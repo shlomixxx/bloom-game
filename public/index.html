@@ -34,6 +34,8 @@
     border-radius: 24px;
     overflow: hidden;
     box-shadow: 0 2px 30px rgba(0,0,0,0.06);
+    position: relative;
+    min-height: 600px;
   }
   .top {
     padding: 12px 14px;
@@ -301,6 +303,74 @@
   @keyframes achToastOut {
     from { opacity: 1; transform: translate(-50%, 0); }
     to   { opacity: 0; transform: translate(-50%, 20px); }
+  }
+
+  .home-screen {
+    position: absolute; inset: 0;
+    background: linear-gradient(180deg, #F5F5F0 0%, #FFFFFF 60%);
+    z-index: 250;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: flex-start;
+    padding: 84px 24px 30px;
+    direction: rtl; text-align: center;
+    overflow: hidden;
+  }
+  .home-mute {
+    position: absolute; top: 16px; left: 16px;
+    width: 34px; height: 34px;
+    background: none; border: 1px solid rgba(0,0,0,0.08);
+    border-radius: 9px; cursor: pointer; padding: 0;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .home-mute svg { width: 16px; height: 16px; color: #6F6E68; }
+  .home-mute.muted svg { color: #C84040; }
+  .home-icons {
+    display: flex; gap: 8px; margin-bottom: 32px;
+  }
+  .home-icon {
+    width: 52px; height: 52px; border-radius: 13px;
+    display: flex; align-items: center; justify-content: center;
+    animation: homeFloat 2.4s ease-in-out infinite;
+  }
+  .home-icon svg { width: 26px; height: 26px; }
+  .home-icon:nth-child(2) { animation-delay: 0.12s; }
+  .home-icon:nth-child(3) { animation-delay: 0.24s; }
+  .home-icon:nth-child(4) { animation-delay: 0.36s; }
+  .home-icon:nth-child(5) { animation-delay: 0.48s; }
+  @keyframes homeFloat {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-8px); }
+  }
+  .home-brand {
+    font-size: 36px; letter-spacing: 0.3em;
+    font-weight: 700; color: #1C1A18;
+    margin-bottom: 14px;
+  }
+  .home-sub {
+    font-size: 14px; color: #6F6E68;
+    margin-bottom: 42px; max-width: 280px;
+    line-height: 1.6;
+  }
+  .home-start {
+    width: 100%; max-width: 280px;
+    padding: 16px 18px; border-radius: 12px;
+    background: #1C1A18; color: #FFFFFF;
+    border: none; font-size: 15px; font-weight: 600;
+    cursor: pointer; font-family: inherit;
+    transition: transform 0.12s;
+  }
+  .home-start:active { transform: scale(0.98); }
+  .home-skip {
+    margin-top: 18px; background: none; border: none;
+    color: #A8A6A0; font-size: 13px;
+    cursor: pointer; padding: 8px;
+    font-family: inherit;
+  }
+  .home-skip:hover { color: #6F6E68; }
+  .home-version {
+    position: absolute; bottom: 18px; left: 0; right: 0;
+    font-size: 11px; color: #C8C5BE;
+    letter-spacing: 0.12em;
   }
 
   .countdown {
@@ -664,6 +734,60 @@
       }
     }
     body.innerHTML = html;
+  }
+
+  /* ============ HOME SCREEN ============ */
+  function showHome() {
+    const app = document.querySelector('.app');
+    if (!app || document.getElementById('home-screen')) return;
+    const h = document.createElement('div');
+    h.id = 'home-screen';
+    h.className = 'home-screen';
+    h.innerHTML =
+      '<button class="home-mute" id="home-mute" aria-label="השתק">' +
+        '<svg id="home-mute-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 8a5 5 0 0 1 0 8M17.7 5a9 9 0 0 1 0 14M6 15H4a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1h2l3.5-4.5A.8.8 0 0 1 11 5v14a.8.8 0 0 1-1.5.5L6 15"/></svg>' +
+      '</button>' +
+      '<div class="home-icons">' +
+        '<div class="home-icon" style="background:#C0DD97;color:#173404">' + SVG.leaf + '</div>' +
+        '<div class="home-icon" style="background:#F4C0D1;color:#4B1528">' + SVG.flower + '</div>' +
+        '<div class="home-icon" style="background:#F5C4B3;color:#4A1B0C">' + SVG.flame + '</div>' +
+        '<div class="home-icon" style="background:#9FE1CB;color:#04342C">' + SVG.star + '</div>' +
+        '<div class="home-icon" style="background:#CECBF6;color:#26215C">' + SVG.crown + '</div>' +
+      '</div>' +
+      '<div class="home-brand">BLOOM</div>' +
+      '<div class="home-sub">מזג חפצים, גלה דרגות חדשות, והגע עד לכתר</div>' +
+      '<button class="home-start" id="home-start">בוא נתחיל</button>' +
+      '<button class="home-skip" id="home-skip">אני יודע לשחק, דלג</button>' +
+      '<div class="home-version">v1.0</div>';
+    app.appendChild(h);
+    syncHomeMuteUI();
+    document.getElementById('home-mute').onclick = function(e) {
+      e.stopPropagation();
+      toggleMute();
+      syncHomeMuteUI();
+    };
+    const enter = function() {
+      ensureAudio(); startMusic();
+      hideHome();
+    };
+    document.getElementById('home-start').onclick = enter;
+    document.getElementById('home-skip').onclick = enter;
+  }
+  function hideHome() {
+    const h = document.getElementById('home-screen');
+    if (h) h.remove();
+  }
+  function syncHomeMuteUI() {
+    const btn = document.getElementById('home-mute');
+    const icon = document.getElementById('home-mute-icon');
+    if (!btn || !icon) return;
+    if (muted) {
+      btn.classList.add('muted');
+      icon.innerHTML = '<path d="M15 8a5 5 0 0 1 1.7 3M6 15H4a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1h2l3.5-4.5A.8.8 0 0 1 11 5v14a.8.8 0 0 1-1.5.5L6 15M21 9l-6 6M15 9l6 6"/>';
+    } else {
+      btn.classList.remove('muted');
+      icon.innerHTML = '<path d="M15 8a5 5 0 0 1 0 8M17.7 5a9 9 0 0 1 0 14M6 15H4a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1h2l3.5-4.5A.8.8 0 0 1 11 5v14a.8.8 0 0 1-1.5.5L6 15"/>';
+    }
   }
 
   function pointsFor(tier, groupSize, chainMult) {
@@ -1384,6 +1508,7 @@
   updateMuteUI();
   renderStreakBadge();
   init('daily');
+  showHome();
 })();
 </script>
 
