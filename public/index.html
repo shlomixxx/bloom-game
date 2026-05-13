@@ -222,6 +222,15 @@
     padding: 4px 10px; border-radius: 14px; font-size: 12px; font-weight: 600;
     margin-top: 8px;
   }
+  .lb-tabs { display: flex; gap: 6px; margin: 6px 0 12px; }
+  .lb-tab {
+    flex: 1; padding: 8px 10px; border-radius: 8px;
+    background: #F5F2EC; color: #6F6E68;
+    border: none; cursor: pointer;
+    font-family: inherit; font-size: 13px; font-weight: 500;
+  }
+  .lb-tab.active { background: #1C1A18; color: #FFFFFF; }
+  .lb-range { font-size: 11px; color: #A8A6A0; margin-bottom: 8px; direction: rtl; text-align: right; }
 
   .countdown {
     display: inline-flex; align-items: center; gap: 6px;
@@ -256,6 +265,9 @@
     <div class="top-buttons">
       <button class="icon-btn" id="mute" aria-label="השתק">
         <svg id="mute-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 8a5 5 0 0 1 0 8M17.7 5a9 9 0 0 1 0 14M6 15H4a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1h2l3.5-4.5A.8.8 0 0 1 11 5v14a.8.8 0 0 1-1.5.5L6 15"/></svg>
+      </button>
+      <button class="icon-btn" id="leaderboard" aria-label="טבלת מובילים">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="14" width="5" height="7" rx="1"/><rect x="9.5" y="9" width="5" height="12" rx="1"/><rect x="16" y="4" width="5" height="17" rx="1"/></svg>
       </button>
       <button class="icon-btn" id="info" aria-label="מידע על ניקוד">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01M11 12h1v4h1"/></svg>
@@ -613,6 +625,115 @@
     }
     leaderboardLoading = false;
     if (wrap) render({ over: true, alreadyPlayed: dailySubmitted });
+  }
+
+  /* ============ LEADERBOARD MODAL (day/week/month) ============ */
+  let lbModalPeriod = 'day';
+  let lbModalList = [];
+  let lbModalLoading = false;
+  let lbModalRange = null;
+  let lbModalRank = null;
+
+  function openLeaderboardModal() {
+    const wrap = document.getElementById('grid-wrap');
+    if (!wrap || document.getElementById('lb-modal')) return;
+    const modal = document.createElement('div');
+    modal.id = 'lb-modal';
+    modal.className = 'info-modal';
+    modal.innerHTML =
+      '<div class="info-card">' +
+        '<button class="info-close" id="lb-modal-close" aria-label="סגור">' +
+          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>' +
+        '</button>' +
+        '<div class="info-title">טבלת מובילים</div>' +
+        '<div class="lb-tabs">' +
+          '<button class="lb-tab" data-period="day">יומי</button>' +
+          '<button class="lb-tab" data-period="week">שבועי</button>' +
+          '<button class="lb-tab" data-period="month">חודשי</button>' +
+        '</div>' +
+        '<div id="lb-modal-body"></div>' +
+      '</div>';
+    wrap.appendChild(modal);
+    document.getElementById('lb-modal-close').onclick = closeLeaderboardModal;
+    modal.onclick = function(e) { if (e.target === modal) closeLeaderboardModal(); };
+    const tabs = modal.querySelectorAll('.lb-tab');
+    tabs.forEach(function(t) {
+      t.onclick = function() { switchLbTab(t.getAttribute('data-period')); };
+    });
+    switchLbTab(lbModalPeriod);
+  }
+
+  function closeLeaderboardModal() {
+    const m = document.getElementById('lb-modal');
+    if (m) m.remove();
+  }
+
+  function switchLbTab(period) {
+    lbModalPeriod = period;
+    const tabs = document.querySelectorAll('#lb-modal .lb-tab');
+    tabs.forEach(function(t) {
+      if (t.getAttribute('data-period') === period) t.classList.add('active');
+      else t.classList.remove('active');
+    });
+    loadLbModal(period);
+  }
+
+  async function loadLbModal(period) {
+    lbModalLoading = true;
+    renderLbModalBody();
+    try {
+      const url = API_BASE + '/api/leaderboard/range/' + encodeURIComponent(period) +
+        '?endDate=' + encodeURIComponent(dailyDate) +
+        '&deviceId=' + encodeURIComponent(deviceId);
+      const res = await fetch(url, { method: 'GET' });
+      if (res.ok) {
+        const data = await res.json();
+        lbModalList = (data && data.list) || [];
+        lbModalRange = data ? { from: data.from, to: data.to, total: data.total } : null;
+        lbModalRank = data && typeof data.rank === 'number' ? data.rank : null;
+      } else {
+        lbModalList = []; lbModalRange = null; lbModalRank = null;
+      }
+    } catch (e) {
+      console.warn('Load lb-modal failed:', e);
+      lbModalList = []; lbModalRange = null; lbModalRank = null;
+    }
+    lbModalLoading = false;
+    renderLbModalBody();
+  }
+
+  function renderLbModalBody() {
+    const body = document.getElementById('lb-modal-body');
+    if (!body) return;
+    if (lbModalLoading) {
+      body.innerHTML = '<div class="lb-loading">טוען…</div>';
+      return;
+    }
+    let rangeText = '';
+    if (lbModalRange) {
+      if (lbModalPeriod === 'day') {
+        rangeText = formatDateHe(lbModalRange.to) + ' · ' + (lbModalRange.total || 0) + ' שחקנים';
+      } else {
+        rangeText = formatDateHe(lbModalRange.from) + ' – ' + formatDateHe(lbModalRange.to) + ' · ' + (lbModalRange.total || 0) + ' שחקנים';
+      }
+    }
+    if (!lbModalList.length) {
+      body.innerHTML = (rangeText ? '<div class="lb-range">' + rangeText + '</div>' : '') +
+        '<div class="lb-empty">אין עדיין ניקודים בטווח הזה</div>';
+      return;
+    }
+    const rows = lbModalList.slice(0, 50).map(function(row, i) {
+      const isYou = row.you;
+      return '<div class="lb-row' + (isYou ? ' you' : '') + '">' +
+        '<div class="lb-rank">' + (i+1) + '</div>' +
+        '<div class="lb-name">' + escapeHtml(row.name || 'אנונימי') + (isYou ? ' (אתה)' : '') + '</div>' +
+        '<div class="lb-score">' + (row.score || 0).toLocaleString() + '</div>' +
+      '</div>';
+    }).join('');
+    body.innerHTML =
+      (rangeText ? '<div class="lb-range">' + rangeText + '</div>' : '') +
+      '<div class="lb-list">' + rows + '</div>' +
+      (lbModalRank ? '<div class="lb-rank-pill">המקום שלך: #' + lbModalRank + '</div>' : '');
   }
 
   function promptForName(cb) {
@@ -979,6 +1100,7 @@
   document.getElementById('reset').onclick = function() { init(); };
   document.getElementById('info').onclick = showInfo;
   document.getElementById('mute').onclick = toggleMute;
+  document.getElementById('leaderboard').onclick = openLeaderboardModal;
   document.getElementById('mode-switch').onclick = function() {
     init(mode === 'daily' ? 'practice' : 'daily');
   };
