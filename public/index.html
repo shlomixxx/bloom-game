@@ -37,30 +37,45 @@
   }
   .top {
     padding: 12px 14px;
+    border-bottom: 1px solid rgba(0,0,0,0.06);
+  }
+  .top-row {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 8px;
-    border-bottom: 1px solid rgba(0,0,0,0.06);
   }
-  .brand { font-size: 15px; letter-spacing: 0.2em; font-weight: 600; color: #1C1A18; }
-  .stats { display: flex; gap: 12px; align-items: center; }
-  .stat-label { font-size: 9px; color: #6F6E68; letter-spacing: 0.08em; text-transform: uppercase; }
-  .stat-val { font-size: 15px; font-weight: 600; color: #1C1A18; margin-top: 1px; display: inline-block; }
+  .brand { font-size: 16px; letter-spacing: 0.22em; font-weight: 600; color: #1C1A18; }
+  .stats {
+    display: flex;
+    gap: 6px;
+    margin-top: 10px;
+  }
+  .stats > .stat {
+    flex: 1;
+    background: #FAFAF6;
+    border-radius: 9px;
+    padding: 6px 10px;
+    text-align: right;
+    direction: rtl;
+    overflow: hidden;
+  }
+  .stat-label { font-size: 9px; color: #A8A6A0; letter-spacing: 0.08em; text-transform: uppercase; }
+  .stat-val { font-size: 16px; font-weight: 700; color: #1C1A18; margin-top: 2px; display: block; font-variant-numeric: tabular-nums; white-space: nowrap; }
   .stat-val.bump { animation: bump 0.32s ease-out; }
   @keyframes bump {
     0% { transform: scale(1); color: #1C1A18; }
     40% { transform: scale(1.22); color: #BA7517; }
     100% { transform: scale(1); color: #1C1A18; }
   }
-  .top-buttons { display: flex; gap: 4px; }
+  .top-buttons { display: flex; gap: 5px; }
   .icon-btn {
-    background: none; border: 1px solid rgba(0,0,0,0.1); border-radius: 7px;
-    width: 28px; height: 28px;
+    background: none; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px;
+    width: 30px; height: 30px;
     display: flex; align-items: center; justify-content: center;
     cursor: pointer; padding: 0; flex-shrink: 0;
   }
-  .icon-btn svg { width: 14px; height: 14px; color: #6F6E68; }
+  .icon-btn svg { width: 15px; height: 15px; color: #6F6E68; }
   .icon-btn:hover { background: #F5F5F0; }
   .icon-btn.muted svg { color: #C84040; }
   .next-bar {
@@ -311,28 +326,30 @@
 
 <div class="app">
   <div class="top">
-    <div class="brand">BLOOM</div>
-    <div class="stats">
-      <div><div class="stat-label">ניקוד</div><div class="stat-val" id="score">0</div></div>
-      <div><div class="stat-label">שיא</div><div class="stat-val" id="best">0</div></div>
-      <div><div class="stat-label">רצף</div><div class="stat-val streak-val zero" id="streak">🔥 0</div></div>
+    <div class="top-row">
+      <div class="brand">BLOOM</div>
+      <div class="top-buttons">
+        <button class="icon-btn" id="mute" aria-label="השתק">
+          <svg id="mute-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 8a5 5 0 0 1 0 8M17.7 5a9 9 0 0 1 0 14M6 15H4a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1h2l3.5-4.5A.8.8 0 0 1 11 5v14a.8.8 0 0 1-1.5.5L6 15"/></svg>
+        </button>
+        <button class="icon-btn" id="leaderboard" aria-label="טבלת מובילים">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="14" width="5" height="7" rx="1"/><rect x="9.5" y="9" width="5" height="12" rx="1"/><rect x="16" y="4" width="5" height="17" rx="1"/></svg>
+        </button>
+        <button class="icon-btn" id="achievements" aria-label="הישגים">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4z"/><path d="M7 4H4v2a3 3 0 0 0 3 3M17 4h3v2a3 3 0 0 1-3 3"/></svg>
+        </button>
+        <button class="icon-btn" id="info" aria-label="מידע על ניקוד">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01M11 12h1v4h1"/></svg>
+        </button>
+        <button class="icon-btn" id="reset" aria-label="התחל מחדש">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11A8.1 8.1 0 0 0 4.5 9M4 5v4h4"/><path d="M4 13a8.1 8.1 0 0 0 15.5 2M20 19v-4h-4"/></svg>
+        </button>
+      </div>
     </div>
-    <div class="top-buttons">
-      <button class="icon-btn" id="mute" aria-label="השתק">
-        <svg id="mute-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 8a5 5 0 0 1 0 8M17.7 5a9 9 0 0 1 0 14M6 15H4a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1h2l3.5-4.5A.8.8 0 0 1 11 5v14a.8.8 0 0 1-1.5.5L6 15"/></svg>
-      </button>
-      <button class="icon-btn" id="leaderboard" aria-label="טבלת מובילים">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="14" width="5" height="7" rx="1"/><rect x="9.5" y="9" width="5" height="12" rx="1"/><rect x="16" y="4" width="5" height="17" rx="1"/></svg>
-      </button>
-      <button class="icon-btn" id="achievements" aria-label="הישגים">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4z"/><path d="M7 4H4v2a3 3 0 0 0 3 3M17 4h3v2a3 3 0 0 1-3 3"/></svg>
-      </button>
-      <button class="icon-btn" id="info" aria-label="מידע על ניקוד">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01M11 12h1v4h1"/></svg>
-      </button>
-      <button class="icon-btn" id="reset" aria-label="התחל מחדש">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11A8.1 8.1 0 0 0 4.5 9M4 5v4h4"/><path d="M4 13a8.1 8.1 0 0 0 15.5 2M20 19v-4h-4"/></svg>
-      </button>
+    <div class="stats">
+      <div class="stat"><div class="stat-label">ניקוד</div><div class="stat-val" id="score">0</div></div>
+      <div class="stat"><div class="stat-label">שיא</div><div class="stat-val" id="best">0</div></div>
+      <div class="stat"><div class="stat-label">רצף</div><div class="stat-val streak-val zero" id="streak">🔥 0</div></div>
     </div>
   </div>
   <div class="mode-bar" id="mode-bar">
