@@ -36,31 +36,31 @@
     box-shadow: 0 2px 30px rgba(0,0,0,0.06);
   }
   .top {
-    padding: 16px 18px;
+    padding: 12px 14px;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 10px;
+    gap: 8px;
     border-bottom: 1px solid rgba(0,0,0,0.06);
   }
-  .brand { font-size: 16px; letter-spacing: 0.2em; font-weight: 600; color: #1C1A18; }
-  .stats { display: flex; gap: 16px; align-items: center; }
-  .stat-label { font-size: 10px; color: #6F6E68; letter-spacing: 0.08em; text-transform: uppercase; }
-  .stat-val { font-size: 16px; font-weight: 600; color: #1C1A18; margin-top: 1px; display: inline-block; }
+  .brand { font-size: 15px; letter-spacing: 0.2em; font-weight: 600; color: #1C1A18; }
+  .stats { display: flex; gap: 12px; align-items: center; }
+  .stat-label { font-size: 9px; color: #6F6E68; letter-spacing: 0.08em; text-transform: uppercase; }
+  .stat-val { font-size: 15px; font-weight: 600; color: #1C1A18; margin-top: 1px; display: inline-block; }
   .stat-val.bump { animation: bump 0.32s ease-out; }
   @keyframes bump {
     0% { transform: scale(1); color: #1C1A18; }
     40% { transform: scale(1.22); color: #BA7517; }
     100% { transform: scale(1); color: #1C1A18; }
   }
-  .top-buttons { display: flex; gap: 6px; }
+  .top-buttons { display: flex; gap: 4px; }
   .icon-btn {
-    background: none; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px;
-    width: 32px; height: 32px;
+    background: none; border: 1px solid rgba(0,0,0,0.1); border-radius: 7px;
+    width: 28px; height: 28px;
     display: flex; align-items: center; justify-content: center;
     cursor: pointer; padding: 0; flex-shrink: 0;
   }
-  .icon-btn svg { width: 16px; height: 16px; color: #6F6E68; }
+  .icon-btn svg { width: 14px; height: 14px; color: #6F6E68; }
   .icon-btn:hover { background: #F5F5F0; }
   .icon-btn.muted svg { color: #C84040; }
   .next-bar {
@@ -234,6 +234,60 @@
   .lb-tab.active { background: #1C1A18; color: #FFFFFF; }
   .lb-range { font-size: 11px; color: #A8A6A0; margin-bottom: 8px; direction: rtl; text-align: right; }
 
+  .streak-val { color: #D95A1B; font-variant-numeric: tabular-nums; }
+  .streak-val.zero { color: #A8A6A0; }
+
+  .ach-group-title {
+    font-size: 11px; color: #BA7517; letter-spacing: 0.06em; font-weight: 700;
+    margin: 12px 0 6px; text-transform: uppercase; direction: rtl; text-align: right;
+  }
+  .ach-group-title:first-of-type { margin-top: 4px; }
+  .ach-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 10px; border-radius: 9px;
+    background: #FAFAF6; margin-bottom: 4px;
+    direction: rtl;
+  }
+  .ach-row.unlocked { background: #FFF5E1; }
+  .ach-row.locked { opacity: 0.45; }
+  .ach-icon {
+    width: 28px; height: 28px; border-radius: 7px;
+    display: flex; align-items: center; justify-content: center;
+    background: #FFFFFF; color: #BA7517; flex-shrink: 0;
+  }
+  .ach-row.unlocked .ach-icon { background: #FAC775; color: #4A2E00; }
+  .ach-row.locked .ach-icon { background: #E8E5DE; color: #A8A6A0; }
+  .ach-icon svg { width: 15px; height: 15px; }
+  .ach-text { flex: 1; text-align: right; }
+  .ach-name { font-size: 13px; font-weight: 600; color: #1C1A18; }
+  .ach-row.locked .ach-name { color: #6F6E68; }
+  .ach-desc { font-size: 11px; color: #6F6E68; margin-top: 1px; }
+  .ach-summary {
+    font-size: 12px; color: #6F6E68;
+    text-align: center; margin: 4px 0 10px;
+  }
+  .ach-summary b { color: #BA7517; font-weight: 700; }
+  .ach-unlock-toast {
+    position: fixed; bottom: 24px; left: 50%;
+    transform: translateX(-50%);
+    background: #1C1A18; color: #FFFFFF;
+    padding: 10px 16px; border-radius: 24px;
+    font-size: 13px; font-weight: 600;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.25);
+    z-index: 300; display: flex; align-items: center; gap: 8px;
+    animation: achToastIn 0.4s ease-out, achToastOut 0.4s ease-in 2.6s forwards;
+    direction: rtl;
+  }
+  .ach-unlock-toast svg { width: 16px; height: 16px; color: #FAC775; }
+  @keyframes achToastIn {
+    from { opacity: 0; transform: translate(-50%, 20px); }
+    to   { opacity: 1; transform: translate(-50%, 0); }
+  }
+  @keyframes achToastOut {
+    from { opacity: 1; transform: translate(-50%, 0); }
+    to   { opacity: 0; transform: translate(-50%, 20px); }
+  }
+
   .countdown {
     display: inline-flex; align-items: center; gap: 6px;
     background: #F5F2EC; color: #6F6E68;
@@ -261,6 +315,7 @@
     <div class="stats">
       <div><div class="stat-label">ניקוד</div><div class="stat-val" id="score">0</div></div>
       <div><div class="stat-label">שיא</div><div class="stat-val" id="best">0</div></div>
+      <div><div class="stat-label">רצף</div><div class="stat-val streak-val zero" id="streak">🔥 0</div></div>
     </div>
     <div class="top-buttons">
       <button class="icon-btn" id="mute" aria-label="השתק">
@@ -268,6 +323,9 @@
       </button>
       <button class="icon-btn" id="leaderboard" aria-label="טבלת מובילים">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="14" width="5" height="7" rx="1"/><rect x="9.5" y="9" width="5" height="12" rx="1"/><rect x="16" y="4" width="5" height="17" rx="1"/></svg>
+      </button>
+      <button class="icon-btn" id="achievements" aria-label="הישגים">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4z"/><path d="M7 4H4v2a3 3 0 0 0 3 3M17 4h3v2a3 3 0 0 1-3 3"/></svg>
       </button>
       <button class="icon-btn" id="info" aria-label="מידע על ניקוד">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01M11 12h1v4h1"/></svg>
@@ -330,6 +388,9 @@
   const DEVICE_KEY = 'bloom_device_id';
   const DAILY_PLAYED_PREFIX = 'bloom_daily_';
   const MUTE_KEY = 'bloom_muted';
+  const STREAK_KEY = 'bloom_streak';
+  const ACH_KEY = 'bloom_achievements';
+  const GAMES_COUNT_KEY = 'bloom_games_played';
 
   // Same-origin API. When the game is served from the Express backend, this
   // works as-is. When opened from file:// the leaderboard simply won't load.
@@ -403,6 +464,189 @@
     updateMuteUI();
     if (muted) stopMusic();
     else { ensureAudio(); playTone(523, 0.08, 'sine', 0.12, 0); startMusic(); }
+  }
+
+  /* ============ STREAK + ACHIEVEMENTS ============ */
+  let currentGameMaxChain = 0;
+  let streakBumpedThisSession = false;
+
+  function loadStreak() {
+    try {
+      const raw = localStorage.getItem(STREAK_KEY);
+      if (!raw) return { count: 0, lastPlayed: null };
+      const v = JSON.parse(raw);
+      return { count: v.count | 0, lastPlayed: v.lastPlayed || null };
+    } catch (e) { return { count: 0, lastPlayed: null }; }
+  }
+  function saveStreak(s) { try { localStorage.setItem(STREAK_KEY, JSON.stringify(s)); } catch (e) {} }
+  function daysBetween(a, b) {
+    const da = new Date(a + 'T00:00:00Z');
+    const db = new Date(b + 'T00:00:00Z');
+    return Math.round((db - da) / 86400000);
+  }
+  function bumpStreak() {
+    const today = todayInIsrael();
+    const s = loadStreak();
+    if (s.lastPlayed === today) return s;
+    if (s.lastPlayed && daysBetween(s.lastPlayed, today) === 1) s.count = (s.count | 0) + 1;
+    else s.count = 1;
+    s.lastPlayed = today;
+    saveStreak(s);
+    renderStreakBadge();
+    checkAchievements({ streakNow: s.count });
+    return s;
+  }
+  function renderStreakBadge() {
+    const el = document.getElementById('streak');
+    if (!el) return;
+    const s = loadStreak();
+    const today = todayInIsrael();
+    let n = s.count | 0;
+    if (s.lastPlayed && daysBetween(s.lastPlayed, today) > 1) n = 0;
+    el.textContent = '🔥 ' + n;
+    if (n > 0) el.classList.remove('zero');
+    else el.classList.add('zero');
+  }
+
+  const ACH_GROUPS = [
+    { id: 'tier', name: 'דרגות' },
+    { id: 'chain', name: 'שרשראות' },
+    { id: 'score', name: 'ניקוד' },
+    { id: 'streak', name: 'רצף ימים' },
+    { id: 'general', name: 'כללי' }
+  ];
+  const ACHIEVEMENTS = [
+    { id: 'tier_fire',   group: 'tier',    name: 'אש',             desc: 'הגעת לדרגת אש',     check: function(s){ return s.highestTier >= 4; } },
+    { id: 'tier_star',   group: 'tier',    name: 'כוכב',            desc: 'הגעת לדרגת כוכב',   check: function(s){ return s.highestTier >= 6; } },
+    { id: 'tier_crown',  group: 'tier',    name: 'כתר',             desc: 'הגעת לדרגת כתר',    check: function(s){ return s.highestTier >= 8; } },
+    { id: 'chain_2',     group: 'chain',   name: 'שרשרת ×1.5',      desc: 'שרשרת של 2 מיזוגים',  check: function(s){ return s.maxChain >= 2; } },
+    { id: 'chain_3',     group: 'chain',   name: 'שרשרת ×2',        desc: 'שרשרת של 3 מיזוגים',  check: function(s){ return s.maxChain >= 3; } },
+    { id: 'chain_5',     group: 'chain',   name: 'שרשרת ×3',        desc: 'שרשרת של 5 מיזוגים',  check: function(s){ return s.maxChain >= 5; } },
+    { id: 'score_10k',   group: 'score',   name: '10,000',          desc: 'הגעת ל-10K במשחק אחד', check: function(s){ return s.score >= 10000; } },
+    { id: 'score_50k',   group: 'score',   name: '50,000',          desc: 'הגעת ל-50K במשחק אחד', check: function(s){ return s.score >= 50000; } },
+    { id: 'score_100k',  group: 'score',   name: '100,000',         desc: 'הגעת ל-100K במשחק אחד',check: function(s){ return s.score >= 100000; } },
+    { id: 'streak_3',    group: 'streak',  name: '3 ימים',          desc: 'שיחקת 3 ימים רצוף',    check: function(s){ return s.streakNow >= 3; } },
+    { id: 'streak_7',    group: 'streak',  name: 'שבוע',            desc: '7 ימים רצוף',          check: function(s){ return s.streakNow >= 7; } },
+    { id: 'streak_30',   group: 'streak',  name: 'חודש',            desc: '30 ימים רצוף',         check: function(s){ return s.streakNow >= 30; } },
+    { id: 'first_play',  group: 'general', name: 'המשחק הראשון',    desc: 'התחלת לשחק',          check: function(s){ return (s.gamesPlayed | 0) >= 1; } },
+    { id: 'games_10',    group: 'general', name: '10 משחקים',       desc: 'סיימת 10 משחקים',      check: function(s){ return (s.gamesPlayed | 0) >= 10; } },
+    { id: 'games_50',    group: 'general', name: '50 משחקים',       desc: 'סיימת 50 משחקים',      check: function(s){ return (s.gamesPlayed | 0) >= 50; } }
+  ];
+  const ACH_ICON_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4z"/><path d="M7 4H4v2a3 3 0 0 0 3 3M17 4h3v2a3 3 0 0 1-3 3"/></svg>';
+
+  function loadUnlocked() {
+    try {
+      const raw = localStorage.getItem(ACH_KEY);
+      if (!raw) return {};
+      const arr = JSON.parse(raw);
+      const m = {};
+      for (let i = 0; i < arr.length; i++) m[arr[i]] = true;
+      return m;
+    } catch (e) { return {}; }
+  }
+  function saveUnlocked(map) {
+    try {
+      const ids = Object.keys(map).filter(function(k){ return map[k]; });
+      localStorage.setItem(ACH_KEY, JSON.stringify(ids));
+    } catch (e) {}
+  }
+  function unlockedSnapshot() { return loadUnlocked(); }
+  function loadGamesPlayed() {
+    try { return parseInt(localStorage.getItem(GAMES_COUNT_KEY) || '0', 10) | 0; } catch (e) { return 0; }
+  }
+  function incrementGamesPlayed() {
+    const n = loadGamesPlayed() + 1;
+    try { localStorage.setItem(GAMES_COUNT_KEY, String(n)); } catch (e) {}
+    return n;
+  }
+
+  function currentAchievementState(extra) {
+    const s = loadStreak();
+    const today = todayInIsrael();
+    let streakNow = s.count | 0;
+    if (s.lastPlayed && daysBetween(s.lastPlayed, today) > 1) streakNow = 0;
+    return Object.assign({
+      score: score | 0,
+      highestTier: highestTier | 0,
+      maxChain: currentGameMaxChain | 0,
+      streakNow: streakNow,
+      gamesPlayed: loadGamesPlayed()
+    }, extra || {});
+  }
+
+  function checkAchievements(extra) {
+    const state = currentAchievementState(extra);
+    const unlocked = loadUnlocked();
+    const newly = [];
+    for (let i = 0; i < ACHIEVEMENTS.length; i++) {
+      const a = ACHIEVEMENTS[i];
+      if (unlocked[a.id]) continue;
+      try {
+        if (a.check(state)) { unlocked[a.id] = true; newly.push(a); }
+      } catch (e) {}
+    }
+    if (newly.length) {
+      saveUnlocked(unlocked);
+      for (let i = 0; i < newly.length; i++) {
+        (function(a, idx) {
+          setTimeout(function() { showAchievementToast(a); }, idx * 700);
+        })(newly[i], i);
+      }
+    }
+  }
+
+  function showAchievementToast(a) {
+    const t = document.createElement('div');
+    t.className = 'ach-unlock-toast';
+    t.innerHTML = ACH_ICON_SVG + '<span>הישג חדש: ' + a.name + '</span>';
+    document.body.appendChild(t);
+    setTimeout(function() { t.remove(); }, 3200);
+    playTone(659, 0.12, 'triangle', 0.12, 0);
+    playTone(784, 0.16, 'triangle', 0.12, 0.08);
+  }
+
+  function openAchievementsModal() {
+    const wrap = document.getElementById('grid-wrap');
+    if (!wrap || document.getElementById('ach-modal')) return;
+    const modal = document.createElement('div');
+    modal.id = 'ach-modal';
+    modal.className = 'info-modal';
+    modal.innerHTML =
+      '<div class="info-card">' +
+        '<button class="info-close" id="ach-modal-close" aria-label="סגור">' +
+          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>' +
+        '</button>' +
+        '<div class="info-title">הישגים</div>' +
+        '<div id="ach-modal-body"></div>' +
+      '</div>';
+    wrap.appendChild(modal);
+    document.getElementById('ach-modal-close').onclick = function() { modal.remove(); };
+    modal.onclick = function(e) { if (e.target === modal) modal.remove(); };
+    renderAchievementsBody();
+  }
+
+  function renderAchievementsBody() {
+    const body = document.getElementById('ach-modal-body');
+    if (!body) return;
+    const unlocked = loadUnlocked();
+    const total = ACHIEVEMENTS.length;
+    const got = ACHIEVEMENTS.filter(function(a){ return unlocked[a.id]; }).length;
+    let html = '<div class="ach-summary">פתחת <b>' + got + '</b> מתוך ' + total + ' הישגים</div>';
+    for (let g = 0; g < ACH_GROUPS.length; g++) {
+      const grp = ACH_GROUPS[g];
+      const items = ACHIEVEMENTS.filter(function(a){ return a.group === grp.id; });
+      if (!items.length) continue;
+      html += '<div class="ach-group-title">' + grp.name + '</div>';
+      for (let i = 0; i < items.length; i++) {
+        const a = items[i];
+        const isUnlocked = !!unlocked[a.id];
+        html += '<div class="ach-row ' + (isUnlocked ? 'unlocked' : 'locked') + '">' +
+          '<div class="ach-icon">' + ACH_ICON_SVG + '</div>' +
+          '<div class="ach-text"><div class="ach-name">' + a.name + '</div><div class="ach-desc">' + a.desc + '</div></div>' +
+        '</div>';
+      }
+    }
+    body.innerHTML = html;
   }
 
   function pointsFor(tier, groupSize, chainMult) {
@@ -490,6 +734,7 @@
     dailyDate = todayInIsrael();
     grid = Array.from({length: ROWS}, function() { return Array(COLS).fill(0); });
     score = 0; highestTier = 1; busy = false;
+    currentGameMaxChain = 0;
     leaderboard = [];
     dailyRank = null;
     if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; }
@@ -882,6 +1127,7 @@
             showFloatingScore(kr, kc, points, chainCount);
             bumpScore();
             soundMerge(nt);
+            if (chainCount > currentGameMaxChain) currentGameMaxChain = chainCount;
             if (chainCount >= 2) {
               const m = chainCount === 2 ? '1.5' : chainCount === 3 ? '2' : chainCount === 4 ? '2.5' : '3';
               showChainBadge(chainCount, m);
@@ -902,6 +1148,7 @@
       soundMilestone(highestTier);
       buzz([30, 40, 30]);
     }
+    checkAchievements();
   }
 
   function isGameOver() {
@@ -919,6 +1166,10 @@
     ensureAudio();
     startMusic();
     soundDrop();
+    if (!streakBumpedThisSession) {
+      bumpStreak();
+      streakBumpedThisSession = true;
+    }
     grid[row][col] = nextPiece;
     if (nextPiece > highestTier) highestTier = nextPiece;
     render({ appearing: [row, col] });
@@ -929,6 +1180,8 @@
     if (isGameOver()) {
       soundGameOver();
       buzz([60, 80, 100]);
+      incrementGamesPlayed();
+      checkAchievements();
       if (mode === 'daily' && !dailySubmitted) {
         dailySubmitted = true;
         localStorage.setItem(DAILY_PLAYED_PREFIX + dailyDate, JSON.stringify({ score: score, tier: highestTier, ts: Date.now() }));
@@ -1101,6 +1354,7 @@
   document.getElementById('info').onclick = showInfo;
   document.getElementById('mute').onclick = toggleMute;
   document.getElementById('leaderboard').onclick = openLeaderboardModal;
+  document.getElementById('achievements').onclick = openAchievementsModal;
   document.getElementById('mode-switch').onclick = function() {
     init(mode === 'daily' ? 'practice' : 'daily');
   };
@@ -1111,6 +1365,7 @@
   });
 
   updateMuteUI();
+  renderStreakBadge();
   init('daily');
 })();
 </script>
