@@ -260,6 +260,9 @@
   }
   .mode-bar.practice { background: #FAFAF6; }
   .mode-info { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; }
+  .mode-info.clickable { cursor: pointer; border-radius: 8px; padding: 2px 4px; margin: -2px -4px; transition: background 0.15s; }
+  .mode-info.clickable:hover { background: rgba(255,255,255,0.55); }
+  .mode-info-chevron { width: 14px; height: 14px; color: #6F6E68; flex-shrink: 0; opacity: 0.6; }
   .mode-icon { width: 24px; height: 24px; border-radius: 6px; display: flex; align-items: center; justify-content: center; background: #EF9F27; color: #412402; flex-shrink: 0; }
   .mode-icon svg { width: 14px; height: 14px; }
   .mode-bar.practice .mode-icon { background: #D3D1C7; color: #2C2C2A; }
@@ -885,7 +888,7 @@
     </div>
   </div>
   <div class="mode-bar" id="mode-bar">
-    <div class="mode-info">
+    <div class="mode-info" id="mode-info">
       <div class="mode-icon" id="mode-icon">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 9h18M8 3v4M16 3v4"/></svg>
       </div>
@@ -893,6 +896,7 @@
         <div class="mode-title" id="mode-title">אתגר יומי</div>
         <div class="mode-sub" id="mode-sub">אותו דאנג'ן לכולם היום</div>
       </div>
+      <svg id="mode-info-chevron" class="mode-info-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display:none"><path d="M15 6l-6 6 6 6"/></svg>
     </div>
     <div class="mode-tabs" id="mode-tabs"></div>
   </div>
@@ -1964,6 +1968,7 @@
       '<div class="contest-form" style="margin-top:18px">' +
         '<button class="contest-submit-btn" id="clb-play">שחק עכשיו</button>' +
         '<button class="contest-secondary-btn" id="clb-share">שתף קישור</button>' +
+        (myContestsCountSync() >= 2 ? '<button class="contest-secondary-btn" id="clb-switch" style="margin-top:6px">↕ החלפת תחרות (' + myContestsCountSync() + ')</button>' : '') +
         (activeContestCode === code ? '<button class="contest-ghost-btn" id="clb-leave">יציאה מהתחרות</button>' : '') +
       '</div>';
 
@@ -1995,6 +2000,8 @@
         this.textContent = '✓ הקישור הועתק';
       }
     };
+    const switchBtn = document.getElementById('clb-switch');
+    if (switchBtn) switchBtn.onclick = showMyContestsList;
     const leaveBtn = document.getElementById('clb-leave');
     if (leaveBtn) leaveBtn.onclick = function() {
       if (!confirm('לצאת מהתחרות הזו? תוכל להצטרף בחזרה עם הקוד.')) return;
@@ -2089,6 +2096,9 @@
   let contestSubmitted = false;
   let contestRefreshTimer = null;
   let contestRefreshCode = null;
+  let myContestsCache = null;        // last fetched /api/contests/mine result
+  let myContestsCacheTs = 0;
+  const MY_CONTESTS_CACHE_TTL_MS = 30 * 1000;  // refresh every 30s on demand
 
   function getDeviceId() {
     let id = localStorage.getItem(DEVICE_KEY);
@@ -2106,6 +2116,8 @@
     activeContestCode = code || null;
     if (code) localStorage.setItem(CONTEST_CODE_KEY, code);
     else localStorage.removeItem(CONTEST_CODE_KEY);
+    // The list of contests-I'm-in may have changed (joined/created/left)
+    invalidateMyContestsCache();
   }
 
   function getPlayerName() {
@@ -2116,17 +2128,30 @@
     if (name) localStorage.setItem(NAME_KEY, String(name).trim().slice(0, 50));
   }
 
-  async function fetchMyContests() {
+  async function fetchMyContests(opts) {
+    opts = opts || {};
+    const fresh = !!opts.fresh;
+    if (!fresh && myContestsCache && (Date.now() - myContestsCacheTs) < MY_CONTESTS_CACHE_TTL_MS) {
+      return myContestsCache;
+    }
     try {
       const url = API_BASE + '/api/contests/mine?deviceId=' + encodeURIComponent(deviceId);
       const res = await fetch(url);
-      if (!res.ok) return null;
+      if (!res.ok) return myContestsCache;
       const data = await res.json();
-      return (data && data.contests) || [];
+      myContestsCache = (data && data.contests) || [];
+      myContestsCacheTs = Date.now();
+      return myContestsCache;
     } catch (e) {
       console.warn('fetchMyContests failed', e);
-      return null;
+      return myContestsCache;
     }
+  }
+  function myContestsCountSync() {
+    return myContestsCache ? myContestsCache.length : 0;
+  }
+  function invalidateMyContestsCache() {
+    myContestsCache = null; myContestsCacheTs = 0;
   }
 
   async function fetchContest(code) {
@@ -2290,6 +2315,9 @@
             activeContestData = data.contest;
           }
         });
+        // Populate the count cache in the background so the "חברים" tab
+        // can decide whether to open the list-picker or jump straight in.
+        fetchMyContests().then(function() { updateModeBar(); });
       }
       rng = activeContestData && activeContestData.board_seed != null
         ? mulberry32(activeContestData.board_seed)
@@ -2320,6 +2348,8 @@
     const title = document.getElementById('mode-title');
     const sub = document.getElementById('mode-sub');
     const tabsEl = document.getElementById('mode-tabs');
+    const infoEl = document.getElementById('mode-info');
+    const chevEl = document.getElementById('mode-info-chevron');
     if (!bar) return;
 
     // Title + subtitle reflect the current mode
@@ -2337,8 +2367,28 @@
       sub.textContent = 'דאנג\'ן רנדומלי, ללא טבלת מובילים';
     }
 
+    // In contest mode, the mode-info area becomes a tap target that opens
+    // the contest leaderboard — this is the fastest "show me the players"
+    // path while in-game. Chevron hints that it's interactive.
+    if (infoEl) {
+      if (mode === 'contest' && activeContestCode) {
+        infoEl.classList.add('clickable');
+        if (chevEl) chevEl.style.display = '';
+        infoEl.onclick = function() {
+          saveContestGameState();
+          showContestLeaderboard(activeContestCode);
+        };
+      } else {
+        infoEl.classList.remove('clickable');
+        if (chevEl) chevEl.style.display = 'none';
+        infoEl.onclick = null;
+      }
+    }
+
     // Build/update the segmented tab control. The "חברים" tab appears only
-    // when the player has an active contest code.
+    // when the player has an active contest code. Tapping it: with 2+
+    // contests, opens the My Contests list so the player can choose; with 1,
+    // jumps straight into that contest like before.
     if (!tabsEl) return;
     const tabs = [{ id: 'daily', label: 'יומי' }];
     if (activeContestCode) tabs.push({ id: 'contest', label: 'חברים' });
@@ -2350,8 +2400,12 @@
     tabsEl.querySelectorAll('.mode-tab').forEach(function(btn) {
       btn.onclick = function() {
         const target = btn.getAttribute('data-mode');
-        if (target === mode) return;
+        if (target === mode && target !== 'contest') return;
         if (mode === 'contest') saveContestGameState();
+        if (target === 'contest' && myContestsCountSync() >= 2) {
+          showMyContestsList();
+          return;
+        }
         init(target);
       };
     });
