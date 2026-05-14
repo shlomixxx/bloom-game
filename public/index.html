@@ -3357,6 +3357,16 @@
   document.addEventListener('touchstart',  primeAudio, { once: true, capture: true });
   document.addEventListener('keydown',     primeAudio, { once: true, capture: true });
 
+  // Register the service worker for offline play. Silent if unsupported
+  // (older Safari) — the game still works fine without it.
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function() {
+      navigator.serviceWorker.register('/sw.js').catch(function(e) {
+        console.warn('SW registration failed', e);
+      });
+    });
+  }
+
   updateMuteUI();
   renderStreakBadge();
   init('daily');
