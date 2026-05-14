@@ -734,6 +734,32 @@
     margin-top: 2px; font-weight: 500;
     font-variant-numeric: tabular-nums;
   }
+  /* Contest leaderboard — code chip (so the share code is always visible) */
+  .contest-code-row { text-align: center; margin: 4px 0 10px; }
+  .contest-code-pill {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: #FFF5E1; color: #854F0B;
+    border: 1px solid #FAC775; border-radius: 16px;
+    padding: 6px 14px;
+    font-size: 12px; font-weight: 600;
+    cursor: pointer; font-family: inherit;
+    transition: transform 0.12s, background 0.18s, color 0.18s, border-color 0.18s;
+    direction: rtl;
+  }
+  .contest-code-pill:active { transform: scale(0.97); }
+  .contest-code-pill code {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    letter-spacing: 0.18em;
+    font-size: 13px;
+    font-weight: 700;
+    color: #412402;
+  }
+  .contest-code-pill svg { width: 13px; height: 13px; flex-shrink: 0; }
+  .contest-code-pill.copied {
+    background: #DCF8C6; color: #1B5E20; border-color: #6FB955;
+  }
+  .contest-code-pill.copied code { color: #1B5E20; }
+
   /* My Contests list */
   .my-contest-list {
     display: flex; flex-direction: column; gap: 8px;
@@ -1923,6 +1949,13 @@
     screen.innerHTML =
       createBackButton('window.__bloomBackToHome()') +
       '<div class="contest-title">' + escapeHtml(data.contest.name) + '</div>' +
+      '<div class="contest-code-row">' +
+        '<button class="contest-code-pill" id="clb-code-pill" aria-label="העתק קוד התחרות">' +
+          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>' +
+          '<span>קוד</span>' +
+          '<code>' + escapeHtml(data.contest.code) + '</code>' +
+        '</button>' +
+      '</div>' +
       '<div class="contest-sub" id="clb-sub">' +
         '<span class="contest-live-dot"></span>' +
         (data.players || []).length + ' שחקנים · ' + formatTimeLeft(data.contest.ends_at) +
@@ -1939,6 +1972,19 @@
       stopContestRefresh();
       hideContestScreens();
       init('contest');
+    };
+    const codePill = document.getElementById('clb-code-pill');
+    if (codePill) codePill.onclick = function() {
+      const text = buildContestShareLink(code);
+      const setCopied = function() {
+        codePill.classList.add('copied');
+        setTimeout(function() { codePill.classList.remove('copied'); }, 1400);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(setCopied, setCopied);
+      } else {
+        setCopied();
+      }
     };
     document.getElementById('clb-share').onclick = function() {
       const shareText = data.contest.host_name + ' הזמין/ה אותך לתחרות BLOOM 🎮\n' + link;
