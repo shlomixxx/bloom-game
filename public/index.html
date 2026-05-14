@@ -1632,6 +1632,23 @@
     else if (document.visibilityState === 'visible' && !muted) resumeCurrentMusic();
   });
 
+  /* Browsers block audio until the first user interaction.
+     Prime once on any pointer/touch/key event so the lobby track
+     (queued by showHome) actually starts playing. */
+  let audioPrimed = false;
+  function primeAudio() {
+    if (audioPrimed) return;
+    audioPrimed = true;
+    ensureAudio();
+    if (currentTrack && !muted) {
+      const el = getTrackEl(currentTrack);
+      if (el && el.paused) fadeInTrack(currentTrack, MUSIC_FADE_MS, MUSIC_VOLUME);
+    }
+  }
+  document.addEventListener('pointerdown', primeAudio, { once: true, capture: true });
+  document.addEventListener('touchstart',  primeAudio, { once: true, capture: true });
+  document.addEventListener('keydown',     primeAudio, { once: true, capture: true });
+
   updateMuteUI();
   renderStreakBadge();
   init('daily');
