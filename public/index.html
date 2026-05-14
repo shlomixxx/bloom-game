@@ -5,9 +5,29 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#F5F5F0">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="BLOOM">
 <title>BLOOM — משחק מיזוג</title>
+
+<!-- Favicons / app icons -->
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/assets/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="icon" href="/assets/favicon-16.png" sizes="16x16" type="image/png">
+<link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
+
+<!-- Social preview (Open Graph + Twitter) -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="BLOOM">
 <meta property="og:title" content="BLOOM — משחק מיזוג">
-<meta property="og:description" content="מזג, התקדם, הגע לכתר. שחק עכשיו.">
+<meta property="og:description" content="מזג חפצים, גלה דרגות, והגע עד לכתר. הזמן חברים לתחרות פרטית — מי יביא את הציון הכי גבוה?">
+<meta property="og:url" content="https://bloom-web-production-f3bd.up.railway.app/">
+<meta property="og:image" content="https://bloom-web-production-f3bd.up.railway.app/assets/social-share.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:locale" content="he_IL">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="BLOOM — משחק מיזוג">
+<meta name="twitter:description" content="מזג חפצים, גלה דרגות, והגע עד לכתר. הזמן חברים לתחרות פרטית.">
+<meta name="twitter:image" content="https://bloom-web-production-f3bd.up.railway.app/assets/social-share.png">
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body {
@@ -579,6 +599,12 @@
     color: #C84040; font-size: 12px;
     text-align: center; margin-top: 10px;
     min-height: 16px;
+  }
+  .contest-form-hint {
+    font-size: 11px; color: #6F6E68;
+    margin-top: -10px; margin-bottom: 14px;
+    text-align: right; direction: rtl;
+    line-height: 1.4;
   }
   .contest-submit-btn {
     width: 100%;
@@ -1665,16 +1691,34 @@
           '<div class="contest-duration-pill selected" data-days="7">שבוע</div>' +
           '<div class="contest-duration-pill" data-days="30">חודש</div>' +
         '</div>' +
+        '<div class="contest-form-label">סוג הלוח</div>' +
+        '<div class="contest-duration-row" id="ctf-board-type">' +
+          '<div class="contest-duration-pill selected" data-board="shared">משותף</div>' +
+          '<div class="contest-duration-pill" data-board="free">חופשי</div>' +
+        '</div>' +
+        '<div class="contest-form-hint" id="ctf-board-hint">כולם מקבלים את אותו לוח — השוואה הוגנת</div>' +
         '<button class="contest-submit-btn" id="ctf-submit">צור והעתק קוד</button>' +
         '<div class="contest-error" id="ctf-error"></div>' +
       '</div>';
 
     let selectedDays = 7;
+    let selectedBoardType = 'shared';
     document.querySelectorAll('#ctf-duration .contest-duration-pill').forEach(function(pill) {
       pill.onclick = function() {
         document.querySelectorAll('#ctf-duration .contest-duration-pill').forEach(function(p) { p.classList.remove('selected'); });
         pill.classList.add('selected');
         selectedDays = parseInt(pill.dataset.days, 10);
+      };
+    });
+    document.querySelectorAll('#ctf-board-type .contest-duration-pill').forEach(function(pill) {
+      pill.onclick = function() {
+        document.querySelectorAll('#ctf-board-type .contest-duration-pill').forEach(function(p) { p.classList.remove('selected'); });
+        pill.classList.add('selected');
+        selectedBoardType = pill.dataset.board;
+        const hint = document.getElementById('ctf-board-hint');
+        if (hint) hint.textContent = selectedBoardType === 'free'
+          ? 'לוח אקראי לכל שחקן — תחרות ניקוד טהורה'
+          : 'כולם מקבלים את אותו לוח — השוואה הוגנת';
       };
     });
 
@@ -1698,9 +1742,15 @@
             hostName: hostVal,
             deviceId: deviceId,
             durationDays: selectedDays,
-            boardType: 'shared'
+            boardType: selectedBoardType
           })
         });
+        if (res.status === 429) {
+          errEl.textContent = 'יצרת יותר מדי תחרויות. נסה שוב בעוד שעה.';
+          this.disabled = false;
+          this.textContent = 'צור והעתק קוד';
+          return;
+        }
         if (!res.ok) throw new Error('Server error');
         const data = await res.json();
         setPlayerName(hostVal);
@@ -1853,6 +1903,12 @@
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ deviceId: deviceId, displayName: nameVal })
           });
+          if (res.status === 429) {
+            document.getElementById('cjp-error').textContent = 'יותר מדי ניסיונות. נסה שוב בעוד שעה.';
+            this.disabled = false;
+            this.textContent = 'הצטרף ושחק';
+            return;
+          }
           if (!res.ok) throw new Error('Join failed');
           setPlayerName(nameVal);
           setActiveContest(code);

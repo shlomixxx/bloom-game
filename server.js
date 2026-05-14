@@ -38,18 +38,66 @@ function generateContestCode() {
 }
 
 async function generateUniqueContestCode() {
-  for (let attempt = 0; attempt < 10; attempt++) {
+  for (let attempt = 0; attempt < 20; attempt++) {
     const code = generateContestCode();
+    if (isCodeBlacklisted(code)) continue;
     const result = await pool.query('SELECT code FROM contests WHERE code = $1', [code]);
     if (result.rows.length === 0) return code;
   }
-  throw new Error('Could not generate unique code after 10 attempts');
+  throw new Error('Could not generate unique code after 20 attempts');
 }
 
 function shiftDateBack(iso, daysBack) {
   const d = new Date(iso + 'T00:00:00Z');
   d.setUTCDate(d.getUTCDate() - daysBack);
   return d.toISOString().slice(0, 10);
+}
+
+// ============================================================
+// RATE LIMITING (per-device, in-memory, sliding window)
+// ============================================================
+// Resets on server restart. Acceptable for a friends game with no auth.
+
+const rateLimitStore = new Map(); // bucket key → array of timestamps
+
+function checkRateLimit(bucket, deviceId, maxRequests, windowMs) {
+  if (!deviceId) return true; // bad inputs validated separately; don't double-fail
+  const key = bucket + ':' + deviceId;
+  const now = Date.now();
+  const recent = (rateLimitStore.get(key) || []).filter(function(ts) { return now - ts < windowMs; });
+  if (recent.length >= maxRequests) {
+    return false;
+  }
+  recent.push(now);
+  rateLimitStore.set(key, recent);
+  return true;
+}
+
+// Periodic cleanup so the map doesn't grow unbounded
+setInterval(function() {
+  const cutoff = Date.now() - 60 * 60 * 1000; // anything older than 1 hour is gone
+  for (const [k, arr] of rateLimitStore) {
+    const fresh = arr.filter(function(ts) { return ts > cutoff; });
+    if (fresh.length === 0) rateLimitStore.delete(k);
+    else if (fresh.length !== arr.length) rateLimitStore.set(k, fresh);
+  }
+}, 5 * 60 * 1000);
+
+// ============================================================
+// CONTEST CODE GENERATION + BLACKLIST
+// ============================================================
+// The base alphabet already avoids 0/1/I/O. Filter out a small set of
+// substrings that read offensive in the resulting codes.
+const CODE_BLACKLIST = [
+  'FUCK', 'SHIT', 'BITCH', 'DICK', 'COCK', 'CUNT', 'TWAT', 'PUSS',
+  'ANAL', 'PORN', 'NAZI', 'KKK', 'HELL', 'CRAP', 'DAMN',
+  'SLUT', 'WHORE', 'RAPE', 'SUCK'
+];
+function isCodeBlacklisted(code) {
+  for (let i = 0; i < CODE_BLACKLIST.length; i++) {
+    if (code.indexOf(CODE_BLACKLIST[i]) !== -1) return true;
+  }
+  return false;
 }
 
 // ============================================================
@@ -62,6 +110,10 @@ app.post('/api/score', async (req, res) => {
     if (!isValidDate(date)) return res.status(400).json({ error: 'bad_date' });
     if (typeof deviceId !== 'string' || deviceId.length < 8 || deviceId.length > 64) {
       return res.status(400).json({ error: 'bad_device' });
+    }
+    // Rate limit: max 60 daily score submissions per device per hour
+    if (!checkRateLimit('daily:score', deviceId, 60, 60 * 60 * 1000)) {
+      return res.status(429).json({ error: 'rate_limited' });
     }
     if (typeof score !== 'number' || !Number.isFinite(score) || score < 0 || score > 10_000_000) {
       return res.status(400).json({ error: 'bad_score' });
@@ -250,6 +302,11 @@ app.post('/api/contests', async (req, res) => {
       return res.status(400).json({ error: 'bad_device' });
     }
 
+    // Rate limit: max 5 new contests per device per hour
+    if (!checkRateLimit('contest:create', deviceId, 5, 60 * 60 * 1000)) {
+      return res.status(429).json({ error: 'rate_limited' });
+    }
+
     const dur = Math.min(Math.max(parseInt(durationDays, 10) || 7, 1), 30);
     const type = boardType === 'free' ? 'free' : 'shared';
     const seed = type === 'shared' ? Math.floor(Math.random() * 2147483647) : null;
@@ -328,6 +385,10 @@ app.post('/api/contests/:code/join', async (req, res) => {
     if (typeof deviceId !== 'string' || deviceId.length < 8 || deviceId.length > 64) {
       return res.status(400).json({ error: 'bad_device' });
     }
+    // Rate limit: max 30 joins per device per hour
+    if (!checkRateLimit('contest:join', deviceId, 30, 60 * 60 * 1000)) {
+      return res.status(429).json({ error: 'rate_limited' });
+    }
     const cleanedName = cleanDisplayName(displayName);
 
     const contestResult = await pool.query('SELECT * FROM contests WHERE code = $1', [code]);
@@ -362,6 +423,10 @@ app.post('/api/contests/:code/score', async (req, res) => {
     if (!code) return res.status(400).json({ error: 'bad_code' });
     if (typeof deviceId !== 'string' || deviceId.length < 8 || deviceId.length > 64) {
       return res.status(400).json({ error: 'bad_device' });
+    }
+    // Rate limit: max 60 score submissions per device per hour (~1/min)
+    if (!checkRateLimit('contest:score', deviceId, 60, 60 * 60 * 1000)) {
+      return res.status(429).json({ error: 'rate_limited' });
     }
     if (typeof score !== 'number' || !Number.isFinite(score) || score < 0 || score > 10_000_000) {
       return res.status(400).json({ error: 'bad_score' });
