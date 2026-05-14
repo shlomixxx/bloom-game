@@ -389,6 +389,30 @@
     text-align: center; margin: 4px 0 10px;
   }
   .ach-summary b { color: #BA7517; font-weight: 700; }
+
+  /* Lifetime stats grid (inside achievements modal) */
+  .stats-grid {
+    display: grid; grid-template-columns: 1fr 1fr 1fr;
+    gap: 5px; margin: 0 0 14px;
+  }
+  .stat-card {
+    background: #FAFAF6;
+    border-radius: 9px;
+    padding: 7px 8px;
+    text-align: center;
+    direction: rtl;
+    min-width: 0;
+  }
+  .stat-card-label {
+    font-size: 9px; color: #A8A6A0;
+    letter-spacing: 0.04em;
+    margin-bottom: 2px;
+  }
+  .stat-card-value {
+    font-size: 14px; font-weight: 700; color: #1C1A18;
+    font-variant-numeric: tabular-nums;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
   .ach-unlock-toast {
     position: fixed; bottom: 24px; left: 50%;
     transform: translateX(-50%);
@@ -1000,6 +1024,11 @@
   const STREAK_KEY = 'bloom_streak';
   const ACH_KEY = 'bloom_achievements';
   const GAMES_COUNT_KEY = 'bloom_games_played';
+  // Lifetime "personal bests" — only ever grow.
+  const BEST_TIER_KEY  = 'bloom_best_tier_ever';
+  const BEST_CHAIN_KEY = 'bloom_best_chain_ever';
+  const BEST_STREAK_KEY = 'bloom_best_streak_ever';
+  const TOTAL_SCORE_KEY = 'bloom_total_lifetime_score';
 
   // Same-origin API. When the game is served from the Express backend, this
   // works as-is. When opened from file:// the leaderboard simply won't load.
@@ -1336,6 +1365,7 @@
     else s.count = 1;
     s.lastPlayed = today;
     saveStreak(s);
+    bumpLifetimeMax(BEST_STREAK_KEY, s.count);
     renderStreakBadge();
     checkAchievements({ streakNow: s.count });
     return s;
@@ -1402,6 +1432,22 @@
     const n = loadGamesPlayed() + 1;
     try { localStorage.setItem(GAMES_COUNT_KEY, String(n)); } catch (e) {}
     return n;
+  }
+  // Generic int helpers for the lifetime "personal best" trackers.
+  function loadLifetimeInt(key) {
+    try { return parseInt(localStorage.getItem(key) || '0', 10) | 0; } catch (e) { return 0; }
+  }
+  function bumpLifetimeMax(key, candidate) {
+    const c = candidate | 0;
+    if (c <= 0) return;
+    const cur = loadLifetimeInt(key);
+    if (c > cur) { try { localStorage.setItem(key, String(c)); } catch (e) {} }
+  }
+  function addLifetimeTotal(key, delta) {
+    const d = delta | 0;
+    if (d <= 0) return;
+    const cur = loadLifetimeInt(key);
+    try { localStorage.setItem(key, String(cur + d)); } catch (e) {}
   }
 
   function currentAchievementState(extra) {
@@ -1475,7 +1521,29 @@
     const unlocked = loadUnlocked();
     const total = ACHIEVEMENTS.length;
     const got = ACHIEVEMENTS.filter(function(a){ return unlocked[a.id]; }).length;
-    let html = '<div class="ach-summary">פתחת <b>' + got + '</b> מתוך ' + total + ' הישגים</div>';
+
+    // Lifetime stats panel
+    const bestTier = loadLifetimeInt(BEST_TIER_KEY);
+    const bestTierName = (bestTier > 0 && TIERS[bestTier]) ? TIERS[bestTier].name : '—';
+    const stats = [
+      { label: 'משחקים',         value: loadGamesPlayed().toLocaleString() },
+      { label: 'שיא במשחק',      value: (best | 0).toLocaleString() },
+      { label: 'דרגה מקסימלית',  value: bestTierName },
+      { label: 'שרשרת ארוכה',    value: loadLifetimeInt(BEST_CHAIN_KEY) || '—' },
+      { label: 'רצף שיא',         value: loadLifetimeInt(BEST_STREAK_KEY) || '—' },
+      { label: 'ניקוד מצטבר',    value: loadLifetimeInt(TOTAL_SCORE_KEY).toLocaleString() }
+    ];
+    let statsHtml = '<div class="stats-grid">';
+    for (let i = 0; i < stats.length; i++) {
+      statsHtml += '<div class="stat-card">' +
+        '<div class="stat-card-label">' + stats[i].label + '</div>' +
+        '<div class="stat-card-value">' + stats[i].value + '</div>' +
+      '</div>';
+    }
+    statsHtml += '</div>';
+
+    let html = '<div class="ach-summary">המספרים שלך · פתחת <b>' + got + '</b> מתוך ' + total + ' הישגים</div>';
+    html += statsHtml;
     for (let g = 0; g < ACH_GROUPS.length; g++) {
       const grp = ACH_GROUPS[g];
       const items = ACHIEVEMENTS.filter(function(a){ return a.group === grp.id; });
@@ -3067,6 +3135,7 @@
             bumpScore();
             soundMerge(nt);
             if (chainCount > currentGameMaxChain) currentGameMaxChain = chainCount;
+            bumpLifetimeMax(BEST_CHAIN_KEY, chainCount);
             if (chainCount >= 2) {
               const m = chainCount === 2 ? '1.5' : chainCount === 3 ? '2' : chainCount === 4 ? '2.5' : '3';
               showChainBadge(chainCount, m);
@@ -3121,6 +3190,8 @@
       buzz([60, 80, 100]);
       playMusic('fail');
       incrementGamesPlayed();
+      bumpLifetimeMax(BEST_TIER_KEY, highestTier);
+      addLifetimeTotal(TOTAL_SCORE_KEY, score);
       checkAchievements();
       if (mode === 'daily' && !dailySubmitted) {
         dailySubmitted = true;
