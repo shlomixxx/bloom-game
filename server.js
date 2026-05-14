@@ -194,6 +194,49 @@ app.get('/api/leaderboard/range/:period', async (req, res) => {
 // FRIENDS COMPETITION ENDPOINTS (חדש)
 // ============================================================
 
+// GET /api/contests/mine — כל התחרויות שהמכשיר חבר בהן
+app.get('/api/contests/mine', async (req, res) => {
+  try {
+    const deviceId = String(req.query.deviceId || '').slice(0, 64);
+    if (!deviceId || deviceId.length < 8) {
+      return res.status(400).json({ error: 'bad_device' });
+    }
+    const result = await pool.query(
+      `SELECT
+         c.code, c.name, c.host_name, c.ends_at, c.created_at, c.board_type,
+         cs.score AS my_score, cs.highest_tier AS my_tier,
+         cs.games_played AS my_games, cs.last_played_at AS my_last,
+         (SELECT COUNT(*) FROM contest_scores WHERE contest_code = c.code) AS member_count,
+         (SELECT 1 + COUNT(*) FROM contest_scores
+            WHERE contest_code = c.code AND score > cs.score) AS my_rank
+       FROM contests c
+       INNER JOIN contest_scores cs ON cs.contest_code = c.code
+       WHERE cs.device_id = $1
+       ORDER BY cs.last_played_at DESC, c.created_at DESC`,
+      [deviceId]
+    );
+    const contests = result.rows.map((r) => ({
+      code: r.code,
+      name: r.name,
+      host_name: r.host_name,
+      ends_at: r.ends_at,
+      board_type: r.board_type,
+      member_count: parseInt(r.member_count, 10) || 0,
+      my: {
+        score: r.my_score | 0,
+        tier: r.my_tier | 0,
+        games: r.my_games | 0,
+        rank: parseInt(r.my_rank, 10) || 1,
+        last: r.my_last
+      }
+    }));
+    res.json({ ok: true, contests });
+  } catch (e) {
+    console.error('GET /api/contests/mine', e);
+    res.status(500).json({ error: 'server' });
+  }
+});
+
 // POST /api/contests — יצירת תחרות חדשה
 app.post('/api/contests', async (req, res) => {
   try {
