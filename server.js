@@ -450,7 +450,7 @@ app.post('/api/contests/:code/score', async (req, res) => {
        ON CONFLICT (contest_code, device_id)
        DO UPDATE SET
          display_name = EXCLUDED.display_name,
-         score = GREATEST(contest_scores.score, EXCLUDED.score),
+         score = contest_scores.score + EXCLUDED.score,
          highest_tier = GREATEST(contest_scores.highest_tier, EXCLUDED.highest_tier),
          games_played = contest_scores.games_played + 1,
          last_played_at = NOW()`,

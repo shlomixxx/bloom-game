@@ -398,6 +398,8 @@
     direction: rtl;
   }
   .ach-unlock-toast svg { width: 16px; height: 16px; color: #FAC775; }
+  .ach-unlock-toast.overtake { background: #C8472F; }
+  .ach-unlock-toast.overtake svg { color: #FFD37A; }
   @keyframes achToastIn {
     from { opacity: 0; transform: translate(-50%, 20px); }
     to   { opacity: 1; transform: translate(-50%, 0); }
@@ -764,6 +766,15 @@
     margin-top: 2px; font-weight: 500;
     font-variant-numeric: tabular-nums;
   }
+  /* Contest scoring-method explainer (sums vs single-game) */
+  .contest-scoring-note {
+    font-size: 10px; color: #6F6E68;
+    text-align: center; margin: -4px auto 8px;
+    background: #FFF5E1; border-radius: 10px;
+    padding: 4px 12px; max-width: 280px;
+    direction: rtl; letter-spacing: 0.02em;
+  }
+
   /* Contest leaderboard — code chip (so the share code is always visible) */
   .contest-code-row { text-align: center; margin: 4px 0 10px; }
   .contest-code-pill {
@@ -1505,6 +1516,11 @@
       const onOverScreen = wrap && wrap.querySelector('.overlay');
       if (onOverScreen) init('practice');
       playMusic('game');
+      // If we're returning to a paused contest game, make sure the overtake
+      // watcher is running again (it was stopped when navigating away).
+      if (mode === 'contest' && activeContestCode && !overtakeTimer) {
+        startOvertakeWatch(activeContestCode);
+      }
     };
     document.getElementById('home-start').onclick = enter;
     document.getElementById('home-skip').onclick = enter;
@@ -2017,6 +2033,82 @@
     contestRefreshTimer = setInterval(refreshContestBoardSilently, 20000);
   }
 
+  /* ============ OVERTAKE WATCH (toast when someone passes me) ============ */
+  // Polls the active contest every 45s. The first poll seeds a baseline
+  // silently; subsequent polls compare each opponent's score to the baseline
+  // and fire a toast for anyone who crossed above my score since the last
+  // check. Names are used as identifiers (the contest endpoint does not
+  // expose device_id) — fine for friends groups; rare name collisions just
+  // cause one missed toast.
+  let overtakeTimer = null;
+  let overtakeCode = null;
+  let overtakeBaseline = null;          // { myScore, others: Map(name -> score) }
+
+  function snapshotFromContestData(data) {
+    const me = (data.players || []).find(function(p) { return p.you; });
+    const myScore = me ? (me.score | 0) : 0;
+    const others = new Map();
+    (data.players || []).forEach(function(p) {
+      if (!p.you) others.set(p.name, p.score | 0);
+    });
+    return { myScore: myScore, others: others };
+  }
+
+  async function refreshOvertake() {
+    if (!overtakeCode || !overtakeBaseline) return;
+    if (typeof document !== 'undefined' && document.hidden) return;
+    if (mode !== 'contest' || activeContestCode !== overtakeCode) return;
+    const data = await fetchContest(overtakeCode);
+    if (!data) return;
+    if (!overtakeTimer) return; // got stopped during the fetch
+    const next = snapshotFromContestData(data);
+    const overtakers = [];
+    next.others.forEach(function(newScore, name) {
+      const prevScore = overtakeBaseline.others.get(name) || 0;
+      if (newScore > next.myScore && prevScore <= overtakeBaseline.myScore) {
+        overtakers.push({ name: name, score: newScore });
+      }
+    });
+    overtakeBaseline = next;
+    if (!overtakers.length) return;
+    overtakers.sort(function(a, b) { return b.score - a.score; });
+    showOvertakeToast(overtakers[0], overtakers.length - 1);
+  }
+
+  function startOvertakeWatch(code) {
+    stopOvertakeWatch();
+    if (!code) return;
+    overtakeCode = code;
+    overtakeTimer = setTimeout(function tick() {
+      if (!overtakeTimer) return;
+      // First tick seeds the baseline silently; rearm with the regular interval.
+      (async function() {
+        const data = await fetchContest(code);
+        if (data) overtakeBaseline = snapshotFromContestData(data);
+        if (overtakeTimer) overtakeTimer = setInterval(refreshOvertake, 45000);
+      })();
+    }, 0);
+  }
+
+  function stopOvertakeWatch() {
+    if (overtakeTimer) { clearTimeout(overtakeTimer); clearInterval(overtakeTimer); overtakeTimer = null; }
+    overtakeCode = null;
+    overtakeBaseline = null;
+  }
+
+  function showOvertakeToast(player, extraCount) {
+    const t = document.createElement('div');
+    t.className = 'ach-unlock-toast overtake';
+    const extra = extraCount > 0 ? ' (+' + extraCount + ')' : '';
+    t.innerHTML =
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z"/></svg>' +
+      '<span>' + escapeHtml(player.name) + ' עבר אותך' + extra + ' · ' + (player.score | 0).toLocaleString() + ' נק׳</span>';
+    document.body.appendChild(t);
+    setTimeout(function() { t.remove(); }, 3500);
+    if (!sfxMuted) buzz([30, 40, 30]);
+    if (!sfxMuted) tone({ freq: 392, bendTo: 294, duration: 0.22, type: 'sawtooth', vol: 0.09, filter: 2400 });
+  }
+
   async function showContestLeaderboard(code) {
     let screen = document.getElementById('contest-screen');
     if (!screen) {
@@ -2053,6 +2145,7 @@
         '<span class="contest-live-dot"></span>' +
         (data.players || []).length + ' שחקנים · ' + formatTimeLeft(data.contest.ends_at) +
       '</div>' +
+      '<div class="contest-scoring-note">סכום נקודות מצטבר — כל משחק מצטרף לסך</div>' +
       '<div class="contest-board">' + playersHtml + '</div>' +
       '<div class="contest-form" style="margin-top:18px">' +
         '<button class="contest-submit-btn" id="clb-play">שחק עכשיו</button>' +
@@ -2096,6 +2189,7 @@
       if (!confirm('לצאת מהתחרות הזו? תוכל להצטרף בחזרה עם הקוד.')) return;
       clearContestGameState(code);
       clearContestDisplayName(code);
+      stopOvertakeWatch();
       setActiveContest(null);
       activeContestData = null;
       stopContestRefresh();
@@ -2103,6 +2197,9 @@
       showHome();
     };
 
+    // Leaderboard view has its own 20 s refresh — pause the overtake watcher
+    // to avoid hitting the same endpoint twice on different cadences.
+    stopOvertakeWatch();
     startContestRefresh(code);
   }
 
@@ -2453,6 +2550,9 @@
     if (!restoredContestState) nextPiece = pickPiece();
     updateModeBar();
     render();
+    // Watch for opponents passing my score while I'm mid-game in a contest.
+    if (mode === 'contest' && activeContestCode) startOvertakeWatch(activeContestCode);
+    else stopOvertakeWatch();
   }
 
   function updateModeBar() {
@@ -2959,6 +3059,7 @@
       if (mode === 'contest' && !contestSubmitted && activeContestCode) {
         contestSubmitted = true;
         clearContestGameState();
+        stopOvertakeWatch();
         (async function() {
           await submitContestScore(activeContestCode, score, highestTier);
           await loadContestLeaderboard();
@@ -3151,6 +3252,10 @@
     // Same for the My Contests list, if it's open
     if (document.visibilityState === 'visible' && document.getElementById('mclb-body')) {
       fetchMyContests({ fresh: true }).then(function(c) { renderMyContestsBody(c); });
+    }
+    // And for the in-game overtake watcher
+    if (document.visibilityState === 'visible' && overtakeCode && overtakeTimer) {
+      refreshOvertake();
     }
   });
   window.addEventListener('beforeunload', function() {
