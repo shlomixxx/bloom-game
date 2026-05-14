@@ -748,6 +748,16 @@
   .contest-board-row.first .contest-board-rank {
     background: #FAC775; color: #412402; border-color: #FAC775;
   }
+  .contest-board-tier {
+    width: 28px; height: 28px; border-radius: 7px;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .contest-board-tier svg { width: 16px; height: 16px; }
+  .contest-board-tier.contest-board-tier-empty {
+    background: #F0EDE3; color: #C8C5BE;
+    font-weight: 700;
+  }
   .contest-board-name {
     flex: 1; font-size: 14px; color: #1C1A18; font-weight: 500;
   }
@@ -2116,19 +2126,30 @@
       const cls = i === 0 ? 'contest-board-row first' : p.you ? 'contest-board-row me' : 'contest-board-row';
       const youBadge = p.you ? ' <small>(אתה)</small>' : '';
       const games = p.games | 0;
+      const tierIdx = p.tier | 0;
       const last = formatRelativeTime(p.last);
-      const metaParts = [];
-      if (games > 0) metaParts.push(games + (games === 1 ? ' משחק' : ' משחקים'));
-      if (last) metaParts.push(last);
-      const metaLine = metaParts.length
-        ? '<div class="contest-board-meta">' + metaParts.join(' · ') + '</div>'
-        : '';
+      let metaLine;
+      if (games === 0) {
+        metaLine = '<div class="contest-board-meta">' + (p.you ? 'טרם שיחקת בתחרות' : 'טרם שיחק') + '</div>';
+      } else {
+        const parts = [games + (games === 1 ? ' משחק' : ' משחקים')];
+        if (TIERS[tierIdx] && tierIdx > 0) parts.push('עד ' + TIERS[tierIdx].name);
+        if (last) parts.push(last);
+        metaLine = '<div class="contest-board-meta">' + parts.join(' · ') + '</div>';
+      }
       const delta = (i === 0) ? 0 : topScore - (p.score | 0);
       const deltaLine = delta > 0
         ? '<div class="contest-board-delta">−' + delta.toLocaleString() + '</div>'
         : '';
+      // Small tier badge to the left of the name — gives an at-a-glance signal
+      // of how far the player got in this contest.
+      const tierObj = TIERS[tierIdx];
+      const tierBadge = (games > 0 && tierObj && tierIdx > 0)
+        ? '<div class="contest-board-tier" style="background:' + tierObj.bg + ';color:' + tierObj.fg + '" title="' + escapeHtml(tierObj.name) + '">' + tierObj.svg + '</div>'
+        : '<div class="contest-board-tier contest-board-tier-empty">·</div>';
       return '<div class="' + cls + '">' +
         '<div class="contest-board-rank">' + (i + 1) + '</div>' +
+        tierBadge +
         '<div class="contest-board-name-col">' +
           '<div class="contest-board-name">' + escapeHtml(p.name || 'אנונימי') + youBadge + '</div>' +
           metaLine +
