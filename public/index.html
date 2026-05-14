@@ -448,6 +448,15 @@
     font-weight: 700;
     letter-spacing: 0.06em;
   }
+  .home-contest.home-contest-active {
+    background: #E1F5EE;
+    color: #04342C;
+    border-color: #9FE1CB;
+  }
+  .home-contest-badge.home-contest-badge-active {
+    background: #2E8B6F;
+    color: #FFFFFF;
+  }
 
   /* Contest screens - shared styles */
   .contest-screen {
@@ -1313,7 +1322,9 @@
       '<div class="home-brand">BLOOM</div>' +
       '<div class="home-sub">מזג חפצים, גלה דרגות חדשות, והגע עד לכתר</div>' +
       '<button class="home-start" id="home-start">בוא נתחיל</button>' +
-      '<button class="home-contest" id="home-contest"><span class="home-contest-badge">חדש</span>תחרות חברים</button>' +
+      (activeContestCode
+        ? '<button class="home-contest home-contest-active" id="home-contest"><span class="home-contest-badge home-contest-badge-active">פעיל</span>המשך תחרות חברים</button>'
+        : '<button class="home-contest" id="home-contest"><span class="home-contest-badge">חדש</span>תחרות חברים</button>') +
       '<button class="home-skip" id="home-skip">אני יודע לשחק, דלג</button>' +
       '<div class="home-version">v1.0</div>';
     app.appendChild(h);
@@ -1335,7 +1346,11 @@
     const contestBtn = document.getElementById('home-contest');
     if (contestBtn) contestBtn.onclick = function() {
       ensureAudio();
-      showContestMenu();
+      if (activeContestCode) {
+        showContestLeaderboard(activeContestCode);
+      } else {
+        showContestMenu();
+      }
     };
     playMusic('lobby');
   }
@@ -1653,6 +1668,7 @@
       '<div class="contest-form" style="margin-top:18px">' +
         '<button class="contest-submit-btn" id="clb-play">שחק עכשיו</button>' +
         '<button class="contest-secondary-btn" id="clb-share">שתף קישור</button>' +
+        (activeContestCode === code ? '<button class="contest-ghost-btn" id="clb-leave">יציאה מהתחרות</button>' : '') +
       '</div>';
 
     document.getElementById('clb-play').onclick = function() {
@@ -1668,6 +1684,14 @@
         navigator.clipboard.writeText(link);
         this.textContent = '✓ הקישור הועתק';
       }
+    };
+    const leaveBtn = document.getElementById('clb-leave');
+    if (leaveBtn) leaveBtn.onclick = function() {
+      if (!confirm('לצאת מהתחרות הזו? תוכל להצטרף בחזרה עם הקוד.')) return;
+      setActiveContest(null);
+      activeContestData = null;
+      hideContestScreens();
+      showHome();
     };
   }
 
