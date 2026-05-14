@@ -80,6 +80,56 @@
   .icon-btn svg { width: 15px; height: 15px; color: #6F6E68; }
   .icon-btn:hover { background: #F5F5F0; }
   .icon-btn.muted svg { color: #C84040; }
+
+  .mute-menu {
+    position: absolute;
+    z-index: 160;
+    top: 56px;
+    background: #FFFFFF;
+    border: 1px solid rgba(0,0,0,0.08);
+    border-radius: 11px;
+    padding: 5px;
+    min-width: 200px;
+    box-shadow: 0 10px 28px rgba(0,0,0,0.14);
+    direction: rtl;
+  }
+  .mute-menu.from-top { left: 14px; }
+  .mute-menu.from-home { top: 60px; left: 16px; }
+  .mute-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 11px; border-radius: 8px;
+    cursor: pointer; user-select: none;
+    font-size: 13px; color: #1C1A18;
+  }
+  .mute-item:hover { background: #FAFAF6; }
+  .mute-item-icon {
+    width: 22px; height: 22px;
+    display: flex; align-items: center; justify-content: center;
+    color: #6F6E68; flex-shrink: 0;
+  }
+  .mute-item-icon svg { width: 16px; height: 16px; }
+  .mute-item-label { flex: 1; text-align: right; font-weight: 500; }
+  .mute-item-state {
+    font-size: 10px; padding: 2px 8px;
+    border-radius: 10px;
+    background: #E6F4D7; color: #2E5A0F;
+    letter-spacing: 0.02em;
+  }
+  .mute-item.off .mute-item-state {
+    background: #FCE4E0; color: #B23A1A;
+  }
+  .mute-item.off .mute-item-icon { color: #C84040; }
+  .mute-item.off .mute-item-label { color: #6F6E68; }
+  .mute-item.mute-item-all {
+    margin-top: 3px;
+    border-top: 1px solid rgba(0,0,0,0.05);
+    border-radius: 0 0 8px 8px;
+    padding-top: 11px;
+    justify-content: center;
+    color: #6F6E68;
+    font-weight: 600;
+  }
+  .mute-item.mute-item-all:hover { background: #F5F2EC; color: #1C1A18; }
   .next-bar {
     padding: 12px 18px;
     display: flex; align-items: center; gap: 12px;
@@ -489,6 +539,8 @@
   const DEVICE_KEY = 'bloom_device_id';
   const DAILY_PLAYED_PREFIX = 'bloom_daily_';
   const MUTE_KEY = 'bloom_muted';
+  const MUSIC_MUTE_KEY = 'bloom_muted_music';
+  const SFX_MUTE_KEY = 'bloom_muted_sfx';
   const STREAK_KEY = 'bloom_streak';
   const ACH_KEY = 'bloom_achievements';
   const GAMES_COUNT_KEY = 'bloom_games_played';
@@ -499,7 +551,24 @@
 
   /* ============ AUDIO ============ */
   let audioCtx = null;
-  let muted = localStorage.getItem(MUTE_KEY) === '1';
+  // Granular mute: music (mp3 tracks) and sfx (Web Audio tones + haptics) are
+  // controlled independently. Migrate from the legacy MUTE_KEY when present.
+  const legacyMutedRaw = localStorage.getItem(MUTE_KEY);
+  function readMuteKey(key) {
+    const v = localStorage.getItem(key);
+    if (v === '1') return true;
+    if (v === '0') return false;
+    return legacyMutedRaw === '1';
+  }
+  let musicMuted = readMuteKey(MUSIC_MUTE_KEY);
+  let sfxMuted = readMuteKey(SFX_MUTE_KEY);
+  function saveMuteState() {
+    try {
+      localStorage.setItem(MUSIC_MUTE_KEY, musicMuted ? '1' : '0');
+      localStorage.setItem(SFX_MUTE_KEY, sfxMuted ? '1' : '0');
+    } catch (e) {}
+  }
+  function isAnyMuted() { return musicMuted || sfxMuted; }
 
   function ensureAudio() {
     if (!audioCtx) try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) {}
@@ -578,7 +647,7 @@
     if (sameTrack && el && !el.paused && el.volume > 0.001) return;
     const prev = currentTrack;
     currentTrack = name;
-    if (muted) return;
+    if (musicMuted) return;
     if (prev && prev !== name) {
       fadeOutTrack(prev, MUSIC_FADE_MS, function() {
         if (currentTrack === name) fadeInTrack(name, MUSIC_FADE_MS, MUSIC_VOLUME);
@@ -601,13 +670,13 @@
     });
   }
   function resumeCurrentMusic() {
-    if (!currentTrack || muted) return;
+    if (!currentTrack || musicMuted) return;
     const el = getTrackEl(currentTrack);
     if (!el) return;
     try { el.volume = MUSIC_VOLUME; const p = el.play(); if (p && p.catch) p.catch(function() {}); } catch(e) {}
   }
   function playTone(freq, duration, type, volume, delay) {
-    if (muted) return;
+    if (sfxMuted) return;
     const ctx = ensureAudio();
     if (!ctx) return;
     const t0 = ctx.currentTime + (delay || 0);
@@ -641,14 +710,12 @@
     playTone(196, 0.32, 'sawtooth', 0.1, 0.28);
   }
   function buzz(pattern) {
-    if (muted) return;
+    if (sfxMuted) return;
     if (navigator.vibrate) try { navigator.vibrate(pattern); } catch(e) {}
   }
-  function updateMuteUI() {
-    const btn = document.getElementById('mute');
-    const icon = document.getElementById('mute-icon');
+  function setMuteIcon(btn, icon, mutedState) {
     if (!btn || !icon) return;
-    if (muted) {
+    if (mutedState) {
       btn.classList.add('muted');
       icon.innerHTML = '<path d="M15 8a5 5 0 0 1 1.7 3M6 15H4a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1h2l3.5-4.5A.8.8 0 0 1 11 5v14a.8.8 0 0 1-1.5.5L6 15M21 9l-6 6M15 9l6 6"/>';
     } else {
@@ -656,16 +723,103 @@
       icon.innerHTML = '<path d="M15 8a5 5 0 0 1 0 8M17.7 5a9 9 0 0 1 0 14M6 15H4a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1h2l3.5-4.5A.8.8 0 0 1 11 5v14a.8.8 0 0 1-1.5.5L6 15"/>';
     }
   }
-  function toggleMute() {
-    muted = !muted;
-    localStorage.setItem(MUTE_KEY, muted ? '1' : '0');
+  function updateMuteUI() {
+    setMuteIcon(document.getElementById('mute'), document.getElementById('mute-icon'), isAnyMuted());
+    setMuteIcon(document.getElementById('home-mute'), document.getElementById('home-mute-icon'), isAnyMuted());
+  }
+  function setMusicMuted(next) {
+    if (musicMuted === next) return;
+    musicMuted = next;
+    saveMuteState();
     updateMuteUI();
-    if (muted) {
-      pauseAllMusic();
-    } else {
-      ensureAudio();
-      playTone(523, 0.08, 'sine', 0.12, 0);
-      resumeCurrentMusic();
+    syncMuteMenuItems();
+    if (musicMuted) pauseAllMusic();
+    else { ensureAudio(); resumeCurrentMusic(); }
+  }
+  function setSfxMuted(next) {
+    if (sfxMuted === next) return;
+    sfxMuted = next;
+    saveMuteState();
+    updateMuteUI();
+    syncMuteMenuItems();
+    if (!sfxMuted) { ensureAudio(); playTone(523, 0.08, 'sine', 0.12, 0); }
+  }
+  function muteAll() { setMusicMuted(true); setSfxMuted(true); }
+  function unmuteAll() { setMusicMuted(false); setSfxMuted(false); }
+
+  /* Mute popover menu — 3 choices: music, sfx, all */
+  const SVG_MUSIC_NOTE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>';
+  const SVG_BELL = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>';
+
+  function openMuteMenu(anchor) {
+    const existing = document.getElementById('mute-menu');
+    if (existing) { closeMuteMenu(); return; }
+    ensureAudio();
+    const app = document.querySelector('.app');
+    if (!app) return;
+    const menu = document.createElement('div');
+    menu.id = 'mute-menu';
+    menu.className = 'mute-menu ' + (anchor === 'home' ? 'from-home' : 'from-top');
+    menu.innerHTML =
+      '<div class="mute-item" data-kind="music">' +
+        '<div class="mute-item-icon">' + SVG_MUSIC_NOTE + '</div>' +
+        '<div class="mute-item-label">מוזיקה</div>' +
+        '<div class="mute-item-state">פעיל</div>' +
+      '</div>' +
+      '<div class="mute-item" data-kind="sfx">' +
+        '<div class="mute-item-icon">' + SVG_BELL + '</div>' +
+        '<div class="mute-item-label">אפקטי קול</div>' +
+        '<div class="mute-item-state">פעיל</div>' +
+      '</div>' +
+      '<div class="mute-item mute-item-all" data-kind="all">' +
+        '<div class="mute-item-label">השתק הכל</div>' +
+      '</div>';
+    app.appendChild(menu);
+    syncMuteMenuItems();
+    menu.querySelectorAll('.mute-item').forEach(function(it) {
+      it.onclick = function(e) {
+        e.stopPropagation();
+        const kind = it.getAttribute('data-kind');
+        if (kind === 'music') setMusicMuted(!musicMuted);
+        else if (kind === 'sfx') setSfxMuted(!sfxMuted);
+        else if (kind === 'all') {
+          if (musicMuted && sfxMuted) unmuteAll(); else muteAll();
+        }
+      };
+    });
+    setTimeout(function() {
+      const onOutside = function(e) {
+        if (!menu.contains(e.target) && !e.target.closest('#mute, #home-mute')) {
+          closeMuteMenu();
+          document.removeEventListener('pointerdown', onOutside, true);
+        }
+      };
+      document.addEventListener('pointerdown', onOutside, true);
+      menu.__outsideHandler = onOutside;
+    }, 0);
+  }
+  function closeMuteMenu() {
+    const menu = document.getElementById('mute-menu');
+    if (!menu) return;
+    if (menu.__outsideHandler) document.removeEventListener('pointerdown', menu.__outsideHandler, true);
+    menu.remove();
+  }
+  function syncMuteMenuItems() {
+    const menu = document.getElementById('mute-menu');
+    if (!menu) return;
+    const musicItem = menu.querySelector('[data-kind="music"]');
+    const sfxItem = menu.querySelector('[data-kind="sfx"]');
+    const allItem = menu.querySelector('[data-kind="all"]');
+    if (musicItem) {
+      musicItem.classList.toggle('off', musicMuted);
+      musicItem.querySelector('.mute-item-state').textContent = musicMuted ? 'מושתק' : 'פעיל';
+    }
+    if (sfxItem) {
+      sfxItem.classList.toggle('off', sfxMuted);
+      sfxItem.querySelector('.mute-item-state').textContent = sfxMuted ? 'מושתק' : 'פעיל';
+    }
+    if (allItem) {
+      allItem.querySelector('.mute-item-label').textContent = (musicMuted && sfxMuted) ? 'הפעל הכל' : 'השתק הכל';
     }
   }
 
@@ -879,8 +1033,7 @@
     syncHomeMuteUI();
     document.getElementById('home-mute').onclick = function(e) {
       e.stopPropagation();
-      toggleMute();
-      syncHomeMuteUI();
+      openMuteMenu('home');
     };
     const enter = function() {
       ensureAudio();
@@ -898,18 +1051,7 @@
     const h = document.getElementById('home-screen');
     if (h) h.remove();
   }
-  function syncHomeMuteUI() {
-    const btn = document.getElementById('home-mute');
-    const icon = document.getElementById('home-mute-icon');
-    if (!btn || !icon) return;
-    if (muted) {
-      btn.classList.add('muted');
-      icon.innerHTML = '<path d="M15 8a5 5 0 0 1 1.7 3M6 15H4a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1h2l3.5-4.5A.8.8 0 0 1 11 5v14a.8.8 0 0 1-1.5.5L6 15M21 9l-6 6M15 9l6 6"/>';
-    } else {
-      btn.classList.remove('muted');
-      icon.innerHTML = '<path d="M15 8a5 5 0 0 1 0 8M17.7 5a9 9 0 0 1 0 14M6 15H4a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1h2l3.5-4.5A.8.8 0 0 1 11 5v14a.8.8 0 0 1-1.5.5L6 15"/>';
-    }
-  }
+  function syncHomeMuteUI() { updateMuteUI(); }
 
   function pointsFor(tier, groupSize, chainMult) {
     return Math.round(tier * 10 * groupSize * chainMult);
@@ -1619,7 +1761,7 @@
 
   document.getElementById('reset').onclick = function() { init(); };
   document.getElementById('info').onclick = showInfo;
-  document.getElementById('mute').onclick = toggleMute;
+  document.getElementById('mute').onclick = function() { openMuteMenu('top'); };
   document.getElementById('leaderboard').onclick = openLeaderboardModal;
   document.getElementById('achievements').onclick = openAchievementsModal;
   document.getElementById('home-btn').onclick = function() { showHome(); };
@@ -1629,7 +1771,7 @@
 
   document.addEventListener('visibilitychange', function() {
     if (document.visibilityState === 'hidden') pauseAllMusic();
-    else if (document.visibilityState === 'visible' && !muted) resumeCurrentMusic();
+    else if (document.visibilityState === 'visible' && !musicMuted) resumeCurrentMusic();
   });
 
   /* Browsers block audio until the first user interaction.
@@ -1640,7 +1782,7 @@
     if (audioPrimed) return;
     audioPrimed = true;
     ensureAudio();
-    if (currentTrack && !muted) {
+    if (currentTrack && !musicMuted) {
       const el = getTrackEl(currentTrack);
       if (el && el.paused) fadeInTrack(currentTrack, MUSIC_FADE_MS, MUSIC_VOLUME);
     }
