@@ -266,12 +266,33 @@
   .mode-text { min-width: 0; }
   .mode-title { font-size: 12px; font-weight: 600; color: #1C1A18; line-height: 1.15; }
   .mode-sub { font-size: 10px; color: #6F6E68; line-height: 1.15; margin-top: 1px; }
-  .mode-switch {
-    background: none; border: 1px solid rgba(0,0,0,0.12); border-radius: 14px;
-    padding: 4px 10px; font-size: 11px; color: #6F6E68; cursor: pointer;
-    font-family: inherit; flex-shrink: 0;
+  .mode-tabs {
+    display: flex; gap: 2px;
+    background: rgba(0,0,0,0.05);
+    padding: 2px;
+    border-radius: 10px;
+    flex-shrink: 0;
+    direction: rtl;
   }
-  .mode-switch:hover { background: #F5F2EC; }
+  .mode-tab {
+    background: none; border: none;
+    padding: 5px 9px;
+    border-radius: 8px;
+    font-size: 11px;
+    font-weight: 500;
+    color: #6F6E68;
+    cursor: pointer;
+    font-family: inherit;
+    white-space: nowrap;
+    transition: background 0.15s, color 0.15s;
+  }
+  .mode-tab:hover:not(.active) { color: #1C1A18; }
+  .mode-tab.active {
+    background: #FFFFFF;
+    color: #1C1A18;
+    font-weight: 600;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  }
 
   .leaderboard { margin: 14px 0 4px; }
   .lb-head {
@@ -796,7 +817,7 @@
         <div class="mode-sub" id="mode-sub">אותו דאנג'ן לכולם היום</div>
       </div>
     </div>
-    <button class="mode-switch" id="mode-switch">אימון חופשי</button>
+    <div class="mode-tabs" id="mode-tabs"></div>
   </div>
   <div class="next-bar">
     <div class="next-label">הבא:</div>
@@ -1904,7 +1925,6 @@
   let contestSubmitted = false;
   let contestRefreshTimer = null;
   let contestRefreshCode = null;
-  let lastNonPracticeMode = 'daily';
 
   function getDeviceId() {
     let id = localStorage.getItem(DEVICE_KEY);
@@ -2034,7 +2054,6 @@
     opts = opts || {};
     const fresh = !!opts.fresh;
     if (nextMode) mode = nextMode;
-    if (mode !== 'practice') lastNonPracticeMode = mode;
     dailyDate = todayInIsrael();
     grid = Array.from({length: ROWS}, function() { return Array(COLS).fill(0); });
     score = 0; highestTier = 1; busy = false;
@@ -2103,28 +2122,42 @@
     const bar = document.getElementById('mode-bar');
     const title = document.getElementById('mode-title');
     const sub = document.getElementById('mode-sub');
-    const sw = document.getElementById('mode-switch');
+    const tabsEl = document.getElementById('mode-tabs');
     if (!bar) return;
+
+    // Title + subtitle reflect the current mode
     if (mode === 'daily') {
       bar.classList.remove('practice');
       title.textContent = 'אתגר יומי · ' + formatDateHe(dailyDate);
       sub.textContent = "אותו דאנג'ן לכולם היום";
-      sw.textContent = 'אימון חופשי';
-      return;
-    }
-    if (mode === 'contest') {
+    } else if (mode === 'contest') {
       bar.classList.remove('practice');
       title.textContent = 'תחרות חברים';
       sub.textContent = activeContestData ? activeContestData.name : 'תחרות פעילה';
-      sw.textContent = 'אימון חופשי';
-      return;
+    } else {
+      bar.classList.add('practice');
+      title.textContent = 'אימון חופשי';
+      sub.textContent = 'דאנג\'ן רנדומלי, ללא טבלת מובילים';
     }
-    bar.classList.add('practice');
-    title.textContent = 'אימון חופשי';
-    sub.textContent = 'דאנג\'ן רנדומלי, ללא טבלת מובילים';
-    sw.textContent = (lastNonPracticeMode === 'contest' && activeContestCode)
-      ? 'חזרה לתחרות חברים'
-      : 'חזרה לאתגר היומי';
+
+    // Build/update the segmented tab control. The "חברים" tab appears only
+    // when the player has an active contest code.
+    if (!tabsEl) return;
+    const tabs = [{ id: 'daily', label: 'יומי' }];
+    if (activeContestCode) tabs.push({ id: 'contest', label: 'חברים' });
+    tabs.push({ id: 'practice', label: 'אימון' });
+    tabsEl.innerHTML = tabs.map(function(t) {
+      return '<button class="mode-tab' + (t.id === mode ? ' active' : '') +
+        '" data-mode="' + t.id + '">' + t.label + '</button>';
+    }).join('');
+    tabsEl.querySelectorAll('.mode-tab').forEach(function(btn) {
+      btn.onclick = function() {
+        const target = btn.getAttribute('data-mode');
+        if (target === mode) return;
+        if (mode === 'contest') saveContestGameState();
+        init(target);
+      };
+    });
   }
 
   function startCountdown() {
@@ -2737,19 +2770,9 @@
   document.getElementById('leaderboard').onclick = openLeaderboardModal;
   document.getElementById('achievements').onclick = openAchievementsModal;
   document.getElementById('home-btn').onclick = function() { showHome(); };
-  document.getElementById('mode-switch').onclick = function() {
-    if (mode === 'daily' || mode === 'contest') {
-      // Switching INTO practice — preserve any in-progress contest state so the
-      // user can return to it via the practice mode-switch.
-      if (mode === 'contest') saveContestGameState();
-      init('practice');
-    } else {
-      // Switching OUT of practice — go to whatever non-practice mode the user
-      // came from. Restoration of contest grid happens automatically inside init().
-      const back = (lastNonPracticeMode === 'contest' && activeContestCode) ? 'contest' : 'daily';
-      init(back);
-    }
-  };
+  // Mode navigation is now wired inside updateModeBar() via the segmented
+  // .mode-tabs control — every tab routes to its mode directly and saves
+  // contest state when leaving contest. No single mode-switch button anymore.
 
   document.addEventListener('visibilitychange', function() {
     if (document.visibilityState === 'hidden') {
