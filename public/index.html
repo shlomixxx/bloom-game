@@ -13,6 +13,7 @@
 <link rel="icon" href="/assets/favicon-32.png" sizes="32x32" type="image/png">
 <link rel="icon" href="/assets/favicon-16.png" sizes="16x16" type="image/png">
 <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
+<link rel="manifest" href="/manifest.json">
 
 <!-- Social preview (Open Graph + Twitter) -->
 <meta property="og:type" content="website">
@@ -1524,6 +1525,7 @@
 
   function hideContestScreens() {
     stopContestRefresh();
+    stopMyContestsRefresh();
     const el = document.getElementById('contest-screen');
     if (el) el.remove();
   }
@@ -1608,39 +1610,8 @@
     showHome();
   };
 
-  async function showMyContestsList() {
-    let screen = document.getElementById('contest-screen');
-    if (!screen) {
-      const app = document.querySelector('.app');
-      hideHome();
-      screen = document.createElement('div');
-      screen.id = 'contest-screen';
-      screen.className = 'contest-screen';
-      app.appendChild(screen);
-    }
-    screen.innerHTML =
-      createBackButton('window.__bloomBackToContestMenu()') +
-      '<div class="contest-title">התחרויות שלי</div>' +
-      '<div class="contest-sub" id="mclb-sub">טוען…</div>' +
-      '<div id="mclb-body"><div class="contest-loading">טוען…</div></div>';
-
-    const contests = await fetchMyContests();
-    const body = document.getElementById('mclb-body');
-    const subEl = document.getElementById('mclb-sub');
-    if (!contests) {
-      if (body) body.innerHTML = '<div class="contest-board-empty">שגיאת חיבור</div>';
-      if (subEl) subEl.textContent = '';
-      return;
-    }
-    if (contests.length === 0) {
-      if (subEl) subEl.textContent = 'עדיין לא הצטרפת לאף תחרות';
-      if (body) body.innerHTML =
-        '<div class="contest-board-empty">צור תחרות חדשה או הצטרף עם קוד</div>';
-      return;
-    }
-    if (subEl) subEl.textContent = contests.length + ' תחרויות פעילות';
-
-    const rows = contests.map(function(c) {
+  function renderMyContestsRowsHtml(contests) {
+    return contests.map(function(c) {
       const ended = new Date(c.ends_at) < new Date();
       const isActive = activeContestCode === c.code;
       const rankClass = c.my.rank === 1 ? ' rank-1' : '';
@@ -1661,9 +1632,11 @@
         '</div>' +
       '</div>';
     }).join('');
-    if (body) body.innerHTML = '<div class="my-contest-list">' + rows + '</div>';
+  }
 
-    if (body) body.querySelectorAll('.my-contest-row').forEach(function(row) {
+  function bindMyContestsRowClicks(body) {
+    if (!body) return;
+    body.querySelectorAll('.my-contest-row').forEach(function(row) {
       row.onclick = function() {
         const code = row.getAttribute('data-code');
         if (!code) return;
@@ -1671,6 +1644,64 @@
         showContestLeaderboard(code);
       };
     });
+  }
+
+  function renderMyContestsBody(contests) {
+    const body = document.getElementById('mclb-body');
+    const subEl = document.getElementById('mclb-sub');
+    if (!body) return;
+    if (!contests) {
+      body.innerHTML = '<div class="contest-board-empty">שגיאת חיבור</div>';
+      if (subEl) subEl.textContent = '';
+      return;
+    }
+    if (contests.length === 0) {
+      if (subEl) subEl.textContent = 'עדיין לא הצטרפת לאף תחרות';
+      body.innerHTML = '<div class="contest-board-empty">צור תחרות חדשה או הצטרף עם קוד</div>';
+      return;
+    }
+    if (subEl) {
+      subEl.innerHTML = '<span class="contest-live-dot"></span>' +
+        contests.length + ' תחרויות פעילות';
+    }
+    body.innerHTML = '<div class="my-contest-list">' + renderMyContestsRowsHtml(contests) + '</div>';
+    bindMyContestsRowClicks(body);
+  }
+
+  let myContestsRefreshTimer = null;
+  function stopMyContestsRefresh() {
+    if (myContestsRefreshTimer) { clearInterval(myContestsRefreshTimer); myContestsRefreshTimer = null; }
+  }
+  function startMyContestsRefresh() {
+    stopMyContestsRefresh();
+    myContestsRefreshTimer = setInterval(async function() {
+      if (typeof document !== 'undefined' && document.hidden) return;
+      if (!document.getElementById('mclb-body')) { stopMyContestsRefresh(); return; }
+      const contests = await fetchMyContests({ fresh: true });
+      if (!document.getElementById('mclb-body')) return;
+      renderMyContestsBody(contests);
+    }, 30000);
+  }
+
+  async function showMyContestsList() {
+    let screen = document.getElementById('contest-screen');
+    if (!screen) {
+      const app = document.querySelector('.app');
+      hideHome();
+      screen = document.createElement('div');
+      screen.id = 'contest-screen';
+      screen.className = 'contest-screen';
+      app.appendChild(screen);
+    }
+    screen.innerHTML =
+      createBackButton('window.__bloomBackToContestMenu()') +
+      '<div class="contest-title">התחרויות שלי</div>' +
+      '<div class="contest-sub" id="mclb-sub">טוען…</div>' +
+      '<div id="mclb-body"><div class="contest-loading">טוען…</div></div>';
+
+    const contests = await fetchMyContests();
+    renderMyContestsBody(contests);
+    if (contests && contests.length > 0) startMyContestsRefresh();
   }
 
   function showCreateContestForm() {
@@ -1684,7 +1715,7 @@
         '<div class="contest-form-label">שם התחרות</div>' +
         '<input class="contest-input" id="ctf-name" placeholder="משפחת כהן · פסח" maxlength="100" />' +
         '<div class="contest-form-label">השם שלך בלוח</div>' +
-        '<input class="contest-input" id="ctf-host" placeholder="סבא משה" maxlength="50" value="' + getPlayerName() + '" />' +
+        '<input class="contest-input" id="ctf-host" placeholder="סבא משה" maxlength="50" value="' + escapeHtml(getPlayerName()) + '" />' +
         '<div class="contest-form-label">משך התחרות</div>' +
         '<div class="contest-duration-row" id="ctf-duration">' +
           '<div class="contest-duration-pill" data-days="1">יום</div>' +
@@ -1754,6 +1785,7 @@
         if (!res.ok) throw new Error('Server error');
         const data = await res.json();
         setPlayerName(hostVal);
+        setContestDisplayName(data.contest.code, hostVal);
         setActiveContest(data.contest.code);
         showContestShareScreen(data.contest);
       } catch (e) {
@@ -1883,7 +1915,7 @@
       '</div>' +
       '<div class="contest-form">' +
         '<div class="contest-form-label">השם שלך בלוח</div>' +
-        '<input class="contest-input" id="cjp-name" placeholder="הנכד דניאל" maxlength="50" value="' + getPlayerName() + '" />' +
+        '<input class="contest-input" id="cjp-name" placeholder="הנכד דניאל" maxlength="50" value="' + escapeHtml(getContestDisplayName(code)) + '" />' +
         '<button class="contest-submit-btn" id="cjp-join" ' + (ended ? 'disabled' : '') + '>' + (ended ? 'התחרות הסתיימה' : 'הצטרף ושחק') + '</button>' +
         '<div class="contest-error" id="cjp-error"></div>' +
       '</div>';
@@ -1911,6 +1943,7 @@
           }
           if (!res.ok) throw new Error('Join failed');
           setPlayerName(nameVal);
+          setContestDisplayName(code, nameVal);
           setActiveContest(code);
           hideContestScreens();
           init('contest');
@@ -2062,6 +2095,7 @@
     if (leaveBtn) leaveBtn.onclick = function() {
       if (!confirm('לצאת מהתחרות הזו? תוכל להצטרף בחזרה עם הקוד.')) return;
       clearContestGameState(code);
+      clearContestDisplayName(code);
       setActiveContest(null);
       activeContestData = null;
       stopContestRefresh();
@@ -2184,6 +2218,28 @@
     if (name) localStorage.setItem(NAME_KEY, String(name).trim().slice(0, 50));
   }
 
+  // Per-contest display names — a player may want different identities in
+  // different contests ("סבא משה" at home, "המנהל" at the office). The
+  // global name still acts as the default for new contests.
+  const CONTEST_NAME_KEY_PREFIX = 'bloom_contest_name_';
+  function getContestDisplayName(code) {
+    if (!code) return getPlayerName();
+    try {
+      const name = localStorage.getItem(CONTEST_NAME_KEY_PREFIX + code);
+      return (name && name.trim()) || getPlayerName();
+    } catch (e) { return getPlayerName(); }
+  }
+  function setContestDisplayName(code, name) {
+    if (!code || !name) return;
+    try {
+      localStorage.setItem(CONTEST_NAME_KEY_PREFIX + code, String(name).trim().slice(0, 50));
+    } catch (e) {}
+  }
+  function clearContestDisplayName(code) {
+    if (!code) return;
+    try { localStorage.removeItem(CONTEST_NAME_KEY_PREFIX + code); } catch (e) {}
+  }
+
   async function fetchMyContests(opts) {
     opts = opts || {};
     const fresh = !!opts.fresh;
@@ -2229,7 +2285,7 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           deviceId: deviceId,
-          displayName: getPlayerName() || 'אנונימי',
+          displayName: getContestDisplayName(code) || 'אנונימי',
           score: scoreValue,
           tier: tierValue
         })
@@ -3091,6 +3147,10 @@
     // Resume an immediate contest-board refresh when the tab regains focus
     if (document.visibilityState === 'visible' && contestRefreshCode) {
       refreshContestBoardSilently();
+    }
+    // Same for the My Contests list, if it's open
+    if (document.visibilityState === 'visible' && document.getElementById('mclb-body')) {
+      fetchMyContests({ fresh: true }).then(function(c) { renderMyContestsBody(c); });
     }
   });
   window.addEventListener('beforeunload', function() {
