@@ -1146,9 +1146,9 @@
   const MUSIC_FADE_MS = 500;
   const MUSIC_FADE_STEPS = 20;
   const MUSIC_TRACKS = {
-    lobby: { id: 'music-lobby', el: null, fadeTimer: null },
-    game:  { id: 'music-game',  el: null, fadeTimer: null },
-    fail:  { id: 'music-fail',  el: null, fadeTimer: null }
+    lobby: { id: 'music-lobby', el: null, fadeTimer: null, gain: null, source: null },
+    game:  { id: 'music-game',  el: null, fadeTimer: null, gain: null, source: null },
+    fail:  { id: 'music-fail',  el: null, fadeTimer: null, gain: null, source: null }
   };
   let currentTrack = null;
 
@@ -1158,6 +1158,54 @@
     if (!t.el) t.el = document.getElementById(t.id);
     return t.el;
   }
+
+  // iOS Safari makes HTMLAudioElement.volume effectively read-only — assigning
+  // values between 0 and 1 are accepted by JS but ignored at the audio layer.
+  // The workaround is to route the <audio> element through a Web Audio
+  // GainNode: createMediaElementSource(el) → GainNode → destination. Then we
+  // control loudness via gain.gain.value, which iOS DOES honour, and leave
+  // el.volume pinned at 1 (or 0 when we want to fully cut the element).
+  // createMediaElementSource can only be called ONCE per element, so we cache
+  // the result on the track entry.
+  function getTrackGain(name) {
+    const t = MUSIC_TRACKS[name];
+    if (!t) return null;
+    if (t.gain) return t.gain;
+    const ctx = ensureAudio();
+    if (!ctx) return null;
+    const el = getTrackEl(name);
+    if (!el) return null;
+    try {
+      t.source = ctx.createMediaElementSource(el);
+      t.gain = ctx.createGain();
+      t.gain.gain.value = 0;
+      t.source.connect(t.gain);
+      t.gain.connect(ctx.destination);
+      el.volume = 1; // bypass element volume; gain controls loudness now
+    } catch (e) {
+      // Older Safari or CORS issues — fall back to native el.volume (which on
+      // iOS still won't work mid-range, but at least we don't crash).
+      t.gain = null; t.source = null;
+    }
+    return t.gain;
+  }
+
+  function setTrackLevel(name, v) {
+    const t = MUSIC_TRACKS[name];
+    if (!t) return;
+    const gain = t.gain || getTrackGain(name);
+    if (gain) { gain.gain.value = Math.max(0, Math.min(1, v)); return; }
+    const el = getTrackEl(name);
+    if (el) try { el.volume = Math.max(0, Math.min(1, v)); } catch (e) {}
+  }
+  function currentTrackLevel(name) {
+    const t = MUSIC_TRACKS[name];
+    if (!t) return 0;
+    if (t.gain) return Number(t.gain.gain.value) || 0;
+    const el = getTrackEl(name);
+    return el ? el.volume : 0;
+  }
+
   function clearFade(name) {
     const t = MUSIC_TRACKS[name];
     if (t && t.fadeTimer) { clearInterval(t.fadeTimer); t.fadeTimer = null; }
@@ -1167,20 +1215,22 @@
     const el = getTrackEl(name);
     if (!t || !el) { onDone && onDone(); return; }
     clearFade(name);
-    if (el.paused || el.volume <= 0.001) {
-      try { el.pause(); el.currentTime = 0; el.volume = 0; } catch(e) {}
+    const startLevel = currentTrackLevel(name);
+    if (el.paused || startLevel <= 0.001) {
+      setTrackLevel(name, 0);
+      try { el.pause(); el.currentTime = 0; } catch(e) {}
       onDone && onDone();
       return;
     }
-    const start = el.volume;
     const stepMs = ms / MUSIC_FADE_STEPS;
     let i = 0;
     t.fadeTimer = setInterval(function() {
       i++;
-      el.volume = Math.max(0, start * (1 - i / MUSIC_FADE_STEPS));
+      setTrackLevel(name, Math.max(0, startLevel * (1 - i / MUSIC_FADE_STEPS)));
       if (i >= MUSIC_FADE_STEPS) {
         clearFade(name);
-        try { el.pause(); el.currentTime = 0; el.volume = 0; } catch(e) {}
+        setTrackLevel(name, 0);
+        try { el.pause(); el.currentTime = 0; } catch(e) {}
         onDone && onDone();
       }
     }, stepMs);
@@ -1191,8 +1241,12 @@
     if (!t || !el) return;
     clearFade(name);
     target = (typeof target === 'number') ? target : musicVolume;
+    // Make sure the Web Audio routing exists before play() so we can control
+    // loudness via the gain node even on iOS.
+    ensureAudio();
+    getTrackGain(name);
+    setTrackLevel(name, 0);
     try {
-      el.volume = 0;
       el.currentTime = 0;
       const p = el.play();
       if (p && p.catch) p.catch(function() {});
@@ -1201,7 +1255,7 @@
     let i = 0;
     t.fadeTimer = setInterval(function() {
       i++;
-      el.volume = Math.min(target, target * (i / MUSIC_FADE_STEPS));
+      setTrackLevel(name, Math.min(target, target * (i / MUSIC_FADE_STEPS)));
       if (i >= MUSIC_FADE_STEPS) clearFade(name);
     }, stepMs);
   }
@@ -1209,7 +1263,7 @@
     if (!MUSIC_TRACKS[name]) return;
     const sameTrack = currentTrack === name;
     const el = getTrackEl(name);
-    if (sameTrack && el && !el.paused && el.volume > 0.001) return;
+    if (sameTrack && el && !el.paused && currentTrackLevel(name) > 0.001) return;
     const prev = currentTrack;
     currentTrack = name;
     if (isMusicMuted()) return;
@@ -1238,15 +1292,16 @@
     if (!currentTrack || isMusicMuted()) return;
     const el = getTrackEl(currentTrack);
     if (!el) return;
-    try { el.volume = musicVolume; const p = el.play(); if (p && p.catch) p.catch(function() {}); } catch(e) {}
+    ensureAudio();
+    getTrackGain(currentTrack);
+    setTrackLevel(currentTrack, musicVolume);
+    try { const p = el.play(); if (p && p.catch) p.catch(function() {}); } catch(e) {}
   }
   // Apply a volume change to any currently-playing music element immediately
-  // (without restarting / fading). Used by the slider.
+  // (without restarting / fading). Used by the slider for live response.
   function applyMusicVolumeToActive() {
     if (!currentTrack) return;
-    const el = getTrackEl(currentTrack);
-    if (!el) return;
-    try { el.volume = isMusicMuted() ? 0 : musicVolume; } catch (e) {}
+    setTrackLevel(currentTrack, isMusicMuted() ? 0 : musicVolume);
   }
   function tone(opts) {
     if (isSfxMuted()) return;
