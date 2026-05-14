@@ -399,6 +399,20 @@ app.post('/api/contests/:code/join', async (req, res) => {
       return res.status(403).json({ error: 'ended' });
     }
 
+    // Name uniqueness check — any OTHER device in this contest already using
+    // this display name (case-insensitive) makes us reject.
+    const nameClash = await pool.query(
+      `SELECT 1 FROM contest_scores
+       WHERE contest_code = $1
+         AND LOWER(display_name) = LOWER($2)
+         AND device_id <> $3
+       LIMIT 1`,
+      [code, cleanedName, deviceId]
+    );
+    if (nameClash.rows.length > 0) {
+      return res.status(409).json({ error: 'name_taken' });
+    }
+
     await pool.query(
       `INSERT INTO contest_scores (contest_code, device_id, display_name, score, highest_tier)
        VALUES ($1, $2, $3, 0, 1)
@@ -444,6 +458,32 @@ app.post('/api/contests/:code/score', async (req, res) => {
       return res.status(403).json({ error: 'ended' });
     }
 
+    // If the submitter is trying to RENAME themselves to a name another
+    // device in this contest already uses, silently keep their existing
+    // name. The score still saves — we just don't let them steal the
+    // identity. (New joiners hit the strict 409 inside /join above; this
+    // path is only for ongoing players, and we don't want to lose a game's
+    // score over a name choice.)
+    let nameToStore = cleanedName;
+    const existing = await pool.query(
+      `SELECT display_name FROM contest_scores WHERE contest_code = $1 AND device_id = $2`,
+      [code, deviceId]
+    );
+    if (existing.rows.length > 0) {
+      const currentName = existing.rows[0].display_name;
+      if (currentName && cleanedName.toLowerCase() !== currentName.toLowerCase()) {
+        const clash = await pool.query(
+          `SELECT 1 FROM contest_scores
+           WHERE contest_code = $1
+             AND LOWER(display_name) = LOWER($2)
+             AND device_id <> $3
+           LIMIT 1`,
+          [code, cleanedName, deviceId]
+        );
+        if (clash.rows.length > 0) nameToStore = currentName;
+      }
+    }
+
     await pool.query(
       `INSERT INTO contest_scores (contest_code, device_id, display_name, score, highest_tier, games_played, last_played_at)
        VALUES ($1, $2, $3, $4, $5, 1, NOW())
@@ -454,7 +494,7 @@ app.post('/api/contests/:code/score', async (req, res) => {
          highest_tier = GREATEST(contest_scores.highest_tier, EXCLUDED.highest_tier),
          games_played = contest_scores.games_played + 1,
          last_played_at = NOW()`,
-      [code, deviceId, cleanedName, Math.floor(score), Math.floor(tier)]
+      [code, deviceId, nameToStore, Math.floor(score), Math.floor(tier)]
     );
 
     const rankRes = await pool.query(

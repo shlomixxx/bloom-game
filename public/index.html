@@ -1848,15 +1848,34 @@
       '</div>';
 
     document.getElementById('ctsh-wa').onclick = function() {
-      window.open('https://wa.me/?text=' + encodeURIComponent(shareText), '_blank');
+      // Some mobile browsers block window.open if it isn't a direct user click
+      // gesture — fall back to copying the link with a "הועתק" flash.
+      const w = window.open('https://wa.me/?text=' + encodeURIComponent(shareText), '_blank');
+      if (!w) {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(shareText).catch(function() {});
+        }
+        const wa = document.getElementById('ctsh-wa');
+        const span = wa.querySelector('span');
+        if (span) {
+          const orig = span.textContent;
+          span.textContent = '✓ הטקסט הועתק';
+          setTimeout(function() { span.textContent = orig; }, 1700);
+        }
+      }
     };
     document.getElementById('ctsh-copy').onclick = function() {
-      navigator.clipboard.writeText(link).then(function() {
-        const lbl = document.getElementById('ctsh-copy-label');
-        const orig = lbl.textContent;
+      const lbl = document.getElementById('ctsh-copy-label');
+      const orig = lbl.textContent;
+      const flash = function() {
         lbl.textContent = '✓ הועתק';
         setTimeout(function() { lbl.textContent = orig; }, 1500);
-      });
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(link).then(flash, flash);
+      } else {
+        flash();
+      }
     };
     document.getElementById('ctsh-leaderboard').onclick = function() {
       showContestLeaderboard(contest.code);
@@ -1953,6 +1972,12 @@
           });
           if (res.status === 429) {
             document.getElementById('cjp-error').textContent = 'יותר מדי ניסיונות. נסה שוב בעוד שעה.';
+            this.disabled = false;
+            this.textContent = 'הצטרף ושחק';
+            return;
+          }
+          if (res.status === 409) {
+            document.getElementById('cjp-error').textContent = 'השם תפוס. בחר שם אחר.';
             this.disabled = false;
             this.textContent = 'הצטרף ושחק';
             return;
@@ -2174,12 +2199,23 @@
       }
     };
     document.getElementById('clb-share').onclick = function() {
+      const btn = this;
+      const orig = btn.textContent;
+      const flash = function() {
+        btn.textContent = '✓ הקישור הועתק';
+        setTimeout(function() { btn.textContent = orig; }, 1700);
+      };
       const shareText = data.contest.host_name + ' הזמין/ה אותך לתחרות BLOOM 🎮\n' + link;
       if (navigator.share) {
-        navigator.share({ text: shareText });
+        navigator.share({ text: shareText }).catch(function() {
+          // user cancelled the share sheet — fall through to copy as a fallback
+          if (navigator.clipboard) navigator.clipboard.writeText(link).then(flash, flash);
+          else flash();
+        });
+      } else if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(link).then(flash, flash);
       } else {
-        navigator.clipboard.writeText(link);
-        this.textContent = '✓ הקישור הועתק';
+        flash();
       }
     };
     const switchBtn = document.getElementById('clb-switch');
