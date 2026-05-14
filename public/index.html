@@ -1817,6 +1817,7 @@
       if (!confirm('לצאת מהתחרות הזו? תוכל להצטרף בחזרה עם הקוד.')) return;
       setActiveContest(null);
       activeContestData = null;
+      clearContestGameState();
       stopContestRefresh();
       hideContestScreens();
       showHome();
@@ -1896,11 +1897,14 @@
 
   // ============ FRIENDS CONTEST STATE ============
   const CONTEST_CODE_KEY = 'bloom_active_contest';
+  const CONTEST_STATE_KEY = 'bloom_contest_game_state';
+  const CONTEST_STATE_TTL_MS = 24 * 60 * 60 * 1000;
   let activeContestCode = localStorage.getItem(CONTEST_CODE_KEY) || null;
   let activeContestData = null;
   let contestSubmitted = false;
   let contestRefreshTimer = null;
   let contestRefreshCode = null;
+  let lastNonPracticeMode = 'daily';
 
   function getDeviceId() {
     let id = localStorage.getItem(DEVICE_KEY);
@@ -1965,6 +1969,41 @@
     return origin + '?c=' + encodeURIComponent(code);
   }
 
+  function saveContestGameState() {
+    if (mode !== 'contest' || !activeContestCode || !grid) return;
+    // Don't save a fresh board (nothing on it yet)
+    const hasPiece = grid.some(function(row) { return row.some(function(c) { return c > 0; }); });
+    if (!hasPiece && (score | 0) === 0) {
+      clearContestGameState();
+      return;
+    }
+    try {
+      localStorage.setItem(CONTEST_STATE_KEY, JSON.stringify({
+        code: activeContestCode,
+        grid: grid,
+        score: score | 0,
+        highestTier: highestTier | 0,
+        nextPiece: nextPiece,
+        maxChain: currentGameMaxChain | 0,
+        ts: Date.now()
+      }));
+    } catch (e) {}
+  }
+  function loadContestGameState(code) {
+    try {
+      const raw = localStorage.getItem(CONTEST_STATE_KEY);
+      if (!raw) return null;
+      const s = JSON.parse(raw);
+      if (!s || s.code !== code) return null;
+      if (Date.now() - (s.ts || 0) > CONTEST_STATE_TTL_MS) return null;
+      if (!Array.isArray(s.grid) || s.grid.length !== ROWS) return null;
+      return s;
+    } catch (e) { return null; }
+  }
+  function clearContestGameState() {
+    try { localStorage.removeItem(CONTEST_STATE_KEY); } catch (e) {}
+  }
+
   function formatTimeLeft(endsAt) {
     const ms = new Date(endsAt) - new Date();
     if (ms <= 0) return 'הסתיים';
@@ -1991,8 +2030,11 @@
     return new Date(iso).toLocaleDateString('he-IL');
   }
 
-  function init(nextMode) {
+  function init(nextMode, opts) {
+    opts = opts || {};
+    const fresh = !!opts.fresh;
     if (nextMode) mode = nextMode;
+    if (mode !== 'practice') lastNonPracticeMode = mode;
     dailyDate = todayInIsrael();
     grid = Array.from({length: ROWS}, function() { return Array(COLS).fill(0); });
     score = 0; highestTier = 1; busy = false;
@@ -2023,6 +2065,7 @@
       rng = Math.random;
       dailySubmitted = false;
     }
+    let restoredContestState = false;
     if (mode === 'contest') {
       contestSubmitted = false;
       if (activeContestCode) {
@@ -2035,8 +2078,23 @@
       rng = activeContestData && activeContestData.board_seed != null
         ? mulberry32(activeContestData.board_seed)
         : Math.random;
+      if (fresh) {
+        clearContestGameState();
+      } else if (activeContestCode) {
+        const saved = loadContestGameState(activeContestCode);
+        if (saved) {
+          grid = saved.grid;
+          score = saved.score | 0;
+          highestTier = saved.highestTier || 1;
+          currentGameMaxChain = saved.maxChain || 0;
+          if (saved.nextPiece) {
+            nextPiece = saved.nextPiece;
+            restoredContestState = true;
+          }
+        }
+      }
     }
-    nextPiece = pickPiece();
+    if (!restoredContestState) nextPiece = pickPiece();
     updateModeBar();
     render();
   }
@@ -2064,7 +2122,9 @@
     bar.classList.add('practice');
     title.textContent = 'אימון חופשי';
     sub.textContent = 'דאנג\'ן רנדומלי, ללא טבלת מובילים';
-    sw.textContent = 'חזרה לאתגר היומי';
+    sw.textContent = (lastNonPracticeMode === 'contest' && activeContestCode)
+      ? 'חזרה לתחרות חברים'
+      : 'חזרה לאתגר היומי';
   }
 
   function startCountdown() {
@@ -2502,13 +2562,18 @@
       }
       if (mode === 'contest' && !contestSubmitted && activeContestCode) {
         contestSubmitted = true;
+        clearContestGameState();
         (async function() {
           await submitContestScore(activeContestCode, score, highestTier);
           await loadContestLeaderboard();
         })();
       }
     }
-    else { busy = false; render(); }
+    else {
+      busy = false;
+      render();
+      if (mode === 'contest') saveContestGameState();
+    }
   }
 
   function shareResult() {
@@ -2630,8 +2695,7 @@
           '<button class="btn secondary" id="again">' + againLabel + '</button>' +
         '</div>';
       document.getElementById('again').onclick = function() {
-        if (mode === 'daily') init('practice');
-        else init('practice');
+        init('practice', { fresh: true });
       };
       document.getElementById('share-btn').onclick = shareResult;
       if (showCountdown) startCountdown();
@@ -2667,23 +2731,40 @@
     }
   }
 
-  document.getElementById('reset').onclick = function() { init(); };
+  document.getElementById('reset').onclick = function() { init(undefined, { fresh: true }); };
   document.getElementById('info').onclick = showInfo;
   document.getElementById('mute').onclick = function() { openMuteMenu('top'); };
   document.getElementById('leaderboard').onclick = openLeaderboardModal;
   document.getElementById('achievements').onclick = openAchievementsModal;
   document.getElementById('home-btn').onclick = function() { showHome(); };
   document.getElementById('mode-switch').onclick = function() {
-    init(mode === 'daily' ? 'practice' : 'daily');
+    if (mode === 'daily' || mode === 'contest') {
+      // Switching INTO practice — preserve any in-progress contest state so the
+      // user can return to it via the practice mode-switch.
+      if (mode === 'contest') saveContestGameState();
+      init('practice');
+    } else {
+      // Switching OUT of practice — go to whatever non-practice mode the user
+      // came from. Restoration of contest grid happens automatically inside init().
+      const back = (lastNonPracticeMode === 'contest' && activeContestCode) ? 'contest' : 'daily';
+      init(back);
+    }
   };
 
   document.addEventListener('visibilitychange', function() {
-    if (document.visibilityState === 'hidden') pauseAllMusic();
-    else if (document.visibilityState === 'visible' && !musicMuted) resumeCurrentMusic();
+    if (document.visibilityState === 'hidden') {
+      pauseAllMusic();
+      if (mode === 'contest') saveContestGameState();
+    } else if (document.visibilityState === 'visible' && !musicMuted) {
+      resumeCurrentMusic();
+    }
     // Resume an immediate contest-board refresh when the tab regains focus
     if (document.visibilityState === 'visible' && contestRefreshCode) {
       refreshContestBoardSilently();
     }
+  });
+  window.addEventListener('beforeunload', function() {
+    if (mode === 'contest') saveContestGameState();
   });
 
   /* Browsers block audio until the first user interaction.
