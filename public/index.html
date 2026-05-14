@@ -675,39 +675,70 @@
     if (!el) return;
     try { el.volume = MUSIC_VOLUME; const p = el.play(); if (p && p.catch) p.catch(function() {}); } catch(e) {}
   }
-  function playTone(freq, duration, type, volume, delay) {
+  function tone(opts) {
     if (sfxMuted) return;
-    const ctx = ensureAudio();
-    if (!ctx) return;
-    const t0 = ctx.currentTime + (delay || 0);
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = type || 'sine';
-    osc.frequency.setValueAtTime(freq, t0);
-    gain.gain.setValueAtTime(volume, t0);
-    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + duration);
-    osc.connect(gain); gain.connect(ctx.destination);
-    osc.start(t0); osc.stop(t0 + duration + 0.05);
+    const c = ensureAudio();
+    if (!c) return;
+    const t0 = c.currentTime + (opts.delay || 0);
+    const osc = c.createOscillator();
+    const gain = c.createGain();
+    const filter = c.createBiquadFilter();
+    osc.type = opts.type || 'sine';
+    osc.frequency.setValueAtTime(opts.freq, t0);
+    if (opts.bendTo) osc.frequency.exponentialRampToValueAtTime(opts.bendTo, t0 + opts.duration);
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(opts.filter || 5000, t0);
+    gain.gain.setValueAtTime(0, t0);
+    gain.gain.linearRampToValueAtTime(opts.vol || 0.2, t0 + (opts.attack || 0.005));
+    gain.gain.exponentialRampToValueAtTime(0.001, t0 + opts.duration);
+    osc.connect(filter); filter.connect(gain); gain.connect(c.destination);
+    osc.start(t0); osc.stop(t0 + opts.duration + 0.05);
   }
-  function soundDrop() { playTone(180, 0.08, 'sine', 0.08, 0); }
+
+  function soundDrop() {
+    tone({ freq: 520, bendTo: 280, duration: 0.12, type: 'sine', vol: 0.14, filter: 3000 });
+    tone({ freq: 260, bendTo: 140, duration: 0.15, type: 'sine', vol: 0.09, filter: 1500, delay: 0.005 });
+  }
+
   function soundMerge(tier) {
-    const base = 180 + tier * 30;
-    playTone(base, 0.09, 'triangle', 0.12, 0);
-    playTone(base * 1.5, 0.11, 'triangle', 0.09, 0.04);
+    const baseFreqs = [0, 0, 330, 392, 466, 523, 622, 740, 880];
+    const fundamental = baseFreqs[tier] || 330;
+    tone({ freq: fundamental, duration: 0.25, type: 'triangle', vol: 0.18, filter: 5000 });
+    tone({ freq: fundamental * 1.5, duration: 0.22, type: 'triangle', vol: 0.12, filter: 6000, delay: 0.025 });
+    tone({ freq: fundamental * 2, duration: 0.18, type: 'sine', vol: 0.09, filter: 8000, delay: 0.05 });
+    if (tier >= 6) tone({ freq: fundamental * 3, duration: 0.15, type: 'sine', vol: 0.06, filter: 9000, delay: 0.08 });
+    if (tier >= 8) tone({ freq: fundamental * 4, duration: 0.2, type: 'sine', vol: 0.07, filter: 10000, delay: 0.12 });
   }
+
   function soundChain(chainCount) {
-    const notes = [262, 330, 392, 523, 659, 784];
-    for (let i = 0; i < Math.min(chainCount, notes.length); i++) playTone(notes[i], 0.13, 'square', 0.08, i * 0.05);
+    const scale = [523, 587, 659, 784, 880, 1047, 1175];
+    for (let i = 0; i < Math.min(chainCount + 1, scale.length); i++) {
+      tone({ freq: scale[i], duration: 0.16, type: 'triangle', vol: 0.14, filter: 6000, delay: i * 0.07 });
+      tone({ freq: scale[i] * 2, duration: 0.12, type: 'sine', vol: 0.06, filter: 8000, delay: i * 0.07 + 0.01 });
+    }
   }
+
   function soundMilestone(tier) {
-    const melody = [523, 659, 784, 1047];
-    for (let i = 0; i < melody.length; i++) playTone(melody[i], 0.18, 'triangle', 0.13, i * 0.08);
-    if (tier >= MAX_TIER) for (let i = 0; i < melody.length; i++) playTone(melody[i] * 1.5, 0.22, 'triangle', 0.1, 0.4 + i * 0.08);
+    const melody = [523, 659, 784, 1047, 1319];
+    for (let i = 0; i < melody.length; i++) {
+      tone({ freq: melody[i], duration: 0.22, type: 'triangle', vol: 0.16, filter: 6000, delay: i * 0.09 });
+      tone({ freq: melody[i] * 2, duration: 0.18, type: 'sine', vol: 0.08, filter: 8000, delay: i * 0.09 + 0.01 });
+    }
+    if (tier >= MAX_TIER) {
+      const sparkle = [2093, 2349, 2637, 3136];
+      for (let i = 0; i < sparkle.length; i++) {
+        tone({ freq: sparkle[i], duration: 0.1, type: 'sine', vol: 0.05, filter: 10000, delay: 0.55 + i * 0.04 });
+      }
+    }
   }
+
   function soundGameOver() {
-    playTone(330, 0.15, 'sawtooth', 0.1, 0);
-    playTone(247, 0.18, 'sawtooth', 0.1, 0.12);
-    playTone(196, 0.32, 'sawtooth', 0.1, 0.28);
+    tone({ freq: 392, bendTo: 370, duration: 0.18, type: 'sawtooth', vol: 0.11, filter: 2500 });
+    tone({ freq: 349, bendTo: 330, duration: 0.18, type: 'sawtooth', vol: 0.11, filter: 2500, delay: 0.18 });
+    tone({ freq: 311, bendTo: 220, duration: 0.5, type: 'sawtooth', vol: 0.13, filter: 2200, delay: 0.36 });
+    tone({ freq: 196, bendTo: 165, duration: 0.18, type: 'sine', vol: 0.08, filter: 1500 });
+    tone({ freq: 175, bendTo: 165, duration: 0.18, type: 'sine', vol: 0.08, filter: 1500, delay: 0.18 });
+    tone({ freq: 156, bendTo: 110, duration: 0.5, type: 'sine', vol: 0.09, filter: 1500, delay: 0.36 });
   }
   function buzz(pattern) {
     if (sfxMuted) return;
@@ -742,7 +773,7 @@
     saveMuteState();
     updateMuteUI();
     syncMuteMenuItems();
-    if (!sfxMuted) { ensureAudio(); playTone(523, 0.08, 'sine', 0.12, 0); }
+    if (!sfxMuted) { ensureAudio(); tone({ freq: 523, duration: 0.08, type: 'sine', vol: 0.12 }); }
   }
   function muteAll() { setMusicMuted(true); setSfxMuted(true); }
   function unmuteAll() { setMusicMuted(false); setSfxMuted(false); }
@@ -958,8 +989,8 @@
     t.innerHTML = ACH_ICON_SVG + '<span>הישג חדש: ' + a.name + '</span>';
     document.body.appendChild(t);
     setTimeout(function() { t.remove(); }, 3200);
-    playTone(659, 0.12, 'triangle', 0.12, 0);
-    playTone(784, 0.16, 'triangle', 0.12, 0.08);
+    tone({ freq: 659, duration: 0.12, type: 'triangle', vol: 0.12 });
+    tone({ freq: 784, duration: 0.16, type: 'triangle', vol: 0.12, delay: 0.08 });
   }
 
   function openAchievementsModal() {
