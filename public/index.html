@@ -410,6 +410,9 @@
     <div class="top-row">
       <div class="brand">BLOOM</div>
       <div class="top-buttons">
+        <button class="icon-btn" id="home-btn" aria-label="חזרה לבית">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12l9-9 9 9M5 10v10h14V10M10 20v-6h4v6"/></svg>
+        </button>
         <button class="icon-btn" id="mute" aria-label="השתק">
           <svg id="mute-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 8a5 5 0 0 1 0 8M17.7 5a9 9 0 0 1 0 14M6 15H4a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1h2l3.5-4.5A.8.8 0 0 1 11 5v14a.8.8 0 0 1-1.5.5L6 15"/></svg>
         </button>
@@ -882,6 +885,9 @@
     const enter = function() {
       ensureAudio();
       hideHome();
+      const wrap = document.getElementById('grid-wrap');
+      const onOverScreen = wrap && wrap.querySelector('.overlay');
+      if (onOverScreen) init('practice');
       playMusic('game');
     };
     document.getElementById('home-start').onclick = enter;
@@ -1616,6 +1622,7 @@
   document.getElementById('mute').onclick = toggleMute;
   document.getElementById('leaderboard').onclick = openLeaderboardModal;
   document.getElementById('achievements').onclick = openAchievementsModal;
+  document.getElementById('home-btn').onclick = function() { showHome(); };
   document.getElementById('mode-switch').onclick = function() {
     init(mode === 'daily' ? 'practice' : 'daily');
   };
