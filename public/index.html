@@ -191,6 +191,13 @@
   }
   .info-title { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
   .info-sub { font-size: 12px; color: #6F6E68; margin-bottom: 12px; }
+  .credits {
+    margin-top: 14px; padding-top: 12px;
+    border-top: 1px solid rgba(0,0,0,0.06);
+    font-size: 10px; color: #A8A6A0;
+    line-height: 1.55; direction: rtl; text-align: right;
+  }
+  .credits a { color: #6F6E68; }
   .info-close { float: left; background: none; border: none; cursor: pointer; padding: 0; }
   .info-close svg { width: 18px; height: 18px; color: #6F6E68; }
 
@@ -394,6 +401,10 @@
 </head>
 <body>
 
+<audio id="music-lobby" src="bloom-music-lobby.mp3" loop preload="auto"></audio>
+<audio id="music-game"  src="bloom-music.mp3"      loop preload="auto"></audio>
+<audio id="music-fail"  src="bloom-music-fail.mp3" loop preload="auto"></audio>
+
 <div class="app">
   <div class="top">
     <div class="top-row">
@@ -484,7 +495,6 @@
   const API_BASE = '';
 
   /* ============ AUDIO ============ */
-  const bgMusic = document.getElementById('bg-music');
   let audioCtx = null;
   let muted = localStorage.getItem(MUTE_KEY) === '1';
 
@@ -493,8 +503,106 @@
     if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume().catch(function() {});
     return audioCtx;
   }
-  function startMusic() { if (muted || !bgMusic) return; try { bgMusic.volume = 0.35; bgMusic.play().catch(function() {}); } catch(e) {} }
-  function stopMusic() { if (bgMusic) try { bgMusic.pause(); } catch(e) {} }
+
+  /* Music manager: 3 tracks (lobby/game/fail) with 0.5s cross-fade */
+  const MUSIC_VOLUME = 0.28;
+  const MUSIC_FADE_MS = 500;
+  const MUSIC_FADE_STEPS = 20;
+  const MUSIC_TRACKS = {
+    lobby: { id: 'music-lobby', el: null, fadeTimer: null },
+    game:  { id: 'music-game',  el: null, fadeTimer: null },
+    fail:  { id: 'music-fail',  el: null, fadeTimer: null }
+  };
+  let currentTrack = null;
+
+  function getTrackEl(name) {
+    const t = MUSIC_TRACKS[name];
+    if (!t) return null;
+    if (!t.el) t.el = document.getElementById(t.id);
+    return t.el;
+  }
+  function clearFade(name) {
+    const t = MUSIC_TRACKS[name];
+    if (t && t.fadeTimer) { clearInterval(t.fadeTimer); t.fadeTimer = null; }
+  }
+  function fadeOutTrack(name, ms, onDone) {
+    const t = MUSIC_TRACKS[name];
+    const el = getTrackEl(name);
+    if (!t || !el) { onDone && onDone(); return; }
+    clearFade(name);
+    if (el.paused || el.volume <= 0.001) {
+      try { el.pause(); el.currentTime = 0; el.volume = 0; } catch(e) {}
+      onDone && onDone();
+      return;
+    }
+    const start = el.volume;
+    const stepMs = ms / MUSIC_FADE_STEPS;
+    let i = 0;
+    t.fadeTimer = setInterval(function() {
+      i++;
+      el.volume = Math.max(0, start * (1 - i / MUSIC_FADE_STEPS));
+      if (i >= MUSIC_FADE_STEPS) {
+        clearFade(name);
+        try { el.pause(); el.currentTime = 0; el.volume = 0; } catch(e) {}
+        onDone && onDone();
+      }
+    }, stepMs);
+  }
+  function fadeInTrack(name, ms, target) {
+    const t = MUSIC_TRACKS[name];
+    const el = getTrackEl(name);
+    if (!t || !el) return;
+    clearFade(name);
+    target = (typeof target === 'number') ? target : MUSIC_VOLUME;
+    try {
+      el.volume = 0;
+      el.currentTime = 0;
+      const p = el.play();
+      if (p && p.catch) p.catch(function() {});
+    } catch(e) {}
+    const stepMs = ms / MUSIC_FADE_STEPS;
+    let i = 0;
+    t.fadeTimer = setInterval(function() {
+      i++;
+      el.volume = Math.min(target, target * (i / MUSIC_FADE_STEPS));
+      if (i >= MUSIC_FADE_STEPS) clearFade(name);
+    }, stepMs);
+  }
+  function playMusic(name) {
+    if (!MUSIC_TRACKS[name]) return;
+    const sameTrack = currentTrack === name;
+    const el = getTrackEl(name);
+    if (sameTrack && el && !el.paused && el.volume > 0.001) return;
+    const prev = currentTrack;
+    currentTrack = name;
+    if (muted) return;
+    if (prev && prev !== name) {
+      fadeOutTrack(prev, MUSIC_FADE_MS, function() {
+        if (currentTrack === name) fadeInTrack(name, MUSIC_FADE_MS, MUSIC_VOLUME);
+      });
+    } else {
+      fadeInTrack(name, MUSIC_FADE_MS, MUSIC_VOLUME);
+    }
+  }
+  function stopAllMusic() {
+    Object.keys(MUSIC_TRACKS).forEach(function(k) {
+      fadeOutTrack(k, MUSIC_FADE_MS);
+    });
+    currentTrack = null;
+  }
+  function pauseAllMusic() {
+    Object.keys(MUSIC_TRACKS).forEach(function(k) {
+      clearFade(k);
+      const el = getTrackEl(k);
+      if (el) try { el.pause(); } catch(e) {}
+    });
+  }
+  function resumeCurrentMusic() {
+    if (!currentTrack || muted) return;
+    const el = getTrackEl(currentTrack);
+    if (!el) return;
+    try { el.volume = MUSIC_VOLUME; const p = el.play(); if (p && p.catch) p.catch(function() {}); } catch(e) {}
+  }
   function playTone(freq, duration, type, volume, delay) {
     if (muted) return;
     const ctx = ensureAudio();
@@ -549,8 +657,13 @@
     muted = !muted;
     localStorage.setItem(MUTE_KEY, muted ? '1' : '0');
     updateMuteUI();
-    if (muted) stopMusic();
-    else { ensureAudio(); playTone(523, 0.08, 'sine', 0.12, 0); startMusic(); }
+    if (muted) {
+      pauseAllMusic();
+    } else {
+      ensureAudio();
+      playTone(523, 0.08, 'sine', 0.12, 0);
+      resumeCurrentMusic();
+    }
   }
 
   /* ============ STREAK + ACHIEVEMENTS ============ */
@@ -767,11 +880,13 @@
       syncHomeMuteUI();
     };
     const enter = function() {
-      ensureAudio(); startMusic();
+      ensureAudio();
       hideHome();
+      playMusic('game');
     };
     document.getElementById('home-start').onclick = enter;
     document.getElementById('home-skip').onclick = enter;
+    playMusic('lobby');
   }
   function hideHome() {
     const h = document.getElementById('home-screen');
@@ -1305,7 +1420,7 @@
     if (row === -1) return;
     busy = true;
     ensureAudio();
-    startMusic();
+    playMusic('game');
     soundDrop();
     if (!streakBumpedThisSession) {
       bumpStreak();
@@ -1321,6 +1436,7 @@
     if (isGameOver()) {
       soundGameOver();
       buzz([60, 80, 100]);
+      playMusic('fail');
       incrementGamesPlayed();
       checkAchievements();
       if (mode === 'daily' && !dailySubmitted) {
@@ -1389,6 +1505,10 @@
         '<div class="info-title">איך הניקוד עובד</div>' +
         '<div class="info-sub">דרגה × 10 × מספר הפריטים במיזוג. שרשרת מוסיפה ×1.5, ×2, ×2.5…</div>' +
         '<div class="tier-table">' + rows.join('') + '</div>' +
+        '<div class="credits">' +
+          'מוזיקה: שלושה טראקים של Manuel Graf (לובי, משחק, סיום), רישיון CC BY 4.0.<br>' +
+          '<a href="https://manuelgraf.com" target="_blank" rel="noopener">manuelgraf.com</a>' +
+        '</div>' +
       '</div>';
     wrap.appendChild(modal);
     document.getElementById('info-close').onclick = function() { modal.remove(); };
@@ -1501,8 +1621,8 @@
   };
 
   document.addEventListener('visibilitychange', function() {
-    if (document.visibilityState === 'hidden') stopMusic();
-    else if (document.visibilityState === 'visible' && !muted) startMusic();
+    if (document.visibilityState === 'hidden') pauseAllMusic();
+    else if (document.visibilityState === 'visible' && !muted) resumeCurrentMusic();
   });
 
   updateMuteUI();
