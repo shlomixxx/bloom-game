@@ -208,18 +208,45 @@
   .mute-row.off input.vol-slider::-webkit-slider-thumb { background: #C84040; }
   .mute-row.off input.vol-slider::-moz-range-thumb { background: #C84040; }
   .mute-item.mute-item-all:hover { background: #F5F2EC; color: #1C1A18; }
-  .next-bar {
-    padding: 12px 18px;
-    display: flex; align-items: center; gap: 12px;
+  .tier-bar {
+    direction: ltr;
+    padding: 10px 14px 12px;
+    display: flex; justify-content: space-between; align-items: flex-end; gap: 4px;
     border-bottom: 1px solid rgba(0,0,0,0.06);
   }
-  .next-label { font-size: 12px; color: #6F6E68; }
-  .next-piece {
-    width: 42px; height: 42px; border-radius: 10px;
-    display: flex; align-items: center; justify-content: center;
+  .tier-cell {
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    flex: 1 1 0; min-width: 0;
+    transition: transform 180ms ease-out;
   }
-  .next-piece svg { width: 24px; height: 24px; }
-  .next-value { flex: 1; font-size: 11px; color: #A8A6A0; text-align: left; }
+  .tier-icon {
+    width: 32px; height: 32px; border-radius: 9px;
+    display: flex; align-items: center; justify-content: center;
+    background: #F5F2EC;
+    transition: box-shadow 180ms ease-out;
+  }
+  .tier-icon svg { width: 18px; height: 18px; }
+  .tier-score {
+    font-size: 10px; font-weight: 600; color: #B5B1A8;
+    transition: color 180ms ease-out;
+    font-variant-numeric: tabular-nums;
+  }
+  .tier-cell.active, .tier-cell.cycling { transform: scale(1.22); z-index: 2; }
+  .tier-cell.active .tier-icon, .tier-cell.cycling .tier-icon {
+    box-shadow:
+      0 0 0 2px rgba(255,255,255,0.95),
+      0 0 0 4px var(--ring, #1C1A18),
+      0 5px 14px rgba(0,0,0,0.18);
+  }
+  .tier-cell.active .tier-score {
+    color: var(--ring, #1C1A18);
+    font-weight: 800;
+  }
+  @media (max-width: 380px) {
+    .tier-icon { width: 28px; height: 28px; border-radius: 8px; }
+    .tier-icon svg { width: 16px; height: 16px; }
+    .tier-score { font-size: 9px; }
+  }
   .grid-wrap { padding: 12px; direction: ltr; position: relative; }
   .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; }
   .cell {
@@ -1042,11 +1069,7 @@
     </div>
     <div class="mode-tabs" id="mode-tabs"></div>
   </div>
-  <div class="next-bar">
-    <div class="next-label">הבא:</div>
-    <div class="next-piece" id="next-piece"></div>
-    <div class="next-value" id="next-value"></div>
-  </div>
+  <div class="tier-bar" id="tier-bar" aria-label="סולם האריחים"></div>
   <div class="grid-wrap" id="grid-wrap"><div class="grid" id="grid"></div></div>
 </div>
 
@@ -3381,7 +3404,8 @@
     render({ appearing: [row, col] });
     await sleep(140);
     await processChains();
-    nextPiece = pickPiece();
+    await rollNextPiece();
+    render();
     if (score > best) { best = score; localStorage.setItem(BEST_KEY, String(best)); }
     if (isGameOver()) {
       soundGameOver();
@@ -3480,16 +3504,78 @@
     modal.onclick = function(e) { if (e.target === modal) modal.remove(); };
   }
 
+  function buildTierBar() {
+    const bar = document.getElementById('tier-bar');
+    if (!bar || bar.children.length) return;
+    for (let t = 1; t <= MAX_TIER; t++) {
+      const tier = TIERS[t];
+      const cell = document.createElement('div');
+      cell.className = 'tier-cell';
+      cell.dataset.tier = String(t);
+      cell.style.setProperty('--ring', tier.bg);
+      const icon = document.createElement('div');
+      icon.className = 'tier-icon';
+      icon.style.background = tier.bg;
+      icon.style.color = tier.fg;
+      icon.innerHTML = tier.svg;
+      const score = document.createElement('div');
+      score.className = 'tier-score';
+      score.textContent = pieceValue(t).toLocaleString();
+      cell.appendChild(icon);
+      cell.appendChild(score);
+      bar.appendChild(cell);
+    }
+  }
+
+  function highlightNextTier(tier) {
+    const bar = document.getElementById('tier-bar');
+    if (!bar) return;
+    const cells = bar.querySelectorAll('.tier-cell');
+    cells.forEach(function(c) {
+      c.classList.remove('active');
+      c.classList.remove('cycling');
+    });
+    const cell = bar.querySelector('.tier-cell[data-tier="' + tier + '"]');
+    if (cell) cell.classList.add('active');
+  }
+
+  async function revealNextTier(finalTier) {
+    const bar = document.getElementById('tier-bar');
+    if (!bar) return;
+    const cells = bar.querySelectorAll('.tier-cell');
+    cells.forEach(function(c) {
+      c.classList.remove('active');
+      c.classList.remove('cycling');
+    });
+    const sweep = [1, 2, 3, 4, 1, 2, 3, 4, 1, 2, 3, 4];
+    sweep.push(finalTier);
+    const startMs = 28;
+    const endMs = 95;
+    for (let i = 0; i < sweep.length; i++) {
+      cells.forEach(function(c) { c.classList.remove('cycling'); });
+      const cell = bar.querySelector('.tier-cell[data-tier="' + sweep[i] + '"]');
+      if (cell) cell.classList.add('cycling');
+      const t = sweep.length > 1 ? i / (sweep.length - 1) : 1;
+      const dur = Math.round(startMs + (endMs - startMs) * (t * t));
+      await sleep(dur);
+    }
+    cells.forEach(function(c) { c.classList.remove('cycling'); });
+    const finalCell = bar.querySelector('.tier-cell[data-tier="' + finalTier + '"]');
+    if (finalCell) finalCell.classList.add('active');
+  }
+
+  async function rollNextPiece() {
+    const chosen = pickPiece();
+    await revealNextTier(chosen);
+    nextPiece = chosen;
+  }
+
   function render(opts) {
     opts = opts || {};
     document.getElementById('score').textContent = score.toLocaleString();
     document.getElementById('best').textContent = best.toLocaleString();
-    const np = document.getElementById('next-piece');
-    const npT = TIERS[nextPiece];
-    np.style.background = npT.bg;
-    np.style.color = npT.fg;
-    np.innerHTML = npT.svg;
-    document.getElementById('next-value').textContent = pieceValue(nextPiece).toLocaleString() + ' נק׳ במיזוג';
+    buildTierBar();
+    highlightNextTier(nextPiece);
     const wrap = document.getElementById('grid-wrap');
 
     if (opts.over) {
@@ -3649,8 +3735,37 @@
       showContestPreview(contestCodeFromURL.toUpperCase());
     }, 100);
   }
+
+  // ============================================================
+  // BloomDebug — internal API exposed for the auto-play bot.
+  // Only used when ?bot=1 (or ?botui) is in the URL.
+  // ============================================================
+  window.BloomDebug = {
+    ready: function() {
+      return Array.isArray(grid) && grid.length === ROWS && typeof nextPiece === 'number';
+    },
+    getGrid: function() {
+      if (!Array.isArray(grid)) return null;
+      return grid.map(function(row) { return row.slice(); });
+    },
+    getCurrentPiece: function() { return nextPiece; },
+    getScore: function() { return score | 0; },
+    getHighestTier: function() { return highestTier | 0; },
+    isGameOver: function() {
+      if (!Array.isArray(grid) || !grid[0]) return false;
+      return isGameOver();
+    },
+    isBusy: function() {
+      if (Array.isArray(grid) && grid[0] && isGameOver()) return false;
+      return !!busy;
+    },
+    drop: function(col) { return drop(col); },
+    restart: function() { init('practice'); },
+  };
 })();
 </script>
+
+<script src="/bot.js"></script>
 
 </body>
 </html>

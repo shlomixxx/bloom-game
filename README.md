@@ -1,132 +1,170 @@
 # BLOOM — Mobile Merge Game
 
-A Suika-style merge game built as a mobile-first web app. Single HTML file, no build step, no dependencies.
+A Suika-style merge puzzle built as a mobile-first web app. Single HTML frontend, tiny Express backend, no build step.
+
+Live: https://bloom-web-production-f3bd.up.railway.app
+
+---
 
 ## Project goal
 
-Build a viral, monetizable casual game that a solo developer can launch with minimal budget. The strategy is to launch on the web first, validate user retention organically, then port to App Store and Google Play.
+Ship a viral, monetizable casual game that a solo developer can launch on a small budget. Strategy: web first → validate retention → port to App Store / Google Play via Capacitor.
+
+The success metric for v1 is **retention**, not revenue. Target: ≥40% of first-time players return for a second session.
+
+---
 
 ## Game mechanics
 
-- 4×6 grid. Tap a column to drop the "next" piece into the lowest empty cell.
-- Adjacent identical pieces (horizontally or vertically) automatically merge into the next tier.
+- 4 columns × 6 rows. Tap a column to drop the "next" piece into the lowest empty cell.
+- Adjacent same-tier pieces (horizontally or vertically) merge into the next tier.
 - Merges trigger gravity, which can trigger more merges → chain reactions.
-- 8 tiers in total: Stone → Leaf → Flower → Flame → Bolt → Star → Diamond → Crown.
-- Game ends when the top row fills completely.
+- 8 tiers: **Stone → Leaf → Flower → Flame → Bolt → Star → Diamond → Crown**.
+- Game ends when the top row fills.
 
-## Scoring
+### Scoring
 
-`points = tier × 10 × group_size × chain_multiplier`
+```
+points = tier × 10 × group_size × chain_multiplier
+```
 
-Chain multipliers:
-- 1st merge in a drop: ×1
-- 2nd merge in chain: ×1.5
-- 3rd merge: ×2
-- 4th: ×2.5
-- 5th+: ×3
+Chain multiplier per drop: 1st merge ×1, 2nd ×1.5, 3rd ×2, 4th ×2.5, 5th+ ×3.
 
-Floating "+X" badges appear on each merge to give the player immediate feedback.
-A "שרשרת ×N" chain badge appears in the centre of the board for chain reactions of 2+.
+Visual feedback: floating `+X` badge on every merge, "שרשרת ×N" banner for chains of 2+, animated bump on score updates.
 
-## Visual identity
+---
 
-- Palette: muted parchment cream background (#F5F5F0) with vibrant tier colours.
-- Each tier has its own distinct colour from the Tabler ramp family.
-- Icons are inlined SVG (no external font dependency).
-- Typography: system sans (Apple system / Segoe / Helvetica).
-- Direction: RTL, Hebrew UI.
+## Modes
+
+- **Daily challenge (default)** — deterministic seed derived from the Israel-timezone date (`mulberry32` hash of `YYYY-MM-DD`). All players get the same piece sequence. One run per device per day. Score is submitted to the global leaderboard.
+- **Practice (free play)** — random seed, unlimited replays, no leaderboard submission.
+
+The daily run is gated by `localStorage`; on a second visit the same day, the player sees their result and a countdown to midnight Asia/Jerusalem.
+
+---
+
+## Features (currently shipped)
+
+- Full merge engine with BFS group detection, gravity, and chained scoring
+- Floating `+points` and "שרשרת ×N" feedback
+- Personal best score in `localStorage`
+- Game-over screen with full tier table and point values
+- Wordle-style emoji share (uses `navigator.share` with clipboard fallback)
+- One-time anonymous player-name prompt (persisted)
+- Anonymous `deviceId` (UUID, persisted) — one row per device per day
+- **Daily leaderboard** — top 50 for today's date, with the player's row highlighted and absolute rank
+- **Public leaderboard modal** with `day / week / month` tabs (rolling 1 / 7 / 30 day windows)
+- Mute button (sounds + music, persisted)
+- Web Audio synth: drop, merge (pitch rises with tier), chain, milestone, game-over
+- Info modal explaining the scoring formula and tier table
+
+## NOT currently in the build
+
+The repository's older `ROADMAP_1.md` describes a welcome splash, an interactive tutorial, and background MP3 music. **Those were rolled back** in commit `4fb5972` ("Roll back to initial daily-challenge game, layered with sound system"). Treat `ROADMAP_1.md` as a historical design doc, not a description of the current state.
+
+---
 
 ## Tech stack
 
-- Frontend: single `public/index.html`. Vanilla JS, one IIFE, no build, no framework.
-- Backend: Node 18+ / Express, single `server.js`. Serves the static frontend and a small JSON API.
-- Database: Postgres via `pg`. Schema in `schema.sql`, applied on boot.
-- Hosting: Railway (frontend + backend + Postgres in one project).
-- `localStorage` for personal best score, daily-played state, deviceId, and player name.
-- `navigator.share` API for Web Share, with clipboard fallback.
-- All SVG icons embedded inline as strings.
+- **Frontend**: one `public/index.html` (~1.1k lines). Vanilla JS in a single IIFE. RTL Hebrew UI. No build, no framework, no CDN. SVG icons inlined as strings.
+- **Backend**: `server.js` — Node 18+, Express, ~165 lines. Serves the static frontend and a small JSON API.
+- **Database**: Postgres via `pg`. Schema in `schema.sql`, applied on every boot by `initDb()` (idempotent `CREATE TABLE IF NOT EXISTS`).
+- **Persistence**: `localStorage` for best score, mute, deviceId, player name, and the daily-played gate.
+- **Hosting**: Railway — `bloom-web` service + `Postgres-z2RQ` plugin in one project.
+
+---
 
 ## Project structure
 
 ```
 bloom-game/
-├── public/index.html    ← the game (frontend)
-├── server.js             ← Express server: static + /api/*
-├── db.js                 ← Postgres pool + schema bootstrap
-├── schema.sql            ← daily_scores table
+├── public/
+│   └── index.html      # the entire game — HTML + CSS + JS in one file
+├── server.js           # Express server: static + /api/*
+├── db.js               # Postgres pool + schema bootstrap
+├── schema.sql          # daily_scores table + index
 ├── package.json
-└── README.md
+├── README.md           # this file (human-facing)
+├── CLAUDE.md           # AI-agent context for future sessions
+└── ROADMAP_1.md        # historical design doc (NOT current state)
 ```
+
+---
 
 ## API
 
-- `POST /api/score` — body `{ date, deviceId, name, score, tier }`. Upserts the player's best score for the given date. Returns `{ ok, rank }`.
-- `GET /api/leaderboard/:date?deviceId=...` — returns `{ list (top 50), total, rank }`.
-- `GET /api/health` — liveness check.
+All endpoints are JSON. Bodies are limited to 4 KB.
 
-The deviceId is a UUID generated client-side on first visit and persisted in `localStorage`. One row per deviceId per date.
+| Method | Path | Body / query | Returns |
+| --- | --- | --- | --- |
+| `GET` | `/api/health` | — | `{ ok: true }` |
+| `POST` | `/api/score` | `{ date, deviceId, name, score, tier }` | `{ ok, rank }` — upserts only if new score is higher than stored |
+| `GET` | `/api/leaderboard/:date` | `?deviceId=...` | `{ list (top 50), total, rank }` — single-day board |
+| `GET` | `/api/leaderboard/range/:period` | `period ∈ {day,week,month}`, `?endDate=YYYY-MM-DD&deviceId=...` | `{ list, total, rank, from, to, period }` — best-per-device over rolling window |
 
-## Current status
+Validation: `date` matches `YYYY-MM-DD`, `deviceId` is 8–64 chars, `score` is 0–10,000,000, `tier` is 1–8. The name is trimmed to 24 chars and falls back to `אנונימי`.
 
-**v1 — core gameplay (done):**
-- Full merge logic with BFS group detection and gravity
-- Chain reaction processing with multiplier scoring
-- Floating score feedback on every merge
-- Score "bump" animation on changes
-- Chain badge for 2+ merges
-- Game-over screen with tier table showing point values
-- Share result with emoji grid (Wordle-style)
-- Personal best persisted across sessions
-- Info button explaining the scoring system
+### Database schema
 
-**v2 — daily challenge + leaderboard (done):**
-- Daily seed mode: deterministic mulberry32 RNG keyed by date (Asia/Jerusalem)
-- One run per day per device; second visit shows the prior result + countdown
-- Practice mode: random seed, unlimited replays, no leaderboard submit
-- Global leaderboard on Postgres via Express API
-- Anonymous deviceId tracking (no signup)
-- One-time player-name prompt
-- Share text includes the daily date and player rank
+```sql
+daily_scores (
+  date TEXT, device_id TEXT, name TEXT,
+  score INTEGER, tier INTEGER,
+  created_at, updated_at,
+  PRIMARY KEY (date, device_id)
+)
+INDEX idx_daily_scores_lookup ON (date, score DESC)
+```
 
-## Roadmap (NOT yet built)
+One row per device per date. Re-submissions only overwrite if `new.score > old.score`.
 
-When the user wants to extend the game, these are the planned features in priority order:
+---
 
-1. **Rewarded video ads** — "watch 15s for a hint piece" via AdMob or similar.
-2. **Light IAP** — $4.99 "remove ads + 2 daily extra games"; $1.99 cosmetic skin packs.
-3. **Onboarding tutorial** — 30-second guided first-game.
-4. **Sound effects** — drop, merge, chain — each with a satisfying audio cue.
-5. **Particle effects** — small confetti burst when reaching the Crown for the first time.
-6. **Capacitor wrap** — port to iOS and Android app stores once retention is proven.
-7. **Better anti-cheat** — currently deviceId only (spoofable). Add HMAC-signed score submission once we have meaningful traffic.
-
-## Important context
-
-- The developer is Israeli, comfortable in Hebrew, builds in Vanilla JS + Firebase (his existing stack from SST/BarberBot project).
-- The developer is a lawyer and entrepreneur, not a senior game designer. Keep explanations clear and grounded, with practical economic reasoning.
-- The launch strategy is **web first** — no app store on day one. Validate viral mechanics with friends and Twitter/Reddit before investing in store assets.
-- The success metric for v1 is **retention**, not revenue. Target: 40% of first-time players play a second time.
-
-## How to run locally
+## Run locally
 
 ```bash
 npm install
-# Start Postgres locally OR point at a remote one:
+
 export DATABASE_URL="postgres://user:pass@host:5432/bloom"
 export PGSSL="false"   # only when the local Postgres has no SSL
 npm start              # listens on http://localhost:3000
 ```
 
-The frontend can also be opened standalone from `public/index.html` for pure-gameplay testing — the leaderboard simply won't load.
+The frontend also opens standalone from `public/index.html` — gameplay works, leaderboard requests will simply fail.
 
-## How to deploy
+---
 
-The app is hosted on Railway. From the project root:
+## Deploy
+
+Railway. From the project root:
 
 ```bash
-railway login           # one time
-railway link            # connect to the bloom-game Railway project
-railway up              # build & deploy from the local directory
+railway login            # one time
+railway link             # one time — connect to the bloom-game project
+railway up --service bloom-web --detach --ci
 ```
 
-Railway injects `DATABASE_URL` (Postgres plugin) and `PORT` automatically. The schema in `schema.sql` runs on every boot via `initDb()`, so deploys are idempotent.
+Railway injects `DATABASE_URL` and `PORT` automatically. Schema is re-applied idempotently on each boot.
+
+---
+
+## Roadmap (planned, not built)
+
+In priority order:
+
+1. **Daily streak counter** + return-day prompts
+2. **Onboarding tutorial** (was previously built, then rolled back — to be redone leaner)
+3. **Rewarded video ads** ("watch 15s for a hint piece") via AdMob
+4. **Light IAP** — "$4.99 remove ads + bonus daily runs", $1.99 cosmetic skin packs
+5. **Capacitor wrap** — iOS / Android app stores (only after retention is proven)
+6. **HMAC-signed score submission** — anti-cheat hardening once traffic is meaningful
+
+---
+
+## Conventions
+
+- Single HTML file. Do not split into separate JS / CSS files.
+- No npm frontend dependencies, no CDN, no build step.
+- RTL Hebrew is the canonical UI direction.
+- Every state mutation that survives a refresh must hit `localStorage`.
+- See [CLAUDE.md](CLAUDE.md) for the full agent contract — architecture, what NOT to change, known issues, and current progress.
