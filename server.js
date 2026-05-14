@@ -260,6 +260,7 @@ app.get('/api/contests/:code', async (req, res) => {
       score: r.score,
       tier: r.highest_tier,
       games: r.games_played,
+      last: r.last_played_at,
       you: !!(deviceId && r.device_id === deviceId)
     }));
 

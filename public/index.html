@@ -688,6 +688,42 @@
     text-align: center; padding: 40px;
     color: #6F6E68; font-size: 14px;
   }
+
+  /* Contest UX polish — Phase A */
+  .contest-card.contest-card-continue {
+    background: #F0FBF6;
+    box-shadow: 0 0 0 1.5px #9FE1CB;
+  }
+  .contest-card.contest-card-continue:hover { background: #E1F5EE; }
+  .contest-card-sub-meta { font-size: 11px; color: #2E8B6F; margin-top: 3px; font-weight: 500; }
+  .contest-board-row { gap: 10px; }
+  .contest-board-name-col { flex: 1; min-width: 0; }
+  .contest-board-name-col .contest-board-name { font-size: 14px; }
+  .contest-board-meta {
+    font-size: 10px; color: #A8A6A0;
+    margin-top: 2px; font-weight: 400;
+    direction: rtl;
+  }
+  .contest-board-score-col {
+    display: flex; flex-direction: column; align-items: flex-end;
+    flex-shrink: 0;
+  }
+  .contest-board-delta {
+    font-size: 10px; color: #A8A6A0;
+    margin-top: 2px; font-weight: 500;
+    font-variant-numeric: tabular-nums;
+  }
+  .contest-live-dot {
+    display: inline-block;
+    width: 6px; height: 6px; border-radius: 50%;
+    background: #2E8B6F; margin-right: 6px;
+    vertical-align: middle;
+    animation: contestLive 1.6s ease-in-out infinite;
+  }
+  @keyframes contestLive {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50%      { opacity: 0.35; transform: scale(0.85); }
+  }
   .home-version {
     position: absolute; bottom: 18px; left: 0; right: 0;
     font-size: 11px; color: #C8C5BE;
@@ -1346,11 +1382,7 @@
     const contestBtn = document.getElementById('home-contest');
     if (contestBtn) contestBtn.onclick = function() {
       ensureAudio();
-      if (activeContestCode) {
-        showContestLeaderboard(activeContestCode);
-      } else {
-        showContestMenu();
-      }
+      showContestMenu();
     };
     playMusic('lobby');
   }
@@ -1363,6 +1395,7 @@
   /* ============ FRIENDS CONTEST SCREENS ============ */
 
   function hideContestScreens() {
+    stopContestRefresh();
     const el = document.getElementById('contest-screen');
     if (el) el.remove();
   }
@@ -1380,11 +1413,24 @@
     const screen = document.createElement('div');
     screen.id = 'contest-screen';
     screen.className = 'contest-screen';
+    const continueCard = activeContestCode
+      ? '<div class="contest-card contest-card-continue" id="contest-continue-card">' +
+          '<div class="contest-card-icon" style="background:#C7EDDE;color:#04342C">' +
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 5l7 7-7 7"/></svg>' +
+          '</div>' +
+          '<div style="flex:1;min-width:0">' +
+            '<div class="contest-card-title">המשך תחרות פעילה</div>' +
+            '<div class="contest-card-desc" id="contest-continue-desc">טוען פרטים…</div>' +
+            '<div class="contest-card-sub-meta" id="contest-continue-meta"></div>' +
+          '</div>' +
+        '</div>'
+      : '';
     screen.innerHTML =
       createBackButton('window.__bloomBackToHome()') +
       '<div class="contest-title">תחרות חברים</div>' +
       '<div class="contest-sub">בחר את התפקיד שלך</div>' +
       '<div class="contest-cards">' +
+        continueCard +
         '<div class="contest-card" id="contest-create-card">' +
           '<div class="contest-card-icon" style="background:#FAEEDA;color:#854F0B">' +
             '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>' +
@@ -1407,6 +1453,26 @@
     app.appendChild(screen);
     document.getElementById('contest-create-card').onclick = showCreateContestForm;
     document.getElementById('contest-join-card').onclick = showJoinContestForm;
+    const continueEl = document.getElementById('contest-continue-card');
+    if (continueEl) {
+      continueEl.onclick = function() { showContestLeaderboard(activeContestCode); };
+      // Async-fill the card with contest name + member count
+      fetchContest(activeContestCode).then(function(data) {
+        const stillThere = document.getElementById('contest-continue-card');
+        if (!stillThere || !data) {
+          const descFb = document.getElementById('contest-continue-desc');
+          if (descFb) descFb.textContent = 'לחץ כדי לראות את הלוח';
+          return;
+        }
+        const descEl = document.getElementById('contest-continue-desc');
+        const metaEl = document.getElementById('contest-continue-meta');
+        if (descEl) descEl.textContent = data.contest.name;
+        if (metaEl) {
+          const n = (data.players && data.players.length) || 0;
+          metaEl.textContent = n + ' שחקנים · ' + formatTimeLeft(data.contest.ends_at);
+        }
+      });
+    }
   }
 
   window.__bloomBackToHome = function() {
@@ -1579,6 +1645,13 @@
         '<div class="contest-sub">בדוק את הקוד ונסה שוב</div>';
       return;
     }
+    // If the player is already a member, skip the join form
+    const alreadyMember = (data.players || []).some(function(p) { return p.you; });
+    if (alreadyMember) {
+      setActiveContest(code);
+      showContestLeaderboard(code);
+      return;
+    }
     const ended = new Date(data.contest.ends_at) < new Date();
     const topScore = data.players.length ? data.players[0].score : 0;
 
@@ -1627,6 +1700,67 @@
     }
   }
 
+  function renderContestBoardRows(players) {
+    if (!players || players.length === 0) {
+      return '<div class="contest-board-empty">אין עדיין שחקנים</div>';
+    }
+    const topScore = players[0].score | 0;
+    return players.map(function(p, i) {
+      const cls = i === 0 ? 'contest-board-row first' : p.you ? 'contest-board-row me' : 'contest-board-row';
+      const youBadge = p.you ? ' <small>(אתה)</small>' : '';
+      const games = p.games | 0;
+      const last = formatRelativeTime(p.last);
+      const metaParts = [];
+      if (games > 0) metaParts.push(games + (games === 1 ? ' משחק' : ' משחקים'));
+      if (last) metaParts.push(last);
+      const metaLine = metaParts.length
+        ? '<div class="contest-board-meta">' + metaParts.join(' · ') + '</div>'
+        : '';
+      const delta = (i === 0) ? 0 : topScore - (p.score | 0);
+      const deltaLine = delta > 0
+        ? '<div class="contest-board-delta">−' + delta.toLocaleString() + '</div>'
+        : '';
+      return '<div class="' + cls + '">' +
+        '<div class="contest-board-rank">' + (i + 1) + '</div>' +
+        '<div class="contest-board-name-col">' +
+          '<div class="contest-board-name">' + escapeHtml(p.name || 'אנונימי') + youBadge + '</div>' +
+          metaLine +
+        '</div>' +
+        '<div class="contest-board-score-col">' +
+          '<div class="contest-board-score">' + (p.score | 0).toLocaleString() + '</div>' +
+          deltaLine +
+        '</div>' +
+      '</div>';
+    }).join('');
+  }
+
+  function stopContestRefresh() {
+    if (contestRefreshTimer) { clearInterval(contestRefreshTimer); contestRefreshTimer = null; }
+    contestRefreshCode = null;
+  }
+
+  async function refreshContestBoardSilently() {
+    if (!contestRefreshCode) return;
+    if (typeof document !== 'undefined' && document.hidden) return;
+    const data = await fetchContest(contestRefreshCode);
+    if (!data) return;
+    const screen = document.getElementById('contest-screen');
+    if (!screen) return;
+    const boardEl = screen.querySelector('.contest-board');
+    if (boardEl) boardEl.innerHTML = renderContestBoardRows(data.players || []);
+    const subEl = document.getElementById('clb-sub');
+    if (subEl) {
+      subEl.innerHTML = '<span class="contest-live-dot"></span>' +
+        (data.players || []).length + ' שחקנים · ' + formatTimeLeft(data.contest.ends_at);
+    }
+  }
+
+  function startContestRefresh(code) {
+    stopContestRefresh();
+    contestRefreshCode = code;
+    contestRefreshTimer = setInterval(refreshContestBoardSilently, 20000);
+  }
+
   async function showContestLeaderboard(code) {
     let screen = document.getElementById('contest-screen');
     if (!screen) {
@@ -1646,24 +1780,16 @@
       return;
     }
 
-    const playersHtml = data.players.length === 0
-      ? '<div class="contest-board-empty">אין עדיין שחקנים</div>'
-      : data.players.map(function(p, i) {
-          const cls = i === 0 ? 'contest-board-row first' : p.you ? 'contest-board-row me' : 'contest-board-row';
-          const youBadge = p.you ? ' <small>(אתה)</small>' : '';
-          return '<div class="' + cls + '">' +
-            '<div class="contest-board-rank">' + (i + 1) + '</div>' +
-            '<div class="contest-board-name">' + p.name + youBadge + '</div>' +
-            '<div class="contest-board-score">' + p.score.toLocaleString() + '</div>' +
-          '</div>';
-        }).join('');
-
+    const playersHtml = renderContestBoardRows(data.players || []);
     const link = buildContestShareLink(code);
 
     screen.innerHTML =
       createBackButton('window.__bloomBackToHome()') +
-      '<div class="contest-title">' + data.contest.name + '</div>' +
-      '<div class="contest-sub">' + data.players.length + ' שחקנים · ' + formatTimeLeft(data.contest.ends_at) + '</div>' +
+      '<div class="contest-title">' + escapeHtml(data.contest.name) + '</div>' +
+      '<div class="contest-sub" id="clb-sub">' +
+        '<span class="contest-live-dot"></span>' +
+        (data.players || []).length + ' שחקנים · ' + formatTimeLeft(data.contest.ends_at) +
+      '</div>' +
       '<div class="contest-board">' + playersHtml + '</div>' +
       '<div class="contest-form" style="margin-top:18px">' +
         '<button class="contest-submit-btn" id="clb-play">שחק עכשיו</button>' +
@@ -1673,6 +1799,7 @@
 
     document.getElementById('clb-play').onclick = function() {
       setActiveContest(code);
+      stopContestRefresh();
       hideContestScreens();
       init('contest');
     };
@@ -1690,9 +1817,12 @@
       if (!confirm('לצאת מהתחרות הזו? תוכל להצטרף בחזרה עם הקוד.')) return;
       setActiveContest(null);
       activeContestData = null;
+      stopContestRefresh();
       hideContestScreens();
       showHome();
     };
+
+    startContestRefresh(code);
   }
 
   function pointsFor(tier, groupSize, chainMult) {
@@ -1769,6 +1899,8 @@
   let activeContestCode = localStorage.getItem(CONTEST_CODE_KEY) || null;
   let activeContestData = null;
   let contestSubmitted = false;
+  let contestRefreshTimer = null;
+  let contestRefreshCode = null;
 
   function getDeviceId() {
     let id = localStorage.getItem(DEVICE_KEY);
@@ -1841,6 +1973,22 @@
     if (days > 0) return days + ' ימים';
     if (hours > 0) return hours + ' שעות';
     return 'פחות משעה';
+  }
+
+  function formatRelativeTime(iso) {
+    if (!iso) return '';
+    const ms = new Date() - new Date(iso);
+    if (isNaN(ms) || ms < 0) return '';
+    const sec = Math.floor(ms / 1000);
+    if (sec < 60) return 'עכשיו';
+    const min = Math.floor(sec / 60);
+    if (min < 60) return 'לפני ' + min + ' דק׳';
+    const hours = Math.floor(min / 60);
+    if (hours < 24) return 'לפני ' + hours + ' שע׳';
+    const days = Math.floor(hours / 24);
+    if (days === 1) return 'אתמול';
+    if (days < 7) return 'לפני ' + days + ' ימים';
+    return new Date(iso).toLocaleDateString('he-IL');
   }
 
   function init(nextMode) {
@@ -2532,6 +2680,10 @@
   document.addEventListener('visibilitychange', function() {
     if (document.visibilityState === 'hidden') pauseAllMusic();
     else if (document.visibilityState === 'visible' && !musicMuted) resumeCurrentMusic();
+    // Resume an immediate contest-board refresh when the tab regains focus
+    if (document.visibilityState === 'visible' && contestRefreshCode) {
+      refreshContestBoardSilently();
+    }
   });
 
   /* Browsers block audio until the first user interaction.
