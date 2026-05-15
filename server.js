@@ -1936,7 +1936,7 @@ if (ADMIN_PATH && ADMIN_PASSWORD) {
       const live = await pool.query(
         `SELECT ls.contest_code, ls.device_id, ls.display_name, ls.live_score, ls.highest_tier, ls.updated_at, c.name AS contest_name
          FROM contest_live_state ls JOIN contests c ON c.code = ls.contest_code
-         WHERE ls.updated_at > NOW() - INTERVAL '30 seconds'
+         WHERE ls.updated_at > NOW() - INTERVAL '60 seconds'
          ORDER BY ls.live_score DESC`
       );
       // All active players from heartbeat (daily, practice, contest, challenge)
@@ -1949,7 +1949,7 @@ if (ADMIN_PATH && ADMIN_PASSWORD) {
       const watchers = await pool.query(
         `SELECT contest_code, watcher_name, target_device_id, watcher_last_score, updated_at
          FROM contest_watchers
-         WHERE updated_at > NOW() - INTERVAL '30 seconds'
+         WHERE updated_at > NOW() - INTERVAL '60 seconds'
          ORDER BY updated_at DESC`
       );
       res.json({ ok: true, live: live.rows, heartbeat: heartbeat.rows, watchers: watchers.rows });
@@ -2350,11 +2350,11 @@ app.get('/api/live-state/:deviceId', async (req, res) => {
     try {
       r = await pool.query(
         `SELECT display_name, mode, score, highest_tier, grid_json, updated_at
-         FROM player_heartbeat WHERE device_id = $1 AND updated_at > NOW() - INTERVAL '30 seconds'`, [did]);
+         FROM player_heartbeat WHERE device_id = $1 AND updated_at > NOW() - INTERVAL '60 seconds'`, [did]);
     } catch (e) {
       r = await pool.query(
         `SELECT display_name, mode, score, highest_tier, updated_at
-         FROM player_heartbeat WHERE device_id = $1 AND updated_at > NOW() - INTERVAL '30 seconds'`, [did]);
+         FROM player_heartbeat WHERE device_id = $1 AND updated_at > NOW() - INTERVAL '60 seconds'`, [did]);
     }
     if (!r.rows.length) return res.status(404).json({ error: 'not_found' });
     const row = r.rows[0];

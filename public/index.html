@@ -6987,10 +6987,12 @@
   // Admin spectator: ?watch=DEVICE_ID — universal spectator for ANY player
   var watchTarget = urlParams.get('watch');
   if (watchTarget) {
-    setTimeout(function() {
-      hideHome();
-      startUniversalSpectator(watchTarget);
-    }, 300);
+    // Skip normal game — go straight to spectator mode.
+    // Don't show home screen, don't start own heartbeat.
+    if (_heartbeatTimer) { clearInterval(_heartbeatTimer); _heartbeatTimer = null; }
+    var homeEl = document.getElementById('home-screen');
+    if (homeEl) homeEl.remove();
+    startUniversalSpectator(watchTarget);
   }
 
   // Universal spectator — works for ALL modes (practice, daily, contest, challenge)
@@ -6999,7 +7001,6 @@
     if (_uniSpecTimer) { clearInterval(_uniSpecTimer); _uniSpecTimer = null; }
     var wrap = document.getElementById('grid-wrap');
     if (!wrap) return;
-    // Build spectator UI
     var ROWS = getBoardRows(), COLS = getBoardCols();
     var cellsHtml = '';
     for (var r = 0; r < ROWS; r++) {
@@ -7008,29 +7009,34 @@
       }
     }
     wrap.innerHTML =
-      '<div style="text-align:center;padding:12px 0;direction:rtl">' +
-        '<div style="font-size:14px;font-weight:600;color:#1C1A18" id="uspec-name">טוען שחקן...</div>' +
-        '<div style="font-size:11px;color:#6F6E68;margin-top:2px" id="uspec-meta"></div>' +
-        '<div style="font-size:32px;font-weight:700;margin:8px 0" id="uspec-score">0</div>' +
+      '<div style="text-align:center;padding:16px 0;direction:rtl">' +
+        '<div style="font-size:15px;font-weight:700;color:#1C1A18" id="uspec-name">⏳ מתחבר לשחקן...</div>' +
+        '<div style="font-size:12px;color:#6F6E68;margin-top:4px" id="uspec-meta">ממתין לנתונים</div>' +
+        '<div style="font-size:36px;font-weight:700;margin:10px 0;color:#1C1A18" id="uspec-score">—</div>' +
       '</div>' +
       '<div class="spectator-grid"><div class="grid" id="uspec-grid">' + cellsHtml + '</div></div>' +
-      '<div style="text-align:center;margin-top:12px">' +
+      '<div style="text-align:center;margin-top:14px">' +
+        '<div style="font-size:10px;color:#A8A6A0;margin-bottom:8px" id="uspec-status">polling…</div>' +
         '<button class="btn secondary" id="uspec-close">חזרה למשחק שלי</button>' +
       '</div>';
     document.getElementById('uspec-close').onclick = function() {
       if (_uniSpecTimer) { clearInterval(_uniSpecTimer); _uniSpecTimer = null; }
-      init(mode);
+      window.location.href = window.location.origin; // reload without ?watch param
     };
-    // Start polling
+    var pollCount = 0;
+    var foundOnce = false;
     function poll() {
+      pollCount++;
+      var statusEl = document.getElementById('uspec-status');
       fetch(API_BASE + '/api/live-state/' + encodeURIComponent(targetId))
         .then(function(r) { return r.ok ? r.json() : null; })
         .then(function(d) {
           if (!d) {
-            var meta = document.getElementById('uspec-meta');
-            if (meta) meta.textContent = 'השחקן לא פעיל כרגע';
+            if (statusEl) statusEl.textContent = foundOnce ? '🔴 השחקן הפסיק לשחק' : 'ממתין לשחקן… (ניסיון ' + pollCount + ')';
             return;
           }
+          foundOnce = true;
+          if (statusEl) statusEl.textContent = '🟢 מחובר · מתעדכן כל 2 שניות';
           var nameEl = document.getElementById('uspec-name');
           var metaEl = document.getElementById('uspec-meta');
           var scoreEl = document.getElementById('uspec-score');
@@ -7039,7 +7045,6 @@
           var modeLabel = d.mode === 'daily' ? 'יומי' : d.mode === 'practice' ? 'אימון' : d.mode === 'challenge' ? 'אתגר' : d.mode;
           if (metaEl) metaEl.textContent = modeLabel + ' · tier ' + (d.tier || 1);
           if (scoreEl) scoreEl.textContent = (d.score || 0).toLocaleString();
-          // Render grid
           if (gridEl && d.grid && Array.isArray(d.grid)) {
             var cells = gridEl.children;
             var idx = 0;
@@ -7066,7 +7071,9 @@
             }
           }
         })
-        .catch(function() {});
+        .catch(function() {
+          if (statusEl) statusEl.textContent = '⚠️ שגיאת רשת';
+        });
     }
     poll();
     _uniSpecTimer = setInterval(poll, 2000);
