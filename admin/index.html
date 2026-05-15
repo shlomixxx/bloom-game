@@ -776,14 +776,16 @@
     } else {
       if (live.length) {
         html += '<details open><summary>משחקים פעילים (' + live.length + ')</summary>';
-        html += '<table><thead><tr><th>שחקן</th><th>תחרות</th><th>ניקוד חי</th><th>tier</th><th>עדכון אחרון</th></tr></thead><tbody>';
+        html += '<table><thead><tr><th>שחקן</th><th>תחרות</th><th>ניקוד חי</th><th>tier</th><th>עדכון אחרון</th><th></th></tr></thead><tbody>';
         live.forEach(function(l) {
+          var gameUrl = location.origin + '/?watch=' + encodeURIComponent(l.device_id);
           html += '<tr>' +
             '<td>' + escHtml(l.display_name) + '</td>' +
             '<td>' + escHtml(l.contest_name) + '</td>' +
             '<td><strong>' + fmtNum(l.live_score) + '</strong></td>' +
             '<td>' + (l.highest_tier | 0) + '</td>' +
             '<td class="muted">' + fmtTime(l.updated_at) + '</td>' +
+            '<td><a href="' + gameUrl + '" target="_blank" class="btn sm secondary" style="font-size:10px;padding:3px 8px">👁 צפה</a></td>' +
           '</tr>';
         });
         html += '</tbody></table></details>';

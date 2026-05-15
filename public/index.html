@@ -6955,6 +6955,15 @@
     }, 100);
   }
 
+  // Admin spectator: ?watch=DEVICE_ID opens spectator mode directly
+  var watchTarget = urlParams.get('watch');
+  if (watchTarget) {
+    setTimeout(function() {
+      hideHome();
+      startSpectator(watchTarget, 'שחקן', 'home');
+    }, 200);
+  }
+
   // ============================================================
   // BloomDebug — internal API exposed for the auto-play bot.
   // Only used when ?bot=1 (or ?botui) is in the URL.
