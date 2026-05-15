@@ -107,6 +107,7 @@
     g[row][col] = piece;
 
     let score = 0, chains = 0, highest = piece;
+    let anchorCol = col; // track merge anchor like the real engine
 
     while (true) {
       let merged = false;
@@ -119,7 +120,10 @@
             let kr = -1, kc = -1;
             for (let i = 0; i < group.length; i++) {
               const gr = group[i][0], gc = group[i][1];
-              if (gr > kr || (gr === kr && gc < kc)) { kr = gr; kc = gc; }
+              if (gr > kr) { kr = gr; kc = gc; }
+              else if (gr === kr) {
+                if (Math.abs(gc - anchorCol) < Math.abs(kc - anchorCol)) kc = gc;
+              }
             }
             for (let i = 0; i < group.length; i++) {
               const gr = group[i][0], gc = group[i][1];
@@ -129,6 +133,7 @@
             const nt = Math.min(t + 1, MAX_TIER);
             g[kr][kc] = nt;
             chains++;
+            anchorCol = kc; // follow merge flow
             const mult = 1 + (chains - 1) * 0.5;
             score += nt * 10 * group.length * mult;
             if (nt > highest) highest = nt;

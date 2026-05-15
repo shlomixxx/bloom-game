@@ -6134,7 +6134,10 @@
     requestAnimationFrame(tick);
   }
 
-  async function processChains() {
+  async function processChains(anchorRow, anchorCol) {
+    // anchorRow/anchorCol: where the piece was dropped (first merge prefers
+    // this cell as the survivor). For chain reactions after gravity, the
+    // anchor shifts to the last merge position for natural visual flow.
     let chainCount = 0;
     const prevHighestTier = highestTier;
     while (true) {
@@ -6147,10 +6150,20 @@
           if (t === 0 || t === MAX_TIER) continue;
           const group = findGroup(r, c, t);
           if (group.length >= 2) {
+            // Choose survivor cell: prefer the bottommost cell (gravity-friendly).
+            // On a row tie, prefer the cell closest to the anchor (drop/last merge)
+            // so the result "stays where the player aimed."
             let kr = -1, kc = -1;
             for (let i = 0; i < group.length; i++) {
               const gr = group[i][0], gc = group[i][1];
-              if (gr > kr || (gr === kr && gc < kc)) { kr = gr; kc = gc; }
+              if (gr > kr) {
+                kr = gr; kc = gc;
+              } else if (gr === kr) {
+                // Same row: prefer cell closest to anchor column
+                var distNew = Math.abs(gc - (anchorCol != null ? anchorCol : 0));
+                var distOld = Math.abs(kc - (anchorCol != null ? anchorCol : 0));
+                if (distNew < distOld) { kc = gc; }
+              }
             }
             for (let i = 0; i < group.length; i++) {
               const gr = group[i][0], gc = group[i][1];
@@ -6179,6 +6192,8 @@
             merged = [kr, kc];
             mergedTier = nt;
             mergeSize = group.length;
+            // Update anchor to last merge position — chain reactions follow the flow
+            anchorRow = kr; anchorCol = kc;
             showFloatingScore(kr, kc, points, chainCount);
             bumpScore();
             soundMerge(nt);
@@ -6237,7 +6252,7 @@
     dismissCoach();
     render({ appearing: [row, col] });
     await sleep(140);
-    await processChains();
+    await processChains(row, col);
     // Pick the next piece NOW — this is synchronous, so the player can drop
     // again the instant we set busy=false below. The cycling animation runs
     // in the background as a visual indicator only, never gating input.
