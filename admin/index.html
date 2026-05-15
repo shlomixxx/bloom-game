@@ -405,7 +405,10 @@
 
   <!-- Live -->
   <section>
-    <h2>קורה עכשיו <button class="tip-btn" data-tip="live">?</button> <span class="live-dot"></span></h2>
+    <h2>קורה עכשיו <button class="tip-btn" data-tip="live">?</button> <span class="live-dot"></span>
+      <button class="btn sm secondary" id="btn-live-refresh" style="margin-right:auto;font-size:10px">↻ רענן</button>
+      <label style="font-size:10px;color:#6F6E68;display:flex;align-items:center;gap:4px"><input type="checkbox" id="live-auto" checked> אוטומטי</label>
+    </h2>
     <div id="live-host">
       <div class="loading">טוען…</div>
     </div>
@@ -1266,6 +1269,12 @@
   loadGameConfig();
   wireTips();
   refreshAll();
+
+  // Live section: dedicated refresh + auto-refresh every 10s
+  $('btn-live-refresh').onclick = function() { loadLive(); toast('לייב עודכן'); };
+  var _liveAutoTimer = setInterval(function() {
+    if ($('live-auto') && $('live-auto').checked) loadLive();
+  }, 10000);
 })();
 </script>
 
