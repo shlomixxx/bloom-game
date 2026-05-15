@@ -6237,6 +6237,7 @@
   }
 
   let tourCurrentStep = 0;
+  let _tourOnDone = null;
   function showTour(opts) {
     opts = opts || {};
     tourCurrentStep = (typeof opts.step === 'number') ? opts.step : 0;
@@ -6292,7 +6293,6 @@
       renderTourStep();
     };
   }
-  let _tourOnDone = null;
   function closeTour(opts) {
     opts = opts || {};
     const m = document.getElementById('tour-modal');
