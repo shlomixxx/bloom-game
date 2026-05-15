@@ -4593,6 +4593,12 @@
       '</div>' +
       (function() {
         var totalMs = loadLifetimeInt(TOTAL_PLAY_TIME_KEY);
+        // Estimate for players who played before time tracking was added
+        // (~3 minutes average per game)
+        if (totalMs < 60000 && totalGames > 0) {
+          totalMs = totalGames * 180000; // 3 min per game estimate
+          try { localStorage.setItem(TOTAL_PLAY_TIME_KEY, String(totalMs)); } catch(e) {}
+        }
         if (totalMs < 60000) return ''; // less than 1 minute — don't show
         var h = Math.floor(totalMs / 3600000);
         var m = Math.floor((totalMs % 3600000) / 60000);
