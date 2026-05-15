@@ -932,32 +932,45 @@
   html[data-theme="dark"] .home-mystats { background: #2A2118; border-color: rgba(250,199,117,0.35); color: #8E8A82; }
   html[data-theme="dark"] .home-mystats strong { color: #F2EFE9; }
 
-  /* Unified player card on home screen */
-  .home-player-card {
-    margin: 0 auto; padding: 10px 14px;
-    background: #FAFAF6; border: 1px solid rgba(0,0,0,0.06);
-    border-radius: 14px; direction: rtl; max-width: 340px;
+  /* Secret stats bubble (appears when tapping tier icons) */
+  @keyframes bubblePop { 0% { transform: scale(0.85) translateY(-8px); opacity: 0; } 100% { transform: scale(1) translateY(0); opacity: 1; } }
+  .home-stats-bubble {
+    position: relative; margin: -8px auto 8px;
+    padding: 14px 16px; max-width: 300px;
+    background: #FFFDF6; border: 1px solid #EDE9DD;
+    border-radius: 16px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.08), 0 2px 6px rgba(0,0,0,0.04);
+    direction: rtl;
   }
-  .hpc-top {
-    display: flex; align-items: center; gap: 8px; justify-content: center;
-    margin-bottom: 8px; padding-bottom: 8px;
-    border-bottom: 1px solid rgba(0,0,0,0.05);
+  .hsb-arrow {
+    position: absolute; top: -7px; left: 50%; transform: translateX(-50%);
+    width: 14px; height: 7px;
+    background: #FFFDF6; border-left: 1px solid #EDE9DD; border-top: 1px solid #EDE9DD;
+    transform: translateX(-50%) rotate(45deg); top: -6px;
   }
-  .hpc-name { font-size: 14px; font-weight: 700; color: #1C1A18; }
-  .hpc-level { font-size: 11px; padding: 2px 8px; border-radius: 99px; background: linear-gradient(135deg, #FFF7E6, #FFF1D0); border: 1px solid #FAC775; color: #854F0B; font-weight: 600; margin-right: auto; white-space: nowrap; }
-  .hpc-stats { display: flex; align-items: center; justify-content: center; gap: 0; }
-  .hpc-stat { flex: 1; text-align: center; min-width: 0; }
-  .hpc-stat-val { font-size: 13px; font-weight: 700; color: #1C1A18; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .hpc-stat-label { font-size: 10px; color: #A8A6A0; margin-top: 1px; }
-  .hpc-divider { width: 1px; height: 24px; background: rgba(0,0,0,0.08); flex-shrink: 0; margin: 0 4px; }
+  .hsb-header { display: flex; align-items: center; gap: 8px; justify-content: center; margin-bottom: 10px; }
+  .hsb-header strong { font-size: 14px; color: #1C1A18; }
+  .hsb-level { font-size: 10px; padding: 2px 7px; border-radius: 99px; background: linear-gradient(135deg, #FFF7E6, #FFF1D0); border: 1px solid #FAC775; color: #854F0B; font-weight: 600; white-space: nowrap; }
+  .hsb-grid { display: flex; gap: 1px; background: #EDE9DD; border-radius: 10px; overflow: hidden; margin-bottom: 10px; }
+  .hsb-cell { flex: 1; background: #FFFDF6; padding: 8px 4px; text-align: center; }
+  .hsb-val { font-size: 13px; font-weight: 700; color: #1C1A18; white-space: nowrap; }
+  .hsb-lbl { font-size: 9px; color: #A8A6A0; margin-top: 2px; text-transform: uppercase; }
+  .hsb-share {
+    width: 100%; padding: 8px; border: none; border-radius: 8px;
+    background: #1C1A18; color: #FFF; font-family: inherit;
+    font-size: 12px; font-weight: 600; cursor: pointer;
+  }
+  .hsb-share:active { opacity: 0.8; }
 
-  html[data-theme="dark"] .home-player-card { background: #2C2A28; border-color: rgba(255,255,255,0.06); }
-  html[data-theme="dark"] .hpc-top { border-color: rgba(255,255,255,0.06); }
-  html[data-theme="dark"] .hpc-name { color: #F2EFE9; }
-  html[data-theme="dark"] .hpc-stat-val { color: #F2EFE9; }
-  html[data-theme="dark"] .hpc-stat-label { color: #6F6E68; }
-  html[data-theme="dark"] .hpc-divider { background: rgba(255,255,255,0.08); }
-  html[data-theme="dark"] .hpc-level { background: linear-gradient(135deg, #3D2E0A, #2A2118); border-color: rgba(250,199,117,0.35); color: #FAC775; }
+  html[data-theme="dark"] .home-stats-bubble { background: #2C2A28; border-color: rgba(255,255,255,0.08); box-shadow: 0 8px 24px rgba(0,0,0,0.3); }
+  html[data-theme="dark"] .hsb-arrow { background: #2C2A28; border-color: rgba(255,255,255,0.08); }
+  html[data-theme="dark"] .hsb-header strong { color: #F2EFE9; }
+  html[data-theme="dark"] .hsb-grid { background: rgba(255,255,255,0.06); }
+  html[data-theme="dark"] .hsb-cell { background: #2C2A28; }
+  html[data-theme="dark"] .hsb-val { color: #F2EFE9; }
+  html[data-theme="dark"] .hsb-lbl { color: #6F6E68; }
+  html[data-theme="dark"] .hsb-level { background: linear-gradient(135deg, #3D2E0A, #2A2118); border-color: rgba(250,199,117,0.35); color: #FAC775; }
+  html[data-theme="dark"] .hsb-share { background: #FAC775; color: #1A1816; }
 
   /* Social proof under the primary CTA — minimal, peripheral. */
   .home-social {
@@ -3010,16 +3023,17 @@
       '<button class="home-mute" id="home-mute" aria-label="השתק">' +
         '<svg id="home-mute-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 8a5 5 0 0 1 0 8M17.7 5a9 9 0 0 1 0 14M6 15H4a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1h2l3.5-4.5A.8.8 0 0 1 11 5v14a.8.8 0 0 1-1.5.5L6 15"/></svg>' +
       '</button>' +
-      '<div class="home-icons">' +
-        '<div class="home-icon" style="background:#C0DD97;color:#173404">' + SVG.leaf + '</div>' +
-        '<div class="home-icon" style="background:#F4C0D1;color:#4B1528">' + SVG.flower + '</div>' +
-        '<div class="home-icon" style="background:#F5C4B3;color:#4A1B0C">' + SVG.flame + '</div>' +
-        '<div class="home-icon" style="background:#9FE1CB;color:#04342C">' + SVG.star + '</div>' +
+      '<div class="home-icons" id="home-icons-tap">' +
         '<div class="home-icon" style="background:#CECBF6;color:#26215C">' + SVG.crown + '</div>' +
+        '<div class="home-icon" style="background:#9FE1CB;color:#04342C">' + SVG.star + '</div>' +
+        '<div class="home-icon" style="background:#F5C4B3;color:#4A1B0C">' + SVG.flame + '</div>' +
+        '<div class="home-icon" style="background:#F4C0D1;color:#4B1528">' + SVG.flower + '</div>' +
+        '<div class="home-icon" style="background:#C0DD97;color:#173404">' + SVG.leaf + '</div>' +
       '</div>' +
       '<div class="home-brand">BLOOM</div>' +
       '<div class="home-sub">מזג חפצים, גלה דרגות חדשות, והגע עד לכתר</div>' +
       '<div id="home-mystats-host"></div>' +
+      '<div class="home-stats-bubble" id="home-stats-bubble" style="display:none"></div>' +
       // Returning players see "שחק עכשיו" and the tour link below.
       // New players see "בוא נתחיל" (opens tour) and "דלג" to skip it.
       (hasSeenTour()
@@ -3062,6 +3076,24 @@
         startOvertakeWatch(activeContestCode);
       }
     };
+    // Tap tier icons → reveal hidden stats bubble
+    var iconsTap = document.getElementById('home-icons-tap');
+    var statsBubble = document.getElementById('home-stats-bubble');
+    if (iconsTap && statsBubble) {
+      iconsTap.style.cursor = 'pointer';
+      iconsTap.onclick = function() {
+        var isOpen = statsBubble.style.display !== 'none';
+        statsBubble.style.display = isOpen ? 'none' : '';
+        if (!isOpen) statsBubble.style.animation = 'bubblePop 0.25s ease-out';
+      };
+      // Tap outside bubble → close it
+      document.addEventListener('pointerdown', function(e) {
+        if (statsBubble.style.display === 'none') return;
+        if (statsBubble.contains(e.target) || iconsTap.contains(e.target)) return;
+        statsBubble.style.display = 'none';
+      });
+    }
+
     document.getElementById('home-start').onclick = function() {
       ensureAudio();
       if (!hasSeenTour()) { showTour({ onDone: enter }); }
@@ -4590,41 +4622,56 @@
   // at least one game. Pulls from localStorage lifetime values + best score.
   function refreshHomeMyStats() {
     const host = document.getElementById('home-mystats-host');
-    if (!host) return;
+    if (host) host.innerHTML = ''; // keep home clean
+    const bubble = document.getElementById('home-stats-bubble');
+    if (!bubble) return;
     const bestScore  = parseInt(localStorage.getItem(BEST_KEY)        || '0', 10) || 0;
     const bestTier   = parseInt(localStorage.getItem(BEST_TIER_KEY)   || '0', 10) || 0;
     const totalGames = parseInt(localStorage.getItem(GAMES_COUNT_KEY) || '0', 10) || 0;
-    if (bestScore <= 0 && totalGames <= 0) { host.innerHTML = ''; return; }
+    if (bestScore <= 0 && totalGames <= 0) { bubble.innerHTML = ''; return; }
     const playerNm = (getPlayerName() || '').trim();
     const tierName = (getActiveTiers()[bestTier] && getActiveTiers()[bestTier].name) || '—';
-    host.innerHTML =
-      (function() {
-        var totalMs = loadLifetimeInt(TOTAL_PLAY_TIME_KEY);
-        if (totalMs < 60000 && totalGames > 0) {
-          totalMs = totalGames * 180000;
-          try { localStorage.setItem(TOTAL_PLAY_TIME_KEY, String(totalMs)); } catch(e) {}
-        }
-        var h = Math.floor(totalMs / 3600000);
-        var m = Math.floor((totalMs % 3600000) / 60000);
-        var timeText = totalMs >= 60000 ? (h > 0 ? h + ' שעות ו-' + m + ' דק\'' : m + ' דקות') : '';
-        var level = h >= 10 ? '🔥🔥🔥 מכור מושבע' : h >= 3 ? '🔥🔥 מכור' : h >= 1 ? '🔥 מתמכר' : m >= 15 ? '😊 חובבן' : totalMs >= 60000 ? '🌱 מתחיל' : '';
 
-        return '<div class="home-player-card">' +
-          '<div class="hpc-top">' +
-            renderAvatarHtml(deviceId, 'sm') +
-            '<div class="hpc-name">' + (playerNm ? escapeHtml(playerNm) : 'שחקן') + '</div>' +
-            (level ? '<div class="hpc-level">' + level + '</div>' : '') +
-          '</div>' +
-          '<div class="hpc-stats">' +
-            '<div class="hpc-stat"><div class="hpc-stat-val">' + bestScore.toLocaleString() + '</div><div class="hpc-stat-label">🏆 שיא</div></div>' +
-            '<div class="hpc-divider"></div>' +
-            '<div class="hpc-stat"><div class="hpc-stat-val">' + escapeHtml(tierName) + '</div><div class="hpc-stat-label">עד</div></div>' +
-            '<div class="hpc-divider"></div>' +
-            '<div class="hpc-stat"><div class="hpc-stat-val">' + totalGames + '</div><div class="hpc-stat-label">משחקים</div></div>' +
-            (timeText ? '<div class="hpc-divider"></div><div class="hpc-stat"><div class="hpc-stat-val">' + timeText + '</div><div class="hpc-stat-label">🕐 זמן</div></div>' : '') +
-          '</div>' +
-        '</div>';
-      })();
+    var totalMs = loadLifetimeInt(TOTAL_PLAY_TIME_KEY);
+    if (totalMs < 60000 && totalGames > 0) {
+      totalMs = totalGames * 180000;
+      try { localStorage.setItem(TOTAL_PLAY_TIME_KEY, String(totalMs)); } catch(e) {}
+    }
+    var h = Math.floor(totalMs / 3600000);
+    var m = Math.floor((totalMs % 3600000) / 60000);
+    var timeText = totalMs >= 60000 ? (h > 0 ? h + ' שעות ו-' + m + ' דק\'' : m + ' דקות') : '';
+    var level = h >= 10 ? '🔥🔥🔥 מכור מושבע' : h >= 3 ? '🔥🔥 מכור' : h >= 1 ? '🔥 מתמכר' : m >= 15 ? '😊 חובבן' : totalMs >= 60000 ? '🌱 מתחיל' : '';
+
+    bubble.innerHTML =
+      '<div class="hsb-arrow"></div>' +
+      '<div class="hsb-header">' +
+        renderAvatarHtml(deviceId, 'sm') +
+        '<strong>' + (playerNm ? escapeHtml(playerNm) : 'שחקן') + '</strong>' +
+        (level ? '<span class="hsb-level">' + level + '</span>' : '') +
+      '</div>' +
+      '<div class="hsb-grid">' +
+        '<div class="hsb-cell"><div class="hsb-val">' + bestScore.toLocaleString() + '</div><div class="hsb-lbl">🏆 שיא</div></div>' +
+        '<div class="hsb-cell"><div class="hsb-val">' + escapeHtml(tierName) + '</div><div class="hsb-lbl">דרגה</div></div>' +
+        '<div class="hsb-cell"><div class="hsb-val">' + totalGames + '</div><div class="hsb-lbl">משחקים</div></div>' +
+        (timeText ? '<div class="hsb-cell"><div class="hsb-val">' + timeText + '</div><div class="hsb-lbl">🕐 זמן</div></div>' : '') +
+      '</div>' +
+      '<button class="hsb-share" id="hsb-share-btn">📤 שתף את הפרופיל</button>';
+
+    document.getElementById('hsb-share-btn').onclick = function(e) {
+      e.stopPropagation();
+      var text = '🌸 BLOOM — ' + (playerNm || 'שחקן') + '\n' +
+        '🏆 שיא: ' + bestScore.toLocaleString() + ' · ' + tierName + '\n' +
+        '🎮 ' + totalGames + ' משחקים' + (timeText ? ' · 🕐 ' + timeText : '') + '\n' +
+        (level ? level + '\n' : '') +
+        '\nשחק גם: ' + window.location.origin;
+      if (navigator.share) navigator.share({ text: text }).catch(function(){});
+      else if (navigator.clipboard) {
+        navigator.clipboard.writeText(text);
+        this.textContent = '✓ הועתק!';
+        var btn = this;
+        setTimeout(function() { btn.textContent = '📤 שתף את הפרופיל'; }, 1500);
+      }
+    };
   }
 
   // Social-proof line under the primary CTA. Pulls from the existing
