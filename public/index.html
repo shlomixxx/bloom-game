@@ -100,7 +100,7 @@
     .app { border-radius: 0; max-width: 100%; box-shadow: none; }
   }
   .top {
-    padding: 12px 14px;
+    padding: 8px 14px;
     border-bottom: 1px solid rgba(0,0,0,0.06);
   }
   .top-row {
@@ -113,14 +113,14 @@
   .stats {
     display: flex;
     gap: 6px;
-    margin-top: 10px;
+    margin-top: 6px;
     align-items: stretch;
   }
   .stats > .stat {
     flex: 1;
     background: #FAFAF6;
     border-radius: 12px;
-    padding: 8px 12px;
+    padding: 6px 12px;
     text-align: right;
     direction: rtl;
     overflow: hidden;
@@ -131,7 +131,7 @@
     flex: 2;
     background: linear-gradient(135deg, #1C1A18 0%, #2C2A28 100%);
     color: #FFFFFF;
-    padding: 10px 14px;
+    padding: 8px 14px;
   }
   .stats > .stat.stat-primary .stat-label { color: #FAC775; }
   .stats > .stat.stat-primary .stat-val { color: #FFFFFF; font-size: 24px; }
@@ -269,7 +269,7 @@
   .mute-item.mute-item-all:hover { background: #F5F2EC; color: #1C1A18; }
   .tier-bar {
     direction: ltr;
-    padding: 10px 14px 12px;
+    padding: 6px 14px 8px;
     display: flex; justify-content: space-between; align-items: flex-end; gap: 4px;
     border-bottom: 1px solid rgba(0,0,0,0.06);
   }
@@ -307,15 +307,19 @@
     .tier-score { font-size: 9px; }
   }
   .grid-wrap {
-    padding: 12px; direction: ltr; position: relative;
+    padding: 6px 6px 12px; direction: ltr; position: relative;
     /* Consume all leftover height between mode/tier bars and the bottom of
-       the app — and center the grid both axes if there's extra space. */
+       the app. The grid (sized by fitGrid to be full-width squares) sits
+       at the TOP of this wrap; if it's taller than the available space,
+       scroll vertically inside the wrap. The user prefers edge-to-edge
+       squares with possible scroll over centered squares with side margins. */
     flex: 1 1 auto;
     min-height: 0;
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: center;
-    overflow: hidden;
+    overflow-y: auto;
+    overflow-x: hidden;
   }
   .grid {
     display: grid;
@@ -3773,25 +3777,22 @@
     window.addEventListener('resize', syncBottomState);
   }
 
-  // Sizes the .grid element to fill .grid-wrap with SQUARE cells. Picks the
-  // largest cell side that fits both axes (Math.min of width-based and
-  // height-based), then sizes the grid to a clean rows×cols of that side.
-  // The grid centers horizontally inside the wrap when the available height
-  // is the limiting factor — square cells beat full-width rectangles.
+  // Sizes the .grid element with SQUARE cells that ALWAYS fill the full
+  // width of .grid-wrap. The grid height becomes rows × cellSide regardless
+  // of available vertical room — if the viewport is short, the page scrolls
+  // a bit. The user explicitly preferred edge-to-edge squares with possible
+  // scroll over centered squares with empty side margins.
   function fitGrid() {
     const wrap = document.getElementById('grid-wrap');
     const grid = document.getElementById('grid');
     if (!wrap || !grid) return;
-    const padding = 12;            // matches CSS .grid-wrap padding
+    const padX = 6;                // matches CSS .grid-wrap horizontal padding
     const gap = 5;                 // matches CSS .grid gap
     const cols = getBoardCols();
     const rows = getBoardRows();
-    const W = Math.max(0, wrap.clientWidth - 2 * padding);
-    const H = Math.max(0, wrap.clientHeight - 2 * padding);
-    if (W <= 0 || H <= 0) return;  // not yet laid out
-    const cellByW = Math.floor((W - (cols - 1) * gap) / cols);
-    const cellByH = Math.floor((H - (rows - 1) * gap) / rows);
-    const cell = Math.max(0, Math.min(cellByW, cellByH));
+    const W = Math.max(0, wrap.clientWidth - 2 * padX);
+    if (W <= 0) return;            // not yet laid out
+    const cell = Math.floor((W - (cols - 1) * gap) / cols);
     if (cell <= 0) return;
     grid.style.width  = (cell * cols + (cols - 1) * gap) + 'px';
     grid.style.height = (cell * rows + (rows - 1) * gap) + 'px';
