@@ -4,6 +4,16 @@ import { pool, initDb } from './db.js';
 
 const app = express();
 app.disable('x-powered-by');
+
+// Security headers
+app.use((_req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  next();
+});
+
 app.use(express.json({ limit: '4kb' }));
 app.use(express.static('public', { maxAge: '5m', extensions: ['html'] }));
 
@@ -134,9 +144,11 @@ const LIVE_FRESH_SECONDS = 10;
 // Resets on server restart. Acceptable for a friends game with no auth.
 
 const rateLimitStore = new Map(); // bucket key → array of timestamps
+const MAX_RATE_LIMIT_KEYS = 50000;
 
 function checkRateLimit(bucket, deviceId, maxRequests, windowMs) {
   if (!deviceId) return true; // bad inputs validated separately; don't double-fail
+  if (rateLimitStore.size > MAX_RATE_LIMIT_KEYS) rateLimitStore.clear();
   const key = bucket + ':' + deviceId;
   const now = Date.now();
   const recent = (rateLimitStore.get(key) || []).filter(function(ts) { return now - ts < windowMs; });
@@ -1291,18 +1303,23 @@ app.post('/api/challenges/:slug/complete', async (req, res) => {
     }
 
     // For "beat" type, mark winner immediately if threshold met. No cap on winners.
+    // Wrapped in transaction to prevent duplicate winner_rank under concurrency.
     let isWinner = entry.is_winner;
     let winnerRank = entry.winner_rank;
     if (c.challenge_type === 'beat' && c.threshold_score != null && entry.score >= c.threshold_score && !isWinner) {
-      const w = await client.query(
-        `UPDATE challenge_entries SET is_winner = TRUE,
-                winner_rank = (SELECT COUNT(*)+1 FROM challenge_entries WHERE challenge_id = $1 AND is_winner = TRUE),
-                reached_threshold_at = COALESCE(reached_threshold_at, NOW())
-         WHERE challenge_id = $1 AND device_id = $2 AND is_winner = FALSE
-         RETURNING is_winner, winner_rank`,
-        [c.id, deviceId]
-      );
-      if (w.rows.length) { isWinner = true; winnerRank = w.rows[0].winner_rank; }
+      await client.query('BEGIN');
+      try {
+        const w = await client.query(
+          `UPDATE challenge_entries SET is_winner = TRUE,
+                  winner_rank = (SELECT COUNT(*)+1 FROM challenge_entries WHERE challenge_id = $1 AND is_winner = TRUE),
+                  reached_threshold_at = COALESCE(reached_threshold_at, NOW())
+           WHERE challenge_id = $1 AND device_id = $2 AND is_winner = FALSE
+           RETURNING is_winner, winner_rank`,
+          [c.id, deviceId]
+        );
+        if (w.rows.length) { isWinner = true; winnerRank = w.rows[0].winner_rank; }
+        await client.query('COMMIT');
+      } catch (err) { await client.query('ROLLBACK'); throw err; }
     }
 
     // Compute rank in completed entries (for non-winners to see where they stand).
@@ -2175,5 +2192,33 @@ const port = process.env.PORT || 3000;
 initDb()
   .catch((e) => console.error('[db] init failed:', e))
   .finally(() => {
-    app.listen(port, () => console.log(`[bloom] listening on ${port}`));
+    const server = app.listen(port, () => console.log(`[bloom] listening on ${port}`));
+
+    // ============================================================
+    // EPHEMERAL TABLE CLEANUP (every hour)
+    // ============================================================
+    setInterval(async () => {
+      try {
+        await pool.query(`DELETE FROM contest_live_state WHERE updated_at < NOW() - INTERVAL '1 hour'`);
+        await pool.query(`DELETE FROM contest_watchers WHERE updated_at < NOW() - INTERVAL '1 hour'`);
+      } catch (e) {
+        console.warn('[cleanup] ephemeral cleanup failed', e.message);
+      }
+    }, 60 * 60 * 1000);
+
+    // ============================================================
+    // GRACEFUL SHUTDOWN
+    // ============================================================
+    function shutdown(signal) {
+      console.log(`[bloom] ${signal} received, shutting down gracefully`);
+      server.close(() => {
+        pool.end(() => {
+          console.log('[bloom] shut down complete');
+          process.exit(0);
+        });
+      });
+      setTimeout(() => { console.error('[bloom] forced shutdown'); process.exit(1); }, 10000);
+    }
+    process.on('SIGTERM', () => shutdown('SIGTERM'));
+    process.on('SIGINT',  () => shutdown('SIGINT'));
   });

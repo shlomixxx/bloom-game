@@ -16,7 +16,6 @@
 
 <!-- Installable PWA (Add to Home Screen on iOS / Android) -->
 <link rel="manifest" href="/manifest.json">
-<link rel="manifest" href="/manifest.json">
 
 <!-- Social preview (Open Graph + Twitter) -->
 <meta property="og:type" content="website">
@@ -2890,7 +2889,11 @@
         startOvertakeWatch(activeContestCode);
       }
     };
-    document.getElementById('home-start').onclick = enter;
+    document.getElementById('home-start').onclick = function() {
+      ensureAudio();
+      if (!hasSeenTour()) { showTour({ onDone: enter }); }
+      else { enter(); }
+    };
     document.getElementById('home-skip').onclick = enter;
     const shareGameBtn = document.getElementById('home-share-game');
     if (shareGameBtn) shareGameBtn.onclick = function(e) {
@@ -6002,7 +6005,7 @@
     // in the background as a visual indicator only, never gating input.
     rollNextPiece();
     render();
-    if (score > best) { best = score; localStorage.setItem(BEST_KEY, String(best)); }
+    if (score > best && mode !== 'practice') { best = score; localStorage.setItem(BEST_KEY, String(best)); }
     if (isGameOver()) {
       soundGameOver();
       buzz([60, 80, 100]);
@@ -6237,6 +6240,7 @@
   function showTour(opts) {
     opts = opts || {};
     tourCurrentStep = (typeof opts.step === 'number') ? opts.step : 0;
+    if (opts.onDone) _tourOnDone = opts.onDone;
     const existing = document.getElementById('tour-modal');
     if (existing) existing.remove();
     const modal = document.createElement('div');
@@ -6288,6 +6292,7 @@
       renderTourStep();
     };
   }
+  let _tourOnDone = null;
   function closeTour(opts) {
     opts = opts || {};
     const m = document.getElementById('tour-modal');
@@ -6295,6 +6300,7 @@
     if (opts.markSeen !== false) {
       try { localStorage.setItem(TOUR_KEY, '1'); } catch (e) {}
     }
+    if (_tourOnDone) { const cb = _tourOnDone; _tourOnDone = null; cb(); }
   }
   function hasSeenTour() {
     try { return localStorage.getItem(TOUR_KEY) === '1'; } catch (e) { return false; }
@@ -6636,28 +6642,31 @@
   // BloomDebug — internal API exposed for the auto-play bot.
   // Only used when ?bot=1 (or ?botui) is in the URL.
   // ============================================================
-  window.BloomDebug = {
-    ready: function() {
-      return Array.isArray(grid) && grid.length === getBoardRows() && typeof nextPiece === 'number';
-    },
-    getGrid: function() {
-      if (!Array.isArray(grid)) return null;
-      return grid.map(function(row) { return row.slice(); });
-    },
-    getCurrentPiece: function() { return nextPiece; },
-    getScore: function() { return score | 0; },
-    getHighestTier: function() { return highestTier | 0; },
-    isGameOver: function() {
-      if (!Array.isArray(grid) || !grid[0]) return false;
-      return isGameOver();
-    },
-    isBusy: function() {
-      if (Array.isArray(grid) && grid[0] && isGameOver()) return false;
-      return !!busy;
-    },
-    drop: function(col) { return drop(col); },
-    restart: function() { init('practice'); },
-  };
+  const _dbgParams = new URLSearchParams(window.location.search);
+  if (_dbgParams.has('bot') || _dbgParams.has('botui')) {
+    window.BloomDebug = {
+      ready: function() {
+        return Array.isArray(grid) && grid.length === getBoardRows() && typeof nextPiece === 'number';
+      },
+      getGrid: function() {
+        if (!Array.isArray(grid)) return null;
+        return grid.map(function(row) { return row.slice(); });
+      },
+      getCurrentPiece: function() { return nextPiece; },
+      getScore: function() { return score | 0; },
+      getHighestTier: function() { return highestTier | 0; },
+      isGameOver: function() {
+        if (!Array.isArray(grid) || !grid[0]) return false;
+        return isGameOver();
+      },
+      isBusy: function() {
+        if (Array.isArray(grid) && grid[0] && isGameOver()) return false;
+        return !!busy;
+      },
+      drop: function(col) { return drop(col); },
+      restart: function() { init('practice'); },
+    };
+  }
 })();
 </script>
 

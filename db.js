@@ -7,7 +7,12 @@ const connectionString = process.env.DATABASE_URL;
 
 export const pool = new Pool({
   connectionString,
-  ssl: process.env.PGSSL === 'false' ? false : { rejectUnauthorized: false }
+  // Railway Postgres uses self-signed certs → rejectUnauthorized must be false.
+  // Set PGSSL_STRICT=true in environments with proper CA-signed certs.
+  ssl: process.env.PGSSL === 'false' ? false : { rejectUnauthorized: process.env.PGSSL_STRICT === 'true' },
+  max: 20,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 5000
 });
 
 export async function initDb() {
