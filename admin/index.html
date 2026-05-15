@@ -350,6 +350,16 @@
         <div style="font-size:10px;color:#6F6E68;margin-bottom:3px">קוד תחרות</div>
         <input id="bot-contest-code" placeholder="ABC123" maxlength="8" style="width:120px;padding:6px 8px;border:1px solid rgba(0,0,0,0.12);border-radius:8px;font-family:inherit;font-size:13px;text-transform:uppercase;letter-spacing:0.15em;font-weight:700">
       </div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:end">
+        <div>
+          <div style="font-size:10px;color:#6F6E68;margin-bottom:3px">החלפת שם אחרי game-over (שניות)</div>
+          <div style="display:flex;gap:4px;align-items:center">
+            <input type="number" id="bot-delay-min" min="5" max="300" value="30" style="width:50px;padding:5px;border:1px solid rgba(0,0,0,0.12);border-radius:6px;font-family:inherit;font-size:12px;text-align:center">
+            <span style="font-size:11px;color:#6F6E68">עד</span>
+            <input type="number" id="bot-delay-max" min="10" max="600" value="90" style="width:50px;padding:5px;border:1px solid rgba(0,0,0,0.12);border-radius:6px;font-family:inherit;font-size:12px;text-align:center">
+          </div>
+        </div>
+      </div>
       <div style="display:flex;gap:6px">
         <button class="btn sm" id="btn-bots-start" style="background:#2E8B6F;flex:1">▶ הפעל</button>
         <button class="btn sm" id="btn-bots-stop" style="background:#C8472F;flex:1">⏹ עצור</button>
@@ -1325,7 +1335,8 @@
     if (d.running) {
       var modeLabel = d.config.mode === 'daily' ? 'יומי' : d.config.mode === 'contest' ? 'תחרות' : 'אימון';
       var speedLabel = d.config.speed === 'slow' ? '🐌' : d.config.speed === 'fast' ? '⚡' : d.config.speed === 'instant' ? '🚀' : '🏃';
-      el.innerHTML = '🟢 <strong>' + d.count + ' בוטים</strong> · ' + modeLabel + ' ' + speedLabel +
+      el.innerHTML = '🟢 <strong>' + d.count + ' משחקים</strong> · ' + modeLabel + ' ' + speedLabel +
+        (d.pending > 0 ? ' · ⏳ ' + d.pending + ' ממתינים' : '') +
         (d.config.contestCode ? ' · קוד: ' + d.config.contestCode : '') + '<br>' +
         d.bots.slice(0, 8).map(function(b) { return b.name + ' <strong>' + (b.score|0).toLocaleString() + '</strong>'; }).join(' · ') +
         (d.count > 8 ? ' <span style="color:#A8A6A0">ועוד ' + (d.count - 8) + '</span>' : '');
@@ -1342,12 +1353,14 @@
     var mode = $('bot-mode').value;
     var speed = $('bot-speed').value;
     var contestCode = mode === 'contest' ? ($('bot-contest-code').value || '').trim().toUpperCase() : null;
+    var restartMin = parseInt($('bot-delay-min').value, 10) || 30;
+    var restartMax = parseInt($('bot-delay-max').value, 10) || 90;
     if (mode === 'contest' && !contestCode) { toast('נא להזין קוד תחרות'); return; }
     this.disabled = true; this.textContent = '...';
     var r = await api('/bots/start', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ count: count, mode: mode, speed: speed, contestCode: contestCode })
+      body: JSON.stringify({ count: count, mode: mode, speed: speed, contestCode: contestCode, restartMin: restartMin, restartMax: restartMax })
     });
     this.disabled = false; this.textContent = '▶ הפעל';
     if (r && r.ok) {

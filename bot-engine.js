@@ -150,16 +150,40 @@ function isGameOver(g) {
 const bots = new Map(); // deviceId → bot state
 let botInterval = null;
 let botPool = null;
-let botConfig = { mode: 'practice', speed: 'normal', contestCode: null, challengeSlug: null };
+let botConfig = {
+  mode: 'practice', speed: 'normal', contestCode: null, challengeSlug: null,
+  targetCount: 10,  // how many bots should be active at any time
+  restartMin: 30,   // seconds to wait before new player replaces finished one
+  restartMax: 90    // max random delay
+};
+let usedNames = new Set(); // track recently used names to avoid repeats
+let pendingSpawns = []; // { spawnAt: timestamp }
 
 const TICK_SPEEDS = { slow: 8000, normal: 5000, fast: 2500, instant: 1000 };
 const MOVES_PER_TICK = { slow: 1, normal: 2, fast: 3, instant: 5 };
+
+function pickNewName() {
+  // Find a name not recently used
+  const available = NAMES.filter(n => !usedNames.has(n));
+  if (available.length === 0) {
+    usedNames.clear(); // reset if all names used
+    return NAMES[Math.floor(Math.random() * NAMES.length)];
+  }
+  const name = available[Math.floor(Math.random() * available.length)];
+  usedNames.add(name);
+  // Keep usedNames from growing too large — forget oldest after 60% used
+  if (usedNames.size > NAMES.length * 0.6) {
+    const arr = [...usedNames];
+    for (let i = 0; i < 20 && arr.length > 20; i++) usedNames.delete(arr[i]);
+  }
+  return name;
+}
 
 function createBot(name) {
   const deviceId = 'bot-' + Math.random().toString(36).slice(2, 10) + '-' + Date.now().toString(36);
   return {
     deviceId,
-    name,
+    name: name || pickNewName(),
     grid: Array.from({ length: ROWS }, () => new Array(COLS).fill(0)),
     score: 0,
     highestTier: 1,
@@ -168,21 +192,55 @@ function createBot(name) {
     contestCode: botConfig.contestCode,
     challengeSlug: botConfig.challengeSlug,
     active: true,
-    joined: false // for contests/challenges — tracks if join API was called
+    exiting: false, // true = game over, waiting to be replaced
+    joined: false
   };
 }
 
+function removeBot(bot) {
+  bots.delete(bot.deviceId);
+  // Clean heartbeat for this bot
+  if (botPool) {
+    botPool.query(`DELETE FROM player_heartbeat WHERE device_id = $1`, [bot.deviceId]).catch(() => {});
+    if (bot.contestCode) {
+      botPool.query(`DELETE FROM contest_live_state WHERE device_id = $1`, [bot.deviceId]).catch(() => {});
+    }
+  }
+}
+
+function scheduleReplacement() {
+  const delayMs = (botConfig.restartMin + Math.random() * (botConfig.restartMax - botConfig.restartMin)) * 1000;
+  pendingSpawns.push({ spawnAt: Date.now() + delayMs });
+}
+
+function processPendingSpawns() {
+  const now = Date.now();
+  const activeCount = [...bots.values()].filter(b => !b.exiting).length;
+  const needed = botConfig.targetCount - activeCount;
+  
+  let spawned = 0;
+  while (pendingSpawns.length > 0 && spawned < needed) {
+    const next = pendingSpawns[0];
+    if (next.spawnAt > now) break; // not ready yet
+    pendingSpawns.shift();
+    
+    const bot = createBot();
+    bots.set(bot.deviceId, bot);
+    if (bot.mode === 'contest' && bot.contestCode) joinContest(bot);
+    spawned++;
+  }
+}
+
 function tickBot(bot) {
-  if (!bot.active) return;
+  if (!bot.active || bot.exiting) return;
   
   if (isGameOver(bot.grid)) {
-    // Submit final score before restarting
     submitBotScore(bot);
     bot.gamesPlayed++;
-    bot.grid = Array.from({ length: ROWS }, () => new Array(COLS).fill(0));
-    bot.score = 0;
-    bot.highestTier = 1;
-    bot.joined = false;
+    bot.exiting = true; // mark as done — will be removed and replaced
+    scheduleReplacement();
+    // Remove from live view after a short delay (simulates "leaving")
+    setTimeout(() => removeBot(bot), 3000);
     return;
   }
 
@@ -255,7 +313,7 @@ async function joinContest(bot) {
 
 async function flushBots() {
   if (!botPool || bots.size === 0) return;
-  const activeBots = [...bots.values()].filter(b => b.active);
+  const activeBots = [...bots.values()].filter(b => b.active && !b.exiting);
   if (!activeBots.length) return;
 
   // Batch upsert all bot heartbeats
@@ -329,22 +387,27 @@ function startBots(count, pool, config) {
     botConfig.speed = config.speed || 'normal';
     botConfig.contestCode = config.contestCode || null;
     botConfig.challengeSlug = config.challengeSlug || null;
+    botConfig.targetCount = count;
+    if (config.restartMin != null) botConfig.restartMin = config.restartMin;
+    if (config.restartMax != null) botConfig.restartMax = config.restartMax;
   }
   
-  const shuffled = [...NAMES].sort(() => Math.random() - 0.5);
-  const names = shuffled.slice(0, Math.min(count, NAMES.length));
+  usedNames.clear();
+  pendingSpawns = [];
   
-  for (const name of names) {
-    const bot = createBot(name);
+  for (let i = 0; i < count; i++) {
+    const bot = createBot();
     bots.set(bot.deviceId, bot);
-    if (bot.mode === 'contest' && bot.contestCode) {
-      joinContest(bot);
-    }
+    if (bot.mode === 'contest' && bot.contestCode) joinContest(bot);
   }
   
   const tickMs = TICK_SPEEDS[botConfig.speed] || 5000;
   botInterval = setInterval(() => {
+    // Tick all active bots
     for (const bot of bots.values()) tickBot(bot);
+    // Spawn replacements for finished bots
+    processPendingSpawns();
+    // Flush to DB
     flushBots();
   }, tickMs);
   
@@ -352,7 +415,7 @@ function startBots(count, pool, config) {
   for (const bot of bots.values()) tickBot(bot);
   flushBots();
   
-  console.log(`[bots] started ${bots.size} bots — mode: ${botConfig.mode}, speed: ${botConfig.speed}`);
+  console.log(`[bots] started ${bots.size} bots — mode: ${botConfig.mode}, speed: ${botConfig.speed}, rotation: ${botConfig.restartMin}-${botConfig.restartMax}s`);
   return bots.size;
 }
 
@@ -364,20 +427,24 @@ function stopBots() {
   if (botPool && bots.size > 0) {
     const ids = [...bots.keys()];
     botPool.query(`DELETE FROM player_heartbeat WHERE device_id = ANY($1)`, [ids]).catch(() => {});
-    // Also clean contest live state
     if (botConfig.contestCode) {
       botPool.query(`DELETE FROM contest_live_state WHERE device_id = ANY($1)`, [ids]).catch(() => {});
     }
   }
   bots.clear();
+  pendingSpawns = [];
+  usedNames.clear();
   console.log('[bots] stopped all bots');
 }
 
 function getBotStatus() {
-  const active = [...bots.values()].filter(b => b.active);
+  const active = [...bots.values()].filter(b => !b.exiting);
+  const exiting = [...bots.values()].filter(b => b.exiting);
   return {
     running: botInterval !== null,
     count: active.length,
+    pending: pendingSpawns.length,
+    exiting: exiting.length,
     config: { ...botConfig },
     bots: active.slice(0, 20).map(b => ({
       name: b.name,

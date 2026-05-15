@@ -2240,7 +2240,9 @@ if (ADMIN_PATH && ADMIN_PASSWORD) {
       mode: req.body.mode || 'practice',
       speed: req.body.speed || 'normal',
       contestCode: req.body.contestCode || null,
-      challengeSlug: req.body.challengeSlug || null
+      challengeSlug: req.body.challengeSlug || null,
+      restartMin: Math.max(5, Math.min(300, parseInt(req.body.restartMin, 10) || 30)),
+      restartMax: Math.max(10, Math.min(600, parseInt(req.body.restartMax, 10) || 90))
     };
     const started = startBots(count, pool, config);
     logAdminAction('bots.start', 'bots', String(count), { ...config, started });
