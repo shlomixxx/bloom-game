@@ -1,5 +1,6 @@
 import express from 'express';
 import { timingSafeEqual } from 'node:crypto';
+import { readFile as readFileSw } from 'node:fs/promises';
 import { pool, initDb } from './db.js';
 
 const app = express();
@@ -14,7 +15,35 @@ app.use((_req, res, next) => {
   next();
 });
 
+// CORS — only allow same-origin API requests (block external sites)
+app.use('/api', (req, res, next) => {
+  const origin = req.headers.origin || '';
+  const host = req.headers.host || '';
+  // Allow same-origin and no-origin (direct/curl). Block cross-origin.
+  if (origin && !origin.includes(host)) {
+    return res.status(403).json({ error: 'cross_origin_blocked' });
+  }
+  next();
+});
+
 app.use(express.json({ limit: '4kb' }));
+
+// Serve sw.js dynamically so CACHE_NAME auto-bumps on every deploy.
+// The boot timestamp ensures users always get fresh cache after a Railway restart.
+const BOOT_TS = new Date().toISOString().replace(/[^0-9]/g, '').slice(0, 14);
+let _swTemplate = null;
+app.get('/sw.js', async (_req, res) => {
+  try {
+    if (!_swTemplate) _swTemplate = await readFileSw(new URL('./public/sw.js', import.meta.url), 'utf8');
+    const body = _swTemplate.replace(/const CACHE_NAME = '[^']+';/, `const CACHE_NAME = 'bloom-v1-${BOOT_TS}';`);
+    res.setHeader('Content-Type', 'application/javascript');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.send(body);
+  } catch (e) {
+    res.status(500).send('// sw.js unavailable');
+  }
+});
+
 app.use(express.static('public', { maxAge: '5m', extensions: ['html'] }));
 
 // ============================================================
@@ -193,7 +222,7 @@ function isCodeBlacklisted(code) {
 
 app.post('/api/score', async (req, res) => {
   try {
-    const { date, deviceId, name, score, tier } = req.body || {};
+    const { date, deviceId, name, score, tier, drops } = req.body || {};
     if (!isValidDate(date)) return res.status(400).json({ error: 'bad_date' });
     if (typeof deviceId !== 'string' || deviceId.length < 8 || deviceId.length > 64) {
       return res.status(400).json({ error: 'bad_device' });
@@ -207,6 +236,13 @@ app.post('/api/score', async (req, res) => {
     }
     if (typeof tier !== 'number' || tier < 1 || tier > 8) {
       return res.status(400).json({ error: 'bad_tier' });
+    }
+    // Anti-cheat: reject scores that are implausible given the number of drops.
+    // Old clients that don't send drops are allowed through (drops will be undefined).
+    const dropsN = typeof drops === 'number' && Number.isFinite(drops) && drops >= 0 ? Math.floor(drops) : null;
+    if (dropsN !== null && challengeDropsImplausible(score, dropsN)) {
+      console.warn(`[anti-cheat] daily score rejected: device=${deviceId} score=${score} drops=${dropsN}`);
+      return res.status(400).json({ error: 'implausible_score' });
     }
     const safeName = cleanName(name);
     await pool.query(
