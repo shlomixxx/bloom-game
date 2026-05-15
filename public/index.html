@@ -3087,7 +3087,7 @@
     refreshHomeMyStats();
     // Wire the "איך משחקים?" link
     const tourLink = document.getElementById('home-tour-btn');
-    if (tourLink) tourLink.onclick = function() { ensureAudio(); showTour(); };
+    if (tourLink) tourLink.onclick = function() { ensureAudio(); showTour({ onDone: enter }); };
     // First-ever-visit: gently auto-open the tour after the home settles in.
     // We defer it so the home animations land first, and only fire if the
     // player hasn't seen the tour AND hasn't already started learning the
