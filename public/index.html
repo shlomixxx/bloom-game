@@ -167,7 +167,7 @@
 
   .mute-menu {
     position: absolute;
-    z-index: 160;
+    z-index: 260;
     top: 56px;
     background: #FFFFFF;
     border: 1px solid rgba(0,0,0,0.08);
@@ -2580,8 +2580,11 @@
     const existing = document.getElementById('mute-menu');
     if (existing) { closeMuteMenu(); return; }
     ensureAudio();
-    const app = document.querySelector('.app');
-    if (!app) return;
+    // Append to home-screen when opened from home (so it's above the home overlay).
+    // Otherwise append to .app for the regular in-game context.
+    const parent = (anchor === 'home' && document.getElementById('home-screen'))
+      || document.querySelector('.app');
+    if (!parent) return;
     const menu = document.createElement('div');
     menu.id = 'mute-menu';
     menu.className = 'mute-menu mute-menu-volumes ' + (anchor === 'home' ? 'from-home' : 'from-top');
@@ -2598,7 +2601,7 @@
       '<div class="mute-item mute-item-all" data-kind="all">' +
         '<div class="mute-item-label">השתק הכל</div>' +
       '</div>';
-    app.appendChild(menu);
+    parent.appendChild(menu);
     syncMuteMenuItems();
 
     // Slider inputs — live update both per-channel state and the playing audio.
@@ -5676,6 +5679,8 @@
     if (mode === 'challenge' && activeChallenge) pushChallengeScore();
     // Onboarding: nudge the first-time player on the very first board paint.
     maybeOnboardStep1();
+    // Persist current mode so page refresh restores context.
+    try { localStorage.setItem('bloom_last_mode', mode); } catch (e) {}
   }
 
   function updateModeBar() {
@@ -6483,7 +6488,7 @@
     modal.className = 'info-modal';
     modal.innerHTML = '<div class="tour-card" id="tour-card"></div>';
     document.body.appendChild(modal);
-    modal.onclick = function(e) { if (e.target === modal) closeTour({ markSeen: false }); };
+    modal.onclick = function(e) { if (e.target === modal) closeTour({ markSeen: true }); };
     renderTourStep();
   }
   function renderTourStep() {
@@ -6537,7 +6542,17 @@
     if (_tourOnDone) { const cb = _tourOnDone; _tourOnDone = null; cb(); }
   }
   function hasSeenTour() {
-    try { return localStorage.getItem(TOUR_KEY) === '1'; } catch (e) { return false; }
+    try {
+      if (localStorage.getItem(TOUR_KEY) === '1') return true;
+      // Existing players who played before the tour was added — treat as "seen"
+      // so they get "שחק עכשיו" instead of the onboarding flow.
+      var games = parseInt(localStorage.getItem(GAMES_COUNT_KEY) || '0', 10);
+      if (games > 0) {
+        localStorage.setItem(TOUR_KEY, '1'); // persist so we don't check again
+        return true;
+      }
+      return false;
+    } catch (e) { return false; }
   }
 
   function showInfo() {
@@ -6872,8 +6887,26 @@
 
   updateMuteUI();
   renderStreakBadge();
-  init('daily');
-  showHome();
+
+  // Restore last active mode on refresh so players don't lose context.
+  // Default to 'daily' for first-time visitors.
+  var LAST_MODE_KEY = 'bloom_last_mode';
+  var savedMode = localStorage.getItem(LAST_MODE_KEY) || 'daily';
+  // Challenge can't be resumed, contest needs fresh fetch — safe to restore daily/practice.
+  if (savedMode !== 'daily' && savedMode !== 'practice') savedMode = 'daily';
+
+  init(savedMode);
+
+  // Show home only for genuine first-timers or if the player was idle.
+  // Returning mid-game players go straight to their game.
+  var hasHistory = loadGamesPlayed() > 0;
+  var hasPracticeState = !!loadPracticeGameState();
+  if (!hasHistory || (savedMode === 'daily' && !hasPracticeState)) {
+    showHome();
+  }
+
+  // Persist mode on every init so we can restore on refresh.
+  // (the save is inside init() itself — see 'bloom_last_mode' setItem)
 
   // Visit ping — fire-and-forget. Lets the admin dashboard distinguish
   // "visited but didn't play" from "didn't visit at all" (bounce rate).
