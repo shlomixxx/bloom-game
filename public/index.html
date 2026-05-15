@@ -457,6 +457,27 @@
   .tier-name { flex: 1; font-size: 13px; color: #1C1A18; text-align: right; }
   .tier-pts { font-size: 12px; color: #6F6E68; font-variant-numeric: tabular-nums; }
 
+  /* Game-over stats summary */
+  .game-stats-summary {
+    margin: 16px 0 8px; padding: 14px;
+    background: #FAFAF6; border-radius: 12px;
+    border: 1px solid rgba(0,0,0,0.05);
+    direction: rtl;
+  }
+  .gss-title { font-size: 12px; font-weight: 700; color: #1C1A18; margin-bottom: 10px; text-align: center; }
+  .gss-grid { display: flex; flex-direction: column; gap: 5px; }
+  .gss-row { display: flex; align-items: center; gap: 8px; }
+  .gss-icon { width: 24px; height: 24px; border-radius: 6px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .gss-icon svg { width: 13px; height: 13px; }
+  .gss-bar-wrap { flex: 1; height: 14px; background: #F0EDE3; border-radius: 7px; overflow: hidden; }
+  .gss-bar { height: 100%; border-radius: 7px; min-width: 4px; transition: width 0.5s ease-out; }
+  .gss-count { font-size: 12px; font-weight: 700; color: #1C1A18; width: 32px; text-align: center; font-variant-numeric: tabular-nums; }
+  .gss-footer {
+    display: flex; justify-content: center; gap: 14px;
+    margin-top: 10px; padding-top: 8px;
+    border-top: 1px solid rgba(0,0,0,0.05);
+    font-size: 11px; color: #6F6E68;
+  }
   .share-label { font-size: 10px; color: #A8A6A0; margin: 14px 0 6px; letter-spacing: 0.08em; text-transform: uppercase; }
   .share-card {
     padding: 12px 14px; background: #DCF8C6; border-radius: 10px;
@@ -2017,6 +2038,11 @@
   html[data-theme="dark"] .over-title { color: #8E8A82; }
   html[data-theme="dark"] .share-card { background: #1B3A1B; color: #9FE1CB; }
   html[data-theme="dark"] .share-label { color: #6F6E68; }
+  html[data-theme="dark"] .game-stats-summary { background: #2C2A28; border-color: rgba(255,255,255,0.06); }
+  html[data-theme="dark"] .gss-title { color: #F2EFE9; }
+  html[data-theme="dark"] .gss-bar-wrap { background: #1A1816; }
+  html[data-theme="dark"] .gss-count { color: #F2EFE9; }
+  html[data-theme="dark"] .gss-footer { color: #8E8A82; border-color: rgba(255,255,255,0.06); }
   html[data-theme="dark"] .contest-duration-pill { background: #2C2A28; color: #F2EFE9; border-color: rgba(255,255,255,0.1); }
   html[data-theme="dark"] .contest-duration-pill.selected { background: #FAC775; color: #1A1816; }
   html[data-theme="dark"] .contest-info-row { color: #F2EFE9; }
@@ -2692,6 +2718,11 @@
   /* ============ STREAK + ACHIEVEMENTS ============ */
   let currentGameMaxChain = 0;
   let streakBumpedThisSession = false;
+
+  // Per-game stats for the game-over summary
+  let gameMergesPerTier = {}; // tier → count of merges that CREATED this tier
+  let gameBestMergeTier = 0;  // highest tier created from a single merge
+  let gameTotalMerges = 0;    // total merge events
 
   // Per-game tracking: which milestone tiers have already paid their bonus.
   // Reset in init() at the start of each game. The bonuses fire ONCE per
@@ -5562,6 +5593,9 @@
     score = 0; highestTier = 1; busy = false; dropsCount = 0;
     currentGameMaxChain = 0;
     tierUpHit = {};   // reset milestone-bonus tracker for this fresh game
+    gameMergesPerTier = {};
+    gameBestMergeTier = 0;
+    gameTotalMerges = 0;
     leaderboard = [];
     dailyRank = null;
     // Cleared at top of init: by the time we know we're entering contest mode,
@@ -6190,6 +6224,10 @@
             const points = pointsFor(nt, group.length, multiplier);
             score += points;
             if (nt > highestTier) highestTier = nt;
+            // Track per-tier merge stats for game-over summary
+            gameMergesPerTier[nt] = (gameMergesPerTier[nt] || 0) + 1;
+            gameTotalMerges++;
+            if (nt > gameBestMergeTier) gameBestMergeTier = nt;
             // First-time-tier-up bonus: when this merge brings the player's
             // highestTier to a milestone they haven't hit YET this game,
             // award the bonus. Drives the dopamine of "I just got Crown!".
@@ -6780,6 +6818,32 @@
           (showCountdown ? '<div class="countdown" id="countdown"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span>אתגר חדש בעוד <span id="countdown-val">--:--:--</span></span></div>' : '') +
           (showLeaderboard ? renderLeaderboard() : '') +
           '<div class="tier-table">' + tierRows.join('') + '</div>' +
+          // Game stats summary
+          (function() {
+            if (gameTotalMerges === 0) return '';
+            var statsHtml = '<div class="game-stats-summary">';
+            statsHtml += '<div class="gss-title">📊 סיכום המשחק</div>';
+            statsHtml += '<div class="gss-grid">';
+            for (var t = 2; t <= MAX_TIER; t++) {
+              var count = gameMergesPerTier[t] || 0;
+              if (count === 0 && t > highestTier) continue;
+              var ti = getActiveTiers()[t];
+              var barWidth = gameTotalMerges > 0 ? Math.max(4, Math.round(count / gameTotalMerges * 100)) : 0;
+              statsHtml += '<div class="gss-row">' +
+                '<div class="gss-icon" style="background:' + ti.bg + ';color:' + ti.fg + '">' + ti.svg + '</div>' +
+                '<div class="gss-bar-wrap"><div class="gss-bar" style="width:' + barWidth + '%;background:' + ti.bg + '"></div></div>' +
+                '<div class="gss-count">' + (count > 0 ? '×' + count : '—') + '</div>' +
+              '</div>';
+            }
+            statsHtml += '</div>';
+            statsHtml += '<div class="gss-footer">' +
+              '<span>🔗 שרשרת: ×' + (currentGameMaxChain || 1) + '</span>' +
+              '<span>💧 ' + (dropsCount || 0) + ' טיפות</span>' +
+              '<span>🎯 ' + gameTotalMerges + ' מיזוגים</span>' +
+            '</div>';
+            statsHtml += '</div>';
+            return statsHtml;
+          })() +
           '<div class="share-label">התוצאה לשיתוף</div>' +
           '<div class="share-card">' + shareHeader + '<br>' + emojis.join('') + '<br><br>🎮 ' + (window.location.host || 'bloom-game') + '</div>' +
           '<button class="btn" id="share-btn">שתף תוצאה</button>' +
