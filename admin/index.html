@@ -518,6 +518,44 @@
     setTimeout(function() { t.classList.remove('show'); }, 2200);
   }
 
+  // ============ ADMIN PREFERENCES (persisted in localStorage) ============
+  var PREFS_KEY = 'bloom_admin_prefs';
+  function loadPrefs() {
+    try { return JSON.parse(localStorage.getItem(PREFS_KEY)) || {}; } catch(e) { return {}; }
+  }
+  function savePrefs(obj) {
+    var current = loadPrefs();
+    Object.assign(current, obj);
+    try { localStorage.setItem(PREFS_KEY, JSON.stringify(current)); } catch(e) {}
+  }
+  // Restore a specific input from prefs
+  function restorePref(id, fallback) {
+    var prefs = loadPrefs();
+    var el = $(id);
+    if (!el || prefs[id] == null) return;
+    if (el.type === 'checkbox') el.checked = !!prefs[id];
+    else el.value = prefs[id];
+  }
+  // Auto-save any input change to prefs
+  function watchPref(id) {
+    var el = $(id);
+    if (!el) return;
+    var handler = function() {
+      var obj = {};
+      obj[id] = el.type === 'checkbox' ? el.checked : el.value;
+      savePrefs(obj);
+    };
+    el.addEventListener('change', handler);
+    el.addEventListener('input', handler);
+  }
+  // Restore + watch all admin prefs
+  function initPrefs() {
+    var ids = ['live-auto', 'bot-count', 'bot-mode', 'bot-speed', 'bot-delay-min', 'bot-delay-max', 'bot-contest-code'];
+    ids.forEach(function(id) { restorePref(id); watchPref(id); });
+    // Trigger mode change to show/hide contest field
+    if ($('bot-mode')) $('bot-mode').dispatchEvent(new Event('change'));
+  }
+
   // ============ HELP TOOLTIP SYSTEM ============
   var _tipEl = null;
   function showTip(btn, html) {
@@ -1318,6 +1356,7 @@
   renderExports();
   loadGameConfig();
   wireTips();
+  initPrefs(); // restore saved preferences before refreshAll
   refreshAll();
 
   // Live section: dedicated refresh + auto-refresh every 10s
