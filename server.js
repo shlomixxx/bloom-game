@@ -2,6 +2,7 @@ import express from 'express';
 import { timingSafeEqual, createHmac, randomBytes } from 'node:crypto';
 import { readFile as readFileSw } from 'node:fs/promises';
 import { pool, initDb } from './db.js';
+import { startBots, stopBots, getBotStatus } from './bot-engine.js';
 
 const app = express();
 app.disable('x-powered-by');
@@ -2228,6 +2229,24 @@ if (ADMIN_PATH && ADMIN_PASSWORD) {
   });
 
   // ---------- GAME CONFIG ----------
+
+  // ---------- SERVER BOTS ----------
+  adminRouter.get('/api/bots', (_req, res) => {
+    res.json({ ok: true, ...getBotStatus() });
+  });
+  adminRouter.post('/api/bots/start', (req, res) => {
+    const count = Math.max(1, Math.min(200, parseInt(req.body.count, 10) || 10));
+    const started = startBots(count, pool);
+    logAdminAction('bots.start', 'bots', String(count), { started });
+    res.json({ ok: true, count: started });
+  });
+  adminRouter.post('/api/bots/stop', (_req, res) => {
+    stopBots();
+    logAdminAction('bots.stop', 'bots', '0', {});
+    res.json({ ok: true });
+  });
+
+  // ---------- GAME CONFIG (moved after bots) ----------
   adminRouter.get('/api/config', async (_req, res) => {
     try {
       const r = await pool.query('SELECT key, value, updated_at FROM game_config ORDER BY key');

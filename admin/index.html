@@ -319,6 +319,22 @@
     </div>
   </section>
 
+  <!-- Server Bots -->
+  <section id="bots-section" style="margin-bottom:12px">
+    <h2>🤖 שחקני דמו <button class="tip-btn" data-tip="bots">?</button></h2>
+    <div style="display:flex;align-items:center;gap:10px;padding:12px 16px;background:var(--card);border-radius:10px;margin-top:8px;flex-wrap:wrap">
+      <div style="flex:1;min-width:140px">
+        <div style="font-size:11px;color:#6F6E68;margin-bottom:4px">מספר בוטים</div>
+        <input type="number" id="bot-count" min="1" max="200" value="10" style="width:70px;padding:6px 8px;border:1px solid rgba(0,0,0,0.12);border-radius:8px;font-family:inherit;font-size:14px;font-weight:700;text-align:center">
+      </div>
+      <div style="display:flex;gap:6px">
+        <button class="btn sm" id="btn-bots-start" style="background:#2E8B6F;min-width:80px">▶ הפעל</button>
+        <button class="btn sm" id="btn-bots-stop" style="background:#C8472F;min-width:80px">⏹ עצור</button>
+      </div>
+    </div>
+    <div id="bots-status" style="margin-top:8px;font-size:12px;color:#6F6E68;padding:0 16px"></div>
+  </section>
+
   <!-- KPI cards -->
   <section>
     <h2>מטריקות-על <button class="tip-btn" data-tip="kpi">?</button> <span class="badge" id="kpi-tag">היום</span></h2>
@@ -510,7 +526,8 @@
     players: '<strong>שחקנים</strong><br>חיפוש שחקנים לפי שם או device ID.<br><div class="tip-example">🔍 חפש "שלומי" או הדבק device ID<br>📋 תראה: סך משחקים, שיא, דרגה, תאריך אחרון<br>🗑️ אפשר למחוק שחקן (cascade — מוחק את כל הנתונים שלו)</div>',
     live: '<strong>קורה עכשיו</strong><br>מי משחק ברגע זה + מי צופה במישהו.<br><div class="tip-example">🟢 שחקנים פעילים: ניקוד חי, tier, תחרות<br>👁️ צופים: מי צופה במי<br>🔄 מתעדכן רק בלחיצה על "רענון"</div>',
     audit: '<strong>יומן פעולות אדמין</strong><br>כל פעולה שנעשתה מפאנל הניהול.<br><div class="tip-example">📋 מציג: מחיקת שחקן, שינוי הגדרה, סגירת תחרות<br>💡 מאפשר לעקוב אחרי כל שינוי שנעשה</div>',
-    csv: '<strong>הורדת CSV</strong><br>ייצוא נתונים לאקסל.<br><div class="tip-example">📥 לחץ על טבלה → הורדה אוטומטית<br>📊 תומך בעברית (BOM) + עד 10,000 שורות<br>💡 שימושי לניתוח חיצוני או גיבוי</div>'
+    csv: '<strong>הורדת CSV</strong><br>ייצוא נתונים לאקסל.<br><div class="tip-example">📥 לחץ על טבלה → הורדה אוטומטית<br>📊 תומך בעברית (BOM) + עד 10,000 שורות<br>💡 שימושי לניתוח חיצוני או גיבוי</div>',
+    bots: '<strong>שחקני דמו (בוטים)</strong><br>שחקנים מדומים שרצים על השרת ומשחקים אוטומטית.<br><div class="tip-example">🤖 בחר כמה בוטים (1-200) ולחץ הפעל<br>👤 כל בוט מקבל שם ישראלי אקראי<br>🎮 משחקים אימון עם לוגיקת merge אמיתית<br>👁 אפשר לצפות בהם מ-"קורה עכשיו"<br>💰 עלות: ~$0 עד 50 בוטים, ~$2/חודש ל-200<br>⏹ כשעוצרים — נמחקים מהלייב מיד</div>'
   };
 
   // Wire all .tip-btn elements after DOM load
@@ -1275,6 +1292,40 @@
   var _liveAutoTimer = setInterval(function() {
     if ($('live-auto') && $('live-auto').checked) loadLive();
   }, 10000);
+
+  // Bot controls
+  async function refreshBotStatus() {
+    var d = await api('/bots');
+    var el = $('bots-status');
+    if (!el) return;
+    if (!d) { el.textContent = ''; return; }
+    if (d.running) {
+      el.innerHTML = '🟢 <strong>' + d.count + ' בוטים פעילים</strong> — ' +
+        d.bots.slice(0, 5).map(function(b) { return b.name + ' (' + (b.score|0).toLocaleString() + ')'; }).join(', ') +
+        (d.count > 5 ? ' ועוד ' + (d.count - 5) + '...' : '');
+    } else {
+      el.textContent = '⚪ לא פעיל';
+    }
+  }
+  $('btn-bots-start').onclick = async function() {
+    var count = parseInt($('bot-count').value, 10) || 10;
+    this.disabled = true; this.textContent = '...';
+    var r = await api('/bots/start', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ count: count })
+    });
+    this.disabled = false; this.textContent = '▶ הפעל';
+    if (r && r.ok) { toast('🤖 ' + r.count + ' בוטים הופעלו'); refreshBotStatus(); }
+  };
+  $('btn-bots-stop').onclick = async function() {
+    this.disabled = true; this.textContent = '...';
+    var r = await api('/bots/stop', { method: 'POST' });
+    this.disabled = false; this.textContent = '⏹ עצור';
+    if (r && r.ok) { toast('בוטים נעצרו'); refreshBotStatus(); }
+  };
+  refreshBotStatus();
+  setInterval(refreshBotStatus, 15000);
 })();
 </script>
 
