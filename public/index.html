@@ -2174,6 +2174,15 @@
   // works as-is. When opened from file:// the leaderboard simply won't load.
   const API_BASE = '';
 
+  // Game config fetched from server (admin-controlled).
+  // merge_mode: 'anchor' (result near drop) or 'classic' (leftmost wins).
+  var gameConfig = { merge_mode: 'anchor' };
+  (function loadGameConfig() {
+    fetch(API_BASE + '/api/config').then(function(r) { return r.json(); })
+      .then(function(d) { if (d && d.config) gameConfig = d.config; })
+      .catch(function() {});
+  })();
+
   /* ============ AUDIO ============ */
   let audioCtx = null;
   // Channel volumes (0–1). Music drives the mp3 cross-fade target; sfx
@@ -6150,19 +6159,23 @@
           if (t === 0 || t === MAX_TIER) continue;
           const group = findGroup(r, c, t);
           if (group.length >= 2) {
-            // Choose survivor cell: prefer the bottommost cell (gravity-friendly).
-            // On a row tie, prefer the cell closest to the anchor (drop/last merge)
-            // so the result "stays where the player aimed."
+            // Choose survivor cell: bottommost (gravity-friendly).
+            // Horizontal tie-breaker depends on admin-controlled merge_mode:
+            // 'anchor' = closest to drop column (natural), 'classic' = leftmost.
             let kr = -1, kc = -1;
+            var useAnchor = gameConfig.merge_mode !== 'classic';
             for (let i = 0; i < group.length; i++) {
               const gr = group[i][0], gc = group[i][1];
               if (gr > kr) {
                 kr = gr; kc = gc;
               } else if (gr === kr) {
-                // Same row: prefer cell closest to anchor column
-                var distNew = Math.abs(gc - (anchorCol != null ? anchorCol : 0));
-                var distOld = Math.abs(kc - (anchorCol != null ? anchorCol : 0));
-                if (distNew < distOld) { kc = gc; }
+                if (useAnchor) {
+                  var distNew = Math.abs(gc - (anchorCol != null ? anchorCol : 0));
+                  var distOld = Math.abs(kc - (anchorCol != null ? anchorCol : 0));
+                  if (distNew < distOld) { kc = gc; }
+                } else {
+                  if (gc < kc) { kc = gc; } // classic: leftmost wins
+                }
               }
             }
             for (let i = 0; i < group.length; i++) {

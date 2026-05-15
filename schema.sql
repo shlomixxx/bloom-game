@@ -200,3 +200,19 @@ CREATE INDEX IF NOT EXISTS idx_challenge_entries_winners
   ON challenge_entries (challenge_id, is_winner) WHERE is_winner = TRUE;
 CREATE INDEX IF NOT EXISTS idx_challenge_entries_threshold
   ON challenge_entries (challenge_id, reached_threshold_at) WHERE reached_threshold_at IS NOT NULL;
+
+-- ============================================================
+-- הגדרות משחק (Admin-controlled game config)
+-- ============================================================
+-- key-value store for runtime game settings the admin can toggle.
+-- The client fetches /api/config on init and applies the values.
+
+CREATE TABLE IF NOT EXISTS game_config (
+  key    VARCHAR(60) PRIMARY KEY,
+  value  TEXT NOT NULL,
+  updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+-- Default merge mode: 'anchor' (new, result stays at drop) or 'classic' (old, leftmost wins)
+INSERT INTO game_config (key, value) VALUES ('merge_mode', 'anchor')
+  ON CONFLICT (key) DO NOTHING;

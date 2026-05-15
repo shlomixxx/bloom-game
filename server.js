@@ -2219,6 +2219,33 @@ if (ADMIN_PATH && ADMIN_PASSWORD) {
     }
   });
 
+  // ---------- GAME CONFIG ----------
+  adminRouter.get('/api/config', async (_req, res) => {
+    try {
+      const r = await pool.query('SELECT key, value, updated_at FROM game_config ORDER BY key');
+      res.json({ ok: true, config: r.rows });
+    } catch (e) {
+      res.status(500).json({ error: 'server' });
+    }
+  });
+  adminRouter.patch('/api/config/:key', async (req, res) => {
+    try {
+      const key = String(req.params.key || '').slice(0, 60);
+      const { value } = req.body || {};
+      if (!key || typeof value !== 'string') return res.status(400).json({ error: 'bad_input' });
+      await pool.query(
+        `INSERT INTO game_config (key, value, updated_at) VALUES ($1, $2, NOW())
+         ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
+        [key, value.slice(0, 200)]
+      );
+      _configCache = {}; _configCacheTs = 0; // bust cache
+      await logAdminAction('config.update', 'game_config', key, { value });
+      res.json({ ok: true });
+    } catch (e) {
+      res.status(500).json({ error: 'server' });
+    }
+  });
+
   // ---------- CSV EXPORT ----------
   const exportTables = {
     'daily_scores':       ['date', 'device_id', 'name', 'score', 'tier', 'created_at', 'updated_at'],
@@ -2263,6 +2290,38 @@ if (ADMIN_PATH && ADMIN_PASSWORD) {
 } else {
   console.log('[admin] disabled — set ADMIN_PATH + ADMIN_PASSWORD env vars to enable');
 }
+
+// ============================================================
+// GAME CONFIG (admin-controlled runtime settings)
+// ============================================================
+
+// In-memory cache refreshed every 60s (avoids DB hit per page load).
+let _configCache = {};
+let _configCacheTs = 0;
+const CONFIG_CACHE_TTL = 60 * 1000;
+
+async function loadConfig() {
+  if (Date.now() - _configCacheTs < CONFIG_CACHE_TTL) return _configCache;
+  try {
+    const r = await pool.query('SELECT key, value FROM game_config');
+    const cfg = {};
+    for (const row of r.rows) cfg[row.key] = row.value;
+    _configCache = cfg;
+    _configCacheTs = Date.now();
+  } catch (e) {
+    console.warn('loadConfig failed', e.message);
+  }
+  return _configCache;
+}
+
+app.get('/api/config', async (_req, res) => {
+  try {
+    const cfg = await loadConfig();
+    res.json({ ok: true, config: cfg });
+  } catch (e) {
+    res.status(500).json({ error: 'server' });
+  }
+});
 
 // ============================================================
 // HEALTH CHECK
