@@ -932,6 +932,18 @@
   html[data-theme="dark"] .home-mystats { background: #2A2118; border-color: rgba(250,199,117,0.35); color: #8E8A82; }
   html[data-theme="dark"] .home-mystats strong { color: #F2EFE9; }
 
+  .home-addiction {
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    margin-top: 6px; padding: 6px 14px;
+    background: linear-gradient(135deg, #FFF7E6 0%, #FFF1D0 100%);
+    border: 1px solid #FAC775;
+    border-radius: 999px;
+    font-size: 11px; color: #854F0B;
+    direction: rtl;
+  }
+  .home-addiction-level { font-weight: 700; }
+  html[data-theme="dark"] .home-addiction { background: linear-gradient(135deg, #3D2E0A 0%, #2A2118 100%); border-color: rgba(250,199,117,0.35); color: #FAC775; }
+
   /* Social proof under the primary CTA — minimal, peripheral. */
   .home-social {
     margin-top: 10px; max-width: 300px;
@@ -4578,7 +4590,19 @@
         '<span class="divider">·</span>' +
         '<span>עד ' + escapeHtml(tierName) + '</span>' +
         (totalGames > 0 ? '<span class="divider">·</span><span>' + totalGames + ' משחקים</span>' : '') +
-      '</div>';
+      '</div>' +
+      (function() {
+        var totalMs = loadLifetimeInt(TOTAL_PLAY_TIME_KEY);
+        if (totalMs < 60000) return ''; // less than 1 minute — don't show
+        var h = Math.floor(totalMs / 3600000);
+        var m = Math.floor((totalMs % 3600000) / 60000);
+        var txt = h > 0 ? h + ' שעות ו-' + m + ' דקות' : m + ' דקות';
+        var level = h >= 10 ? '🔥🔥🔥 מכור מושבע' : h >= 3 ? '🔥🔥 מכור' : h >= 1 ? '🔥 מתמכר' : m >= 15 ? '😊 חובבן' : '🌱 מתחיל';
+        return '<div class="home-addiction">' +
+          '<span>🕐 ' + txt + ' ב-BLOOM</span>' +
+          '<span class="home-addiction-level">' + level + '</span>' +
+        '</div>';
+      })();
   }
 
   // Social-proof line under the primary CTA. Pulls from the existing
