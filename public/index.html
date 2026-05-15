@@ -464,20 +464,36 @@
     border: 1px solid rgba(0,0,0,0.05);
     direction: rtl;
   }
-  .gss-title { font-size: 12px; font-weight: 700; color: #1C1A18; margin-bottom: 10px; text-align: center; }
-  .gss-grid { display: flex; flex-direction: column; gap: 5px; }
-  .gss-row { display: flex; align-items: center; gap: 8px; }
-  .gss-icon { width: 24px; height: 24px; border-radius: 6px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-  .gss-icon svg { width: 13px; height: 13px; }
-  .gss-bar-wrap { flex: 1; height: 14px; background: #F0EDE3; border-radius: 7px; overflow: hidden; }
-  .gss-bar { height: 100%; border-radius: 7px; min-width: 4px; transition: width 0.5s ease-out; }
-  .gss-count { font-size: 12px; font-weight: 700; color: #1C1A18; width: 32px; text-align: center; font-variant-numeric: tabular-nums; }
+  .gss-title { font-size: 12px; font-weight: 700; color: #1C1A18; margin-bottom: 6px; text-align: center; }
+  .gss-time { text-align: center; font-size: 13px; color: #6F6E68; margin-bottom: 10px; }
+  .gss-grid { display: flex; flex-direction: column; gap: 4px; }
+  .gss-row { display: flex; align-items: center; gap: 6px; padding: 2px 0; }
+  .gss-row.gss-top { background: #FFF9EE; border-radius: 6px; padding: 3px 6px; margin: 0 -6px; }
+  .gss-icon { width: 22px; height: 22px; border-radius: 6px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .gss-icon svg { width: 12px; height: 12px; }
+  .gss-bar-wrap { flex: 1; height: 12px; background: #F0EDE3; border-radius: 6px; overflow: hidden; }
+  .gss-bar { height: 100%; border-radius: 6px; min-width: 4px; transition: width 0.5s ease-out; }
+  .gss-merge-count { font-size: 11px; font-weight: 600; color: #6F6E68; width: 26px; text-align: center; }
+  .gss-pts { font-size: 11px; font-weight: 700; color: #1C1A18; width: 48px; text-align: left; font-variant-numeric: tabular-nums; direction: ltr; }
+  .gss-crown { font-size: 11px; flex-shrink: 0; }
   .gss-footer {
-    display: flex; justify-content: center; gap: 14px;
+    display: flex; justify-content: center; gap: 12px;
     margin-top: 10px; padding-top: 8px;
     border-top: 1px solid rgba(0,0,0,0.05);
     font-size: 11px; color: #6F6E68;
+    flex-wrap: wrap;
   }
+  .gss-addiction {
+    margin-top: 10px; padding: 10px 12px;
+    background: linear-gradient(135deg, #FFF7E6 0%, #FFF1D0 100%);
+    border: 1px solid #FAC775;
+    border-radius: 10px;
+    font-size: 12px; color: #854F0B;
+    display: flex; align-items: center; gap: 8px;
+    justify-content: center;
+  }
+  .gss-addiction-icon { font-size: 18px; }
+  .gss-addiction strong { color: #412402; }
   .share-label { font-size: 10px; color: #A8A6A0; margin: 14px 0 6px; letter-spacing: 0.08em; text-transform: uppercase; }
   .share-card {
     padding: 12px 14px; background: #DCF8C6; border-radius: 10px;
@@ -2040,9 +2056,14 @@
   html[data-theme="dark"] .share-label { color: #6F6E68; }
   html[data-theme="dark"] .game-stats-summary { background: #2C2A28; border-color: rgba(255,255,255,0.06); }
   html[data-theme="dark"] .gss-title { color: #F2EFE9; }
+  html[data-theme="dark"] .gss-time { color: #8E8A82; }
   html[data-theme="dark"] .gss-bar-wrap { background: #1A1816; }
-  html[data-theme="dark"] .gss-count { color: #F2EFE9; }
+  html[data-theme="dark"] .gss-merge-count { color: #8E8A82; }
+  html[data-theme="dark"] .gss-pts { color: #F2EFE9; }
+  html[data-theme="dark"] .gss-row.gss-top { background: #3D2E0A; }
   html[data-theme="dark"] .gss-footer { color: #8E8A82; border-color: rgba(255,255,255,0.06); }
+  html[data-theme="dark"] .gss-addiction { background: linear-gradient(135deg, #3D2E0A 0%, #2A2118 100%); border-color: rgba(250,199,117,0.3); color: #FAC775; }
+  html[data-theme="dark"] .gss-addiction strong { color: #FFD37A; }
   html[data-theme="dark"] .contest-duration-pill { background: #2C2A28; color: #F2EFE9; border-color: rgba(255,255,255,0.1); }
   html[data-theme="dark"] .contest-duration-pill.selected { background: #FAC775; color: #1A1816; }
   html[data-theme="dark"] .contest-info-row { color: #F2EFE9; }
@@ -2721,8 +2742,11 @@
 
   // Per-game stats for the game-over summary
   let gameMergesPerTier = {}; // tier → count of merges that CREATED this tier
+  let gamePointsPerTier = {}; // tier → total points earned from this tier
   let gameBestMergeTier = 0;  // highest tier created from a single merge
   let gameTotalMerges = 0;    // total merge events
+  let gameStartTime = 0;      // Date.now() when game started
+  const TOTAL_PLAY_TIME_KEY = 'bloom_total_play_ms';
 
   // Per-game tracking: which milestone tiers have already paid their bonus.
   // Reset in init() at the start of each game. The bonuses fire ONCE per
@@ -5594,8 +5618,10 @@
     currentGameMaxChain = 0;
     tierUpHit = {};   // reset milestone-bonus tracker for this fresh game
     gameMergesPerTier = {};
+    gamePointsPerTier = {};
     gameBestMergeTier = 0;
     gameTotalMerges = 0;
+    gameStartTime = Date.now();
     leaderboard = [];
     dailyRank = null;
     // Cleared at top of init: by the time we know we're entering contest mode,
@@ -6226,6 +6252,7 @@
             if (nt > highestTier) highestTier = nt;
             // Track per-tier merge stats for game-over summary
             gameMergesPerTier[nt] = (gameMergesPerTier[nt] || 0) + 1;
+            gamePointsPerTier[nt] = (gamePointsPerTier[nt] || 0) + points;
             gameTotalMerges++;
             if (nt > gameBestMergeTier) gameBestMergeTier = nt;
             // First-time-tier-up bonus: when this merge brings the player's
@@ -6319,6 +6346,10 @@
         incrementGamesPlayed();
         bumpLifetimeMax(BEST_TIER_KEY, highestTier);
         addLifetimeTotal(TOTAL_SCORE_KEY, score);
+        // Track total play time
+        var gameDuration = Date.now() - (gameStartTime || Date.now());
+        var totalMs = loadLifetimeInt(TOTAL_PLAY_TIME_KEY) + gameDuration;
+        try { localStorage.setItem(TOTAL_PLAY_TIME_KEY, String(totalMs)); } catch(e) {}
       }
       checkAchievements();
       // Challenges short-circuit the regular game-over screen — they get
@@ -6821,26 +6852,63 @@
           // Game stats summary
           (function() {
             if (gameTotalMerges === 0) return '';
+            var gameDur = Date.now() - (gameStartTime || Date.now());
+            var durMin = Math.floor(gameDur / 60000);
+            var durSec = Math.floor((gameDur % 60000) / 1000);
+            var durText = durMin > 0 ? durMin + ' דק\' ' + durSec + ' שנ\'' : durSec + ' שניות';
+
+            // Find the tier that scored the most points
+            var topTier = 0, topTierPts = 0;
+            for (var tt = 2; tt <= MAX_TIER; tt++) {
+              if ((gamePointsPerTier[tt] || 0) > topTierPts) { topTier = tt; topTierPts = gamePointsPerTier[tt]; }
+            }
+
             var statsHtml = '<div class="game-stats-summary">';
             statsHtml += '<div class="gss-title">📊 סיכום המשחק</div>';
+
+            // Time badge
+            statsHtml += '<div class="gss-time">⏱ ' + durText + '</div>';
+
             statsHtml += '<div class="gss-grid">';
             for (var t = 2; t <= MAX_TIER; t++) {
               var count = gameMergesPerTier[t] || 0;
+              var pts = gamePointsPerTier[t] || 0;
               if (count === 0 && t > highestTier) continue;
               var ti = getActiveTiers()[t];
+              var isTop = (t === topTier && topTierPts > 0);
               var barWidth = gameTotalMerges > 0 ? Math.max(4, Math.round(count / gameTotalMerges * 100)) : 0;
-              statsHtml += '<div class="gss-row">' +
+              statsHtml += '<div class="gss-row' + (isTop ? ' gss-top' : '') + '">' +
                 '<div class="gss-icon" style="background:' + ti.bg + ';color:' + ti.fg + '">' + ti.svg + '</div>' +
                 '<div class="gss-bar-wrap"><div class="gss-bar" style="width:' + barWidth + '%;background:' + ti.bg + '"></div></div>' +
-                '<div class="gss-count">' + (count > 0 ? '×' + count : '—') + '</div>' +
+                '<div class="gss-merge-count">×' + (count || '—') + '</div>' +
+                '<div class="gss-pts">' + (pts > 0 ? pts.toLocaleString() : '—') + '</div>' +
+                (isTop ? '<div class="gss-crown">🔥</div>' : '') +
               '</div>';
             }
             statsHtml += '</div>';
+
+            // Chain explanation + moves
+            var chainText = currentGameMaxChain >= 4 ? '🔥🔥 שרשרת אגדית ×' + currentGameMaxChain + '!'
+              : currentGameMaxChain >= 3 ? '🔥 שרשרת מרשימה ×' + currentGameMaxChain
+              : currentGameMaxChain >= 2 ? '🔗 שרשרת ×' + currentGameMaxChain
+              : '🔗 ללא שרשרת';
+
             statsHtml += '<div class="gss-footer">' +
-              '<span>🔗 שרשרת: ×' + (currentGameMaxChain || 1) + '</span>' +
-              '<span>💧 ' + (dropsCount || 0) + ' טיפות</span>' +
+              '<span>' + chainText + '</span>' +
+              '<span>🎮 ' + (dropsCount || 0) + ' מהלכים</span>' +
               '<span>🎯 ' + gameTotalMerges + ' מיזוגים</span>' +
             '</div>';
+
+            // Total play time "addiction badge"
+            var totalMs = loadLifetimeInt(TOTAL_PLAY_TIME_KEY) + gameDur;
+            var totalHours = Math.floor(totalMs / 3600000);
+            var totalMins = Math.floor((totalMs % 3600000) / 60000);
+            var totalText = totalHours > 0 ? totalHours + ' שעות ו-' + totalMins + ' דקות' : totalMins + ' דקות';
+            statsHtml += '<div class="gss-addiction">' +
+              '<span class="gss-addiction-icon">🕐</span>' +
+              '<span>סה"כ שיחקת <strong>' + totalText + '</strong> ב-BLOOM</span>' +
+            '</div>';
+
             statsHtml += '</div>';
             return statsHtml;
           })() +
