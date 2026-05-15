@@ -58,3 +58,132 @@ CREATE TABLE IF NOT EXISTS contest_scores (
 
 CREATE INDEX IF NOT EXISTS idx_contest_scores_contest_score
   ON contest_scores (contest_code, score DESC);
+
+-- ============================================================
+-- מצב חי בתחרות (Live state + spectators) — חדש
+-- ============================================================
+-- שורה אחת לכל (תחרות, מכשיר) בזמן שמשחק.
+-- היעדר עדכון יותר מ-10s נחשב "לא במשחק" (סינון בקריאה, ללא cron).
+
+CREATE TABLE IF NOT EXISTS contest_live_state (
+  contest_code    VARCHAR(8) NOT NULL REFERENCES contests(code) ON DELETE CASCADE,
+  device_id       VARCHAR(64) NOT NULL,
+  display_name    VARCHAR(50) NOT NULL,
+  live_score      INTEGER NOT NULL DEFAULT 0,
+  highest_tier    INTEGER NOT NULL DEFAULT 1,
+  next_tier       INTEGER,
+  grid_json       TEXT,
+  updated_at      TIMESTAMP NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (contest_code, device_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_contest_live_state_updated
+  ON contest_live_state (contest_code, updated_at DESC);
+
+-- שורה אחת לכל זוג (צופה, נצפה). heartbeat מ-frontend כל 5s.
+CREATE TABLE IF NOT EXISTS contest_watchers (
+  contest_code        VARCHAR(8) NOT NULL REFERENCES contests(code) ON DELETE CASCADE,
+  watcher_device_id   VARCHAR(64) NOT NULL,
+  watcher_name        VARCHAR(50) NOT NULL,
+  watcher_last_score  INTEGER NOT NULL DEFAULT 0,
+  target_device_id    VARCHAR(64) NOT NULL,
+  updated_at          TIMESTAMP NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (contest_code, watcher_device_id, target_device_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_contest_watchers_target
+  ON contest_watchers (contest_code, target_device_id, updated_at DESC);
+
+-- ============================================================
+-- ניתוח: ביקורים יומיים + audit log (אדמין) — חדש
+-- ============================================================
+-- שורה לכל (device, date). מאפשר חישוב bounce-rate ו-retention denominator.
+
+CREATE TABLE IF NOT EXISTS device_visits (
+  device_id    VARCHAR(64) NOT NULL,
+  date         DATE NOT NULL,
+  visit_count  INTEGER NOT NULL DEFAULT 1,
+  first_at     TIMESTAMP NOT NULL DEFAULT NOW(),
+  last_at      TIMESTAMP NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (device_id, date)
+);
+
+CREATE INDEX IF NOT EXISTS idx_device_visits_date
+  ON device_visits (date);
+CREATE INDEX IF NOT EXISTS idx_device_visits_device
+  ON device_visits (device_id);
+
+-- Audit log לפעולות אדמין (מחיקות, עריכת תחרויות וכו'). שורה חדשה
+-- נכתבת בכל פעולה הרסנית. JSONB ל-metadata חופשי.
+
+CREATE TABLE IF NOT EXISTS admin_actions (
+  id           SERIAL PRIMARY KEY,
+  action       VARCHAR(50) NOT NULL,
+  target_type  VARCHAR(50),
+  target_id    VARCHAR(120),
+  metadata     JSONB,
+  created_at   TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_admin_actions_created
+  ON admin_actions (created_at DESC);
+
+-- ============================================================
+-- אתגרי BLOOM (Public single-shot prize contests) — חדש
+-- ============================================================
+-- ניסיון אחד למכשיר לאתגר (PK על challenge_id + device_id).
+-- ארבעה סוגים: race / top_n / beat / first_to_tier.
+
+CREATE TABLE IF NOT EXISTS challenges (
+  id              SERIAL PRIMARY KEY,
+  slug            VARCHAR(40) UNIQUE NOT NULL,
+  name            VARCHAR(100) NOT NULL,
+  description     TEXT,
+  challenge_type  VARCHAR(20) NOT NULL,
+  threshold_score INTEGER,
+  threshold_tier  INTEGER,
+  winners_count   INTEGER NOT NULL DEFAULT 1,
+  prize_text      VARCHAR(200) NOT NULL,
+  prize_image_url VARCHAR(500),
+  board_seed      BIGINT,
+  starts_at       TIMESTAMP NOT NULL,
+  ends_at         TIMESTAMP NOT NULL,
+  status          VARCHAR(20) NOT NULL DEFAULT 'draft',
+  rules_text      TEXT,
+  created_at      TIMESTAMP NOT NULL DEFAULT NOW(),
+  updated_at      TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_challenges_status_ends
+  ON challenges (status, ends_at);
+
+CREATE TABLE IF NOT EXISTS challenge_entries (
+  challenge_id          INTEGER NOT NULL REFERENCES challenges(id) ON DELETE CASCADE,
+  device_id             VARCHAR(64) NOT NULL,
+  display_name          VARCHAR(50) NOT NULL,
+  score                 INTEGER NOT NULL DEFAULT 0,
+  highest_tier          INTEGER NOT NULL DEFAULT 1,
+  drops_count           INTEGER NOT NULL DEFAULT 0,
+  status                VARCHAR(20) NOT NULL DEFAULT 'in_progress',
+  started_at            TIMESTAMP NOT NULL DEFAULT NOW(),
+  completed_at          TIMESTAMP,
+  reached_threshold_at  TIMESTAMP,
+  reached_tier_at       TIMESTAMP,
+  is_winner             BOOLEAN NOT NULL DEFAULT FALSE,
+  winner_rank           INTEGER,
+  cheat_flag            BOOLEAN NOT NULL DEFAULT FALSE,
+  contact_name          VARCHAR(80),
+  contact_phone         VARCHAR(40),
+  contact_email         VARCHAR(120),
+  contact_at            TIMESTAMP,
+  prize_claimed         BOOLEAN NOT NULL DEFAULT FALSE,
+  prize_claimed_at      TIMESTAMP,
+  PRIMARY KEY (challenge_id, device_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_challenge_entries_score
+  ON challenge_entries (challenge_id, score DESC);
+CREATE INDEX IF NOT EXISTS idx_challenge_entries_winners
+  ON challenge_entries (challenge_id, is_winner) WHERE is_winner = TRUE;
+CREATE INDEX IF NOT EXISTS idx_challenge_entries_threshold
+  ON challenge_entries (challenge_id, reached_threshold_at) WHERE reached_threshold_at IS NOT NULL;

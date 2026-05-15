@@ -32,6 +32,22 @@
 <meta name="twitter:title" content="BLOOM — משחק מיזוג">
 <meta name="twitter:description" content="מזג חפצים, גלה דרגות, והגע עד לכתר. הזמן חברים לתחרות פרטית.">
 <meta name="twitter:image" content="https://bloom-web-production-f3bd.up.railway.app/assets/social-share.png">
+
+<!-- Theme detection — runs before <style> applies so we never flash light-then-dark.
+     Honors localStorage override (set 'bloom_theme' to 'light'/'dark'/'auto'). -->
+<script>
+(function() {
+  try {
+    var pref = localStorage.getItem('bloom_theme') || 'auto';
+    var dark = pref === 'dark' || (pref === 'auto' &&
+      window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+    var meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute('content', dark ? '#1A1816' : '#F5F5F0');
+  } catch (e) {}
+})();
+</script>
+
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body {
@@ -40,15 +56,25 @@
     color: #1C1A18;
     overscroll-behavior: none;
     -webkit-tap-highlight-color: transparent;
+    height: 100dvh;
+    /* No page-level scroll — modal/screen overlays scroll internally instead. */
+    overflow: hidden;
     user-select: none;
     -webkit-user-select: none;
   }
   body {
     display: flex;
     justify-content: center;
-    padding: 16px;
+    /* No body padding — the .app handles its own margin via @media below.
+       This ensures small phones get edge-to-edge UI without horizontal clipping. */
+    padding: 0;
     min-height: 100vh;
     min-height: 100dvh;
+  }
+  /* On larger viewports (tablet/desktop), give the .app some breathing room
+     and a centered card feel. On phones it goes edge-to-edge. */
+  @media (min-width: 421px) {
+    body { padding: 16px; }
   }
   .app {
     width: 100%;
@@ -59,7 +85,19 @@
     overflow: hidden;
     box-shadow: 0 2px 30px rgba(0,0,0,0.06);
     position: relative;
-    min-height: 600px;
+    /* Fill the available viewport exactly. The flex column inside lets the
+       grid-wrap consume any leftover space, so the board scales to the
+       phone instead of the page scrolling. */
+    height: 100%;
+    max-height: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+  .top, .mode-bar, .tier-bar { flex-shrink: 0; }
+  /* On phones (no body padding) — kill the rounded corners + box-shadow
+     so the app uses every pixel of the viewport edge-to-edge. */
+  @media (max-width: 420px) {
+    .app { border-radius: 0; max-width: 100%; box-shadow: none; }
   }
   .top {
     padding: 12px 14px;
@@ -71,24 +109,45 @@
     justify-content: space-between;
     gap: 8px;
   }
-  .brand { font-size: 16px; letter-spacing: 0.22em; font-weight: 600; color: #1C1A18; }
+  .brand { font-size: 14px; letter-spacing: 0.22em; font-weight: 600; color: #6F6E68; }
   .stats {
     display: flex;
     gap: 6px;
     margin-top: 10px;
+    align-items: stretch;
   }
   .stats > .stat {
     flex: 1;
     background: #FAFAF6;
-    border-radius: 9px;
-    padding: 6px 10px;
+    border-radius: 12px;
+    padding: 8px 12px;
     text-align: right;
     direction: rtl;
     overflow: hidden;
   }
+  /* The "primary" stat — the current score — is the dopamine center.
+     Larger, bolder, and visually distinct so it commands the top bar. */
+  .stats > .stat.stat-primary {
+    flex: 2;
+    background: linear-gradient(135deg, #1C1A18 0%, #2C2A28 100%);
+    color: #FFFFFF;
+    padding: 10px 14px;
+  }
+  .stats > .stat.stat-primary .stat-label { color: #FAC775; }
+  .stats > .stat.stat-primary .stat-val { color: #FFFFFF; font-size: 24px; }
+  html[data-theme="dark"] .stats > .stat.stat-primary { background: linear-gradient(135deg, #FAC775 0%, #BA7517 100%); }
+  html[data-theme="dark"] .stats > .stat.stat-primary .stat-val { color: #1C1A18; }
+  html[data-theme="dark"] .stats > .stat.stat-primary .stat-label { color: #412402; }
   .stat-label { font-size: 9px; color: #A8A6A0; letter-spacing: 0.08em; text-transform: uppercase; }
   .stat-val { font-size: 16px; font-weight: 700; color: #1C1A18; margin-top: 2px; display: block; font-variant-numeric: tabular-nums; white-space: nowrap; }
   .stat-val.bump { animation: bump 0.32s ease-out; }
+  /* "Near best" — when current score is within 90% of personal best,
+     the שיא value gently pulses to nudge a record attempt. */
+  .stat-val.near-best { animation: nearBest 1.4s ease-in-out infinite; color: #BA7517; }
+  @keyframes nearBest {
+    0%, 100% { transform: scale(1); }
+    50%      { transform: scale(1.06); color: #FAC775; }
+  }
   @keyframes bump {
     0% { transform: scale(1); color: #1C1A18; }
     40% { transform: scale(1.22); color: #BA7517; }
@@ -247,12 +306,33 @@
     .tier-icon svg { width: 16px; height: 16px; }
     .tier-score { font-size: 9px; }
   }
-  .grid-wrap { padding: 12px; direction: ltr; position: relative; }
-  .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; }
+  .grid-wrap {
+    padding: 12px; direction: ltr; position: relative;
+    /* Consume all leftover height between mode/tier bars and the bottom of
+       the app — and center the grid both axes if there's extra space. */
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    grid-template-rows: repeat(6, 1fr);
+    gap: 5px;
+    /* Width + height are set by fitGrid() in JS — cells fill the explicit
+       dimensions via 1fr columns/rows. The grid always uses the FULL width
+       of its container (matching the tier-bar above for visual consistency)
+       and the FULL available height — cells are slightly rectangular when
+       the viewport is short, but icons inside stay centered. */
+  }
   .cell {
-    aspect-ratio: 1; background: #F5F2EC; border-radius: 10px;
+    background: #F5F2EC; border-radius: 10px;
     display: flex; align-items: center; justify-content: center;
     cursor: pointer; transition: background 0.12s;
+    min-width: 0; min-height: 0;
   }
   .cell:hover { background: #EFEBE2; }
   .cell.filled svg { width: 30px; height: 30px; }
@@ -294,6 +374,50 @@
     white-space: nowrap;
     animation: chainPop 0.75s ease-out forwards;
   }
+  /* First-time-tier-up celebration. Bigger + slower than chain-badge so the
+     player REALLY feels the moment. Gold-on-black for premium vibe. */
+  .milestone-banner {
+    position: absolute;
+    top: 50%; left: 50%;
+    background: linear-gradient(135deg, #1C1A18 0%, #412402 100%);
+    color: #FAC775;
+    border: 2px solid #FAC775;
+    border-radius: 18px;
+    padding: 16px 26px;
+    pointer-events: none;
+    z-index: 30;
+    text-align: center; direction: rtl;
+    box-shadow: 0 12px 36px rgba(0,0,0,0.35), 0 0 0 6px rgba(250,199,117,0.18);
+    animation: milestonePop 1.5s ease-out forwards;
+    min-width: 180px;
+  }
+  .milestone-banner-tier {
+    font-size: 14px; font-weight: 700;
+    color: #FFD37A; letter-spacing: 0.04em;
+    margin-bottom: 4px;
+  }
+  .milestone-banner-bonus {
+    font-size: 36px; font-weight: 900;
+    color: #FAC775; line-height: 1;
+    font-variant-numeric: tabular-nums;
+    text-shadow: 0 0 24px rgba(250,199,117,0.6);
+  }
+  .milestone-banner-sub {
+    font-size: 10px; color: #BA7517;
+    margin-top: 6px; font-weight: 600;
+    letter-spacing: 0.03em;
+  }
+  html[data-theme="dark"] .milestone-banner { background: linear-gradient(135deg, #FAC775 0%, #BA7517 100%); color: #1C1A18; border-color: #FFD37A; }
+  html[data-theme="dark"] .milestone-banner-tier { color: #412402; }
+  html[data-theme="dark"] .milestone-banner-bonus { color: #1C1A18; text-shadow: 0 0 24px rgba(255,255,255,0.4); }
+  html[data-theme="dark"] .milestone-banner-sub { color: #5A3500; }
+  @keyframes milestonePop {
+    0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.4) rotate(-8deg); }
+    15%  { opacity: 1; transform: translate(-50%, -50%) scale(1.15) rotate(2deg); }
+    25%  { opacity: 1; transform: translate(-50%, -50%) scale(1) rotate(0deg); }
+    80%  { opacity: 1; transform: translate(-50%, -50%) scale(1) rotate(0deg); }
+    100% { opacity: 0; transform: translate(-50%, -80%) scale(0.95); }
+  }
   @keyframes chainPop {
     0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.55) rotate(-6deg); }
     20%  { opacity: 1; transform: translate(-50%, -50%) scale(1.18) rotate(-2deg); }
@@ -301,7 +425,24 @@
     100% { opacity: 0; transform: translate(-50%, -75%) scale(0.95) rotate(0); }
   }
 
-  .overlay { padding: 20px 22px 22px; text-align: center; direction: rtl; }
+  .overlay {
+    padding: 20px 22px 22px; text-align: center; direction: rtl;
+    /* Overlays render inside .grid-wrap which has overflow:hidden so the
+       game grid never scrolls. But result screens (game-over, challenge
+       result, claim form) are content-tall and were getting clipped at the
+       bottom — losing the share button etc. Let the overlay scroll INSIDE
+       itself when content exceeds the available height. */
+    width: 100%;
+    max-height: 100%;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    /* Soft fade at the bottom hints there's more to scroll to. */
+    mask-image: linear-gradient(to bottom, #000 calc(100% - 14px), transparent);
+    -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 14px), transparent);
+  }
+  /* When the user has scrolled to the bottom (or content fits), kill the
+     fade so the last button isn't half-faded. JS toggles this class. */
+  .overlay.at-bottom { mask-image: none; -webkit-mask-image: none; }
   .over-title { font-size: 13px; font-weight: 500; color: #6F6E68; letter-spacing: 0.08em; text-transform: uppercase; }
   .over-score { font-size: 42px; font-weight: 700; color: #1C1A18; margin-top: 8px; line-height: 1.1; font-variant-numeric: tabular-nums; }
   .over-sub { font-size: 13px; color: #6F6E68; margin-top: 6px; }
@@ -344,6 +485,160 @@
     max-height: calc(100dvh - 40px);
     overflow-y: auto;
   }
+
+  /* ============ TOUR / TUTORIAL ("סייר") ============ */
+  .tour-card {
+    background: #FFFFFF; border-radius: 18px; padding: 0;
+    width: 100%; max-width: 360px;
+    max-height: calc(100dvh - 40px);
+    display: flex; flex-direction: column;
+    overflow: hidden;
+    direction: rtl;
+    box-shadow: 0 16px 48px rgba(0,0,0,0.18);
+  }
+  html[data-theme="dark"] .tour-card { background: #232121; color: #F2EFE9; box-shadow: 0 16px 48px rgba(0,0,0,0.5); }
+  .tour-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 18px 8px;
+    flex-shrink: 0;
+  }
+  .tour-step-pill {
+    background: #F5F2EC; color: #6F6E68;
+    padding: 3px 10px; border-radius: 999px;
+    font-size: 11px; font-weight: 700; letter-spacing: 0.04em;
+  }
+  html[data-theme="dark"] .tour-step-pill { background: #2C2A28; color: #8E8A82; }
+  .tour-skip {
+    background: none; border: none; padding: 4px 8px;
+    color: #A8A6A0; font-size: 12px; font-family: inherit;
+    cursor: pointer;
+  }
+  .tour-skip:hover { color: #6F6E68; }
+  html[data-theme="dark"] .tour-skip { color: #6F6E68; }
+  html[data-theme="dark"] .tour-skip:hover { color: #F2EFE9; }
+  .tour-progress {
+    display: flex; gap: 4px;
+    padding: 4px 18px 0;
+    flex-shrink: 0;
+  }
+  .tour-progress-dot {
+    flex: 1; height: 3px;
+    background: #F0EDE3; border-radius: 999px;
+    transition: background 0.25s;
+  }
+  .tour-progress-dot.done { background: #FAC775; }
+  .tour-progress-dot.active { background: #1C1A18; }
+  html[data-theme="dark"] .tour-progress-dot { background: #2C2A28; }
+  html[data-theme="dark"] .tour-progress-dot.done { background: #FAC775; }
+  html[data-theme="dark"] .tour-progress-dot.active { background: #F2EFE9; }
+  .tour-body {
+    padding: 18px 22px 14px;
+    flex: 1 1 auto; overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .tour-illustration {
+    background: linear-gradient(180deg, #FAFAF6 0%, #F5F2EC 100%);
+    border-radius: 14px;
+    padding: 24px 16px;
+    margin-bottom: 14px;
+    display: flex; align-items: center; justify-content: center;
+    min-height: 130px;
+  }
+  html[data-theme="dark"] .tour-illustration { background: linear-gradient(180deg, #2C2A28 0%, #1F1D1B 100%); }
+  .tour-title {
+    font-size: 19px; font-weight: 700;
+    color: #1C1A18; margin-bottom: 6px; line-height: 1.3;
+    text-align: center;
+  }
+  html[data-theme="dark"] .tour-title { color: #F2EFE9; }
+  .tour-desc {
+    font-size: 14px; color: #6F6E68; line-height: 1.55;
+    text-align: center;
+  }
+  html[data-theme="dark"] .tour-desc { color: #B5B1A8; }
+  .tour-desc strong { color: #1C1A18; font-weight: 700; }
+  html[data-theme="dark"] .tour-desc strong { color: #F2EFE9; }
+  .tour-footer {
+    display: flex; gap: 8px; padding: 12px 18px 16px;
+    flex-shrink: 0;
+    border-top: 1px solid rgba(0,0,0,0.04);
+  }
+  html[data-theme="dark"] .tour-footer { border-top-color: rgba(255,255,255,0.06); }
+  .tour-footer .btn { margin-top: 0; flex: 1; padding: 12px 14px; font-size: 14px; }
+  .tour-footer .btn.secondary { flex: 0.5; }
+
+  /* Mini illustrations using actual TIERS svgs */
+  .tour-tile {
+    width: 44px; height: 44px; border-radius: 10px;
+    display: inline-flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .tour-tile.tour-tile-sm { width: 32px; height: 32px; border-radius: 8px; }
+  .tour-tile.tour-tile-lg { width: 56px; height: 56px; border-radius: 12px; }
+  .tour-tile svg { width: 24px; height: 24px; }
+  .tour-tile.tour-tile-sm svg { width: 18px; height: 18px; }
+  .tour-tile.tour-tile-lg svg { width: 30px; height: 30px; }
+  .tour-tile.tour-tile-empty { background: #F5F2EC; border: 1.5px dashed rgba(0,0,0,0.1); }
+  html[data-theme="dark"] .tour-tile.tour-tile-empty { background: #1F1D1B; border-color: rgba(255,255,255,0.1); }
+  .tour-arrow {
+    color: #FAC775; font-size: 22px; font-weight: 800;
+    margin: 0 6px;
+  }
+  .tour-row {
+    display: flex; align-items: center; justify-content: center;
+    gap: 6px;
+  }
+  .tour-mini-grid {
+    display: grid; grid-template-columns: repeat(4, 32px); gap: 3px;
+    padding: 6px; border-radius: 8px;
+    background: rgba(0,0,0,0.03);
+  }
+  html[data-theme="dark"] .tour-mini-grid { background: rgba(255,255,255,0.04); }
+  .tour-mini-grid .tour-tile { width: 32px; height: 32px; border-radius: 6px; }
+  .tour-mini-grid .tour-tile svg { width: 18px; height: 18px; }
+  /* Step-up bonus illustration */
+  .tour-bonus-list {
+    display: flex; flex-direction: column; gap: 6px;
+    width: 100%; max-width: 240px;
+  }
+  .tour-bonus-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 6px 12px; border-radius: 8px;
+    background: rgba(250,199,117,0.12);
+    font-size: 12px;
+  }
+  html[data-theme="dark"] .tour-bonus-row { background: rgba(250,199,117,0.18); }
+  .tour-bonus-row .name { display: inline-flex; align-items: center; gap: 6px; color: #1C1A18; font-weight: 600; }
+  html[data-theme="dark"] .tour-bonus-row .name { color: #F2EFE9; }
+  .tour-bonus-row .pts { font-weight: 800; color: #BA7517; font-variant-numeric: tabular-nums; }
+
+  /* Mode previews */
+  .tour-modes-grid {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 8px; width: 100%; max-width: 280px;
+  }
+  .tour-mode-card {
+    background: rgba(0,0,0,0.03);
+    border-radius: 10px; padding: 10px 12px;
+    text-align: right; direction: rtl;
+  }
+  html[data-theme="dark"] .tour-mode-card { background: rgba(255,255,255,0.04); }
+  .tour-mode-card .ic { font-size: 20px; line-height: 1; margin-bottom: 4px; }
+  .tour-mode-card .lbl { font-size: 12px; font-weight: 700; color: #1C1A18; }
+  html[data-theme="dark"] .tour-mode-card .lbl { color: #F2EFE9; }
+  .tour-mode-card .desc { font-size: 10px; color: #6F6E68; margin-top: 2px; line-height: 1.3; }
+  html[data-theme="dark"] .tour-mode-card .desc { color: #8E8A82; }
+
+  /* Welcome step — center the BLOOM brand visually */
+  .tour-welcome {
+    display: flex; flex-direction: column; align-items: center; gap: 14px;
+  }
+  .tour-welcome .brand {
+    font-size: 32px; letter-spacing: 0.3em; font-weight: 700;
+    color: #1C1A18; margin: 0;
+  }
+  html[data-theme="dark"] .tour-welcome .brand { color: #F2EFE9; }
+  .tour-welcome .icons-row { display: flex; gap: 6px; }
   .info-title { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
   .info-sub { font-size: 12px; color: #6F6E68; margin-bottom: 12px; }
   .credits {
@@ -564,14 +859,49 @@
     line-height: 1.6;
   }
   .home-start {
-    width: 100%; max-width: 280px;
-    padding: 16px 18px; border-radius: 12px;
+    width: 100%; max-width: 300px;
+    padding: 18px 20px; border-radius: 14px;
     background: #1C1A18; color: #FFFFFF;
-    border: none; font-size: 15px; font-weight: 600;
+    border: none; font-size: 17px; font-weight: 700;
+    letter-spacing: 0.01em;
     cursor: pointer; font-family: inherit;
-    transition: transform 0.12s;
+    box-shadow: 0 6px 18px rgba(28,26,24,0.18);
+    transition: transform 0.12s, box-shadow 0.18s;
   }
+  .home-start:hover { box-shadow: 0 8px 22px rgba(28,26,24,0.24); }
   .home-start:active { transform: scale(0.98); }
+  /* Personal-stats chip — shows the returning player their lifetime bests.
+     Visible only if they've played at least one game (best > 0). */
+  .home-mystats {
+    display: inline-flex; align-items: center; gap: 12px;
+    margin-top: 12px; padding: 8px 14px;
+    background: #FFF9EE; border: 1px solid #FAC775;
+    border-radius: 999px;
+    font-size: 11px; color: #6F6E68;
+    direction: rtl;
+  }
+  .home-mystats .avatar { margin-left: 2px; }
+  .home-mystats strong { color: #1C1A18; font-weight: 700; }
+  .home-mystats .divider { color: #FAC775; }
+  html[data-theme="dark"] .home-mystats { background: #2A2118; border-color: rgba(250,199,117,0.35); color: #8E8A82; }
+  html[data-theme="dark"] .home-mystats strong { color: #F2EFE9; }
+
+  /* Social proof under the primary CTA — minimal, peripheral. */
+  .home-social {
+    margin-top: 10px; max-width: 300px;
+    font-size: 11px; color: #6F6E68;
+    direction: rtl; text-align: center;
+    line-height: 1.5;
+    min-height: 18px;
+  }
+  .home-social strong { color: #1C1A18; font-weight: 700; }
+  html[data-theme="dark"] .home-social strong { color: #F2EFE9; }
+  .home-social .live-dot {
+    display: inline-block; width: 5px; height: 5px; border-radius: 50%;
+    background: #2E8B6F; margin-left: 4px;
+    animation: contestLive 1.6s ease-in-out infinite;
+    vertical-align: 1px;
+  }
   .home-skip {
     margin-top: 18px; background: none; border: none;
     color: #A8A6A0; font-size: 13px;
@@ -970,6 +1300,233 @@
   .my-contest-rank.rank-1 { color: #BA7517; }
   .my-contest-meta-mid { color: #A8A6A0; }
 
+  /* ============ AVATAR (stable per-deviceId emoji chip) ============ */
+  .avatar {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 22px; height: 22px; border-radius: 50%;
+    font-size: 12px; line-height: 1;
+    vertical-align: middle;
+    margin-left: 5px;
+    flex-shrink: 0;
+    user-select: none;
+  }
+  .avatar.lg { width: 32px; height: 32px; font-size: 17px; }
+  .avatar.sm { width: 18px; height: 18px; font-size: 10px; }
+
+  /* ============ ONBOARDING COACH (3-step gentle tutorial) ============ */
+  /* Fires on a brand-new player's first game. Each step is a non-blocking
+     toast pinned above the grid — they keep playing while it fades in. */
+  .coach-toast {
+    position: absolute; top: -8px; left: 50%; transform: translateX(-50%) translateY(-100%);
+    z-index: 20;
+    background: #1C1A18; color: #FFFFFF;
+    border-radius: 14px;
+    padding: 12px 16px;
+    font-size: 13px; font-weight: 600; line-height: 1.4;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.22);
+    max-width: 320px;
+    direction: rtl; text-align: right;
+    opacity: 0;
+    animation: coachIn 0.4s ease-out forwards, coachOut 0.4s ease-in 5.6s forwards;
+  }
+  .coach-toast::after {
+    content: ''; position: absolute; bottom: -6px; left: 50%; transform: translateX(-50%) rotate(45deg);
+    width: 12px; height: 12px; background: #1C1A18;
+  }
+  .coach-toast .coach-title {
+    display: inline-flex; align-items: center; gap: 6px;
+    color: #FAC775; font-size: 10px; font-weight: 700;
+    letter-spacing: 0.12em; text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+  .coach-toast .coach-title svg { width: 12px; height: 12px; }
+  .coach-toast .coach-dismiss {
+    display: inline-block; margin-top: 6px;
+    background: none; border: none; padding: 0;
+    color: #FAC775; font-weight: 700; font-size: 11px;
+    cursor: pointer; font-family: inherit;
+  }
+  @keyframes coachIn  { from { opacity: 0; transform: translateX(-50%) translateY(-90%); } to { opacity: 1; transform: translateX(-50%) translateY(-100%); } }
+  @keyframes coachOut { from { opacity: 1; } to { opacity: 0; transform: translateX(-50%) translateY(-110%); } }
+  /* Pulsing arrow over a target column on the first step. */
+  .coach-arrow {
+    position: absolute; z-index: 19;
+    width: 36px; height: 36px;
+    color: #FAC775;
+    filter: drop-shadow(0 2px 6px rgba(0,0,0,0.3));
+    animation: coachArrow 1.2s ease-in-out infinite;
+    pointer-events: none;
+  }
+  @keyframes coachArrow {
+    0%, 100% { transform: translateY(0); }
+    50%      { transform: translateY(8px); }
+  }
+
+  /* ============ אתגרי BLOOM (Challenges) ============ */
+  /* Home CTA — sits right under the contest button. Royal-purple palette so
+     it reads differently from contests (warm orange) at a glance. */
+  .home-challenge {
+    width: 80%; max-width: 300px;
+    padding: 11px 18px;
+    background: #ECE9FB; color: #26215C;
+    border: 1px solid #CECBF6;
+    border-radius: 14px;
+    font-size: 13px; font-weight: 600;
+    cursor: pointer; font-family: inherit;
+    margin-top: 8px;
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    transition: background 0.15s, transform 0.08s;
+  }
+  .home-challenge:hover { background: #E0DCF6; }
+  .home-challenge:active { transform: scale(0.98); }
+  .home-challenge-badge {
+    background: #6B5BD3; color: #FFFFFF;
+    border-radius: 999px;
+    padding: 2px 9px;
+    font-size: 10px; font-weight: 700; letter-spacing: 0.02em;
+  }
+
+  /* Challenge cards in the list screen */
+  .challenge-list { display: flex; flex-direction: column; gap: 10px; width: 100%; max-width: 360px; margin: 14px auto 0; }
+  .challenge-card {
+    background: #FFFFFF;
+    border: 1px solid rgba(0,0,0,0.08);
+    border-radius: 14px;
+    padding: 14px;
+    cursor: pointer; font-family: inherit;
+    text-align: right; direction: rtl;
+    transition: background 0.15s, transform 0.08s, box-shadow 0.15s;
+    position: relative;
+    width: 100%;
+  }
+  .challenge-card:hover { box-shadow: 0 4px 14px rgba(0,0,0,0.06); }
+  .challenge-card:active { transform: scale(0.985); }
+  .challenge-card.entered {
+    background: #F0FBF6; border-color: #9FE1CB;
+  }
+  .challenge-card-top {
+    display: flex; align-items: flex-start; justify-content: space-between; gap: 10px;
+    margin-bottom: 6px;
+  }
+  .challenge-card-name { font-size: 15px; font-weight: 700; color: #1C1A18; line-height: 1.3; flex: 1; }
+  .challenge-card-prize {
+    background: #FFF5E1; color: #854F0B;
+    border: 1px solid #FAC775;
+    border-radius: 999px;
+    padding: 3px 10px;
+    font-size: 11px; font-weight: 700;
+    white-space: nowrap;
+  }
+  .challenge-card-desc { font-size: 12px; color: #6F6E68; line-height: 1.4; margin-bottom: 8px; }
+  .challenge-card-meta {
+    display: flex; justify-content: space-between; align-items: center;
+    font-size: 11px; color: #A8A6A0;
+    border-top: 1px solid #F0EDE3; padding-top: 8px;
+  }
+  .challenge-card-meta strong { color: #1C1A18; font-weight: 600; }
+  .challenge-type-pill {
+    display: inline-block; padding: 2px 8px;
+    background: #ECE9FB; color: #26215C;
+    border-radius: 999px;
+    font-size: 10px; font-weight: 700;
+    margin-right: 6px;
+  }
+  .challenge-card.entered .challenge-type-pill {
+    background: #DCF8C6; color: #1B5E20;
+  }
+  /* Detail / pre-enter screens */
+  .challenge-prize-banner {
+    width: 100%; max-width: 340px;
+    margin: 14px auto;
+    background: linear-gradient(135deg, #ECE9FB 0%, #FFF5E1 100%);
+    border: 1px solid #CECBF6;
+    border-radius: 16px;
+    padding: 16px;
+    text-align: center; direction: rtl;
+  }
+  .challenge-prize-banner img { max-width: 120px; max-height: 120px; border-radius: 10px; margin: 6px auto 8px; display: block; }
+  .challenge-prize-banner .label { font-size: 10px; color: #6B5BD3; letter-spacing: 0.12em; text-transform: uppercase; font-weight: 700; }
+  .challenge-prize-banner .prize { font-size: 18px; font-weight: 700; color: #1C1A18; margin-top: 4px; }
+  .challenge-prize-banner .sub { font-size: 12px; color: #6F6E68; margin-top: 6px; }
+  .challenge-warn {
+    background: #FFF1D0; color: #8B5500;
+    border: 1px solid #FAC775;
+    border-radius: 12px;
+    padding: 12px 14px;
+    margin: 10px auto;
+    max-width: 340px; direction: rtl;
+    font-size: 12px; line-height: 1.5;
+    text-align: right;
+  }
+  .challenge-warn strong { color: #5A3500; font-weight: 700; }
+  .challenge-rules {
+    font-size: 11px; color: #6F6E68;
+    line-height: 1.6; direction: rtl;
+    background: #FAFAF6; border-radius: 10px;
+    padding: 10px 14px;
+    margin: 10px auto; max-width: 340px;
+    white-space: pre-wrap; text-align: right;
+    max-height: 140px; overflow-y: auto;
+  }
+  .challenge-standings {
+    width: 100%; max-width: 340px;
+    margin: 10px auto;
+    direction: rtl;
+  }
+  .challenge-standings h4 {
+    font-size: 10px; color: #A8A6A0; letter-spacing: 0.08em; text-transform: uppercase;
+    margin: 0 0 6px; font-weight: 600;
+  }
+  .challenge-standings-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 7px 10px; background: #FAFAF6;
+    border-radius: 8px; margin-bottom: 3px;
+    font-size: 13px;
+  }
+  .challenge-standings-row.winner { background: #FFF5E1; }
+  .challenge-standings-rank { width: 22px; font-weight: 700; color: #6F6E68; }
+  .challenge-standings-row.winner .challenge-standings-rank { color: #BA7517; }
+  .challenge-standings-name { flex: 1; font-weight: 500; color: #1C1A18; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .challenge-standings-score { font-weight: 700; color: #1C1A18; font-variant-numeric: tabular-nums; }
+  .challenge-crown { color: #BA7517; font-size: 14px; }
+  /* In-game prize chip — sticks to the top while playing a challenge */
+  .challenge-prize-chip {
+    position: absolute; top: 8px; left: 50%; transform: translateX(-50%);
+    z-index: 8;
+    display: inline-flex; align-items: center; gap: 6px;
+    background: #1C1A18; color: #FAC775;
+    border-radius: 999px;
+    padding: 6px 12px;
+    font-size: 11px; font-weight: 700;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.18);
+    direction: rtl;
+  }
+  .challenge-prize-chip .live-mini {
+    background: #C8472F; color: #FFFFFF;
+    font-size: 8px; font-weight: 800; letter-spacing: 0.1em;
+    padding: 1px 5px; border-radius: 4px;
+  }
+  /* Winner contact form */
+  .challenge-claim-form {
+    width: 100%; max-width: 340px; margin: 10px auto; direction: rtl;
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  .challenge-claim-form input {
+    padding: 11px 13px;
+    border: 1px solid rgba(0,0,0,0.12);
+    border-radius: 10px;
+    font-size: 14px; font-family: inherit;
+    background: #FAFAF6; direction: rtl;
+  }
+  .challenge-claim-form input:focus {
+    outline: none; border-color: #6B5BD3; background: #FFFFFF;
+  }
+  .challenge-checkbox-row {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 12px; color: #6F6E68; direction: rtl;
+    margin: 6px 0;
+  }
+
   .contest-live-dot {
     display: inline-block;
     width: 6px; height: 6px; border-radius: 50%;
@@ -980,6 +1537,196 @@
   @keyframes contestLive {
     0%, 100% { opacity: 1; transform: scale(1); }
     50%      { opacity: 0.35; transform: scale(0.85); }
+  }
+
+  /* Live-score overlay on a contest leaderboard row — the green pill shows
+     the in-progress game's score adding onto the accumulated total. */
+  .contest-board-live {
+    display: inline-flex; align-items: center; gap: 4px;
+    margin-top: 3px;
+    background: #DCF8C6; color: #1B5E20;
+    border-radius: 999px;
+    padding: 1px 8px;
+    font-size: 10px; font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.02em;
+    animation: liveScorePulse 1.4s ease-in-out infinite;
+  }
+  .contest-board-live::before {
+    content: ''; width: 5px; height: 5px; border-radius: 50%;
+    background: #2E8B6F;
+    box-shadow: 0 0 0 2px rgba(46,139,111,0.18);
+  }
+  @keyframes liveScorePulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(46,139,111,0.35); }
+    50%      { box-shadow: 0 0 0 5px rgba(46,139,111,0); }
+  }
+  .contest-board-watch {
+    display: inline-flex; align-items: center; gap: 2px;
+    font-size: 10px; color: #6F6E68; font-weight: 600;
+    margin-right: 6px; vertical-align: middle;
+  }
+  .contest-board-watch svg { width: 11px; height: 11px; }
+  /* Rows you can tap to spectate the player live. */
+  .contest-board-row.spectatable {
+    cursor: pointer;
+    transition: background 0.12s, transform 0.12s;
+    position: relative;
+  }
+  .contest-board-row.spectatable:hover { background: #F0EDE3; }
+  .contest-board-row.spectatable:active { transform: scale(0.99); }
+  .contest-board-row.spectatable:focus-visible {
+    outline: 2px solid #2E8B6F; outline-offset: 2px;
+  }
+  .contest-spectate-hint {
+    display: inline-flex; align-items: center; gap: 3px;
+    margin-top: 3px;
+    background: rgba(28,26,24,0.92); color: #FFFFFF;
+    border-radius: 999px;
+    padding: 2px 8px;
+    font-size: 9px; font-weight: 700;
+    letter-spacing: 0.03em;
+  }
+  .contest-spectate-hint svg { width: 10px; height: 10px; }
+
+  /* Audience badge — floats over the grid while a contest game is being
+     watched by someone else. Click expands the watcher list. */
+  .audience-badge {
+    position: absolute; top: 10px; right: 10px;
+    z-index: 9;
+    display: inline-flex; align-items: center; gap: 6px;
+    background: #1C1A18; color: #FFFFFF;
+    border: none; border-radius: 999px;
+    padding: 6px 11px;
+    font-size: 11px; font-weight: 700;
+    font-family: inherit;
+    cursor: pointer;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.18);
+    animation: audiencePulse 1.6s ease-in-out infinite;
+  }
+  .audience-badge svg { width: 13px; height: 13px; }
+  .audience-badge:active { transform: scale(0.96); }
+  @keyframes audiencePulse {
+    0%, 100% { box-shadow: 0 4px 14px rgba(0,0,0,0.18), 0 0 0 0 rgba(46,139,111,0.55); }
+    50%      { box-shadow: 0 4px 14px rgba(0,0,0,0.18), 0 0 0 8px rgba(46,139,111,0); }
+  }
+  .audience-list {
+    position: absolute; top: 44px; right: 10px;
+    z-index: 11;
+    background: #FFFFFF;
+    border-radius: 12px;
+    box-shadow: 0 8px 28px rgba(0,0,0,0.18);
+    padding: 8px;
+    min-width: 180px; max-width: 240px;
+    direction: rtl;
+    font-family: inherit;
+  }
+  .audience-list-title {
+    font-size: 10px; color: #A8A6A0;
+    letter-spacing: 0.08em; text-transform: uppercase;
+    margin-bottom: 6px; padding: 2px 6px;
+  }
+  .audience-list-row {
+    display: flex; justify-content: space-between; align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    border-radius: 8px;
+    background: #FAFAF6;
+    margin-bottom: 3px;
+    font-size: 12px;
+  }
+  .audience-list-row:last-child { margin-bottom: 0; }
+  .audience-list-name { color: #1C1A18; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .audience-list-score { color: #6F6E68; font-size: 10px; font-variant-numeric: tabular-nums; flex-shrink: 0; }
+
+  /* Spectator picker — opens from the game-over modal in contest mode. */
+  .spectator-picker-list {
+    display: flex; flex-direction: column; gap: 6px;
+    margin-top: 8px;
+    max-height: 320px; overflow-y: auto;
+  }
+  .spectator-picker-row {
+    display: flex; align-items: center; gap: 10px;
+    background: #FAFAF6;
+    border-radius: 10px;
+    padding: 10px 12px;
+    cursor: pointer; font-family: inherit; border: none;
+    text-align: right; direction: rtl;
+    transition: background 0.12s, transform 0.12s;
+    width: 100%;
+  }
+  .spectator-picker-row:hover { background: #F0EDE3; }
+  .spectator-picker-row:active { transform: scale(0.985); }
+  .spectator-picker-row .contest-board-tier { width: 26px; height: 26px; }
+  .spectator-picker-row .contest-board-tier svg { width: 14px; height: 14px; }
+  .spectator-picker-name { flex: 1; font-size: 13px; color: #1C1A18; font-weight: 600; }
+  .spectator-picker-meta { font-size: 10px; color: #6F6E68; margin-top: 2px; }
+  .spectator-picker-score {
+    font-size: 13px; font-weight: 700; color: #1B5E20;
+    font-variant-numeric: tabular-nums; flex-shrink: 0;
+  }
+  .spectator-picker-empty {
+    text-align: center; padding: 24px 14px;
+    color: #6F6E68; font-size: 13px; line-height: 1.5;
+  }
+
+  /* Spectator view — replaces the grid-wrap contents while watching. */
+  .spectator-view {
+    padding: 12px;
+    display: flex; flex-direction: column; align-items: center;
+    direction: rtl;
+  }
+  .spectator-header {
+    width: 100%; max-width: 340px;
+    display: flex; justify-content: space-between; align-items: center;
+    gap: 10px;
+    background: #FAFAF6;
+    border-radius: 12px;
+    padding: 10px 14px;
+    margin-bottom: 12px;
+  }
+  .spectator-header-name {
+    font-size: 14px; font-weight: 700; color: #1C1A18;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .spectator-header-score {
+    font-size: 18px; font-weight: 800; color: #1B5E20;
+    font-variant-numeric: tabular-nums;
+  }
+  .spectator-header-meta { font-size: 10px; color: #6F6E68; margin-top: 2px; }
+  .live-tag {
+    display: inline-flex; align-items: center; gap: 4px;
+    background: #C8472F; color: #FFFFFF;
+    border-radius: 999px;
+    padding: 2px 8px;
+    font-size: 9px; font-weight: 800;
+    letter-spacing: 0.12em;
+  }
+  .live-tag::before {
+    content: ''; width: 6px; height: 6px; border-radius: 50%;
+    background: #FFFFFF;
+    animation: contestLive 1.2s ease-in-out infinite;
+  }
+  .spectator-grid {
+    filter: saturate(0.9);
+    pointer-events: none;
+    position: relative;
+  }
+  .spectator-grid .cell { cursor: default; }
+  .spectator-controls {
+    display: flex; gap: 8px; width: 100%; max-width: 340px;
+    margin-top: 14px;
+  }
+  .spectator-controls .btn { margin-top: 0; flex: 1; }
+  .spectator-controls .btn.secondary { background: #F5F2EC; color: #1C1A18; }
+  .spectator-toast {
+    position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%);
+    background: #1C1A18; color: #FFFFFF;
+    border-radius: 22px;
+    padding: 10px 18px;
+    font-size: 12px; font-weight: 600;
+    z-index: 200; direction: rtl;
+    box-shadow: 0 8px 28px rgba(0,0,0,0.22);
   }
   .home-version {
     position: absolute; bottom: 18px; left: 0; right: 0;
@@ -1017,6 +1764,221 @@
     margin-top: 10px;
   }
   .name-input:focus { outline: none; border-color: #BA7517; background: #FFFFFF; }
+
+  /* ============================================================
+     DARK MODE
+     ============================================================
+     Activated when <html data-theme="dark"> (set by the head script).
+     Strategy: surgical overrides on the most-impactful surfaces, not a
+     full CSS-variable refactor. Tier colors stay vivid (they're brand);
+     accents (gold #FAC775, success greens) stay as-is. We just flip the
+     neutrals from "warm cream" to "warm dark". */
+  html[data-theme="dark"] { color-scheme: dark; }
+  html[data-theme="dark"] body { background: #1A1816; color: #F2EFE9; }
+  html[data-theme="dark"] .app { background: #1A1816; box-shadow: none; }
+  /* Top bar — gradient stays but darker */
+  html[data-theme="dark"] .top { background: #1A1816; }
+  html[data-theme="dark"] .brand { color: #F2EFE9; }
+  html[data-theme="dark"] .stat-label { color: #8E8A82; }
+  html[data-theme="dark"] .stat-val { color: #F2EFE9; }
+  html[data-theme="dark"] .icon-btn svg { color: #8E8A82; }
+  html[data-theme="dark"] .icon-btn:hover { background: #2C2A28; }
+  html[data-theme="dark"] .mode-bar { background: linear-gradient(90deg, #2C2A28 0%, #1F1D1B 100%); border-bottom-color: rgba(255,255,255,0.06); }
+  html[data-theme="dark"] .mode-bar.practice { background: #1F1D1B; }
+  html[data-theme="dark"] .mode-title { color: #F2EFE9; }
+  html[data-theme="dark"] .mode-sub { color: #8E8A82; }
+  html[data-theme="dark"] .mode-tabs { background: rgba(255,255,255,0.06); }
+  html[data-theme="dark"] .mode-tab { color: #8E8A82; }
+  html[data-theme="dark"] .mode-tab:hover:not(.active) { color: #F2EFE9; }
+  html[data-theme="dark"] .mode-tab.active { background: #3A3735; color: #F2EFE9; }
+  html[data-theme="dark"] .mode-info.clickable:hover { background: rgba(255,255,255,0.04); }
+  /* Tier ladder strip */
+  html[data-theme="dark"] .tier-bar { background: #1F1D1B; border-bottom-color: rgba(255,255,255,0.06); }
+  /* Game grid — empty cells get a warm-dark fill so tier colors pop more */
+  html[data-theme="dark"] .grid-wrap { background: #1A1816; }
+  html[data-theme="dark"] .cell { background: #2C2A28; }
+  html[data-theme="dark"] .cell:hover { background: #38332E; }
+  /* Modals */
+  html[data-theme="dark"] .info-modal { background: rgba(0,0,0,0.7); }
+  html[data-theme="dark"] .info-card { background: #232121; color: #F2EFE9; }
+  html[data-theme="dark"] .info-title { color: #F2EFE9; }
+  html[data-theme="dark"] .info-sub { color: #8E8A82; }
+  html[data-theme="dark"] .info-close svg { color: #8E8A82; }
+  html[data-theme="dark"] .credits { color: #6F6E68; border-top-color: rgba(255,255,255,0.06); }
+  html[data-theme="dark"] .credits a { color: #8E8A82; }
+  /* Buttons */
+  html[data-theme="dark"] .btn { background: #F2EFE9; color: #1A1816; }
+  html[data-theme="dark"] .btn.secondary { background: #2C2A28; color: #F2EFE9; }
+  /* Score overlay (game-over) */
+  html[data-theme="dark"] .overlay { color: #F2EFE9; }
+  html[data-theme="dark"] .over-title { color: #8E8A82; }
+  html[data-theme="dark"] .over-score { color: #F2EFE9; }
+  html[data-theme="dark"] .over-sub { color: #8E8A82; }
+  html[data-theme="dark"] .tier-row.reached { background: #2C2A28; }
+  html[data-theme="dark"] .tier-name { color: #F2EFE9; }
+  html[data-theme="dark"] .tier-pts { color: #8E8A82; }
+  html[data-theme="dark"] .share-label { color: #6F6E68; }
+  /* In-game leaderboard */
+  html[data-theme="dark"] .leaderboard { color: #F2EFE9; }
+  html[data-theme="dark"] .lb-row { background: #2C2A28; }
+  html[data-theme="dark"] .lb-row.you { background: #3D2E0A; }
+  html[data-theme="dark"] .lb-rank { color: #8E8A82; }
+  /* Home screen */
+  html[data-theme="dark"] .home-screen { background: linear-gradient(180deg, #1F1D1B 0%, #1A1816 100%); }
+  html[data-theme="dark"] .home-mute { background: #2C2A28; color: #F2EFE9; border-color: rgba(255,255,255,0.08); }
+  html[data-theme="dark"] .home-brand { color: #F2EFE9; }
+  html[data-theme="dark"] .home-sub   { color: #8E8A82; }
+  html[data-theme="dark"] .home-start { background: #F2EFE9; color: #1A1816; }
+  html[data-theme="dark"] .home-skip  { color: #6F6E68; }
+  html[data-theme="dark"] .home-skip:hover { color: #F2EFE9; }
+  html[data-theme="dark"] .home-share-game { background: transparent; color: #8E8A82; border-color: rgba(255,255,255,0.08); }
+  html[data-theme="dark"] .home-share-game:hover { background: #2C2A28; color: #F2EFE9; }
+  html[data-theme="dark"] .home-version { color: #4A4845; }
+  /* Contest cards (warm tone preserved but darker) */
+  html[data-theme="dark"] .home-contest { background: #3D2E0A; color: #FAC775; border-color: rgba(250,199,117,0.4); }
+  html[data-theme="dark"] .home-contest:hover { background: #4D3A0E; }
+  html[data-theme="dark"] .home-contest.home-contest-active { background: #1B5E20; color: #DCF8C6; border-color: #2E8B6F; }
+  html[data-theme="dark"] .home-challenge { background: #2A2547; color: #CECBF6; border-color: rgba(206,203,246,0.3); }
+  html[data-theme="dark"] .home-challenge:hover { background: #322B5A; }
+  /* Contest screens */
+  html[data-theme="dark"] .contest-screen { background: linear-gradient(180deg, #1F1D1B 0%, #1A1816 100%); color: #F2EFE9; }
+  html[data-theme="dark"] .contest-title { color: #F2EFE9; }
+  html[data-theme="dark"] .contest-sub   { color: #8E8A82; }
+  html[data-theme="dark"] .contest-info-card,
+  html[data-theme="dark"] .contest-card,
+  html[data-theme="dark"] .my-contest-row,
+  html[data-theme="dark"] .contest-board-row,
+  html[data-theme="dark"] .spectator-header { background: #2C2A28; border-color: rgba(255,255,255,0.06); }
+  html[data-theme="dark"] .contest-board-row.first { background: #3D2E0A; }
+  html[data-theme="dark"] .contest-board-row.me    { background: #1B3A2C; }
+  html[data-theme="dark"] .contest-board-rank { background: #1A1816; color: #F2EFE9; border-color: rgba(255,255,255,0.06); }
+  html[data-theme="dark"] .contest-board-name { color: #F2EFE9; }
+  html[data-theme="dark"] .contest-board-score { color: #F2EFE9; }
+  html[data-theme="dark"] .contest-board-meta,
+  html[data-theme="dark"] .contest-board-delta,
+  html[data-theme="dark"] .contest-board-watch { color: #8E8A82; }
+  html[data-theme="dark"] .contest-form-label { color: #8E8A82; }
+  html[data-theme="dark"] .contest-input,
+  html[data-theme="dark"] .name-input { background: #1A1816; color: #F2EFE9; border-color: rgba(255,255,255,0.12); }
+  html[data-theme="dark"] .contest-input:focus,
+  html[data-theme="dark"] .name-input:focus { background: #2C2A28; border-color: #FAC775; }
+  html[data-theme="dark"] .contest-submit-btn { background: #F2EFE9; color: #1A1816; }
+  html[data-theme="dark"] .contest-secondary-btn { background: #2C2A28; color: #F2EFE9; }
+  html[data-theme="dark"] .contest-back-btn { background: #2C2A28; color: #F2EFE9; border-color: rgba(255,255,255,0.1); }
+  html[data-theme="dark"] .contest-card-title { color: #F2EFE9; }
+  html[data-theme="dark"] .contest-card-desc { color: #8E8A82; }
+  html[data-theme="dark"] .contest-code-pill { background: #3D2E0A; color: #FAC775; border-color: rgba(250,199,117,0.4); }
+  html[data-theme="dark"] .contest-code-pill code { color: #FAC775; }
+  html[data-theme="dark"] .contest-scoring-note { background: #3D2E0A; color: #FAC775; }
+  html[data-theme="dark"] .my-contest-name { color: #F2EFE9; }
+  html[data-theme="dark"] .my-contest-meta { color: #8E8A82; }
+  html[data-theme="dark"] .my-contest-rank { color: #F2EFE9; }
+  /* Challenge screens — purple palette darkened */
+  html[data-theme="dark"] .challenge-card { background: #2C2A28; border-color: rgba(255,255,255,0.06); }
+  html[data-theme="dark"] .challenge-card:hover { background: #38332E; }
+  html[data-theme="dark"] .challenge-card.entered { background: #1B3A2C; border-color: #2E8B6F; }
+  html[data-theme="dark"] .challenge-card-name { color: #F2EFE9; }
+  html[data-theme="dark"] .challenge-card-desc { color: #8E8A82; }
+  html[data-theme="dark"] .challenge-card-meta { color: #8E8A82; border-top-color: rgba(255,255,255,0.06); }
+  html[data-theme="dark"] .challenge-card-meta strong { color: #F2EFE9; }
+  html[data-theme="dark"] .challenge-prize-banner { background: linear-gradient(135deg, #2A2547 0%, #3D2E0A 100%); border-color: rgba(206,203,246,0.3); }
+  html[data-theme="dark"] .challenge-prize-banner .prize { color: #F2EFE9; }
+  html[data-theme="dark"] .challenge-prize-banner .sub { color: #8E8A82; }
+  html[data-theme="dark"] .challenge-rules { background: #2C2A28; color: #8E8A82; }
+  html[data-theme="dark"] .challenge-standings-row { background: #2C2A28; }
+  html[data-theme="dark"] .challenge-standings-row.winner { background: #3D2E0A; }
+  html[data-theme="dark"] .challenge-standings-name { color: #F2EFE9; }
+  html[data-theme="dark"] .challenge-standings-score { color: #F2EFE9; }
+  html[data-theme="dark"] .challenge-standings-rank { color: #8E8A82; }
+  html[data-theme="dark"] .challenge-claim-form input { background: #1A1816; color: #F2EFE9; border-color: rgba(255,255,255,0.12); }
+  html[data-theme="dark"] .challenge-warn { background: #3D2E0A; color: #FAC775; border-color: rgba(250,199,117,0.4); }
+  /* Spectator view */
+  html[data-theme="dark"] .spectator-grid { filter: saturate(0.95) brightness(0.95); }
+  html[data-theme="dark"] .spectator-header-name { color: #F2EFE9; }
+  html[data-theme="dark"] .spectator-header-meta { color: #8E8A82; }
+  html[data-theme="dark"] .audience-list { background: #232121; }
+  html[data-theme="dark"] .audience-list-row { background: #2C2A28; }
+  html[data-theme="dark"] .audience-list-name { color: #F2EFE9; }
+  /* Mute / volume popover */
+  html[data-theme="dark"] .mute-menu { background: #232121; box-shadow: 0 10px 30px rgba(0,0,0,0.55); }
+  html[data-theme="dark"] .mute-item-label { color: #F2EFE9; }
+  html[data-theme="dark"] .mute-row-pct { color: #F2EFE9; }
+  html[data-theme="dark"] .mute-item:hover { background: #2C2A28; }
+  /* Floating animations / chain badge — keep accent visible */
+  html[data-theme="dark"] .float-score { background: #F2EFE9; color: #1A1816; }
+  /* Misc */
+  html[data-theme="dark"] .countdown { background: #2C2A28; color: #8E8A82; }
+  html[data-theme="dark"] .lb-rank-pill { background: #2C2A28; color: #F2EFE9; }
+  html[data-theme="dark"] .ach-unlock-toast { background: #2C2A28; }
+  html[data-theme="dark"] .share-card { background: #1B3A2C; color: #DCF8C6; }
+  html[data-theme="dark"] .lb-range { color: #8E8A82; }
+  html[data-theme="dark"] .lb-empty, html[data-theme="dark"] .lb-loading { color: #8E8A82; }
+  html[data-theme="dark"] .home-icon { box-shadow: 0 0 0 1px rgba(255,255,255,0.04); }
+
+  /* ============= DARK MODE — second pass: gaps found in audit ============= */
+  /* Tab strips (challenge list "פעילים/היסטוריה" + leaderboard modal) */
+  html[data-theme="dark"] .lb-tabs .lb-tab { background: #2C2A28; color: #8E8A82; }
+  html[data-theme="dark"] .lb-tabs .lb-tab.active { background: #FAC775; color: #1A1816; }
+  html[data-theme="dark"] .lb-tabs .lb-tab:hover:not(.active) { background: #38332E; color: #F2EFE9; }
+  /* Achievements modal */
+  html[data-theme="dark"] .ach-row { background: #2C2A28; }
+  html[data-theme="dark"] .ach-row.unlocked { background: #3D2E0A; }
+  html[data-theme="dark"] .ach-icon { background: #38332E; color: #FAC775; }
+  html[data-theme="dark"] .ach-row.unlocked .ach-icon { background: #FAC775; color: #412402; }
+  html[data-theme="dark"] .ach-row.locked .ach-icon { background: #2C2A28; color: #6F6E68; }
+  html[data-theme="dark"] .ach-name { color: #F2EFE9; }
+  html[data-theme="dark"] .ach-row.locked .ach-name { color: #8E8A82; }
+  html[data-theme="dark"] .ach-desc { color: #8E8A82; }
+  html[data-theme="dark"] .ach-summary { color: #8E8A82; }
+  html[data-theme="dark"] .ach-summary b { color: #FAC775; }
+  html[data-theme="dark"] .ach-group-title { color: #FAC775; }
+  /* Lifetime stats grid (inside achievements modal) */
+  html[data-theme="dark"] .stat-card { background: #2C2A28; }
+  html[data-theme="dark"] .stat-card-label { color: #8E8A82; }
+  html[data-theme="dark"] .stat-card-value { color: #F2EFE9; }
+  /* Score-area streak indicator */
+  html[data-theme="dark"] .streak-val { color: #FAC775; }
+  html[data-theme="dark"] .streak-val.zero { color: #6F6E68; }
+  /* Top primary-stat in dark mode — the gold gradient is bright; soften the
+     score text shadow / make label readable */
+  html[data-theme="dark"] .stats > .stat:not(.stat-primary) { background: #2C2A28; }
+  /* Tier-table (game-over modal): "reached" / "locked" rows */
+  html[data-theme="dark"] .tier-row.reached { background: #2C2A28; }
+  /* Tier-bar empty cells (next-piece indicator) */
+  html[data-theme="dark"] .tier-icon { background: #2C2A28; }
+  html[data-theme="dark"] .tier-score { color: #6F6E68; }
+  /* Code-pill in contest leaderboard (shareable code chip) — already covered
+     for `.contest-code-pill`, but the `code` element inside needs explicit color */
+  html[data-theme="dark"] .contest-code-pill code { color: #FAC775; }
+  /* Audience badge dropdown — text color when expanded */
+  html[data-theme="dark"] .audience-list-title { color: #6F6E68; }
+  html[data-theme="dark"] .audience-list-score { color: #8E8A82; }
+  /* Spectator picker rows */
+  html[data-theme="dark"] .spectator-picker-row { background: #2C2A28; border-color: rgba(255,255,255,0.06); }
+  html[data-theme="dark"] .spectator-picker-row:hover { background: #38332E; }
+  html[data-theme="dark"] .spectator-picker-name { color: #F2EFE9; }
+  html[data-theme="dark"] .spectator-picker-meta { color: #8E8A82; }
+  html[data-theme="dark"] .spectator-picker-empty { color: #8E8A82; }
+  html[data-theme="dark"] .spectator-picker-score { color: #9FE1CB; }
+  /* Spectator view header tier badge / live tag — already mostly OK, just ensure */
+  html[data-theme="dark"] .spectator-header-name { color: #F2EFE9; }
+  html[data-theme="dark"] .spectator-header-meta { color: #8E8A82; }
+  /* Challenge "claim" winner form labels */
+  html[data-theme="dark"] .challenge-checkbox-row { color: #8E8A82; }
+  /* Mode-info chevron color */
+  html[data-theme="dark"] .mode-info-chevron { color: #6F6E68; }
+  /* Player-name input in name-modal */
+  html[data-theme="dark"] .name-input { background: #2C2A28; color: #F2EFE9; border-color: rgba(255,255,255,0.12); }
+  html[data-theme="dark"] .name-input:focus { background: #1A1816; border-color: #FAC775; }
+  /* Contest "live" dot stays green (it's a status indicator, OK as-is) */
+  /* Contest scoring note (the "סכום נקודות מצטבר…" pill) */
+  html[data-theme="dark"] .contest-scoring-note { background: #3D2E0A; color: #FAC775; }
+  /* Floating-score badge over the grid (each merge "+X" popup) */
+  html[data-theme="dark"] .float-score { background: #FAC775; color: #1A1816; }
+  /* Avatar chip — give a slightly darker background for legibility (override
+     inline styles only when necessary; here we rely on the inline style). */
+  /* Contest-back-btn was missing border-color in dark */
+  html[data-theme="dark"] .contest-back-btn { background: #2C2A28; color: #F2EFE9; border-color: rgba(255,255,255,0.1); }
 </style>
 </head>
 <body>
@@ -1051,7 +2013,7 @@
       </div>
     </div>
     <div class="stats">
-      <div class="stat"><div class="stat-label">ניקוד</div><div class="stat-val" id="score">0</div></div>
+      <div class="stat stat-primary"><div class="stat-label">ניקוד</div><div class="stat-val" id="score">0</div></div>
       <div class="stat"><div class="stat-label">שיא</div><div class="stat-val" id="best">0</div></div>
       <div class="stat"><div class="stat-label">רצף</div><div class="stat-val streak-val zero" id="streak">🔥 0</div></div>
     </div>
@@ -1075,7 +2037,11 @@
 
 <script>
 (function() {
-  const ROWS = 6, COLS = 4;
+  // Board dimensions live behind getters so a future "Pro mode" (5 or 6
+  // columns, sold as IAP) can swap them at runtime without touching every
+  // callsite. Today they return the original 6×4 dimensions — pure refactor.
+  function getBoardRows() { return 6; }
+  function getBoardCols() { return 4; }
 
   const SVG = {
     circle:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/></svg>',
@@ -1101,6 +2067,14 @@
   ];
   const MAX_TIER = TIERS.length - 1;
   const WEIGHTS = [0, 55, 28, 12, 5];
+
+  // ============ THEME / SKIN ABSTRACTION ============
+  // All getActiveTiers()[i] callsites should go through getActiveTiers() so a future
+  // skin-pack swap (a $1.99 IAP, planned for the app launch) can return a
+  // different palette at runtime without touching every callsite. Today this
+  // returns the original TIERS array unchanged — pure refactor.
+  function getActiveTiers() { return TIERS; }
+  // Same idea for board dimensions (added in Step 2 below).
   const BEST_KEY = 'bloom_best_score';
   const NAME_KEY = 'bloom_player_name';
   const DEVICE_KEY = 'bloom_device_id';
@@ -1111,6 +2085,10 @@
   const STREAK_KEY = 'bloom_streak';
   const ACH_KEY = 'bloom_achievements';
   const GAMES_COUNT_KEY = 'bloom_games_played';
+  // Onboarding progress: 0=fresh, 1=saw "tap a column", 2=saw "merge!", 3=saw "chain!" / done.
+  const ONBOARD_KEY = 'bloom_onboard_step';
+  function getOnboardStep() { return parseInt(localStorage.getItem(ONBOARD_KEY) || '0', 10) || 0; }
+  function setOnboardStep(n) { try { localStorage.setItem(ONBOARD_KEY, String(n | 0)); } catch (e) {} }
   // Lifetime "personal bests" — only ever grow.
   const BEST_TIER_KEY  = 'bloom_best_tier_ever';
   const BEST_CHAIN_KEY = 'bloom_best_chain_ever';
@@ -1464,6 +2442,45 @@
     '</div>';
   }
 
+  // ============ THEME (light/dark/auto) ============
+  // Cycle through three states from the mute popover. The actual <html
+  // data-theme="…"> swap happens here AND in the early head script (so
+  // first paint matches the saved preference — no flash of wrong theme).
+  function getThemePref() {
+    return localStorage.getItem('bloom_theme') || 'auto';
+  }
+  function applyTheme(pref) {
+    const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const dark = pref === 'dark' || (pref === 'auto' && prefersDark);
+    document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute('content', dark ? '#1A1816' : '#F5F5F0');
+  }
+  function cycleTheme() {
+    const order = ['auto', 'light', 'dark'];
+    const cur = getThemePref();
+    const next = order[(order.indexOf(cur) + 1) % order.length];
+    try { localStorage.setItem('bloom_theme', next); } catch (e) {}
+    applyTheme(next);
+  }
+  function syncThemeRow() {
+    const lbl = document.getElementById('theme-label');
+    const st  = document.getElementById('theme-state');
+    if (!lbl || !st) return;
+    const cur = getThemePref();
+    const txt = cur === 'auto' ? 'אוטומטי' : cur === 'dark' ? 'כהה' : 'בהיר';
+    const icon = cur === 'auto' ? '🖥️' : cur === 'dark' ? '🌙' : '☀️';
+    lbl.textContent = txt;
+    st.textContent = icon;
+  }
+  // Re-apply theme when OS preference changes (only matters in 'auto' mode).
+  if (window.matchMedia) {
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    if (mq.addEventListener) mq.addEventListener('change', function() {
+      if (getThemePref() === 'auto') applyTheme('auto');
+    });
+  }
+
   function openMuteMenu(anchor) {
     const existing = document.getElementById('mute-menu');
     if (existing) { closeMuteMenu(); return; }
@@ -1476,6 +2493,13 @@
     menu.innerHTML =
       volSliderHtml('music', musicVolume) +
       volSliderHtml('sfx', sfxVolume) +
+      '<div class="mute-item mute-item-theme" data-kind="theme">' +
+        '<div class="mute-item-icon">' +
+          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>' +
+        '</div>' +
+        '<div class="mute-item-label">מצב <span id="theme-label">—</span></div>' +
+        '<div class="mute-item-state" id="theme-state">—</div>' +
+      '</div>' +
       '<div class="mute-item mute-item-all" data-kind="all">' +
         '<div class="mute-item-label">השתק הכל</div>' +
       '</div>';
@@ -1504,6 +2528,15 @@
       e.stopPropagation();
       if (isMusicMuted() && isSfxMuted()) unmuteAll(); else muteAll();
     };
+
+    // Theme cycle: auto → light → dark → auto
+    const themeBtn = menu.querySelector('[data-kind="theme"]');
+    if (themeBtn) themeBtn.onclick = function(e) {
+      e.stopPropagation();
+      cycleTheme();
+      syncThemeRow();
+    };
+    syncThemeRow();
 
     setTimeout(function() {
       const onOutside = function(e) {
@@ -1552,6 +2585,12 @@
   /* ============ STREAK + ACHIEVEMENTS ============ */
   let currentGameMaxChain = 0;
   let streakBumpedThisSession = false;
+
+  // Per-game tracking: which milestone tiers have already paid their bonus.
+  // Reset in init() at the start of each game. The bonuses fire ONCE per
+  // game when the player's highestTier crosses 5/6/7/8 for the first time.
+  let tierUpHit = {};
+  const TIER_UP_BONUS = { 5: 500, 6: 1500, 7: 5000, 8: 15000 };
 
   function loadStreak() {
     try {
@@ -1734,7 +2773,7 @@
 
     // Lifetime stats panel
     const bestTier = loadLifetimeInt(BEST_TIER_KEY);
-    const bestTierName = (bestTier > 0 && TIERS[bestTier]) ? TIERS[bestTier].name : '—';
+    const bestTierName = (bestTier > 0 && getActiveTiers()[bestTier]) ? getActiveTiers()[bestTier].name : '—';
     const stats = [
       { label: 'משחקים',         value: loadGamesPlayed().toLocaleString() },
       { label: 'שיא במשחק',      value: (best | 0).toLocaleString() },
@@ -1791,11 +2830,21 @@
       '</div>' +
       '<div class="home-brand">BLOOM</div>' +
       '<div class="home-sub">מזג חפצים, גלה דרגות חדשות, והגע עד לכתר</div>' +
+      '<div id="home-mystats-host"></div>' +
       '<button class="home-start" id="home-start">בוא נתחיל</button>' +
+      '<div class="home-social" id="home-social"></div>' +
       (activeContestCode
         ? '<button class="home-contest home-contest-active" id="home-contest"><span class="home-contest-badge home-contest-badge-active">פעיל</span>המשך תחרות חברים</button>'
         : '<button class="home-contest" id="home-contest"><span class="home-contest-badge">חדש</span>תחרות חברים</button>') +
+      // The challenge CTA is rendered hidden and revealed by a /api/challenges
+      // fetch right after showHome (so first paint isn't delayed). Visible only
+      // when there's actually an active challenge to show.
+      '<button class="home-challenge" id="home-challenge" style="display:none">' +
+        '<span class="home-challenge-badge">פרס</span>' +
+        '<span id="home-challenge-label">אתגרי BLOOM</span>' +
+      '</button>' +
       '<button class="home-skip" id="home-skip">אני יודע לשחק, דלג</button>' +
+      '<button class="home-skip" id="home-tour-btn" style="margin-top:0;color:#BA7517">📖 איך משחקים?</button>' +
       '<button class="home-share-game" id="home-share-game" aria-label="שתף את BLOOM">' +
         '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5L15.4 17.5M15.4 6.5L8.6 10.5"/></svg>' +
         '<span>שתף עם חברים</span>' +
@@ -1849,6 +2898,22 @@
       ensureAudio();
       showContestMenu();
     };
+    refreshHomeChallengeCta();
+    refreshHomeSocialProof();
+    refreshHomeMyStats();
+    // Wire the "איך משחקים?" link
+    const tourLink = document.getElementById('home-tour-btn');
+    if (tourLink) tourLink.onclick = function() { ensureAudio(); showTour(); };
+    // First-ever-visit: gently auto-open the tour after the home settles in.
+    // We defer it so the home animations land first, and only fire if the
+    // player hasn't seen the tour AND hasn't already started learning the
+    // game via the in-game coach toasts.
+    if (!hasSeenTour() && getOnboardStep() === 0) {
+      setTimeout(function() {
+        // Re-check in case they navigated away in the meantime
+        if (document.getElementById('home-screen') && !hasSeenTour()) showTour();
+      }, 900);
+    }
     playMusic('lobby');
   }
   function hideHome() {
@@ -2201,8 +3266,12 @@
       showContestLeaderboard(contest.code);
     };
     document.getElementById('ctsh-play').onclick = function() {
+      // Defensive: re-set the active code in case any earlier screen drifted it
+      // (the new contest was set as active at creation time, but this guarantees
+      // correctness even if state was perturbed by a fast user).
+      setActiveContest(contest.code);
       hideContestScreens();
-      init('contest');
+      init('contest', { fresh: true });
     };
   }
 
@@ -2321,41 +3390,66 @@
     if (!players || players.length === 0) {
       return '<div class="contest-board-empty">אין עדיין שחקנים</div>';
     }
-    const topScore = players[0].score | 0;
+    // Effective rank ordering already accounts for liveScore on the server,
+    // but the displayed score should also include the live delta so the
+    // numbers match the rank visually.
+    function displayScore(p) { return (p.score | 0) + (p.liveScore == null ? 0 : (p.liveScore | 0)); }
+    const topScore = displayScore(players[0]);
     return players.map(function(p, i) {
       const cls = i === 0 ? 'contest-board-row first' : p.you ? 'contest-board-row me' : 'contest-board-row';
       const youBadge = p.you ? ' <small>(אתה)</small>' : '';
       const games = p.games | 0;
-      const tierIdx = p.tier | 0;
+      const tierIdx = (p.liveTier != null && p.liveTier > 0) ? (p.liveTier | 0) : (p.tier | 0);
       const last = formatRelativeTime(p.last);
+      const watching = Array.isArray(p.watchers) ? p.watchers.length : 0;
+      const watchBadge = watching > 0
+        ? '<span class="contest-board-watch" title="צופים עכשיו"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>' + watching + '</span>'
+        : '';
       let metaLine;
-      if (games === 0) {
+      if (games === 0 && p.liveScore == null) {
         metaLine = '<div class="contest-board-meta">' + (p.you ? 'טרם שיחקת בתחרות' : 'טרם שיחק') + '</div>';
       } else {
-        const parts = [games + (games === 1 ? ' משחק' : ' משחקים')];
-        if (TIERS[tierIdx] && tierIdx > 0) parts.push('עד ' + TIERS[tierIdx].name);
-        if (last) parts.push(last);
+        const parts = [];
+        if (games > 0) parts.push(games + (games === 1 ? ' משחק' : ' משחקים'));
+        if (getActiveTiers()[tierIdx] && tierIdx > 0) parts.push('עד ' + getActiveTiers()[tierIdx].name);
+        if (p.liveScore == null && last) parts.push(last);
         metaLine = '<div class="contest-board-meta">' + parts.join(' · ') + '</div>';
       }
-      const delta = (i === 0) ? 0 : topScore - (p.score | 0);
+      const total = displayScore(p);
+      const delta = (i === 0) ? 0 : topScore - total;
       const deltaLine = delta > 0
         ? '<div class="contest-board-delta">−' + delta.toLocaleString() + '</div>'
         : '';
-      // Small tier badge to the left of the name — gives an at-a-glance signal
-      // of how far the player got in this contest.
-      const tierObj = TIERS[tierIdx];
-      const tierBadge = (games > 0 && tierObj && tierIdx > 0)
+      const livePill = (p.liveScore != null)
+        ? '<div class="contest-board-live">+' + (p.liveScore | 0).toLocaleString() + '<span style="font-weight:600;margin-right:2px;">חי</span></div>'
+        : '';
+      const tierObj = getActiveTiers()[tierIdx];
+      const tierBadge = ((games > 0 || p.liveScore != null) && tierObj && tierIdx > 0)
         ? '<div class="contest-board-tier" style="background:' + tierObj.bg + ';color:' + tierObj.fg + '" title="' + escapeHtml(tierObj.name) + '">' + tierObj.svg + '</div>'
         : '<div class="contest-board-tier contest-board-tier-empty">·</div>';
-      return '<div class="' + cls + '">' +
+      // Mark this row clickable-to-spectate only if it's another player who's
+      // currently live. The delegated handler in `showContestLeaderboard`
+      // dispatches on this data attribute.
+      const spectatable = !p.you && p.liveScore != null && p.deviceId;
+      const rowAttrs = spectatable
+        ? ' role="button" tabindex="0" data-spectate-target="' + escapeHtml(p.deviceId) + '" data-spectate-name="' + escapeHtml(p.name || '') + '"'
+        : '';
+      const spectatableCls = spectatable ? ' spectatable' : '';
+      const spectateHint = spectatable
+        ? '<div class="contest-spectate-hint" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>צפה</div>'
+        : '';
+      const avatarHtml = renderAvatarHtml(p.deviceId || p.name, 'sm');
+      return '<div class="' + cls + spectatableCls + '"' + rowAttrs + '>' +
         '<div class="contest-board-rank">' + (i + 1) + '</div>' +
         tierBadge +
         '<div class="contest-board-name-col">' +
-          '<div class="contest-board-name">' + escapeHtml(p.name || 'אנונימי') + youBadge + '</div>' +
+          '<div class="contest-board-name">' + watchBadge + avatarHtml + escapeHtml(p.name || 'אנונימי') + youBadge + '</div>' +
           metaLine +
         '</div>' +
         '<div class="contest-board-score-col">' +
-          '<div class="contest-board-score">' + (p.score | 0).toLocaleString() + '</div>' +
+          '<div class="contest-board-score">' + total.toLocaleString() + '</div>' +
+          livePill +
+          spectateHint +
           deltaLine +
         '</div>' +
       '</div>';
@@ -2372,6 +3466,7 @@
     if (typeof document !== 'undefined' && document.hidden) return;
     const data = await fetchContest(contestRefreshCode);
     if (!data) return;
+    updateMyWatchersFromContestData(data);
     const screen = document.getElementById('contest-screen');
     if (!screen) return;
     const boardEl = screen.querySelector('.contest-board');
@@ -2381,6 +3476,16 @@
       subEl.innerHTML = '<span class="contest-live-dot"></span>' +
         (data.players || []).length + ' שחקנים · ' + formatTimeLeft(data.contest.ends_at);
     }
+  }
+
+  function updateMyWatchersFromContestData(data) {
+    if (!data || !Array.isArray(data.players)) return;
+    const me = data.players.find(function(p) { return p.you; });
+    if (!me) return;
+    meWatchers = Array.isArray(me.watchers) ? me.watchers : [];
+    meHasWatchers = !!me.hasWatchers;
+    meWatcherCount = meWatchers.length;
+    renderAudienceBadge();
   }
 
   function startContestRefresh(code) {
@@ -2502,9 +3607,15 @@
         (data.players || []).length + ' שחקנים · ' + formatTimeLeft(data.contest.ends_at) +
       '</div>' +
       '<div class="contest-scoring-note">סכום נקודות מצטבר — כל משחק מצטרף לסך</div>' +
-      '<div class="contest-board">' + playersHtml + '</div>' +
+      '<div class="contest-board" id="clb-board">' + playersHtml + '</div>' +
       '<div class="contest-form" style="margin-top:18px">' +
         '<button class="contest-submit-btn" id="clb-play">שחק עכשיו</button>' +
+        '<button class="contest-secondary-btn" id="clb-spectate" style="display:none">' +
+          '<span style="display:inline-flex;align-items:center;gap:6px;justify-content:center">' +
+            '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>' +
+            '<span id="clb-spectate-label">צפה במשחק חי</span>' +
+          '</span>' +
+        '</button>' +
         '<button class="contest-secondary-btn" id="clb-share">שתף קישור</button>' +
         (myContestsCountSync() >= 2 ? '<button class="contest-secondary-btn" id="clb-switch" style="margin-top:6px">↕ החלפת תחרות (' + myContestsCountSync() + ')</button>' : '') +
         (activeContestCode === code ? '<button class="contest-ghost-btn" id="clb-leave">יציאה מהתחרות</button>' : '') +
@@ -2564,14 +3675,126 @@
       showHome();
     };
 
+    // Delegated spectate handler — fires on any leaderboard row that's
+    // tagged spectatable (=another player who is currently live). We use
+    // delegation because the inner HTML of `.contest-board` is rewritten
+    // every 20s by `refreshContestBoardSilently`.
+    const boardEl = document.getElementById('clb-board');
+    if (boardEl) {
+      const dispatchSpectate = function(target, name) {
+        if (!target) return;
+        openSpectatorPicker('contest-screen');
+        // Once the picker mounted, jump straight into spectating this specific
+        // target — saves a click since the user already chose who to watch.
+        setTimeout(function() {
+          const modal = document.getElementById('spectator-picker-modal');
+          if (modal) modal.remove();
+          startSpectator(target, name, 'contest-screen');
+        }, 0);
+      };
+      boardEl.addEventListener('click', function(ev) {
+        const row = ev.target.closest('[data-spectate-target]');
+        if (!row) return;
+        dispatchSpectate(row.getAttribute('data-spectate-target'),
+                         row.getAttribute('data-spectate-name'));
+      });
+      boardEl.addEventListener('keydown', function(ev) {
+        if (ev.key !== 'Enter' && ev.key !== ' ') return;
+        const row = ev.target.closest('[data-spectate-target]');
+        if (!row) return;
+        ev.preventDefault();
+        dispatchSpectate(row.getAttribute('data-spectate-target'),
+                         row.getAttribute('data-spectate-name'));
+      });
+    }
+
+    // Top-level "watch live games" button — also visible mid-game so the
+    // player can take a peek without losing their run.
+    const specOpenBtn = document.getElementById('clb-spectate');
+    function refreshSpectateBtnVisibility() {
+      const liveCount = (activeContestData ? 0 : 0) + 0; // placeholder; recomputed below
+      // Recompute count from currently-rendered board so we don't double-fetch.
+      const rows = document.querySelectorAll('#clb-board [data-spectate-target]');
+      if (!specOpenBtn) return;
+      if (rows.length > 0) {
+        specOpenBtn.style.display = '';
+        const label = document.getElementById('clb-spectate-label');
+        if (label) label.textContent = rows.length === 1
+          ? 'צפה במשחק חי'
+          : 'צפה במשחק חי (' + rows.length + ')';
+      } else {
+        specOpenBtn.style.display = 'none';
+      }
+    }
+    if (specOpenBtn) specOpenBtn.onclick = function() { openSpectatorPicker('contest-screen'); };
+    refreshSpectateBtnVisibility();
+    // The 20s board refresh rewrites the board HTML — observe it to keep
+    // the spectate button's count fresh without piggybacking on every poll.
+    if (boardEl && 'MutationObserver' in window) {
+      new MutationObserver(refreshSpectateBtnVisibility).observe(boardEl, { childList: true, subtree: false });
+    }
+
     // Leaderboard view has its own 20 s refresh — pause the overtake watcher
     // to avoid hitting the same endpoint twice on different cadences.
     stopOvertakeWatch();
     startContestRefresh(code);
   }
 
+  // Wires up scroll-detection on a freshly-rendered .overlay so the
+  // fade-out hint at the bottom only shows when there's actually more to
+  // scroll to. Call this after every wrap.innerHTML = '<div class="overlay">…'.
+  function equipOverlay() {
+    const overlay = document.querySelector('#grid-wrap .overlay');
+    if (!overlay) return;
+    function syncBottomState() {
+      // "at-bottom" = nothing more to reveal by scrolling
+      const fits   = overlay.scrollHeight <= overlay.clientHeight + 2;
+      const ended  = overlay.scrollTop + overlay.clientHeight >= overlay.scrollHeight - 2;
+      overlay.classList.toggle('at-bottom', fits || ended);
+    }
+    // Initial check after layout settles
+    setTimeout(syncBottomState, 0);
+    overlay.addEventListener('scroll', syncBottomState, { passive: true });
+    window.addEventListener('resize', syncBottomState);
+  }
+
+  // Sizes the .grid element to fill BOTH dimensions of .grid-wrap.
+  // Cells get independent width and height (slightly rectangular when the
+  // viewport is short) so the grid always uses the FULL app width — matching
+  // the tier-bar above for a unified look. The previous "smallest dimension"
+  // approach left the grid noticeably narrower than the tier-bar, which the
+  // user flagged as visually inconsistent. SVG icons inside cells are fixed
+  // 30×30 and stay centered regardless of cell shape.
+  function fitGrid() {
+    const wrap = document.getElementById('grid-wrap');
+    const grid = document.getElementById('grid');
+    if (!wrap || !grid) return;
+    const padding = 12;            // matches CSS .grid-wrap padding
+    const gap = 5;                 // matches CSS .grid gap
+    const cols = getBoardCols();
+    const rows = getBoardRows();
+    const W = Math.max(0, wrap.clientWidth - 2 * padding);
+    const H = Math.max(0, wrap.clientHeight - 2 * padding);
+    if (W <= 0 || H <= 0) return;  // not yet laid out
+    const cellWidth  = Math.floor((W - (cols - 1) * gap) / cols);
+    const cellHeight = Math.floor((H - (rows - 1) * gap) / rows);
+    if (cellWidth <= 0 || cellHeight <= 0) return;
+    grid.style.width  = (cellWidth  * cols + (cols - 1) * gap) + 'px';
+    grid.style.height = (cellHeight * rows + (rows - 1) * gap) + 'px';
+  }
+  // Re-fit on resize/orientation/dpr changes — phones rotate, browser
+  // address bar shows/hides, etc.
+  window.addEventListener('resize', function() {
+    if (typeof fitGrid === 'function') fitGrid();
+  });
+
+  // Score per merge. The (1 + (tier-1)*0.3) factor weights higher tiers more
+  // heavily — Crown (tier 8) merges are worth ~3.1× a flat formula. This
+  // turns the late-game grind into a payoff: a Crown achievement now scores
+  // ~62K (versus ~15K with the old linear formula) without touching the
+  // chain ladder (which would invalidate existing leaderboards).
   function pointsFor(tier, groupSize, chainMult) {
-    return Math.round(tier * 10 * groupSize * chainMult);
+    return Math.round(tier * 10 * (1 + (tier - 1) * 0.3) * groupSize * chainMult);
   }
   function pieceValue(tier) {
     return pointsFor(tier, 2, 1);
@@ -2644,15 +3867,85 @@
   const CONTEST_STATE_KEY = 'bloom_contest_game_state';        // legacy single-state key (kept for migration)
   const CONTEST_STATE_KEY_PREFIX = 'bloom_contest_state_';      // new per-contest scheme
   const CONTEST_STATE_TTL_MS = 24 * 60 * 60 * 1000;
+  // Last final score we posted for this contest — used as the "score" we
+  // show to the player we're now spectating, so they can see how far each
+  // of their watchers got.
+  const CONTEST_LAST_FINAL_PREFIX = 'bloom_contest_last_final_';
   function contestStateKey(code) { return CONTEST_STATE_KEY_PREFIX + code; }
+  function getLastFinalScore(code) {
+    if (!code) return 0;
+    const raw = parseInt(localStorage.getItem(CONTEST_LAST_FINAL_PREFIX + code) || '0', 10);
+    return Number.isFinite(raw) ? Math.max(0, raw) : 0;
+  }
+  function setLastFinalScore(code, value) {
+    if (!code) return;
+    try { localStorage.setItem(CONTEST_LAST_FINAL_PREFIX + code, String(Math.max(0, value | 0))); } catch (e) {}
+  }
   let activeContestCode = localStorage.getItem(CONTEST_CODE_KEY) || null;
   let activeContestData = null;
+  // Which contest the IN-MEMORY game state (grid/score/highestTier/nextPiece)
+  // actually belongs to. Decoupled from `activeContestCode` so that switching
+  // contests via the My Contests list does NOT cause the prior contest's
+  // grid to be saved into the new contest's localStorage slot. Set to a
+  // contest code when init('contest') restores/starts a game, cleared on
+  // game-over or when leaving contest mode.
+  let activeGameContestCode = null;
   let contestSubmitted = false;
   let contestRefreshTimer = null;
   let contestRefreshCode = null;
   let myContestsCache = null;        // last fetched /api/contests/mine result
   let myContestsCacheTs = 0;
   const MY_CONTESTS_CACHE_TTL_MS = 30 * 1000;  // refresh every 30s on demand
+
+  // ============ LIVE CONTEST STATE (real-time score + spectators) ============
+  // Demand-driven design: we only send the (heavier) grid frame when the
+  // last server response said someone is actually watching. An idle contest
+  // costs nothing beyond the existing 20s leaderboard poll.
+  let liveScoreLastSentAt = 0;          // ms timestamp of last /live-score POST
+  let liveScoreLastSentValue = -1;      // score value last sent (skip duplicates)
+  let liveScoreFlushTimer = null;       // pending throttled flush
+  let meHasWatchers = false;            // from /live-score response or leaderboard fetch
+  let meWatchers = [];                  // [{name, lastScore}] — populated by leaderboard poll (every 20s)
+  let meWatcherCount = 0;               // updated more frequently by /live-score response
+  let audienceBadgeOpen = false;        // dropdown expanded?
+  const LIVE_SCORE_MIN_INTERVAL_MS = 1000;
+  let spectatorSession = null;          // { code, targetDeviceId, name, lastScore, pollTimer, heartbeatTimer, missCount, lastSnap }
+
+  // ============ AVATAR ============
+  // Stable per-deviceId emoji + color pair. The same player always gets the
+  // same avatar across sessions; different players are visually distinct in
+  // leaderboards even if their display names overlap. No PII, pure hash.
+  const AVATAR_EMOJIS = [
+    '🦁','🐯','🦊','🐺','🐻','🐼','🐰','🐹','🐮','🐷','🐸','🦉','🐢','🐬','🐙','🦋','🦄','🦖','🐳','🐝',
+    '🌵','🌻','🌸','🌹','🍀','🍎','🍒','🍓','🥑','🍕','🌶','🌽','🥨','🍩','🌮','🍪','🌟','⚡','🔥','💎'
+  ];
+  const AVATAR_COLORS = [
+    ['#FFE0B2', '#5D2E00'], ['#FFCDD2', '#5D1010'], ['#F8BBD0', '#5C1532'],
+    ['#E1BEE7', '#3E1452'], ['#D1C4E9', '#23195C'], ['#C5CAE9', '#0F1B5C'],
+    ['#BBDEFB', '#0D3D6D'], ['#B3E5FC', '#0F4A6D'], ['#B2EBF2', '#0E4F5C'],
+    ['#B2DFDB', '#0F4F45'], ['#C8E6C9', '#194A1F'], ['#DCEDC8', '#324F11'],
+    ['#FFF9C4', '#5C4A0E'], ['#FFE082', '#5C3D0E'], ['#FFCC80', '#5C2E0E']
+  ];
+  function avatarHash(deviceId) {
+    let h = 2166136261 >>> 0;
+    const s = String(deviceId || '');
+    for (let i = 0; i < s.length; i++) {
+      h ^= s.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    return h >>> 0;
+  }
+  function getAvatar(deviceId) {
+    const h = avatarHash(deviceId);
+    const emoji = AVATAR_EMOJIS[h % AVATAR_EMOJIS.length];
+    const [bg, fg] = AVATAR_COLORS[(h >>> 8) % AVATAR_COLORS.length];
+    return { emoji, bg, fg };
+  }
+  function renderAvatarHtml(deviceId, sizeClass) {
+    const a = getAvatar(deviceId);
+    return '<span class="avatar' + (sizeClass ? ' ' + sizeClass : '') +
+      '" style="background:' + a.bg + ';color:' + a.fg + '">' + a.emoji + '</span>';
+  }
 
   function getDeviceId() {
     let id = localStorage.getItem(DEVICE_KEY);
@@ -2667,9 +3960,14 @@
 
   // ============ FRIENDS CONTEST HELPERS ============
   function setActiveContest(code) {
+    const prev = activeContestCode;
     activeContestCode = code || null;
     if (code) localStorage.setItem(CONTEST_CODE_KEY, code);
     else localStorage.removeItem(CONTEST_CODE_KEY);
+    // CRITICAL: when the code changes, drop the cached activeContestData.
+    // Otherwise init('contest') reads the OLD contest's board_seed and the
+    // new contest's game gets the previous contest's piece sequence.
+    if (prev !== activeContestCode) activeContestData = null;
     // The list of contests-I'm-in may have changed (joined/created/left)
     invalidateMyContestsCache();
   }
@@ -2768,16 +4066,22 @@
   }
 
   function saveContestGameState() {
-    if (mode !== 'contest' || !activeContestCode || !grid) return;
+    // Save to the contest the IN-MEMORY game state actually belongs to —
+    // NOT to whatever activeContestCode currently is. Otherwise switching
+    // contests via the My Contests list (which mutates activeContestCode
+    // without resetting the grid) would write the previous contest's mid-game
+    // state into the new contest's localStorage slot.
+    const targetCode = activeGameContestCode || activeContestCode;
+    if (mode !== 'contest' || !targetCode || !grid) return;
     // Don't save a fresh board (nothing on it yet)
     const hasPiece = grid.some(function(row) { return row.some(function(c) { return c > 0; }); });
     if (!hasPiece && (score | 0) === 0) {
-      clearContestGameState();
+      clearContestGameState(targetCode);
       return;
     }
     try {
-      localStorage.setItem(contestStateKey(activeContestCode), JSON.stringify({
-        code: activeContestCode,
+      localStorage.setItem(contestStateKey(targetCode), JSON.stringify({
+        code: targetCode,
         grid: grid,
         score: score | 0,
         highestTier: highestTier | 0,
@@ -2809,7 +4113,7 @@
       const s = JSON.parse(raw);
       if (!s || s.code !== code) return null;
       if (Date.now() - (s.ts || 0) > CONTEST_STATE_TTL_MS) return null;
-      if (!Array.isArray(s.grid) || s.grid.length !== ROWS) return null;
+      if (!Array.isArray(s.grid) || s.grid.length !== getBoardRows()) return null;
       return s;
     } catch (e) { return null; }
   }
@@ -2832,6 +4136,1195 @@
     return 'פחות משעה';
   }
 
+  // ================================================================
+  // ONBOARDING COACH — 3 progressive toasts on a brand-new player's
+  // first game. Each step persists in localStorage so it never repeats.
+  // The toasts are pinned to grid-wrap, dismissable, auto-fade after 6s.
+  // ================================================================
+
+  function dismissCoach() {
+    const t = document.querySelector('.coach-toast');
+    if (t) t.remove();
+    const a = document.querySelector('.coach-arrow');
+    if (a) a.remove();
+  }
+
+  function showCoach(step, title, body, opts) {
+    // Don't pile multiple toasts.
+    dismissCoach();
+    const wrap = document.getElementById('grid-wrap');
+    if (!wrap) return;
+    opts = opts || {};
+    const t = document.createElement('div');
+    t.className = 'coach-toast';
+    t.innerHTML =
+      '<div class="coach-title">' +
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg>' +
+        'BLOOM · שלב ' + step + ' מתוך 3' +
+      '</div>' +
+      escapeHtml(title) + '<br>' +
+      '<span style="font-weight:500;color:#D6D5D1">' + escapeHtml(body) + '</span>' +
+      (opts.dismiss !== false ? '<br><button class="coach-dismiss" id="coach-dismiss">הבנתי →</button>' : '');
+    wrap.appendChild(t);
+    const btn = document.getElementById('coach-dismiss');
+    if (btn) btn.onclick = function() { dismissCoach(); };
+    // Optional: a pointer arrow over a specific column.
+    if (opts.arrowCol != null) {
+      const arrow = document.createElement('div');
+      arrow.className = 'coach-arrow';
+      arrow.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 22L4 12h5V2h6v10h5z"/></svg>';
+      // Position over the chosen column (0-indexed, right-to-left since RTL but grid is LTR).
+      // grid-wrap has padding 12px + 5px gap; each cell ~ (w - 24 - 15) / 4.
+      const c = opts.arrowCol | 0;
+      arrow.style.bottom = '24px';
+      arrow.style.left   = 'calc(' + (12 + (c + 0.5) * 25) + '% - 18px)';
+      // Use a CSS calc on percentage approximated via the grid columns.
+      arrow.style.left = 'calc(12px + ' + ((c + 0.5) * 100 / 4) + '% - 18px - 12px)';
+      wrap.appendChild(arrow);
+    }
+  }
+
+  // Hooks called at key moments — they no-op if onboarding is already past.
+  function maybeOnboardStep1() {
+    if (getOnboardStep() >= 1) return;
+    if (mode !== 'daily' && mode !== 'practice') return;
+    // Show after the grid renders. setTimeout makes it appear smoothly.
+    setTimeout(function() {
+      showCoach(1,
+        'הקש על עמודה כדי להפיל את החלק',
+        'החלק "הבא" (מסומן בסולם למעלה) ייפול לעמודה שתבחר.',
+        { arrowCol: 1 });
+      setOnboardStep(1);
+    }, 350);
+  }
+  function maybeOnboardStep2() {
+    if (getOnboardStep() >= 2) return;
+    if (mode !== 'daily' && mode !== 'practice') return;
+    showCoach(2,
+      'צרף 2 שווים → מיזוג + ניקוד',
+      'אריחים אנכיים או אופקיים מאותו סוג מתמזגים לדרגה הבאה.');
+    setOnboardStep(2);
+  }
+  function maybeOnboardStep3() {
+    if (getOnboardStep() >= 3) return;
+    if (mode !== 'daily' && mode !== 'practice') return;
+    showCoach(3,
+      'יפה! שרשרת = ניקוד גבוה יותר',
+      'מיזוג שגורר מיזוג נוסף = שרשרת. תוכל לשרשר 5? היעד: כתר 👑.');
+    setOnboardStep(3);
+  }
+
+  // ================================================================
+  // BLOOM CHALLENGES (state + fetch helpers + screens)
+  // ================================================================
+  // Public single-shot prize contests. Distinct from Friends Contests in that:
+  // - One attempt per device per challenge (server-enforced via PK).
+  // - No reset, no pause, no game-state save. Closing the tab = forfeit.
+  // - Score posts to /score on every drop; the server's score-only-grows
+  //   guard means a closed tab still has a meaningful final score.
+
+  let challengesCache = null;          // most recent /api/challenges payload
+  let challengesCacheTs = 0;
+  const CHALLENGES_CACHE_TTL_MS = 30 * 1000;
+  let activeChallenge = null;          // { slug, name, prizeText, thresholdScore, thresholdTier, type, winnersCount, isWinner, winnerRank, drops }
+  const CHALLENGE_DROPS_KEY_PREFIX = 'bloom_challenge_drops_';
+
+  function challengeDropsKey(slug) { return CHALLENGE_DROPS_KEY_PREFIX + slug; }
+  function readChallengeDrops(slug) {
+    try { return parseInt(localStorage.getItem(challengeDropsKey(slug)) || '0', 10) || 0; }
+    catch (e) { return 0; }
+  }
+  function writeChallengeDrops(slug, n) {
+    try { localStorage.setItem(challengeDropsKey(slug), String(n | 0)); } catch (e) {}
+  }
+  function clearChallengeDrops(slug) {
+    try { localStorage.removeItem(challengeDropsKey(slug)); } catch (e) {}
+  }
+
+  async function fetchChallenges(opts) {
+    opts = opts || {};
+    if (!opts.fresh && challengesCache && (Date.now() - challengesCacheTs) < CHALLENGES_CACHE_TTL_MS) {
+      return challengesCache;
+    }
+    try {
+      const url = API_BASE + '/api/challenges?deviceId=' + encodeURIComponent(deviceId);
+      const res = await fetch(url);
+      if (!res.ok) return challengesCache;
+      const data = await res.json();
+      challengesCache = (data && data.challenges) || [];
+      challengesCacheTs = Date.now();
+      return challengesCache;
+    } catch (e) { return challengesCache; }
+  }
+
+  async function fetchChallenge(slug) {
+    try {
+      const url = API_BASE + '/api/challenges/' + encodeURIComponent(slug) + '?deviceId=' + encodeURIComponent(deviceId);
+      const res = await fetch(url);
+      if (!res.ok) return null;
+      return await res.json();
+    } catch (e) { return null; }
+  }
+
+  function challengeTypeLabel(c) {
+    const t = c.challengeType;
+    if (t === 'race')          return 'מרוץ ל-' + (c.thresholdScore || 0).toLocaleString();
+    if (t === 'top_n')         return 'Top ' + (c.winnersCount || 1);
+    if (t === 'beat')          return 'עבור ' + (c.thresholdScore || 0).toLocaleString();
+    if (t === 'first_to_tier' && getActiveTiers()[c.thresholdTier|0]) return 'ראשון ל-' + getActiveTiers()[c.thresholdTier|0].name;
+    if (t === 'first_to_tier') return 'ראשון לדרגה ' + (c.thresholdTier || '?');
+    return t;
+  }
+
+  function challengeTimeLeft(endsAt) {
+    const ms = new Date(endsAt) - new Date();
+    if (ms <= 0) return 'הסתיים';
+    const days = Math.floor(ms / (24 * 60 * 60 * 1000));
+    const hours = Math.floor((ms % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000));
+    const minutes = Math.floor((ms % (60 * 60 * 1000)) / (60 * 1000));
+    if (days > 0) return days + ' ימים';
+    if (hours > 0) return hours + ' שעות';
+    if (minutes > 0) return minutes + ' דקות';
+    return 'פחות מדקה';
+  }
+
+  // Personal-stats chip — visible only if the returning player has played
+  // at least one game. Pulls from localStorage lifetime values + best score.
+  function refreshHomeMyStats() {
+    const host = document.getElementById('home-mystats-host');
+    if (!host) return;
+    const bestScore  = parseInt(localStorage.getItem(BEST_KEY)        || '0', 10) || 0;
+    const bestTier   = parseInt(localStorage.getItem(BEST_TIER_KEY)   || '0', 10) || 0;
+    const totalGames = parseInt(localStorage.getItem(GAMES_COUNT_KEY) || '0', 10) || 0;
+    if (bestScore <= 0 && totalGames <= 0) { host.innerHTML = ''; return; }
+    const playerNm = (getPlayerName() || '').trim();
+    const tierName = (getActiveTiers()[bestTier] && getActiveTiers()[bestTier].name) || '—';
+    host.innerHTML =
+      '<div class="home-mystats">' +
+        renderAvatarHtml(deviceId, 'sm') +
+        (playerNm ? '<span><strong>' + escapeHtml(playerNm) + '</strong></span><span class="divider">·</span>' : '') +
+        '<span>🏆 שיא: <strong>' + bestScore.toLocaleString() + '</strong></span>' +
+        '<span class="divider">·</span>' +
+        '<span>עד ' + escapeHtml(tierName) + '</span>' +
+        (totalGames > 0 ? '<span class="divider">·</span><span>' + totalGames + ' משחקים</span>' : '') +
+      '</div>';
+  }
+
+  // Social-proof line under the primary CTA. Pulls from the existing
+  // /api/leaderboard/:date endpoint — one extra GET per home-visit.
+  async function refreshHomeSocialProof() {
+    const el = document.getElementById('home-social');
+    if (!el) return;
+    try {
+      const res = await fetch(API_BASE + '/api/leaderboard/' + encodeURIComponent(dailyDate));
+      if (!res.ok) return;
+      const data = await res.json();
+      const total = (data && data.total) | 0;
+      const top   = (data && data.list && data.list[0]) || null;
+      if (total === 0) {
+        el.innerHTML = '<span class="live-dot"></span> אתה הראשון היום — תהיה בראש הלוח';
+      } else if (top) {
+        el.innerHTML = '<span class="live-dot"></span> ' +
+          '<strong>' + total + '</strong> שיחקו היום · מוביל: <strong>' +
+          escapeHtml(top.name || 'אנונימי') + '</strong> · ' +
+          (top.score | 0).toLocaleString();
+      }
+    } catch (e) { /* silent — the home works fine without this line */ }
+  }
+
+  function refreshHomeChallengeCta() {
+    const btn = document.getElementById('home-challenge');
+    if (!btn) return;
+    fetchChallenges().then(function(list) {
+      if (!list || !list.length) { btn.style.display = 'none'; return; }
+      btn.style.display = '';
+      const lbl = document.getElementById('home-challenge-label');
+      if (lbl) lbl.textContent = list.length === 1
+        ? 'אתגר פרס פעיל — ' + list[0].prizeText
+        : list.length + ' אתגרי פרס פעילים';
+      btn.onclick = function() {
+        ensureAudio();
+        showChallengesList('home');
+      };
+    });
+  }
+
+  function hideChallengeScreens() {
+    const el = document.getElementById('challenge-screen');
+    if (el) el.remove();
+  }
+
+  // Tracks where the user came from before opening the challenges hub, so the
+  // back button routes intelligently: from the home screen → back home; from
+  // a mid-game mode-tap → back into the game; from a contest screen → back
+  // there. Set by EVERY entry point into showChallengesList().
+  let challengeListEntryFrom = 'home';
+  // Tabs state for the challenges hub.
+  let challengeListTab = 'active';   // 'active' | 'history'
+  let historyChallengesCache = null;
+  let historyChallengesCacheTs = 0;
+  const HISTORY_CACHE_TTL_MS = 60 * 1000;
+
+  async function fetchHistoryChallenges(opts) {
+    opts = opts || {};
+    if (!opts.fresh && historyChallengesCache && (Date.now() - historyChallengesCacheTs) < HISTORY_CACHE_TTL_MS) {
+      return historyChallengesCache;
+    }
+    try {
+      const res = await fetch(API_BASE + '/api/challenges/history?deviceId=' + encodeURIComponent(deviceId));
+      if (!res.ok) return historyChallengesCache;
+      const data = await res.json();
+      historyChallengesCache = (data && data.challenges) || [];
+      historyChallengesCacheTs = Date.now();
+      return historyChallengesCache;
+    } catch (e) { return historyChallengesCache; }
+  }
+
+  function navigateBackFromChallenges() {
+    hideChallengeScreens();
+    if (challengeListEntryFrom === 'in-game') {
+      // The player tapped the "אתגרים" mode tab from inside a game — go back
+      // to the appropriate game screen for the current mode.
+      if (mode === 'contest' && activeContestCode) {
+        // Resume their saved contest game state.
+        init('contest');
+      } else if (mode === 'daily' || mode === 'practice') {
+        init(mode);
+      } else {
+        showHome();
+      }
+    } else if (challengeListEntryFrom === 'contest-screen') {
+      if (activeContestCode) showContestLeaderboard(activeContestCode);
+      else showContestMenu();
+    } else {
+      showHome();
+    }
+  }
+  window.__bloomBackFromChallenges = navigateBackFromChallenges;
+
+  async function showChallengesList(entryFrom) {
+    if (entryFrom) challengeListEntryFrom = entryFrom;
+    const app = document.querySelector('.app');
+    if (!app) return;
+    hideHome();
+    hideContestScreens();
+    hideChallengeScreens();
+    const screen = document.createElement('div');
+    screen.id = 'challenge-screen';
+    screen.className = 'contest-screen';
+    screen.innerHTML =
+      createBackButton('window.__bloomBackFromChallenges()') +
+      '<div class="contest-title">אתגרי BLOOM</div>' +
+      '<div class="contest-sub">ניסיון אחד. פרס אמיתי.</div>' +
+      '<div class="lb-tabs" id="cl-tabs" style="max-width:340px;margin:8px auto 4px">' +
+        '<button class="lb-tab' + (challengeListTab === 'active' ? ' active' : '') + '" data-tab="active">פעילים</button>' +
+        '<button class="lb-tab' + (challengeListTab === 'history' ? ' active' : '') + '" data-tab="history">היסטוריה</button>' +
+      '</div>' +
+      '<div class="challenge-list" id="challenge-list"><div class="contest-loading">טוען…</div></div>';
+    app.appendChild(screen);
+    document.querySelectorAll('#cl-tabs .lb-tab').forEach(function(b) {
+      b.onclick = function() {
+        const tab = b.getAttribute('data-tab');
+        if (tab === challengeListTab) return;
+        challengeListTab = tab;
+        document.querySelectorAll('#cl-tabs .lb-tab').forEach(function(x) { x.classList.toggle('active', x === b); });
+        renderChallengeListBody();
+      };
+    });
+    renderChallengeListBody();
+  }
+
+  async function renderChallengeListBody() {
+    const host = document.getElementById('challenge-list');
+    if (!host) return;
+    host.innerHTML = '<div class="contest-loading">טוען…</div>';
+    let list;
+    if (challengeListTab === 'history') {
+      list = await fetchHistoryChallenges({ fresh: true });
+    } else {
+      list = await fetchChallenges({ fresh: true });
+    }
+    if (!host.isConnected) return;  // user navigated away mid-fetch
+    if (!list || !list.length) {
+      host.innerHTML = '<div class="contest-board-empty">' +
+        (challengeListTab === 'history' ? 'אין עדיין אתגרים שהסתיימו' : 'אין אתגרים פעילים כרגע. נסה מחר.') +
+        '</div>';
+      return;
+    }
+    host.innerHTML = list.map(function(c) {
+      const entered = !!c.myEntry;
+      const winnersFilled = c.winnersFilled | 0;
+      const isHistory = challengeListTab === 'history';
+      const meta = entered
+        ? (c.myEntry.is_winner ? '👑 זכית · מקום ' + c.myEntry.winner_rank : '✓ השתתפת · ' + (c.myEntry.score | 0).toLocaleString() + ' נק׳')
+        : (winnersFilled > 0 ? winnersFilled + '/' + c.winnersCount + ' זוכים כבר נסגרו' : c.entriesCount + ' משתתפים');
+      const rightSide = isHistory
+        ? 'הסתיים <strong>' + escapeHtml(formatRelativeTime(c.endsAt) || fmtEndsDate(c.endsAt)) + '</strong>'
+        : 'נותרו <strong>' + escapeHtml(challengeTimeLeft(c.endsAt)) + '</strong>';
+      // Top winners line (history only): show the names of who won.
+      let winnersLine = '';
+      if (isHistory && c.topWinners && c.topWinners.length) {
+        const txt = c.topWinners.map(function(w) {
+          return '👑 ' + escapeHtml(w.name) + ' (' + (w.score | 0).toLocaleString() + ')';
+        }).join(' · ');
+        winnersLine = '<div class="challenge-card-desc" style="color:#BA7517;font-weight:600;margin-top:4px">' + txt + '</div>';
+      } else if (isHistory) {
+        winnersLine = '<div class="challenge-card-desc" style="font-style:italic">לא נקבעו זוכים</div>';
+      }
+      return '<button class="challenge-card' + (entered ? ' entered' : '') + (isHistory ? ' ended' : '') + '" data-slug="' + escapeHtml(c.slug) + '">' +
+        '<div class="challenge-card-top">' +
+          '<div class="challenge-card-name">' + escapeHtml(c.name) + '</div>' +
+          '<div class="challenge-card-prize">🎁 ' + escapeHtml(c.prizeText) + '</div>' +
+        '</div>' +
+        (c.description ? '<div class="challenge-card-desc">' + escapeHtml(c.description) + '</div>' : '') +
+        winnersLine +
+        '<div class="challenge-card-meta">' +
+          '<div><span class="challenge-type-pill">' + escapeHtml(challengeTypeLabel(c)) + '</span>' + escapeHtml(meta) + '</div>' +
+          '<div>' + rightSide + '</div>' +
+        '</div>' +
+      '</button>';
+    }).join('');
+    host.querySelectorAll('.challenge-card').forEach(function(b) {
+      b.onclick = function() { showChallengeDetail(b.getAttribute('data-slug')); };
+    });
+  }
+  function fmtEndsDate(iso) {
+    if (!iso) return '';
+    try { return new Date(iso).toLocaleDateString('he-IL'); } catch (e) { return iso; }
+  }
+
+  async function showChallengeDetail(slug) {
+    const app = document.querySelector('.app');
+    if (!app) return;
+    hideHome();
+    hideContestScreens();
+    hideChallengeScreens();
+    const screen = document.createElement('div');
+    screen.id = 'challenge-screen';
+    screen.className = 'contest-screen';
+    screen.innerHTML =
+      createBackButton('window.__bloomBackToChallengesList()') +
+      '<div class="contest-loading">טוען…</div>';
+    app.appendChild(screen);
+    const data = await fetchChallenge(slug);
+    if (!data || !data.challenge) {
+      screen.innerHTML =
+        createBackButton('window.__bloomBackToChallengesList()') +
+        '<div class="contest-title" style="margin-top:60px">לא נמצא אתגר</div>';
+      return;
+    }
+    const c = data.challenge;
+    const myEntry = c.myEntry;
+    const entered = !!myEntry;
+    const inProgress = entered && myEntry.status === 'in_progress';
+    const completed  = entered && myEntry.status === 'completed';
+    const isWinner   = entered && myEntry.is_winner;
+    const winnersFull = (c.winnersFilled | 0) >= (c.winnersCount | 0) && c.challengeType !== 'top_n' && c.challengeType !== 'beat';
+    const standingsHtml = (data.standings || []).slice(0, 10).map(function(s, i) {
+      const rank = s.winner_rank ? s.winner_rank : (i + 1);
+      return '<div class="challenge-standings-row' + (s.is_winner ? ' winner' : '') + '">' +
+        '<div class="challenge-standings-rank">' + (s.is_winner ? '<span class="challenge-crown">👑</span>' : rank) + '</div>' +
+        '<div class="challenge-standings-name">' + renderAvatarHtml(s.display_name, 'sm') + escapeHtml(s.display_name) + '</div>' +
+        '<div class="challenge-standings-score">' + (s.score | 0).toLocaleString() + '</div>' +
+      '</div>';
+    }).join('');
+    const prizeImg = c.prizeImageUrl
+      ? '<img src="' + escapeHtml(c.prizeImageUrl) + '" alt="' + escapeHtml(c.prizeText) + '" onerror="this.style.display=\'none\'">'
+      : '';
+    let actionHtml;
+    if (winnersFull && !isWinner) {
+      actionHtml = '<button class="btn" disabled style="opacity:0.5">כל הזוכים נסגרו</button>';
+    } else if (isWinner) {
+      actionHtml = '<button class="btn" id="chal-claim">👑 השאר פרטים לקבלת הפרס</button>';
+    } else if (completed) {
+      actionHtml = '<button class="btn secondary" disabled>כבר השתתפת — ניקוד ' + (myEntry.score | 0).toLocaleString() + '</button>';
+    } else if (inProgress) {
+      actionHtml = '<button class="btn secondary" disabled>המשחק שלך הסתיים — ניקוד אחרון ' + (myEntry.score | 0).toLocaleString() + '</button>';
+    } else {
+      actionHtml = '<button class="btn" id="chal-start">התחל אתגר →</button>';
+    }
+    screen.innerHTML =
+      createBackButton('window.__bloomBackToChallengesList()') +
+      '<div class="contest-title">' + escapeHtml(c.name) + '</div>' +
+      '<div class="contest-sub">' + escapeHtml(challengeTypeLabel(c)) + ' · ' + (c.winnersCount | 0) + ' זוכים · נותרו ' + challengeTimeLeft(c.endsAt) + '</div>' +
+      '<div class="challenge-prize-banner">' +
+        prizeImg +
+        '<div class="label">הפרס</div>' +
+        '<div class="prize">🎁 ' + escapeHtml(c.prizeText) + '</div>' +
+        (c.description ? '<div class="sub">' + escapeHtml(c.description) + '</div>' : '') +
+      '</div>' +
+      (c.rulesText ? '<div class="challenge-rules">' + escapeHtml(c.rulesText) + '</div>' : '') +
+      (standingsHtml
+        ? '<div class="challenge-standings"><h4>הניקודים המובילים</h4>' + standingsHtml + '</div>'
+        : '') +
+      '<div class="contest-form">' + actionHtml + '</div>';
+    const startBtn = document.getElementById('chal-start');
+    if (startBtn) startBtn.onclick = function() { showChallengePreEnter(c); };
+    const claimBtn = document.getElementById('chal-claim');
+    if (claimBtn) claimBtn.onclick = function() { showChallengeClaim(c); };
+  }
+
+  function showChallengePreEnter(c) {
+    const wrap = document.getElementById('challenge-screen') || document.querySelector('.app');
+    if (!wrap) return;
+    let modal = document.getElementById('chal-pre-modal');
+    if (modal) modal.remove();
+    modal = document.createElement('div');
+    modal.id = 'chal-pre-modal';
+    modal.className = 'info-modal';
+    const prefillName = (getPlayerName() || '').trim();
+    modal.innerHTML =
+      '<div class="info-card">' +
+        '<button class="info-close" id="chal-pre-close" aria-label="סגור"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>' +
+        '<div class="info-title">🎁 ' + escapeHtml(c.name) + '</div>' +
+        '<div class="info-sub">פרס: ' + escapeHtml(c.prizeText) + '</div>' +
+        '<div class="challenge-warn">' +
+          '<strong>זה הניסיון היחיד שלך.</strong><br>אין reset, אין pause, אין חזרה. ברגע שתתחיל — המשחק רץ עד הסוף. מוכן?' +
+        '</div>' +
+        '<div class="contest-form">' +
+          '<div class="contest-form-label">השם שלך בלוח</div>' +
+          '<input class="contest-input" id="chal-name" placeholder="כתוב את שמך" maxlength="50" value="' + escapeHtml(prefillName) + '" />' +
+          (c.rulesText ? '<label class="challenge-checkbox-row"><input type="checkbox" id="chal-agree"> קראתי את התקנון</label>' : '') +
+          '<button class="contest-submit-btn" id="chal-go">התחל אתגר</button>' +
+          '<button class="contest-secondary-btn" id="chal-cancel" style="margin-top:6px">ביטול</button>' +
+          '<div class="contest-error" id="chal-err"></div>' +
+        '</div>' +
+      '</div>';
+    wrap.appendChild(modal);
+    document.getElementById('chal-pre-close').onclick = function() { modal.remove(); };
+    document.getElementById('chal-cancel').onclick    = function() { modal.remove(); };
+    modal.onclick = function(e) { if (e.target === modal) modal.remove(); };
+    document.getElementById('chal-go').onclick = async function() {
+      const nameInput = document.getElementById('chal-name');
+      const errEl = document.getElementById('chal-err');
+      const name = (nameInput.value || '').trim();
+      if (!name) { errEl.textContent = 'נא להזין שם'; return; }
+      const agreeEl = document.getElementById('chal-agree');
+      if (agreeEl && !agreeEl.checked) { errEl.textContent = 'יש לאשר את התקנון'; return; }
+      this.disabled = true; this.textContent = 'מתחיל…';
+      try {
+        const res = await fetch(API_BASE + '/api/challenges/' + encodeURIComponent(c.slug) + '/enter', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ deviceId: deviceId, displayName: name })
+        });
+        const data = await res.json().catch(function() { return {}; });
+        if (!res.ok) {
+          errEl.textContent = data.error === 'already_entered' ? 'כבר השתתפת באתגר הזה.'
+            : data.error === 'rate_limited' ? 'יותר מדי ניסיונות. נסה בעוד שעה.'
+            : 'שגיאה: ' + (data.error || res.status);
+          this.disabled = false; this.textContent = 'התחל אתגר';
+          return;
+        }
+        setPlayerName(name);
+        modal.remove();
+        hideChallengeScreens();
+        beginChallengeRun(c, data);
+      } catch (e) {
+        errEl.textContent = 'שגיאת חיבור. נסה שוב.';
+        this.disabled = false; this.textContent = 'התחל אתגר';
+      }
+    };
+  }
+
+  function showChallengeClaim(c) {
+    const wrap = document.getElementById('challenge-screen') || document.querySelector('.app');
+    if (!wrap) return;
+    let modal = document.getElementById('chal-claim-modal');
+    if (modal) modal.remove();
+    modal = document.createElement('div');
+    modal.id = 'chal-claim-modal';
+    modal.className = 'info-modal';
+    modal.innerHTML =
+      '<div class="info-card">' +
+        '<button class="info-close" id="chal-claim-close" aria-label="סגור"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>' +
+        '<div class="info-title">🎉 ניצחת באתגר!</div>' +
+        '<div class="info-sub">פרס: ' + escapeHtml(c.prizeText) + ' — מלא פרטים ויצור קשר.</div>' +
+        '<div class="challenge-claim-form">' +
+          '<input id="cc-name"  placeholder="שם מלא"        maxlength="80"  />' +
+          '<input id="cc-phone" placeholder="טלפון / WhatsApp" maxlength="40" />' +
+          '<input id="cc-email" placeholder="אימייל (אופציונלי)" maxlength="120" />' +
+          '<button class="contest-submit-btn" id="cc-go">שלח לאדמין</button>' +
+          '<div class="contest-error" id="cc-err"></div>' +
+          '<div class="help" style="font-size:11px;color:#A8A6A0;margin-top:8px;text-align:right">הפרטים שלך נשמרים בדשבורד פרטי בלבד. ייצרו איתך קשר תוך 48 שעות.</div>' +
+        '</div>' +
+      '</div>';
+    wrap.appendChild(modal);
+    document.getElementById('chal-claim-close').onclick = function() { modal.remove(); };
+    modal.onclick = function(e) { if (e.target === modal) modal.remove(); };
+    document.getElementById('cc-go').onclick = async function() {
+      const name  = document.getElementById('cc-name').value.trim();
+      const phone = document.getElementById('cc-phone').value.trim();
+      const email = document.getElementById('cc-email').value.trim();
+      const err = document.getElementById('cc-err');
+      if (!name) { err.textContent = 'שם הוא חובה'; return; }
+      if (!phone && !email) { err.textContent = 'נא להזין טלפון או אימייל'; return; }
+      this.disabled = true; this.textContent = 'שולח…';
+      try {
+        const res = await fetch(API_BASE + '/api/challenges/' + encodeURIComponent(c.slug) + '/claim', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ deviceId: deviceId, contactName: name, contactPhone: phone, contactEmail: email })
+        });
+        const data = await res.json().catch(function() { return {}; });
+        if (!res.ok) {
+          err.textContent = data.error === 'not_winner_or_already_claimed' ? 'כבר נשלחו פרטים.' : 'שגיאה: ' + (data.error || res.status);
+          this.disabled = false; this.textContent = 'שלח לאדמין';
+          return;
+        }
+        modal.innerHTML = '<div class="info-card"><div class="info-title">✓ הפרטים נשלחו!</div><div class="info-sub">ייצרו איתך קשר תוך 48 שעות.</div><button class="btn" id="cc-done" style="margin-top:14px">סגור</button></div>';
+        document.getElementById('cc-done').onclick = function() { modal.remove(); showChallengeDetail(c.slug); };
+      } catch (e) {
+        err.textContent = 'שגיאת חיבור.';
+        this.disabled = false; this.textContent = 'שלח לאדמין';
+      }
+    };
+  }
+
+  // navigation helpers — wired below via window.__ for use from inline onclick HTML.
+  window.__bloomBackToHomeFromChallenges = function() { hideChallengeScreens(); showHome(); };
+  window.__bloomBackToChallengesList = function() { showChallengesList(); };
+
+  // ================================================================
+  // CHALLENGE RUN — the in-game side of a prize attempt.
+  // ================================================================
+  // beginChallengeRun() is the single entry point. It locks the player into
+  // challenge mode (no reset, no pause, no save), pushes the live grid to the
+  // server on every drop, and routes to the result screen on game-over.
+
+  function beginChallengeRun(challengeMeta, enterResp) {
+    activeChallenge = {
+      slug:           challengeMeta.slug,
+      name:           challengeMeta.name,
+      prizeText:      challengeMeta.prizeText || enterResp.prizeText,
+      challengeType:  enterResp.challengeType,
+      thresholdScore: enterResp.thresholdScore,
+      thresholdTier:  enterResp.thresholdTier,
+      winnersCount:   enterResp.winnersCount,
+      boardSeed:      enterResp.boardSeed,
+      drops:          0,           // running count synced to localStorage
+      isWinner:       false,
+      winnerRank:     null
+    };
+    clearChallengeDrops(challengeMeta.slug);
+    hideChallengeScreens();
+    init('challenge', { fresh: true });
+  }
+
+  let challengeScoreInflight = false;
+  async function pushChallengeScore() {
+    if (mode !== 'challenge' || !activeChallenge) return;
+    if (challengeScoreInflight) return;  // one in-flight at a time — drop the older heartbeat
+    challengeScoreInflight = true;
+    try {
+      const res = await fetch(API_BASE + '/api/challenges/' + encodeURIComponent(activeChallenge.slug) + '/score', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          deviceId: deviceId,
+          score: score | 0,
+          tier: highestTier | 0,
+          drops: activeChallenge.drops | 0
+        })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.isWinner && !activeChallenge.isWinner) {
+          activeChallenge.isWinner = true;
+          activeChallenge.winnerRank = data.winnerRank;
+          // Don't pop the modal mid-game — let the result screen handle it.
+          // But do show a one-shot toast so the player feels the moment.
+          showChallengeWinToast();
+        }
+      }
+    } catch (e) { /* silent — challenge writes are best-effort during play */ }
+    challengeScoreInflight = false;
+  }
+
+  function showChallengeWinToast() {
+    const t = document.createElement('div');
+    t.className = 'spectator-toast';
+    t.style.background = '#1B5E20';
+    t.textContent = '🎉 חצית את הרף — אתה זוכה!';
+    document.body.appendChild(t);
+    setTimeout(function() { if (t.parentNode) t.parentNode.removeChild(t); }, 3200);
+  }
+
+  async function completeChallengeRun() {
+    if (!activeChallenge) return null;
+    try {
+      const res = await fetch(API_BASE + '/api/challenges/' + encodeURIComponent(activeChallenge.slug) + '/complete', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          deviceId: deviceId,
+          score: score | 0,
+          tier: highestTier | 0,
+          drops: activeChallenge.drops | 0
+        })
+      });
+      if (!res.ok) return null;
+      return await res.json();
+    } catch (e) { return null; }
+  }
+
+  function challengePrizeChipHtml() {
+    if (!activeChallenge) return '';
+    return '<div class="challenge-prize-chip">' +
+      '<span class="live-mini">LIVE</span>' +
+      '🎁 ' + escapeHtml(activeChallenge.prizeText) +
+    '</div>';
+  }
+
+  function renderChallengeResult(data) {
+    const wrap = document.getElementById('grid-wrap');
+    if (!wrap || !activeChallenge) return;
+    const finalScore  = data && data.finalScore != null ? data.finalScore : score;
+    const isWinner    = !!(data && data.isWinner) || activeChallenge.isWinner;
+    const winnerRank  = (data && data.winnerRank) || activeChallenge.winnerRank;
+    const rank        = data && data.rank;
+    const total       = data && data.totalEntries;
+    const threshold   = activeChallenge.thresholdScore;
+    const slug        = activeChallenge.slug;
+    const name        = activeChallenge.name;
+    const prizeText   = activeChallenge.prizeText;
+
+    let resultHtml;
+    if (isWinner) {
+      resultHtml =
+        '<div class="over-title" style="color:#1B5E20">🎉 מזל טוב! זכית באתגר</div>' +
+        '<div class="over-score">' + (finalScore | 0).toLocaleString() + '</div>' +
+        '<div class="over-sub">מקום ' + (winnerRank || 1) + ' באתגר "' + escapeHtml(name) + '"</div>' +
+        '<div class="challenge-prize-banner" style="margin-top:14px">' +
+          '<div class="label">הפרס שלך</div>' +
+          '<div class="prize">🎁 ' + escapeHtml(prizeText) + '</div>' +
+        '</div>' +
+        '<div class="challenge-warn"><strong>צעד אחרון:</strong> השאר פרטים ליצירת קשר.</div>' +
+        '<div class="challenge-claim-form">' +
+          '<input id="cr-name"  placeholder="שם מלא"        maxlength="80"  value="' + escapeHtml(getPlayerName() || '') + '"/>' +
+          '<input id="cr-phone" placeholder="טלפון / WhatsApp" maxlength="40" />' +
+          '<input id="cr-email" placeholder="אימייל (אופציונלי)" maxlength="120" />' +
+          '<button class="btn" id="cr-submit">שלח לאדמין</button>' +
+          '<div class="contest-error" id="cr-err"></div>' +
+        '</div>';
+    } else {
+      const distance = (threshold != null && finalScore < threshold)
+        ? '<div class="over-sub" style="margin-top:8px">חסרו לך ' + (threshold - finalScore).toLocaleString() + ' נקודות לפרס</div>'
+        : '';
+      resultHtml =
+        '<div class="over-title">האתגר הסתיים</div>' +
+        '<div class="over-score">' + (finalScore | 0).toLocaleString() + '</div>' +
+        '<div class="over-sub">' + (rank ? 'מקום ' + rank + ' מתוך ' + total + ' משתתפים' : 'תוצאה נשלחה') + '</div>' +
+        distance +
+        '<div class="challenge-warn" style="background:#FAFAF6;color:#6F6E68;border-color:#F0EDE3"><strong>זה היה הניסיון היחיד שלך באתגר הזה.</strong> בהצלחה באתגר הבא!</div>';
+    }
+
+    wrap.innerHTML =
+      '<div class="overlay">' +
+        resultHtml +
+        '<button class="btn" id="cr-back">חזור לאתגרים</button>' +
+        '<button class="btn secondary" id="cr-share">שתף תוצאה</button>' +
+      '</div>';
+
+    document.getElementById('cr-back').onclick = function() {
+      const slugSaved = slug;
+      activeChallenge = null;
+      mode = 'practice';
+      showChallengeDetail(slugSaved);
+    };
+    document.getElementById('cr-share').onclick = function() {
+      const txt = (isWinner ? 'ניצחתי באתגר BLOOM וזכיתי ב-' + prizeText + '!\n' : 'ניקוד ' + finalScore.toLocaleString() + ' באתגר BLOOM.\n')
+        + window.location.origin + window.location.pathname;
+      if (navigator.share) navigator.share({ text: txt }).catch(function() {});
+      else if (navigator.clipboard) navigator.clipboard.writeText(txt);
+    };
+    const submitBtn = document.getElementById('cr-submit');
+    if (submitBtn) submitBtn.onclick = async function() {
+      const nm = document.getElementById('cr-name').value.trim();
+      const ph = document.getElementById('cr-phone').value.trim();
+      const em = document.getElementById('cr-email').value.trim();
+      const err = document.getElementById('cr-err');
+      if (!nm) { err.textContent = 'שם הוא חובה'; return; }
+      if (!ph && !em) { err.textContent = 'נא להזין טלפון או אימייל'; return; }
+      this.disabled = true; this.textContent = 'שולח…';
+      try {
+        const res = await fetch(API_BASE + '/api/challenges/' + encodeURIComponent(slug) + '/claim', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ deviceId: deviceId, contactName: nm, contactPhone: ph, contactEmail: em })
+        });
+        const data = await res.json().catch(function() { return {}; });
+        if (!res.ok) {
+          err.textContent = data.error === 'not_winner_or_already_claimed' ? 'כבר נשלחו פרטים.' : 'שגיאה: ' + (data.error || res.status);
+          this.disabled = false; this.textContent = 'שלח לאדמין'; return;
+        }
+        this.textContent = '✓ נשלח. ייצרו איתך קשר.';
+        this.classList.add('secondary');
+      } catch (e) {
+        err.textContent = 'שגיאת חיבור.';
+        this.disabled = false; this.textContent = 'שלח לאדמין';
+      }
+    };
+    // Challenge result is content-tall (banner + score + position + form +
+    // share/back buttons); equip the overlay so the bottom buttons are
+    // reachable via internal scroll on shorter phones.
+    equipOverlay();
+  }
+
+  // beforeunload — warn if mid-challenge.
+  window.addEventListener('beforeunload', function(e) {
+    if (mode === 'challenge' && activeChallenge && !isGameOver()) {
+      e.preventDefault();
+      e.returnValue = 'אתה באמצע אתגר פרס. הניקוד הסופי יהיה הניקוד הנוכחי.';
+      return e.returnValue;
+    }
+  });
+
+  // ================================================================
+  // LIVE SCORE PUSH (sender side — the player who is currently playing)
+  // ================================================================
+  // Throttle: at most one POST per LIVE_SCORE_MIN_INTERVAL_MS. If the score
+  // hasn't changed since the last successful send, skip entirely.
+
+  function liveSnapshot() {
+    return {
+      deviceId: deviceId,
+      displayName: getContestDisplayName(activeContestCode) || 'אנונימי',
+      liveScore: score | 0,
+      tier: highestTier | 0
+    };
+  }
+
+  function flattenGrid() {
+    const flat = new Array(getBoardRows() * getBoardCols());
+    for (let r = 0; r < getBoardRows(); r++) {
+      for (let c = 0; c < getBoardCols(); c++) flat[r * getBoardCols() + c] = grid[r][c] | 0;
+    }
+    return flat;
+  }
+
+  async function pushLiveScore() {
+    if (mode !== 'contest' || !activeContestCode) return;
+    liveScoreLastSentAt = Date.now();
+    liveScoreLastSentValue = score | 0;
+    try {
+      const res = await fetch(API_BASE + '/api/contests/' + encodeURIComponent(activeContestCode) + '/live-score', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(liveSnapshot())
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data && typeof data.hasWatchers === 'boolean') {
+        const prev = meHasWatchers;
+        meHasWatchers = data.hasWatchers;
+        if (typeof data.watcherCount === 'number') meWatcherCount = data.watcherCount | 0;
+        else meWatcherCount = meHasWatchers ? Math.max(meWatcherCount, 1) : 0;
+        // If we just learned a watcher arrived, push a state frame now so
+        // they see the live grid without waiting for the next drop.
+        if (!prev && meHasWatchers) pushLiveState();
+        renderAudienceBadge();
+      }
+    } catch (e) {
+      // Silent — live score is non-critical.
+    }
+  }
+
+  function scheduleLiveScorePush() {
+    if (mode !== 'contest' || !activeContestCode) return;
+    if ((score | 0) === liveScoreLastSentValue) return;
+    const elapsed = Date.now() - liveScoreLastSentAt;
+    if (elapsed >= LIVE_SCORE_MIN_INTERVAL_MS) {
+      if (liveScoreFlushTimer) { clearTimeout(liveScoreFlushTimer); liveScoreFlushTimer = null; }
+      pushLiveScore();
+      return;
+    }
+    if (liveScoreFlushTimer) return; // already queued
+    liveScoreFlushTimer = setTimeout(function() {
+      liveScoreFlushTimer = null;
+      pushLiveScore();
+    }, LIVE_SCORE_MIN_INTERVAL_MS - elapsed);
+  }
+
+  async function pushLiveState() {
+    if (mode !== 'contest' || !activeContestCode || !meHasWatchers) return;
+    if (!Array.isArray(grid)) return;
+    const body = Object.assign({}, liveSnapshot(), {
+      nextTier: typeof nextPiece === 'number' ? (nextPiece | 0) : null,
+      gridJson: flattenGrid()
+    });
+    try {
+      await fetch(API_BASE + '/api/contests/' + encodeURIComponent(activeContestCode) + '/live-state', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+    } catch (e) {
+      // Silent.
+    }
+  }
+
+  // Called by the game-over flow to make sure spectators stop seeing the
+  // dead board quickly. Server TTL would handle it within 10s anyway.
+  function stopLivePush() {
+    if (liveScoreFlushTimer) { clearTimeout(liveScoreFlushTimer); liveScoreFlushTimer = null; }
+    liveScoreLastSentValue = -1;
+    meHasWatchers = false;
+    meWatchers = [];
+    meWatcherCount = 0;
+    renderAudienceBadge();
+  }
+
+  // ================================================================
+  // AUDIENCE BADGE (the active player's "👁 N" floating indicator)
+  // ================================================================
+
+  function ensureAudienceBadge() {
+    let wrap = document.getElementById('grid-wrap');
+    if (!wrap) return null;
+    let badge = document.getElementById('audience-badge');
+    if (!badge) {
+      badge = document.createElement('button');
+      badge.id = 'audience-badge';
+      badge.className = 'audience-badge';
+      badge.setAttribute('aria-label', 'הקהל שצופה בך');
+      badge.onclick = function(e) {
+        e.stopPropagation();
+        audienceBadgeOpen = !audienceBadgeOpen;
+        renderAudienceBadge();
+      };
+      wrap.appendChild(badge);
+      document.addEventListener('click', function(ev) {
+        const list = document.getElementById('audience-list');
+        if (!audienceBadgeOpen) return;
+        if (list && (list === ev.target || list.contains(ev.target))) return;
+        if (badge === ev.target || badge.contains(ev.target)) return;
+        audienceBadgeOpen = false;
+        renderAudienceBadge();
+      });
+    }
+    return badge;
+  }
+
+  function removeAudienceBadge() {
+    const badge = document.getElementById('audience-badge');
+    if (badge) badge.remove();
+    const list = document.getElementById('audience-list');
+    if (list) list.remove();
+    audienceBadgeOpen = false;
+  }
+
+  function renderAudienceBadge() {
+    const visible = mode === 'contest'
+      && activeContestCode
+      && !spectatorSession
+      && (meWatchers.length > 0 || meHasWatchers || meWatcherCount > 0);
+    if (!visible) { removeAudienceBadge(); return; }
+    const badge = ensureAudienceBadge();
+    if (!badge) return;
+    const count = Math.max(meWatchers.length, meWatcherCount | 0);
+    badge.innerHTML =
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">' +
+        '<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>' +
+      '</svg>' +
+      '<span>' + count + '</span>';
+    const wrap = document.getElementById('grid-wrap');
+    let list = document.getElementById('audience-list');
+    if (audienceBadgeOpen && meWatchers.length) {
+      if (!list) {
+        list = document.createElement('div');
+        list.id = 'audience-list';
+        list.className = 'audience-list';
+        wrap.appendChild(list);
+      }
+      const rowsHtml = meWatchers.map(function(w) {
+        return '<div class="audience-list-row">' +
+          '<span class="audience-list-name">' + renderAvatarHtml(w.name, 'sm') + escapeHtml(w.name || 'אנונימי') + '</span>' +
+          '<span class="audience-list-score">' + (w.lastScore | 0).toLocaleString() + ' נק׳</span>' +
+        '</div>';
+      }).join('');
+      list.innerHTML = '<div class="audience-list-title">צופים בך · נקודה אחרונה</div>' + rowsHtml;
+    } else if (list) {
+      list.remove();
+    }
+  }
+
+  // ================================================================
+  // SPECTATOR (viewer side — for a player who chose to watch)
+  // ================================================================
+
+  // entryFrom: 'game-over' (default), 'contest-screen', or 'in-game'. Drives
+  // where the spectator's "exit" button returns to.
+  let pendingSpectatorEntry = 'game-over';
+  function openSpectatorPicker(entryFrom) {
+    if (!activeContestCode) return;
+    pendingSpectatorEntry = entryFrom || 'game-over';
+    // Anchor the modal inside whatever is currently visible: contest-screen
+    // overlays grid-wrap (higher z-index), so attaching there keeps the modal
+    // visible when the picker is opened mid-game from the contest leaderboard.
+    const host = document.getElementById('contest-screen') || document.getElementById('grid-wrap');
+    if (!host) return;
+    let modal = document.getElementById('spectator-picker-modal');
+    if (modal) modal.remove();
+    modal = document.createElement('div');
+    modal.id = 'spectator-picker-modal';
+    modal.className = 'info-modal';
+    modal.innerHTML =
+      '<div class="info-card">' +
+        '<button class="info-close" id="spm-close" aria-label="סגור">' +
+          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>' +
+        '</button>' +
+        '<div class="info-title">צפייה במשחקים חיים</div>' +
+        '<div class="info-sub">בחר שחקן שמשחק עכשיו ותעבור לצפייה חיה</div>' +
+        '<div id="spm-body"><div class="spectator-picker-empty">טוען…</div></div>' +
+      '</div>';
+    host.appendChild(modal);
+    document.getElementById('spm-close').onclick = function() { modal.remove(); };
+    modal.onclick = function(e) { if (e.target === modal) modal.remove(); };
+    refreshSpectatorPicker();
+  }
+
+  async function refreshSpectatorPicker() {
+    const body = document.getElementById('spm-body');
+    if (!body) return;
+    const data = await fetchContest(activeContestCode);
+    if (!body.isConnected) return; // modal closed mid-fetch
+    if (!data || !Array.isArray(data.players)) {
+      body.innerHTML = '<div class="spectator-picker-empty">שגיאת חיבור. נסה שוב.</div>';
+      return;
+    }
+    const live = data.players.filter(function(p) {
+      return p.liveScore !== null && p.deviceId && p.deviceId !== deviceId;
+    });
+    live.sort(function(a, b) { return (b.liveScore | 0) - (a.liveScore | 0); });
+    if (!live.length) {
+      body.innerHTML = '<div class="spectator-picker-empty">אין כרגע שחקנים פעילים בתחרות.<br>נסה שוב בעוד כמה רגעים.</div>';
+      return;
+    }
+    const rows = live.map(function(p) {
+      const tierObj = (getActiveTiers()[p.liveTier | 0] || getActiveTiers()[p.tier | 0]);
+      const tierBadge = tierObj
+        ? '<div class="contest-board-tier" style="background:' + tierObj.bg + ';color:' + tierObj.fg + '">' + tierObj.svg + '</div>'
+        : '<div class="contest-board-tier contest-board-tier-empty">·</div>';
+      return '<button class="spectator-picker-row" data-target="' + escapeHtml(p.deviceId) + '" data-name="' + escapeHtml(p.name || '') + '">' +
+        tierBadge +
+        '<div style="flex:1;min-width:0">' +
+          '<div class="spectator-picker-name">' + renderAvatarHtml(p.deviceId || p.name, 'sm') + escapeHtml(p.name || 'אנונימי') + '</div>' +
+          '<div class="spectator-picker-meta">' + (p.score | 0).toLocaleString() + ' נצברו · ' + (p.tier | 0 ? 'עד ' + (getActiveTiers()[p.tier | 0] && getActiveTiers()[p.tier | 0].name || '') : 'משחק ראשון') + '</div>' +
+        '</div>' +
+        '<div class="spectator-picker-score">+' + (p.liveScore | 0).toLocaleString() + '</div>' +
+      '</button>';
+    }).join('');
+    body.innerHTML = '<div class="spectator-picker-list">' + rows + '</div>';
+    body.querySelectorAll('.spectator-picker-row').forEach(function(btn) {
+      btn.onclick = function() {
+        const target = btn.getAttribute('data-target');
+        const name   = btn.getAttribute('data-name');
+        const modal = document.getElementById('spectator-picker-modal');
+        if (modal) modal.remove();
+        startSpectator(target, name, pendingSpectatorEntry);
+      };
+    });
+  }
+
+  function startSpectator(targetDeviceId, fallbackName, entryFrom) {
+    if (!activeContestCode || !targetDeviceId) return;
+    if (spectatorSession) stopSpectator(null);
+    const wrap = document.getElementById('grid-wrap');
+    if (!wrap) return;
+    const from = entryFrom || 'game-over';
+    // If the spectate starts mid-game, snapshot the current run so we can
+    // resume it cleanly on exit. The grid-wrap is about to be replaced.
+    if (from !== 'game-over' && !contestSubmitted && mode === 'contest') {
+      saveContestGameState();
+    }
+    // Tear down our own contest-screen overlay (if it's open behind the picker)
+    // so the spectator view has the stage to itself.
+    if (from === 'contest-screen') {
+      const el = document.getElementById('contest-screen');
+      if (el) { stopContestRefresh(); el.remove(); }
+    }
+    // Stop heartbeating my OWN game while I'm watching someone else — my
+    // contest_live_state row will fade within 10s on the server side.
+    stopLivePush();
+    spectatorSession = {
+      code: activeContestCode,
+      targetDeviceId: targetDeviceId,
+      name: fallbackName || 'שחקן',
+      lastScore: 0,
+      missCount: 0,
+      lastSnap: null,
+      pollTimer: null,
+      heartbeatTimer: null,
+      entryFrom: from
+    };
+    removeAudienceBadge();
+    renderSpectatorView();
+    // Initial heartbeat + first snapshot tick.
+    spectatorHeartbeat();
+    spectatorTick(true);
+    spectatorSession.pollTimer = setInterval(spectatorTick, 1000);
+    spectatorSession.heartbeatTimer = setInterval(spectatorHeartbeat, 5000);
+  }
+
+  async function spectatorHeartbeat() {
+    const s = spectatorSession;
+    if (!s) return;
+    const myName = getContestDisplayName(s.code) || 'אנונימי';
+    // If the spectator entered mid-game (paused their run), the score they
+    // expose to the watched player is their *current in-progress* score —
+    // that's more truthful than the last completed game's score.
+    let myScore = getLastFinalScore(s.code);
+    const midGamePause = s.entryFrom !== 'game-over'
+      && mode === 'contest'
+      && !contestSubmitted
+      && Array.isArray(grid)
+      && grid.some(function(row) { return row.some(function(c) { return c > 0; }); });
+    if (midGamePause) myScore = score | 0;
+    try {
+      await fetch(API_BASE + '/api/contests/' + encodeURIComponent(s.code) + '/watch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          watcherDeviceId: deviceId,
+          watcherName: myName,
+          watcherLastScore: myScore,
+          targetDeviceId: s.targetDeviceId
+        })
+      });
+    } catch (e) { /* silent */ }
+  }
+
+  async function spectatorTick(forceRender) {
+    const s = spectatorSession;
+    if (!s) return;
+    let res;
+    try {
+      res = await fetch(API_BASE + '/api/contests/' + encodeURIComponent(s.code) +
+        '/live-state/' + encodeURIComponent(s.targetDeviceId));
+    } catch (e) {
+      return;
+    }
+    if (!spectatorSession || spectatorSession !== s) return;
+    if (res.status === 404) {
+      s.missCount++;
+      if (s.missCount >= 2) {
+        showSpectatorToast('המשחק הסתיים');
+        stopSpectator(true);
+      }
+      return;
+    }
+    if (!res.ok) return;
+    let data;
+    try { data = await res.json(); } catch (e) { return; }
+    if (!spectatorSession || spectatorSession !== s) return;
+    s.missCount = 0;
+    if (data && data.live) {
+      s.lastSnap = data.live;
+      if (data.live.name) s.name = data.live.name;
+      renderSpectatorView();
+    } else if (forceRender) {
+      renderSpectatorView();
+    }
+  }
+
+  function renderSpectatorView() {
+    const s = spectatorSession;
+    if (!s) return;
+    const wrap = document.getElementById('grid-wrap');
+    if (!wrap) return;
+    const snap = s.lastSnap;
+    const tier = snap ? (snap.tier | 0) : 0;
+    const tierObj = getActiveTiers()[tier];
+    const tierBadge = tierObj
+      ? '<div class="contest-board-tier" style="background:' + tierObj.bg + ';color:' + tierObj.fg + '">' + tierObj.svg + '</div>'
+      : '<div class="contest-board-tier contest-board-tier-empty">·</div>';
+    let cellsHtml = '';
+    if (snap && Array.isArray(snap.grid) && snap.grid.length === 24) {
+      for (let i = 0; i < 24; i++) {
+        const t = snap.grid[i] | 0;
+        if (t > 0 && getActiveTiers()[t]) {
+          const ti = getActiveTiers()[t];
+          cellsHtml += '<div class="cell filled" style="background:' + ti.bg + ';color:' + ti.fg + '">' + ti.svg + '</div>';
+        } else {
+          cellsHtml += '<div class="cell"></div>';
+        }
+      }
+    } else {
+      for (let i = 0; i < 24; i++) cellsHtml += '<div class="cell"></div>';
+    }
+    const liveScoreText = snap ? (snap.score | 0).toLocaleString() : '—';
+    const tierName = (tierObj && tierObj.name) ? tierObj.name : '—';
+    // Choose exit label based on where the spectate started — the player
+    // should see "back to my game" if they came from mid-game.
+    const willResumeGame = s.entryFrom !== 'game-over' && !contestSubmitted && mode === 'contest';
+    const exitLabel = willResumeGame ? 'חזור למשחק שלי'
+      : s.entryFrom === 'contest-screen' ? 'חזור ללוח התחרות'
+      : 'צא מהצפייה';
+    wrap.innerHTML =
+      '<div class="spectator-view">' +
+        '<div class="spectator-header">' +
+          '<div>' +
+            '<div class="spectator-header-name">' + tierBadge +
+              '<span>צופה ב ' + escapeHtml(s.name || 'שחקן') + '</span>' +
+              '<span class="live-tag">LIVE</span>' +
+            '</div>' +
+            '<div class="spectator-header-meta">דרגה: ' + escapeHtml(tierName) + '</div>' +
+          '</div>' +
+          '<div class="spectator-header-score">' + liveScoreText + '</div>' +
+        '</div>' +
+        '<div class="spectator-grid"><div class="grid" id="spectator-grid-el">' + cellsHtml + '</div></div>' +
+        '<div class="spectator-controls">' +
+          '<button class="btn secondary" id="spec-switch">החלפת שחקן</button>' +
+          '<button class="btn" id="spec-exit">' + exitLabel + '</button>' +
+        '</div>' +
+      '</div>';
+    const sw = document.getElementById('spec-switch');
+    const ex = document.getElementById('spec-exit');
+    if (sw) sw.onclick = function() {
+      const fromBeforeExit = s.entryFrom;
+      stopSpectator(null);
+      openSpectatorPicker(fromBeforeExit);
+    };
+    if (ex) ex.onclick = function() {
+      stopSpectator('exit');
+    };
+  }
+
+  // exit: null → internal cleanup only (e.g., before switching player).
+  //       'exit' → user-initiated exit; route based on entryFrom + game state.
+  function stopSpectator(exit) {
+    const s = spectatorSession;
+    if (!s) return;
+    if (s.pollTimer) { clearInterval(s.pollTimer); s.pollTimer = null; }
+    if (s.heartbeatTimer) { clearInterval(s.heartbeatTimer); s.heartbeatTimer = null; }
+    // Best-effort unwatch — the server TTL will clean us up regardless.
+    try {
+      fetch(API_BASE + '/api/contests/' + encodeURIComponent(s.code) + '/unwatch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ watcherDeviceId: deviceId, targetDeviceId: s.targetDeviceId })
+      });
+    } catch (e) {}
+    const from = s.entryFrom;
+    spectatorSession = null;
+    if (exit !== 'exit') return;
+    if (from !== 'game-over' && !contestSubmitted && mode === 'contest' && activeContestCode) {
+      // Mid-game spectate ended → resume the saved game.
+      init('contest');
+      return;
+    }
+    if (from === 'contest-screen' && activeContestCode) {
+      showContestLeaderboard(activeContestCode);
+      return;
+    }
+    // Default — back to the game-over view.
+    render({ over: true });
+  }
+
+  function showSpectatorToast(text) {
+    const t = document.createElement('div');
+    t.className = 'spectator-toast';
+    t.textContent = text;
+    document.body.appendChild(t);
+    setTimeout(function() { if (t.parentNode) t.parentNode.removeChild(t); }, 2400);
+  }
+
   function formatRelativeTime(iso) {
     if (!iso) return '';
     const ms = new Date() - new Date(iso);
@@ -2848,16 +5341,21 @@
     return new Date(iso).toLocaleDateString('he-IL');
   }
 
-  function init(nextMode, opts) {
+  async function init(nextMode, opts) {
     opts = opts || {};
     const fresh = !!opts.fresh;
     if (nextMode) mode = nextMode;
     dailyDate = todayInIsrael();
-    grid = Array.from({length: ROWS}, function() { return Array(COLS).fill(0); });
+    grid = Array.from({length: getBoardRows()}, function() { return Array(getBoardCols()).fill(0); });
     score = 0; highestTier = 1; busy = false;
     currentGameMaxChain = 0;
+    tierUpHit = {};   // reset milestone-bonus tracker for this fresh game
     leaderboard = [];
     dailyRank = null;
+    // Cleared at top of init: by the time we know we're entering contest mode,
+    // we'll re-set this to the contest code the new game belongs to. For non-
+    // contest modes it stays null — saveContestGameState() then no-ops.
+    activeGameContestCode = null;
     if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; }
 
     if (mode === 'daily') {
@@ -2883,16 +5381,27 @@
       dailySubmitted = false;
     }
     let restoredContestState = false;
+    // Reset all live-broadcast state for a fresh game in this contest. The
+    // server side fades within LIVE_FRESH_SECONDS regardless, but resetting
+    // here means there's no flicker of stale data when toggling modes.
+    if (spectatorSession) stopSpectator(false);
+    stopLivePush();
     if (mode === 'contest') {
       contestSubmitted = false;
       if (activeContestCode) {
-        fetchContest(activeContestCode).then(function(data) {
-          if (data && data.contest && data.contest.board_seed != null) {
-            activeContestData = data.contest;
-          }
-        });
-        // Populate the count cache in the background so the "חברים" tab
-        // can decide whether to open the list-picker or jump straight in.
+        // AWAIT the fetch — without this, switching contests uses the previous
+        // contest's board_seed for the new game (visual state-leak that the
+        // user reported: "המערכת זוכרת את המשחק שלו רק מאחת מהתחרויות").
+        // We only block if activeContestData is missing or stale; if the cache
+        // already matches activeContestCode the fetch is best-effort.
+        if (!activeContestData || activeContestData.code !== activeContestCode) {
+          const data = await fetchContest(activeContestCode);
+          if (data && data.contest) activeContestData = data.contest;
+        } else {
+          fetchContest(activeContestCode).then(function(data) {
+            if (data && data.contest) activeContestData = data.contest;
+          });
+        }
         fetchMyContests().then(function() { updateModeBar(); });
       }
       rng = activeContestData && activeContestData.board_seed != null
@@ -2913,6 +5422,19 @@
           }
         }
       }
+      // Tag the in-memory game with its owning contest BEFORE any save can fire.
+      // From this point, saveContestGameState() routes by activeGameContestCode
+      // — so switching activeContestCode (My Contests row click) won't pollute
+      // the new contest's saved slot with this contest's grid.
+      activeGameContestCode = activeContestCode;
+    } else if (mode === 'challenge') {
+      // Challenges run on a fixed seed shared across all entrants for fairness.
+      // No save/restore — closing the tab = forfeit, by design.
+      if (activeChallenge && activeChallenge.boardSeed != null) {
+        rng = mulberry32(activeChallenge.boardSeed);
+      } else {
+        rng = Math.random;
+      }
     }
     if (!restoredContestState) nextPiece = pickPiece();
     updateModeBar();
@@ -2920,6 +5442,10 @@
     // Watch for opponents passing my score while I'm mid-game in a contest.
     if (mode === 'contest' && activeContestCode) startOvertakeWatch(activeContestCode);
     else stopOvertakeWatch();
+    // First-drop ping so spectators / leaderboards see the entry immediately.
+    if (mode === 'challenge' && activeChallenge) pushChallengeScore();
+    // Onboarding: nudge the first-time player on the very first board paint.
+    maybeOnboardStep1();
   }
 
   function updateModeBar() {
@@ -2971,6 +5497,7 @@
     if (!tabsEl) return;
     const tabs = [{ id: 'daily', label: 'יומי' }];
     if (activeContestCode) tabs.push({ id: 'contest', label: 'חברים' });
+    tabs.push({ id: 'challenge', label: 'אתגרים' });
     tabs.push({ id: 'practice', label: 'אימון' });
     tabsEl.innerHTML = tabs.map(function(t) {
       return '<button class="mode-tab' + (t.id === mode ? ' active' : '') +
@@ -2979,10 +5506,19 @@
     tabsEl.querySelectorAll('.mode-tab').forEach(function(btn) {
       btn.onclick = function() {
         const target = btn.getAttribute('data-mode');
-        if (target === mode && target !== 'contest') return;
+        if (target === mode && target !== 'contest' && target !== 'challenge') return;
         if (mode === 'contest') saveContestGameState();
+        // No saveChallengeGameState — challenges intentionally don't survive navigation.
         if (target === 'contest' && myContestsCountSync() >= 2) {
           showMyContestsList();
+          return;
+        }
+        if (target === 'challenge') {
+          // The "אתגרים" tab opens the public challenges hub. It's not an
+          // in-game mode you can flip into — you have to pick a specific
+          // challenge from the list and confirm before starting.
+          // Track entry point so the back arrow returns to the game, not home.
+          showChallengesList('in-game');
           return;
         }
         init(target);
@@ -3020,8 +5556,12 @@
     }
     const rows = leaderboard.slice(0, 10).map(function(row, i) {
       const isYou = row.you;
+      // No deviceId in the public daily leaderboard; hash on the name. Same-named
+      // players will collide visually — acceptable for the small daily board.
+      const seed = isYou ? deviceId : (row.name || 'anon');
       return '<div class="lb-row' + (isYou ? ' you' : '') + '">' +
         '<div class="lb-rank">' + (i+1) + '</div>' +
+        renderAvatarHtml(seed, 'sm') +
         '<div class="lb-name">' + escapeHtml(row.name || 'אנונימי') + (isYou ? ' (אתה)' : '') + '</div>' +
         '<div class="lb-score">' + (row.score || 0).toLocaleString() + '</div>' +
       '</div>';
@@ -3091,8 +5631,10 @@
     }
     const data = await fetchContest(activeContestCode);
     if (data && data.players) {
+      updateMyWatchersFromContestData(data);
       leaderboard = data.players.map(function(p) {
-        return { name: p.name, score: p.score, tier: p.tier, you: !!p.you };
+        const total = (p.score | 0) + (p.liveScore == null ? 0 : (p.liveScore | 0));
+        return { name: p.name, score: total, tier: p.tier, you: !!p.you, liveScore: p.liveScore };
       });
       if (data.contest) activeContestData = data.contest;
     }
@@ -3257,9 +5799,9 @@
     while (stack.length) {
       const pos = stack.pop();
       const r = pos[0], c = pos[1];
-      const k = r * COLS + c;
+      const k = r * getBoardCols() + c;
       if (visited.has(k)) continue;
-      if (r < 0 || r >= ROWS || c < 0 || c >= COLS) continue;
+      if (r < 0 || r >= getBoardRows() || c < 0 || c >= getBoardCols()) continue;
       if (grid[r][c] !== tier) continue;
       visited.add(k);
       group.push([r, c]);
@@ -3269,9 +5811,9 @@
   }
 
   function applyGravity() {
-    for (let c = 0; c < COLS; c++) {
-      let w = ROWS - 1;
-      for (let r = ROWS - 1; r >= 0; r--) {
+    for (let c = 0; c < getBoardCols(); c++) {
+      let w = getBoardRows() - 1;
+      for (let r = getBoardRows() - 1; r >= 0; r--) {
         if (grid[r][c] !== 0) {
           if (r !== w) { grid[w][c] = grid[r][c]; grid[r][c] = 0; }
           w--;
@@ -3285,7 +5827,7 @@
   function showFloatingScore(row, col, points, chainCount) {
     const gridEl = document.getElementById('grid');
     if (!gridEl) return;
-    const cellIdx = row * COLS + col;
+    const cellIdx = row * getBoardCols() + col;
     const cell = gridEl.children[cellIdx];
     if (!cell) return;
     const cellRect = cell.getBoundingClientRect();
@@ -3311,6 +5853,22 @@
     setTimeout(function() { if (badge.parentNode) badge.parentNode.removeChild(badge); }, 750);
   }
 
+  // First-time-tier-up celebration. Bigger, slower, gold-on-black banner.
+  // Fires at most once per (tier, game) — checked at the call site.
+  function showMilestoneBanner(tier, bonusPts) {
+    const wrap = document.getElementById('grid-wrap');
+    if (!wrap) return;
+    const t = (getActiveTiers() && getActiveTiers()[tier]) || { name: 'דרגה ' + tier, emoji: '⭐' };
+    const banner = document.createElement('div');
+    banner.className = 'milestone-banner';
+    banner.innerHTML =
+      '<div class="milestone-banner-tier">' + t.emoji + ' ' + escapeHtml(t.name) + '</div>' +
+      '<div class="milestone-banner-bonus">+' + bonusPts.toLocaleString() + '</div>' +
+      '<div class="milestone-banner-sub">בונוס פעם-ראשונה במשחק זה</div>';
+    wrap.appendChild(banner);
+    setTimeout(function() { if (banner.parentNode) banner.parentNode.removeChild(banner); }, 1500);
+  }
+
   function bumpScore() {
     const el = document.getElementById('score');
     if (!el) return;
@@ -3326,8 +5884,8 @@
       let merged = null;
       let mergedTier = 0;
       let mergeSize = 0;
-      outer: for (let r = 0; r < ROWS; r++) {
-        for (let c = 0; c < COLS; c++) {
+      outer: for (let r = 0; r < getBoardRows(); r++) {
+        for (let c = 0; c < getBoardCols(); c++) {
           const t = grid[r][c];
           if (t === 0 || t === MAX_TIER) continue;
           const group = findGroup(r, c, t);
@@ -3349,6 +5907,18 @@
             const points = pointsFor(nt, group.length, multiplier);
             score += points;
             if (nt > highestTier) highestTier = nt;
+            // First-time-tier-up bonus: when this merge brings the player's
+            // highestTier to a milestone they haven't hit YET this game,
+            // award the bonus. Drives the dopamine of "I just got Crown!".
+            if (TIER_UP_BONUS[nt] && !tierUpHit[nt]) {
+              tierUpHit[nt] = true;
+              const bonusPts = TIER_UP_BONUS[nt];
+              score += bonusPts;
+              showMilestoneBanner(nt, bonusPts);
+              soundMilestone(nt);
+              bumpScore();
+              buzz([60, 40, 80]);
+            }
             merged = [kr, kc];
             mergedTier = nt;
             mergeSize = group.length;
@@ -3357,6 +5927,9 @@
             soundMerge(nt);
             if (chainCount > currentGameMaxChain) currentGameMaxChain = chainCount;
             bumpLifetimeMax(BEST_CHAIN_KEY, chainCount);
+            // Onboarding: first merge → step 2; first chain (≥2) → step 3.
+            if (chainCount === 1) maybeOnboardStep2();
+            else if (chainCount >= 2) maybeOnboardStep3();
             if (chainCount >= 2) {
               const m = chainCount === 2 ? '1.5' : chainCount === 3 ? '2' : chainCount === 4 ? '2.5' : '3';
               showChainBadge(chainCount, m);
@@ -3387,7 +5960,7 @@
   async function drop(col) {
     if (busy) return;
     let row = -1;
-    for (let r = ROWS - 1; r >= 0; r--) {
+    for (let r = getBoardRows() - 1; r >= 0; r--) {
       if (grid[r][col] === 0) { row = r; break; }
     }
     if (row === -1) return;
@@ -3401,10 +5974,16 @@
     }
     grid[row][col] = nextPiece;
     if (nextPiece > highestTier) highestTier = nextPiece;
+    // Dismiss the step-1 coach toast the moment a player actually drops —
+    // they've understood the input; no need to keep the arrow up.
+    dismissCoach();
     render({ appearing: [row, col] });
     await sleep(140);
     await processChains();
-    await rollNextPiece();
+    // Pick the next piece NOW — this is synchronous, so the player can drop
+    // again the instant we set busy=false below. The cycling animation runs
+    // in the background as a visual indicator only, never gating input.
+    rollNextPiece();
     render();
     if (score > best) { best = score; localStorage.setItem(BEST_KEY, String(best)); }
     if (isGameOver()) {
@@ -3415,6 +5994,17 @@
       bumpLifetimeMax(BEST_TIER_KEY, highestTier);
       addLifetimeTotal(TOTAL_SCORE_KEY, score);
       checkAchievements();
+      // Challenges short-circuit the regular game-over screen — they get
+      // their own bespoke "you won / you didn't" view from /complete.
+      if (mode === 'challenge' && activeChallenge) {
+        const w = document.getElementById('grid-wrap');
+        if (w) w.innerHTML = '<div class="overlay"><div class="over-title">האתגר הסתיים</div><div class="contest-loading" style="margin-top:14px">שולח תוצאה…</div></div>';
+        (async function() {
+          const result = await completeChallengeRun();
+          renderChallengeResult(result);
+        })();
+        return;
+      }
       if (mode === 'daily' && !dailySubmitted) {
         dailySubmitted = true;
         localStorage.setItem(DAILY_PLAYED_PREFIX + dailyDate, JSON.stringify({ score: score, tier: highestTier, ts: Date.now() }));
@@ -3431,6 +6021,11 @@
         contestSubmitted = true;
         clearContestGameState();
         stopOvertakeWatch();
+        setLastFinalScore(activeContestCode, score | 0);
+        stopLivePush();
+        // Detach the in-memory state from the contest — future saveContestGameState()
+        // calls (e.g. from beforeunload) won't pollute the just-cleared slot.
+        activeGameContestCode = null;
         (async function() {
           await submitContestScore(activeContestCode, score, highestTier);
           await loadContestLeaderboard();
@@ -3440,13 +6035,22 @@
     else {
       busy = false;
       render();
-      if (mode === 'contest') saveContestGameState();
+      if (mode === 'contest') {
+        saveContestGameState();
+        scheduleLiveScorePush();
+        if (meHasWatchers) pushLiveState();
+      }
+      if (mode === 'challenge' && activeChallenge) {
+        activeChallenge.drops = (activeChallenge.drops | 0) + 1;
+        writeChallengeDrops(activeChallenge.slug, activeChallenge.drops);
+        pushChallengeScore();
+      }
     }
   }
 
   function shareResult() {
     const emojis = [];
-    for (let t = 1; t <= highestTier; t++) emojis.push(TIERS[t].emoji);
+    for (let t = 1; t <= highestTier; t++) emojis.push(getActiveTiers()[t].emoji);
     let header;
     if (mode === 'daily') {
       header = 'BLOOM · אתגר יומי ' + formatDateHe(dailyDate) + '\n' + score.toLocaleString() + ' נקודות';
@@ -3469,12 +6073,222 @@
     }
   }
 
+  // ================================================================
+  // TOUR — multi-step guided tutorial covering rules, merging, chains,
+  // tier-up bonuses, and the 4 game modes. Reachable from a button in
+  // showInfo() and proactively offered to first-time visitors. Uses real
+  // TIER svgs for illustrations so the player learns the actual icon set.
+  // ================================================================
+  const TOUR_KEY = 'bloom_tour_seen';
+  function tourTile(tier, sizeClass) {
+    const t = (getActiveTiers() && getActiveTiers()[tier]) || null;
+    const cls = 'tour-tile' + (sizeClass ? ' ' + sizeClass : '');
+    if (!t) return '<span class="' + cls + ' tour-tile-empty"></span>';
+    return '<span class="' + cls + '" style="background:' + t.bg + ';color:' + t.fg + '">' + t.svg + '</span>';
+  }
+
+  function tourSteps() {
+    return [
+      // 1 — Welcome
+      {
+        illustration:
+          '<div class="tour-welcome">' +
+            '<div class="icons-row">' +
+              tourTile(8, 'tour-tile-lg') + tourTile(7, 'tour-tile-lg') + tourTile(6, 'tour-tile-lg') +
+            '</div>' +
+            '<div class="brand">BLOOM</div>' +
+          '</div>',
+        title: 'ברוכים הבאים ל-BLOOM',
+        desc: 'משחק מיזוג בעברית. מטרה אחת: <strong>להגיע לכתר 👑</strong>. הסיור הזה ייקח 60 שניות.'
+      },
+      // 2 — The Board
+      {
+        illustration: (function() {
+          const cells = [];
+          for (let i = 0; i < 24; i++) cells.push('<span class="tour-tile tour-tile-empty"></span>');
+          return '<div class="tour-mini-grid">' + cells.join('') + '</div>';
+        })(),
+        title: 'הלוח',
+        desc: '<strong>4 עמודות × 6 שורות</strong>. כל הקשה על עמודה מפילה את החלק "הבא" לתחתית העמודה.'
+      },
+      // 3 — The Tier ladder
+      {
+        illustration:
+          '<div class="tour-row">' +
+            tourTile(1, 'tour-tile-sm') + tourTile(2, 'tour-tile-sm') + tourTile(3, 'tour-tile-sm') +
+            tourTile(4, 'tour-tile-sm') + tourTile(5, 'tour-tile-sm') + tourTile(6, 'tour-tile-sm') +
+            tourTile(7, 'tour-tile-sm') + tourTile(8, 'tour-tile-sm') +
+          '</div>',
+        title: '8 דרגות — מאבן עד כתר',
+        desc: 'אבן → עלה → פרח → אש → ⚡ ברק → ⭐ כוכב → 💎 יהלום → 👑 <strong>כתר</strong>. הסולם בראש המסך מציג את הדרגה הבאה שתיפול.'
+      },
+      // 4 — Simple merge
+      {
+        illustration:
+          '<div class="tour-row">' +
+            tourTile(2) + tourTile(2) +
+            '<span class="tour-arrow">→</span>' +
+            tourTile(3) +
+          '</div>',
+        title: 'שני זהים → מיזוג',
+        desc: 'אריחים זהים שצמודים <strong>אופקית או אנכית</strong> מתמזגים אוטומטית לדרגה הבאה. <strong>שני עלים = פרח אחד</strong>.'
+      },
+      // 5 — Group merge
+      {
+        illustration:
+          '<div class="tour-row">' +
+            '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:3px">' +
+              tourTile(3, 'tour-tile-sm') + tourTile(3, 'tour-tile-sm') +
+              tourTile(3, 'tour-tile-sm') + tourTile(3, 'tour-tile-sm') +
+            '</div>' +
+            '<span class="tour-arrow">→</span>' +
+            tourTile(4) +
+          '</div>',
+        title: 'מיזוג גדול = ניקוד גדול',
+        desc: 'מיזוג של <strong>3, 4 או יותר אריחים בו-זמנית</strong> נותן ניקוד <strong>פי 3, פי 4 ויותר</strong>. תכנן קבוצות גדולות לפני המיזוג.'
+      },
+      // 6 — Chains
+      {
+        illustration:
+          '<div class="tour-welcome">' +
+            '<div class="tour-row">' +
+              tourTile(2, 'tour-tile-sm') + tourTile(2, 'tour-tile-sm') +
+              '<span class="tour-arrow">→</span>' + tourTile(3, 'tour-tile-sm') +
+            '</div>' +
+            '<div class="tour-row">' +
+              tourTile(3, 'tour-tile-sm') + tourTile(3, 'tour-tile-sm') +
+              '<span class="tour-arrow">→</span>' + tourTile(4, 'tour-tile-sm') +
+            '</div>' +
+            '<div class="tour-row" style="margin-top:6px">' +
+              '<span style="background:#FAC775;color:#412402;padding:3px 10px;border-radius:999px;font-weight:800;font-size:12px">שרשרת ×3</span>' +
+            '</div>' +
+          '</div>',
+        title: 'שרשרת — מכפיל ניקוד',
+        desc: 'מיזוג שגורר מיזוג נוסף = <strong>שרשרת</strong>. כל קישור מכפיל את הניקוד: ×1.5, ×2, ×2.5, עד <strong>×3 על שרשרת ארוכה</strong>.'
+      },
+      // 7 — Tier-up bonuses
+      {
+        illustration:
+          '<div class="tour-bonus-list">' +
+            '<div class="tour-bonus-row"><span class="name">' + tourTile(5, 'tour-tile-sm') + 'ברק</span><span class="pts">+500</span></div>' +
+            '<div class="tour-bonus-row"><span class="name">' + tourTile(6, 'tour-tile-sm') + 'כוכב</span><span class="pts">+1,500</span></div>' +
+            '<div class="tour-bonus-row"><span class="name">' + tourTile(7, 'tour-tile-sm') + 'יהלום</span><span class="pts">+5,000</span></div>' +
+            '<div class="tour-bonus-row"><span class="name">' + tourTile(8, 'tour-tile-sm') + 'כתר</span><span class="pts">+15,000</span></div>' +
+          '</div>',
+        title: 'בונוס פעם-ראשונה',
+        desc: 'בכל משחק, פעם <strong>הראשונה</strong> שמגיעים לדרגה גבוהה — בונוס ניקוד מיידי + פיצוץ ויזואלי. <strong>כתר אחד = +15,000</strong>.'
+      },
+      // 8 — Game over
+      {
+        illustration: (function() {
+          const cells = [];
+          // First row full, rest empty — the game-over condition
+          const filled = [2, 3, 4, 5];
+          for (let i = 0; i < 4; i++) cells.push(tourTile(filled[i], 'tour-tile-sm'));
+          for (let i = 0; i < 20; i++) cells.push('<span class="tour-tile tour-tile-empty" style="width:32px;height:32px;border-radius:6px"></span>');
+          return '<div class="tour-mini-grid">' + cells.join('') + '</div>';
+        })(),
+        title: 'סיום משחק',
+        desc: 'המשחק נגמר כששורה ה<strong>עליונה מתמלאת</strong>. אז תקבל מסך תוצאות — שתף את הציון, ראה את מקומך בלוח, ונסה שוב.'
+      },
+      // 9 — 4 modes
+      {
+        illustration:
+          '<div class="tour-modes-grid">' +
+            '<div class="tour-mode-card"><div class="ic">📅</div><div class="lbl">יומי</div><div class="desc">אותו לוח לכולם, פעם ביום</div></div>' +
+            '<div class="tour-mode-card"><div class="ic">🎮</div><div class="lbl">אימון</div><div class="desc">חופשי, ללא לוח מובילים</div></div>' +
+            '<div class="tour-mode-card"><div class="ic">👥</div><div class="lbl">חברים</div><div class="desc">תחרות פרטית עם קוד</div></div>' +
+            '<div class="tour-mode-card"><div class="ic">🎁</div><div class="lbl">אתגרים</div><div class="desc">פרסים אמיתיים</div></div>' +
+          '</div>',
+        title: '4 מצבי משחק',
+        desc: 'אותו משחק, ארבעה דרכים לשחק. תוכל להחליף ביניהם בטאבים שמתחת לסולם.'
+      },
+      // 10 — Ready
+      {
+        illustration:
+          '<div class="tour-welcome">' +
+            tourTile(8, 'tour-tile-lg') +
+            '<div style="font-size:32px">🎯</div>' +
+          '</div>',
+        title: 'מוכן? קדימה!',
+        desc: 'עכשיו אתה יודע הכל. תקיש על "<strong>בוא נתחיל</strong>" ונראה אותך מגיע לכתר.'
+      }
+    ];
+  }
+
+  let tourCurrentStep = 0;
+  function showTour(opts) {
+    opts = opts || {};
+    tourCurrentStep = (typeof opts.step === 'number') ? opts.step : 0;
+    const existing = document.getElementById('tour-modal');
+    if (existing) existing.remove();
+    const modal = document.createElement('div');
+    modal.id = 'tour-modal';
+    modal.className = 'info-modal';
+    modal.innerHTML = '<div class="tour-card" id="tour-card"></div>';
+    document.body.appendChild(modal);
+    modal.onclick = function(e) { if (e.target === modal) closeTour({ markSeen: false }); };
+    renderTourStep();
+  }
+  function renderTourStep() {
+    const card = document.getElementById('tour-card');
+    if (!card) return;
+    const steps = tourSteps();
+    const total = steps.length;
+    if (tourCurrentStep < 0) tourCurrentStep = 0;
+    if (tourCurrentStep >= total) { closeTour({ markSeen: true }); return; }
+    const step = steps[tourCurrentStep];
+    const dots = [];
+    for (let i = 0; i < total; i++) {
+      const cls = i < tourCurrentStep ? 'done' : (i === tourCurrentStep ? 'active' : '');
+      dots.push('<div class="tour-progress-dot ' + cls + '"></div>');
+    }
+    const isLast = tourCurrentStep === total - 1;
+    const isFirst = tourCurrentStep === 0;
+    card.innerHTML =
+      '<div class="tour-header">' +
+        '<span class="tour-step-pill">שלב ' + (tourCurrentStep + 1) + ' מתוך ' + total + '</span>' +
+        '<button class="tour-skip" id="tour-skip">דלג ✕</button>' +
+      '</div>' +
+      '<div class="tour-progress">' + dots.join('') + '</div>' +
+      '<div class="tour-body">' +
+        '<div class="tour-illustration">' + step.illustration + '</div>' +
+        '<div class="tour-title">' + step.title + '</div>' +
+        '<div class="tour-desc">' + step.desc + '</div>' +
+      '</div>' +
+      '<div class="tour-footer">' +
+        (isFirst ? '' : '<button class="btn secondary" id="tour-prev">‹ הקודם</button>') +
+        '<button class="btn" id="tour-next">' + (isLast ? 'בוא נתחיל!' : 'הבא ›') + '</button>' +
+      '</div>';
+    document.getElementById('tour-skip').onclick = function() { closeTour({ markSeen: true }); };
+    document.getElementById('tour-next').onclick = function() {
+      tourCurrentStep++;
+      renderTourStep();
+    };
+    const prev = document.getElementById('tour-prev');
+    if (prev) prev.onclick = function() {
+      tourCurrentStep--;
+      renderTourStep();
+    };
+  }
+  function closeTour(opts) {
+    opts = opts || {};
+    const m = document.getElementById('tour-modal');
+    if (m) m.remove();
+    if (opts.markSeen !== false) {
+      try { localStorage.setItem(TOUR_KEY, '1'); } catch (e) {}
+    }
+  }
+  function hasSeenTour() {
+    try { return localStorage.getItem(TOUR_KEY) === '1'; } catch (e) { return false; }
+  }
+
   function showInfo() {
     const wrap = document.getElementById('grid-wrap');
     if (!wrap || document.getElementById('info-modal')) return;
     const rows = [];
     for (let t = 1; t <= MAX_TIER; t++) {
-      const ti = TIERS[t];
+      const ti = getActiveTiers()[t];
       rows.push(
         '<div class="tier-row reached" style="text-align:right;">' +
           '<div class="tier-icon-sm" style="background:' + ti.bg + ';color:' + ti.fg + '">' + ti.svg + '</div>' +
@@ -3492,7 +6306,8 @@
           '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>' +
         '</button>' +
         '<div class="info-title">איך הניקוד עובד</div>' +
-        '<div class="info-sub">דרגה × 10 × מספר הפריטים במיזוג. שרשרת מוסיפה ×1.5, ×2, ×2.5…</div>' +
+        '<div class="info-sub">דרגה × 10 × (1 + 0.3·דרגה) × גודל הקבוצה × שרשרת.<br>בנוסף: בונוס פעם-ראשונה במשחק — ⚡ ברק +500 · ⭐ כוכב +1,500 · 💎 יהלום +5,000 · 👑 כתר +15,000.</div>' +
+        '<button class="btn" id="info-tour-btn" style="margin: 4px 0 12px">📖 פתח את המדריך המלא</button>' +
         '<div class="tier-table">' + rows.join('') + '</div>' +
         '<div class="credits">' +
           'מוזיקה: שלושה טראקים של Manuel Graf (לובי, משחק, סיום), רישיון CC BY 4.0.<br>' +
@@ -3502,13 +6317,15 @@
     wrap.appendChild(modal);
     document.getElementById('info-close').onclick = function() { modal.remove(); };
     modal.onclick = function(e) { if (e.target === modal) modal.remove(); };
+    const tourBtn = document.getElementById('info-tour-btn');
+    if (tourBtn) tourBtn.onclick = function() { modal.remove(); showTour(); };
   }
 
   function buildTierBar() {
     const bar = document.getElementById('tier-bar');
     if (!bar || bar.children.length) return;
     for (let t = 1; t <= MAX_TIER; t++) {
-      const tier = TIERS[t];
+      const tier = getActiveTiers()[t];
       const cell = document.createElement('div');
       cell.className = 'tier-cell';
       cell.dataset.tier = String(t);
@@ -3539,12 +6356,19 @@
     if (cell) cell.classList.add('active');
   }
 
+  // Token bumps with each new roll so a stale animation (still cycling from
+  // the previous drop) bails out the moment a new pick arrives.
+  let revealToken = 0;
   async function revealNextTier(finalTier) {
     const bar = document.getElementById('tier-bar');
     if (!bar) return;
+    const myToken = ++revealToken;
     const cells = bar.querySelectorAll('.tier-cell');
+    // Keep the 'active' highlight on the chosen tier throughout the cycle —
+    // a fast player needs to know what they're about to drop, even mid-anim.
     cells.forEach(function(c) {
-      c.classList.remove('active');
+      const tier = parseInt(c.getAttribute('data-tier'), 10);
+      if (tier !== finalTier) c.classList.remove('active');
       c.classList.remove('cycling');
     });
     const sweep = [1, 2, 3, 4, 1, 2, 3, 4, 1, 2, 3, 4];
@@ -3552,6 +6376,10 @@
     const startMs = 28;
     const endMs = 95;
     for (let i = 0; i < sweep.length; i++) {
+      // If a newer roll started, abandon this cycle — highlightNextTier
+      // (called synchronously by rollNextPiece) has already snapped the bar
+      // to the new chosen tier.
+      if (myToken !== revealToken) return;
       cells.forEach(function(c) { c.classList.remove('cycling'); });
       const cell = bar.querySelector('.tier-cell[data-tier="' + sweep[i] + '"]');
       if (cell) cell.classList.add('cycling');
@@ -3559,21 +6387,37 @@
       const dur = Math.round(startMs + (endMs - startMs) * (t * t));
       await sleep(dur);
     }
+    if (myToken !== revealToken) return;
     cells.forEach(function(c) { c.classList.remove('cycling'); });
     const finalCell = bar.querySelector('.tier-cell[data-tier="' + finalTier + '"]');
     if (finalCell) finalCell.classList.add('active');
   }
 
-  async function rollNextPiece() {
+  // Pick the next piece IMMEDIATELY so a fast tapper can drop again the
+  // moment processChains() returns. The fancy cycling animation runs as
+  // a non-blocking visual indicator (~600ms total) — it never gates input.
+  function rollNextPiece() {
     const chosen = pickPiece();
-    await revealNextTier(chosen);
     nextPiece = chosen;
+    // Snap the tier bar to the new piece right now (the animation may still
+    // be playing; revealToken makes it a no-op if a newer roll fired).
+    highlightNextTier(chosen);
+    // Fire-and-forget the cycle. If the player taps fast, the next call to
+    // rollNextPiece will bump revealToken and the in-flight animation bails.
+    revealNextTier(chosen);
   }
 
   function render(opts) {
     opts = opts || {};
     document.getElementById('score').textContent = score.toLocaleString();
     document.getElementById('best').textContent = best.toLocaleString();
+    // "Near best" cue — once the current run gets within 10% of the personal
+    // best, the best value pulses in gold to invite a record attempt.
+    const bestEl = document.getElementById('best');
+    if (bestEl) {
+      if (best > 0 && score >= best * 0.9 && score < best) bestEl.classList.add('near-best');
+      else bestEl.classList.remove('near-best');
+    }
     buildTierBar();
     highlightNextTier(nextPiece);
     const wrap = document.getElementById('grid-wrap');
@@ -3581,7 +6425,7 @@
     if (opts.over) {
       const tierRows = [];
       for (let t = 1; t <= MAX_TIER; t++) {
-        const ti = TIERS[t];
+        const ti = getActiveTiers()[t];
         const reached = t <= highestTier;
         tierRows.push(
           '<div class="tier-row ' + (reached ? 'reached' : 'locked') + '">' +
@@ -3592,7 +6436,7 @@
         );
       }
       const emojis = [];
-      for (let t = 1; t <= highestTier; t++) emojis.push(TIERS[t].emoji);
+      for (let t = 1; t <= highestTier; t++) emojis.push(getActiveTiers()[t].emoji);
 
       let title;
       if (mode === 'daily' && opts.alreadyPlayed) title = 'סיימת את האתגר היומי';
@@ -3608,13 +6452,18 @@
 
       const showCountdown = mode === 'daily';
       const showLeaderboard = mode === 'daily' || mode === 'contest';
-      const againLabel = (mode === 'daily') ? 'שחק באימון חופשי' : 'שחק שוב';
+      const isContestOver = mode === 'contest' && activeContestCode;
+      const againLabel = isContestOver ? 'שחק עוד משחק בתחרות'
+        : (mode === 'daily') ? 'שחק באימון חופשי' : 'שחק שוב';
+      const spectateBtn = isContestOver
+        ? '<button class="btn secondary" id="spec-open"><span style="display:inline-flex;align-items:center;gap:6px;justify-content:center"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>צא לצפייה במשחקים חיים</span></button>'
+        : '';
 
       wrap.innerHTML =
         '<div class="overlay">' +
           '<div class="over-title">' + title + '</div>' +
           '<div class="over-score">' + score.toLocaleString() + '</div>' +
-          '<div class="over-sub">הגעת ל' + TIERS[highestTier].name + ' · ' + highestTier + '/' + MAX_TIER + ' דרגות</div>' +
+          '<div class="over-sub">הגעת ל' + getActiveTiers()[highestTier].name + ' · ' + highestTier + '/' + MAX_TIER + ' דרגות</div>' +
           (dailyRank ? '<div class="lb-rank-pill">המקום שלך היום: #' + dailyRank + '</div>' : '') +
           (showCountdown ? '<div class="countdown" id="countdown"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span>אתגר חדש בעוד <span id="countdown-val">--:--:--</span></span></div>' : '') +
           (showLeaderboard ? renderLeaderboard() : '') +
@@ -3622,13 +6471,18 @@
           '<div class="share-label">התוצאה לשיתוף</div>' +
           '<div class="share-card">' + shareHeader + '<br>' + emojis.join('') + '<br><br>' + (window.location.host || 'play.bloom.com') + '</div>' +
           '<button class="btn" id="share-btn">שתף תוצאה</button>' +
+          spectateBtn +
           '<button class="btn secondary" id="again">' + againLabel + '</button>' +
         '</div>';
       document.getElementById('again').onclick = function() {
-        init('practice', { fresh: true });
+        if (isContestOver) init('contest', { fresh: true });
+        else init('practice', { fresh: true });
       };
       document.getElementById('share-btn').onclick = shareResult;
+      const specBtn = document.getElementById('spec-open');
+      if (specBtn) specBtn.onclick = function() { openSpectatorPicker('game-over'); };
       if (showCountdown) startCountdown();
+      equipOverlay();
       return;
     }
 
@@ -3639,14 +6493,17 @@
     } else {
       gridEl.innerHTML = '';
     }
-    for (let r = 0; r < ROWS; r++) {
-      for (let c = 0; c < COLS; c++) {
+    // Size the grid to fit the available area on BOTH axes (CSS aspect-ratio
+    // alone can't constrain by both width and height cross-browser).
+    fitGrid();
+    for (let r = 0; r < getBoardRows(); r++) {
+      for (let c = 0; c < getBoardCols(); c++) {
         const t = grid[r][c];
         const cell = document.createElement('div');
         cell.className = 'cell';
         if (t > 0) {
           cell.classList.add('filled');
-          const ti = TIERS[t];
+          const ti = getActiveTiers()[t];
           cell.style.background = ti.bg;
           cell.style.color = ti.fg;
           cell.innerHTML = ti.svg;
@@ -3657,6 +6514,18 @@
           cell.onclick = function() { drop(colIdx); };
         })(c);
         gridEl.appendChild(cell);
+      }
+    }
+    // Challenge-mode visual: pin the prize chip over the grid + hide the reset
+    // button (which would otherwise let the player rage-restart their only attempt).
+    const resetEl = document.getElementById('reset');
+    if (resetEl) resetEl.style.display = (mode === 'challenge' && activeChallenge) ? 'none' : '';
+    if (mode === 'challenge' && activeChallenge) {
+      const existingChip = wrap.querySelector('.challenge-prize-chip');
+      if (!existingChip) {
+        const chip = document.createElement('div');
+        chip.innerHTML = challengePrizeChipHtml();
+        if (chip.firstChild) wrap.appendChild(chip.firstChild);
       }
     }
   }
@@ -3727,6 +6596,16 @@
   init('daily');
   showHome();
 
+  // Visit ping — fire-and-forget. Lets the admin dashboard distinguish
+  // "visited but didn't play" from "didn't visit at all" (bounce rate).
+  try {
+    fetch(API_BASE + '/api/ping', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ deviceId: deviceId })
+    }).catch(function() {});
+  } catch (e) {}
+
   // Check for contest link
   const urlParams = new URLSearchParams(window.location.search);
   const contestCodeFromURL = urlParams.get('c');
@@ -3742,7 +6621,7 @@
   // ============================================================
   window.BloomDebug = {
     ready: function() {
-      return Array.isArray(grid) && grid.length === ROWS && typeof nextPiece === 'number';
+      return Array.isArray(grid) && grid.length === getBoardRows() && typeof nextPiece === 'number';
     },
     getGrid: function() {
       if (!Array.isArray(grid)) return null;

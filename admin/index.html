@@ -1,0 +1,1075 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<title>BLOOM אדמין</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: #FAFAF6;
+    color: #1C1A18;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    direction: rtl;
+    font-size: 14px;
+    line-height: 1.45;
+    min-height: 100vh;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 16px; }
+
+  /* HEADER */
+  header {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 14px 18px;
+    background: linear-gradient(90deg, #FFF7E6 0%, #FFFFFF 100%);
+    border-radius: 14px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    margin-bottom: 16px;
+  }
+  header h1 { font-size: 18px; font-weight: 700; margin: 0; color: #1C1A18; }
+  header h1 small { color: #6F6E68; font-weight: 500; font-size: 12px; margin-right: 8px; }
+  header .actions { display: flex; gap: 6px; }
+  .btn {
+    background: #1C1A18; color: #FFFFFF; border: none;
+    padding: 8px 14px; border-radius: 10px; font-weight: 600; font-size: 13px;
+    cursor: pointer; font-family: inherit;
+    transition: opacity 0.15s, transform 0.08s;
+  }
+  .btn:active { transform: scale(0.97); }
+  .btn:hover { opacity: 0.92; }
+  .btn.secondary { background: #F5F2EC; color: #1C1A18; }
+  .btn.ghost { background: transparent; color: #6F6E68; border: 1px solid rgba(0,0,0,0.1); }
+  .btn.danger { background: #C8472F; color: #FFFFFF; }
+  .btn.sm { padding: 5px 10px; font-size: 11px; border-radius: 7px; }
+
+  /* SECTION */
+  section { background: #FFFFFF; border-radius: 14px; padding: 16px 18px; margin-bottom: 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.03); }
+  section h2 { font-size: 13px; font-weight: 700; margin: 0 0 12px; color: #1C1A18; letter-spacing: 0.02em;
+    display: flex; align-items: center; gap: 8px; }
+  section h2 .badge { background: #F5F2EC; color: #6F6E68; font-size: 10px; padding: 2px 7px; border-radius: 999px; font-weight: 600; }
+
+  /* KPIS */
+  .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  @media (max-width: 720px) { .kpis { grid-template-columns: repeat(2, 1fr); } }
+  .kpi {
+    background: #FAFAF6; border-radius: 10px; padding: 11px 12px;
+    border: 1px solid rgba(0,0,0,0.04);
+  }
+  .kpi .label { font-size: 10px; color: #A8A6A0; letter-spacing: 0.08em; text-transform: uppercase; }
+  .kpi .value { font-size: 26px; font-weight: 700; color: #1C1A18; margin-top: 2px; font-variant-numeric: tabular-nums; }
+  .kpi .sub { font-size: 10px; color: #6F6E68; margin-top: 2px; }
+  .kpi .sub.good { color: #2E8B6F; font-weight: 600; }
+  .kpi .sub.bad  { color: #C8472F; font-weight: 600; }
+
+  /* ANOMALY BANNER */
+  .anomaly {
+    background: #FCE4E0; color: #8B1F0A;
+    border-right: 4px solid #C8472F;
+    padding: 12px 16px; border-radius: 10px;
+    margin-bottom: 14px;
+    font-weight: 600;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .anomaly svg { width: 18px; height: 18px; flex-shrink: 0; }
+
+  /* SPARKLINE */
+  .spark { display: block; width: 100%; height: 60px; }
+  .spark path.line { fill: none; stroke: #2E8B6F; stroke-width: 1.8; stroke-linejoin: round; stroke-linecap: round; }
+  .spark path.area { fill: rgba(46,139,111,0.10); stroke: none; }
+  .spark-meta { display: flex; justify-content: space-between; font-size: 10px; color: #A8A6A0; margin-top: 4px; }
+
+  /* FUNNEL */
+  .funnel { display: flex; flex-direction: column; gap: 6px; }
+  .funnel-row { display: flex; align-items: center; gap: 10px; }
+  .funnel-bar {
+    background: #F0EDE3; border-radius: 6px; height: 26px; flex: 1; position: relative; overflow: hidden;
+  }
+  .funnel-bar-fill { background: #FAC775; height: 100%; border-radius: 6px; transition: width 0.4s; }
+  .funnel-bar.drop .funnel-bar-fill { background: #C8472F; }
+  .funnel-label { width: 110px; font-size: 12px; font-weight: 600; color: #1C1A18; }
+  .funnel-value {
+    position: absolute; inset: 0; display: flex; align-items: center; padding: 0 8px;
+    font-size: 11px; font-weight: 700; color: #1C1A18; font-variant-numeric: tabular-nums;
+  }
+  .funnel-value .pct { color: #6F6E68; font-weight: 500; margin-right: 4px; }
+
+  /* COHORT TABLE */
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th { text-align: right; font-weight: 600; color: #6F6E68; padding: 8px 10px; border-bottom: 1px solid #F0EDE3; font-size: 11px; }
+  td { padding: 8px 10px; border-bottom: 1px solid #F5F2EC; font-variant-numeric: tabular-nums; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: #FAFAF6; }
+  .table-wrap { overflow-x: auto; }
+  .meter { display: inline-block; background: #F0EDE3; border-radius: 999px; width: 50px; height: 8px; vertical-align: middle; margin-right: 6px; overflow: hidden; }
+  .meter > span { display: block; height: 100%; background: #2E8B6F; border-radius: 999px; }
+  .meter.bad > span { background: #C8472F; }
+  .meter.warn > span { background: #FAC775; }
+  .pill {
+    display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 10px; font-weight: 700;
+  }
+  .pill.good { background: #DCF8C6; color: #1B5E20; }
+  .pill.bad  { background: #FCE4E0; color: #8B1F0A; }
+  .pill.warn { background: #FFF1D0; color: #8B5500; }
+  .pill.outlier { background: #C8472F; color: #FFFFFF; }
+
+  /* HEATMAP */
+  .heatmap { display: grid; grid-template-columns: 50px repeat(24, 1fr); gap: 2px; }
+  .hm-cell { background: #FAFAF6; height: 18px; border-radius: 3px; }
+  .hm-label { font-size: 10px; color: #6F6E68; align-self: center; padding-right: 4px; }
+  .hm-hour { font-size: 9px; color: #A8A6A0; text-align: center; padding-bottom: 2px; }
+  @media (max-width: 720px) { .heatmap { grid-template-columns: 36px repeat(24, 1fr); gap: 1px; } .hm-cell { height: 14px; } }
+
+  /* SCORES + CONTESTS */
+  td.actions { white-space: nowrap; }
+  td.actions .btn { margin-right: 4px; }
+  td.muted { color: #A8A6A0; font-size: 11px; }
+  td.right { text-align: left; direction: ltr; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 11px; }
+  .row-flag { background: rgba(200,71,47,0.06) !important; }
+
+  /* EXPORT */
+  .exports { display: flex; flex-wrap: wrap; gap: 6px; }
+  .exports a {
+    background: #F5F2EC; color: #1C1A18; padding: 7px 12px; border-radius: 9px;
+    font-size: 12px; font-weight: 600; text-decoration: none;
+    display: inline-flex; align-items: center; gap: 5px;
+    transition: background 0.15s;
+  }
+  .exports a:hover { background: #F0EDE3; }
+  .exports a svg { width: 12px; height: 12px; }
+
+  /* SEARCH */
+  .player-search { display: flex; gap: 6px; margin-bottom: 10px; }
+  .player-search input {
+    flex: 1; padding: 8px 12px; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px;
+    font-family: inherit; font-size: 13px; background: #FAFAF6; direction: rtl;
+  }
+  .player-search input:focus { outline: none; border-color: #FAC775; background: #FFFFFF; }
+
+  /* DRAWER (player drill-down) */
+  .drawer-overlay { position: fixed; inset: 0; background: rgba(28,26,24,0.5); z-index: 80; display: none; }
+  .drawer-overlay.open { display: block; }
+  .drawer {
+    position: fixed; top: 0; right: 0; bottom: 0; width: 100%; max-width: 460px;
+    background: #FFFFFF; z-index: 90;
+    transform: translateX(100%); transition: transform 0.22s ease-out;
+    overflow-y: auto; padding: 18px;
+    box-shadow: -2px 0 14px rgba(0,0,0,0.12);
+  }
+  .drawer.open { transform: translateX(0); }
+  .drawer-close {
+    background: none; border: none; padding: 4px; cursor: pointer; color: #6F6E68;
+    float: left;
+  }
+  .drawer h3 { font-size: 16px; margin: 0 0 4px; }
+  .drawer-meta { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 11px; color: #A8A6A0; margin-bottom: 14px; direction: ltr; text-align: left; }
+
+  /* MISC */
+  .loading { text-align: center; padding: 30px; color: #6F6E68; }
+  .empty { text-align: center; padding: 20px; color: #A8A6A0; font-size: 12px; }
+  .help { font-size: 11px; color: #A8A6A0; margin-top: 6px; line-height: 1.5; }
+  .live-dot {
+    display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #2E8B6F; margin-left: 6px;
+    animation: pulse 1.4s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%,100% { opacity: 1; transform: scale(1); }
+    50%     { opacity: 0.4; transform: scale(0.7); }
+  }
+  details summary { cursor: pointer; font-size: 12px; color: #6F6E68; padding: 4px 0; }
+  details[open] summary { color: #1C1A18; font-weight: 600; }
+  .toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+    background: #1C1A18; color: #FFFFFF; padding: 10px 18px; border-radius: 22px;
+    font-size: 12px; font-weight: 600; z-index: 200;
+    box-shadow: 0 6px 22px rgba(0,0,0,0.18);
+    opacity: 0; transition: opacity 0.2s;
+  }
+  .toast.show { opacity: 1; }
+
+  /* ============ DARK MODE ============ */
+  @media (prefers-color-scheme: dark) {
+    body { background: #1A1816; color: #F2EFE9; }
+    header { background: linear-gradient(90deg, #3D2E0A 0%, #1F1D1B 100%); box-shadow: none; }
+    header h1 { color: #F2EFE9; }
+    header h1 small { color: #8E8A82; }
+    section { background: #232121; box-shadow: 0 1px 3px rgba(0,0,0,0.4); }
+    section h2 { color: #F2EFE9; }
+    section h2 .badge { background: #2C2A28; color: #8E8A82; }
+    .kpi { background: #2C2A28; border-color: rgba(255,255,255,0.06); }
+    .kpi .label { color: #8E8A82; }
+    .kpi .value { color: #F2EFE9; }
+    .kpi .sub { color: #8E8A82; }
+    .help { color: #6F6E68; }
+    .btn { background: #F2EFE9; color: #1A1816; }
+    .btn.secondary { background: #2C2A28; color: #F2EFE9; }
+    .btn.ghost { color: #8E8A82; border-color: rgba(255,255,255,0.12); }
+    th { color: #8E8A82; border-bottom-color: rgba(255,255,255,0.08); }
+    td { border-bottom-color: rgba(255,255,255,0.04); }
+    tr:hover td { background: #2C2A28; }
+    .meter { background: #2C2A28; }
+    .pill.good { background: #1B3A2C; color: #9FE1CB; }
+    .pill.bad  { background: #3D1A12; color: #FBA88E; }
+    .pill.warn { background: #3D2E0A; color: #FAC775; }
+    .anomaly { background: #3D1A12; color: #FBA88E; border-right-color: #C8472F; }
+    .player-search input { background: #2C2A28; color: #F2EFE9; border-color: rgba(255,255,255,0.12); }
+    .exports a { background: #2C2A28; color: #F2EFE9; }
+    .exports a:hover { background: #38332E; }
+    .drawer { background: #232121; }
+    .drawer h3 { color: #F2EFE9; }
+    .drawer-meta { color: #8E8A82; }
+    .empty, .loading { color: #8E8A82; }
+    .spark path.line { stroke: #9FE1CB; }
+    .spark path.area { fill: rgba(159,225,203,0.08); }
+    .spark-meta { color: #8E8A82; }
+    .funnel-bar { background: #2C2A28; }
+    .funnel-bar-fill { background: #FAC775; }
+    .funnel-label { color: #F2EFE9; }
+    .funnel-value { color: #F2EFE9; }
+    .funnel-value .pct { color: #8E8A82; }
+    .hm-cell { background: #2C2A28; }
+    .hm-label { color: #8E8A82; }
+    .hm-hour { color: #6F6E68; }
+    /* The heatmap intensities reference rgba(250,199,117,…) which already
+       reads fine on dark — only the empty fallback changes above. */
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <header>
+    <h1>BLOOM אדמין <small id="hdr-date">—</small></h1>
+    <div class="actions">
+      <button class="btn ghost sm" id="btn-help" title="עזרה">?</button>
+      <button class="btn secondary sm" id="btn-logout">יציאה</button>
+      <button class="btn sm" id="btn-refresh">↻ רענון</button>
+    </div>
+  </header>
+
+  <div id="anomaly-host"></div>
+
+  <!-- KPI cards -->
+  <section>
+    <h2>מטריקות-על <span class="badge" id="kpi-tag">היום</span></h2>
+    <div class="kpis" id="kpis">
+      <div class="loading">טוען…</div>
+    </div>
+    <div class="help">השוואה לאמת-תעשייה (Hybrid Casual 2026): D1 ≥ 40% · D7 ≥ 20% · D30 ≥ 7%</div>
+  </section>
+
+  <!-- DAU sparkline -->
+  <section>
+    <h2>DAU · 30 ימים</h2>
+    <div id="spark-host">
+      <div class="loading">טוען…</div>
+    </div>
+  </section>
+
+  <!-- Funnel -->
+  <section>
+    <h2>משפך · <span class="badge">7 ימים אחרונים</span></h2>
+    <div id="funnel-host">
+      <div class="loading">טוען…</div>
+    </div>
+    <div class="help">בחן את נקודות הנשירה — כל ירידה מעל 50% מסומנת באדום.</div>
+  </section>
+
+  <!-- Cohort retention -->
+  <section>
+    <h2>Cohort retention · <span class="badge">8 שבועות אחרונים</span></h2>
+    <div class="table-wrap" id="retention-host">
+      <div class="loading">טוען…</div>
+    </div>
+    <div class="help">כל שורה = שחקנים שהתחילו לראשונה בשבוע הזה. D1/D7/D30 = אחוז שחזר אחרי 1/7/30 ימים.</div>
+  </section>
+
+  <!-- Heatmap -->
+  <section>
+    <h2>מפת חום · <span class="badge">שעות-יום (30 ימים, אסיה/ירושלים)</span></h2>
+    <div id="heatmap-host">
+      <div class="loading">טוען…</div>
+    </div>
+    <div class="help">צבע כהה = יותר משחקים שהסתיימו באותה שעה. שימושי לתזמון תזכורות.</div>
+  </section>
+
+  <!-- Top scores -->
+  <section>
+    <h2>ניקודים מובילים · <span class="badge" id="ts-date">היום</span></h2>
+    <div class="table-wrap" id="top-scores-host">
+      <div class="loading">טוען…</div>
+    </div>
+    <div class="help">⚠ OUTLIER = z-score &gt; 3 (סטטיסטית חשוד). אם רואים — בחן את המכשיר.</div>
+  </section>
+
+  <!-- Active contests -->
+  <section>
+    <h2>תחרויות</h2>
+    <div class="table-wrap" id="contests-host">
+      <div class="loading">טוען…</div>
+    </div>
+  </section>
+
+  <!-- Challenges -->
+  <section>
+    <h2>🎁 אתגרי פרס <span class="badge" id="ch-tag">—</span>
+      <button class="btn sm" id="ch-new" style="margin-right:auto">+ צור אתגר</button>
+    </h2>
+    <div class="table-wrap" id="challenges-host">
+      <div class="loading">טוען…</div>
+    </div>
+    <div class="help">אתגרים פתוחים לכל גולש. ניסיון אחד למכשיר. ⚠ = z-score outlier או יחס drops/score חשוד — בדוק לפני שאתה משלם.</div>
+  </section>
+
+  <!-- Players -->
+  <section>
+    <h2>שחקנים</h2>
+    <div class="player-search">
+      <input id="player-q" type="text" placeholder="חיפוש לפי שם או device id…" />
+      <button class="btn secondary sm" id="player-search-btn">חפש</button>
+    </div>
+    <div class="table-wrap" id="players-host">
+      <div class="loading">טוען…</div>
+    </div>
+  </section>
+
+  <!-- Live -->
+  <section>
+    <h2>קורה עכשיו <span class="live-dot"></span></h2>
+    <div id="live-host">
+      <div class="loading">טוען…</div>
+    </div>
+    <div class="help">מי משחק כרגע + מי צופה — מתעדכן בכל לחיצה על "רענון".</div>
+  </section>
+
+  <!-- Audit log -->
+  <section>
+    <h2>יומן פעולות אדמין · <span class="badge">20 אחרונות</span></h2>
+    <div class="table-wrap" id="audit-host">
+      <div class="loading">טוען…</div>
+    </div>
+  </section>
+
+  <!-- Exports -->
+  <section>
+    <h2>הורדת CSV</h2>
+    <div class="exports" id="exports-host"></div>
+    <div class="help">תוצא אוטומטית עם BOM ל-Excel + עברית. עד 10,000 שורות לטבלה.</div>
+  </section>
+
+</div>
+
+<div class="drawer-overlay" id="drawer-overlay"></div>
+<aside class="drawer" id="drawer"></aside>
+<div class="toast" id="toast"></div>
+
+<script>
+(function() {
+  'use strict';
+
+  // Admin app base = current pathname stripped of trailing slash/index.html.
+  // We never hardcode the secret slug — it comes from the URL the admin loaded.
+  const BASE = location.pathname.replace(/\/index\.html$/, '').replace(/\/$/, '');
+  const API  = BASE + '/api';
+
+  function $(id) { return document.getElementById(id); }
+  function escHtml(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function(c) {
+      return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c];
+    });
+  }
+  function fmtNum(n) { return (n | 0).toLocaleString('he-IL'); }
+  function fmtPct(n) { return n == null ? '—' : (Math.round(n * 10) / 10).toFixed(1) + '%'; }
+  function fmtDate(s) { if (!s) return '—'; return new Date(s).toLocaleDateString('he-IL'); }
+  function fmtDateShort(s) { if (!s) return '—'; const d = new Date(s); return d.getDate() + '/' + (d.getMonth() + 1); }
+  function fmtTime(s) { if (!s) return '—'; return new Date(s).toLocaleString('he-IL', { hour: '2-digit', minute: '2-digit', month: 'numeric', day: 'numeric' }); }
+
+  async function api(path, opts) {
+    const res = await fetch(API + path, opts);
+    if (res.status === 401 || res.status === 403) { location.reload(); return null; }
+    if (!res.ok) { toast('שגיאת שרת: ' + res.status); return null; }
+    return res.json();
+  }
+
+  function toast(msg) {
+    const t = $('toast'); t.textContent = msg; t.classList.add('show');
+    setTimeout(function() { t.classList.remove('show'); }, 2200);
+  }
+
+  // ---------- DASHBOARD ----------
+  async function loadDashboard() {
+    $('hdr-date').textContent = new Date().toLocaleDateString('he-IL', { day: 'numeric', month: 'long', year: 'numeric' });
+    const data = await api('/dashboard');
+    if (!data) return;
+
+    // Anomaly banner
+    const ah = $('anomaly-host');
+    if (data.anomaly) {
+      ah.innerHTML =
+        '<div class="anomaly">' +
+          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4M12 17h.01"/><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg>' +
+          '<span>' + escHtml(data.anomaly.message) + '</span>' +
+        '</div>';
+    } else {
+      ah.innerHTML = '';
+    }
+
+    // KPI cards
+    const k = data.kpis, b = data.benchmarks;
+    function kCard(label, value, sub, subClass) {
+      return '<div class="kpi">' +
+        '<div class="label">' + escHtml(label) + '</div>' +
+        '<div class="value">' + (value == null ? '—' : value) + '</div>' +
+        (sub ? '<div class="sub ' + (subClass || '') + '">' + sub + '</div>' : '') +
+      '</div>';
+    }
+    const d1Sub = k.d1Pct == null ? 'אין cohort אתמול' :
+      (k.d1Pct >= b.d1 ? '↑ ' + fmtPct(k.d1Pct) + ' (יעד ' + b.d1 + '%)' : '↓ ' + fmtPct(k.d1Pct) + ' (יעד ' + b.d1 + '%)');
+    $('kpis').innerHTML =
+      kCard('DAU', fmtNum(k.dau)) +
+      kCard('WAU', fmtNum(k.wau)) +
+      kCard('MAU', fmtNum(k.mau)) +
+      kCard('חדשים היום', fmtNum(k.newToday)) +
+      kCard('משחקים היום', fmtNum(k.gamesToday)) +
+      kCard('תחרויות פעילות', fmtNum(k.contestsActive)) +
+      kCard('D1 retention', k.d1Pct == null ? '—' : fmtPct(k.d1Pct), d1Sub, (k.d1Pct != null && k.d1Pct >= b.d1) ? 'good' : 'bad') +
+      kCard('גודל cohort אתמול', fmtNum(k.d1Cohort), k.d1Returned + ' חזרו היום');
+
+    // Sparkline
+    const s = data.sparkline || [];
+    if (!s.length) {
+      $('spark-host').innerHTML = '<div class="empty">אין מספיק נתונים</div>';
+    } else {
+      const W = 760, H = 60, P = 4;
+      const max = Math.max(1, ...s.map(d => d.dau));
+      const step = (W - 2 * P) / Math.max(1, s.length - 1);
+      const pts = s.map((d, i) => [P + i * step, H - P - (d.dau / max) * (H - 2 * P)]);
+      const line = pts.map((p, i) => (i === 0 ? 'M' : 'L') + p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join(' ');
+      const area = line + ' L ' + pts[pts.length - 1][0].toFixed(1) + ' ' + (H - P) + ' L ' + P + ' ' + (H - P) + ' Z';
+      const last = s[s.length - 1], first = s[0];
+      $('spark-host').innerHTML =
+        '<svg class="spark" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none">' +
+          '<path class="area" d="' + area + '"/>' +
+          '<path class="line" d="' + line + '"/>' +
+        '</svg>' +
+        '<div class="spark-meta">' +
+          '<span>' + fmtDateShort(first.date) + ' — ' + fmtNum(first.dau) + '</span>' +
+          '<span>שיא: ' + fmtNum(max) + '</span>' +
+          '<span>' + fmtDateShort(last.date) + ' — ' + fmtNum(last.dau) + '</span>' +
+        '</div>';
+    }
+  }
+
+  // ---------- FUNNEL ----------
+  async function loadFunnel() {
+    const data = await api('/funnel?days=7');
+    if (!data) return;
+    const f = data.funnel;
+    const visited = f.visited | 0;
+    const stages = [
+      { label: 'ביקרו', v: visited, pct: 100 },
+      { label: 'שיחקו',   v: f.played    | 0, pct: visited ? Math.round(100 * f.played    / visited) : 0 },
+      { label: 'סיימו',  v: f.completed | 0, pct: visited ? Math.round(100 * f.completed / visited) : 0 },
+      { label: 'חזרו למחרת', v: f.returned_next_day | 0, pct: visited ? Math.round(100 * f.returned_next_day / visited) : 0 }
+    ];
+    if (!visited) {
+      $('funnel-host').innerHTML = '<div class="empty">אין ביקורים ב-7 הימים האחרונים</div>';
+      return;
+    }
+    let html = '<div class="funnel">';
+    let prev = visited;
+    stages.forEach(function(st, i) {
+      const stepDrop = (i > 0 && prev > 0) ? (100 - Math.round(100 * st.v / prev)) : 0;
+      const dropCls = stepDrop > 50 ? ' drop' : '';
+      html += '<div class="funnel-row">' +
+        '<div class="funnel-label">' + escHtml(st.label) + '</div>' +
+        '<div class="funnel-bar' + dropCls + '">' +
+          '<div class="funnel-bar-fill" style="width:' + st.pct + '%"></div>' +
+          '<div class="funnel-value"><span class="pct">' + st.pct + '%</span>' + fmtNum(st.v) + '</div>' +
+        '</div>' +
+      '</div>';
+      prev = st.v;
+    });
+    html += '</div>';
+    $('funnel-host').innerHTML = html;
+  }
+
+  // ---------- RETENTION ----------
+  async function loadRetention() {
+    const data = await api('/retention');
+    if (!data) return;
+    if (!data.cohorts.length) {
+      $('retention-host').innerHTML = '<div class="empty">אין עוד cohorts לחישוב — חכה כמה ימים</div>';
+      return;
+    }
+    function meter(pct, target) {
+      if (pct == null) return '—';
+      const cls = pct >= target ? '' : (pct >= target * 0.6 ? ' warn' : ' bad');
+      const w = Math.min(100, Math.round(pct));
+      return '<span class="meter' + cls + '"><span style="width:' + w + '%"></span></span>' + fmtPct(pct);
+    }
+    let html = '<table>' +
+      '<thead><tr><th>תחילת שבוע</th><th>גודל</th><th>D1 (יעד 40%)</th><th>D7 (יעד 20%)</th><th>D30 (יעד 7%)</th></tr></thead><tbody>';
+    data.cohorts.forEach(function(c) {
+      html += '<tr>' +
+        '<td>' + fmtDate(c.weekStart) + '</td>' +
+        '<td>' + (c.size < 3 ? '<span class="pill warn">' + c.size + '</span>' : c.size) + '</td>' +
+        '<td>' + meter(c.d1, 40) + '</td>' +
+        '<td>' + meter(c.d7, 20) + '</td>' +
+        '<td>' + meter(c.d30, 7) + '</td>' +
+      '</tr>';
+    });
+    html += '</tbody></table>';
+    $('retention-host').innerHTML = html;
+  }
+
+  // ---------- HEATMAP ----------
+  async function loadHeatmap() {
+    const data = await api('/heatmap?days=30');
+    if (!data) return;
+    const grid = data.grid;
+    let max = 1;
+    for (let d = 0; d < 7; d++) for (let h = 0; h < 24; h++) max = Math.max(max, grid[d][h]);
+    const dows = ['א\'', 'ב\'', 'ג\'', 'ד\'', 'ה\'', 'ו\'', 'ש\''];
+    let html = '<div class="heatmap">';
+    // Header row: empty + hours
+    html += '<div></div>';
+    for (let h = 0; h < 24; h++) html += '<div class="hm-hour">' + (h % 3 === 0 ? h : '') + '</div>';
+    // Day rows
+    for (let d = 0; d < 7; d++) {
+      html += '<div class="hm-label">' + dows[d] + '</div>';
+      for (let h = 0; h < 24; h++) {
+        const v = grid[d][h];
+        const intensity = v / max;
+        const bg = v === 0
+          ? '#FAFAF6'
+          : 'rgba(250,199,117,' + (0.15 + intensity * 0.85).toFixed(2) + ')';
+        html += '<div class="hm-cell" style="background:' + bg + '" title="' + dows[d] + ' ' + h + ':00 — ' + v + ' משחקים"></div>';
+      }
+    }
+    html += '</div>';
+    $('heatmap-host').innerHTML = html;
+  }
+
+  // ---------- TOP SCORES ----------
+  async function loadTopScores() {
+    const data = await api('/top-scores');
+    if (!data) return;
+    if (!data.scores.length) {
+      $('top-scores-host').innerHTML = '<div class="empty">אין ניקודים היום</div>';
+      return;
+    }
+    let html = '<table><thead><tr>' +
+      '<th>#</th><th>שם</th><th>ניקוד</th><th>tier</th><th>z-score</th><th>device</th><th>שעה</th>' +
+      '</tr></thead><tbody>';
+    data.scores.forEach(function(r, i) {
+      const cls = r.outlier ? ' class="row-flag"' : '';
+      const flag = r.outlier ? ' <span class="pill outlier">⚠ OUTLIER</span>' : '';
+      html += '<tr' + cls + '>' +
+        '<td>' + (i + 1) + '</td>' +
+        '<td>' + escHtml(r.name) + flag + '</td>' +
+        '<td><strong>' + fmtNum(r.score) + '</strong></td>' +
+        '<td>' + r.tier + '</td>' +
+        '<td>' + (r.zscore != null ? r.zscore.toFixed(2) : '—') + '</td>' +
+        '<td class="right">' + escHtml(String(r.device_id).slice(0, 12)) + '…</td>' +
+        '<td class="muted">' + fmtTime(r.updated_at) + '</td>' +
+      '</tr>';
+    });
+    html += '</tbody></table>';
+    $('top-scores-host').innerHTML = html;
+  }
+
+  // ---------- CONTESTS ----------
+  async function loadContests() {
+    const data = await api('/contests');
+    if (!data) return;
+    if (!data.contests.length) {
+      $('contests-host').innerHTML = '<div class="empty">אין תחרויות</div>';
+      return;
+    }
+    let html = '<table><thead><tr>' +
+      '<th>קוד</th><th>שם</th><th>מארח</th><th>חברים</th><th>שיא</th><th>מסתיים</th><th>סטטוס</th><th>פעולות</th>' +
+      '</tr></thead><tbody>';
+    data.contests.forEach(function(c) {
+      const active = new Date(c.ends_at) > new Date();
+      const statusPill = active
+        ? '<span class="pill good">פעילה</span>'
+        : '<span class="pill warn">הסתיימה</span>';
+      html += '<tr>' +
+        '<td class="right">' + escHtml(c.code) + '</td>' +
+        '<td>' + escHtml(c.name) + '</td>' +
+        '<td>' + escHtml(c.host_name) + '</td>' +
+        '<td>' + fmtNum(c.members) + '</td>' +
+        '<td>' + (c.top_score != null ? fmtNum(c.top_score) : '—') + '</td>' +
+        '<td>' + fmtDate(c.ends_at) + '</td>' +
+        '<td>' + statusPill + '</td>' +
+        '<td class="actions">' +
+          (active ? '<button class="btn ghost sm" data-end="' + escHtml(c.code) + '">סיים</button> ' : '') +
+          '<button class="btn danger sm" data-del-c="' + escHtml(c.code) + '">מחק</button>' +
+        '</td>' +
+      '</tr>';
+    });
+    html += '</tbody></table>';
+    $('contests-host').innerHTML = html;
+    // Wire actions
+    $('contests-host').querySelectorAll('[data-end]').forEach(function(b) {
+      b.onclick = async function() {
+        const code = b.getAttribute('data-end');
+        if (!confirm('לסיים את התחרות ' + code + ' מיידית? לא ניתן לשחק יותר.')) return;
+        const r = await api('/contest/' + encodeURIComponent(code), {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ endsAt: new Date().toISOString(), status: 'ended' })
+        });
+        if (r && r.ok) { toast('התחרות הסתיימה'); loadContests(); loadAudit(); }
+      };
+    });
+    $('contests-host').querySelectorAll('[data-del-c]').forEach(function(b) {
+      b.onclick = async function() {
+        const code = b.getAttribute('data-del-c');
+        if (!confirm('למחוק לצמיתות את התחרות ' + code + '? כל הניקודים של חבריה יימחקו.')) return;
+        const r = await api('/contest/' + encodeURIComponent(code), { method: 'DELETE' });
+        if (r && r.ok) { toast('נמחק'); loadContests(); loadAudit(); }
+      };
+    });
+  }
+
+  // ---------- PLAYERS ----------
+  async function loadPlayers() {
+    const q = $('player-q').value.trim();
+    const data = await api('/players?limit=50' + (q ? '&q=' + encodeURIComponent(q) : ''));
+    if (!data) return;
+    if (!data.players.length) {
+      $('players-host').innerHTML = '<div class="empty">אין תוצאות</div>';
+      return;
+    }
+    let html = '<table><thead><tr>' +
+      '<th>שם</th><th>device</th><th>משחקים</th><th>ניקוד שיא</th><th>tier שיא</th><th>שיחק לאחרונה</th><th></th>' +
+      '</tr></thead><tbody>';
+    data.players.forEach(function(p) {
+      html += '<tr>' +
+        '<td>' + escHtml(p.name) + '</td>' +
+        '<td class="right">' + escHtml(String(p.device_id).slice(0, 14)) + '…</td>' +
+        '<td>' + fmtNum(p.games_played) + '</td>' +
+        '<td><strong>' + fmtNum(p.best_score) + '</strong></td>' +
+        '<td>' + (p.best_tier | 0) + '</td>' +
+        '<td class="muted">' + fmtTime(p.last_played) + '</td>' +
+        '<td class="actions">' +
+          '<button class="btn ghost sm" data-view="' + escHtml(p.device_id) + '">פתח</button>' +
+        '</td>' +
+      '</tr>';
+    });
+    html += '</tbody></table>';
+    html += '<div class="help">סה"כ ' + data.total + ' שחקנים</div>';
+    $('players-host').innerHTML = html;
+    $('players-host').querySelectorAll('[data-view]').forEach(function(b) {
+      b.onclick = function() { openPlayerDrawer(b.getAttribute('data-view')); };
+    });
+  }
+
+  // ---------- LIVE ----------
+  async function loadLive() {
+    const data = await api('/live');
+    if (!data) return;
+    const live = data.live || [];
+    const watchers = data.watchers || [];
+    let html = '';
+    if (!live.length && !watchers.length) {
+      html = '<div class="empty">אף אחד לא משחק כרגע</div>';
+    } else {
+      if (live.length) {
+        html += '<details open><summary>משחקים פעילים (' + live.length + ')</summary>';
+        html += '<table><thead><tr><th>שחקן</th><th>תחרות</th><th>ניקוד חי</th><th>tier</th><th>עדכון אחרון</th></tr></thead><tbody>';
+        live.forEach(function(l) {
+          html += '<tr>' +
+            '<td>' + escHtml(l.display_name) + '</td>' +
+            '<td>' + escHtml(l.contest_name) + '</td>' +
+            '<td><strong>' + fmtNum(l.live_score) + '</strong></td>' +
+            '<td>' + (l.highest_tier | 0) + '</td>' +
+            '<td class="muted">' + fmtTime(l.updated_at) + '</td>' +
+          '</tr>';
+        });
+        html += '</tbody></table></details>';
+      }
+      if (watchers.length) {
+        html += '<details><summary>צופים (' + watchers.length + ')</summary>';
+        html += '<table><thead><tr><th>צופה</th><th>צופה ב-device</th><th>ניקוד אחרון</th><th>עדכון</th></tr></thead><tbody>';
+        watchers.forEach(function(w) {
+          html += '<tr>' +
+            '<td>' + escHtml(w.watcher_name) + '</td>' +
+            '<td class="right">' + escHtml(String(w.target_device_id).slice(0, 14)) + '…</td>' +
+            '<td>' + fmtNum(w.watcher_last_score) + '</td>' +
+            '<td class="muted">' + fmtTime(w.updated_at) + '</td>' +
+          '</tr>';
+        });
+        html += '</tbody></table></details>';
+      }
+    }
+    $('live-host').innerHTML = html;
+  }
+
+  // ---------- CHALLENGES ----------
+  const TYPE_LABELS = {
+    race: 'מרוץ-לרף', top_n: 'Top-N', beat: 'עבור-רף', first_to_tier: 'ראשון-לדרגה'
+  };
+
+  async function loadChallenges() {
+    const data = await api('/challenges');
+    if (!data) return;
+    const list = data.challenges || [];
+    $('ch-tag').textContent = list.length + (list.length === 1 ? ' אתגר' : ' אתגרים');
+    if (!list.length) {
+      $('challenges-host').innerHTML = '<div class="empty">אין אתגרים. לחץ "+ צור אתגר" להתחיל.</div>';
+      return;
+    }
+    let html = '<table><thead><tr>' +
+      '<th>סטטוס</th><th>שם</th><th>סוג / רף</th><th>פרס</th><th>זוכים</th><th>משתתפים</th><th>מסתיים</th><th>פעולות</th>' +
+      '</tr></thead><tbody>';
+    list.forEach(function(c) {
+      const active = c.status === 'active' && new Date(c.ends_at) > new Date();
+      const statusPill = c.status === 'active'  ? '<span class="pill good">פעיל</span>' :
+                          c.status === 'draft'   ? '<span class="pill warn">טיוטה</span>' :
+                          c.status === 'ended'   ? '<span class="pill bad">הסתיים</span>' :
+                                                   '<span class="pill bad">בוטל</span>';
+      const typeStr = TYPE_LABELS[c.challenge_type] +
+        (c.threshold_score ? ' · ' + (c.threshold_score|0).toLocaleString() :
+         c.threshold_tier  ? ' · דרגה ' + c.threshold_tier : '');
+      const cheatBadge = c.cheat_count > 0 ? ' <span class="pill outlier">⚠ ' + c.cheat_count + '</span>' : '';
+      html += '<tr>' +
+        '<td>' + statusPill + '</td>' +
+        '<td><strong>' + escHtml(c.name) + '</strong><br><span class="muted">' + escHtml(c.slug) + '</span></td>' +
+        '<td>' + escHtml(typeStr) + '</td>' +
+        '<td>' + escHtml(c.prize_text) + '</td>' +
+        '<td>' + c.winners_filled + '/' + c.winners_count + '</td>' +
+        '<td>' + c.entries_count + cheatBadge + '</td>' +
+        '<td>' + fmtDate(c.ends_at) + '</td>' +
+        '<td class="actions">' +
+          '<button class="btn ghost sm" data-ch-entries="' + c.id + '">משתתפים</button> ' +
+          '<button class="btn ghost sm" data-ch-edit="' + c.id + '">ערוך</button> ' +
+          (active ? '<button class="btn secondary sm" data-ch-finalize="' + c.id + '">סיים</button> ' : '') +
+          '<button class="btn danger sm" data-ch-del="' + c.id + '">✕</button>' +
+        '</td>' +
+      '</tr>';
+    });
+    html += '</tbody></table>';
+    $('challenges-host').innerHTML = html;
+    // wire actions
+    $('challenges-host').querySelectorAll('[data-ch-entries]').forEach(function(b) {
+      b.onclick = function() { openChallengeEntries(parseInt(b.getAttribute('data-ch-entries'), 10)); };
+    });
+    $('challenges-host').querySelectorAll('[data-ch-edit]').forEach(function(b) {
+      b.onclick = function() {
+        const id = parseInt(b.getAttribute('data-ch-edit'), 10);
+        const c = list.find(x => x.id === id);
+        if (c) openChallengeModal(c);
+      };
+    });
+    $('challenges-host').querySelectorAll('[data-ch-finalize]').forEach(function(b) {
+      b.onclick = async function() {
+        if (!confirm('לסיים את האתגר עכשיו? משתתפים שלא סיימו ייסומנו כ-abandoned. עבור Top-N הזוכים ייקבעו אוטומטית.')) return;
+        const r = await api('/challenges/' + b.getAttribute('data-ch-finalize') + '/finalize', { method: 'POST' });
+        if (r && r.ok) { toast('האתגר הסתיים'); loadChallenges(); loadAudit(); }
+      };
+    });
+    $('challenges-host').querySelectorAll('[data-ch-del]').forEach(function(b) {
+      b.onclick = async function() {
+        if (!confirm('למחוק את האתגר לצמיתות? כל המשתתפים והפרטים יימחקו.')) return;
+        const r = await api('/challenges/' + b.getAttribute('data-ch-del'), { method: 'DELETE' });
+        if (r && r.ok) { toast('נמחק'); loadChallenges(); loadAudit(); }
+      };
+    });
+  }
+
+  function openChallengeModal(existing) {
+    const isEdit = !!existing;
+    const c = existing || { challenge_type: 'race', winners_count: 1, status: 'draft' };
+    let modal = document.getElementById('ch-modal');
+    if (modal) modal.remove();
+    modal = document.createElement('div');
+    modal.id = 'ch-modal';
+    modal.className = 'info-modal';
+    const startsDefault = c.starts_at ? new Date(c.starts_at).toISOString().slice(0,16) : new Date(Date.now()+10*60000).toISOString().slice(0,16);
+    const endsDefault   = c.ends_at   ? new Date(c.ends_at).toISOString().slice(0,16)   : new Date(Date.now()+24*60*60000).toISOString().slice(0,16);
+    const defaultRules  = c.rules_text || 'הזכייה מבוססת מיומנות במשחק BLOOM. אין הגרלה.\nכל ניסיון יחיד וסופי. אין reset, אין החזרים.\nהזוכה ייצור עמנו קשר תוך 7 ימים — אחרת הפרס יועבר למשתתף הבא.';
+    modal.innerHTML =
+      '<div class="info-card" style="max-width:480px">' +
+        '<button class="info-close" id="ch-modal-close"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>' +
+        '<div class="info-title">' + (isEdit ? 'עריכת אתגר' : 'אתגר חדש') + '</div>' +
+        '<div style="display:flex;flex-direction:column;gap:8px;direction:rtl">' +
+          '<label style="font-size:11px;color:#6F6E68">שם<input id="cf-name" maxlength="100" value="' + escHtml(c.name||'') + '" style="width:100%;padding:8px;border:1px solid rgba(0,0,0,0.12);border-radius:8px;font-family:inherit;font-size:13px;background:#FAFAF6"></label>' +
+          (isEdit ? '' : '<label style="font-size:11px;color:#6F6E68">slug (אופציונלי, יווצר אוטומטית)<input id="cf-slug" maxlength="40" placeholder="iphone-may-200k" style="width:100%;padding:8px;border:1px solid rgba(0,0,0,0.12);border-radius:8px;font-family:inherit;font-size:13px;background:#FAFAF6"></label>') +
+          '<label style="font-size:11px;color:#6F6E68">תיאור קצר<textarea id="cf-desc" maxlength="500" style="width:100%;padding:8px;border:1px solid rgba(0,0,0,0.12);border-radius:8px;font-family:inherit;font-size:13px;background:#FAFAF6;min-height:50px">' + escHtml(c.description||'') + '</textarea></label>' +
+          '<label style="font-size:11px;color:#6F6E68">סוג אתגר<select id="cf-type" style="width:100%;padding:8px;border:1px solid rgba(0,0,0,0.12);border-radius:8px;font-family:inherit;font-size:13px;background:#FAFAF6">' +
+            '<option value="race">מרוץ-לרף (Race-to-Threshold) — N הראשונים שעוברים את הרף</option>' +
+            '<option value="top_n">Top-N — N הניקודים הגבוהים בסוף</option>' +
+            '<option value="beat">עבור-רף (Beat-the-Target) — כל מי שעובר את הרף זוכה</option>' +
+            '<option value="first_to_tier">ראשון לדרגה — N הראשונים שמגיעים לדרגה X</option>' +
+          '</select></label>' +
+          '<div style="display:flex;gap:8px">' +
+            '<label style="flex:1;font-size:11px;color:#6F6E68" id="cf-thr-score-wrap">רף ניקוד<input type="number" id="cf-thr-score" min="100" max="10000000" value="' + (c.threshold_score||100000) + '" style="width:100%;padding:8px;border:1px solid rgba(0,0,0,0.12);border-radius:8px;font-family:inherit;font-size:13px;background:#FAFAF6"></label>' +
+            '<label style="flex:1;font-size:11px;color:#6F6E68;display:none" id="cf-thr-tier-wrap">דרגה (2-8)<input type="number" id="cf-thr-tier" min="2" max="8" value="' + (c.threshold_tier||5) + '" style="width:100%;padding:8px;border:1px solid rgba(0,0,0,0.12);border-radius:8px;font-family:inherit;font-size:13px;background:#FAFAF6"></label>' +
+            '<label style="flex:1;font-size:11px;color:#6F6E68">מס\' זוכים<input type="number" id="cf-winners" min="1" max="100" value="' + (c.winners_count||1) + '" style="width:100%;padding:8px;border:1px solid rgba(0,0,0,0.12);border-radius:8px;font-family:inherit;font-size:13px;background:#FAFAF6"></label>' +
+          '</div>' +
+          '<label style="font-size:11px;color:#6F6E68">תיאור הפרס<input id="cf-prize" maxlength="200" value="' + escHtml(c.prize_text||'') + '" placeholder="iPhone 16 Pro" style="width:100%;padding:8px;border:1px solid rgba(0,0,0,0.12);border-radius:8px;font-family:inherit;font-size:13px;background:#FAFAF6"></label>' +
+          '<label style="font-size:11px;color:#6F6E68">URL לתמונת פרס (אופציונלי)<input id="cf-img" maxlength="500" value="' + escHtml(c.prize_image_url||'') + '" placeholder="https://…" style="width:100%;padding:8px;border:1px solid rgba(0,0,0,0.12);border-radius:8px;font-family:inherit;font-size:13px;background:#FAFAF6"></label>' +
+          '<div style="display:flex;gap:8px">' +
+            '<label style="flex:1;font-size:11px;color:#6F6E68">תחילה<input type="datetime-local" id="cf-starts" value="' + startsDefault + '" style="width:100%;padding:8px;border:1px solid rgba(0,0,0,0.12);border-radius:8px;font-family:inherit;font-size:13px;background:#FAFAF6"></label>' +
+            '<label style="flex:1;font-size:11px;color:#6F6E68">סיום<input type="datetime-local" id="cf-ends" value="' + endsDefault + '" style="width:100%;padding:8px;border:1px solid rgba(0,0,0,0.12);border-radius:8px;font-family:inherit;font-size:13px;background:#FAFAF6"></label>' +
+          '</div>' +
+          '<label style="font-size:11px;color:#6F6E68">תקנון<textarea id="cf-rules" style="width:100%;padding:8px;border:1px solid rgba(0,0,0,0.12);border-radius:8px;font-family:inherit;font-size:12px;background:#FAFAF6;min-height:80px">' + escHtml(defaultRules) + '</textarea></label>' +
+          (isEdit
+            ? '<label style="font-size:11px;color:#6F6E68">סטטוס<select id="cf-status" style="width:100%;padding:8px;border:1px solid rgba(0,0,0,0.12);border-radius:8px;font-family:inherit;font-size:13px;background:#FAFAF6">' +
+                '<option value="draft">טיוטה</option><option value="active">פעיל</option><option value="ended">הסתיים</option><option value="cancelled">בוטל</option>' +
+              '</select></label>'
+            : '') +
+          '<div id="cf-err" class="contest-error" style="color:#C8472F;font-size:12px"></div>' +
+          '<div style="display:flex;gap:8px;margin-top:8px">' +
+            '<button class="btn secondary sm" id="cf-cancel" style="flex:1">ביטול</button>' +
+            (isEdit
+              ? '<button class="btn sm" id="cf-save" style="flex:1">שמור</button>'
+              : '<button class="btn secondary sm" id="cf-draft" style="flex:1">שמור כטיוטה</button>' +
+                '<button class="btn sm" id="cf-publish" style="flex:1">פרסם עכשיו</button>') +
+          '</div>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(modal);
+    $('ch-modal-close').onclick = function() { modal.remove(); };
+    $('cf-cancel').onclick = function() { modal.remove(); };
+
+    const typeSel = $('cf-type');
+    typeSel.value = c.challenge_type || 'race';
+    if (isEdit && $('cf-status')) $('cf-status').value = c.status || 'draft';
+    function syncTypeFields() {
+      const t = typeSel.value;
+      $('cf-thr-score-wrap').style.display = (t === 'race' || t === 'beat') ? '' : 'none';
+      $('cf-thr-tier-wrap').style.display  = (t === 'first_to_tier')        ? '' : 'none';
+    }
+    typeSel.onchange = syncTypeFields;
+    syncTypeFields();
+
+    async function submit(asActive) {
+      const body = {
+        name: $('cf-name').value.trim(),
+        description: $('cf-desc').value.trim(),
+        challenge_type: typeSel.value,
+        winners_count: parseInt($('cf-winners').value, 10) || 1,
+        prize_text: $('cf-prize').value.trim(),
+        prize_image_url: $('cf-img').value.trim() || null,
+        starts_at: $('cf-starts').value ? new Date($('cf-starts').value).toISOString() : null,
+        ends_at:   $('cf-ends').value   ? new Date($('cf-ends').value).toISOString()   : null,
+        rules_text: $('cf-rules').value.trim()
+      };
+      if (typeSel.value === 'race' || typeSel.value === 'beat') body.threshold_score = parseInt($('cf-thr-score').value, 10);
+      if (typeSel.value === 'first_to_tier')                     body.threshold_tier  = parseInt($('cf-thr-tier').value, 10);
+      if (!isEdit) {
+        const slug = $('cf-slug').value.trim();
+        if (slug) body.slug = slug;
+        body.status = asActive ? 'active' : 'draft';
+      } else {
+        if ($('cf-status')) body.status = $('cf-status').value;
+      }
+      const path = isEdit ? '/challenges/' + c.id : '/challenges';
+      const method = isEdit ? 'PATCH' : 'POST';
+      const r = await api(path, { method: method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      if (!r) return;
+      if (r.error) { $('cf-err').textContent = 'שגיאה: ' + r.error + (r.field ? ' (' + r.field + ')' : ''); return; }
+      modal.remove();
+      toast(isEdit ? 'נשמר' : (asActive ? 'נוצר ופורסם' : 'נוצר כטיוטה'));
+      loadChallenges(); loadAudit();
+    }
+    if (isEdit) {
+      $('cf-save').onclick = function() { submit(false); };
+    } else {
+      $('cf-draft').onclick   = function() { submit(false); };
+      $('cf-publish').onclick = function() { submit(true);  };
+    }
+  }
+
+  async function openChallengeEntries(id) {
+    const overlay = $('drawer-overlay'), drawer = $('drawer');
+    drawer.innerHTML = '<button class="drawer-close" id="drawer-close"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button><div class="loading">טוען…</div>';
+    overlay.classList.add('open'); drawer.classList.add('open');
+    $('drawer-close').onclick = function() { overlay.classList.remove('open'); drawer.classList.remove('open'); };
+    overlay.onclick = function() { overlay.classList.remove('open'); drawer.classList.remove('open'); };
+    const data = await api('/challenges/' + id + '/entries');
+    if (!data) { drawer.innerHTML = '<div class="empty">שגיאה</div>'; return; }
+    const c = data.challenge;
+    let html = '<button class="drawer-close" id="drawer-close"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>' +
+      '<h3>' + escHtml(c.name) + '</h3>' +
+      '<div class="drawer-meta">' + escHtml(c.slug) + ' · ' + (data.entries.length) + ' משתתפים</div>';
+    if (data.entries.length === 0) {
+      html += '<div class="empty">אין עדיין משתתפים</div>';
+    } else {
+      html += '<table><thead><tr><th>#</th><th>שם</th><th>ניקוד</th><th>tier</th><th>drops</th><th>סטטוס</th><th>פעולות</th></tr></thead><tbody>';
+      data.entries.forEach(function(e, i) {
+        const rank = e.winner_rank ? e.winner_rank : (i + 1);
+        const statusPill = e.status === 'completed' ? '<span class="pill good">סיים</span>' :
+                           e.status === 'abandoned' ? '<span class="pill warn">נטש</span>' :
+                                                       '<span class="pill warn">משחק</span>';
+        const winnerPill = e.is_winner ? ' <span class="pill good">👑 ' + (e.winner_rank || '?') + '</span>' : '';
+        const cheatPill  = e.cheat_flag ? ' <span class="pill outlier">⚠</span>' : '';
+        const contact = e.contact_at
+          ? '<div class="muted" style="font-size:10px;direction:ltr">' + escHtml(e.contact_name||'') + ' · ' + escHtml(e.contact_phone||'') + ' · ' + escHtml(e.contact_email||'') + '</div>'
+          : '';
+        html += '<tr>' +
+          '<td>' + rank + '</td>' +
+          '<td>' + escHtml(e.display_name) + winnerPill + cheatPill + contact + '</td>' +
+          '<td><strong>' + (e.score|0).toLocaleString() + '</strong></td>' +
+          '<td>' + (e.highest_tier|0) + '</td>' +
+          '<td>' + (e.drops_count|0) + '</td>' +
+          '<td>' + statusPill + '</td>' +
+          '<td class="actions">' +
+            '<button class="btn ghost sm" data-toggle-winner data-id="' + e.device_id + '" data-cur="' + (e.is_winner ? '1' : '0') + '">' + (e.is_winner ? '✗ הסר זוכה' : '👑 סמן זוכה') + '</button> ' +
+            (e.is_winner ? '<button class="btn ghost sm" data-toggle-paid data-id="' + e.device_id + '" data-cur="' + (e.prize_claimed ? '1' : '0') + '">' + (e.prize_claimed ? '✓ שולם' : 'סמן ששולם') + '</button> ' : '') +
+            '<button class="btn ghost sm" data-toggle-cheat data-id="' + e.device_id + '" data-cur="' + (e.cheat_flag ? '1' : '0') + '">' + (e.cheat_flag ? 'הסר ⚠' : 'סמן ⚠') + '</button>' +
+          '</td>' +
+        '</tr>';
+      });
+      html += '</tbody></table>';
+    }
+    drawer.innerHTML = html;
+    $('drawer-close').onclick = function() { overlay.classList.remove('open'); drawer.classList.remove('open'); };
+    async function patchEntry(did, body) {
+      const r = await api('/challenges/' + id + '/entries/' + encodeURIComponent(did), {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      if (r && r.ok) { toast('עודכן'); openChallengeEntries(id); loadChallenges(); loadAudit(); }
+    }
+    drawer.querySelectorAll('[data-toggle-winner]').forEach(function(b) {
+      b.onclick = function() { patchEntry(b.getAttribute('data-id'), { is_winner: b.getAttribute('data-cur') !== '1' }); };
+    });
+    drawer.querySelectorAll('[data-toggle-paid]').forEach(function(b) {
+      b.onclick = function() { patchEntry(b.getAttribute('data-id'), { prize_claimed: b.getAttribute('data-cur') !== '1' }); };
+    });
+    drawer.querySelectorAll('[data-toggle-cheat]').forEach(function(b) {
+      b.onclick = function() { patchEntry(b.getAttribute('data-id'), { cheat_flag: b.getAttribute('data-cur') !== '1' }); };
+    });
+  }
+
+  // ---------- AUDIT ----------
+  async function loadAudit() {
+    const data = await api('/audit?limit=20');
+    if (!data) return;
+    if (!data.actions.length) {
+      $('audit-host').innerHTML = '<div class="empty">אין פעולות אדמין עדיין</div>';
+      return;
+    }
+    let html = '<table><thead><tr><th>שעה</th><th>פעולה</th><th>יעד</th><th>פרטים</th></tr></thead><tbody>';
+    data.actions.forEach(function(a) {
+      html += '<tr>' +
+        '<td class="muted">' + fmtTime(a.created_at) + '</td>' +
+        '<td><span class="pill warn">' + escHtml(a.action) + '</span></td>' +
+        '<td>' + escHtml((a.target_type || '') + ' · ' + (a.target_id || '')) + '</td>' +
+        '<td class="muted">' + escHtml(a.metadata ? JSON.stringify(a.metadata) : '') + '</td>' +
+      '</tr>';
+    });
+    html += '</tbody></table>';
+    $('audit-host').innerHTML = html;
+  }
+
+  // ---------- EXPORTS ----------
+  function renderExports() {
+    const tables = ['daily_scores', 'contests', 'contest_scores', 'device_visits', 'admin_actions'];
+    $('exports-host').innerHTML = tables.map(function(t) {
+      return '<a href="' + API + '/export/' + t + '.csv">' +
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>' +
+        t + '</a>';
+    }).join('');
+  }
+
+  // ---------- PLAYER DRAWER ----------
+  async function openPlayerDrawer(id) {
+    const overlay = $('drawer-overlay'), drawer = $('drawer');
+    drawer.innerHTML = '<button class="drawer-close" id="drawer-close" aria-label="סגור">' +
+      '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>' +
+      '<div class="loading">טוען…</div>';
+    overlay.classList.add('open'); drawer.classList.add('open');
+    $('drawer-close').onclick = closePlayerDrawer;
+    overlay.onclick = closePlayerDrawer;
+
+    const data = await api('/player/' + encodeURIComponent(id));
+    if (!data) { drawer.innerHTML = '<div class="empty">שגיאה</div>'; return; }
+    let html = '<button class="drawer-close" id="drawer-close">' +
+      '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>' +
+      '<h3>פרופיל שחקן</h3>' +
+      '<div class="drawer-meta">' + escHtml(id) + '</div>';
+    if (data.scores.length) {
+      html += '<h4 style="font-size:12px;color:#6F6E68;margin:14px 0 6px">ניקודים יומיים (' + data.scores.length + ')</h4>';
+      html += '<table><thead><tr><th>תאריך</th><th>ניקוד</th><th>tier</th></tr></thead><tbody>';
+      data.scores.forEach(function(s) {
+        html += '<tr><td>' + fmtDate(s.date) + '</td><td><strong>' + fmtNum(s.score) + '</strong></td><td>' + s.tier + '</td></tr>';
+      });
+      html += '</tbody></table>';
+    }
+    if (data.contests.length) {
+      html += '<h4 style="font-size:12px;color:#6F6E68;margin:14px 0 6px">חבר ב-' + data.contests.length + ' תחרויות</h4>';
+      html += '<table><thead><tr><th>תחרות</th><th>שם בלוח</th><th>סכום</th><th>משחקים</th></tr></thead><tbody>';
+      data.contests.forEach(function(c) {
+        html += '<tr>' +
+          '<td>' + escHtml(c.contest_name) + '<br><span class="muted">' + escHtml(c.contest_code) + '</span></td>' +
+          '<td>' + escHtml(c.display_name) + '</td>' +
+          '<td><strong>' + fmtNum(c.score) + '</strong></td>' +
+          '<td>' + (c.games_played | 0) + '</td>' +
+        '</tr>';
+      });
+      html += '</tbody></table>';
+    }
+    if (data.visits.length) {
+      html += '<h4 style="font-size:12px;color:#6F6E68;margin:14px 0 6px">' + data.visits.length + ' ימי ביקור (90 אחרונים)</h4>';
+    }
+    html += '<div style="margin-top:18px"><button class="btn danger" id="drawer-del">🗑 מחק שחקן ואת כל הנתונים</button></div>';
+    drawer.innerHTML = html;
+    $('drawer-close').onclick = closePlayerDrawer;
+    $('drawer-del').onclick = async function() {
+      if (!confirm('למחוק את השחקן ' + id + ' לצמיתות? כל הניקודים, ביקורים, ותחרויות יימחקו.')) return;
+      const r = await api('/player/' + encodeURIComponent(id), { method: 'DELETE' });
+      if (r && r.ok) { toast('השחקן נמחק'); closePlayerDrawer(); loadPlayers(); loadAudit(); }
+    };
+  }
+  function closePlayerDrawer() {
+    $('drawer-overlay').classList.remove('open');
+    $('drawer').classList.remove('open');
+  }
+
+  // ---------- WIRING ----------
+  function refreshAll() {
+    loadDashboard();
+    loadFunnel();
+    loadRetention();
+    loadHeatmap();
+    loadTopScores();
+    loadContests();
+    loadChallenges();
+    loadPlayers();
+    loadLive();
+    loadAudit();
+  }
+
+  $('btn-refresh').onclick = refreshAll;
+  $('ch-new').onclick = function() { openChallengeModal(null); };
+  $('btn-logout').onclick = function() {
+    // Forces the browser to drop cached Basic Auth creds.
+    location.replace('/');
+  };
+  $('btn-help').onclick = function() {
+    alert(
+      'BLOOM אדמין — מקרא:\n\n' +
+      '🟢 ירוק = מעל יעד תעשייה 2026 (Hybrid Casual)\n' +
+      '🟡 צהוב = מתחת ליעד אך לא בקריטי\n' +
+      '🔴 אדום = בעיה — DAU צנח, ניקוד outlier (z>3), או cohort קטן מ-3\n\n' +
+      '" Live " מציג רק שורות עם heartbeat ב-30 השניות האחרונות.\n' +
+      'מחיקה היא לצמיתות + cascade — נכנס ל-audit log.'
+    );
+  };
+  $('player-search-btn').onclick = loadPlayers;
+  $('player-q').addEventListener('keydown', function(e) { if (e.key === 'Enter') loadPlayers(); });
+
+  renderExports();
+  refreshAll();
+})();
+</script>
+
+</body>
+</html>

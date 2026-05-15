@@ -4,7 +4,10 @@
   "description": "BLOOM — a Suika-style merge game with daily challenge and global leaderboard.",
   "type": "module",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "seed:demo": "node scripts/seed_demo.js",
+    "seed:reset": "node scripts/seed_demo.js --reset",
+    "seed:clean": "node scripts/seed_demo.js --clean"
   },
   "engines": {
     "node": ">=18"
