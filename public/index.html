@@ -2956,11 +2956,26 @@
     if (el) el.remove();
   }
 
-  function createBackButton(onclick) {
-    return '<button class="contest-back-btn" onclick="' + onclick + '" aria-label="חזור">' +
+  function createBackButton(action) {
+    return '<button class="contest-back-btn" data-back="' + action + '" aria-label="חזור">' +
       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>' +
       '</button>';
   }
+
+  // Event delegation for back buttons — replaces inline onclick="window.__bloom*()"
+  document.querySelector('.app').addEventListener('click', function(e) {
+    const btn = e.target.closest('[data-back]');
+    if (!btn) return;
+    const action = btn.getAttribute('data-back');
+    const handlers = {
+      'home': function() { hideContestScreens(); showHome(); },
+      'contest-menu': function() { hideContestScreens(); showContestMenu(); },
+      'challenges': navigateBackFromChallenges,
+      'challenges-list': function() { showChallengesList(); },
+      'home-from-challenges': function() { hideChallengeScreens(); showHome(); }
+    };
+    if (handlers[action]) handlers[action]();
+  });
 
   function showContestMenu() {
     const app = document.querySelector('.app');
@@ -2982,7 +2997,7 @@
         '</div>'
       : '';
     screen.innerHTML =
-      createBackButton('window.__bloomBackToHome()') +
+      createBackButton('home') +
       '<div class="contest-title">תחרות חברים</div>' +
       '<div class="contest-sub">בחר את התפקיד שלך</div>' +
       '<div class="contest-cards">' +
@@ -3030,11 +3045,6 @@
       });
     }
   }
-
-  window.__bloomBackToHome = function() {
-    hideContestScreens();
-    showHome();
-  };
 
   function renderMyContestsRowsHtml(contests) {
     return contests.map(function(c) {
@@ -3120,7 +3130,7 @@
       app.appendChild(screen);
     }
     screen.innerHTML =
-      createBackButton('window.__bloomBackToContestMenu()') +
+      createBackButton('contest-menu') +
       '<div class="contest-title">התחרויות שלי</div>' +
       '<div class="contest-sub" id="mclb-sub">טוען…</div>' +
       '<div id="mclb-body"><div class="contest-loading">טוען…</div></div>';
@@ -3134,7 +3144,7 @@
     const screen = document.getElementById('contest-screen');
     if (!screen) return;
     screen.innerHTML =
-      createBackButton('window.__bloomBackToContestMenu()') +
+      createBackButton('contest-menu') +
       '<div class="contest-title">תחרות חדשה</div>' +
       '<div class="contest-sub">פרטים בסיסיים בלבד</div>' +
       '<div class="contest-form">' +
@@ -3222,11 +3232,6 @@
     };
   }
 
-  window.__bloomBackToContestMenu = function() {
-    hideContestScreens();
-    showContestMenu();
-  };
-
   function showContestShareScreen(contest) {
     const screen = document.getElementById('contest-screen');
     if (!screen) return;
@@ -3235,7 +3240,7 @@
       'כל המשפחה משחקת — מי יביא את הציון הכי גבוה?\n' + link;
 
     screen.innerHTML =
-      createBackButton('window.__bloomBackToContestMenu()') +
+      createBackButton('contest-menu') +
       '<div class="contest-title">התחרות מוכנה!</div>' +
       '<div class="contest-sub">שתף את הקוד עם המשפחה</div>' +
       '<div class="contest-link-card">' +
@@ -3304,7 +3309,7 @@
     const screen = document.getElementById('contest-screen');
     if (!screen) return;
     screen.innerHTML =
-      createBackButton('window.__bloomBackToContestMenu()') +
+      createBackButton('contest-menu') +
       '<div class="contest-title">הצטרף לתחרות</div>' +
       '<div class="contest-sub">הכנס את הקוד שקיבלת</div>' +
       '<div class="contest-form">' +
@@ -3338,7 +3343,7 @@
     const data = await fetchContest(code);
     if (!data) {
       screen.innerHTML =
-        createBackButton('window.__bloomBackToContestMenu()') +
+        createBackButton('contest-menu') +
         '<div class="contest-title" style="margin-top:60px">תחרות לא נמצאה</div>' +
         '<div class="contest-sub">בדוק את הקוד ונסה שוב</div>';
       return;
@@ -3354,7 +3359,7 @@
     const topScore = data.players.length ? data.players[0].score : 0;
 
     screen.innerHTML =
-      createBackButton('window.__bloomBackToContestMenu()') +
+      createBackButton('contest-menu') +
       '<div class="contest-title">' + data.contest.name + '</div>' +
       '<div class="contest-sub">' + (ended ? 'התחרות הסתיימה' : 'הוזמנת על ידי ' + data.contest.host_name) + '</div>' +
       '<div class="contest-info-card">' +
@@ -3609,7 +3614,7 @@
     const data = await fetchContest(code);
     if (!data) {
       screen.innerHTML =
-        createBackButton('window.__bloomBackToHome()') +
+        createBackButton('home') +
         '<div class="contest-title" style="margin-top:60px">שגיאת חיבור</div>';
       return;
     }
@@ -3618,7 +3623,7 @@
     const link = buildContestShareLink(code);
 
     screen.innerHTML =
-      createBackButton('window.__bloomBackToHome()') +
+      createBackButton('home') +
       '<div class="contest-title">' + escapeHtml(data.contest.name) + '</div>' +
       '<div class="contest-code-row">' +
         '<button class="contest-code-pill" id="clb-code-pill" aria-label="העתק קוד התחרות">' +
@@ -3783,23 +3788,25 @@
     window.addEventListener('resize', syncBottomState);
   }
 
-  // Sizes the .grid element with SQUARE cells that ALWAYS fill the full
-  // width of .grid-wrap. The grid height becomes rows × cellSide regardless
-  // of available vertical room — if the viewport is short, the page scrolls
-  // a bit. The user explicitly preferred edge-to-edge squares with possible
-  // scroll over centered squares with empty side margins.
+  // Sizes the .grid element with SQUARE cells. Fits within BOTH the
+  // available width and height of .grid-wrap so the board never scrolls.
+  // On very short screens the cells shrink proportionally instead of
+  // overflowing vertically.
   function fitGrid() {
     const wrap = document.getElementById('grid-wrap');
     const grid = document.getElementById('grid');
     if (!wrap || !grid) return;
     const padX = 6;                // matches CSS .grid-wrap horizontal padding
+    const padY = 12;               // matches CSS .grid-wrap bottom padding
     const gap = 5;                 // matches CSS .grid gap
     const cols = getBoardCols();
     const rows = getBoardRows();
     const W = Math.max(0, wrap.clientWidth - 2 * padX);
-    if (W <= 0) return;            // not yet laid out
-    const cell = Math.floor((W - (cols - 1) * gap) / cols);
-    if (cell <= 0) return;
+    const H = Math.max(0, wrap.clientHeight - padY - 6);
+    if (W <= 0 || H <= 0) return;  // not yet laid out
+    const cellByW = Math.floor((W - (cols - 1) * gap) / cols);
+    const cellByH = Math.floor((H - (rows - 1) * gap) / rows);
+    const cell = Math.max(1, Math.min(cellByW, cellByH));
     grid.style.width  = (cell * cols + (cols - 1) * gap) + 'px';
     grid.style.height = (cell * rows + (rows - 1) * gap) + 'px';
   }
@@ -3978,6 +3985,26 @@
     return id;
   }
   const deviceId = getDeviceId();
+
+  // Device token — HMAC proof that this deviceId was registered server-side.
+  // Fetched once, stored forever. Sent with score submissions for anti-spoofing.
+  const DEVICE_TOKEN_KEY = 'bloom_device_token';
+  let deviceToken = localStorage.getItem(DEVICE_TOKEN_KEY) || null;
+  function ensureDeviceToken() {
+    if (deviceToken) return;
+    fetch(API_BASE + '/api/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ deviceId: deviceId })
+    }).then(function(res) { return res.json(); })
+      .then(function(data) {
+        if (data && data.token) {
+          deviceToken = data.token;
+          try { localStorage.setItem(DEVICE_TOKEN_KEY, data.token); } catch (e) {}
+        }
+      }).catch(function() {});
+  }
+  ensureDeviceToken();
 
   // ============ FRIENDS CONTEST HELPERS ============
   function setActiveContest(code) {
@@ -4421,7 +4448,6 @@
       showHome();
     }
   }
-  window.__bloomBackFromChallenges = navigateBackFromChallenges;
 
   async function showChallengesList(entryFrom) {
     if (entryFrom) challengeListEntryFrom = entryFrom;
@@ -4434,7 +4460,7 @@
     screen.id = 'challenge-screen';
     screen.className = 'contest-screen';
     screen.innerHTML =
-      createBackButton('window.__bloomBackFromChallenges()') +
+      createBackButton('challenges') +
       '<div class="contest-title">אתגרי BLOOM</div>' +
       '<div class="contest-sub">ניסיון אחד. פרס אמיתי.</div>' +
       '<div class="lb-tabs" id="cl-tabs" style="max-width:340px;margin:8px auto 4px">' +
@@ -4524,13 +4550,13 @@
     screen.id = 'challenge-screen';
     screen.className = 'contest-screen';
     screen.innerHTML =
-      createBackButton('window.__bloomBackToChallengesList()') +
+      createBackButton('challenges-list') +
       '<div class="contest-loading">טוען…</div>';
     app.appendChild(screen);
     const data = await fetchChallenge(slug);
     if (!data || !data.challenge) {
       screen.innerHTML =
-        createBackButton('window.__bloomBackToChallengesList()') +
+        createBackButton('challenges-list') +
         '<div class="contest-title" style="margin-top:60px">לא נמצא אתגר</div>';
       return;
     }
@@ -4565,7 +4591,7 @@
       actionHtml = '<button class="btn" id="chal-start">התחל אתגר →</button>';
     }
     screen.innerHTML =
-      createBackButton('window.__bloomBackToChallengesList()') +
+      createBackButton('challenges-list') +
       '<div class="contest-title">' + escapeHtml(c.name) + '</div>' +
       '<div class="contest-sub">' + escapeHtml(challengeTypeLabel(c)) + ' · ' + (c.winnersCount | 0) + ' זוכים · נותרו ' + challengeTimeLeft(c.endsAt) + '</div>' +
       '<div class="challenge-prize-banner">' +
@@ -4699,10 +4725,6 @@
       }
     };
   }
-
-  // navigation helpers — wired below via window.__ for use from inline onclick HTML.
-  window.__bloomBackToHomeFromChallenges = function() { hideChallengeScreens(); showHome(); };
-  window.__bloomBackToChallengesList = function() { showChallengesList(); };
 
   // ================================================================
   // CHALLENGE RUN — the in-game side of a prize attempt.
@@ -5610,7 +5632,8 @@
           name: (playerName || 'אנונימי').slice(0, 24),
           score: score,
           tier: highestTier,
-          drops: dropsCount | 0
+          drops: dropsCount | 0,
+          token: deviceToken
         })
       });
       if (res.ok) {

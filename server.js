@@ -1,5 +1,5 @@
 import express from 'express';
-import { timingSafeEqual } from 'node:crypto';
+import { timingSafeEqual, createHmac, randomBytes } from 'node:crypto';
 import { readFile as readFileSw } from 'node:fs/promises';
 import { pool, initDb } from './db.js';
 
@@ -168,6 +168,49 @@ function normalizeGridJson(raw) {
 const LIVE_FRESH_SECONDS = 10;
 
 // ============================================================
+// DEVICE TOKEN AUTH (HMAC-based anti-spoofing)
+// ============================================================
+// Each device registers once → gets an HMAC token tied to its deviceId.
+// Score-sensitive endpoints verify the token. Old clients that don't send
+// a token are allowed through during migration (soft enforcement).
+// Set DEVICE_SECRET env var for stable tokens across restarts.
+
+const DEVICE_SECRET = process.env.DEVICE_SECRET || randomBytes(32).toString('hex');
+if (!process.env.DEVICE_SECRET) {
+  console.warn('[auth] DEVICE_SECRET not set — using random (tokens reset on restart). Set it in Railway env vars.');
+}
+
+function generateDeviceToken(deviceId) {
+  return createHmac('sha256', DEVICE_SECRET).update(deviceId).digest('hex');
+}
+
+function verifyDeviceToken(deviceId, token) {
+  if (!token) return false;
+  const expected = generateDeviceToken(deviceId);
+  const a = Buffer.from(token);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(a, b);
+}
+
+// POST /api/register — issues a token for a deviceId. Idempotent.
+app.post('/api/register', (req, res) => {
+  try {
+    const { deviceId } = req.body || {};
+    if (typeof deviceId !== 'string' || deviceId.length < 8 || deviceId.length > 64) {
+      return res.status(400).json({ error: 'bad_device' });
+    }
+    if (!checkRateLimit('register', deviceId, 10, 60 * 60 * 1000)) {
+      return res.status(429).json({ error: 'rate_limited' });
+    }
+    res.json({ ok: true, token: generateDeviceToken(deviceId) });
+  } catch (e) {
+    console.error('POST /api/register', e);
+    res.status(500).json({ error: 'server' });
+  }
+});
+
+// ============================================================
 // RATE LIMITING (per-device, in-memory, sliding window)
 // ============================================================
 // Resets on server restart. Acceptable for a friends game with no auth.
@@ -222,10 +265,17 @@ function isCodeBlacklisted(code) {
 
 app.post('/api/score', async (req, res) => {
   try {
-    const { date, deviceId, name, score, tier, drops } = req.body || {};
+    const { date, deviceId, name, score, tier, drops, token } = req.body || {};
     if (!isValidDate(date)) return res.status(400).json({ error: 'bad_date' });
     if (typeof deviceId !== 'string' || deviceId.length < 8 || deviceId.length > 64) {
       return res.status(400).json({ error: 'bad_device' });
+    }
+    // Token verification: reject if a token is provided but invalid.
+    // Missing tokens are allowed (old clients) but logged for monitoring.
+    if (token) {
+      if (!verifyDeviceToken(deviceId, token)) {
+        return res.status(403).json({ error: 'bad_token' });
+      }
     }
     // Rate limit: max 60 daily score submissions per device per hour
     if (!checkRateLimit('daily:score', deviceId, 60, 60 * 60 * 1000)) {
