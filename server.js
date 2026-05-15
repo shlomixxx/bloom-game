@@ -2304,26 +2304,57 @@ if (ADMIN_PATH && ADMIN_PASSWORD) {
 // ============================================================
 app.post('/api/heartbeat', async (req, res) => {
   try {
-    const { deviceId, displayName, mode, score, highestTier } = req.body || {};
+    const { deviceId, displayName, mode, score, highestTier, grid } = req.body || {};
     if (!deviceId) return res.status(400).json({ error: 'missing_device' });
+    const gridJson = Array.isArray(grid) ? JSON.stringify(grid) : null;
     await pool.query(
-      `INSERT INTO player_heartbeat (device_id, display_name, mode, score, highest_tier, updated_at)
-       VALUES ($1, $2, $3, $4, $5, NOW())
+      `INSERT INTO player_heartbeat (device_id, display_name, mode, score, highest_tier, grid_json, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, NOW())
        ON CONFLICT (device_id) DO UPDATE
        SET display_name = COALESCE(EXCLUDED.display_name, player_heartbeat.display_name),
            mode = EXCLUDED.mode,
            score = EXCLUDED.score,
            highest_tier = EXCLUDED.highest_tier,
+           grid_json = COALESCE(EXCLUDED.grid_json, player_heartbeat.grid_json),
            updated_at = NOW()`,
       [String(deviceId).slice(0, 64),
        String(displayName || '').slice(0, 100) || 'אנונימי',
        String(mode || 'daily').slice(0, 20),
        Math.max(0, parseInt(score, 10) || 0),
-       Math.max(1, parseInt(highestTier, 10) || 1)]
+       Math.max(1, parseInt(highestTier, 10) || 1),
+       gridJson]
     );
     res.json({ ok: true });
   } catch (e) {
     console.error('heartbeat', e.message);
+    res.status(500).json({ error: 'server' });
+  }
+});
+
+// Universal spectator endpoint — watch ANY player regardless of mode
+app.get('/api/live-state/:deviceId', async (req, res) => {
+  try {
+    const did = String(req.params.deviceId || '').slice(0, 64);
+    const r = await pool.query(
+      `SELECT display_name, mode, score, highest_tier, grid_json, updated_at
+       FROM player_heartbeat
+       WHERE device_id = $1 AND updated_at > NOW() - INTERVAL '30 seconds'`,
+      [did]
+    );
+    if (!r.rows.length) return res.status(404).json({ error: 'not_found' });
+    const row = r.rows[0];
+    let grid = null;
+    try { grid = JSON.parse(row.grid_json); } catch (e) {}
+    res.json({
+      ok: true,
+      name: row.display_name,
+      mode: row.mode,
+      score: row.score | 0,
+      tier: row.highest_tier | 0,
+      grid: grid,
+      updatedAt: row.updated_at
+    });
+  } catch (e) {
     res.status(500).json({ error: 'server' });
   }
 });

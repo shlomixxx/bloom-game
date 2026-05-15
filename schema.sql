@@ -226,5 +226,6 @@ CREATE TABLE IF NOT EXISTS player_heartbeat (
   mode        VARCHAR(20) NOT NULL DEFAULT 'daily',
   score       INT NOT NULL DEFAULT 0,
   highest_tier INT NOT NULL DEFAULT 1,
+  grid_json   TEXT,
   updated_at  TIMESTAMP NOT NULL DEFAULT NOW()
 );

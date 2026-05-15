@@ -6910,8 +6910,11 @@
   var _heartbeatTimer = null;
   function sendHeartbeat() {
     if (document.visibilityState === 'hidden') return;
-    // Don't send if on home screen (not actively playing)
     if (document.getElementById('home-screen')) return;
+    var gridData = null;
+    if (Array.isArray(grid) && grid.length > 0) {
+      gridData = grid.map(function(row) { return row.slice(); });
+    }
     fetch(API_BASE + '/api/heartbeat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -6920,16 +6923,14 @@
         displayName: getPlayerName() || 'אנונימי',
         mode: mode,
         score: score | 0,
-        highestTier: highestTier | 0
+        highestTier: highestTier | 0,
+        grid: gridData
       })
     }).catch(function() {});
   }
-  _heartbeatTimer = setInterval(sendHeartbeat, 20000);
-  // Also send on first drop
-  document.addEventListener('pointerdown', function _firstBeat() {
-    sendHeartbeat();
-    document.removeEventListener('pointerdown', _firstBeat);
-  }, { once: true });
+  _heartbeatTimer = setInterval(sendHeartbeat, 5000);
+  // Send first heartbeat immediately on interaction
+  sendHeartbeat();
 
   // Register the service worker for offline play. Silent if unsupported
   // (older Safari) — the game still works fine without it.
@@ -6983,13 +6984,92 @@
     }, 100);
   }
 
-  // Admin spectator: ?watch=DEVICE_ID opens spectator mode directly
+  // Admin spectator: ?watch=DEVICE_ID — universal spectator for ANY player
   var watchTarget = urlParams.get('watch');
   if (watchTarget) {
     setTimeout(function() {
       hideHome();
-      startSpectator(watchTarget, 'שחקן', 'home');
-    }, 200);
+      startUniversalSpectator(watchTarget);
+    }, 300);
+  }
+
+  // Universal spectator — works for ALL modes (practice, daily, contest, challenge)
+  var _uniSpecTimer = null;
+  function startUniversalSpectator(targetId) {
+    if (_uniSpecTimer) { clearInterval(_uniSpecTimer); _uniSpecTimer = null; }
+    var wrap = document.getElementById('grid-wrap');
+    if (!wrap) return;
+    // Build spectator UI
+    var ROWS = getBoardRows(), COLS = getBoardCols();
+    var cellsHtml = '';
+    for (var r = 0; r < ROWS; r++) {
+      for (var c = 0; c < COLS; c++) {
+        cellsHtml += '<div class="cell"></div>';
+      }
+    }
+    wrap.innerHTML =
+      '<div style="text-align:center;padding:12px 0;direction:rtl">' +
+        '<div style="font-size:14px;font-weight:600;color:#1C1A18" id="uspec-name">טוען שחקן...</div>' +
+        '<div style="font-size:11px;color:#6F6E68;margin-top:2px" id="uspec-meta"></div>' +
+        '<div style="font-size:32px;font-weight:700;margin:8px 0" id="uspec-score">0</div>' +
+      '</div>' +
+      '<div class="spectator-grid"><div class="grid" id="uspec-grid">' + cellsHtml + '</div></div>' +
+      '<div style="text-align:center;margin-top:12px">' +
+        '<button class="btn secondary" id="uspec-close">חזרה למשחק שלי</button>' +
+      '</div>';
+    document.getElementById('uspec-close').onclick = function() {
+      if (_uniSpecTimer) { clearInterval(_uniSpecTimer); _uniSpecTimer = null; }
+      init(mode);
+    };
+    // Start polling
+    function poll() {
+      fetch(API_BASE + '/api/live-state/' + encodeURIComponent(targetId))
+        .then(function(r) { return r.ok ? r.json() : null; })
+        .then(function(d) {
+          if (!d) {
+            var meta = document.getElementById('uspec-meta');
+            if (meta) meta.textContent = 'השחקן לא פעיל כרגע';
+            return;
+          }
+          var nameEl = document.getElementById('uspec-name');
+          var metaEl = document.getElementById('uspec-meta');
+          var scoreEl = document.getElementById('uspec-score');
+          var gridEl = document.getElementById('uspec-grid');
+          if (nameEl) nameEl.textContent = '👁 צופה ב-' + (d.name || 'אנונימי');
+          var modeLabel = d.mode === 'daily' ? 'יומי' : d.mode === 'practice' ? 'אימון' : d.mode === 'challenge' ? 'אתגר' : d.mode;
+          if (metaEl) metaEl.textContent = modeLabel + ' · tier ' + (d.tier || 1);
+          if (scoreEl) scoreEl.textContent = (d.score || 0).toLocaleString();
+          // Render grid
+          if (gridEl && d.grid && Array.isArray(d.grid)) {
+            var cells = gridEl.children;
+            var idx = 0;
+            for (var r = 0; r < d.grid.length; r++) {
+              for (var c = 0; c < (d.grid[r] || []).length; c++) {
+                var cell = cells[idx];
+                if (cell) {
+                  var t = d.grid[r][c] || 0;
+                  if (t > 0) {
+                    var ti = getActiveTiers()[t];
+                    cell.className = 'cell filled';
+                    cell.style.background = ti ? ti.bg : '#ccc';
+                    cell.style.color = ti ? ti.fg : '#333';
+                    cell.innerHTML = ti ? ti.svg : '';
+                  } else {
+                    cell.className = 'cell';
+                    cell.style.background = '';
+                    cell.style.color = '';
+                    cell.innerHTML = '';
+                  }
+                }
+                idx++;
+              }
+            }
+          }
+        })
+        .catch(function() {});
+    }
+    poll();
+    _uniSpecTimer = setInterval(poll, 2000);
   }
 
   // ============================================================
