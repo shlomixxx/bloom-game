@@ -322,11 +322,8 @@
     grid-template-columns: repeat(4, 1fr);
     grid-template-rows: repeat(6, 1fr);
     gap: 5px;
-    /* Width + height are set by fitGrid() in JS — cells fill the explicit
-       dimensions via 1fr columns/rows. The grid always uses the FULL width
-       of its container (matching the tier-bar above for visual consistency)
-       and the FULL available height — cells are slightly rectangular when
-       the viewport is short, but icons inside stay centered. */
+    /* Width + height are set by fitGrid() in JS to keep cells SQUARE.
+       The grid centers inside .grid-wrap when narrower than the container. */
   }
   .cell {
     background: #F5F2EC; border-radius: 10px;
@@ -2191,6 +2188,24 @@
     return t.gain;
   }
 
+  // Defense-in-depth loop: some browsers (notably iOS Safari) drop the
+  // native <audio loop> behavior once the element is captured by Web Audio
+  // via createMediaElementSource. Set loop in JS AND restart on 'ended' so
+  // the song actually keeps playing through the whole game session.
+  Object.keys(MUSIC_TRACKS).forEach(function(name) {
+    const el = document.getElementById(MUSIC_TRACKS[name].id);
+    if (!el) return;
+    try { el.loop = true; } catch (e) {}
+    el.addEventListener('ended', function() {
+      if (currentTrack !== name || isMusicMuted()) return;
+      try {
+        el.currentTime = 0;
+        const p = el.play();
+        if (p && p.catch) p.catch(function() {});
+      } catch (e) {}
+    });
+  });
+
   function setTrackLevel(name, v) {
     const t = MUSIC_TRACKS[name];
     if (!t) return;
@@ -3758,13 +3773,11 @@
     window.addEventListener('resize', syncBottomState);
   }
 
-  // Sizes the .grid element to fill BOTH dimensions of .grid-wrap.
-  // Cells get independent width and height (slightly rectangular when the
-  // viewport is short) so the grid always uses the FULL app width — matching
-  // the tier-bar above for a unified look. The previous "smallest dimension"
-  // approach left the grid noticeably narrower than the tier-bar, which the
-  // user flagged as visually inconsistent. SVG icons inside cells are fixed
-  // 30×30 and stay centered regardless of cell shape.
+  // Sizes the .grid element to fill .grid-wrap with SQUARE cells. Picks the
+  // largest cell side that fits both axes (Math.min of width-based and
+  // height-based), then sizes the grid to a clean rows×cols of that side.
+  // The grid centers horizontally inside the wrap when the available height
+  // is the limiting factor — square cells beat full-width rectangles.
   function fitGrid() {
     const wrap = document.getElementById('grid-wrap');
     const grid = document.getElementById('grid');
@@ -3776,11 +3789,12 @@
     const W = Math.max(0, wrap.clientWidth - 2 * padding);
     const H = Math.max(0, wrap.clientHeight - 2 * padding);
     if (W <= 0 || H <= 0) return;  // not yet laid out
-    const cellWidth  = Math.floor((W - (cols - 1) * gap) / cols);
-    const cellHeight = Math.floor((H - (rows - 1) * gap) / rows);
-    if (cellWidth <= 0 || cellHeight <= 0) return;
-    grid.style.width  = (cellWidth  * cols + (cols - 1) * gap) + 'px';
-    grid.style.height = (cellHeight * rows + (rows - 1) * gap) + 'px';
+    const cellByW = Math.floor((W - (cols - 1) * gap) / cols);
+    const cellByH = Math.floor((H - (rows - 1) * gap) / rows);
+    const cell = Math.max(0, Math.min(cellByW, cellByH));
+    if (cell <= 0) return;
+    grid.style.width  = (cell * cols + (cols - 1) * gap) + 'px';
+    grid.style.height = (cell * rows + (rows - 1) * gap) + 'px';
   }
   // Re-fit on resize/orientation/dpr changes — phones rotate, browser
   // address bar shows/hides, etc.
