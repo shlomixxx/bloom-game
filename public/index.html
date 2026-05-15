@@ -2000,6 +2000,60 @@
      inline styles only when necessary; here we rely on the inline style). */
   /* Contest-back-btn was missing border-color in dark */
   html[data-theme="dark"] .contest-back-btn { background: #2C2A28; color: #F2EFE9; border-color: rgba(255,255,255,0.1); }
+  /* ============ DARK MODE — gap fixes (bulk) ============ */
+  html[data-theme="dark"] .stats > .stat { background: #2C2A28; }
+  html[data-theme="dark"] .stat-val { color: #F2EFE9; }
+  html[data-theme="dark"] .btn { background: #F2EFE9; color: #1A1816; }
+  html[data-theme="dark"] .btn.secondary { background: #2C2A28; color: #F2EFE9; }
+  html[data-theme="dark"] .mode-tab.active { background: #2C2A28; color: #F2EFE9; box-shadow: none; }
+  html[data-theme="dark"] .tier-row.reached { background: #2C2A28; }
+  html[data-theme="dark"] .tier-name { color: #F2EFE9; }
+  html[data-theme="dark"] .lb-name { color: #F2EFE9; }
+  html[data-theme="dark"] .lb-score { color: #9FE1CB; }
+  html[data-theme="dark"] .lb-tab { color: #8E8A82; }
+  html[data-theme="dark"] .lb-tab.active { background: #2C2A28; color: #F2EFE9; }
+  html[data-theme="dark"] .over-score { color: #F2EFE9; }
+  html[data-theme="dark"] .over-sub { color: #8E8A82; }
+  html[data-theme="dark"] .over-title { color: #8E8A82; }
+  html[data-theme="dark"] .share-card { background: #1B3A1B; color: #9FE1CB; }
+  html[data-theme="dark"] .share-label { color: #6F6E68; }
+  html[data-theme="dark"] .contest-duration-pill { background: #2C2A28; color: #F2EFE9; border-color: rgba(255,255,255,0.1); }
+  html[data-theme="dark"] .contest-duration-pill.selected { background: #FAC775; color: #1A1816; }
+  html[data-theme="dark"] .contest-info-row { color: #F2EFE9; }
+  html[data-theme="dark"] .contest-info-row span:first-child { color: #8E8A82; }
+  html[data-theme="dark"] .contest-submit-btn { background: #FAC775; color: #1A1816; }
+  html[data-theme="dark"] .contest-secondary-btn { background: #2C2A28; color: #F2EFE9; border-color: rgba(255,255,255,0.1); }
+  html[data-theme="dark"] .contest-ghost-btn { color: #8E8A82; }
+  html[data-theme="dark"] .contest-ghost-btn:hover { color: #C84040; }
+  html[data-theme="dark"] .coach-toast { background: #2C2A28; color: #F2EFE9; box-shadow: 0 8px 24px rgba(0,0,0,0.5); }
+  html[data-theme="dark"] .audience-badge { background: #2C2A28; color: #F2EFE9; border-color: rgba(255,255,255,0.1); }
+  html[data-theme="dark"] .spectator-toast { background: #FAC775; color: #1A1816; }
+  html[data-theme="dark"] .challenge-prize-chip { background: #2C2A28; color: #FAC775; border-color: rgba(250,199,117,0.3); }
+  html[data-theme="dark"] .home-challenge-badge { background: #9B8AE8; }
+  html[data-theme="dark"] .mute-row-head { color: #F2EFE9; }
+  html[data-theme="dark"] .mute-item-label { color: #F2EFE9; }
+  html[data-theme="dark"] .mute-item-state { background: #1B3A1B; color: #9FE1CB; }
+  html[data-theme="dark"] .mute-item.off .mute-item-state { background: #3A1B1B; color: #F4C0D1; }
+  html[data-theme="dark"] .tour-tile-empty { background: #2C2A28; }
+  html[data-theme="dark"] .live-mini { background: #2C2A28; color: #9FE1CB; }
+  html[data-theme="dark"] .icon-btn { border-color: rgba(255,255,255,0.1); }
+  html[data-theme="dark"] .icon-btn svg { color: #8E8A82; }
+  html[data-theme="dark"] .icon-btn:hover { background: #2C2A28; }
+  html[data-theme="dark"] .info-sub { color: #8E8A82; }
+  html[data-theme="dark"] .credits { color: #6F6E68; }
+  html[data-theme="dark"] .credits a { color: #9FE1CB; }
+  html[data-theme="dark"] .contest-form-label { color: #8E8A82; }
+  html[data-theme="dark"] .contest-form-hint { color: #6F6E68; }
+  html[data-theme="dark"] .contest-error { color: #F4C0D1; }
+  html[data-theme="dark"] .my-contest-row { background: #2C2A28; border-color: rgba(255,255,255,0.06); }
+  html[data-theme="dark"] .my-contest-name { color: #F2EFE9; }
+  html[data-theme="dark"] .my-contest-meta { color: #8E8A82; }
+  html[data-theme="dark"] .ach-unlock-toast { background: #2C2A28; color: #FAC775; box-shadow: 0 8px 24px rgba(0,0,0,0.5); }
+  html[data-theme="dark"] .challenge-card { background: #2C2A28; border-color: rgba(255,255,255,0.06); }
+  html[data-theme="dark"] .challenge-card-name { color: #F2EFE9; }
+  html[data-theme="dark"] .challenge-card-prize { color: #FAC775; }
+  html[data-theme="dark"] .challenge-card-meta { color: #8E8A82; }
+  html[data-theme="dark"] .countdown { background: #2C2A28; color: #8E8A82; }
 </style>
 </head>
 <body>
@@ -3660,9 +3714,12 @@
           '<code>' + escapeHtml(data.contest.code) + '</code>' +
         '</button>' +
       '</div>' +
-      '<div class="contest-sub" id="clb-sub">' +
-        '<span class="contest-live-dot"></span>' +
-        (data.players || []).length + ' שחקנים · ' + formatTimeLeft(data.contest.ends_at) +
+      '<div class="contest-sub" id="clb-sub" style="display:flex;align-items:center;justify-content:center;gap:8px">' +
+        '<span><span class="contest-live-dot"></span>' +
+        (data.players || []).length + ' שחקנים · ' + formatTimeLeft(data.contest.ends_at) + '</span>' +
+        '<button id="clb-refresh" style="background:none;border:1px solid rgba(0,0,0,0.1);border-radius:6px;padding:3px 6px;cursor:pointer;display:inline-flex;align-items:center" aria-label="רענן">' +
+          '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11A8.1 8.1 0 0 0 4.5 9M4 5v4h4"/><path d="M4 13a8.1 8.1 0 0 0 15.5 2M20 19v-4h-4"/></svg>' +
+        '</button>' +
       '</div>' +
       '<div class="contest-scoring-note">סכום נקודות מצטבר — כל משחק מצטרף לסך</div>' +
       '<div class="contest-board" id="clb-board">' + playersHtml + '</div>' +
@@ -3684,6 +3741,13 @@
       stopContestRefresh();
       hideContestScreens();
       init('contest');
+    };
+    const refreshBtn = document.getElementById('clb-refresh');
+    if (refreshBtn) refreshBtn.onclick = function() {
+      refreshBtn.style.opacity = '0.4';
+      refreshContestBoardSilently().then(function() {
+        refreshBtn.style.opacity = '1';
+      });
     };
     const codePill = document.getElementById('clb-code-pill');
     if (codePill) codePill.onclick = function() {
