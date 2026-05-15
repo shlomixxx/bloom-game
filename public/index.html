@@ -6903,6 +6903,34 @@
   document.addEventListener('touchstart',  primeAudio, { once: true, capture: true });
   document.addEventListener('keydown',     primeAudio, { once: true, capture: true });
 
+  // ============================================================
+  // PLAYER HEARTBEAT — tells the server this player is active
+  // so the admin live view shows ALL players, not just contests.
+  // ============================================================
+  var _heartbeatTimer = null;
+  function sendHeartbeat() {
+    if (document.visibilityState === 'hidden') return;
+    // Don't send if on home screen (not actively playing)
+    if (document.getElementById('home-screen')) return;
+    fetch(API_BASE + '/api/heartbeat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        deviceId: deviceId,
+        displayName: getPlayerName() || 'אנונימי',
+        mode: mode,
+        score: score | 0,
+        highestTier: highestTier | 0
+      })
+    }).catch(function() {});
+  }
+  _heartbeatTimer = setInterval(sendHeartbeat, 20000);
+  // Also send on first drop
+  document.addEventListener('pointerdown', function _firstBeat() {
+    sendHeartbeat();
+    document.removeEventListener('pointerdown', _firstBeat);
+  }, { once: true });
+
   // Register the service worker for offline play. Silent if unsupported
   // (older Safari) — the game still works fine without it.
   if ('serviceWorker' in navigator) {

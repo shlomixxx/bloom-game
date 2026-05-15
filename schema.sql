@@ -216,3 +216,15 @@ CREATE TABLE IF NOT EXISTS game_config (
 -- Default merge mode: 'anchor' (new, result stays at drop) or 'classic' (old, leftmost wins)
 INSERT INTO game_config (key, value) VALUES ('merge_mode', 'anchor')
   ON CONFLICT (key) DO NOTHING;
+
+-- ============================================================
+-- Player heartbeat — tracks ALL active players (any mode)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS player_heartbeat (
+  device_id   VARCHAR(64) PRIMARY KEY,
+  display_name VARCHAR(100),
+  mode        VARCHAR(20) NOT NULL DEFAULT 'daily',
+  score       INT NOT NULL DEFAULT 0,
+  highest_tier INT NOT NULL DEFAULT 1,
+  updated_at  TIMESTAMP NOT NULL DEFAULT NOW()
+);

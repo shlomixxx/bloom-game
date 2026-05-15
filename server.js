@@ -1932,11 +1932,19 @@ if (ADMIN_PATH && ADMIN_PASSWORD) {
   // ---------- LIVE — what's happening right now ----------
   adminRouter.get('/api/live', async (_req, res) => {
     try {
+      // Contest live state (existing)
       const live = await pool.query(
         `SELECT ls.contest_code, ls.device_id, ls.display_name, ls.live_score, ls.highest_tier, ls.updated_at, c.name AS contest_name
          FROM contest_live_state ls JOIN contests c ON c.code = ls.contest_code
          WHERE ls.updated_at > NOW() - INTERVAL '30 seconds'
          ORDER BY ls.live_score DESC`
+      );
+      // All active players from heartbeat (daily, practice, contest, challenge)
+      const heartbeat = await pool.query(
+        `SELECT device_id, display_name, mode, score, highest_tier, updated_at
+         FROM player_heartbeat
+         WHERE updated_at > NOW() - INTERVAL '45 seconds'
+         ORDER BY score DESC`
       );
       const watchers = await pool.query(
         `SELECT contest_code, watcher_name, target_device_id, watcher_last_score, updated_at
@@ -1944,7 +1952,7 @@ if (ADMIN_PATH && ADMIN_PASSWORD) {
          WHERE updated_at > NOW() - INTERVAL '30 seconds'
          ORDER BY updated_at DESC`
       );
-      res.json({ ok: true, live: live.rows, watchers: watchers.rows });
+      res.json({ ok: true, live: live.rows, heartbeat: heartbeat.rows, watchers: watchers.rows });
     } catch (e) {
       console.error('admin /live', e);
       res.status(500).json({ error: 'server' });
@@ -2290,6 +2298,42 @@ if (ADMIN_PATH && ADMIN_PASSWORD) {
 } else {
   console.log('[admin] disabled — set ADMIN_PATH + ADMIN_PASSWORD env vars to enable');
 }
+
+// ============================================================
+// PLAYER HEARTBEAT — tracks all active players (any mode)
+// ============================================================
+app.post('/api/heartbeat', async (req, res) => {
+  try {
+    const { deviceId, displayName, mode, score, highestTier } = req.body || {};
+    if (!deviceId) return res.status(400).json({ error: 'missing_device' });
+    await pool.query(
+      `INSERT INTO player_heartbeat (device_id, display_name, mode, score, highest_tier, updated_at)
+       VALUES ($1, $2, $3, $4, $5, NOW())
+       ON CONFLICT (device_id) DO UPDATE
+       SET display_name = COALESCE(EXCLUDED.display_name, player_heartbeat.display_name),
+           mode = EXCLUDED.mode,
+           score = EXCLUDED.score,
+           highest_tier = EXCLUDED.highest_tier,
+           updated_at = NOW()`,
+      [String(deviceId).slice(0, 64),
+       String(displayName || '').slice(0, 100) || 'אנונימי',
+       String(mode || 'daily').slice(0, 20),
+       Math.max(0, parseInt(score, 10) || 0),
+       Math.max(1, parseInt(highestTier, 10) || 1)]
+    );
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('heartbeat', e.message);
+    res.status(500).json({ error: 'server' });
+  }
+});
+
+// Cleanup old heartbeats every hour
+setInterval(async () => {
+  try {
+    await pool.query(`DELETE FROM player_heartbeat WHERE updated_at < NOW() - INTERVAL '2 minutes'`);
+  } catch (e) {}
+}, 60 * 1000);
 
 // ============================================================
 // GAME CONFIG (admin-controlled runtime settings)

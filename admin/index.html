@@ -796,22 +796,41 @@
     const data = await api('/live');
     if (!data) return;
     const live = data.live || [];
+    const heartbeat = data.heartbeat || [];
     const watchers = data.watchers || [];
     let html = '';
-    if (!live.length && !watchers.length) {
+
+    // Merge: contest live + heartbeat into one unified list.
+    // Contest players appear in both — deduplicate by device_id, prefer contest data.
+    var contestDeviceIds = {};
+    live.forEach(function(l) { contestDeviceIds[l.device_id] = true; });
+
+    var allPlayers = [];
+    // Add contest players
+    live.forEach(function(l) {
+      allPlayers.push({ device_id: l.device_id, name: l.display_name, mode: 'contest (' + escHtml(l.contest_name) + ')', score: l.live_score, tier: l.highest_tier, updated: l.updated_at });
+    });
+    // Add heartbeat players not already in contests
+    heartbeat.forEach(function(h) {
+      if (contestDeviceIds[h.device_id]) return; // already shown via contest
+      var modeLabel = h.mode === 'daily' ? 'יומי' : h.mode === 'practice' ? 'אימון' : h.mode === 'challenge' ? 'אתגר' : h.mode;
+      allPlayers.push({ device_id: h.device_id, name: h.display_name, mode: modeLabel, score: h.score, tier: h.highest_tier, updated: h.updated_at });
+    });
+
+    if (!allPlayers.length && !watchers.length) {
       html = '<div class="empty">אף אחד לא משחק כרגע</div>';
     } else {
-      if (live.length) {
-        html += '<details open><summary>משחקים פעילים (' + live.length + ')</summary>';
-        html += '<table><thead><tr><th>שחקן</th><th>תחרות</th><th>ניקוד חי</th><th>tier</th><th>עדכון אחרון</th><th></th></tr></thead><tbody>';
-        live.forEach(function(l) {
-          var gameUrl = location.origin + '/?watch=' + encodeURIComponent(l.device_id);
+      if (allPlayers.length) {
+        html += '<details open><summary>שחקנים פעילים (' + allPlayers.length + ')</summary>';
+        html += '<table><thead><tr><th>שחקן</th><th>מצב</th><th>ניקוד</th><th>tier</th><th>עדכון</th><th></th></tr></thead><tbody>';
+        allPlayers.forEach(function(p) {
+          var gameUrl = location.origin + '/?watch=' + encodeURIComponent(p.device_id);
           html += '<tr>' +
-            '<td>' + escHtml(l.display_name) + '</td>' +
-            '<td>' + escHtml(l.contest_name) + '</td>' +
-            '<td><strong>' + fmtNum(l.live_score) + '</strong></td>' +
-            '<td>' + (l.highest_tier | 0) + '</td>' +
-            '<td class="muted">' + fmtTime(l.updated_at) + '</td>' +
+            '<td>' + escHtml(p.name) + '</td>' +
+            '<td>' + p.mode + '</td>' +
+            '<td><strong>' + fmtNum(p.score) + '</strong></td>' +
+            '<td>' + (p.tier | 0) + '</td>' +
+            '<td class="muted">' + fmtTime(p.updated) + '</td>' +
             '<td><a href="' + gameUrl + '" target="_blank" class="btn sm secondary" style="font-size:10px;padding:3px 8px">👁 צפה</a></td>' +
           '</tr>';
         });
