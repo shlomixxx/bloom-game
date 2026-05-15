@@ -20,6 +20,19 @@ CREATE TABLE IF NOT EXISTS daily_scores (
 CREATE INDEX IF NOT EXISTS idx_daily_scores_date_score
   ON daily_scores (date, score DESC);
 
+-- Migration: legacy DBs created `date` as TEXT; admin queries compare it to
+-- CURRENT_DATE. Postgres rejects `text = date` without an explicit cast.
+-- Idempotent: only ALTERs if the column is still text.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'daily_scores' AND column_name = 'date' AND data_type = 'text'
+  ) THEN
+    ALTER TABLE daily_scores ALTER COLUMN date TYPE DATE USING date::date;
+  END IF;
+END $$;
+
 -- ============================================================
 -- תחרויות חברים (Friends Competitions) - חדש
 -- ============================================================
