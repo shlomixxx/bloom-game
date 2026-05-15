@@ -4174,6 +4174,42 @@
     } catch (e) {}
   }
 
+  // ============ PRACTICE STATE SAVE/RESTORE ============
+  // Mirrors the contest state pattern so switching tabs mid-game doesn't
+  // lose the player's board. TTL: 1 hour (practice is low-stakes).
+  const PRACTICE_STATE_KEY = 'bloom_practice_state';
+  const PRACTICE_STATE_TTL_MS = 60 * 60 * 1000;
+
+  function savePracticeGameState() {
+    if (mode !== 'practice' || !grid) return;
+    const hasPiece = grid.some(function(row) { return row.some(function(c) { return c > 0; }); });
+    if (!hasPiece && (score | 0) === 0) { clearPracticeGameState(); return; }
+    try {
+      localStorage.setItem(PRACTICE_STATE_KEY, JSON.stringify({
+        grid: grid,
+        score: score | 0,
+        highestTier: highestTier | 0,
+        nextPiece: nextPiece,
+        maxChain: currentGameMaxChain | 0,
+        drops: dropsCount | 0,
+        ts: Date.now()
+      }));
+    } catch (e) {}
+  }
+  function loadPracticeGameState() {
+    try {
+      const raw = localStorage.getItem(PRACTICE_STATE_KEY);
+      if (!raw) return null;
+      const s = JSON.parse(raw);
+      if (!s || !Array.isArray(s.grid) || s.grid.length !== getBoardRows()) return null;
+      if (Date.now() - (s.ts || 0) > PRACTICE_STATE_TTL_MS) return null;
+      return s;
+    } catch (e) { return null; }
+  }
+  function clearPracticeGameState() {
+    try { localStorage.removeItem(PRACTICE_STATE_KEY); } catch (e) {}
+  }
+
   function formatTimeLeft(endsAt) {
     const ms = new Date(endsAt) - new Date();
     if (ms <= 0) return 'הסתיים';
@@ -5478,6 +5514,24 @@
       } else {
         rng = Math.random;
       }
+    } else if (mode === 'practice') {
+      // Restore practice state when switching back from another tab.
+      if (fresh) {
+        clearPracticeGameState();
+      } else {
+        const saved = loadPracticeGameState();
+        if (saved) {
+          grid = saved.grid;
+          score = saved.score | 0;
+          highestTier = saved.highestTier || 1;
+          currentGameMaxChain = saved.maxChain || 0;
+          dropsCount = saved.drops || 0;
+          if (saved.nextPiece) {
+            nextPiece = saved.nextPiece;
+            restoredContestState = true; // reuse flag to skip pickPiece
+          }
+        }
+      }
     }
     if (!restoredContestState) nextPiece = pickPiece();
     updateModeBar();
@@ -5551,6 +5605,7 @@
         const target = btn.getAttribute('data-mode');
         if (target === mode && target !== 'contest' && target !== 'challenge') return;
         if (mode === 'contest') saveContestGameState();
+        if (mode === 'practice') savePracticeGameState();
         // No saveChallengeGameState — challenges intentionally don't survive navigation.
         if (target === 'contest' && myContestsCountSync() >= 2) {
           showMyContestsList();
@@ -6063,6 +6118,7 @@
       } else {
         render({ over: true });
       }
+      if (mode === 'practice') clearPracticeGameState();
       if (mode === 'contest' && !contestSubmitted && activeContestCode) {
         contestSubmitted = true;
         clearContestGameState();
@@ -6593,6 +6649,7 @@
     if (document.visibilityState === 'hidden') {
       pauseAllMusic();
       if (mode === 'contest') saveContestGameState();
+      if (mode === 'practice') savePracticeGameState();
     } else if (document.visibilityState === 'visible' && !isMusicMuted()) {
       resumeCurrentMusic();
     }
@@ -6611,6 +6668,7 @@
   });
   window.addEventListener('beforeunload', function() {
     if (mode === 'contest') saveContestGameState();
+    if (mode === 'practice') savePracticeGameState();
   });
 
   /* Browsers block audio until the first user interaction.
