@@ -1212,30 +1212,47 @@
 
   // Game Config
   async function loadGameConfig() {
-    const d = await api('/config');
-    if (!d || !d.config) return;
-    const rows = d.config;
-    const mergeRow = rows.find(function(r) { return r.key === 'merge_mode'; });
-    const btn = $('btn-merge-mode');
+    var btn = $('btn-merge-mode');
     if (!btn) return;
-    var current = mergeRow ? mergeRow.value : 'anchor';
-    btn.textContent = current === 'anchor' ? '🎯 anchor' : '⬅ classic';
-    btn.style.background = current === 'anchor' ? '#9FE1CB' : '#F4C0D1';
-    btn.style.color = '#1C1A18';
-    btn.onclick = async function() {
-      var next = current === 'anchor' ? 'classic' : 'anchor';
-      btn.disabled = true; btn.textContent = '...';
-      var r = await api('/config/merge_mode', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ value: next })
-      });
-      btn.disabled = false;
-      if (r && r.ok) {
-        toast('כיוון מיזוג → ' + next);
-        loadGameConfig();
+    try {
+      var d = await api('/config');
+      if (!d || !d.config) {
+        btn.textContent = '⚠️ שגיאה';
+        btn.style.background = '#FCE4E0';
+        btn.onclick = function() { loadGameConfig(); };
+        return;
       }
-    };
+      var rows = Array.isArray(d.config) ? d.config : [];
+      var mergeRow = rows.find(function(r) { return r.key === 'merge_mode'; });
+      var current = mergeRow ? mergeRow.value : 'anchor';
+      btn.textContent = current === 'anchor' ? '🎯 anchor' : '⬅ classic';
+      btn.style.background = current === 'anchor' ? '#9FE1CB' : '#F4C0D1';
+      btn.style.color = '#1C1A18';
+      btn.disabled = false;
+      btn.onclick = async function() {
+        var next = current === 'anchor' ? 'classic' : 'anchor';
+        btn.disabled = true; btn.textContent = '...';
+        try {
+          var r = await api('/config/merge_mode', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ value: next })
+          });
+          if (r && r.ok) {
+            toast('כיוון מיזוג → ' + next);
+          } else {
+            toast('שגיאה בשמירה');
+          }
+        } catch (e) {
+          toast('שגיאת רשת');
+        }
+        btn.disabled = false;
+        loadGameConfig();
+      };
+    } catch (e) {
+      btn.textContent = '⚠️ נסה שוב';
+      btn.onclick = function() { loadGameConfig(); };
+    }
   }
 
   renderExports();
