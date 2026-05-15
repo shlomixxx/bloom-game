@@ -6384,10 +6384,10 @@
       }
       if (!merged) break;
       render({ merging: merged });
-      await sleep(230);
+      await sleep(150);
       applyGravity();
       render();
-      await sleep(140);
+      await sleep(80);
     }
     if (highestTier > prevHighestTier) {
       soundMilestone(highestTier);
@@ -6400,14 +6400,21 @@
     return grid[0].every(function(c) { return c !== 0; });
   }
 
+  let queuedCol = -1; // next move queued while busy
+
   async function drop(col) {
-    if (busy) return;
+    if (busy) {
+      // Queue the next move — drops as soon as current finishes
+      queuedCol = col;
+      return;
+    }
     let row = -1;
     for (let r = getBoardRows() - 1; r >= 0; r--) {
       if (grid[r][col] === 0) { row = r; break; }
     }
     if (row === -1) return;
     busy = true;
+    queuedCol = -1;
     dropsCount++;
     ensureAudio();
     playMusic('game');
@@ -6422,7 +6429,7 @@
     // they've understood the input; no need to keep the arrow up.
     dismissCoach();
     render({ appearing: [row, col] });
-    await sleep(140);
+    await sleep(80);
     await processChains(row, col);
     // Pick the next piece NOW — this is synchronous, so the player can drop
     // again the instant we set busy=false below. The cycling animation runs
@@ -6487,6 +6494,13 @@
     else {
       busy = false;
       render();
+      // Auto-play queued move (fast tapping)
+      if (queuedCol >= 0) {
+        var nextCol = queuedCol;
+        queuedCol = -1;
+        setTimeout(function() { drop(nextCol); }, 10);
+        return;
+      }
       if (mode === 'contest') {
         saveContestGameState();
         scheduleLiveScorePush();
