@@ -100,6 +100,7 @@
   }
   .top {
     padding: 8px 14px;
+    padding-top: max(8px, env(safe-area-inset-top));
     border-bottom: 1px solid rgba(0,0,0,0.06);
   }
   .top-row {
@@ -154,12 +155,13 @@
   }
   .top-buttons { display: flex; gap: 5px; }
   .icon-btn {
-    background: none; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px;
-    width: 30px; height: 30px;
+    background: none; border: 1px solid rgba(0,0,0,0.1); border-radius: 10px;
+    width: 36px; height: 36px;
+    min-width: 44px; min-height: 44px; /* Apple HIG touch target */
     display: flex; align-items: center; justify-content: center;
     cursor: pointer; padding: 0; flex-shrink: 0;
   }
-  .icon-btn svg { width: 15px; height: 15px; color: #6F6E68; }
+  .icon-btn svg { width: 16px; height: 16px; color: #6F6E68; }
   .icon-btn:hover { background: #F5F5F0; }
   .icon-btn.muted svg { color: #C84040; }
 
@@ -679,14 +681,15 @@
   }
   .mode-tab {
     background: none; border: none;
-    padding: 5px 9px;
+    padding: 7px 13px;
     border-radius: 8px;
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 500;
     color: #6F6E68;
     cursor: pointer;
     font-family: inherit;
     white-space: nowrap;
+    min-height: 36px;
     transition: background 0.15s, color 0.15s;
   }
   .mode-tab:hover:not(.active) { color: #1C1A18; }
@@ -819,8 +822,14 @@
     display: flex; flex-direction: column;
     align-items: center; justify-content: flex-start;
     padding: 84px 24px 30px;
+    padding-top: max(84px, calc(60px + env(safe-area-inset-top)));
     direction: rtl; text-align: center;
-    overflow: hidden;
+    overflow-y: auto; overflow-x: hidden;
+    animation: homeFadeIn 0.3s ease-out;
+  }
+  @keyframes homeFadeIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
   }
   .home-mute {
     position: absolute; top: 16px; left: 16px;
@@ -952,6 +961,11 @@
     overflow-y: auto;
     direction: rtl;
     display: flex; flex-direction: column;
+    animation: screenSlideIn 0.22s ease-out;
+  }
+  @keyframes screenSlideIn {
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: translateY(0); }
   }
   .contest-back-btn {
     position: absolute;
@@ -3157,7 +3171,7 @@
         '<div class="contest-form-label">שם התחרות</div>' +
         '<input class="contest-input" id="ctf-name" placeholder="משפחת כהן · פסח" maxlength="100" />' +
         '<div class="contest-form-label">השם שלך בלוח</div>' +
-        '<input class="contest-input" id="ctf-host" placeholder="סבא משה" maxlength="50" value="' + escapeHtml(getPlayerName()) + '" />' +
+        '<input class="contest-input" id="ctf-host" autocapitalize="words" placeholder="סבא משה" maxlength="50" value="' + escapeHtml(getPlayerName()) + '" />' +
         '<div class="contest-form-label">משך התחרות</div>' +
         '<div class="contest-duration-row" id="ctf-duration">' +
           '<div class="contest-duration-pill" data-days="1">יום</div>' +
@@ -3375,7 +3389,7 @@
       '</div>' +
       '<div class="contest-form">' +
         '<div class="contest-form-label">השם שלך בלוח</div>' +
-        '<input class="contest-input" id="cjp-name" placeholder="הנכד דניאל" maxlength="50" value="' + escapeHtml(getContestDisplayName(code)) + '" />' +
+        '<input class="contest-input" id="cjp-name" autocapitalize="words" placeholder="הנכד דניאל" maxlength="50" value="' + escapeHtml(getContestDisplayName(code)) + '" />' +
         '<button class="contest-submit-btn" id="cjp-join" ' + (ended ? 'disabled' : '') + '>' + (ended ? 'התחרות הסתיימה' : 'הצטרף ושחק') + '</button>' +
         '<div class="contest-error" id="cjp-error"></div>' +
       '</div>';
@@ -3656,7 +3670,7 @@
         '</button>' +
         '<button class="contest-secondary-btn" id="clb-share">שתף קישור</button>' +
         (myContestsCountSync() >= 2 ? '<button class="contest-secondary-btn" id="clb-switch" style="margin-top:6px">↕ החלפת תחרות (' + myContestsCountSync() + ')</button>' : '') +
-        '<button class="contest-ghost-btn" id="clb-leave">יציאה מהתחרות</button>' +
+        '<button class="contest-ghost-btn" id="clb-leave">נתק ממכשיר זה</button>' +
       '</div>';
 
     document.getElementById('clb-play').onclick = function() {
@@ -3702,7 +3716,7 @@
     if (switchBtn) switchBtn.onclick = showMyContestsList;
     const leaveBtn = document.getElementById('clb-leave');
     if (leaveBtn) leaveBtn.onclick = async function() {
-      if (!confirm('לצאת מהתחרות הזו? תוכל להצטרף בחזרה עם הקוד.')) return;
+      if (!confirm('לנתק את המכשיר מהתחרות? הציון נשמר בלוח ותוכל להצטרף מחדש עם הקוד.')) return;
       clearContestGameState(code);
       clearContestDisplayName(code);
       stopContestRefresh();
@@ -4703,7 +4717,7 @@
         '</div>' +
         '<div class="contest-form">' +
           '<div class="contest-form-label">השם שלך בלוח</div>' +
-          '<input class="contest-input" id="chal-name" placeholder="כתוב את שמך" maxlength="50" value="' + escapeHtml(prefillName) + '" />' +
+          '<input class="contest-input" id="chal-name" autocapitalize="words" placeholder="כתוב את שמך" maxlength="50" value="' + escapeHtml(prefillName) + '" />' +
           (c.rulesText ? '<label class="challenge-checkbox-row"><input type="checkbox" id="chal-agree"> קראתי את התקנון</label>' : '') +
           '<button class="contest-submit-btn" id="chal-go">התחל אתגר</button>' +
           '<button class="contest-secondary-btn" id="chal-cancel" style="margin-top:6px">ביטול</button>' +
@@ -4760,7 +4774,7 @@
         '<div class="info-title">🎉 ניצחת באתגר!</div>' +
         '<div class="info-sub">פרס: ' + escapeHtml(c.prizeText) + ' — מלא פרטים ויצור קשר.</div>' +
         '<div class="challenge-claim-form">' +
-          '<input id="cc-name"  placeholder="שם מלא"        maxlength="80"  />' +
+          '<input id="cc-name" autocapitalize="words" placeholder="שם מלא"        maxlength="80"  />' +
           '<input id="cc-phone" placeholder="טלפון / WhatsApp" maxlength="40" />' +
           '<input id="cc-email" placeholder="אימייל (אופציונלי)" maxlength="120" />' +
           '<button class="contest-submit-btn" id="cc-go">שלח לאדמין</button>' +
@@ -4913,7 +4927,7 @@
         '</div>' +
         '<div class="challenge-warn"><strong>צעד אחרון:</strong> השאר פרטים ליצירת קשר.</div>' +
         '<div class="challenge-claim-form">' +
-          '<input id="cr-name"  placeholder="שם מלא"        maxlength="80"  value="' + escapeHtml(getPlayerName() || '') + '"/>' +
+          '<input id="cr-name" autocapitalize="words" placeholder="שם מלא"        maxlength="80"  value="' + escapeHtml(getPlayerName() || '') + '"/>' +
           '<input id="cr-phone" placeholder="טלפון / WhatsApp" maxlength="40" />' +
           '<input id="cr-email" placeholder="אימייל (אופציונלי)" maxlength="120" />' +
           '<button class="btn" id="cr-submit">שלח לאדמין</button>' +
@@ -5910,7 +5924,7 @@
       '<div class="info-card">' +
         '<div class="info-title">איך לקרוא לך בטבלת המובילים?</div>' +
         '<div class="info-sub">השם יישמר במכשיר ויופיע ליד התוצאה שלך.</div>' +
-        '<input class="name-input" id="name-input" maxlength="24" placeholder="השם שלך" />' +
+        '<input class="name-input" id="name-input" autocapitalize="words" maxlength="24" placeholder="השם שלך" />' +
         '<button class="btn" id="name-save">שמור והמשך</button>' +
         '<button class="btn secondary" id="name-skip">דלג</button>' +
       '</div>';
@@ -6459,7 +6473,9 @@
         '<button class="info-close" id="info-close" aria-label="סגור">' +
           '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>' +
         '</button>' +
-        '<div class="info-title">איך הניקוד עובד</div>' +
+        '<div class="info-title">איך משחקים</div>' +
+        '<div class="info-sub" style="margin-bottom:12px">הטל חלקים לעמודות. שני חלקים זהים שגובלים (אופקי/אנכי) — מתמזגים לדרגה הבאה.<br>המשחק נגמר כשהשורה העליונה מלאה.</div>' +
+        '<div class="info-title" style="font-size:13px;margin-top:4px">ניקוד</div>' +
         '<div class="info-sub">דרגה × 10 × (1 + 0.3·דרגה) × גודל הקבוצה × שרשרת.<br>בנוסף: בונוס פעם-ראשונה במשחק — ⚡ ברק +500 · ⭐ כוכב +1,500 · 💎 יהלום +5,000 · 👑 כתר +15,000.</div>' +
         '<button class="btn" id="info-tour-btn" style="margin: 4px 0 12px">📖 פתח את המדריך המלא</button>' +
         '<div class="tier-table">' + rows.join('') + '</div>' +
@@ -6619,11 +6635,18 @@
           '<div class="over-score">' + score.toLocaleString() + '</div>' +
           '<div class="over-sub">הגעת ל' + getActiveTiers()[highestTier].name + ' · ' + highestTier + '/' + MAX_TIER + ' דרגות</div>' +
           (dailyRank ? '<div class="lb-rank-pill">המקום שלך היום: #' + dailyRank + '</div>' : '') +
+          (function() {
+            if (mode !== 'daily') return '';
+            var s = loadStreak();
+            var n = s.count | 0;
+            if (n >= 2) return '<div style="margin:8px 0;font-size:13px;color:#BA7517;font-weight:600">🔥 ' + n + ' ימים ברצף! חזור מחר לשמור על הרצף</div>';
+            return '<div style="margin:8px 0;font-size:13px;color:#6F6E68">💪 חזור מחר לאתגר יומי חדש ולרצף 🔥</div>';
+          })() +
           (showCountdown ? '<div class="countdown" id="countdown"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span>אתגר חדש בעוד <span id="countdown-val">--:--:--</span></span></div>' : '') +
           (showLeaderboard ? renderLeaderboard() : '') +
           '<div class="tier-table">' + tierRows.join('') + '</div>' +
           '<div class="share-label">התוצאה לשיתוף</div>' +
-          '<div class="share-card">' + shareHeader + '<br>' + emojis.join('') + '<br><br>' + (window.location.host || 'play.bloom.com') + '</div>' +
+          '<div class="share-card">' + shareHeader + '<br>' + emojis.join('') + '<br><br>🎮 ' + (window.location.host || 'bloom-game') + '</div>' +
           '<button class="btn" id="share-btn">שתף תוצאה</button>' +
           spectateBtn +
           '<button class="btn secondary" id="again">' + againLabel + '</button>' +
@@ -6684,7 +6707,13 @@
     }
   }
 
-  document.getElementById('reset').onclick = function() { init(undefined, { fresh: true }); };
+  document.getElementById('reset').onclick = function() {
+    var hasPiece = grid && grid.some(function(r) { return r.some(function(c) { return c > 0; }); });
+    if (hasPiece && score > 100) {
+      if (!confirm('להתחיל מחדש? המשחק הנוכחי יימחק.')) return;
+    }
+    init(undefined, { fresh: true });
+  };
   document.getElementById('info').onclick = showInfo;
   document.getElementById('mute').onclick = function() { openMuteMenu('top'); };
   document.getElementById('leaderboard').onclick = openLeaderboardModal;
