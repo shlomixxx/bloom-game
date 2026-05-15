@@ -130,6 +130,35 @@
 
   /* EXPORT */
   .exports { display: flex; flex-wrap: wrap; gap: 6px; }
+
+  /* HELP TOOLTIP SYSTEM */
+  .tip-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 18px; height: 18px; border-radius: 50%;
+    background: #F0EDE3; color: #A8A6A0; border: none;
+    font-size: 10px; font-weight: 700; cursor: pointer;
+    font-family: inherit; line-height: 1; flex-shrink: 0;
+    transition: background 0.15s;
+  }
+  .tip-btn:hover { background: #FAC775; color: #412402; }
+  .tip-popup {
+    display: none; position: fixed; z-index: 9999;
+    background: #1C1A18; color: #F2EFE9; border-radius: 12px;
+    padding: 14px 16px; font-size: 12px; line-height: 1.7;
+    max-width: 340px; width: calc(100vw - 32px);
+    box-shadow: 0 12px 40px rgba(0,0,0,0.35);
+    direction: rtl; text-align: right;
+  }
+  .tip-popup.show { display: block; }
+  .tip-popup strong { color: #FAC775; }
+  .tip-popup .tip-example {
+    background: rgba(255,255,255,0.08); border-radius: 8px;
+    padding: 8px 10px; margin-top: 8px; font-size: 11px; line-height: 1.6;
+  }
+  .tip-popup .tip-close {
+    position: absolute; top: 8px; left: 8px; background: none; border: none;
+    color: rgba(255,255,255,0.5); font-size: 16px; cursor: pointer;
+  }
   .exports a {
     background: #F5F2EC; color: #1C1A18; padding: 7px 12px; border-radius: 9px;
     font-size: 12px; font-weight: 600; text-decoration: none;
@@ -253,7 +282,7 @@
 
   <!-- Game Config (Admin-controlled) -->
   <section id="config-section" style="margin-bottom:12px">
-    <h2>הגדרות משחק</h2>
+    <h2>הגדרות משחק <button class="tip-btn" data-tip="config">?</button></h2>
     <div class="config-row" style="display:flex;align-items:center;gap:12px;padding:12px 16px;background:var(--card);border-radius:10px;margin-top:8px">
       <div style="flex:1">
         <strong style="font-size:13px">כיוון מיזוג</strong>
@@ -265,7 +294,7 @@
 
   <!-- KPI cards -->
   <section>
-    <h2>מטריקות-על <span class="badge" id="kpi-tag">היום</span></h2>
+    <h2>מטריקות-על <button class="tip-btn" data-tip="kpi">?</button> <span class="badge" id="kpi-tag">היום</span></h2>
     <div class="kpis" id="kpis">
       <div class="loading">טוען…</div>
     </div>
@@ -274,7 +303,7 @@
 
   <!-- DAU sparkline -->
   <section>
-    <h2>DAU · 30 ימים</h2>
+    <h2>DAU · 30 ימים <button class="tip-btn" data-tip="dau">?</button></h2>
     <div id="spark-host">
       <div class="loading">טוען…</div>
     </div>
@@ -282,7 +311,7 @@
 
   <!-- Funnel -->
   <section>
-    <h2>משפך · <span class="badge">7 ימים אחרונים</span></h2>
+    <h2>משפך <button class="tip-btn" data-tip="funnel">?</button> · <span class="badge">7 ימים אחרונים</span></h2>
     <div id="funnel-host">
       <div class="loading">טוען…</div>
     </div>
@@ -291,7 +320,7 @@
 
   <!-- Cohort retention -->
   <section>
-    <h2>Cohort retention · <span class="badge">8 שבועות אחרונים</span></h2>
+    <h2>Cohort retention <button class="tip-btn" data-tip="retention">?</button> · <span class="badge">8 שבועות אחרונים</span></h2>
     <div class="table-wrap" id="retention-host">
       <div class="loading">טוען…</div>
     </div>
@@ -300,7 +329,7 @@
 
   <!-- Heatmap -->
   <section>
-    <h2>מפת חום · <span class="badge">שעות-יום (30 ימים, אסיה/ירושלים)</span></h2>
+    <h2>מפת חום <button class="tip-btn" data-tip="heatmap">?</button> · <span class="badge">שעות-יום (30 ימים, אסיה/ירושלים)</span></h2>
     <div id="heatmap-host">
       <div class="loading">טוען…</div>
     </div>
@@ -309,7 +338,7 @@
 
   <!-- Top scores -->
   <section>
-    <h2>ניקודים מובילים · <span class="badge" id="ts-date">היום</span></h2>
+    <h2>ניקודים מובילים <button class="tip-btn" data-tip="scores">?</button> · <span class="badge" id="ts-date">היום</span></h2>
     <div class="table-wrap" id="top-scores-host">
       <div class="loading">טוען…</div>
     </div>
@@ -318,7 +347,7 @@
 
   <!-- Active contests -->
   <section>
-    <h2>תחרויות</h2>
+    <h2>תחרויות <button class="tip-btn" data-tip="contests">?</button></h2>
     <div class="table-wrap" id="contests-host">
       <div class="loading">טוען…</div>
     </div>
@@ -326,7 +355,7 @@
 
   <!-- Challenges -->
   <section>
-    <h2>🎁 אתגרי פרס <span class="badge" id="ch-tag">—</span>
+    <h2>🎁 אתגרי פרס <button class="tip-btn" data-tip="challenges">?</button> <span class="badge" id="ch-tag">—</span>
       <button class="btn sm" id="ch-new" style="margin-right:auto">+ צור אתגר</button>
     </h2>
     <div class="table-wrap" id="challenges-host">
@@ -337,7 +366,7 @@
 
   <!-- Players -->
   <section>
-    <h2>שחקנים</h2>
+    <h2>שחקנים <button class="tip-btn" data-tip="players">?</button></h2>
     <div class="player-search">
       <input id="player-q" type="text" placeholder="חיפוש לפי שם או device id…" />
       <button class="btn secondary sm" id="player-search-btn">חפש</button>
@@ -349,7 +378,7 @@
 
   <!-- Live -->
   <section>
-    <h2>קורה עכשיו <span class="live-dot"></span></h2>
+    <h2>קורה עכשיו <button class="tip-btn" data-tip="live">?</button> <span class="live-dot"></span></h2>
     <div id="live-host">
       <div class="loading">טוען…</div>
     </div>
@@ -358,7 +387,7 @@
 
   <!-- Audit log -->
   <section>
-    <h2>יומן פעולות אדמין · <span class="badge">20 אחרונות</span></h2>
+    <h2>יומן פעולות אדמין <button class="tip-btn" data-tip="audit">?</button> · <span class="badge">20 אחרונות</span></h2>
     <div class="table-wrap" id="audit-host">
       <div class="loading">טוען…</div>
     </div>
@@ -366,7 +395,7 @@
 
   <!-- Exports -->
   <section>
-    <h2>הורדת CSV</h2>
+    <h2>הורדת CSV <button class="tip-btn" data-tip="csv">?</button></h2>
     <div class="exports" id="exports-host"></div>
     <div class="help">תוצא אוטומטית עם BOM ל-Excel + עברית. עד 10,000 שורות לטבלה.</div>
   </section>
@@ -408,6 +437,61 @@
   function toast(msg) {
     const t = $('toast'); t.textContent = msg; t.classList.add('show');
     setTimeout(function() { t.classList.remove('show'); }, 2200);
+  }
+
+  // ============ HELP TOOLTIP SYSTEM ============
+  var _tipEl = null;
+  function showTip(btn, html) {
+    closeTip();
+    var popup = document.createElement('div');
+    popup.className = 'tip-popup show';
+    popup.innerHTML = '<button class="tip-close" onclick="closeTip()">✕</button>' + html;
+    document.body.appendChild(popup);
+    _tipEl = popup;
+    // Position below the button
+    var rect = btn.getBoundingClientRect();
+    popup.style.top = Math.min(rect.bottom + 6, window.innerHeight - popup.offsetHeight - 10) + 'px';
+    popup.style.right = Math.max(8, window.innerWidth - rect.right) + 'px';
+    // Close on outside click
+    setTimeout(function() {
+      document.addEventListener('pointerdown', _tipOutside, true);
+    }, 0);
+  }
+  function closeTip() {
+    if (_tipEl) { _tipEl.remove(); _tipEl = null; }
+    document.removeEventListener('pointerdown', _tipOutside, true);
+  }
+  function _tipOutside(e) {
+    if (_tipEl && !_tipEl.contains(e.target) && !e.target.classList.contains('tip-btn')) closeTip();
+  }
+  window.closeTip = closeTip;
+
+  // Help content per section
+  var TIPS = {
+    config: '<strong>הגדרות משחק</strong><br>שליטה על התנהגות המשחק לכל השחקנים.<br><div class="tip-example">🎯 <strong>anchor</strong> = כשאריח מתמזג, התוצאה נשארת ליד המקום שהשחקן זרק<br>⬅ <strong>classic</strong> = התוצאה תמיד זזה שמאלה (ההתנהגות המקורית)</div>',
+    kpi: '<strong>מטריקות-על</strong><br>המספרים הכי חשובים של המשחק.<br><div class="tip-example">📊 <strong>DAU</strong> = שחקנים ייחודיים שנכנסו היום<br>📊 <strong>D1</strong> = כמה % חזרו יום אחרי ההתקנה<br>📊 <strong>D7/D30</strong> = אחוז שחזר אחרי שבוע/חודש<br>🎯 יעדים: D1 ≥ 40% · D7 ≥ 20% · D30 ≥ 7%<br>ירוק = מעל היעד · אדום = מתחת</div>',
+    dau: '<strong>DAU · 30 ימים</strong><br>גרף של כמה שחקנים ייחודיים נכנסו כל יום.<br><div class="tip-example">📈 עלייה = המשחק גדל<br>📉 ירידה = שחקנים נושרים<br>🔍 חפש דפוסים: סופ"ש בד"כ גבוה יותר</div>',
+    funnel: '<strong>משפך שחקנים</strong><br>מראה את ההמרה — כמה מתוך מי שנכנס באמת משחק.<br><div class="tip-example">ביקור → שחק משחק → השיג 50+ → הגיע tier 3+<br>⚠️ <strong>ירידה מעל 50%</strong> בין שלבים = בעיה. משמעות: שחקנים נוטשים בנקודה הזו.</div>',
+    retention: '<strong>Cohort Retention</strong><br>כל שורה = קבוצת שחקנים שהתחילו באותו שבוע.<br><div class="tip-example">📅 שבוע 12 מאי: 10 שחקנים חדשים<br>→ D1: 40% (4 חזרו למחרת)<br>→ D7: 20% (2 חזרו אחרי שבוע)<br>🟢 ירוק = מעל ממוצע · 🔴 אדום = מתחת</div>',
+    heatmap: '<strong>מפת חום</strong><br>מתי שחקנים משחקים — לפי שעה ויום בשבוע.<br><div class="tip-example">🔥 צבע כהה = הרבה משחקים<br>🕐 שימושי לתזמון: תזכורות push, אתגרים חדשים, תחרויות.<br>לדוגמה: אם 20:00-22:00 הכי פעיל → שלח תזכורת ב-19:30</div>',
+    scores: '<strong>ניקודים מובילים</strong><br>השחקנים עם הניקוד הגבוה ביותר היום.<br><div class="tip-example">⚠️ <strong>OUTLIER</strong> = ניקוד חשוד סטטיסטית (z-score > 3)<br>פירוש: הניקוד רחוק מאוד מהממוצע — יכול להיות רמאי או פשוט שחקן מעולה.<br>💡 בדוק: כמות drops, tier, ו-games played</div>',
+    contests: '<strong>תחרויות חברים</strong><br>כל התחרויות הפעילות שנוצרו ע"י שחקנים.<br><div class="tip-example">📋 כל תחרות מציגה: קוד, יוצר, מספר שחקנים, זמן שנותר<br>🔧 אפשר לסגור תחרות חשודה ידנית</div>',
+    challenges: '<strong>אתגרי פרס</strong><br>אתגרים שאתה יוצר — עם פרס אמיתי לזוכים.<br><div class="tip-example">🎁 <strong>race</strong> = ראשון שמגיע לרף ניקוד זוכה<br>🎁 <strong>top_n</strong> = N המובילים זוכים<br>🎁 <strong>beat</strong> = כל מי שעובר את הרף זוכה<br>⚠️ בדוק OUTLIER לפני שאתה מעביר פרס!</div>',
+    players: '<strong>שחקנים</strong><br>חיפוש שחקנים לפי שם או device ID.<br><div class="tip-example">🔍 חפש "שלומי" או הדבק device ID<br>📋 תראה: סך משחקים, שיא, דרגה, תאריך אחרון<br>🗑️ אפשר למחוק שחקן (cascade — מוחק את כל הנתונים שלו)</div>',
+    live: '<strong>קורה עכשיו</strong><br>מי משחק ברגע זה + מי צופה במישהו.<br><div class="tip-example">🟢 שחקנים פעילים: ניקוד חי, tier, תחרות<br>👁️ צופים: מי צופה במי<br>🔄 מתעדכן רק בלחיצה על "רענון"</div>',
+    audit: '<strong>יומן פעולות אדמין</strong><br>כל פעולה שנעשתה מפאנל הניהול.<br><div class="tip-example">📋 מציג: מחיקת שחקן, שינוי הגדרה, סגירת תחרות<br>💡 מאפשר לעקוב אחרי כל שינוי שנעשה</div>',
+    csv: '<strong>הורדת CSV</strong><br>ייצוא נתונים לאקסל.<br><div class="tip-example">📥 לחץ על טבלה → הורדה אוטומטית<br>📊 תומך בעברית (BOM) + עד 10,000 שורות<br>💡 שימושי לניתוח חיצוני או גיבוי</div>'
+  };
+
+  // Wire all .tip-btn elements after DOM load
+  function wireTips() {
+    document.querySelectorAll('.tip-btn[data-tip]').forEach(function(btn) {
+      btn.onclick = function(e) {
+        e.stopPropagation();
+        var key = btn.getAttribute('data-tip');
+        if (TIPS[key]) showTip(btn, TIPS[key]);
+      };
+    });
   }
 
   // ---------- DASHBOARD ----------
@@ -1108,6 +1192,7 @@
 
   renderExports();
   loadGameConfig();
+  wireTips();
   refreshAll();
 })();
 </script>
