@@ -2921,6 +2921,7 @@
     const contestBtn = document.getElementById('home-contest');
     if (contestBtn) contestBtn.onclick = function() {
       ensureAudio();
+      if (mode === 'practice') savePracticeGameState();
       showContestMenu();
     };
     refreshHomeChallengeCta();
@@ -4458,6 +4459,7 @@
         : list.length + ' אתגרי פרס פעילים';
       btn.onclick = function() {
         ensureAudio();
+        if (mode === 'practice') savePracticeGameState();
         showChallengesList('home');
       };
     });
@@ -6670,7 +6672,12 @@
   document.getElementById('mute').onclick = function() { openMuteMenu('top'); };
   document.getElementById('leaderboard').onclick = openLeaderboardModal;
   document.getElementById('achievements').onclick = openAchievementsModal;
-  document.getElementById('home-btn').onclick = function() { showHome(); };
+  document.getElementById('home-btn').onclick = function() {
+    // Save mid-game state so the player can resume after visiting home.
+    if (mode === 'contest') saveContestGameState();
+    if (mode === 'practice') savePracticeGameState();
+    showHome();
+  };
   // Mode navigation is now wired inside updateModeBar() via the segmented
   // .mode-tabs control — every tab routes to its mode directly and saves
   // contest state when leaving contest. No single mode-switch button anymore.
