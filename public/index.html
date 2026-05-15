@@ -6410,14 +6410,29 @@
   function shareResult() {
     const emojis = [];
     for (let t = 1; t <= highestTier; t++) emojis.push(getActiveTiers()[t].emoji);
+    // Game duration
+    var gameDur = Date.now() - (gameStartTime || Date.now());
+    var durMin = Math.floor(gameDur / 60000);
+    var durSec = Math.floor((gameDur % 60000) / 1000);
+    var durText = durMin > 0 ? durMin + ':' + String(durSec).padStart(2, '0') : durSec + ' שנ\'';
+    // Total play time
+    var totalMs = loadLifetimeInt(TOTAL_PLAY_TIME_KEY);
+    var totalH = Math.floor(totalMs / 3600000);
+    var totalM = Math.floor((totalMs % 3600000) / 60000);
+    var totalText = totalH > 0 ? totalH + ' שעות ו-' + totalM + ' דקות' : totalM + ' דקות';
+    // Chain
+    var chainText = currentGameMaxChain >= 2 ? ' · 🔗×' + currentGameMaxChain : '';
+
     let header;
     if (mode === 'daily') {
-      header = 'BLOOM · אתגר יומי ' + formatDateHe(dailyDate) + '\n' + score.toLocaleString() + ' נקודות';
+      header = '🌸 BLOOM · אתגר יומי ' + formatDateHe(dailyDate) + '\n' + score.toLocaleString() + ' נקודות';
       if (dailyRank) header += ' · מקום #' + dailyRank;
     } else {
-      header = 'BLOOM — ' + score.toLocaleString() + ' נקודות';
+      header = '🌸 BLOOM — ' + score.toLocaleString() + ' נקודות';
     }
-    const text = header + '\n' + emojis.join('') + '\nשחק: ' + window.location.href;
+    const statsLine = '⏱' + durText + chainText + ' · 🎯' + gameTotalMerges + ' מיזוגים';
+    const addictionLine = '🕐 סה"כ ' + totalText + ' ב-BLOOM';
+    const text = header + '\n' + emojis.join('') + '\n' + statsLine + '\n' + addictionLine + '\n\nשחק גם: ' + window.location.origin;
     if (navigator.share) {
       navigator.share({ text: text }).catch(function() {});
     } else if (navigator.clipboard) {
@@ -6913,7 +6928,21 @@
             return statsHtml;
           })() +
           '<div class="share-label">התוצאה לשיתוף</div>' +
-          '<div class="share-card">' + shareHeader + '<br>' + emojis.join('') + '<br><br>🎮 ' + (window.location.host || 'bloom-game') + '</div>' +
+          (function() {
+            var gameDur = Date.now() - (gameStartTime || Date.now());
+            var durMin = Math.floor(gameDur / 60000);
+            var durSec = Math.floor((gameDur % 60000) / 1000);
+            var durText = durMin > 0 ? durMin + ':' + String(durSec).padStart(2, '0') : durSec + '"';
+            var chainBit = currentGameMaxChain >= 2 ? ' · 🔗×' + currentGameMaxChain : '';
+            var totalMs = loadLifetimeInt(TOTAL_PLAY_TIME_KEY);
+            var totalH = Math.floor(totalMs / 3600000);
+            var totalM = Math.floor((totalMs % 3600000) / 60000);
+            var totalText = totalH > 0 ? totalH + ' שעות ו-' + totalM + ' דק\'' : totalM + ' דקות';
+            return '<div class="share-card">' + shareHeader + '<br>' + emojis.join('') +
+              '<br><span style="font-size:11px;opacity:0.8">⏱' + durText + chainBit + ' · 🎯' + gameTotalMerges + ' מיזוגים</span>' +
+              '<br><span style="font-size:10px;opacity:0.6">🕐 סה"כ ' + totalText + ' ב-BLOOM</span>' +
+              '<br><br>🎮 ' + (window.location.host || 'bloom-game') + '</div>';
+          })() +
           '<button class="btn" id="share-btn">שתף תוצאה</button>' +
           spectateBtn +
           '<button class="btn secondary" id="again">' + againLabel + '</button>' +
