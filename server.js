@@ -2307,23 +2307,33 @@ app.post('/api/heartbeat', async (req, res) => {
     const { deviceId, displayName, mode, score, highestTier, grid } = req.body || {};
     if (!deviceId) return res.status(400).json({ error: 'missing_device' });
     const gridJson = Array.isArray(grid) ? JSON.stringify(grid) : null;
-    await pool.query(
-      `INSERT INTO player_heartbeat (device_id, display_name, mode, score, highest_tier, grid_json, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, NOW())
-       ON CONFLICT (device_id) DO UPDATE
-       SET display_name = COALESCE(EXCLUDED.display_name, player_heartbeat.display_name),
-           mode = EXCLUDED.mode,
-           score = EXCLUDED.score,
-           highest_tier = EXCLUDED.highest_tier,
-           grid_json = COALESCE(EXCLUDED.grid_json, player_heartbeat.grid_json),
-           updated_at = NOW()`,
-      [String(deviceId).slice(0, 64),
-       String(displayName || '').slice(0, 100) || 'אנונימי',
-       String(mode || 'daily').slice(0, 20),
-       Math.max(0, parseInt(score, 10) || 0),
-       Math.max(1, parseInt(highestTier, 10) || 1),
-       gridJson]
-    );
+    const did = String(deviceId).slice(0, 64);
+    const name = String(displayName || '').slice(0, 100) || 'אנונימי';
+    const m = String(mode || 'daily').slice(0, 20);
+    const s = Math.max(0, parseInt(score, 10) || 0);
+    const t = Math.max(1, parseInt(highestTier, 10) || 1);
+    try {
+      // Try with grid_json first
+      await pool.query(
+        `INSERT INTO player_heartbeat (device_id, display_name, mode, score, highest_tier, grid_json, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, NOW())
+         ON CONFLICT (device_id) DO UPDATE
+         SET display_name = COALESCE(EXCLUDED.display_name, player_heartbeat.display_name),
+             mode = EXCLUDED.mode, score = EXCLUDED.score, highest_tier = EXCLUDED.highest_tier,
+             grid_json = COALESCE(EXCLUDED.grid_json, player_heartbeat.grid_json), updated_at = NOW()`,
+        [did, name, m, s, t, gridJson]
+      );
+    } catch (colErr) {
+      // Fallback: grid_json column might not exist yet
+      await pool.query(
+        `INSERT INTO player_heartbeat (device_id, display_name, mode, score, highest_tier, updated_at)
+         VALUES ($1, $2, $3, $4, $5, NOW())
+         ON CONFLICT (device_id) DO UPDATE
+         SET display_name = COALESCE(EXCLUDED.display_name, player_heartbeat.display_name),
+             mode = EXCLUDED.mode, score = EXCLUDED.score, highest_tier = EXCLUDED.highest_tier, updated_at = NOW()`,
+        [did, name, m, s, t]
+      );
+    }
     res.json({ ok: true });
   } catch (e) {
     console.error('heartbeat', e.message);
@@ -2335,16 +2345,21 @@ app.post('/api/heartbeat', async (req, res) => {
 app.get('/api/live-state/:deviceId', async (req, res) => {
   try {
     const did = String(req.params.deviceId || '').slice(0, 64);
-    const r = await pool.query(
-      `SELECT display_name, mode, score, highest_tier, grid_json, updated_at
-       FROM player_heartbeat
-       WHERE device_id = $1 AND updated_at > NOW() - INTERVAL '30 seconds'`,
-      [did]
-    );
+    // Try with grid_json first, fallback without it
+    let r;
+    try {
+      r = await pool.query(
+        `SELECT display_name, mode, score, highest_tier, grid_json, updated_at
+         FROM player_heartbeat WHERE device_id = $1 AND updated_at > NOW() - INTERVAL '30 seconds'`, [did]);
+    } catch (e) {
+      r = await pool.query(
+        `SELECT display_name, mode, score, highest_tier, updated_at
+         FROM player_heartbeat WHERE device_id = $1 AND updated_at > NOW() - INTERVAL '30 seconds'`, [did]);
+    }
     if (!r.rows.length) return res.status(404).json({ error: 'not_found' });
     const row = r.rows[0];
     let grid = null;
-    try { grid = JSON.parse(row.grid_json); } catch (e) {}
+    if (row.grid_json) { try { grid = JSON.parse(row.grid_json); } catch (e) {} }
     res.json({
       ok: true,
       name: row.display_name,

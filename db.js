@@ -23,4 +23,16 @@ export async function initDb() {
   const schema = await readFile(new URL('./schema.sql', import.meta.url), 'utf8');
   await pool.query(schema);
   console.log('[db] schema ready');
+
+  // Auto-migrations: add columns that may be missing from older tables.
+  // Each ALTER TABLE IF NOT EXISTS is safe to re-run.
+  const migrations = [
+    `ALTER TABLE player_heartbeat ADD COLUMN IF NOT EXISTS grid_json TEXT`,
+  ];
+  for (const sql of migrations) {
+    try { await pool.query(sql); } catch (e) {
+      console.warn('[db] migration skipped:', e.message);
+    }
+  }
+  console.log('[db] migrations done');
 }
