@@ -322,14 +322,37 @@
   <!-- Server Bots -->
   <section id="bots-section" style="margin-bottom:12px">
     <h2>🤖 שחקני דמו <button class="tip-btn" data-tip="bots">?</button></h2>
-    <div style="display:flex;align-items:center;gap:10px;padding:12px 16px;background:var(--card);border-radius:10px;margin-top:8px;flex-wrap:wrap">
-      <div style="flex:1;min-width:140px">
-        <div style="font-size:11px;color:#6F6E68;margin-bottom:4px">מספר בוטים</div>
-        <input type="number" id="bot-count" min="1" max="200" value="10" style="width:70px;padding:6px 8px;border:1px solid rgba(0,0,0,0.12);border-radius:8px;font-family:inherit;font-size:14px;font-weight:700;text-align:center">
+    <div style="display:flex;flex-direction:column;gap:10px;padding:12px 16px;background:var(--card);border-radius:10px;margin-top:8px">
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:end">
+        <div>
+          <div style="font-size:10px;color:#6F6E68;margin-bottom:3px">כמות</div>
+          <input type="number" id="bot-count" min="1" max="200" value="10" style="width:60px;padding:6px;border:1px solid rgba(0,0,0,0.12);border-radius:8px;font-family:inherit;font-size:14px;font-weight:700;text-align:center">
+        </div>
+        <div>
+          <div style="font-size:10px;color:#6F6E68;margin-bottom:3px">מצב משחק</div>
+          <select id="bot-mode" style="padding:6px 8px;border:1px solid rgba(0,0,0,0.12);border-radius:8px;font-family:inherit;font-size:12px">
+            <option value="practice">אימון</option>
+            <option value="daily">יומי (לידרבורד)</option>
+            <option value="contest">תחרות חברים</option>
+          </select>
+        </div>
+        <div>
+          <div style="font-size:10px;color:#6F6E68;margin-bottom:3px">מהירות</div>
+          <select id="bot-speed" style="padding:6px 8px;border:1px solid rgba(0,0,0,0.12);border-radius:8px;font-family:inherit;font-size:12px">
+            <option value="slow">🐌 איטי</option>
+            <option value="normal" selected>🏃 רגיל</option>
+            <option value="fast">⚡ מהיר</option>
+            <option value="instant">🚀 מקסימום</option>
+          </select>
+        </div>
+      </div>
+      <div id="bot-contest-row" style="display:none">
+        <div style="font-size:10px;color:#6F6E68;margin-bottom:3px">קוד תחרות</div>
+        <input id="bot-contest-code" placeholder="ABC123" maxlength="8" style="width:120px;padding:6px 8px;border:1px solid rgba(0,0,0,0.12);border-radius:8px;font-family:inherit;font-size:13px;text-transform:uppercase;letter-spacing:0.15em;font-weight:700">
       </div>
       <div style="display:flex;gap:6px">
-        <button class="btn sm" id="btn-bots-start" style="background:#2E8B6F;min-width:80px">▶ הפעל</button>
-        <button class="btn sm" id="btn-bots-stop" style="background:#C8472F;min-width:80px">⏹ עצור</button>
+        <button class="btn sm" id="btn-bots-start" style="background:#2E8B6F;flex:1">▶ הפעל</button>
+        <button class="btn sm" id="btn-bots-stop" style="background:#C8472F;flex:1">⏹ עצור</button>
       </div>
     </div>
     <div id="bots-status" style="margin-top:8px;font-size:12px;color:#6F6E68;padding:0 16px"></div>
@@ -1300,23 +1323,38 @@
     if (!el) return;
     if (!d) { el.textContent = ''; return; }
     if (d.running) {
-      el.innerHTML = '🟢 <strong>' + d.count + ' בוטים פעילים</strong> — ' +
-        d.bots.slice(0, 5).map(function(b) { return b.name + ' (' + (b.score|0).toLocaleString() + ')'; }).join(', ') +
-        (d.count > 5 ? ' ועוד ' + (d.count - 5) + '...' : '');
+      var modeLabel = d.config.mode === 'daily' ? 'יומי' : d.config.mode === 'contest' ? 'תחרות' : 'אימון';
+      var speedLabel = d.config.speed === 'slow' ? '🐌' : d.config.speed === 'fast' ? '⚡' : d.config.speed === 'instant' ? '🚀' : '🏃';
+      el.innerHTML = '🟢 <strong>' + d.count + ' בוטים</strong> · ' + modeLabel + ' ' + speedLabel +
+        (d.config.contestCode ? ' · קוד: ' + d.config.contestCode : '') + '<br>' +
+        d.bots.slice(0, 8).map(function(b) { return b.name + ' <strong>' + (b.score|0).toLocaleString() + '</strong>'; }).join(' · ') +
+        (d.count > 8 ? ' <span style="color:#A8A6A0">ועוד ' + (d.count - 8) + '</span>' : '');
     } else {
       el.textContent = '⚪ לא פעיל';
     }
   }
+  // Show/hide contest code field based on mode
+  $('bot-mode').onchange = function() {
+    $('bot-contest-row').style.display = this.value === 'contest' ? '' : 'none';
+  };
   $('btn-bots-start').onclick = async function() {
     var count = parseInt($('bot-count').value, 10) || 10;
+    var mode = $('bot-mode').value;
+    var speed = $('bot-speed').value;
+    var contestCode = mode === 'contest' ? ($('bot-contest-code').value || '').trim().toUpperCase() : null;
+    if (mode === 'contest' && !contestCode) { toast('נא להזין קוד תחרות'); return; }
     this.disabled = true; this.textContent = '...';
     var r = await api('/bots/start', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ count: count })
+      body: JSON.stringify({ count: count, mode: mode, speed: speed, contestCode: contestCode })
     });
     this.disabled = false; this.textContent = '▶ הפעל';
-    if (r && r.ok) { toast('🤖 ' + r.count + ' בוטים הופעלו'); refreshBotStatus(); }
+    if (r && r.ok) {
+      var label = mode === 'daily' ? 'יומי' : mode === 'contest' ? 'תחרות' : 'אימון';
+      toast('🤖 ' + r.count + ' בוטים · ' + label);
+      refreshBotStatus();
+    }
   };
   $('btn-bots-stop').onclick = async function() {
     this.disabled = true; this.textContent = '...';

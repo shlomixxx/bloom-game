@@ -2236,8 +2236,14 @@ if (ADMIN_PATH && ADMIN_PASSWORD) {
   });
   adminRouter.post('/api/bots/start', (req, res) => {
     const count = Math.max(1, Math.min(200, parseInt(req.body.count, 10) || 10));
-    const started = startBots(count, pool);
-    logAdminAction('bots.start', 'bots', String(count), { started });
+    const config = {
+      mode: req.body.mode || 'practice',
+      speed: req.body.speed || 'normal',
+      contestCode: req.body.contestCode || null,
+      challengeSlug: req.body.challengeSlug || null
+    };
+    const started = startBots(count, pool, config);
+    logAdminAction('bots.start', 'bots', String(count), { ...config, started });
     res.json({ ok: true, count: started });
   });
   adminRouter.post('/api/bots/stop', (_req, res) => {

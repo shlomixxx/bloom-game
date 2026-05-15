@@ -149,7 +149,11 @@ function isGameOver(g) {
 
 const bots = new Map(); // deviceId → bot state
 let botInterval = null;
-let botPool = null; // set by init
+let botPool = null;
+let botConfig = { mode: 'practice', speed: 'normal', contestCode: null, challengeSlug: null };
+
+const TICK_SPEEDS = { slow: 8000, normal: 5000, fast: 2500, instant: 1000 };
+const MOVES_PER_TICK = { slow: 1, normal: 2, fast: 3, instant: 5 };
 
 function createBot(name) {
   const deviceId = 'bot-' + Math.random().toString(36).slice(2, 10) + '-' + Date.now().toString(36);
@@ -160,30 +164,33 @@ function createBot(name) {
     score: 0,
     highestTier: 1,
     gamesPlayed: 0,
-    mode: 'practice',
-    active: true
+    mode: botConfig.mode,
+    contestCode: botConfig.contestCode,
+    challengeSlug: botConfig.challengeSlug,
+    active: true,
+    joined: false // for contests/challenges — tracks if join API was called
   };
 }
 
 function tickBot(bot) {
   if (!bot.active) return;
   
-  // Game over → restart
   if (isGameOver(bot.grid)) {
+    // Submit final score before restarting
+    submitBotScore(bot);
     bot.gamesPlayed++;
     bot.grid = Array.from({ length: ROWS }, () => new Array(COLS).fill(0));
     bot.score = 0;
     bot.highestTier = 1;
+    bot.joined = false;
     return;
   }
 
-  // Make 1-3 moves per tick
-  const moves = 1 + Math.floor(Math.random() * 3);
+  const moves = MOVES_PER_TICK[botConfig.speed] || 2;
   for (let i = 0; i < moves; i++) {
     if (isGameOver(bot.grid)) break;
     const piece = pickPiece(bot.highestTier);
     const col = bestColumn(bot.grid, piece);
-    // Find landing row
     let row = -1;
     for (let r = ROWS - 1; r >= 0; r--) {
       if (bot.grid[r][col] === 0) { row = r; break; }
@@ -198,6 +205,54 @@ function tickBot(bot) {
   }
 }
 
+// Submit score to appropriate endpoint based on mode
+async function submitBotScore(bot) {
+  if (!botPool) return;
+  try {
+    if (bot.mode === 'daily') {
+      // Submit to daily leaderboard
+      const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' });
+      await botPool.query(
+        `INSERT INTO daily_scores (device_id, display_name, date, score, highest_tier, games_played, drops_count)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         ON CONFLICT (device_id, date) DO UPDATE
+         SET score = GREATEST(daily_scores.score, EXCLUDED.score),
+             highest_tier = GREATEST(daily_scores.highest_tier, EXCLUDED.highest_tier),
+             games_played = daily_scores.games_played + 1`,
+        [bot.deviceId, bot.name, today, bot.score, bot.highestTier, 1, 50 + Math.floor(Math.random() * 100)]
+      );
+    } else if (bot.mode === 'contest' && bot.contestCode) {
+      // Submit to contest leaderboard
+      await botPool.query(
+        `INSERT INTO contest_scores (contest_code, device_id, display_name, score, highest_tier, games_played, last_played_at)
+         VALUES ($1, $2, $3, $4, $5, 1, NOW())
+         ON CONFLICT (contest_code, device_id) DO UPDATE
+         SET score = contest_scores.score + EXCLUDED.score,
+             highest_tier = GREATEST(contest_scores.highest_tier, EXCLUDED.highest_tier),
+             games_played = contest_scores.games_played + 1,
+             last_played_at = NOW()`,
+        [bot.contestCode, bot.deviceId, bot.name, bot.score, bot.highestTier]
+      );
+    }
+  } catch (e) {
+    // Silent — non-critical
+  }
+}
+
+// Join contest for new bots
+async function joinContest(bot) {
+  if (!botPool || !bot.contestCode || bot.joined) return;
+  try {
+    await botPool.query(
+      `INSERT INTO contest_scores (contest_code, device_id, display_name, score, highest_tier, games_played, last_played_at)
+       VALUES ($1, $2, $3, 0, 1, 0, NOW())
+       ON CONFLICT (contest_code, device_id) DO NOTHING`,
+      [bot.contestCode, bot.deviceId, bot.name]
+    );
+    bot.joined = true;
+  } catch (e) { /* silent */ }
+}
+
 async function flushBots() {
   if (!botPool || bots.size === 0) return;
   const activeBots = [...bots.values()].filter(b => b.active);
@@ -209,8 +264,9 @@ async function flushBots() {
   let idx = 1;
   for (const b of activeBots) {
     const gridJson = JSON.stringify(b.grid);
+    const modeLabel = b.mode === 'contest' ? 'contest' : b.mode;
     values.push(`($${idx}, $${idx+1}, $${idx+2}, $${idx+3}, $${idx+4}, $${idx+5}, NOW())`);
-    params.push(b.deviceId, b.name, b.mode, b.score, b.highestTier, gridJson);
+    params.push(b.deviceId, b.name, modeLabel, b.score, b.highestTier, gridJson);
     idx += 6;
   }
   
@@ -225,56 +281,78 @@ async function flushBots() {
       params
     );
   } catch (e) {
-    // Fallback without grid_json
     try {
-      const values2 = [];
-      const params2 = [];
-      let idx2 = 1;
+      const v2 = [], p2 = [];
+      let i2 = 1;
       for (const b of activeBots) {
-        values2.push(`($${idx2}, $${idx2+1}, $${idx2+2}, $${idx2+3}, $${idx2+4}, NOW())`);
-        params2.push(b.deviceId, b.name, b.mode, b.score, b.highestTier);
-        idx2 += 5;
+        v2.push(`($${i2}, $${i2+1}, $${i2+2}, $${i2+3}, $${i2+4}, NOW())`);
+        p2.push(b.deviceId, b.name, b.mode, b.score, b.highestTier);
+        i2 += 5;
       }
       await botPool.query(
         `INSERT INTO player_heartbeat (device_id, display_name, mode, score, highest_tier, updated_at)
-         VALUES ${values2.join(',')}
+         VALUES ${v2.join(',')}
          ON CONFLICT (device_id) DO UPDATE
          SET display_name = EXCLUDED.display_name, mode = EXCLUDED.mode,
              score = EXCLUDED.score, highest_tier = EXCLUDED.highest_tier, updated_at = NOW()`,
-        params2
+        p2
       );
     } catch (e2) {
       console.error('[bots] flush failed:', e2.message);
     }
   }
+
+  // Push live scores for contest bots
+  if (botConfig.mode === 'contest' && botConfig.contestCode) {
+    for (const b of activeBots) {
+      if (!b.contestCode) continue;
+      try {
+        await botPool.query(
+          `INSERT INTO contest_live_state (contest_code, device_id, display_name, live_score, highest_tier, updated_at)
+           VALUES ($1, $2, $3, $4, $5, NOW())
+           ON CONFLICT (contest_code, device_id) DO UPDATE
+           SET live_score = EXCLUDED.live_score, highest_tier = EXCLUDED.highest_tier,
+               display_name = EXCLUDED.display_name, updated_at = NOW()`,
+          [b.contestCode, b.deviceId, b.name, b.score, b.highestTier]
+        );
+      } catch (e) { /* silent */ }
+    }
+  }
 }
 
-function startBots(count, pool) {
+function startBots(count, pool, config) {
   botPool = pool;
-  stopBots(); // clear existing
+  stopBots();
   
-  // Pick random names
+  if (config) {
+    botConfig.mode = config.mode || 'practice';
+    botConfig.speed = config.speed || 'normal';
+    botConfig.contestCode = config.contestCode || null;
+    botConfig.challengeSlug = config.challengeSlug || null;
+  }
+  
   const shuffled = [...NAMES].sort(() => Math.random() - 0.5);
   const names = shuffled.slice(0, Math.min(count, NAMES.length));
   
   for (const name of names) {
     const bot = createBot(name);
     bots.set(bot.deviceId, bot);
+    if (bot.mode === 'contest' && bot.contestCode) {
+      joinContest(bot);
+    }
   }
   
-  // Tick all bots every 5 seconds
+  const tickMs = TICK_SPEEDS[botConfig.speed] || 5000;
   botInterval = setInterval(() => {
-    for (const bot of bots.values()) {
-      tickBot(bot);
-    }
+    for (const bot of bots.values()) tickBot(bot);
     flushBots();
-  }, 5000);
+  }, tickMs);
   
-  // Immediate first flush
+  // Immediate first tick
   for (const bot of bots.values()) tickBot(bot);
   flushBots();
   
-  console.log(`[bots] started ${bots.size} bots`);
+  console.log(`[bots] started ${bots.size} bots — mode: ${botConfig.mode}, speed: ${botConfig.speed}`);
   return bots.size;
 }
 
@@ -283,13 +361,13 @@ function stopBots() {
     clearInterval(botInterval);
     botInterval = null;
   }
-  // Clean up heartbeat entries for bots
   if (botPool && bots.size > 0) {
     const ids = [...bots.keys()];
-    botPool.query(
-      `DELETE FROM player_heartbeat WHERE device_id = ANY($1)`,
-      [ids]
-    ).catch(() => {});
+    botPool.query(`DELETE FROM player_heartbeat WHERE device_id = ANY($1)`, [ids]).catch(() => {});
+    // Also clean contest live state
+    if (botConfig.contestCode) {
+      botPool.query(`DELETE FROM contest_live_state WHERE device_id = ANY($1)`, [ids]).catch(() => {});
+    }
   }
   bots.clear();
   console.log('[bots] stopped all bots');
@@ -300,7 +378,8 @@ function getBotStatus() {
   return {
     running: botInterval !== null,
     count: active.length,
-    bots: active.map(b => ({
+    config: { ...botConfig },
+    bots: active.slice(0, 20).map(b => ({
       name: b.name,
       score: b.score,
       tier: b.highestTier,
