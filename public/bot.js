@@ -3,13 +3,13 @@
 
   // ============================================================
   // BLOOM Auto-Play Bot
-  // Activate via: ?bot=1 in URL
-  // Or manually:  window.BloomBot.start()
+  // Activate via: ?bot=1 or ?botui in URL
+  // Bot NEVER auto-starts — player must click ▶ Start.
+  // Bot ALWAYS plays in practice mode — never touches daily/contest/challenge.
   // ============================================================
 
   const params = new URLSearchParams(window.location.search);
-  const autoStart = params.get('bot') === '1';
-  if (!autoStart && !params.get('botui')) return;
+  if (!params.has('bot') && !params.has('botui')) return;
 
   const SPEED_DELAYS = {
     slow:    { min: 800, max: 1500 },
@@ -29,18 +29,11 @@
     autoRestart: true,
   };
 
-  // ============================================================
-  // WAIT FOR GAME API
-  // ============================================================
-
   function waitForGame() {
     return new Promise(resolve => {
       const check = () => {
-        if (window.BloomDebug && window.BloomDebug.ready()) {
-          resolve();
-        } else {
-          setTimeout(check, 100);
-        }
+        if (window.BloomDebug && window.BloomDebug.ready()) resolve();
+        else setTimeout(check, 100);
       };
       check();
     });
@@ -50,8 +43,17 @@
     return new Promise(resolve => setTimeout(resolve, ms));
   }
 
+  // Check if the player is in an active, playable game screen
+  function isInGame() {
+    if (document.getElementById('home-screen')) return false;
+    if (document.getElementById('contest-screen')) return false;
+    if (document.getElementById('challenge-screen')) return false;
+    const grid = document.getElementById('grid');
+    return !!(grid && grid.children.length > 0);
+  }
+
   // ============================================================
-  // DECISION ALGORITHM — full chain simulation per candidate move
+  // DECISION ALGORITHM
   // ============================================================
 
   const MAX_TIER = 8;
@@ -94,8 +96,6 @@
     }
   }
 
-  // Simulate dropping `piece` into column `col` and running the full chain.
-  // Returns { grid, score, chains, highestTier } or null if column is full.
   function simulateDrop(grid, col, piece) {
     const ROWS = grid.length, COLS = grid[0].length;
     const g = cloneGrid(grid);
@@ -106,9 +106,7 @@
     if (row === -1) return null;
     g[row][col] = piece;
 
-    let score = 0;
-    let chains = 0;
-    let highest = piece;
+    let score = 0, chains = 0, highest = piece;
 
     while (true) {
       let merged = false;
@@ -143,7 +141,7 @@
       applyGravitySim(g);
     }
 
-    return { grid: g, score: score, chains: chains, highestTier: highest };
+    return { grid: g, score, chains, highestTier: highest };
   }
 
   function columnHeights(g) {
@@ -169,20 +167,11 @@
     let roughness = 0;
     for (let c = 0; c < COLS - 1; c++) roughness += Math.abs(heights[c] - heights[c + 1]);
 
-    // Bonus: presence of high-tier pieces (preserves merge ladder)
-    let tierBonus = 0;
+    let tierBonus = 0, pairBonus = 0;
     for (let r = 0; r < ROWS; r++) {
       for (let c = 0; c < COLS; c++) {
         const t = g[r][c];
         if (t >= 4) tierBonus += t * 2;
-      }
-    }
-
-    // Bonus: pieces that could merge with the *next* drop (any tier with a same-tier neighbor)
-    let pairBonus = 0;
-    for (let r = 0; r < ROWS; r++) {
-      for (let c = 0; c < COLS; c++) {
-        const t = g[r][c];
         if (t === 0) continue;
         if (c + 1 < COLS && g[r][c + 1] === t) pairBonus += t;
         if (r + 1 < ROWS && g[r + 1][c] === t) pairBonus += t;
@@ -193,8 +182,7 @@
       heightPenalty: maxH * 6 + sumH * 1.2,
       topPenalty: topFilled * 40 + (topFilled >= 3 ? 120 : 0),
       roughness: roughness * 4,
-      tierBonus: tierBonus,
-      pairBonus: pairBonus * 1.5,
+      tierBonus, pairBonus: pairBonus * 1.5,
     };
   }
 
@@ -204,46 +192,25 @@
     if (!grid || !piece) return 0;
     const COLS = grid[0].length;
 
-    let bestCol = -1;
-    let bestScore = -Infinity;
+    let bestCol = -1, bestScore = -Infinity;
 
     for (let col = 0; col < COLS; col++) {
       const sim = simulateDrop(grid, col, piece);
       if (!sim) continue;
-
       const ev = evaluateBoard(sim.grid);
-
-      // Primary signal: actual chain points from this move
       let s = sim.score * 1.0;
-
-      // Reward chain length explicitly (multiplier ladder pays off)
       if (sim.chains >= 2) s += 80 * (sim.chains - 1);
       if (sim.chains >= 3) s += 200;
       if (sim.chains >= 4) s += 400;
-
-      // Reward raising the highest tier (long-term progress)
       if (sim.highestTier > piece) s += (sim.highestTier - piece) * 60;
-
-      // Board quality after the move
-      s -= ev.heightPenalty;
-      s -= ev.topPenalty;
-      s -= ev.roughness;
-      s += ev.tierBonus;
-      s += ev.pairBonus;
-
-      // Hard penalty if move leaves top row completely full (next drop = game over)
+      s -= ev.heightPenalty - ev.topPenalty - ev.roughness;
+      s += ev.tierBonus + ev.pairBonus;
       let topEmpty = 0;
       for (let c = 0; c < COLS; c++) if (sim.grid[0][c] === 0) topEmpty++;
       if (topEmpty === 0) s -= 5000;
       else if (topEmpty === 1) s -= 200;
-
-      // Tiny tie-breaker
       s += Math.random() * 2;
-
-      if (s > bestScore) {
-        bestScore = s;
-        bestCol = col;
-      }
+      if (s > bestScore) { bestScore = s; bestCol = col; }
     }
 
     return bestCol === -1 ? 0 : bestCol;
@@ -259,14 +226,29 @@
     bot.stopRequested = false;
     updateUI();
 
+    // Always force practice mode — never play daily/contest/challenge.
+    if (window.BloomDebug && window.BloomDebug.restart) {
+      window.BloomDebug.restart();
+      await sleep(400);
+    }
+
+    // Dismiss home screen so the bot can see the grid
+    const homeScreen = document.getElementById('home-screen');
+    if (homeScreen) homeScreen.remove();
+
     while (!bot.stopRequested) {
       if (!window.BloomDebug || !window.BloomDebug.ready()) {
         await sleep(200);
         continue;
       }
 
-      // Game-over check must come first — after a final drop the game leaves
-      // `busy = true` permanently, so checking isBusy first would block forever.
+      // Wait if not in an active game (user navigated to menus)
+      if (!isInGame() && !window.BloomDebug.isGameOver()) {
+        await sleep(300);
+        continue;
+      }
+
+      // Game-over → auto-restart in practice or stop
       if (window.BloomDebug.isGameOver()) {
         const score = window.BloomDebug.getScore() || 0;
         const tier = window.BloomDebug.getHighestTier() || 1;
@@ -276,38 +258,29 @@
         if (tier > bot.bestTier) bot.bestTier = tier;
         updateUI();
 
-        if (!bot.autoRestart) {
-          bot.stopRequested = true;
-          break;
-        }
+        if (!bot.autoRestart) { bot.stopRequested = true; break; }
 
         await sleep(1500);
         if (bot.stopRequested) break;
-        window.BloomDebug.restart();
+        window.BloomDebug.restart(); // always practice mode
         await sleep(600);
         continue;
       }
 
-      if (window.BloomDebug.isBusy()) {
-        await sleep(80);
-        continue;
-      }
+      if (window.BloomDebug.isBusy()) { await sleep(80); continue; }
 
       const col = decideMove();
       window.BloomDebug.drop(col);
 
       const d = SPEED_DELAYS[bot.speed];
-      const delay = d.min + Math.random() * (d.max - d.min);
-      await sleep(delay);
+      await sleep(d.min + Math.random() * (d.max - d.min));
     }
 
     bot.running = false;
     updateUI();
   }
 
-  function stop() {
-    bot.stopRequested = true;
-  }
+  function stop() { bot.stopRequested = true; }
 
   // ============================================================
   // UI PANEL
@@ -320,198 +293,88 @@
       <div class="bbp-header">
         <span class="bbp-title">BLOOM Bot</span>
         <span class="bbp-status" id="bbp-status">paused</span>
+        <button class="bbp-expand" id="bbp-expand" style="display:none" aria-label="expand">▼</button>
         <button class="bbp-close" id="bbp-close" aria-label="close">×</button>
       </div>
-      <div class="bbp-controls">
-        <button id="bbp-toggle" class="bbp-btn-primary">▶ Start</button>
-      </div>
-      <div class="bbp-row">
-        <label class="bbp-label">Speed</label>
-        <select id="bbp-speed">
-          <option value="slow">Slow (great for video)</option>
-          <option value="normal" selected>Normal</option>
-          <option value="fast">Fast</option>
-          <option value="instant">Instant (testing)</option>
-        </select>
-      </div>
-      <div class="bbp-row">
-        <label class="bbp-label">
-          <input type="checkbox" id="bbp-autorestart" checked />
-          Auto-restart after game over
-        </label>
-      </div>
-      <div class="bbp-stats">
-        <div class="bbp-stat"><span>Games</span><b id="bbp-games">0</b></div>
-        <div class="bbp-stat"><span>Best</span><b id="bbp-best">0</b></div>
-        <div class="bbp-stat"><span>Average</span><b id="bbp-avg">0</b></div>
-        <div class="bbp-stat"><span>Highest tier</span><b id="bbp-tier">1</b></div>
-      </div>
-      <div class="bbp-footer">
-        <button id="bbp-reset" class="bbp-btn-link">reset stats</button>
-        <button id="bbp-collapse" class="bbp-btn-link">collapse</button>
+      <div id="bbp-body">
+        <div class="bbp-controls">
+          <button id="bbp-toggle" class="bbp-btn-primary">▶ Start</button>
+        </div>
+        <div class="bbp-row">
+          <label class="bbp-label">Speed</label>
+          <select id="bbp-speed">
+            <option value="slow">Slow (great for video)</option>
+            <option value="normal" selected>Normal</option>
+            <option value="fast">Fast</option>
+            <option value="instant">Instant (testing)</option>
+          </select>
+        </div>
+        <div class="bbp-row">
+          <label class="bbp-label">
+            <input type="checkbox" id="bbp-autorestart" checked />
+            Auto-restart after game over
+          </label>
+        </div>
+        <div class="bbp-stats">
+          <div class="bbp-stat"><span>Games</span><b id="bbp-games">0</b></div>
+          <div class="bbp-stat"><span>Best</span><b id="bbp-best">0</b></div>
+          <div class="bbp-stat"><span>Average</span><b id="bbp-avg">0</b></div>
+          <div class="bbp-stat"><span>Highest tier</span><b id="bbp-tier">1</b></div>
+        </div>
+        <div class="bbp-footer">
+          <button id="bbp-reset" class="bbp-btn-link">reset stats</button>
+          <button id="bbp-collapse" class="bbp-btn-link">collapse ▲</button>
+        </div>
       </div>
     `;
     document.body.appendChild(panel);
 
     const style = document.createElement('style');
     style.textContent = `
-      #bloom-bot-panel {
-        position: fixed;
-        bottom: 16px;
-        left: 16px;
-        z-index: 2147483647;
-        background: #1C1A18;
-        color: #FFFFFF;
-        border-radius: 14px;
-        padding: 14px;
-        font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-        font-size: 13px;
-        width: 240px;
-        direction: ltr;
-        box-shadow: 0 8px 32px rgba(0,0,0,0.4);
-        transition: transform 0.2s;
-      }
-      #bloom-bot-panel.collapsed {
-        width: auto;
-        padding: 8px 12px;
-      }
-      #bloom-bot-panel.collapsed > *:not(.bbp-header) { display: none; }
-      .bbp-header {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        margin-bottom: 12px;
-        padding-bottom: 10px;
-        border-bottom: 1px solid rgba(255,255,255,0.1);
-      }
-      #bloom-bot-panel.collapsed .bbp-header {
-        margin: 0; padding: 0; border: none;
-      }
-      .bbp-title { font-weight: 600; flex: 1; font-size: 13px; }
-      .bbp-status {
-        background: rgba(255,255,255,0.15);
-        color: rgba(255,255,255,0.85);
-        padding: 2px 8px;
-        border-radius: 6px;
-        font-size: 10px;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-      }
-      .bbp-status.running {
-        background: #9FE1CB;
-        color: #04342C;
-      }
-      .bbp-close {
-        background: transparent;
-        border: none;
-        color: rgba(255,255,255,0.6);
-        font-size: 20px;
-        cursor: pointer;
-        padding: 0 4px;
-        line-height: 1;
-      }
-      .bbp-close:hover { color: #FFFFFF; }
-      .bbp-controls { margin-bottom: 10px; }
-      .bbp-btn-primary {
-        width: 100%;
-        padding: 9px;
-        border: none;
-        border-radius: 8px;
-        background: #FAC775;
-        color: #1C1A18;
-        font-weight: 600;
-        cursor: pointer;
-        font-family: inherit;
-        font-size: 13px;
-      }
-      .bbp-btn-primary.running {
-        background: #F4C0D1;
-      }
-      .bbp-btn-primary:hover { opacity: 0.9; }
-      .bbp-row {
-        margin-bottom: 10px;
-      }
-      .bbp-label {
-        display: block;
-        font-size: 11px;
-        color: rgba(255,255,255,0.6);
-        margin-bottom: 4px;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-        cursor: pointer;
-      }
-      .bbp-label input { vertical-align: middle; margin-right: 4px; }
-      #bbp-speed {
-        width: 100%;
-        padding: 6px 8px;
-        border-radius: 6px;
-        background: rgba(255,255,255,0.08);
-        color: #FFFFFF;
-        border: 1px solid rgba(255,255,255,0.15);
-        font-family: inherit;
-        font-size: 12px;
-      }
-      .bbp-stats {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 6px;
-        padding: 8px 0;
-        border-top: 1px solid rgba(255,255,255,0.1);
-      }
-      .bbp-stat {
-        background: rgba(255,255,255,0.05);
-        padding: 6px 8px;
-        border-radius: 6px;
-      }
-      .bbp-stat span {
-        display: block;
-        font-size: 10px;
-        color: rgba(255,255,255,0.55);
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-        margin-bottom: 2px;
-      }
-      .bbp-stat b {
-        font-size: 14px;
-        font-weight: 600;
-        color: #FFFFFF;
-      }
-      .bbp-footer {
-        display: flex;
-        gap: 8px;
-        margin-top: 10px;
-        padding-top: 10px;
-        border-top: 1px solid rgba(255,255,255,0.1);
-      }
-      .bbp-btn-link {
-        flex: 1;
-        background: transparent;
-        border: none;
-        color: rgba(255,255,255,0.5);
-        cursor: pointer;
-        font-family: inherit;
-        font-size: 11px;
-        padding: 4px;
-        text-transform: lowercase;
-      }
-      .bbp-btn-link:hover { color: #FFFFFF; }
+      #bloom-bot-panel{position:fixed;bottom:16px;left:16px;z-index:2147483647;background:#1C1A18;color:#FFF;border-radius:14px;padding:14px;font-family:-apple-system,BlinkMacSystemFont,sans-serif;font-size:13px;width:240px;direction:ltr;box-shadow:0 8px 32px rgba(0,0,0,0.4)}
+      #bloom-bot-panel.collapsed{width:auto;padding:8px 12px}
+      .bbp-header{display:flex;align-items:center;gap:8px;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid rgba(255,255,255,0.1)}
+      #bloom-bot-panel.collapsed .bbp-header{margin:0;padding:0;border:none}
+      .bbp-title{font-weight:600;flex:1;font-size:13px}
+      .bbp-status{background:rgba(255,255,255,0.15);color:rgba(255,255,255,0.85);padding:2px 8px;border-radius:6px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em}
+      .bbp-status.running{background:#9FE1CB;color:#04342C}
+      .bbp-close,.bbp-expand{background:transparent;border:none;color:rgba(255,255,255,0.6);font-size:20px;cursor:pointer;padding:0 4px;line-height:1}
+      .bbp-expand{font-size:14px}
+      .bbp-close:hover,.bbp-expand:hover{color:#FFF}
+      .bbp-controls{margin-bottom:10px}
+      .bbp-btn-primary{width:100%;padding:9px;border:none;border-radius:8px;background:#FAC775;color:#1C1A18;font-weight:600;cursor:pointer;font-family:inherit;font-size:13px}
+      .bbp-btn-primary.running{background:#F4C0D1}
+      .bbp-btn-primary:hover{opacity:0.9}
+      .bbp-row{margin-bottom:10px}
+      .bbp-label{display:block;font-size:11px;color:rgba(255,255,255,0.6);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.05em;cursor:pointer}
+      .bbp-label input{vertical-align:middle;margin-right:4px}
+      #bbp-speed{width:100%;padding:6px 8px;border-radius:6px;background:rgba(255,255,255,0.08);color:#FFF;border:1px solid rgba(255,255,255,0.15);font-family:inherit;font-size:12px}
+      .bbp-stats{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:8px 0;border-top:1px solid rgba(255,255,255,0.1)}
+      .bbp-stat{background:rgba(255,255,255,0.05);padding:6px 8px;border-radius:6px}
+      .bbp-stat span{display:block;font-size:10px;color:rgba(255,255,255,0.55);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:2px}
+      .bbp-stat b{font-size:14px;font-weight:600;color:#FFF}
+      .bbp-footer{display:flex;gap:8px;margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.1)}
+      .bbp-btn-link{flex:1;background:transparent;border:none;color:rgba(255,255,255,0.5);cursor:pointer;font-family:inherit;font-size:11px;padding:4px;text-transform:lowercase}
+      .bbp-btn-link:hover{color:#FFF}
     `;
     document.head.appendChild(style);
 
-    document.getElementById('bbp-toggle').onclick = () => {
-      if (bot.running) stop();
-      else play();
-    };
+    document.getElementById('bbp-toggle').onclick = () => { if (bot.running) stop(); else play(); };
     document.getElementById('bbp-speed').onchange = e => bot.speed = e.target.value;
     document.getElementById('bbp-autorestart').onchange = e => bot.autoRestart = e.target.checked;
-    document.getElementById('bbp-close').onclick = () => panel.remove();
-    document.getElementById('bbp-collapse').onclick = () => panel.classList.toggle('collapsed');
+    document.getElementById('bbp-close').onclick = () => { stop(); panel.remove(); };
+    document.getElementById('bbp-collapse').onclick = () => {
+      panel.classList.add('collapsed');
+      document.getElementById('bbp-body').style.display = 'none';
+      document.getElementById('bbp-expand').style.display = '';
+    };
+    document.getElementById('bbp-expand').onclick = () => {
+      panel.classList.remove('collapsed');
+      document.getElementById('bbp-body').style.display = '';
+      document.getElementById('bbp-expand').style.display = 'none';
+    };
     document.getElementById('bbp-reset').onclick = () => {
-      bot.gamesPlayed = 0;
-      bot.totalScore = 0;
-      bot.bestScore = 0;
-      bot.bestTier = 0;
+      bot.gamesPlayed = 0; bot.totalScore = 0; bot.bestScore = 0; bot.bestTier = 0;
       updateUI();
     };
   }
@@ -527,10 +390,7 @@
       toggle.textContent = bot.running ? '⏸ Stop' : '▶ Start';
       toggle.className = 'bbp-btn-primary' + (bot.running ? ' running' : '');
     }
-    const setText = (id, val) => {
-      const el = document.getElementById(id);
-      if (el) el.textContent = val;
-    };
+    const setText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
     setText('bbp-games', bot.gamesPlayed);
     setText('bbp-best', bot.bestScore.toLocaleString());
     setText('bbp-avg', bot.gamesPlayed ? Math.round(bot.totalScore / bot.gamesPlayed).toLocaleString() : 0);
@@ -538,27 +398,16 @@
   }
 
   // ============================================================
-  // INIT
+  // INIT — show panel, NEVER auto-start
   // ============================================================
 
   async function init() {
     await waitForGame();
     createUI();
-    if (autoStart) {
-      setTimeout(() => play(), 1200);
-    }
   }
 
-  window.BloomBot = {
-    start: play,
-    stop: stop,
-    state: () => ({ ...bot }),
-    decideMove: decideMove,
-  };
+  window.BloomBot = { start: play, stop, state: () => ({ ...bot }), decideMove };
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
-  } else {
-    init();
-  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else init();
 })();
