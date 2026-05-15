@@ -1984,9 +1984,9 @@
 </head>
 <body>
 
-<audio id="music-lobby" src="bloom-music-lobby.mp3" loop preload="auto"></audio>
-<audio id="music-game"  src="bloom-music.mp3"      loop preload="auto"></audio>
-<audio id="music-fail"  src="bloom-music-fail.mp3" loop preload="auto"></audio>
+<!-- Music tracks load via fetch + AudioBufferSourceNode in JS — see MUSIC_TRACKS.
+     We do NOT use <audio loop> because it has an audible gap at every loop
+     boundary; BufferSource.loop is gapless at the audio-thread level. -->
 
 <div class="app">
   <div class="top">
@@ -2147,83 +2147,90 @@
   /* Music manager: 3 tracks (lobby/game/fail) with 0.5s cross-fade */
   const MUSIC_FADE_MS = 500;
   const MUSIC_FADE_STEPS = 20;
+  // Music architecture: AudioBufferSourceNode per track. The previous design
+  // routed an <audio loop> element through createMediaElementSource, but that
+  // path can never produce a truly gapless loop — every browser inserts a
+  // small silence at the end-of-file boundary, which on a 16-second track is
+  // audible and feels like the music "stops". BufferSource.loop is gapless
+  // by definition (it's a sample-accurate loop in the audio thread), so the
+  // song plays uninterrupted for the entire session.
   const MUSIC_TRACKS = {
-    lobby: { id: 'music-lobby', el: null, fadeTimer: null, gain: null, source: null },
-    game:  { id: 'music-game',  el: null, fadeTimer: null, gain: null, source: null },
-    fail:  { id: 'music-fail',  el: null, fadeTimer: null, gain: null, source: null }
+    lobby: { url: 'bloom-music-lobby.mp3', buffer: null, source: null, gain: null, fadeTimer: null, loadingPromise: null },
+    game:  { url: 'bloom-music.mp3',       buffer: null, source: null, gain: null, fadeTimer: null, loadingPromise: null },
+    fail:  { url: 'bloom-music-fail.mp3',  buffer: null, source: null, gain: null, fadeTimer: null, loadingPromise: null }
   };
   let currentTrack = null;
 
-  function getTrackEl(name) {
-    const t = MUSIC_TRACKS[name];
-    if (!t) return null;
-    if (!t.el) t.el = document.getElementById(t.id);
-    return t.el;
-  }
-
-  // iOS Safari makes HTMLAudioElement.volume effectively read-only — assigning
-  // values between 0 and 1 are accepted by JS but ignored at the audio layer.
-  // The workaround is to route the <audio> element through a Web Audio
-  // GainNode: createMediaElementSource(el) → GainNode → destination. Then we
-  // control loudness via gain.gain.value, which iOS DOES honour, and leave
-  // el.volume pinned at 1 (or 0 when we want to fully cut the element).
-  // createMediaElementSource can only be called ONCE per element, so we cache
-  // the result on the track entry.
-  function getTrackGain(name) {
+  function ensureTrackGain(name) {
     const t = MUSIC_TRACKS[name];
     if (!t) return null;
     if (t.gain) return t.gain;
     const ctx = ensureAudio();
     if (!ctx) return null;
-    const el = getTrackEl(name);
-    if (!el) return null;
     try {
-      t.source = ctx.createMediaElementSource(el);
       t.gain = ctx.createGain();
       t.gain.gain.value = 0;
-      t.source.connect(t.gain);
       t.gain.connect(ctx.destination);
-      el.volume = 1; // bypass element volume; gain controls loudness now
-    } catch (e) {
-      // Older Safari or CORS issues — fall back to native el.volume (which on
-      // iOS still won't work mid-range, but at least we don't crash).
-      t.gain = null; t.source = null;
-    }
+    } catch (e) { t.gain = null; }
     return t.gain;
   }
 
-  // Defense-in-depth loop: some browsers (notably iOS Safari) drop the
-  // native <audio loop> behavior once the element is captured by Web Audio
-  // via createMediaElementSource. Set loop in JS AND restart on 'ended' so
-  // the song actually keeps playing through the whole game session.
-  Object.keys(MUSIC_TRACKS).forEach(function(name) {
-    const el = document.getElementById(MUSIC_TRACKS[name].id);
-    if (!el) return;
-    try { el.loop = true; } catch (e) {}
-    el.addEventListener('ended', function() {
-      if (currentTrack !== name || isMusicMuted()) return;
-      try {
-        el.currentTime = 0;
-        const p = el.play();
-        if (p && p.catch) p.catch(function() {});
-      } catch (e) {}
-    });
-  });
+  function loadTrackBuffer(name) {
+    const t = MUSIC_TRACKS[name];
+    if (!t) return Promise.reject(new Error('no track'));
+    if (t.buffer) return Promise.resolve(t.buffer);
+    if (t.loadingPromise) return t.loadingPromise;
+    const ctx = ensureAudio();
+    if (!ctx) return Promise.reject(new Error('no AudioContext'));
+    t.loadingPromise = fetch(t.url)
+      .then(function(res) { return res.arrayBuffer(); })
+      .then(function(arr) {
+        // decodeAudioData has a callback form for older Safari support.
+        return new Promise(function(resolve, reject) {
+          ctx.decodeAudioData(arr, resolve, reject);
+        });
+      })
+      .then(function(buffer) { t.buffer = buffer; return buffer; })
+      .catch(function(e) { t.loadingPromise = null; throw e; });
+    return t.loadingPromise;
+  }
+
+  function startTrackSource(name) {
+    const t = MUSIC_TRACKS[name];
+    if (!t || !t.buffer) return false;
+    const gain = ensureTrackGain(name);
+    if (!gain) return false;
+    const ctx = ensureAudio();
+    if (!ctx) return false;
+    stopTrackSource(name);
+    try {
+      const src = ctx.createBufferSource();
+      src.buffer = t.buffer;
+      src.loop = true;
+      src.connect(gain);
+      src.start(0);
+      t.source = src;
+      return true;
+    } catch (e) { return false; }
+  }
+
+  function stopTrackSource(name) {
+    const t = MUSIC_TRACKS[name];
+    if (!t || !t.source) return;
+    try { t.source.stop(); } catch (e) {}
+    try { t.source.disconnect(); } catch (e) {}
+    t.source = null;
+  }
 
   function setTrackLevel(name, v) {
     const t = MUSIC_TRACKS[name];
-    if (!t) return;
-    const gain = t.gain || getTrackGain(name);
-    if (gain) { gain.gain.value = Math.max(0, Math.min(1, v)); return; }
-    const el = getTrackEl(name);
-    if (el) try { el.volume = Math.max(0, Math.min(1, v)); } catch (e) {}
+    if (!t || !t.gain) return;
+    try { t.gain.gain.value = Math.max(0, Math.min(1, v)); } catch (e) {}
   }
   function currentTrackLevel(name) {
     const t = MUSIC_TRACKS[name];
-    if (!t) return 0;
-    if (t.gain) return Number(t.gain.gain.value) || 0;
-    const el = getTrackEl(name);
-    return el ? el.volume : 0;
+    if (!t || !t.gain) return 0;
+    return Number(t.gain.gain.value) || 0;
   }
 
   function clearFade(name) {
@@ -2232,13 +2239,12 @@
   }
   function fadeOutTrack(name, ms, onDone) {
     const t = MUSIC_TRACKS[name];
-    const el = getTrackEl(name);
-    if (!t || !el) { onDone && onDone(); return; }
+    if (!t) { onDone && onDone(); return; }
     clearFade(name);
     const startLevel = currentTrackLevel(name);
-    if (el.paused || startLevel <= 0.001) {
+    if (!t.source || startLevel <= 0.001) {
       setTrackLevel(name, 0);
-      try { el.pause(); el.currentTime = 0; } catch(e) {}
+      stopTrackSource(name);
       onDone && onDone();
       return;
     }
@@ -2250,40 +2256,39 @@
       if (i >= MUSIC_FADE_STEPS) {
         clearFade(name);
         setTrackLevel(name, 0);
-        try { el.pause(); el.currentTime = 0; } catch(e) {}
+        stopTrackSource(name);
         onDone && onDone();
       }
     }, stepMs);
   }
   function fadeInTrack(name, ms, target) {
     const t = MUSIC_TRACKS[name];
-    const el = getTrackEl(name);
-    if (!t || !el) return;
+    if (!t) return;
     clearFade(name);
     target = (typeof target === 'number') ? target : musicVolume;
-    // Make sure the Web Audio routing exists before play() so we can control
-    // loudness via the gain node even on iOS.
     ensureAudio();
-    getTrackGain(name);
+    ensureTrackGain(name);
     setTrackLevel(name, 0);
-    try {
-      el.currentTime = 0;
-      const p = el.play();
-      if (p && p.catch) p.catch(function() {});
-    } catch(e) {}
-    const stepMs = ms / MUSIC_FADE_STEPS;
-    let i = 0;
-    t.fadeTimer = setInterval(function() {
-      i++;
-      setTrackLevel(name, Math.min(target, target * (i / MUSIC_FADE_STEPS)));
-      if (i >= MUSIC_FADE_STEPS) clearFade(name);
-    }, stepMs);
+    // Lazy-load the buffer on first playback. Once decoded, start the
+    // source and tween the gain in.
+    loadTrackBuffer(name).then(function() {
+      if (currentTrack !== name || isMusicMuted()) return;
+      if (!t.source) startTrackSource(name);
+      const stepMs = ms / MUSIC_FADE_STEPS;
+      let i = 0;
+      clearFade(name);
+      t.fadeTimer = setInterval(function() {
+        i++;
+        setTrackLevel(name, Math.min(target, target * (i / MUSIC_FADE_STEPS)));
+        if (i >= MUSIC_FADE_STEPS) clearFade(name);
+      }, stepMs);
+    }).catch(function() { /* decode failed — silent */ });
   }
   function playMusic(name) {
     if (!MUSIC_TRACKS[name]) return;
+    const t = MUSIC_TRACKS[name];
     const sameTrack = currentTrack === name;
-    const el = getTrackEl(name);
-    if (sameTrack && el && !el.paused && currentTrackLevel(name) > 0.001) return;
+    if (sameTrack && t.source && currentTrackLevel(name) > 0.001) return;
     const prev = currentTrack;
     currentTrack = name;
     if (isMusicMuted()) return;
@@ -2302,22 +2307,19 @@
     currentTrack = null;
   }
   function pauseAllMusic() {
+    // BufferSource has no pause API — stop and recreate on resume. For
+    // looping tracks restarting from the top is fine.
     Object.keys(MUSIC_TRACKS).forEach(function(k) {
       clearFade(k);
-      const el = getTrackEl(k);
-      if (el) try { el.pause(); } catch(e) {}
+      setTrackLevel(k, 0);
+      stopTrackSource(k);
     });
   }
   function resumeCurrentMusic() {
     if (!currentTrack || isMusicMuted()) return;
-    const el = getTrackEl(currentTrack);
-    if (!el) return;
-    ensureAudio();
-    getTrackGain(currentTrack);
-    setTrackLevel(currentTrack, musicVolume);
-    try { const p = el.play(); if (p && p.catch) p.catch(function() {}); } catch(e) {}
+    fadeInTrack(currentTrack, MUSIC_FADE_MS, musicVolume);
   }
-  // Apply a volume change to any currently-playing music element immediately
+  // Apply a volume change to any currently-playing music immediately
   // (without restarting / fading). Used by the slider for live response.
   function applyMusicVolumeToActive() {
     if (!currentTrack) return;
@@ -6588,8 +6590,8 @@
     audioPrimed = true;
     ensureAudio();
     if (currentTrack && !isMusicMuted()) {
-      const el = getTrackEl(currentTrack);
-      if (el && el.paused) fadeInTrack(currentTrack, MUSIC_FADE_MS, musicVolume);
+      const t = MUSIC_TRACKS[currentTrack];
+      if (t && !t.source) fadeInTrack(currentTrack, MUSIC_FADE_MS, musicVolume);
     }
   }
   document.addEventListener('pointerdown', primeAudio, { once: true, capture: true });
