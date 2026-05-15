@@ -6276,9 +6276,12 @@
       soundGameOver();
       buzz([60, 80, 100]);
       playMusic('fail');
-      incrementGamesPlayed();
-      bumpLifetimeMax(BEST_TIER_KEY, highestTier);
-      addLifetimeTotal(TOTAL_SCORE_KEY, score);
+      // Skip stat tracking when bot is playing (keep graphs clean)
+      if (!window.__bloomBotActive) {
+        incrementGamesPlayed();
+        bumpLifetimeMax(BEST_TIER_KEY, highestTier);
+        addLifetimeTotal(TOTAL_SCORE_KEY, score);
+      }
       checkAchievements();
       // Challenges short-circuit the regular game-over screen — they get
       // their own bespoke "you won / you didn't" view from /complete.
@@ -6911,6 +6914,7 @@
   function sendHeartbeat() {
     if (document.visibilityState === 'hidden') return;
     if (document.getElementById('home-screen')) return;
+    if (window.__bloomBotActive) return; // bot games don't appear in admin stats
     var gridData = null;
     if (Array.isArray(grid) && grid.length > 0) {
       gridData = grid.map(function(row) { return row.slice(); });
