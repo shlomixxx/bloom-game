@@ -111,31 +111,102 @@ function pickPiece(highest) {
   return 1;
 }
 
+function columnHeights(g) {
+  const h = new Array(COLS).fill(0);
+  for (let c = 0; c < COLS; c++) {
+    for (let r = 0; r < ROWS; r++) {
+      if (g[r][c] !== 0) { h[c] = ROWS - r; break; }
+    }
+  }
+  return h;
+}
+
+function evaluateBoard(g) {
+  const heights = columnHeights(g);
+  let maxH = 0, sumH = 0, topFilled = 0;
+  for (let c = 0; c < COLS; c++) {
+    if (heights[c] > maxH) maxH = heights[c];
+    sumH += heights[c];
+    if (g[0][c] !== 0) topFilled++;
+  }
+  let roughness = 0;
+  for (let c = 0; c < COLS - 1; c++) roughness += Math.abs(heights[c] - heights[c+1]);
+  
+  // Bonus: high-tier pieces (preserves merge ladder)
+  let tierBonus = 0;
+  // Bonus: adjacent same-tier pairs (future merge potential)
+  let pairBonus = 0;
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const t = g[r][c];
+      if (t >= 4) tierBonus += t * 2;
+      if (t === 0) continue;
+      if (c + 1 < COLS && g[r][c+1] === t) pairBonus += t;
+      if (r + 1 < ROWS && g[r+1][c] === t) pairBonus += t;
+    }
+  }
+  
+  return {
+    heightPenalty: maxH * 6 + sumH * 1.2,
+    topPenalty: topFilled * 40 + (topFilled >= 3 ? 120 : 0),
+    roughness: roughness * 4,
+    tierBonus,
+    pairBonus: pairBonus * 1.5,
+  };
+}
+
+function simulateDrop(g, col, piece) {
+  const sim = g.map(r => r.slice());
+  let row = -1;
+  for (let r = ROWS - 1; r >= 0; r--) {
+    if (sim[r][col] === 0) { row = r; break; }
+  }
+  if (row === -1) return null;
+  sim[row][col] = piece;
+  const result = processChains(sim);
+  applyGravity(sim);
+  return { grid: sim, ...result };
+}
+
 function bestColumn(g, piece) {
   let bestCol = 0, bestScore = -Infinity;
+  
   for (let col = 0; col < COLS; col++) {
-    let row = -1;
-    for (let r = ROWS - 1; r >= 0; r--) {
-      if (g[r][col] === 0) { row = r; break; }
-    }
-    if (row === -1) continue;
-    // Clone and simulate
-    const sim = g.map(r => r.slice());
-    sim[row][col] = piece;
-    const result = processChains(sim);
-    // Simple heuristic
-    let s = result.score;
-    // Prefer columns that keep the board low
-    let height = 0;
-    for (let r = 0; r < ROWS; r++) {
-      for (let c = 0; c < COLS; c++) {
-        if (sim[r][c] !== 0) height++;
-      }
-    }
-    s -= height * 5;
-    s += Math.random() * 3; // tie-breaker
+    const sim = simulateDrop(g, col, piece);
+    if (!sim) continue;
+    
+    const ev = evaluateBoard(sim.grid);
+    
+    // Primary: actual chain points from this move
+    let s = sim.score * 1.0;
+    
+    // Reward chain length (multiplier ladder)
+    if (sim.chains >= 2) s += 80 * (sim.chains - 1);
+    if (sim.chains >= 3) s += 200;
+    if (sim.chains >= 4) s += 400;
+    
+    // Reward raising highest tier (long-term progress)
+    if (sim.highest > piece) s += (sim.highest - piece) * 60;
+    
+    // Board quality
+    s -= ev.heightPenalty;
+    s -= ev.topPenalty;
+    s -= ev.roughness;
+    s += ev.tierBonus;
+    s += ev.pairBonus;
+    
+    // Hard penalty for nearly-full top row
+    let topEmpty = 0;
+    for (let c = 0; c < COLS; c++) if (sim.grid[0][c] === 0) topEmpty++;
+    if (topEmpty === 0) s -= 5000;
+    else if (topEmpty === 1) s -= 200;
+    
+    // Tiny tie-breaker
+    s += Math.random() * 2;
+    
     if (s > bestScore) { bestScore = s; bestCol = col; }
   }
+  
   return bestCol;
 }
 
