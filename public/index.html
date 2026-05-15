@@ -2852,25 +2852,29 @@
       '<div class="home-brand">BLOOM</div>' +
       '<div class="home-sub">מזג חפצים, גלה דרגות חדשות, והגע עד לכתר</div>' +
       '<div id="home-mystats-host"></div>' +
-      '<button class="home-start" id="home-start">בוא נתחיל</button>' +
+      // Returning players see "שחק עכשיו" and the tour link below.
+      // New players see "בוא נתחיל" (opens tour) and "דלג" to skip it.
+      (hasSeenTour()
+        ? '<button class="home-start" id="home-start">שחק עכשיו</button>'
+        : '<button class="home-start" id="home-start">בוא נתחיל</button>') +
       '<div class="home-social" id="home-social"></div>' +
       (activeContestCode
         ? '<button class="home-contest home-contest-active" id="home-contest"><span class="home-contest-badge home-contest-badge-active">פעיל</span>המשך תחרות חברים</button>'
         : '<button class="home-contest" id="home-contest"><span class="home-contest-badge">חדש</span>תחרות חברים</button>') +
-      // The challenge CTA is rendered hidden and revealed by a /api/challenges
-      // fetch right after showHome (so first paint isn't delayed). Visible only
-      // when there's actually an active challenge to show.
       '<button class="home-challenge" id="home-challenge" style="display:none">' +
         '<span class="home-challenge-badge">פרס</span>' +
         '<span id="home-challenge-label">אתגרי BLOOM</span>' +
       '</button>' +
-      '<button class="home-skip" id="home-skip">אני יודע לשחק, דלג</button>' +
-      '<button class="home-skip" id="home-tour-btn" style="margin-top:0;color:#BA7517">📖 איך משחקים?</button>' +
+      // "דלג" only shows for first-timers (there's something to skip — the tour).
+      // "איך משחקים?" only shows for returning players (to re-view the tour).
+      (!hasSeenTour()
+        ? '<button class="home-skip" id="home-skip">אני יודע לשחק, דלג</button>'
+        : '<button class="home-skip" id="home-tour-btn" style="margin-top:0;color:#BA7517">📖 איך משחקים?</button>') +
       '<button class="home-share-game" id="home-share-game" aria-label="שתף את BLOOM">' +
         '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5L15.4 17.5M15.4 6.5L8.6 10.5"/></svg>' +
         '<span>שתף עם חברים</span>' +
       '</button>' +
-      '<div class="home-version">v1.0</div>';
+      '<div class="home-version">v1.1</div>';
     app.appendChild(h);
     syncHomeMuteUI();
     document.getElementById('home-mute').onclick = function(e) {
@@ -2895,7 +2899,8 @@
       if (!hasSeenTour()) { showTour({ onDone: enter }); }
       else { enter(); }
     };
-    document.getElementById('home-skip').onclick = enter;
+    const skipBtn = document.getElementById('home-skip');
+    if (skipBtn) skipBtn.onclick = enter;
     const shareGameBtn = document.getElementById('home-share-game');
     if (shareGameBtn) shareGameBtn.onclick = function(e) {
       e.stopPropagation();
@@ -5506,14 +5511,26 @@
         // We only block if activeContestData is missing or stale; if the cache
         // already matches activeContestCode the fetch is best-effort.
         if (!activeContestData || activeContestData.code !== activeContestCode) {
-          const data = await fetchContest(activeContestCode);
-          if (data && data.contest) activeContestData = data.contest;
+          const data = await fetchContest(activeContestCode).catch(function() { return null; });
+          if (data && data.contest) {
+            activeContestData = data.contest;
+          } else if (!activeContestData) {
+            // Fetch failed and no cached data — can't determine board seed.
+            // Fall back to practice so the player isn't stuck on a broken board.
+            console.warn('[init] contest fetch failed, falling back to practice');
+            mode = 'practice';
+            rng = Math.random;
+            updateModeBar();
+            render();
+            maybeOnboardStep1();
+            return;
+          }
         } else {
           fetchContest(activeContestCode).then(function(data) {
             if (data && data.contest) activeContestData = data.contest;
-          });
+          }).catch(function() {});
         }
-        fetchMyContests().then(function() { updateModeBar(); });
+        fetchMyContests().then(function() { updateModeBar(); }).catch(function() {});
       }
       rng = activeContestData && activeContestData.board_seed != null
         ? mulberry32(activeContestData.board_seed)
