@@ -3622,8 +3622,10 @@
     const playersHtml = renderContestBoardRows(data.players || []);
     const link = buildContestShareLink(code);
 
+    // Back: if player has 2+ contests, go to my-contests list; else home.
+    const clbBackTarget = myContestsCountSync() >= 2 ? 'contest-menu' : 'home';
     screen.innerHTML =
-      createBackButton('home') +
+      createBackButton(clbBackTarget) +
       '<div class="contest-title">' + escapeHtml(data.contest.name) + '</div>' +
       '<div class="contest-code-row">' +
         '<button class="contest-code-pill" id="clb-code-pill" aria-label="העתק קוד התחרות">' +
@@ -3648,7 +3650,7 @@
         '</button>' +
         '<button class="contest-secondary-btn" id="clb-share">שתף קישור</button>' +
         (myContestsCountSync() >= 2 ? '<button class="contest-secondary-btn" id="clb-switch" style="margin-top:6px">↕ החלפת תחרות (' + myContestsCountSync() + ')</button>' : '') +
-        (activeContestCode === code ? '<button class="contest-ghost-btn" id="clb-leave">יציאה מהתחרות</button>' : '') +
+        '<button class="contest-ghost-btn" id="clb-leave">יציאה מהתחרות</button>' +
       '</div>';
 
     document.getElementById('clb-play').onclick = function() {
@@ -3693,16 +3695,44 @@
     const switchBtn = document.getElementById('clb-switch');
     if (switchBtn) switchBtn.onclick = showMyContestsList;
     const leaveBtn = document.getElementById('clb-leave');
-    if (leaveBtn) leaveBtn.onclick = function() {
+    if (leaveBtn) leaveBtn.onclick = async function() {
       if (!confirm('לצאת מהתחרות הזו? תוכל להצטרף בחזרה עם הקוד.')) return;
       clearContestGameState(code);
       clearContestDisplayName(code);
-      stopOvertakeWatch();
-      setActiveContest(null);
-      activeContestData = null;
       stopContestRefresh();
-      hideContestScreens();
-      showHome();
+      invalidateMyContestsCache();
+
+      const isLeavingActive = activeContestCode === code;
+
+      if (isLeavingActive) {
+        stopOvertakeWatch();
+        // Find another contest to switch to so the "חברים" tab stays alive.
+        const remaining = await fetchMyContests({ fresh: true });
+        const others = (remaining || []).filter(function(c) { return c.code !== code; });
+        if (others.length > 0) {
+          setActiveContest(others[0].code);
+          activeContestData = null;
+          if (others.length === 1) {
+            showContestLeaderboard(others[0].code);
+          } else {
+            showMyContestsList();
+          }
+        } else {
+          setActiveContest(null);
+          activeContestData = null;
+          hideContestScreens();
+          showHome();
+        }
+      } else {
+        // Leaving a non-active contest — just go back to the list.
+        // Don't touch activeContestCode.
+        if (myContestsCountSync() >= 2) {
+          showMyContestsList();
+        } else {
+          hideContestScreens();
+          showHome();
+        }
+      }
     };
 
     // Delegated spectate handler — fires on any leaderboard row that's
