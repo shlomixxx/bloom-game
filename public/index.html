@@ -1389,7 +1389,13 @@
     cursor: pointer; font-family: inherit;
     margin-top: 8px;
     display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-    transition: background 0.15s, transform 0.08s;
+    transition: background 0.15s, transform 0.08s, opacity 0.3s, max-height 0.3s;
+    max-height: 0; opacity: 0; overflow: hidden; padding: 0 18px; margin-top: 0;
+    border-width: 0;
+  }
+  .home-challenge.visible {
+    max-height: 60px; opacity: 1; padding: 11px 18px; margin-top: 8px;
+    border-width: 1px;
   }
   .home-challenge:hover { background: #E0DCF6; }
   .home-challenge:active { transform: scale(0.98); }
@@ -2875,7 +2881,7 @@
       (activeContestCode
         ? '<button class="home-contest home-contest-active" id="home-contest"><span class="home-contest-badge home-contest-badge-active">פעיל</span>המשך תחרות חברים</button>'
         : '<button class="home-contest" id="home-contest"><span class="home-contest-badge">חדש</span>תחרות חברים</button>') +
-      '<button class="home-challenge" id="home-challenge" style="display:none">' +
+      '<button class="home-challenge" id="home-challenge">' +
         '<span class="home-challenge-badge">פרס</span>' +
         '<span id="home-challenge-label">אתגרי BLOOM</span>' +
       '</button>' +
@@ -3381,7 +3387,7 @@
     screen.innerHTML =
       createBackButton('contest-menu') +
       '<div class="contest-title">' + data.contest.name + '</div>' +
-      '<div class="contest-sub">' + (ended ? 'התחרות הסתיימה' : 'הוזמנת על ידי ' + data.contest.host_name) + '</div>' +
+      '<div class="contest-sub">' + (ended ? 'התחרות הסתיימה' : (data.contest.host_device_id === deviceId ? 'התחרות שיצרת' : 'הוזמנת על ידי ' + escapeHtml(data.contest.host_name))) + '</div>' +
       '<div class="contest-info-card">' +
         '<div class="contest-info-row"><span>שחקנים</span><span>' + data.players.length + '</span></div>' +
         '<div class="contest-info-row"><span>ציון מוביל</span><span>' + topScore.toLocaleString() + '</span></div>' +
@@ -4470,8 +4476,8 @@
     const btn = document.getElementById('home-challenge');
     if (!btn) return;
     fetchChallenges().then(function(list) {
-      if (!list || !list.length) { btn.style.display = 'none'; return; }
-      btn.style.display = '';
+      if (!list || !list.length) { btn.classList.remove('visible'); return; }
+      btn.classList.add('visible');
       const lbl = document.getElementById('home-challenge-label');
       if (lbl) lbl.textContent = list.length === 1
         ? 'אתגר פרס פעיל — ' + list[0].prizeText
@@ -5667,6 +5673,7 @@
       btn.onclick = function() {
         const target = btn.getAttribute('data-mode');
         if (target === mode && target !== 'contest' && target !== 'challenge') return;
+        buzz([12]); // subtle haptic on tab switch
         if (mode === 'contest') saveContestGameState();
         if (mode === 'practice') savePracticeGameState();
         // No saveChallengeGameState — challenges intentionally don't survive navigation.
@@ -5902,8 +5909,10 @@
     }
     const rows = lbModalList.slice(0, 50).map(function(row, i) {
       const isYou = row.you;
+      const seed = isYou ? deviceId : (row.name || 'anon');
       return '<div class="lb-row' + (isYou ? ' you' : '') + '">' +
         '<div class="lb-rank">' + (i+1) + '</div>' +
+        renderAvatarHtml(seed, 'sm') +
         '<div class="lb-name">' + escapeHtml(row.name || 'אנונימי') + (isYou ? ' (אתה)' : '') + '</div>' +
         '<div class="lb-score">' + (row.score || 0).toLocaleString() + '</div>' +
       '</div>';
@@ -6032,12 +6041,28 @@
     setTimeout(function() { if (banner.parentNode) banner.parentNode.removeChild(banner); }, 1500);
   }
 
+  let _scoreAnimFrame = 0;
   function bumpScore() {
     const el = document.getElementById('score');
     if (!el) return;
     el.classList.remove('bump');
     void el.offsetWidth;
     el.classList.add('bump');
+    // Count-up animation: smoothly roll the displayed number to current score
+    var displayedScore = parseInt((el.textContent || '0').replace(/[^\d]/g, ''), 10) || 0;
+    if (displayedScore >= score) return; // already at or past target
+    var from = displayedScore, to = score;
+    var token = ++_scoreAnimFrame;
+    var start = performance.now();
+    var duration = Math.min(320, Math.max(120, (to - from) / 8));
+    function tick(now) {
+      if (token !== _scoreAnimFrame) return; // superseded by newer animation
+      var t = Math.min(1, (now - start) / duration);
+      t = t * t * (3 - 2 * t); // ease-in-out smoothstep
+      el.textContent = Math.round(from + (to - from) * t).toLocaleString();
+      if (t < 1) requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
   }
 
   async function processChains() {
