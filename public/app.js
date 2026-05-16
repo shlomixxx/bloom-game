@@ -4886,8 +4886,8 @@
       sub.textContent = 'ניקוד לא נשמר · שחק ותחליט';
     } else {
       bar.classList.add('practice');
-      title.textContent = 'אימון חופשי';
-      sub.textContent = 'דאנג\'ן רנדומלי, ללא טבלת מובילים';
+      title.textContent = 'משחק חופשי';
+      sub.textContent = 'שחק ותתחרה על לוח המובילים 🏆';
     }
 
     // In contest mode, the mode-info area becomes a tap target that opens
@@ -4916,7 +4916,7 @@
     const tabs = [{ id: 'daily', label: 'יומי' }];
     if (activeContestCode) tabs.push({ id: 'contest', label: 'חברים' });
     tabs.push({ id: 'challenge', label: 'אתגרים' });
-    tabs.push({ id: 'practice', label: 'אימון' });
+    tabs.push({ id: 'practice', label: 'חופשי' });
     tabsEl.innerHTML = tabs.map(function(t) {
       return '<button class="mode-tab' + (t.id === mode ? ' active' : '') +
         '" data-mode="' + t.id + '">' + t.label + '</button>';
@@ -6141,7 +6141,7 @@
       const showLeaderboard = mode === 'daily' || mode === 'contest' || mode === 'practice';
       const isContestOver = mode === 'contest' && activeContestCode;
       const againLabel = isContestOver ? 'שחק עוד משחק בתחרות'
-        : (mode === 'daily') ? 'שחק באימון חופשי' : 'שחק שוב';
+        : (mode === 'daily') ? 'שחק עוד משחק' : 'שחק שוב';
       const spectateBtn = isContestOver
         ? '<button class="btn secondary" id="spec-open"><span style="display:inline-flex;align-items:center;gap:6px;justify-content:center"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>צא לצפייה במשחקים חיים</span></button>'
         : '';

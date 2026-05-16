@@ -176,8 +176,8 @@
       sub.textContent = 'ניקוד לא נשמר · שחק ותחליט';
     } else {
       bar.classList.add('practice');
-      title.textContent = 'אימון חופשי';
-      sub.textContent = 'דאנג\'ן רנדומלי, ללא טבלת מובילים';
+      title.textContent = 'משחק חופשי';
+      sub.textContent = 'שחק ותתחרה על לוח המובילים 🏆';
     }
 
     // In contest mode, the mode-info area becomes a tap target that opens
@@ -206,7 +206,7 @@
     const tabs = [{ id: 'daily', label: 'יומי' }];
     if (activeContestCode) tabs.push({ id: 'contest', label: 'חברים' });
     tabs.push({ id: 'challenge', label: 'אתגרים' });
-    tabs.push({ id: 'practice', label: 'אימון' });
+    tabs.push({ id: 'practice', label: 'חופשי' });
     tabsEl.innerHTML = tabs.map(function(t) {
       return '<button class="mode-tab' + (t.id === mode ? ' active' : '') +
         '" data-mode="' + t.id + '">' + t.label + '</button>';
