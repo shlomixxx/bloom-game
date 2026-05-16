@@ -443,7 +443,8 @@
 
     var modal = document.createElement('div');
     modal.id = 'tile-shop-modal';
-    var html = '<div class="ts-header"><span>🛒 חנות משחק</span><span style="color:#BA7517;font-weight:700">💎 ' + playerBalance + '</span></div>';
+    var html = '<button class="ts-close" id="ts-close-btn">✕</button>';
+    html += '<div class="ts-header"><span>🛒 חנות משחק</span><span style="color:#BA7517;font-weight:700">💎 ' + playerBalance + '</span></div>';
 
     // Section 1: Buy tiles
     html += '<div class="ts-section-label">קנה אריח</div>';
@@ -462,20 +463,19 @@
 
     // Section 2: Power-ups
     var pp = powerupPrices || { random_tile: 15, choose_tile: 40, random_row: 60, choose_row: 100 };
-    html += '<div class="ts-section-label" style="margin-top:10px">כלי עזר</div>';
+    html += '<div class="ts-section-label">כלי עזר</div>';
     html += '<div class="ts-powerups">';
     html += '<button class="ts-power" data-power="random_tile"' + (playerBalance < pp.random_tile ? ' disabled' : '') + '>' +
-      '<span class="ts-power-icon">🎲</span><span class="ts-power-name">מחק אריח רנדומלי</span><span class="ts-power-price">' + pp.random_tile + ' 💎</span></button>';
+      '<span class="ts-power-icon">🎲</span><span class="ts-power-name">מחק אריח<br>אקראי</span><span class="ts-power-price">' + pp.random_tile + ' 💎</span></button>';
     html += '<button class="ts-power" data-power="choose_tile"' + (playerBalance < pp.choose_tile ? ' disabled' : '') + '>' +
-      '<span class="ts-power-icon">🎯</span><span class="ts-power-name">מחק אריח לבחירה</span><span class="ts-power-price">' + pp.choose_tile + ' 💎</span></button>';
+      '<span class="ts-power-icon">🎯</span><span class="ts-power-name">מחק אריח<br>לבחירתך</span><span class="ts-power-price">' + pp.choose_tile + ' 💎</span></button>';
     html += '<button class="ts-power" data-power="random_row"' + (playerBalance < pp.random_row ? ' disabled' : '') + '>' +
-      '<span class="ts-power-icon">🎲</span><span class="ts-power-name">פנה שורה רנדומלית</span><span class="ts-power-price">' + pp.random_row + ' 💎</span></button>';
+      '<span class="ts-power-icon">🎲</span><span class="ts-power-name">פנה שורה<br>אקראית</span><span class="ts-power-price">' + pp.random_row + ' 💎</span></button>';
     html += '<button class="ts-power ts-power-premium" data-power="choose_row"' + (playerBalance < pp.choose_row ? ' disabled' : '') + '>' +
-      '<span class="ts-power-icon">👑</span><span class="ts-power-name">פנה שורה לבחירה</span><span class="ts-power-price">' + pp.choose_row + ' 💎</span></button>';
+      '<span class="ts-power-icon">👑</span><span class="ts-power-name">פנה שורה<br>לבחירתך</span><span class="ts-power-price">' + pp.choose_row + ' 💎</span></button>';
     html += '</div>';
-    html += '<div class="ts-hint">🎲 זול = המערכת בוחרת מה לפנות · 🎯 יקר = אתה שולט בדיוק מה לפנות</div>';
+    html += '<div class="ts-hint">🎲 = המערכת בוחרת · 🎯 = אתה בוחר · 👑 = פרימיום</div>';
 
-    html += '<button class="ts-close" id="ts-close-btn">✕</button>';
     modal.innerHTML = html;
     document.getElementById('grid-wrap').appendChild(modal);
 
