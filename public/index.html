@@ -2267,7 +2267,7 @@
       <div class="stat stat-primary"><div class="stat-label">ניקוד</div><div class="stat-val" id="score">0</div></div>
       <div class="stat"><div class="stat-label">שיא</div><div class="stat-val" id="best">0</div></div>
       <div class="stat"><div class="stat-label">רצף</div><div class="stat-val streak-val zero" id="streak">🔥 0</div></div>
-      <div class="stat stat-shop" id="tile-shop-stat" style="cursor:pointer"><div class="stat-label">חנות</div><div class="stat-val" id="balance-display" style="color:#BA7517">💎 0</div></div>
+      <div class="stat stat-shop" id="tile-shop-stat" style="cursor:pointer"><div class="stat-label">💎 חנות</div><div class="stat-val" id="balance-display" style="color:#BA7517;font-size:15px">0</div></div>
     </div>
   </div>
   <div class="mode-bar" id="mode-bar">
@@ -2501,7 +2501,13 @@
 
   function updateBalanceDisplay() {
     var el = document.getElementById('balance-display');
-    if (el) el.textContent = '💎 ' + playerBalance;
+    if (!el) return;
+    var b = playerBalance;
+    var text = b >= 100000 ? Math.round(b / 1000) + 'K'
+      : b >= 10000 ? (b / 1000).toFixed(1).replace('.0', '') + 'K'
+      : b >= 1000 ? (b / 1000).toFixed(1).replace('.0', '') + 'K'
+      : String(b);
+    el.textContent = text;
   }
 
   // Active power-up mode
