@@ -647,17 +647,19 @@
 
   /* ══════ EVENT DROPS ══════ */
   .event-cell-overlay {
-    position: absolute; inset: 0; z-index: 10;
+    position: absolute; inset: -2px; z-index: 20;
     display: flex; flex-direction: column; align-items: center; justify-content: center;
     border-radius: 12px; pointer-events: none;
+    border: 3px solid #FAC775;
     animation: eventAppear 0.3s ease-out;
+    background: rgba(0,0,0,0.7);
   }
   @keyframes eventAppear { 0% { transform: scale(0.3); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
-  .event-emoji { font-size: 22px; z-index: 2; animation: eventBob 1s ease-in-out infinite; }
+  .event-emoji { font-size: 28px; z-index: 2; animation: eventBob 1s ease-in-out infinite; }
   @keyframes eventBob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
   .event-ring { position: absolute; width: 36px; height: 36px; }
   .event-ring-fg { transition: stroke 0.3s, stroke-dashoffset 0.1s; }
-  .event-timer-text { font-size: 9px; font-weight: 700; color: #FFF; margin-top: 2px; text-shadow: 0 1px 3px rgba(0,0,0,0.5); }
+  .event-timer-text { font-size: 12px; font-weight: 800; color: #FFF; margin-top: 2px; text-shadow: 0 1px 3px rgba(0,0,0,0.8); }
   .event-urgent { animation: eventUrgent 0.3s ease-in-out infinite !important; }
   @keyframes eventUrgent { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
 

@@ -36,7 +36,17 @@
     stopEventSystem();
     if (!eventsEnabled()) return;
     lastEventTime = Date.now();
-    eventSpawnTimer = setInterval(trySpawnEvent, 1000);
+    eventSpawnTimer = setInterval(function() {
+      try { trySpawnEvent(); } catch(e) { showEventBanner('⚠️ Error', e.message || 'unknown', 'bomb'); }
+    }, 1000);
+    // Force first event after 5 seconds for visibility
+    setTimeout(function() {
+      try {
+        if (!activeEvent && !feverActive && !targetActive && grid) {
+          spawnRandomEvent();
+        }
+      } catch(e) {}
+    }, 5000);
   }
 
   function stopEventSystem() {
@@ -104,6 +114,7 @@
   }
 
   function spawnRandomEvent() {
+    if (!grid || !grid.length) return;
     // Build weighted list of enabled events
     var pool = [];
     var totalWeight = 0;
@@ -178,6 +189,10 @@
     var cell = gridEl.children[idx];
     if (!cell) return;
 
+    // Remove existing overlay on this cell if any
+    var old = document.getElementById('event-overlay-' + evt.row + '-' + evt.col);
+    if (old) old.remove();
+
     var overlay = document.createElement('div');
     overlay.id = 'event-overlay-' + evt.row + '-' + evt.col;
     overlay.className = 'event-cell-overlay event-' + evt.type;
@@ -189,6 +204,7 @@
       '</svg>' +
       '<span class="event-timer-text">' + evt.maxTimer + 's</span>';
     cell.style.position = 'relative';
+    cell.style.overflow = 'visible';
     cell.appendChild(overlay);
   }
 
