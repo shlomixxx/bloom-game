@@ -973,6 +973,8 @@
     font-size: 12px; font-weight: 600; cursor: pointer;
   }
   .hsb-share:active { opacity: 0.8; }
+  .hsb-code { text-align: center; font-size: 11px; color: #6F6E68; margin-bottom: 8px; font-variant-numeric: tabular-nums; letter-spacing: 0.05em; }
+  .hsb-balance { font-weight: 700; color: #BA7517; }
 
   html[data-theme="dark"] .home-stats-bubble { background: #2C2A28; border-color: rgba(255,255,255,0.08); box-shadow: 0 8px 24px rgba(0,0,0,0.3); }
   html[data-theme="dark"] .hsb-arrow { background: #2C2A28; border-color: rgba(255,255,255,0.08); }
@@ -4763,6 +4765,7 @@
         '<strong>' + (playerNm ? escapeHtml(playerNm) : 'שחקן') + '</strong>' +
         (level ? '<span class="hsb-level">' + level + '</span>' : '') +
       '</div>' +
+      (playerCode ? '<div class="hsb-code">' + playerCode + (playerBalance > 0 ? ' · <span class="hsb-balance">' + playerBalance + ' 💎</span>' : '') + '</div>' : '') +
       '<div class="hsb-grid">' +
         '<div class="hsb-cell"><div class="hsb-val">' + bestScore.toLocaleString() + '</div><div class="hsb-lbl">🏆 שיא</div></div>' +
         '<div class="hsb-cell"><div class="hsb-val">' + escapeHtml(tierName) + '</div><div class="hsb-lbl">דרגה</div></div>' +
@@ -6616,6 +6619,16 @@
         (async function() {
           await submitContestScore(activeContestCode, score, highestTier);
           await loadContestLeaderboard();
+          // Award credits based on contest rank
+          if (!window.__bloomBotActive && leaderboard.length > 0) {
+            for (var i = 0; i < Math.min(3, leaderboard.length); i++) {
+              if (leaderboard[i].you) {
+                var actions = ['contest_1st', 'contest_2nd', 'contest_3rd'];
+                earnCredits(actions[i]);
+                break;
+              }
+            }
+          }
         })();
       }
     }
@@ -7162,6 +7175,7 @@
             statsHtml += '</div>';
             return statsHtml;
           })() +
+          (playerBalance > 0 ? '<div style="text-align:center;margin:8px 0;font-size:13px;color:#BA7517;font-weight:600">💎 ' + playerBalance.toLocaleString() + ' קרדיטים</div>' : '') +
           '<div class="share-label">התוצאה לשיתוף</div>' +
           (function() {
             var gameDur = Date.now() - (gameStartTime || Date.now());
