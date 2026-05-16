@@ -3009,6 +3009,78 @@ initDb()
     }, 60 * 60 * 1000);
 
     // ============================================================
+    // JACKPOT AUTO-SETTLE (runs every hour, settles yesterday's jackpot)
+    // ============================================================
+    async function autoSettleJackpot() {
+      try {
+        const autoEnabled = await pool.query(`SELECT value FROM game_config WHERE key = 'jackpot_auto_settle'`);
+        if (autoEnabled.rows.length && autoEnabled.rows[0].value === 'false') return;
+
+        // Find unsettled jackpots from previous days
+        const unsettled = await pool.query(
+          `SELECT date, pool, entries FROM daily_jackpot WHERE settled = false AND date < (NOW() AT TIME ZONE 'Asia/Jerusalem')::date ORDER BY date`);
+        
+        for (const j of unsettled.rows) {
+          if ((j.pool | 0) <= 0) continue;
+          const jpDate = j.date instanceof Date ? j.date.toISOString().slice(0, 10) : String(j.date);
+          
+          // Get config
+          const cfgRows = await pool.query(`SELECT key, value FROM game_config WHERE key LIKE 'wager_%' OR key LIKE 'jackpot_%'`);
+          const cfg = {}; for (const r of cfgRows.rows) cfg[r.key] = r.value;
+          const rake = parseInt(cfg.wager_rake, 10) || 5;
+          const pct1 = parseInt(cfg.wager_1st_pct, 10) || 60;
+          const pct2 = parseInt(cfg.wager_2nd_pct, 10) || 25;
+          const pct3 = parseInt(cfg.wager_3rd_pct, 10) || 10;
+          const minPlayers = parseInt(cfg.jackpot_min_players, 10) || 5;
+
+          if ((j.entries | 0) < minPlayers) {
+            // Not enough players — refund everyone
+            const refunds = await pool.query(
+              `SELECT device_id, ABS(amount) as amt FROM wager_settlements WHERE contest_code = $1 AND type = 'jackpot_entry'`, ['JP:' + jpDate]);
+            for (const rf of refunds.rows) {
+              await pool.query(`UPDATE player_profiles SET balance = balance + $1, total_spent = total_spent - $1 WHERE device_id = $2`, [rf.amt, rf.device_id]);
+            }
+            await pool.query(`UPDATE daily_jackpot SET settled = true, settled_at = NOW() WHERE date = $1`, [jpDate]);
+            console.log(`[jackpot] ${jpDate}: refunded ${refunds.rows.length} players (below min ${minPlayers})`);
+            continue;
+          }
+
+          // Get top 3
+          const top = await pool.query(
+            `SELECT device_id, name, score FROM daily_scores WHERE date = $1 ORDER BY score DESC LIMIT 3`, [jpDate]);
+          
+          const poolAmt = j.pool | 0;
+          const rakeAmt = Math.round(poolAmt * rake / 100);
+          const dist = poolAmt - rakeAmt;
+          const prizes = [
+            Math.round(dist * pct1 / (pct1 + pct2 + pct3)),
+            Math.round(dist * pct2 / (pct1 + pct2 + pct3)),
+            Math.round(dist * pct3 / (pct1 + pct2 + pct3))
+          ];
+
+          for (let i = 0; i < Math.min(3, top.rows.length); i++) {
+            const prize = prizes[i] || 0;
+            if (prize <= 0) continue;
+            await pool.query(`UPDATE player_profiles SET balance = balance + $1, total_earned = total_earned + $1 WHERE device_id = $2`, [prize, top.rows[i].device_id]);
+            await pool.query(`INSERT INTO wager_settlements (contest_code, device_id, amount, type) VALUES ($1, $2, $3, $4)`,
+              ['JP:' + jpDate, top.rows[i].device_id, prize, 'jackpot_win_' + (i + 1)]);
+          }
+          if (rakeAmt > 0) {
+            await pool.query(`INSERT INTO wager_settlements (contest_code, device_id, amount, type) VALUES ($1, 'house', $2, 'jackpot_rake')`,
+              ['JP:' + jpDate, rakeAmt]);
+          }
+          await pool.query(`UPDATE daily_jackpot SET settled = true, settled_at = NOW() WHERE date = $1`, [jpDate]);
+          console.log(`[jackpot] ${jpDate}: settled ${poolAmt}💎 → ${top.rows.length} winners, ${rakeAmt} rake`);
+        }
+      } catch (e) {
+        console.warn('[jackpot] auto-settle failed:', e.message);
+      }
+    }
+    // Run every hour + once on startup (after 30 seconds delay)
+    setTimeout(autoSettleJackpot, 30000);
+    setInterval(autoSettleJackpot, 60 * 60 * 1000);
+
+    // ============================================================
     // GRACEFUL SHUTDOWN
     // ============================================================
     function shutdown(signal) {

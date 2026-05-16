@@ -282,6 +282,10 @@ INSERT INTO game_config (key, value) VALUES ('jackpot_enabled', 'true')
   ON CONFLICT (key) DO NOTHING;
 INSERT INTO game_config (key, value) VALUES ('jackpot_entry', '5')
   ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('jackpot_min_players', '5')
+  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('jackpot_auto_settle', 'true')
+  ON CONFLICT (key) DO NOTHING;
 
 -- Wager settlements (tracks every credit movement from bets)
 CREATE TABLE IF NOT EXISTS wager_settlements (
