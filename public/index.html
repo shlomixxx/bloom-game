@@ -4814,6 +4814,10 @@
         nextPiece: nextPiece,
         maxChain: currentGameMaxChain | 0,
         drops: dropsCount | 0,
+        mergesPerTier: gameMergesPerTier,
+        pointsPerTier: gamePointsPerTier,
+        totalMerges: gameTotalMerges,
+        startTime: gameStartTime,
         ts: Date.now()
       }));
     } catch (e) {}
@@ -5615,12 +5619,21 @@
     equipOverlay();
   }
 
-  // beforeunload — warn if mid-challenge.
+  // beforeunload — warn if mid-game with meaningful score.
   window.addEventListener('beforeunload', function(e) {
-    if (mode === 'challenge' && activeChallenge && !isGameOver()) {
+    // Always save state before leaving
+    if (mode === 'practice') savePracticeGameState();
+    if (mode === 'contest') saveContestGameState();
+    // Warn if mid-game
+    var hasScore = (score | 0) > 100;
+    var midGame = !isGameOver() && hasScore && !document.getElementById('home-screen');
+    if (midGame) {
       e.preventDefault();
-      e.returnValue = 'אתה באמצע אתגר פרס. הניקוד הסופי יהיה הניקוד הנוכחי.';
-      return e.returnValue;
+      var msg = mode === 'challenge' ? 'אתה באמצע אתגר פרס. הניקוד הסופי יהיה הניקוד הנוכחי.'
+        : mode === 'contest' ? 'אתה באמצע תחרות. המשחק ישמר.'
+        : 'אתה באמצע משחק עם ' + score.toLocaleString() + ' נקודות. בטוח לצאת?';
+      e.returnValue = msg;
+      return msg;
     }
   });
 
@@ -6213,6 +6226,10 @@
           highestTier = saved.highestTier || 1;
           currentGameMaxChain = saved.maxChain || 0;
           dropsCount = saved.drops || 0;
+          gameMergesPerTier = saved.mergesPerTier || {};
+          gamePointsPerTier = saved.pointsPerTier || {};
+          gameTotalMerges = saved.totalMerges || 0;
+          if (saved.startTime) gameStartTime = saved.startTime;
           if (saved.nextPiece) {
             nextPiece = saved.nextPiece;
             restoredContestState = true; // reuse flag to skip pickPiece
@@ -6895,6 +6912,8 @@
     else {
       busy = false;
       render();
+      // Save state after every move (prevents loss on refresh)
+      if (mode === 'practice') savePracticeGameState();
       // Auto-play queued move (fast tapping)
       if (queuedCol >= 0) {
         var nextCol = queuedCol;
@@ -7513,9 +7532,12 @@
   }
 
   document.getElementById('reset').onclick = function() {
+    if (mode === 'contest') {
+      if (!confirm('אתה בתחרות! התחלה מחדש תאפס את הניקוד. להמשיך?')) return;
+    }
     var hasPiece = grid && grid.some(function(r) { return r.some(function(c) { return c > 0; }); });
     if (hasPiece && score > 100) {
-      if (!confirm('להתחיל מחדש? המשחק הנוכחי יימחק.')) return;
+      if (!confirm('להתחיל מחדש? המשחק הנוכחי (' + score.toLocaleString() + ' נק\') יימחק.')) return;
     }
     init(undefined, { fresh: true });
   };
