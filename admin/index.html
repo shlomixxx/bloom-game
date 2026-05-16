@@ -1573,13 +1573,14 @@
     if (!el) return;
     if (!players.length) { el.innerHTML = '<div style="color:#A8A6A0;font-size:12px;text-align:center;padding:10px">אין תוצאות</div>'; return; }
     var html = '<table style="width:100%;font-size:11px;border-collapse:collapse;direction:rtl">' +
-      '<tr style="background:rgba(0,0,0,0.03)"><th style="padding:4px">קוד</th><th>שם</th><th>💎</th><th>הפניות</th><th>פעולה</th></tr>';
+      '<tr style="background:rgba(0,0,0,0.03)"><th style="padding:4px">קוד</th><th>שם</th><th>💎</th><th>Lv</th><th>XP</th><th>פעולה</th></tr>';
     players.forEach(function(p) {
       html += '<tr style="border-top:1px solid rgba(0,0,0,0.05)">' +
         '<td style="padding:4px;font-weight:700;font-size:10px;letter-spacing:0.05em">' + (p.player_code || '—') + '</td>' +
         '<td>' + (p.display_name || 'אנונימי') + '</td>' +
         '<td style="font-weight:700">' + (p.balance || 0) + '</td>' +
-        '<td>' + (p.referral_count || 0) + '</td>' +
+        '<td style="font-weight:600;color:#6C3483">' + (p.level || 1) + '</td>' +
+        '<td style="font-size:10px;color:#6F6E68">' + (p.xp || 0) + '</td>' +
         '<td><button class="btn sm" style="font-size:9px;padding:2px 6px" onclick="document.getElementById(\'gift-code\').value=\'' + (p.player_code || '') + '\'">🎁</button></td>' +
       '</tr>';
     });

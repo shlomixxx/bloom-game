@@ -2477,7 +2477,7 @@ if (ADMIN_PATH && ADMIN_PASSWORD) {
     try {
       const r = await pool.query(
         `SELECT p.device_id, p.player_code, p.display_name, p.balance, p.total_earned, p.total_spent,
-                p.referred_by, p.created_at,
+                p.referred_by, p.created_at, COALESCE(p.xp, 0) as xp, COALESCE(p.level, 1) as level,
                 (SELECT COUNT(*) FROM referrals WHERE referrer_device = p.device_id) as referral_count
          FROM player_profiles p ORDER BY p.created_at DESC LIMIT 500`);
       res.json({ ok: true, players: r.rows });
@@ -2641,9 +2641,11 @@ app.get('/api/player/code', async (req, res) => {
   try {
     // Check if player already has a code
     const existing = await pool.query(
-      'SELECT player_code, balance FROM player_profiles WHERE device_id = $1', [deviceId]);
+      'SELECT player_code, balance, xp FROM player_profiles WHERE device_id = $1', [deviceId]);
     if (existing.rows.length) {
-      return res.json({ ok: true, code: existing.rows[0].player_code, balance: existing.rows[0].balance });
+      const p = existing.rows[0];
+      const lvl = calcLevel(p.xp || 0);
+      return res.json({ ok: true, code: p.player_code, balance: p.balance, xp: p.xp || 0, level: lvl });
     }
     // Generate unique code (retry if collision)
     const wcfg = await pool.query(`SELECT value FROM game_config WHERE key = 'welcome_bonus'`);
@@ -2669,16 +2671,41 @@ app.get('/api/player/code', async (req, res) => {
 
 // POST /api/referral — register a referral
 
-// POST /api/player/earn — award credits for gameplay actions
+// XP per action and level thresholds
+const XP_MAP = {
+  daily_complete: 50, streak_3: 30, streak_7: 80, streak_30: 300,
+  contest_1st: 100, contest_2nd: 50, contest_3rd: 30
+};
+const LEVELS = [
+  { level: 1,  xp: 0,      title: 'מתחיל' },
+  { level: 2,  xp: 50,     title: 'מתחיל+' },
+  { level: 3,  xp: 150,    title: 'טירון' },
+  { level: 5,  xp: 500,    title: 'חובבן' },
+  { level: 8,  xp: 1200,   title: 'שחקן' },
+  { level: 10, xp: 2000,   title: 'שחקן+' },
+  { level: 15, xp: 5000,   title: 'מקצוען' },
+  { level: 20, xp: 10000,  title: 'מומחה' },
+  { level: 30, xp: 25000,  title: 'אלוף' },
+  { level: 50, xp: 50000,  title: 'אגדה' },
+  { level: 100,xp: 150000, title: 'אלמוותי' },
+];
+function calcLevel(xp) {
+  let lvl = LEVELS[0];
+  for (let i = LEVELS.length - 1; i >= 0; i--) {
+    if (xp >= LEVELS[i].xp) { lvl = LEVELS[i]; break; }
+  }
+  const next = LEVELS.find(l => l.xp > xp) || null;
+  return { level: lvl.level, title: lvl.title, xp, nextXp: next ? next.xp : null, nextTitle: next ? next.title : null, progress: next ? Math.round((xp - lvl.xp) / (next.xp - lvl.xp) * 100) : 100 };
+}
+
+// POST /api/player/earn — award credits + XP for gameplay actions
 app.post('/api/player/earn', async (req, res) => {
   const { deviceId, action, meta } = req.body || {};
   if (!deviceId || !action) return res.status(400).json({ error: 'missing_params' });
   try {
-    // Check player exists
-    const player = await pool.query('SELECT device_id, balance FROM player_profiles WHERE device_id = $1', [deviceId]);
+    const player = await pool.query('SELECT device_id, balance, xp FROM player_profiles WHERE device_id = $1', [deviceId]);
     if (!player.rows.length) return res.json({ ok: false, reason: 'no_profile' });
 
-    // Map action to config key
     const actionMap = {
       'daily_complete': 'daily_reward',
       'streak_3': 'streak_3_reward',
@@ -2691,11 +2718,8 @@ app.post('/api/player/earn', async (req, res) => {
     const configKey = actionMap[action];
     if (!configKey) return res.json({ ok: false, reason: 'unknown_action' });
 
-    // Check for duplicate (prevent double-earning for same action+day)
     const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' });
     const dedupKey = action + ':' + today + (meta ? ':' + JSON.stringify(meta) : '');
-    // Simple dedup using a flag field — use referrals table trick
-    // Actually, just prevent earning same daily reward twice per day
     if (action === 'daily_complete') {
       const dup = await pool.query(
         `SELECT 1 FROM game_config WHERE key = $1`, ['_earn:' + deviceId + ':' + dedupKey]);
@@ -2706,12 +2730,18 @@ app.post('/api/player/earn', async (req, res) => {
     const reward = parseInt((cfgRow.rows[0] || {}).value, 10) || 0;
     if (reward <= 0) return res.json({ ok: false, reason: 'reward_disabled' });
 
-    // Award credits
-    await pool.query(
-      `UPDATE player_profiles SET balance = balance + $1, total_earned = total_earned + $1 WHERE device_id = $2`,
-      [reward, deviceId]);
+    // Award credits + XP
+    const xpGain = XP_MAP[action] || 10;
+    const oldXp = (player.rows[0].xp || 0);
+    const newXp = oldXp + xpGain;
+    const oldLevel = calcLevel(oldXp);
+    const newLevel = calcLevel(newXp);
+    const leveledUp = newLevel.level > oldLevel.level;
 
-    // Dedup mark for daily
+    await pool.query(
+      `UPDATE player_profiles SET balance = balance + $1, total_earned = total_earned + $1, xp = COALESCE(xp, 0) + $2, level = $3 WHERE device_id = $4`,
+      [reward, xpGain, newLevel.level, deviceId]);
+
     if (action === 'daily_complete') {
       await pool.query(
         `INSERT INTO game_config (key, value) VALUES ($1, $2) ON CONFLICT (key) DO NOTHING`,
@@ -2719,7 +2749,7 @@ app.post('/api/player/earn', async (req, res) => {
     }
 
     const newBal = player.rows[0].balance + reward;
-    res.json({ ok: true, action, reward, newBalance: newBal });
+    res.json({ ok: true, action, reward, xpGain, newBalance: newBal, level: newLevel, leveledUp });
   } catch (e) {
     console.error('player/earn', e.message);
     res.status(500).json({ error: 'server' });

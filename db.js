@@ -31,6 +31,8 @@ export async function initDb() {
     `ALTER TABLE contests ADD COLUMN IF NOT EXISTS wager_amount INT DEFAULT 0`,
     `ALTER TABLE contests ADD COLUMN IF NOT EXISTS wager_pool INT DEFAULT 0`,
     `ALTER TABLE contests ADD COLUMN IF NOT EXISTS wager_settled BOOLEAN DEFAULT false`,
+    `ALTER TABLE player_profiles ADD COLUMN IF NOT EXISTS xp INT DEFAULT 0`,
+    `ALTER TABLE player_profiles ADD COLUMN IF NOT EXISTS level INT DEFAULT 1`,
   ];
   for (const sql of migrations) {
     try { await pool.query(sql); } catch (e) {

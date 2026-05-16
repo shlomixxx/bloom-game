@@ -3642,7 +3642,8 @@
     // Show player code on home
     var pidEl = document.getElementById('home-player-id');
     if (pidEl && playerCode) {
-      pidEl.innerHTML = '<span class="pid-code">' + playerCode + '</span> · <span class="pid-balance">' + playerBalance + ' 💎</span>';
+      var lvlText = playerLevel > 1 ? ' · ' + getLevelIcon() + ' Lv.' + playerLevel : '';
+      pidEl.innerHTML = '<span class="pid-code">' + playerCode + '</span> · <span class="pid-balance">' + playerBalance + ' 💎</span>' + lvlText;
       pidEl.onclick = function() {
         if (navigator.clipboard) {
           navigator.clipboard.writeText(playerCode);
@@ -4816,8 +4817,21 @@
   // ============ PLAYER CODE (BLOOM-XXXX) + REFERRALS ============
   const PLAYER_CODE_KEY = 'bloom_player_code';
   const PLAYER_BALANCE_KEY = 'bloom_balance';
+  const PLAYER_XP_KEY = 'bloom_xp';
+  const PLAYER_LEVEL_KEY = 'bloom_level';
+  const PLAYER_LEVEL_TITLE_KEY = 'bloom_level_title';
   let playerCode = localStorage.getItem(PLAYER_CODE_KEY) || null;
   let playerBalance = parseInt(localStorage.getItem(PLAYER_BALANCE_KEY) || '0', 10) || 0;
+  let playerXp = parseInt(localStorage.getItem(PLAYER_XP_KEY) || '0', 10) || 0;
+  let playerLevel = parseInt(localStorage.getItem(PLAYER_LEVEL_KEY) || '1', 10) || 1;
+  let playerLevelTitle = localStorage.getItem(PLAYER_LEVEL_TITLE_KEY) || 'מתחיל';
+
+  var LEVEL_ICONS = { 1: '🌱', 2: '🌱', 3: '🌿', 5: '😊', 8: '🎮', 10: '🎮', 15: '⭐', 20: '⭐', 30: '🔥', 50: '👑', 100: '💎' };
+  function getLevelIcon() {
+    var icon = '🌱';
+    for (var k in LEVEL_ICONS) { if (playerLevel >= parseInt(k, 10)) icon = LEVEL_ICONS[k]; }
+    return icon;
+  }
 
   function fetchPlayerCode() {
     fetch(API_BASE + '/api/player/code?deviceId=' + encodeURIComponent(deviceId))
@@ -4826,11 +4840,18 @@
         if (d && d.code) {
           playerCode = d.code;
           playerBalance = d.balance | 0;
+          if (d.xp != null) playerXp = d.xp | 0;
+          if (d.level) {
+            playerLevel = d.level.level || 1;
+            playerLevelTitle = d.level.title || 'מתחיל';
+          }
           try {
             localStorage.setItem(PLAYER_CODE_KEY, d.code);
             localStorage.setItem(PLAYER_BALANCE_KEY, String(d.balance | 0));
+            localStorage.setItem(PLAYER_XP_KEY, String(playerXp));
+            localStorage.setItem(PLAYER_LEVEL_KEY, String(playerLevel));
+            localStorage.setItem(PLAYER_LEVEL_TITLE_KEY, playerLevelTitle);
           } catch(e) {}
-          // Process referral if ?ref= was in the URL
           processReferral();
         }
       }).catch(function() {});
@@ -4865,8 +4886,32 @@
         playerBalance = d.newBalance;
         try { localStorage.setItem(PLAYER_BALANCE_KEY, String(d.newBalance)); } catch(e) {}
         showCreditToast(d.reward, action);
+        // XP + Level
+        if (d.xpGain) {
+          playerXp = (d.level && d.level.xp) || (playerXp + d.xpGain);
+          try { localStorage.setItem(PLAYER_XP_KEY, String(playerXp)); } catch(e) {}
+        }
+        if (d.level) {
+          playerLevel = d.level.level || playerLevel;
+          playerLevelTitle = d.level.title || playerLevelTitle;
+          try { localStorage.setItem(PLAYER_LEVEL_KEY, String(playerLevel)); localStorage.setItem(PLAYER_LEVEL_TITLE_KEY, playerLevelTitle); } catch(e) {}
+        }
+        if (d.leveledUp) {
+          showLevelUpToast(d.level);
+        }
+        updateBalanceDisplay();
       }
     }).catch(function() {});
+  }
+  function showLevelUpToast(level) {
+    var t = document.createElement('div');
+    t.className = 'credit-toast';
+    t.style.background = 'linear-gradient(135deg, #9B59B6, #6C3483)';
+    t.style.color = '#FFF';
+    t.innerHTML = '<span style="font-size:20px">🎉 רמה ' + (level.level || '') + '!</span><span style="font-size:12px">' + getLevelIcon() + ' ' + (level.title || '') + '</span>';
+    document.body.appendChild(t);
+    setTimeout(function() { t.classList.add('show'); }, 10);
+    setTimeout(function() { t.classList.remove('show'); setTimeout(function() { t.remove(); }, 400); }, 3500);
   }
   function showCreditToast(amount, action) {
     var labels = { daily_complete: 'אתגר יומי', streak_3: 'רצף 3 ימים!', streak_7: 'רצף 7 ימים!', streak_30: 'רצף 30 ימים!',
@@ -5272,7 +5317,7 @@
     var h = Math.floor(totalMs / 3600000);
     var m = Math.floor((totalMs % 3600000) / 60000);
     var timeText = totalMs >= 60000 ? (h > 0 ? h + ' שעות ו-' + m + ' דק\'' : m + ' דקות') : '';
-    var level = h >= 10 ? '🔥🔥🔥 מכור מושבע' : h >= 3 ? '🔥🔥 מכור' : h >= 1 ? '🔥 מתמכר' : m >= 15 ? '😊 חובבן' : totalMs >= 60000 ? '🌱 מתחיל' : '';
+    var level = playerLevel > 1 ? getLevelIcon() + ' Lv.' + playerLevel + ' ' + playerLevelTitle : '';
 
     bubble.innerHTML =
       '<div class="hsb-arrow"></div>' +
