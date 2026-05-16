@@ -85,6 +85,8 @@
   }
   .stats > .stat.stat-primary .stat-label { color: #FAC775; }
   .stats > .stat.stat-primary .stat-val { color: #FFFFFF; font-size: 24px; }
+  .stats > .stat.stat-primary .stat-val.score-lg { font-size: 18px; }
+  .stats > .stat.stat-primary .stat-val.score-xl { font-size: 14px; }
   html[data-theme="dark"] .stats > .stat.stat-primary { background: linear-gradient(135deg, #FAC775 0%, #BA7517 100%); }
   html[data-theme="dark"] .stats > .stat.stat-primary .stat-val { color: #1C1A18; }
   html[data-theme="dark"] .stats > .stat.stat-primary .stat-label { color: #412402; }

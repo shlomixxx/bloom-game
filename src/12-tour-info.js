@@ -353,6 +353,13 @@
   function render(opts) {
     opts = opts || {};
     document.getElementById('score').textContent = score.toLocaleString();
+    // Auto-shrink font for large scores
+    var scoreEl = document.getElementById('score');
+    if (scoreEl) {
+      scoreEl.classList.remove('score-lg', 'score-xl');
+      if (score >= 1000000) scoreEl.classList.add('score-xl');
+      else if (score >= 100000) scoreEl.classList.add('score-lg');
+    }
     document.getElementById('best').textContent = best.toLocaleString();
     updateBalanceDisplay();
     // "Near best" cue — once the current run gets within 10% of the personal

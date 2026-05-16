@@ -5592,7 +5592,7 @@
           const group = findGroup(r, c, t);
           if (group.length >= 2) {
             // ── CROWN MERGE SPECIAL: two crowns → explosion ──
-            if (t === MAX_TIER) {
+            if (t === MAX_TIER && gameConfig.crown_merge_enabled !== 'false') {
               // Clear ALL crowns in the group
               for (let i = 0; i < group.length; i++) {
                 grid[group[i][0]][group[i][1]] = 0;
@@ -5604,7 +5604,7 @@
               }
               for (let cc = 0; cc < getBoardCols(); cc++) grid[clearRow][cc] = 0;
               chainCount++;
-              var crownBonus = 50000;
+              var crownBonus = parseInt(gameConfig.crown_merge_bonus, 10) || 50000;
               score += crownBonus;
               gameTotalMerges++;
               gameMergesPerTier[MAX_TIER] = (gameMergesPerTier[MAX_TIER] || 0) + 1;
@@ -5622,6 +5622,8 @@
               bumpLifetimeMax(BEST_CHAIN_KEY, chainCount);
               break outer;
             }
+            // If crown merge disabled, skip crown tiles entirely (old behavior)
+            if (t === MAX_TIER) continue;
             // ── REGULAR MERGE ──
             // Choose survivor cell: bottommost (gravity-friendly).
             // Horizontal tie-breaker depends on admin-controlled merge_mode:
@@ -6357,6 +6359,13 @@
   function render(opts) {
     opts = opts || {};
     document.getElementById('score').textContent = score.toLocaleString();
+    // Auto-shrink font for large scores
+    var scoreEl = document.getElementById('score');
+    if (scoreEl) {
+      scoreEl.classList.remove('score-lg', 'score-xl');
+      if (score >= 1000000) scoreEl.classList.add('score-xl');
+      else if (score >= 100000) scoreEl.classList.add('score-lg');
+    }
     document.getElementById('best').textContent = best.toLocaleString();
     updateBalanceDisplay();
     // "Near best" cue — once the current run gets within 10% of the personal

@@ -393,3 +393,8 @@ CREATE TABLE IF NOT EXISTS referrals (
 
 INSERT INTO game_config (key, value) VALUES ('score_milestone_reward', '5')
   ON CONFLICT (key) DO NOTHING;
+
+INSERT INTO game_config (key, value) VALUES ('crown_merge_enabled', 'true')
+  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('crown_merge_bonus', '50000')
+  ON CONFLICT (key) DO NOTHING;
