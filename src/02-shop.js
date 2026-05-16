@@ -79,6 +79,13 @@
         var actionBtn = '';
         if (duel.status === 'pending' && !isChallenger) {
           actionBtn = '<button class="btn sm" style="font-size:10px;padding:3px 8px" onclick="acceptDuel(' + duel.id + ')">קבל ⚔️</button>';
+        } else if (duel.status === 'accepted') {
+          var myScore = isChallenger ? duel.challenger_score : duel.opponent_score;
+          if (myScore == null) {
+            actionBtn = '<button class="btn sm" style="font-size:10px;padding:3px 8px;background:#BA7517" onclick="playDuel(' + duel.id + ')">🎮 שחק</button>';
+          } else {
+            actionBtn = '<span style="font-size:10px;color:#2E8B6F">✓ סיימת (' + (myScore|0).toLocaleString() + ')</span>';
+          }
         }
         html += '<div style="padding:6px 0;border-top:1px solid rgba(0,0,0,0.04)">' +
           '<span style="font-weight:600">vs ' + otherName + '</span>' + amtText + ' · ' + statusText + winText + ' ' + actionBtn +
@@ -97,10 +104,98 @@
     if (d && d.ok) {
       fetchPlayerCode(); // refresh balance
       loadMyDuels();
+      // Auto-start the duel game
+      startDuelGame(id, d.duel.board_seed);
     } else {
-      alert((d && d.reason) || 'שגיאה');
+      var msgs = { not_opponent: 'אתה לא היריב', not_pending: 'כבר קיבלת', expired: 'פג תוקף', insufficient_balance: 'אין מספיק 💎' };
+      alert(msgs[d && d.reason] || 'שגיאה');
     }
   };
+
+  window.playDuel = async function(id) {
+    try {
+      var r = await fetch(API_BASE + '/api/duels/mine?deviceId=' + encodeURIComponent(deviceId));
+      var d = await r.json();
+      if (!d || !d.duels) return;
+      var duel = d.duels.find(function(dd) { return dd.id === id; });
+      if (!duel || duel.status !== 'accepted') { alert('הדו-קרב לא פעיל'); return; }
+      startDuelGame(id, duel.board_seed);
+    } catch(e) { alert('שגיאת רשת'); }
+  };
+
+  // Active duel state
+  var activeDuelId = null;
+
+  function startDuelGame(duelId, seed) {
+    activeDuelId = duelId;
+    // Close the duel modal
+    var modal = document.getElementById('duel-modal');
+    if (modal) modal.remove();
+    // Hide home if open
+    hideHome();
+    // Start the game with the duel's seed
+    mode = 'practice'; // reuse practice mode UI
+    dailyDate = todayInIsrael();
+    grid = Array.from({length: getBoardRows()}, function() { return Array(getBoardCols()).fill(0); });
+    score = 0; highestTier = 1; busy = false; dropsCount = 0;
+    currentGameMaxChain = 0;
+    tierUpHit = {};
+    gameMergesPerTier = {};
+    gamePointsPerTier = {};
+    gameBestMergeTier = 0;
+    gameTotalMerges = 0;
+    gameStartTime = Date.now();
+    // Use the duel's board seed for deterministic RNG
+    rng = mulberry32(seed);
+    dailySubmitted = false;
+    nextPiece = pickPiece();
+    updateModeBar();
+    // Override the mode title to show duel info
+    var titleEl = document.getElementById('mode-title');
+    var subEl = document.getElementById('mode-sub');
+    if (titleEl) titleEl.textContent = '⚔️ דו-קרב 1v1';
+    if (subEl) subEl.textContent = 'אותו לוח ליריב — מי ישיג יותר?';
+    render();
+    playMusic('game');
+    ensureAudio();
+    trackEvent('duel_start', { duelId: duelId });
+  }
+
+  // Called from game-over to submit duel score
+  function submitDuelScore(finalScore) {
+    if (!activeDuelId) return;
+    var duelId = activeDuelId;
+    activeDuelId = null; // clear so it's one-shot
+    fetch(API_BASE + '/api/duels/' + duelId + '/score', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ deviceId: deviceId, score: finalScore })
+    }).then(function(r) { return r.json(); }).then(function(d) {
+      if (d && d.result === 'tie') {
+        showDuelResultToast('🤝 תיקו! ההימור הוחזר');
+        fetchPlayerCode();
+      } else if (d && d.result === 'settled' && d.winner === 'you') {
+        showDuelResultToast('🏆 ניצחת בדו-קרב! +' + (d.prize || 0) + ' 💎');
+        fetchPlayerCode();
+      } else if (d && d.result === 'settled' && d.winner === 'opponent') {
+        showDuelResultToast('😔 הפסדת בדו-קרב. היריב היה טוב יותר');
+      } else if (d && d.result === 'waiting') {
+        showDuelResultToast('⚔️ ניקוד נשלח: ' + (d.yourScore || 0).toLocaleString() + ' · ממתין ליריב...');
+      }
+      trackEvent('duel_score', { duelId: duelId, result: d && d.result });
+    }).catch(function() {});
+  }
+
+  function showDuelResultToast(text) {
+    var t = document.createElement('div');
+    t.className = 'credit-toast';
+    t.style.background = 'linear-gradient(135deg, #1C1A18, #2C2A28)';
+    t.style.color = '#FAC775';
+    t.style.fontSize = '14px';
+    t.innerHTML = '<span>' + text + '</span>';
+    document.body.appendChild(t);
+    setTimeout(function() { t.classList.add('show'); }, 10);
+    setTimeout(function() { t.classList.remove('show'); setTimeout(function() { t.remove(); }, 400); }, 4000);
+  }
 
   // ============ IN-GAME TILE SHOP ============
   var tilePrices = null; // fetched once from server

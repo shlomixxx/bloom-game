@@ -870,6 +870,7 @@
           })();
         }
         if (mode === 'practice') clearPracticeGameState();
+        if (activeDuelId) submitDuelScore(score);
       }
       return;
     }
@@ -947,6 +948,8 @@
         render({ over: true, isNewBest: isNewBest });
       }
       if (mode === 'practice') clearPracticeGameState();
+      // Submit duel score if this was a duel game
+      if (activeDuelId) submitDuelScore(score);
       if (mode === 'contest' && !contestSubmitted && activeContestCode) {
         contestSubmitted = true;
         clearContestGameState();
