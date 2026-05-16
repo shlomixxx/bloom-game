@@ -56,6 +56,9 @@ CREATE INDEX IF NOT EXISTS idx_contests_ends_at
 CREATE INDEX IF NOT EXISTS idx_contests_host
   ON contests (host_device_id);
 
+-- Weekly auto-challenge support: distinguish private vs weekly contests
+ALTER TABLE contests ADD COLUMN IF NOT EXISTS contest_type VARCHAR(20) NOT NULL DEFAULT 'private';
+
 CREATE TABLE IF NOT EXISTS contest_scores (
   id              SERIAL PRIMARY KEY,
   contest_code    VARCHAR(8) NOT NULL REFERENCES contests(code) ON DELETE CASCADE,
@@ -291,6 +294,14 @@ INSERT INTO game_config (key, value) VALUES ('jackpot_auto_settle', 'true')
 INSERT INTO game_config (key, value) VALUES ('duel_enabled', 'true')
   ON CONFLICT (key) DO NOTHING;
 INSERT INTO game_config (key, value) VALUES ('duel_timeout_hours', '24')
+  ON CONFLICT (key) DO NOTHING;
+
+-- Weekly auto-challenge settings
+INSERT INTO game_config (key, value) VALUES ('weekly_enabled', 'true')
+  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('weekly_prize', '500')
+  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('weekly_name', 'אתגר שבועי')
   ON CONFLICT (key) DO NOTHING;
 
 -- Wager settlements (tracks every credit movement from bets)

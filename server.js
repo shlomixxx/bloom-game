@@ -1841,6 +1841,7 @@ if (ADMIN_PATH && ADMIN_PASSWORD) {
       const result = await pool.query(
         `SELECT c.code, c.name, c.host_name, c.host_device_id, c.board_type,
                 c.duration_days, c.ends_at, c.status, c.created_at,
+                COALESCE(c.contest_type, 'private') as contest_type,
                 (SELECT COUNT(*) FROM contest_scores WHERE contest_code = c.code)::int AS members,
                 (SELECT MAX(score) FROM contest_scores WHERE contest_code = c.code)    AS top_score
          FROM contests c
@@ -3299,6 +3300,41 @@ app.get('/api/config', async (_req, res) => {
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
 
+// GET /api/weekly — current active weekly contest
+app.get('/api/weekly', async (req, res) => {
+  try {
+    const r = await pool.query(
+      `SELECT c.code, c.name, c.ends_at, c.created_at, c.board_type,
+              (SELECT COUNT(*) FROM contest_scores WHERE contest_code = c.code) as players,
+              (SELECT MAX(score) FROM contest_scores WHERE contest_code = c.code) as top_score
+       FROM contests c
+       WHERE c.contest_type = 'weekly' AND c.status = 'active' AND c.ends_at > NOW()
+       ORDER BY c.created_at DESC LIMIT 1`);
+    if (!r.rows.length) return res.json({ ok: true, weekly: null });
+    const w = r.rows[0];
+    const deviceId = req.query.deviceId || '';
+    let myEntry = null;
+    if (deviceId) {
+      const me = await pool.query(
+        `SELECT score, games_played, display_name FROM contest_scores WHERE contest_code = $1 AND device_id = $2`,
+        [w.code, deviceId]);
+      if (me.rows.length) myEntry = me.rows[0];
+    }
+    // Prize from config
+    const prizeRow = await pool.query(`SELECT value FROM game_config WHERE key = 'weekly_prize'`);
+    const prize = parseInt((prizeRow.rows[0] || {}).value, 10) || 500;
+    res.json({ ok: true, weekly: {
+      code: w.code, name: w.name, endsAt: w.ends_at, createdAt: w.created_at,
+      players: w.players | 0, topScore: w.top_score | 0, prize,
+      joined: !!myEntry, myScore: myEntry ? myEntry.score : 0,
+      myGames: myEntry ? myEntry.games_played : 0
+    }});
+  } catch (e) {
+    console.error('GET /api/weekly', e.message);
+    res.status(500).json({ error: 'server' });
+  }
+});
+
 // ============================================================
 // SERVER START
 // ============================================================
@@ -3392,6 +3428,60 @@ initDb()
     // Run every hour + once on startup (after 30 seconds delay)
     setTimeout(autoSettleJackpot, 30000);
     setInterval(autoSettleJackpot, 60 * 60 * 1000);
+
+    // ============================================================
+    // WEEKLY AUTO-CHALLENGE (creates a new weekly contest each Sunday)
+    // ============================================================
+    async function ensureWeeklyContest() {
+      try {
+        const enabledRow = await pool.query(`SELECT value FROM game_config WHERE key = 'weekly_enabled'`);
+        if (enabledRow.rows.length && enabledRow.rows[0].value === 'false') return;
+
+        // Check if there's an active weekly contest
+        const active = await pool.query(
+          `SELECT code, ends_at FROM contests WHERE contest_type = 'weekly' AND status = 'active' AND ends_at > NOW() ORDER BY created_at DESC LIMIT 1`);
+        if (active.rows.length) return; // Already have an active weekly
+
+        // Mark any expired weekly contests as ended
+        await pool.query(
+          `UPDATE contests SET status = 'ended' WHERE contest_type = 'weekly' AND status = 'active' AND ends_at <= NOW()`);
+
+        // Create new weekly contest
+        const nameRow = await pool.query(`SELECT value FROM game_config WHERE key = 'weekly_name'`);
+        const prizeRow = await pool.query(`SELECT value FROM game_config WHERE key = 'weekly_prize'`);
+        const baseName = (nameRow.rows[0] || {}).value || 'אתגר שבועי';
+        const prize = parseInt((prizeRow.rows[0] || {}).value, 10) || 500;
+
+        // Calculate end: next Sunday midnight Israel time
+        const now = new Date();
+        const israelNow = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Jerusalem' }));
+        const dayOfWeek = israelNow.getDay(); // 0=Sun
+        const daysUntilSunday = dayOfWeek === 0 ? 7 : 7 - dayOfWeek;
+        const endsAt = new Date(now.getTime() + daysUntilSunday * 86400000);
+        endsAt.setHours(23, 59, 59, 0);
+
+        // Week number for naming
+        const weekStart = new Date(now);
+        const weekNum = Math.ceil(((weekStart - new Date(weekStart.getFullYear(), 0, 1)) / 86400000 + 1) / 7);
+        const contestName = baseName + ' #' + weekNum;
+
+        const code = await generateUniqueContestCode();
+        const seed = Math.floor(Math.random() * 2147483647);
+
+        await pool.query(
+          `INSERT INTO contests (code, name, host_name, host_device_id, board_seed, board_type, duration_days, ends_at, contest_type)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'weekly')`,
+          [code, contestName, 'BLOOM', 'system', seed, 'free', daysUntilSunday, endsAt.toISOString()]
+        );
+
+        console.log(`[weekly] Created weekly contest: ${code} "${contestName}" (ends ${endsAt.toISOString()}, prize ${prize}💎)`);
+      } catch (e) {
+        console.warn('[weekly] ensureWeeklyContest failed:', e.message);
+      }
+    }
+    // Run on startup + every hour
+    setTimeout(ensureWeeklyContest, 15000);
+    setInterval(ensureWeeklyContest, 60 * 60 * 1000);
 
     // ============================================================
     // GRACEFUL SHUTDOWN

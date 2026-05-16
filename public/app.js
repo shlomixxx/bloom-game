@@ -1584,6 +1584,7 @@
         : '<button class="home-start" id="home-start">בוא נתחיל</button>') +
       '<div class="home-social" id="home-social"></div>' +
       '<div id="home-mini-lb-host"></div>' +
+      '<div id="home-weekly-host"></div>' +
       '<div class="home-jackpot" id="home-jackpot"></div>' +
       (activeContestCode
         ? '<button class="home-contest home-contest-active" id="home-contest"><span class="home-contest-badge home-contest-badge-active">פעיל</span>המשך תחרות חברים</button>'
@@ -1698,6 +1699,7 @@
     refreshHomeStreak();
     refreshHomeMiniLb();
     refreshHomeAddiction();
+    refreshHomeWeekly();
     // WhatsApp invite button
     var waInvite = document.getElementById('home-invite-wa');
     if (waInvite) waInvite.onclick = function(e) {
@@ -3682,6 +3684,45 @@
     if (shareBtn) shareBtn.onclick = function() { shareAddiction('share'); };
     var waBtn = document.getElementById('home-addiction-share-wa');
     if (waBtn) waBtn.onclick = function() { shareAddiction('whatsapp'); };
+  }
+
+  // ── Home: Weekly Challenge Banner ──
+  async function refreshHomeWeekly() {
+    var host = document.getElementById('home-weekly-host');
+    if (!host) return;
+    try {
+      var res = await fetch(API_BASE + '/api/weekly?deviceId=' + encodeURIComponent(deviceId));
+      if (!res.ok) { host.innerHTML = ''; return; }
+      var data = await res.json();
+      if (!data || !data.weekly) { host.innerHTML = ''; return; }
+      var w = data.weekly;
+      var endsAt = new Date(w.endsAt);
+      var now = new Date();
+      var hoursLeft = Math.max(0, Math.round((endsAt - now) / 3600000));
+      var timeLeft = hoursLeft >= 24 ? Math.ceil(hoursLeft / 24) + ' ימים' : hoursLeft + ' שעות';
+      var statusText = w.joined
+        ? 'הציון שלך: <strong>' + (w.myScore | 0).toLocaleString() + '</strong> · ' + (w.myGames || 0) + ' משחקים'
+        : '<strong>' + (w.players || 0) + '</strong> משתתפים · הצטרף עכשיו!';
+
+      host.innerHTML =
+        '<div class="home-weekly" id="home-weekly-btn">' +
+          '<div class="home-weekly-title">🏆 ' + escapeHtml(w.name) + '</div>' +
+          '<div class="home-weekly-prize">פרס: ' + (w.prize || 500) + ' 💎 · נגמר בעוד ' + timeLeft + '</div>' +
+          '<div class="home-weekly-meta">' + statusText + '</div>' +
+          '<span class="home-weekly-arrow">←</span>' +
+        '</div>';
+
+      var btn = document.getElementById('home-weekly-btn');
+      if (btn) btn.onclick = function() {
+        ensureAudio();
+        if (mode === 'practice') savePracticeGameState();
+        // Navigate to the weekly contest
+        activeContestCode = w.code;
+        try { localStorage.setItem('bloom_active_contest', w.code); } catch(e) {}
+        hideHome();
+        showContestLeaderboard(w.code);
+      };
+    } catch (e) { host.innerHTML = ''; }
   }
 
   function refreshHomeChallengeCta() {

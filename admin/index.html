@@ -852,9 +852,10 @@
       const statusPill = active
         ? '<span class="pill good">פעילה</span>'
         : '<span class="pill warn">הסתיימה</span>';
+      var weeklyBadge = c.contest_type === 'weekly' ? '<span class="pill" style="background:#FAC775;color:#412402;font-size:9px;padding:1px 6px;margin-right:4px">שבועי</span>' : '';
       html += '<tr>' +
         '<td class="right">' + escHtml(c.code) + '</td>' +
-        '<td>' + escHtml(c.name) + '</td>' +
+        '<td>' + weeklyBadge + escHtml(c.name) + '</td>' +
         '<td>' + escHtml(c.host_name) + '</td>' +
         '<td>' + fmtNum(c.members) + '</td>' +
         '<td>' + (c.top_score != null ? fmtNum(c.top_score) : '—') + '</td>' +

@@ -28,6 +28,7 @@
         : '<button class="home-start" id="home-start">בוא נתחיל</button>') +
       '<div class="home-social" id="home-social"></div>' +
       '<div id="home-mini-lb-host"></div>' +
+      '<div id="home-weekly-host"></div>' +
       '<div class="home-jackpot" id="home-jackpot"></div>' +
       (activeContestCode
         ? '<button class="home-contest home-contest-active" id="home-contest"><span class="home-contest-badge home-contest-badge-active">פעיל</span>המשך תחרות חברים</button>'
@@ -142,6 +143,7 @@
     refreshHomeStreak();
     refreshHomeMiniLb();
     refreshHomeAddiction();
+    refreshHomeWeekly();
     // WhatsApp invite button
     var waInvite = document.getElementById('home-invite-wa');
     if (waInvite) waInvite.onclick = function(e) {

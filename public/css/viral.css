@@ -224,3 +224,50 @@
   html[data-theme="dark"] .dr-tomorrow { color: #8E8A82; }
   html[data-theme="dark"] .dr-tomorrow strong { color: #FAC775; }
   html[data-theme="dark"] .dr-close { background: rgba(255,255,255,0.08); color: #8E8A82; }
+
+  /* ── Weekly Challenge Banner ── */
+  .home-weekly {
+    width: 100%; max-width: 300px;
+    margin-top: 10px; padding: 14px 16px;
+    background: linear-gradient(135deg, #1C1A18 0%, #2C2A28 100%);
+    border: 1px solid rgba(250,199,117,0.3);
+    border-radius: 14px; direction: rtl;
+    cursor: pointer; position: relative;
+    overflow: hidden;
+    transition: transform 0.12s;
+  }
+  .home-weekly:active { transform: scale(0.98); }
+  .home-weekly::before {
+    content: ''; position: absolute; top: -50%; left: -50%;
+    width: 200%; height: 200%;
+    background: radial-gradient(circle, rgba(250,199,117,0.08) 0%, transparent 60%);
+    animation: weeklyGlow 4s ease-in-out infinite;
+  }
+  @keyframes weeklyGlow { 0%,100% { transform: translate(0,0); } 50% { transform: translate(10%,10%); } }
+  .home-weekly-title {
+    font-size: 15px; font-weight: 700; color: #FAC775;
+    margin-bottom: 4px; position: relative;
+  }
+  .home-weekly-prize {
+    display: inline-block; padding: 3px 10px;
+    background: rgba(250,199,117,0.15); border-radius: 8px;
+    font-size: 12px; font-weight: 700; color: #FAC775;
+    margin-bottom: 6px; position: relative;
+  }
+  .home-weekly-meta {
+    font-size: 11px; color: #8E8A82; position: relative;
+  }
+  .home-weekly-meta strong { color: #F2EFE9; }
+  .home-weekly-arrow {
+    position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
+    color: #FAC775; font-size: 18px;
+  }
+  html[data-theme="light"] .home-weekly {
+    background: linear-gradient(135deg, #FFF9EE 0%, #FFF1D0 100%);
+    border-color: #FAC775;
+  }
+  html[data-theme="light"] .home-weekly-title { color: #854F0B; }
+  html[data-theme="light"] .home-weekly-prize { background: rgba(186,117,23,0.1); color: #854F0B; }
+  html[data-theme="light"] .home-weekly-meta { color: #6F6E68; }
+  html[data-theme="light"] .home-weekly-meta strong { color: #1C1A18; }
+  html[data-theme="light"] .home-weekly-arrow { color: #BA7517; }
