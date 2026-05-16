@@ -151,7 +151,21 @@
   let gameBestMergeTier = 0;  // highest tier created from a single merge
   let gameTotalMerges = 0;    // total merge events
   let gameStartTime = 0;      // Date.now() when game started
+  let bestBeatenThisGame = false; // live best tracking
   const TOTAL_PLAY_TIME_KEY = 'bloom_total_play_ms';
+
+  function showNewBestBanner() {
+    var wrap = document.getElementById('grid-wrap');
+    if (!wrap) return;
+    var banner = document.createElement('div');
+    banner.className = 'milestone-banner new-best-banner';
+    banner.innerHTML =
+      '<div class="milestone-banner-tier">🎉 שיא חדש!</div>' +
+      '<div class="milestone-banner-bonus">' + score.toLocaleString() + '</div>';
+    wrap.appendChild(banner);
+    buzz([80, 40, 80, 40, 80]);
+    setTimeout(function() { if (banner.parentNode) banner.parentNode.removeChild(banner); }, 1800);
+  }
 
   // Per-game tracking: which milestone tiers have already paid their bonus.
   // Reset in init() at the start of each game. The bonuses fire ONCE per

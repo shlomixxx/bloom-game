@@ -362,12 +362,25 @@
     }
     document.getElementById('best').textContent = best.toLocaleString();
     updateBalanceDisplay();
+    // Live best update — when score passes best during gameplay, update immediately
+    if (score > best && best > 0 && !skinTrialMode && !opts.over) {
+      best = score;
+      try { localStorage.setItem(BEST_KEY, String(best)); } catch(e) {}
+      document.getElementById('best').textContent = best.toLocaleString();
+      // One-time "new best!" celebration during gameplay
+      if (!bestBeatenThisGame) {
+        bestBeatenThisGame = true;
+        var bestEl2 = document.getElementById('best');
+        if (bestEl2) { bestEl2.classList.add('new-best-live'); }
+        showNewBestBanner();
+      }
+    }
     // "Near best" cue — once the current run gets within 10% of the personal
     // best, the best value pulses in gold to invite a record attempt.
     const bestEl = document.getElementById('best');
     if (bestEl) {
       if (best > 0 && score >= best * 0.9 && score < best) bestEl.classList.add('near-best');
-      else bestEl.classList.remove('near-best');
+      else if (!bestBeatenThisGame) bestEl.classList.remove('near-best');
     }
     buildTierBar();
     highlightNextTier(nextPiece);

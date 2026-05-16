@@ -621,3 +621,25 @@
     font-size: 16px !important; font-weight: 900 !important;
     letter-spacing: 0.05em;
   }
+
+  /* ── New Best (live, during gameplay) ── */
+  .stat-val.new-best-live {
+    animation: newBestPulse 1s ease-in-out infinite !important;
+    color: #FAC775 !important;
+  }
+  @keyframes newBestPulse {
+    0%, 100% { transform: scale(1); text-shadow: 0 0 6px rgba(250,199,117,0.3); }
+    50% { transform: scale(1.08); text-shadow: 0 0 12px rgba(250,199,117,0.6); }
+  }
+  .new-best-banner {
+    background: linear-gradient(135deg, #FAC775 0%, #BA7517 100%) !important;
+    border: none !important;
+    animation: newBestPop 0.35s ease-out, fadeUp 1.8s ease-out forwards !important;
+  }
+  .new-best-banner .milestone-banner-tier { color: #1C1A18 !important; font-size: 20px !important; }
+  .new-best-banner .milestone-banner-bonus { color: #412402 !important; font-size: 24px !important; }
+  @keyframes newBestPop {
+    0% { transform: scale(0.3) translateX(-50%); opacity: 0; }
+    60% { transform: scale(1.15) translateX(-50%); }
+    100% { transform: scale(1) translateX(-50%); }
+  }

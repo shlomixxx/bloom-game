@@ -8,6 +8,7 @@
     currentGameMaxChain = 0;
     tierUpHit = {};   // reset milestone-bonus tracker for this fresh game
     scoreMilestonesHit = {}; // reset score milestones
+    bestBeatenThisGame = false; // reset live best tracking
     gameMergesPerTier = {};
     gamePointsPerTier = {};
     gameBestMergeTier = 0;
