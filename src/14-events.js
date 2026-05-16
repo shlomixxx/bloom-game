@@ -35,22 +35,43 @@
 
   function startEventSystem() {
     stopEventSystem();
+    // Diagnostic: prove this function was called
+    var d = document.createElement('div');
+    d.style.cssText = 'position:fixed;bottom:80px;left:10px;right:10px;padding:8px;z-index:9999;text-align:center;border-radius:8px;font-weight:bold;font-size:11px;background:#BA7517;color:#FFF';
+    d.textContent = '⚡ startEventSystem called! enabled=' + eventsEnabled();
+    document.body.appendChild(d);
+    setTimeout(function() { d.remove(); }, 4000);
+
     if (!eventsEnabled()) return;
     lastEventTime = Date.now();
     eventSpawnTimer = setInterval(function() {
       try { trySpawnEvent(); } catch(e) { showEventBanner('⚠️ Error', e.message || 'unknown', 'bomb'); }
     }, 1000);
-    // Force first event after 5 seconds for visibility
+    // Force first event after 3 seconds for visibility
     setTimeout(function() {
       try {
+        var status = 'grid=' + (grid ? grid.length + 'rows' : 'null') +
+          ' active=' + !!activeEvent + ' fever=' + feverActive + ' target=' + targetActive +
+          ' empty=' + (grid ? countEmptyCells() : '?');
+        showEventBanner('🎯 Events ON', status, '');
         if (!activeEvent && !feverActive && !targetActive && grid) {
-          showEventBanner('🎯 Event!', 'מערכת events פעילה', 'star');
           spawnRandomEvent();
         }
       } catch(e) {
-        showEventBanner('⚠️ Error', String(e.message || e), 'bomb');
+        showEventBanner('⚠️ Error', String(e.message || e).slice(0, 60), '');
       }
-    }, 5000);
+    }, 3000);
+    // Backup spawn at 8 seconds
+    setTimeout(function() {
+      try {
+        if (!activeEvent && !feverActive && !targetActive && grid) {
+          spawnRandomEvent();
+          showEventBanner('🎯 Spawn #2', 'event על הלוח!', '');
+        }
+      } catch(e) {
+        showEventBanner('⚠️ Err2', String(e.message || e).slice(0, 60), '');
+      }
+    }, 8000);
   }
 
   function stopEventSystem() {
@@ -478,13 +499,13 @@
     return feverMultiplier;
   }
 
-  // Show event banner — FIXED on screen (not inside grid-wrap)
+  // Show event banner — exact same approach as the green diagnostic (which works!)
   function showEventBanner(title, sub, cssClass) {
-    var banner = document.createElement('div');
-    banner.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:9999;background:linear-gradient(135deg,#1C1A18,#412402);color:#FAC775;border:2px solid #FAC775;border-radius:18px;padding:16px 26px;pointer-events:none;text-align:center;direction:rtl;box-shadow:0 12px 36px rgba(0,0,0,0.35);min-width:180px;animation:milestonePop 1.5s ease-out forwards';
-    banner.innerHTML =
-      '<div style="font-size:16px;font-weight:700;color:#FFD37A;margin-bottom:4px">' + title + '</div>' +
-      '<div style="font-size:28px;font-weight:900;color:#FAC775;line-height:1">' + sub + '</div>';
-    document.body.appendChild(banner);
-    setTimeout(function() { if (banner.parentNode) banner.parentNode.removeChild(banner); }, 1500);
+    var d = document.createElement('div');
+    d.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:9999;padding:20px 30px;border-radius:18px;text-align:center;direction:rtl;min-width:200px;pointer-events:none;background:#1C1A18;color:#FAC775;border:2px solid #FAC775;box-shadow:0 12px 36px rgba(0,0,0,0.5)';
+    d.innerHTML = '<div style="font-size:18px;font-weight:700;margin-bottom:6px">' + title + '</div><div style="font-size:28px;font-weight:900">' + sub + '</div>';
+    document.body.appendChild(d);
+    // Fade out after 1.2s
+    setTimeout(function() { d.style.transition = 'opacity 0.3s'; d.style.opacity = '0'; }, 1200);
+    setTimeout(function() { d.remove(); }, 1600);
   }
