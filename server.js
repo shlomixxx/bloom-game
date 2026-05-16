@@ -2737,7 +2737,7 @@ app.get('/api/player/code', async (req, res) => {
 
 // XP per action and level thresholds
 const XP_MAP = {
-  daily_complete: 50, streak_3: 30, streak_7: 80, streak_30: 300,
+  daily_complete: 50, daily_login: 15, streak_3: 30, streak_7: 80, streak_30: 300,
   contest_1st: 100, contest_2nd: 50, contest_3rd: 30
 };
 const LEVELS = [
@@ -2771,6 +2771,7 @@ app.post('/api/player/earn', async (req, res) => {
     if (!player.rows.length) return res.json({ ok: false, reason: 'no_profile' });
 
     const actionMap = {
+      'daily_login': 'daily_login_reward',
       'daily_complete': 'daily_reward',
       'streak_3': 'streak_3_reward',
       'streak_7': 'streak_7_reward',
@@ -2784,7 +2785,7 @@ app.post('/api/player/earn', async (req, res) => {
 
     const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' });
     const dedupKey = action + ':' + today + (meta ? ':' + JSON.stringify(meta) : '');
-    if (action === 'daily_complete') {
+    if (action === 'daily_complete' || action === 'daily_login') {
       const dup = await pool.query(
         `SELECT 1 FROM game_config WHERE key = $1`, ['_earn:' + deviceId + ':' + dedupKey]);
       if (dup.rows.length) return res.json({ ok: false, reason: 'already_earned' });
@@ -2806,7 +2807,7 @@ app.post('/api/player/earn', async (req, res) => {
       `UPDATE player_profiles SET balance = balance + $1, total_earned = total_earned + $1, xp = COALESCE(xp, 0) + $2, level = $3 WHERE device_id = $4`,
       [reward, xpGain, newLevel.level, deviceId]);
 
-    if (action === 'daily_complete') {
+    if (action === 'daily_complete' || action === 'daily_login') {
       await pool.query(
         `INSERT INTO game_config (key, value) VALUES ($1, $2) ON CONFLICT (key) DO NOTHING`,
         ['_earn:' + deviceId + ':' + dedupKey, '1']).catch(() => {});

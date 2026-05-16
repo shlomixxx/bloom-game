@@ -2115,6 +2115,73 @@
   }
   .name-input:focus { outline: none; border-color: #BA7517; background: #FFFFFF; }
 
+
+  /* ── Daily Login Reward Modal ── */
+  .daily-reward-overlay {
+    position: fixed; inset: 0; z-index: 999;
+    background: rgba(0,0,0,0.6);
+    display: flex; align-items: center; justify-content: center;
+    animation: drOverlayIn 0.3s ease-out;
+    direction: rtl;
+  }
+  @keyframes drOverlayIn { from { opacity: 0; } to { opacity: 1; } }
+  .daily-reward-card {
+    width: 90%; max-width: 320px;
+    background: linear-gradient(135deg, #FFF9EE 0%, #FFF1D0 50%, #FFF7E6 100%);
+    border-radius: 20px; padding: 28px 24px;
+    text-align: center; position: relative;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    animation: drCardPop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  @keyframes drCardPop { from { transform: scale(0.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+  .dr-emoji { font-size: 48px; margin-bottom: 8px; animation: drBounce 0.6s ease-in-out 0.3s; }
+  @keyframes drBounce { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-12px); } }
+  .dr-title { font-size: 20px; font-weight: 800; color: #1C1A18; margin-bottom: 4px; }
+  .dr-streak { font-size: 14px; color: #854F0B; margin-bottom: 16px; }
+  .dr-streak strong { color: #D95A1B; }
+  .dr-reward {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    padding: 12px 24px; border-radius: 14px;
+    background: linear-gradient(135deg, #FAC775 0%, #BA7517 100%);
+    color: #FFFFFF; font-size: 24px; font-weight: 800;
+    margin-bottom: 16px;
+    box-shadow: 0 4px 14px rgba(186,117,23,0.35);
+    animation: drRewardGlow 2s ease-in-out infinite;
+  }
+  @keyframes drRewardGlow {
+    0%,100% { box-shadow: 0 4px 14px rgba(186,117,23,0.35); }
+    50% { box-shadow: 0 6px 24px rgba(186,117,23,0.55); }
+  }
+  .dr-claim-btn {
+    width: 100%; padding: 16px; border-radius: 14px;
+    background: #1C1A18; color: #FFFFFF;
+    border: none; font-size: 17px; font-weight: 700;
+    cursor: pointer; font-family: inherit;
+    box-shadow: 0 6px 18px rgba(28,26,24,0.18);
+    transition: transform 0.12s;
+  }
+  .dr-claim-btn:active { transform: scale(0.97); }
+  .dr-tomorrow {
+    margin-top: 14px; font-size: 12px; color: #854F0B;
+    opacity: 0.7;
+  }
+  .dr-tomorrow strong { color: #412402; }
+  .dr-close {
+    position: absolute; top: 12px; left: 12px;
+    width: 28px; height: 28px; border-radius: 50%;
+    background: rgba(0,0,0,0.06); border: none;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    font-size: 14px; color: #6F6E68;
+  }
+  html[data-theme="dark"] .daily-reward-card {
+    background: linear-gradient(135deg, #2A2118 0%, #3D2E0A 50%, #2A2118 100%);
+  }
+  html[data-theme="dark"] .dr-title { color: #F2EFE9; }
+  html[data-theme="dark"] .dr-streak { color: #8E8A82; }
+  html[data-theme="dark"] .dr-streak strong { color: #FAC775; }
+  html[data-theme="dark"] .dr-tomorrow { color: #8E8A82; }
+  html[data-theme="dark"] .dr-tomorrow strong { color: #FAC775; }
+  html[data-theme="dark"] .dr-close { background: rgba(255,255,255,0.08); color: #8E8A82; }
   /* ============================================================
      DARK MODE
      ============================================================

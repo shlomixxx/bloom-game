@@ -226,6 +226,8 @@ INSERT INTO game_config (key, value) VALUES ('welcome_bonus', '100')
   ON CONFLICT (key) DO NOTHING;
 INSERT INTO game_config (key, value) VALUES ('daily_reward', '10')
   ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('daily_login_reward', '25')
+  ON CONFLICT (key) DO NOTHING;
 INSERT INTO game_config (key, value) VALUES ('streak_3_reward', '15')
   ON CONFLICT (key) DO NOTHING;
 INSERT INTO game_config (key, value) VALUES ('streak_7_reward', '50')

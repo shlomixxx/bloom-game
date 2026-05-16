@@ -472,6 +472,103 @@
     } catch (e) { el.innerHTML = ''; }
   }
 
+  // ── Daily Login Reward ──
+  var DAILY_LOGIN_KEY = 'bloom_daily_login';
+
+  function getDailyLoginState() {
+    try {
+      var raw = localStorage.getItem(DAILY_LOGIN_KEY);
+      if (!raw) return { lastClaimed: null, claimed: false };
+      return JSON.parse(raw);
+    } catch (e) { return { lastClaimed: null, claimed: false }; }
+  }
+
+  function hasDailyLoginReward() {
+    var state = getDailyLoginState();
+    var today = todayInIsrael();
+    return state.lastClaimed !== today;
+  }
+
+  function getDailyRewardAmount(streakDay) {
+    // Escalating visual display — actual server reward is from game_config
+    if (streakDay >= 30) return 200;
+    if (streakDay >= 7) return 100;
+    if (streakDay >= 3) return 50;
+    return 25;
+  }
+
+  function showDailyLoginReward() {
+    if (!hasDailyLoginReward()) return;
+    if (document.getElementById('daily-reward-overlay')) return;
+    // Don't show to brand new players (no games played yet)
+    var totalGames = parseInt(localStorage.getItem(GAMES_COUNT_KEY) || '0', 10) || 0;
+    if (totalGames === 0) return;
+
+    var s = loadStreak();
+    var today = todayInIsrael();
+    var streakN = s.count | 0;
+    if (s.lastPlayed && daysBetween(s.lastPlayed, today) > 1) streakN = 0;
+    // If they played today already, streak was bumped; if not, show what it WILL be
+    var displayStreak = streakN > 0 ? streakN : 1;
+    var displayReward = getDailyRewardAmount(displayStreak);
+
+    var emoji = displayStreak >= 7 ? '🎉' : displayStreak >= 3 ? '🔥' : '🎁';
+    var streakMsg = displayStreak >= 7 ? 'שבוע שלם ברצף! 💪'
+      : displayStreak >= 3 ? displayStreak + ' ימים ברצף!'
+      : displayStreak > 1 ? 'יום ' + displayStreak + ' ברצף'
+      : 'ברוך שובך!';
+
+    var tomorrowReward = getDailyRewardAmount(displayStreak + 1);
+    var tomorrowExtra = tomorrowReward > displayReward ? ' (x' + Math.round(tomorrowReward / 25) + '!)' : '';
+
+    var overlay = document.createElement('div');
+    overlay.id = 'daily-reward-overlay';
+    overlay.className = 'daily-reward-overlay';
+    overlay.innerHTML =
+      '<div class="daily-reward-card">' +
+        '<button class="dr-close" id="dr-close">✕</button>' +
+        '<div class="dr-emoji">' + emoji + '</div>' +
+        '<div class="dr-title">בונוס יומי!</div>' +
+        '<div class="dr-streak"><strong>' + streakMsg + '</strong></div>' +
+        '<div class="dr-reward">+' + displayReward + ' 💎</div>' +
+        '<button class="dr-claim-btn" id="dr-claim">אסוף בונוס</button>' +
+        '<div class="dr-tomorrow">חזור מחר ל-<strong>' + tomorrowReward + ' 💎' + tomorrowExtra + '</strong></div>' +
+      '</div>';
+    document.body.appendChild(overlay);
+
+    var claimed = false;
+    function claim() {
+      if (claimed) return;
+      claimed = true;
+      // Mark as claimed for today
+      try { localStorage.setItem(DAILY_LOGIN_KEY, JSON.stringify({ lastClaimed: todayInIsrael() })); } catch(e) {}
+      // Earn credits via server
+      earnCredits('daily_login');
+      // Animate out
+      var card = overlay.querySelector('.daily-reward-card');
+      if (card) {
+        card.style.transition = 'transform 0.3s, opacity 0.3s';
+        card.style.transform = 'scale(1.1)';
+        card.style.opacity = '0';
+      }
+      overlay.style.transition = 'opacity 0.3s';
+      setTimeout(function() {
+        overlay.style.opacity = '0';
+        setTimeout(function() { overlay.remove(); }, 300);
+      }, 200);
+      trackEvent('daily_login_claimed', { streak: displayStreak, reward: displayReward });
+    }
+
+    document.getElementById('dr-claim').onclick = claim;
+    document.getElementById('dr-close').onclick = function() {
+      // Closing without claiming = still claim (they saw it)
+      claim();
+    };
+    overlay.onclick = function(e) {
+      if (e.target === overlay) claim();
+    };
+  }
+
   // ── Home: Streak hero badge ──
   function refreshHomeStreak() {
     var host = document.getElementById('home-streak-host');

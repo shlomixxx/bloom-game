@@ -413,8 +413,9 @@
             if (mode !== 'daily') return '';
             var s = loadStreak();
             var n = s.count | 0;
-            if (n >= 2) return '<div style="margin:8px 0;font-size:13px;color:#BA7517;font-weight:600">🔥 ' + n + ' ימים ברצף! חזור מחר לשמור על הרצף</div>';
-            return '<div style="margin:8px 0;font-size:13px;color:#6F6E68">💪 חזור מחר לאתגר יומי חדש ולרצף 🔥</div>';
+            var tomorrowReward = getDailyRewardAmount((n || 0) + 1);
+            if (n >= 2) return '<div style="margin:8px 0;font-size:13px;color:#BA7517;font-weight:600">🔥 ' + n + ' ימים ברצף! חזור מחר ל-<strong>' + tomorrowReward + ' 💎</strong> בונוס</div>';
+            return '<div style="margin:8px 0;font-size:13px;color:#6F6E68">💪 חזור מחר לאתגר יומי + <strong style="color:#BA7517">' + tomorrowReward + ' 💎</strong> בונוס יומי 🔥</div>';
           })() +
           (showCountdown ? '<div class="countdown" id="countdown"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span>אתגר חדש בעוד <span id="countdown-val">--:--:--</span></span></div>' : '') +
           (showLeaderboard ? renderLeaderboard() : '') +
