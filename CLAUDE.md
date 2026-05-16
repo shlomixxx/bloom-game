@@ -343,19 +343,23 @@ Live URL: https://bloom-web-production-f3bd.up.railway.app
 GitHub: https://github.com/shlomixxx/bloom-game (private)
 Railway project: `bloom-game` / service `bloom-web` / Postgres `Postgres-z2RQ`.
 
+- ✅ **Phase 1 — Viral features (v1.2)** — streak hero badge (3 states), home mini-leaderboard (top 3 + player rank), addiction badge with share buttons, WhatsApp invite flow, enhanced share card (game time + chain + addiction), WhatsApp direct share in game-over.
+- ✅ **Source code split** — `public/index.html` split to HTML shell (121 lines) + `public/styles.css` (from `css/*.css`, 5 files) + `public/app.js` (from `src/*.js`, 13 files). Build via `./build.sh`. Same IIFE, zero behavior change.
+- ✅ **Daily Login Reward (v1.3)** — `daily_login` action on server (25💎, daily dedup, 15 XP). Client shows animated reward modal on home screen with escalating display based on streak. "Come back tomorrow" messages in game-over include tomorrow's reward amount.
+- ✅ **Premium Player Profile** — `/player/BLOOM-XXXX` upgraded: dark mode auto-detect, avatar, XP progress bar, level badge, 7 stat cards (best score, games, credits, days active, contests, total earned, referrals), days since join, full OG/Twitter meta tags, share profile + WhatsApp buttons. Home screen links to own profile.
+
 ---
 
 ## 12. Future plans (priority order)
 
-1. **Daily streak counter** + lightweight return-day nudge.
-2. **Onboarding tutorial** — redo of the rolled-back version, leaner. Target: a new player gets it in 60–90 seconds.
-3. **Rewarded video ads** via AdMob — "watch 15s for a hint piece" / "continue after game-over" / "double score." Requires AdMob account + an app-store presence to fully monetize.
-4. **Light IAP** — $4.99 remove-ads + bonus daily runs, $1.99 cosmetic skin packs (skin packs = swapping the 8 SVGs only, same engine).
-5. **Capacitor wrap** — iOS / Android stores. Only after retention proves out.
-6. **HMAC-signed score submission** — current anti-cheat is just `deviceId` (spoofable). Add server-side HMAC once traffic justifies it.
-7. **Sound asset polish** — optional voice cues (Wow / Amazing) via freesound.org or ElevenLabs.
-
-Validation gates (don't skip): each step ships only after the previous one's success metric is met. The user has resisted leapfrogging.
+1. **Domain** — bloom-game.co.il
+2. **Google Analytics activation** — replace GA_MEASUREMENT_ID placeholder
+3. **Landing page + SEO** — public marketing page
+4. **Push notification reminders** — "חזור לאתגר היומי!"
+5. **Weekly auto-challenge** — automatic weekly contest
+6. **App Store listing** (PWA)
+7. **Monetization** — ads / premium themes
+8. **Sound asset polish** — optional voice cues
 
 ---
 
