@@ -5517,6 +5517,9 @@
     if (row === -1) {
       // Column is full — check if the whole board is game-over
       if (isGameOver()) {
+        // Save best score BEFORE rendering game-over
+        var isNewBest = score > best && !skinTrialMode;
+        if (isNewBest) { best = score; localStorage.setItem(BEST_KEY, String(best)); }
         soundGameOver();
         buzz([60, 80, 100]);
         playMusic('fail');
@@ -5530,10 +5533,18 @@
         }
         checkAchievements();
         // Submit practice scores to leaderboard too
-        if (mode === 'practice' && !dailySubmitted) {
-          submitAndShowLeaderboard();
+        if ((mode === 'practice' || mode === 'daily') && !dailySubmitted) {
+          if (mode === 'daily') {
+            dailySubmitted = true;
+            localStorage.setItem(DAILY_PLAYED_PREFIX + dailyDate, JSON.stringify({ score: score, tier: highestTier, ts: Date.now() }));
+          }
+          if (!playerName) {
+            promptForName(function() { submitAndShowLeaderboard(); });
+          } else {
+            submitAndShowLeaderboard();
+          }
         }
-        render({ over: true });
+        render({ over: true, isNewBest: isNewBest });
       }
       return;
     }
