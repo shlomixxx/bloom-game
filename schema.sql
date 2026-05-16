@@ -256,6 +256,14 @@ INSERT INTO game_config (key, value) VALUES ('tile_price_8', '150')
   ON CONFLICT (key) DO NOTHING;
 INSERT INTO game_config (key, value) VALUES ('tile_price_multiplier', '1.0')
   ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('powerup_random_tile', '15')
+  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('powerup_choose_tile', '40')
+  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('powerup_random_row', '60')
+  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('powerup_choose_row', '100')
+  ON CONFLICT (key) DO NOTHING;
 
 -- ============================================================
 -- Player heartbeat — tracks ALL active players (any mode)

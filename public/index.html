@@ -533,6 +533,30 @@
   html[data-theme="dark"] .ts-tile { background: rgba(44,42,40,0.95); }
   html[data-theme="dark"] .ts-name { color: #F2EFE9; }
   .stat-shop:active { transform: scale(0.95); }
+  .ts-section-label { font-size: 11px; font-weight: 600; color: rgba(255,255,255,0.7); margin-bottom: 6px; text-align: right; max-width: 280px; width: 100%; }
+  .ts-powerups { display: flex; flex-direction: column; gap: 4px; max-width: 280px; width: 100%; }
+  .ts-power {
+    display: flex; align-items: center; gap: 8px; padding: 8px 10px;
+    background: rgba(255,255,255,0.9); border: none; border-radius: 10px;
+    font-family: inherit; cursor: pointer; direction: rtl; transition: transform 0.15s;
+  }
+  .ts-power:active { transform: scale(0.97); }
+  .ts-power:disabled { opacity: 0.3; cursor: not-allowed; }
+  .ts-power-premium { background: linear-gradient(135deg, #FFF7E6, #FFE4A0) !important; border: 1px solid #FAC775; }
+  .ts-power-icon { font-size: 18px; flex-shrink: 0; }
+  .ts-power-name { flex: 1; font-size: 12px; font-weight: 600; color: #1C1A18; text-align: right; }
+  .ts-power-price { font-size: 11px; font-weight: 700; color: #BA7517; white-space: nowrap; }
+  .ts-hint { max-width: 280px; width: 100%; font-size: 9px; color: rgba(255,255,255,0.45); text-align: center; margin-top: 8px; line-height: 1.4; }
+  html[data-theme="dark"] .ts-power { background: rgba(44,42,40,0.95); }
+  html[data-theme="dark"] .ts-power-name { color: #F2EFE9; }
+  html[data-theme="dark"] .ts-power-premium { background: linear-gradient(135deg, #3D2E0A, #2A2118) !important; border-color: rgba(250,199,117,0.35); }
+  .powerup-hint {
+    position: absolute; top: 8px; left: 50%; transform: translateX(-50%);
+    background: #FAC775; color: #412402; padding: 6px 16px;
+    border-radius: 99px; font-size: 12px; font-weight: 700;
+    z-index: 20; animation: bubblePop 0.25s ease-out;
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+  }
   .share-card {
     padding: 12px 14px; background: #DCF8C6; border-radius: 10px;
     direction: ltr; text-align: left;
@@ -2448,6 +2472,8 @@
   // ============ IN-GAME TILE SHOP ============
   var tilePrices = null; // fetched once from server
 
+  var powerupPrices = null;
+
   async function loadTilePrices() {
     if (tilePrices) return;
     try {
@@ -2456,6 +2482,14 @@
       if (d && d.ok && d.enabled) tilePrices = d.prices;
       else tilePrices = null;
     } catch (e) { tilePrices = null; }
+    // Load power-up prices from config
+    try {
+      var r2 = await fetch(API_BASE + '/api/tile-prices');
+      // Power-up prices are in the config too — fetch them via the config endpoint fallback
+      powerupPrices = {
+        random_tile: 15, choose_tile: 40, random_row: 60, choose_row: 100 // defaults
+      };
+    } catch(e) {}
   }
 
   function updateBalanceDisplay() {
@@ -2463,15 +2497,21 @@
     if (el) el.textContent = '💎 ' + playerBalance;
   }
 
+  // Active power-up mode
+  var activePowerup = null; // 'choose_tile' or 'choose_row'
+
   function showTileShop() {
     if (!tilePrices) { loadTilePrices().then(showTileShop); return; }
-    if (busy) return; // don't open while dropping
+    if (busy) return;
     var existing = document.getElementById('tile-shop-modal');
-    if (existing) { existing.remove(); return; } // toggle
+    if (existing) { existing.remove(); return; }
 
     var modal = document.createElement('div');
     modal.id = 'tile-shop-modal';
-    var html = '<div class="ts-header"><span>קנה אריח</span><span style="color:#BA7517;font-weight:700">💎 ' + playerBalance + '</span></div>';
+    var html = '<div class="ts-header"><span>🛒 חנות משחק</span><span style="color:#BA7517;font-weight:700">💎 ' + playerBalance + '</span></div>';
+
+    // Section 1: Buy tiles
+    html += '<div class="ts-section-label">קנה אריח</div>';
     html += '<div class="ts-grid">';
     for (var t = 2; t <= MAX_TIER; t++) {
       var ti = getActiveTiers()[t];
@@ -2484,18 +2524,33 @@
       '</button>';
     }
     html += '</div>';
+
+    // Section 2: Power-ups
+    var pp = powerupPrices || { random_tile: 15, choose_tile: 40, random_row: 60, choose_row: 100 };
+    html += '<div class="ts-section-label" style="margin-top:10px">כלי עזר</div>';
+    html += '<div class="ts-powerups">';
+    html += '<button class="ts-power" data-power="random_tile"' + (playerBalance < pp.random_tile ? ' disabled' : '') + '>' +
+      '<span class="ts-power-icon">🎲</span><span class="ts-power-name">מחק אריח רנדומלי</span><span class="ts-power-price">' + pp.random_tile + ' 💎</span></button>';
+    html += '<button class="ts-power" data-power="choose_tile"' + (playerBalance < pp.choose_tile ? ' disabled' : '') + '>' +
+      '<span class="ts-power-icon">🎯</span><span class="ts-power-name">מחק אריח לבחירה</span><span class="ts-power-price">' + pp.choose_tile + ' 💎</span></button>';
+    html += '<button class="ts-power" data-power="random_row"' + (playerBalance < pp.random_row ? ' disabled' : '') + '>' +
+      '<span class="ts-power-icon">🎲</span><span class="ts-power-name">מחק שורה רנדומלית</span><span class="ts-power-price">' + pp.random_row + ' 💎</span></button>';
+    html += '<button class="ts-power ts-power-premium" data-power="choose_row"' + (playerBalance < pp.choose_row ? ' disabled' : '') + '>' +
+      '<span class="ts-power-icon">👑</span><span class="ts-power-name">מחק שורה לבחירה</span><span class="ts-power-price">' + pp.choose_row + ' 💎</span></button>';
+    html += '</div>';
+    html += '<div class="ts-hint">🎲 = המערכת בוחרת (זול, עלול למחוק כתרים!) · 🎯 = אתה בוחר (יקר, לא מוחק שורת כתרים)</div>';
+
     html += '<button class="ts-close" id="ts-close-btn">✕</button>';
     modal.innerHTML = html;
     document.getElementById('grid-wrap').appendChild(modal);
 
     document.getElementById('ts-close-btn').onclick = function() { modal.remove(); };
-    // Tap outside
     modal.addEventListener('pointerdown', function(e) { if (e.target === modal) modal.remove(); });
 
+    // Wire tile buy buttons
     modal.querySelectorAll('.ts-tile:not([disabled])').forEach(function(btn) {
       btn.onclick = function() {
         var tier = parseInt(this.getAttribute('data-tier'), 10);
-        var price = parseInt(this.getAttribute('data-price'), 10);
         var self = this;
         self.style.opacity = '0.5';
         fetch(API_BASE + '/api/player/buy-tile', {
@@ -2513,12 +2568,122 @@
             showCreditToast(-d.cost, getActiveTiers()[tier].name);
           } else {
             self.style.opacity = '1';
-            var msg = d.reason === 'insufficient_balance' ? 'אין מספיק 💎' : 'שגיאה';
-            self.querySelector('.ts-price').textContent = msg;
+            self.querySelector('.ts-price').textContent = d.reason === 'insufficient_balance' ? 'אין 💎' : 'שגיאה';
           }
         }).catch(function() { self.style.opacity = '1'; });
       };
     });
+
+    // Wire power-up buttons
+    modal.querySelectorAll('.ts-power:not([disabled])').forEach(function(btn) {
+      btn.onclick = function() {
+        var power = this.getAttribute('data-power');
+        var self = this;
+        self.style.opacity = '0.5';
+        var configKey = 'powerup_' + power;
+        fetch(API_BASE + '/api/player/buy-powerup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ deviceId: deviceId, powerup: configKey })
+        }).then(function(r) { return r.json(); }).then(function(d) {
+          if (d && d.ok) {
+            playerBalance = d.newBalance;
+            try { localStorage.setItem(PLAYER_BALANCE_KEY, String(d.newBalance)); } catch(e) {}
+            updateBalanceDisplay();
+            modal.remove();
+            executePowerup(power, d.cost);
+          } else {
+            self.style.opacity = '1';
+          }
+        }).catch(function() { self.style.opacity = '1'; });
+      };
+    });
+  }
+
+  function executePowerup(type, cost) {
+    if (type === 'random_tile') {
+      // Find all non-empty cells and delete a random one
+      var filled = [];
+      for (var r = 0; r < getBoardRows(); r++)
+        for (var c = 0; c < getBoardCols(); c++)
+          if (grid[r][c] > 0) filled.push([r, c]);
+      if (filled.length > 0) {
+        var pick = filled[Math.floor(Math.random() * filled.length)];
+        grid[pick[0]][pick[1]] = 0;
+        applyGravity();
+        render();
+        showCreditToast(-cost, 'מחיקת אריח 🎲');
+      }
+      if (mode === 'practice') savePracticeGameState();
+    }
+    else if (type === 'choose_tile') {
+      activePowerup = 'choose_tile';
+      showPowerupHint('🎯 לחץ על אריח למחיקה');
+      showCreditToast(-cost, 'בחר אריח למחיקה');
+    }
+    else if (type === 'random_row') {
+      var filledRows = [];
+      for (var r = 0; r < getBoardRows(); r++) {
+        if (grid[r].some(function(c) { return c > 0; })) filledRows.push(r);
+      }
+      if (filledRows.length > 0) {
+        var rowIdx = filledRows[Math.floor(Math.random() * filledRows.length)];
+        for (var c = 0; c < getBoardCols(); c++) grid[rowIdx][c] = 0;
+        applyGravity();
+        render();
+        showCreditToast(-cost, 'מחיקת שורה 🎲');
+      }
+      if (mode === 'practice') savePracticeGameState();
+    }
+    else if (type === 'choose_row') {
+      activePowerup = 'choose_row';
+      showPowerupHint('👑 לחץ על שורה למחיקה');
+      showCreditToast(-cost, 'בחר שורה למחיקה');
+    }
+  }
+
+  function showPowerupHint(text) {
+    var existing = document.getElementById('powerup-hint');
+    if (existing) existing.remove();
+    var hint = document.createElement('div');
+    hint.id = 'powerup-hint';
+    hint.className = 'powerup-hint';
+    hint.textContent = text;
+    var wrap = document.getElementById('grid-wrap');
+    if (wrap) wrap.appendChild(hint);
+  }
+
+  function handlePowerupClick(row, col) {
+    if (!activePowerup) return false;
+    if (activePowerup === 'choose_tile') {
+      if (grid[row][col] > 0) {
+        grid[row][col] = 0;
+        applyGravity();
+        render();
+        if (mode === 'practice') savePracticeGameState();
+      }
+      activePowerup = null;
+      var hint = document.getElementById('powerup-hint');
+      if (hint) hint.remove();
+      return true;
+    }
+    if (activePowerup === 'choose_row') {
+      // Can't delete a row where ALL cells are max tier (crowns)
+      var allMax = grid[row].every(function(c) { return c === MAX_TIER; });
+      if (allMax) {
+        showPowerupHint('❌ אי אפשר למחוק שורת כתרים! בחר שורה אחרת');
+        return true;
+      }
+      for (var c = 0; c < getBoardCols(); c++) grid[row][c] = 0;
+      applyGravity();
+      render();
+      if (mode === 'practice') savePracticeGameState();
+      activePowerup = null;
+      var hint = document.getElementById('powerup-hint');
+      if (hint) hint.remove();
+      return true;
+    }
+    return false;
   }
 
   // Same idea for board dimensions (added in Step 2 below).
@@ -7511,9 +7676,12 @@
           if (opts.appearing && opts.appearing[0] === r && opts.appearing[1] === c) cell.classList.add('appearing');
           if (opts.merging && opts.merging[0] === r && opts.merging[1] === c) cell.classList.add('merging');
         }
-        (function(colIdx) {
-          cell.onclick = function() { drop(colIdx); };
-        })(c);
+        (function(rowIdx, colIdx) {
+          cell.onclick = function() {
+            if (activePowerup && handlePowerupClick(rowIdx, colIdx)) return;
+            drop(colIdx);
+          };
+        })(r, c);
         gridEl.appendChild(cell);
       }
     }

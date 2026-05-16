@@ -2513,6 +2513,29 @@ app.get('/api/tile-prices', async (_req, res) => {
   }
 });
 
+// POST /api/player/buy-powerup — buy a delete power-up
+app.post('/api/player/buy-powerup', async (req, res) => {
+  const { deviceId, powerup } = req.body || {};
+  if (!deviceId || !powerup) return res.status(400).json({ error: 'missing_params' });
+  const validPowerups = ['powerup_random_tile', 'powerup_choose_tile', 'powerup_random_row', 'powerup_choose_row'];
+  if (!validPowerups.includes(powerup)) return res.json({ ok: false, reason: 'invalid_powerup' });
+  try {
+    const priceRow = await pool.query(`SELECT value FROM game_config WHERE key = $1`, [powerup]);
+    const cost = parseInt((priceRow.rows[0] || {}).value, 10) || 0;
+    if (cost <= 0) return res.json({ ok: false, reason: 'powerup_disabled' });
+    const player = await pool.query('SELECT balance FROM player_profiles WHERE device_id = $1', [deviceId]);
+    if (!player.rows.length) return res.json({ ok: false, reason: 'no_profile' });
+    if (player.rows[0].balance < cost) return res.json({ ok: false, reason: 'insufficient_balance' });
+    const newBalance = player.rows[0].balance - cost;
+    await pool.query(`UPDATE player_profiles SET balance = $1, total_spent = total_spent + $2 WHERE device_id = $3`,
+      [newBalance, cost, deviceId]);
+    res.json({ ok: true, powerup, cost, newBalance });
+  } catch (e) {
+    console.error('buy-powerup', e.message);
+    res.status(500).json({ error: 'server' });
+  }
+});
+
 // POST /api/player/buy-tile — buy a specific tile during gameplay
 app.post('/api/player/buy-tile', async (req, res) => {
   const { deviceId, tier } = req.body || {};
