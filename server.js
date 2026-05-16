@@ -30,20 +30,143 @@ app.use('/api', (req, res, next) => {
 
 app.use(express.json({ limit: '4kb' }));
 
-// SEO: robots.txt + sitemap
+// ============================================================
+// SEO: robots.txt + sitemap.xml
+// ============================================================
 app.get('/robots.txt', (_req, res) => {
-  res.type('text').send('User-agent: *\nAllow: /\nSitemap: https://bloom-web-production-f3bd.up.railway.app/sitemap.xml');
+  res.type('text/plain').send(`User-agent: *\nAllow: /\nSitemap: https://bloom-web-production-f3bd.up.railway.app/sitemap.xml`);
 });
-app.get('/sitemap.xml', (_req, res) => {
+
+app.get('/sitemap.xml', async (_req, res) => {
   const base = 'https://bloom-web-production-f3bd.up.railway.app';
-  res.type('xml').send(`<?xml version="1.0" encoding="UTF-8"?>
+  const today = new Date().toISOString().slice(0, 10);
+  res.type('application/xml').send(`<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-<url><loc>${base}/</loc><changefreq>daily</changefreq><priority>1.0</priority></url>
+  <url><loc>${base}/</loc><lastmod>${today}</lastmod><changefreq>daily</changefreq><priority>1.0</priority></url>
+  <url><loc>${base}/welcome</loc><lastmod>${today}</lastmod><changefreq>weekly</changefreq><priority>0.9</priority></url>
 </urlset>`);
 });
 
+// ============================================================
+// LANDING PAGE — /welcome (SEO-rich, server-rendered)
+// ============================================================
+app.get('/welcome', async (_req, res) => {
+  // Pull live stats for social proof
+  let totalPlayers = 0, totalGames = 0, topScore = 0;
+  try {
+    const stats = await pool.query(`SELECT COUNT(DISTINCT device_id) as players, COUNT(*) as games, MAX(score) as top FROM daily_scores`);
+    if (stats.rows[0]) { totalPlayers = stats.rows[0].players|0; totalGames = stats.rows[0].games|0; topScore = stats.rows[0].top|0; }
+  } catch (e) {}
+
+  res.send(`<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BLOOM — משחק מיזוג ממכר בעברית | שחק עכשיו בחינם</title>
+<meta name="description" content="BLOOM — משחק מיזוג ממכר בעברית! מזג אריחים, גלה 8 דרגות, הגע לכתר 👑 תחרות חברים, סקינים, אתגרים יומיים. חינם, ללא הורדה.">
+<meta name="keywords" content="bloom, משחק מיזוג, suika, merge game, משחק בעברית, תחרות, משחק ממכר, משחק חינם">
+<link rel="canonical" href="https://bloom-web-production-f3bd.up.railway.app/welcome">
+<meta property="og:type" content="website">
+<meta property="og:title" content="BLOOM — משחק מיזוג ממכר 🌸">
+<meta property="og:description" content="מזג אריחים, גלה 8 דרגות, הגע לכתר. ${totalPlayers > 0 ? totalPlayers + ' שחקנים כבר משחקים!' : 'שחק עכשיו בחינם!'}">
+<meta property="og:image" content="https://bloom-web-production-f3bd.up.railway.app/assets/social-share.png">
+<meta property="og:url" content="https://bloom-web-production-f3bd.up.railway.app/welcome">
+<meta property="og:locale" content="he_IL">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"VideoGame","name":"BLOOM","description":"משחק מיזוג ממכר בעברית","url":"https://bloom-web-production-f3bd.up.railway.app/","genre":["Puzzle","Casual"],"gamePlatform":["Web","Mobile Web","PWA"],"inLanguage":"he","offers":{"@type":"Offer","price":"0","priceCurrency":"ILS"}}
+</script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Heebo:wght@400;700;900&display=swap');
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0F0D0B;--card:#1A1816;--gold:#FAC775;--gold-dark:#BA7517;--text:#F2EFE9;--muted:#6F6E68;--green:#25D366}
+body{font-family:'Heebo',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden;direction:rtl}
+.hero{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:40px 20px;position:relative;overflow:hidden}
+.hero::before{content:'';position:absolute;top:-20%;left:50%;width:600px;height:600px;background:radial-gradient(circle,rgba(250,199,117,0.08) 0%,transparent 70%);transform:translateX(-50%);animation:heroGlow 6s ease-in-out infinite}
+@keyframes heroGlow{0%,100%{transform:translateX(-50%) scale(1)}50%{transform:translateX(-50%) scale(1.2)}}
+.hero-icons{display:flex;gap:12px;margin-bottom:24px;position:relative}
+.hero-icon{width:56px;height:56px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:28px;animation:float 3s ease-in-out infinite}
+.hero-icon:nth-child(2){animation-delay:0.2s}.hero-icon:nth-child(3){animation-delay:0.4s}.hero-icon:nth-child(4){animation-delay:0.6s}.hero-icon:nth-child(5){animation-delay:0.8s}
+@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
+.hero-brand{font-size:56px;font-weight:900;letter-spacing:0.15em;color:var(--gold);margin-bottom:8px;position:relative;text-shadow:0 0 40px rgba(250,199,117,0.3)}
+.hero-sub{font-size:18px;color:var(--muted);margin-bottom:32px;max-width:400px;line-height:1.7}
+.hero-sub strong{color:var(--text)}
+.cta-play{display:inline-block;padding:18px 48px;background:linear-gradient(135deg,var(--gold) 0%,var(--gold-dark) 100%);color:#1C1A18;font-size:20px;font-weight:900;border-radius:16px;text-decoration:none;box-shadow:0 8px 30px rgba(250,199,117,0.3);transition:transform 0.15s,box-shadow 0.2s;font-family:inherit}
+.cta-play:hover{transform:translateY(-2px);box-shadow:0 12px 40px rgba(250,199,117,0.4)}
+.cta-play:active{transform:scale(0.98)}
+.stats-row{display:flex;gap:24px;margin-top:32px;position:relative}
+.stat-pill{padding:10px 20px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.06);border-radius:12px;text-align:center}
+.stat-pill .val{font-size:22px;font-weight:900;color:var(--gold)}
+.stat-pill .lbl{font-size:11px;color:var(--muted);margin-top:2px}
+.features{padding:60px 20px;max-width:600px;margin:0 auto}
+.features-title{text-align:center;font-size:28px;font-weight:900;color:var(--gold);margin-bottom:40px}
+.feature{display:flex;align-items:flex-start;gap:16px;margin-bottom:28px;padding:20px;background:var(--card);border-radius:16px;border:1px solid rgba(255,255,255,0.04)}
+.feature-icon{font-size:32px;flex-shrink:0;width:48px;text-align:center}
+.feature-text h3{font-size:16px;font-weight:700;margin-bottom:4px}
+.feature-text p{font-size:13px;color:var(--muted);line-height:1.6}
+.bottom-cta{text-align:center;padding:60px 20px 80px}
+.bottom-cta p{color:var(--muted);margin-bottom:20px;font-size:15px}
+.wa-btn{display:inline-flex;align-items:center;gap:8px;padding:14px 28px;background:var(--green);color:#FFF;font-size:16px;font-weight:700;border-radius:14px;text-decoration:none;font-family:inherit;margin-top:12px;transition:transform 0.12s}
+.wa-btn:hover{transform:scale(1.03)}
+.wa-btn svg{width:20px;height:20px;fill:#FFF}
+.footer{text-align:center;padding:20px;font-size:11px;color:var(--muted);border-top:1px solid rgba(255,255,255,0.04)}
+@media(max-width:480px){.hero-brand{font-size:40px}.stats-row{flex-wrap:wrap;justify-content:center;gap:12px}.feature{flex-direction:column;align-items:center;text-align:center}}
+</style>
+</head>
+<body>
+
+<section class="hero">
+  <div class="hero-icons">
+    <div class="hero-icon" style="background:#C0DD97">🌿</div>
+    <div class="hero-icon" style="background:#F4C0D1">🌸</div>
+    <div class="hero-icon" style="background:#F5C4B3">🔥</div>
+    <div class="hero-icon" style="background:#9FE1CB">⭐</div>
+    <div class="hero-icon" style="background:#CECBF6">👑</div>
+  </div>
+  <h1 class="hero-brand">BLOOM</h1>
+  <p class="hero-sub">משחק מיזוג <strong>ממכר</strong> בעברית.<br>מזג אריחים, גלה 8 דרגות, הגע ל<strong>כתר</strong> 👑</p>
+  <a class="cta-play" href="/">🎮 שחק עכשיו — חינם</a>
+  ${totalPlayers > 0 ? `<div class="stats-row">
+    <div class="stat-pill"><div class="val">${totalPlayers.toLocaleString()}</div><div class="lbl">שחקנים</div></div>
+    <div class="stat-pill"><div class="val">${totalGames.toLocaleString()}</div><div class="lbl">משחקים</div></div>
+    <div class="stat-pill"><div class="val">${topScore.toLocaleString()}</div><div class="lbl">שיא עולמי</div></div>
+  </div>` : ''}
+</section>
+
+<section class="features">
+  <h2 class="features-title">למה BLOOM ממכר?</h2>
+  <div class="feature"><div class="feature-icon">🧩</div><div class="feature-text"><h3>קל ללמוד, קשה לעצור</h3><p>הקש על עמודה → הפל אריח → מזג אריחים זהים → גלה דרגות חדשות. פשוט, אבל אי אפשר להפסיק.</p></div></div>
+  <div class="feature"><div class="feature-icon">📅</div><div class="feature-text"><h3>אתגר יומי</h3><p>כל יום דאנג'ן חדש — אותו סידור אריחים לכל השחקנים. מי יביא את הציון הכי גבוה?</p></div></div>
+  <div class="feature"><div class="feature-icon">🏆</div><div class="feature-text"><h3>אתגר שבועי + פרסים</h3><p>תחרות שבועית אוטומטית עם פרס 500 💎. תחרויות חברים עם הימורים.</p></div></div>
+  <div class="feature"><div class="feature-icon">👀</div><div class="feature-text"><h3>צפייה חיה</h3><p>צפה בחברים שלך משחקים בזמן אמת. הם רואים שאתה צופה — הלחץ עולה!</p></div></div>
+  <div class="feature"><div class="feature-icon">🎨</div><div class="feature-text"><h3>6 ערכות עיצוב</h3><p>קלאסי, ניאון, אוקיינוס, גלקסיה, ממתקים, זן. נסה לפני שקונה!</p></div></div>
+  <div class="feature"><div class="feature-icon">🔥</div><div class="feature-text"><h3>רצף יומי + בונוסים</h3><p>שחק כל יום ותקבל בונוס 💎 שגדל. 7 ימים ברצף = בונוס ×4!</p></div></div>
+</section>
+
+<section class="bottom-cta">
+  <p>חינם לגמרי. ללא הורדה. ללא רישום.</p>
+  <a class="cta-play" href="/">🌸 שחק ב-BLOOM</a><br>
+  <a class="wa-btn" href="https://wa.me/?text=${encodeURIComponent('🌸 גיליתי משחק מיזוג ממכר בעברית — BLOOM!\nנסה: https://bloom-web-production-f3bd.up.railway.app')}">
+    <svg viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+    שתף עם חברים
+  </a>
+</section>
+
+<footer class="footer">
+  BLOOM © 2026 · <a href="/" style="color:var(--gold)">שחק עכשיו</a>
+</footer>
+
+</body></html>`);
+});
+
+// ============================================================
+// GA4 INJECTION — replaces GA_MEASUREMENT_ID with env var GA_ID
+// ============================================================
+const GA_ID = process.env.GA_ID || '';
+
 // Serve sw.js dynamically so CACHE_NAME auto-bumps on every deploy.
-// The boot timestamp ensures users always get fresh cache after a Railway restart.
 const BOOT_TS = new Date().toISOString().replace(/[^0-9]/g, '').slice(0, 14);
 let _swTemplate = null;
 app.get('/sw.js', async (_req, res) => {
@@ -58,26 +181,6 @@ app.get('/sw.js', async (_req, res) => {
   }
 });
 
-// ============================================================
-// SEO: robots.txt + sitemap.xml
-// ============================================================
-app.get('/robots.txt', (_req, res) => {
-  res.type('text/plain').send(`User-agent: *\nAllow: /\nSitemap: https://bloom-web-production-f3bd.up.railway.app/sitemap.xml`);
-});
-
-app.get('/sitemap.xml', (_req, res) => {
-  const base = 'https://bloom-web-production-f3bd.up.railway.app';
-  const today = new Date().toISOString().slice(0, 10);
-  res.type('application/xml').send(`<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url><loc>${base}/</loc><lastmod>${today}</lastmod><changefreq>daily</changefreq><priority>1.0</priority></url>
-</urlset>`);
-});
-
-// ============================================================
-// GA4 INJECTION — replaces GA_MEASUREMENT_ID with env var GA_ID
-// ============================================================
-const GA_ID = process.env.GA_ID || '';
 if (GA_ID) {
   let indexHtml = '';
   try { indexHtml = readFileSync('public/index.html', 'utf8'); } catch (e) {}
