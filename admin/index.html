@@ -317,6 +317,12 @@
       </div>
       <button class="btn sm" id="btn-merge-mode" style="min-width:90px">טוען…</button>
     </div>
+    <details style="margin-top:8px;background:var(--card);border-radius:10px;padding:12px 16px">
+      <summary style="cursor:pointer;font-weight:700;font-size:13px;color:var(--gold)">⚙️ כל ההגדרות (42 מפתחות)</summary>
+      <div id="config-table-host" style="margin-top:10px;font-size:12px">
+        <button class="btn sm" id="btn-load-all-config" style="width:100%">📋 טען הגדרות</button>
+      </div>
+    </details>
   </section>
 
   <!-- Player Management -->
@@ -1398,6 +1404,65 @@
   renderExports();
   loadGameConfig();
   wireTips();
+
+  // ====== FULL CONFIG TABLE ======
+  $('btn-load-all-config').onclick = async function() {
+    var host = $('config-table-host');
+    host.innerHTML = '<div style="text-align:center;padding:10px;color:var(--muted)">טוען...</div>';
+    try {
+      var d = await api('/config');
+      if (!d || !d.config) { host.innerHTML = 'שגיאה'; return; }
+      var rows = d.config;
+      // Group by prefix
+      var groups = {};
+      rows.forEach(function(r) {
+        var prefix = r.key.split('_')[0];
+        if (!groups[prefix]) groups[prefix] = [];
+        groups[prefix].push(r);
+      });
+      var html = '<div style="font-size:11px;color:var(--muted);margin-bottom:8px">לחץ על ערך לעריכה. שינויים נשמרים מיד.</div>';
+      html += '<table style="width:100%;border-collapse:collapse;font-size:12px">';
+      html += '<tr style="background:rgba(0,0,0,0.04)"><th style="text-align:right;padding:6px 8px">מפתח</th><th style="text-align:right;padding:6px 8px">ערך</th><th style="width:60px"></th></tr>';
+      rows.forEach(function(r) {
+        if (r.key.startsWith('_earn:')) return; // skip dedup keys
+        html += '<tr data-config-key="' + escHtml(r.key) + '" style="border-top:1px solid rgba(0,0,0,0.04)">' +
+          '<td style="padding:6px 8px;font-weight:600;font-family:monospace;font-size:11px;direction:ltr;color:var(--gold)">' + escHtml(r.key) + '</td>' +
+          '<td style="padding:6px 8px"><input class="cfg-val" data-key="' + escHtml(r.key) + '" value="' + escHtml(r.value) + '" style="width:100%;padding:4px 6px;border:1px solid rgba(0,0,0,0.1);border-radius:6px;font-family:inherit;font-size:12px;box-sizing:border-box;direction:ltr"></td>' +
+          '<td style="padding:6px 4px"><button class="btn sm cfg-save" data-key="' + escHtml(r.key) + '" style="font-size:10px;padding:2px 8px">שמור</button></td>' +
+        '</tr>';
+      });
+      html += '</table>';
+      host.innerHTML = html;
+      // Wire save buttons
+      host.querySelectorAll('.cfg-save').forEach(function(btn) {
+        btn.onclick = async function() {
+          var key = this.getAttribute('data-key');
+          var input = host.querySelector('input[data-key="' + key + '"]');
+          if (!input) return;
+          btn.disabled = true; btn.textContent = '...';
+          try {
+            var r = await api('/config/' + encodeURIComponent(key), {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ value: input.value })
+            });
+            if (r && r.ok) {
+              btn.textContent = '✓';
+              btn.style.background = '#9FE1CB';
+              toast(key + ' → ' + input.value);
+              setTimeout(function() { btn.textContent = 'שמור'; btn.style.background = ''; btn.disabled = false; }, 1500);
+            } else {
+              btn.textContent = '✗'; btn.style.background = '#FCE4E0';
+              setTimeout(function() { btn.textContent = 'שמור'; btn.style.background = ''; btn.disabled = false; }, 1500);
+            }
+          } catch(e) {
+            btn.textContent = '✗'; btn.disabled = false;
+          }
+        };
+      });
+    } catch(e) { host.innerHTML = 'שגיאת רשת'; }
+  };
+
   initPrefs(); // restore saved preferences before refreshAll
   refreshAll();
 
