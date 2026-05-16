@@ -1,8 +1,9 @@
 # BLOOM — Mobile Merge Game
 
-A Suika-style merge puzzle built as a mobile-first web app. Single HTML frontend, tiny Express backend, no build step.
+A Suika-style merge puzzle built as a mobile-first web app. Vanilla JS frontend, tiny Express backend, Postgres on Railway. Hebrew RTL interface.
 
 Live: https://bloom-web-production-f3bd.up.railway.app
+GitHub: https://github.com/shlomixxx/bloom-game
 
 ---
 
@@ -60,20 +61,29 @@ The daily run is gated by `localStorage`; on a second visit the same day, the pl
 - Full merge engine with BFS group detection, gravity, and chained scoring
 - Floating `+points` and "שרשרת ×N" feedback
 - Personal best score in `localStorage`
-- Game-over screen with full tier table and point values
+- Game-over screen with full tier table, stats summary, and share card
 - Wordle-style emoji share (uses `navigator.share` with clipboard fallback)
+- **WhatsApp share** — direct share button in game-over + home screen
 - One-time anonymous player-name prompt (persisted)
 - Anonymous `deviceId` (UUID, persisted) — one row per device per day
-- **Daily leaderboard** — top 50 for today's date, with the player's row highlighted and absolute rank
-- **Public leaderboard modal** with `day / week / month` tabs (rolling 1 / 7 / 30 day windows)
-- **Friends contest leaderboard** with live in-game updates (the active player's current score appears as a pulsing green pill on every spectator's board)
-- **Live spectator mode** — watch another contestant's grid in real time. Reachable two ways: (1) after game-over via "צא לצפייה במשחקים חיים", or (2) **mid-game** from the contest leaderboard screen — tap any row that has a live pill, or use the "👁 צפה במשחק חי" button. The watched grid refreshes every second. When you exit, the game resumes from where you paused.
-- **Audience awareness** — while you're mid-game in a contest, an "👁 N" badge floats over the board showing how many players are watching you. Tap it to see each watcher's name + the score they ended their last game on.
-- **Admin dashboard** — hidden under a configurable URL slug + HTTP Basic Auth. Single-file RTL Hebrew page (`admin/index.html`) with DAU/WAU/MAU + D1/D7/D30 cohort retention vs 2026 hybrid-casual benchmarks (40/20/7), 30-day DAU sparkline, 7-day funnel (visited → played → completed → returned-next-day), time-of-day heatmap, top-scores with z-score outlier flagging, contest management (end/extend/delete), player drill-down, "what's happening right now" live view, audit log, CSV export. See "Admin" below.
-- **Demo seeder** (`npm run seed:demo`) — populates the DB with 30 fake players × 30 days × 5 contests for screenshots/investor demos. Refuses to touch a DB that looks like production (>1000 non-demo rows) unless `--force`.
-- Mute button (sounds + music, persisted)
-- Web Audio synth: drop, merge (pitch rises with tier), chain, milestone, game-over
-- Info modal explaining the scoring formula and tier table
+- **Daily leaderboard** — top 50 with player highlight + absolute rank
+- **Public leaderboard modal** with `day / week / month` tabs
+- **Friends contest** with live in-game score updates + real-time spectator mode
+- **BLOOM Challenges** — public single-shot prize contests (4 types)
+- **Interactive tutorial** — 8-step tour with animated illustrations
+- **Onboarding coach** — gentle in-game toasts for new players
+- **Achievements system** — tier, chain, score, streak, and general achievements
+- **6 skin packs** — classic, neon, ocean, galaxy, candy, zen (with try-before-buy trial mode)
+- **Tile shop** — buy power-ups with BLOOM credits (💎)
+- **Credits/wallet system** — BLOOM-XXXX codes, referral credits, daily bonuses
+- **1v1 duels** — head-to-head matches with wagers
+- **Daily jackpot** — auto-settled at midnight Israel time
+- **XP leveling** — 11 levels with progression
+- **Server-side bots** — 200 Israeli names, 3 modes, 4 speeds, admin-controlled
+- **Admin dashboard** — DAU/WAU/MAU, retention cohorts, funnel, heatmap, live view, bot controls, audit log
+- **Dark mode** — full (253 CSS rules), auto-detects system preference
+- **PWA** — installable, service worker, offline shell
+- **Viral features (v1.2)** — streak hero badge, addiction badge with share, WhatsApp invite flow, mini-leaderboard, enhanced share card with game time + chain + addiction
 
 ## NOT currently in the build
 
@@ -83,11 +93,11 @@ The repository's older `ROADMAP_1.md` describes a welcome splash, an interactive
 
 ## Tech stack
 
-- **Frontend**: one `public/index.html` (~1.1k lines). Vanilla JS in a single IIFE. RTL Hebrew UI. No build, no framework, no CDN. SVG icons inlined as strings.
-- **Backend**: `server.js` — Node 18+, Express, ~165 lines. Serves the static frontend and a small JSON API.
-- **Database**: Postgres via `pg`. Schema in `schema.sql`, applied on every boot by `initDb()` (idempotent `CREATE TABLE IF NOT EXISTS`).
-- **Persistence**: `localStorage` for best score, mute, deviceId, player name, and the daily-played gate.
-- **Hosting**: Railway — `bloom-web` service + `Postgres-z2RQ` plugin in one project.
+- **Frontend**: `public/index.html` (HTML shell, ~120 lines) + `public/styles.css` (CSS) + `public/app.js` (JS IIFE). Vanilla JS, RTL Hebrew UI, no framework, no CDN. SVG icons inlined as strings. Source files in `src/` (13 JS files) and `public/css/` (5 CSS files), concatenated by `build.sh`.
+- **Backend**: `server.js` — Node 18+, Express. Serves the static frontend and a JSON API. `bot-engine.js` — server-side bots (200 Israeli names, 3 modes, 4 speeds).
+- **Database**: Postgres via `pg`. Schema in `schema.sql` (16 tables), applied on every boot by `initDb()` (idempotent).
+- **Persistence**: `localStorage` for best score, mute, deviceId, player name, skins, streak, achievements, and the daily-played gate.
+- **Hosting**: Railway — `bloom-web` service + `Postgres-z2RQ` plugin. Auto-deploy from GitHub.
 
 ---
 
@@ -96,15 +106,35 @@ The repository's older `ROADMAP_1.md` describes a welcome splash, an interactive
 ```
 bloom-game/
 ├── public/
-│   └── index.html      # the entire game — HTML + CSS + JS in one file
-├── server.js           # Express server: static + /api/*
+│   ├── index.html      # HTML shell (~120 lines)
+│   ├── styles.css      # All CSS — GENERATED by build.sh
+│   ├── app.js          # All JS (single IIFE) — GENERATED by build.sh
+│   ├── css/            # CSS source files (5 files)
+│   ├── bot.js          # Dev-only auto-play bot
+│   ├── sw.js           # Service worker
+│   ├── manifest.json   # PWA manifest
+│   └── assets/         # Icons, favicons, social-share.png
+├── src/                # JS source files (13 files) — see src/README.md
+├── admin/index.html    # Admin dashboard (single-file, RTL Hebrew)
+├── server.js           # Express server + API routes
+├── bot-engine.js       # Server-side bots (200 names, 3 modes)
 ├── db.js               # Postgres pool + schema bootstrap
-├── schema.sql          # daily_scores table + index
-├── package.json
-├── README.md           # this file (human-facing)
-├── CLAUDE.md           # AI-agent context for future sessions
-└── ROADMAP_1.md        # historical design doc (NOT current state)
+├── schema.sql          # All tables (16, idempotent)
+├── build.sh            # Concatenate src/*.js → app.js, css/*.css → styles.css
+├── package.json        # deps: express + pg only
+├── README.md           # This file
+├── CLAUDE.md           # AI-agent context
+└── src/README.md       # Source file map
 ```
+
+### Build
+
+```bash
+./build.sh              # Concatenate source → public/app.js + public/styles.css
+./build.sh --watch      # Auto-rebuild on change (requires fswatch)
+```
+
+Edit `src/*.js` and `public/css/*.css`, then run `build.sh`. Don't edit `public/app.js` or `public/styles.css` directly.
 
 ---
 
@@ -239,19 +269,22 @@ Railway injects `DATABASE_URL` and `PORT` automatically. Schema is re-applied id
 
 In priority order:
 
-1. **Daily streak counter** + return-day prompts
-2. **Onboarding tutorial** (was previously built, then rolled back — to be redone leaner)
-3. **Rewarded video ads** ("watch 15s for a hint piece") via AdMob
-4. **Light IAP** — "$4.99 remove ads + bonus daily runs", $1.99 cosmetic skin packs
-5. **Capacitor wrap** — iOS / Android app stores (only after retention is proven)
-6. **HMAC-signed score submission** — anti-cheat hardening once traffic is meaningful
+1. **Domain** — bloom-game.co.il
+2. **Landing page + SEO** — public-facing marketing page
+3. **Google Analytics / Mixpanel** — event tracking
+4. **App Store listing** (PWA)
+5. **Push notification reminders** ("חזור לאתגר היומי!")
+6. **First-day-back bonus** ("חזור מחר ל-500 נקודות בונוס")
+7. **Weekly auto-challenge** — automatic weekly contest
+8. **Player profile page** — public page with stats
+9. **Monetization** — ads / premium themes
 
 ---
 
 ## Conventions
 
-- Single HTML file. Do not split into separate JS / CSS files.
-- No npm frontend dependencies, no CDN, no build step.
+- Source files live in `src/` (JS) and `public/css/` (CSS). Build with `./build.sh`.
+- No npm frontend dependencies, no CDN.
 - RTL Hebrew is the canonical UI direction.
 - Every state mutation that survives a refresh must hit `localStorage`.
 - See [CLAUDE.md](CLAUDE.md) for the full agent contract — architecture, what NOT to change, known issues, and current progress.
