@@ -5645,10 +5645,12 @@
             localStorage.setItem(DAILY_PLAYED_PREFIX + dailyDate, JSON.stringify({ score: score, tier: highestTier, ts: Date.now() }));
           }
           render({ over: true, isNewBest: isNewBest });
-          if (!playerName) {
-            promptForName(function() { submitAndShowLeaderboard(); });
-          } else {
-            submitAndShowLeaderboard();
+          if (!window.__bloomBotActive && !skinTrialMode) {
+            if (!playerName) {
+              promptForName(function() { submitAndShowLeaderboard(); });
+            } else {
+              submitAndShowLeaderboard();
+            }
           }
         } else {
           render({ over: true, isNewBest: isNewBest });
