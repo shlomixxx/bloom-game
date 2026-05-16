@@ -2670,8 +2670,9 @@ function trackEvent(n,p){try{gtag('event',n,p||{});}catch(e){}}
     skinTrialId = null;
     skinTrialOriginal = null;
     removeSkinTrialBanner();
-    buildTierBar(true); // rebuild with original skin colors
+    buildTierBar(true);
     render();
+    showSkinShop(); // return to shop so player can buy or try another
   }
 
   function removeSkinTrialBanner() {
@@ -7036,6 +7037,11 @@ function trackEvent(n,p){try{gtag('event',n,p||{});}catch(e){}}
       bar.classList.remove('practice');
       title.textContent = '🎁 אתגר פרס';
       sub.textContent = activeChallenge.name || activeChallenge.prizeText || 'אתגר פעיל';
+    } else if (skinTrialMode && skinTrialId) {
+      bar.classList.add('practice');
+      var trialPack = SKIN_PACKS[skinTrialId];
+      title.textContent = '🎨 ניסיון · ' + (trialPack ? trialPack.name : '');
+      sub.textContent = 'ניקוד לא נשמר · שחק ותחליט';
     } else {
       bar.classList.add('practice');
       title.textContent = 'אימון חופשי';
