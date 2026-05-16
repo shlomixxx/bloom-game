@@ -1061,6 +1061,19 @@
   }
   .home-streak span { font-size: 11px; font-weight: 400; color: #A8A6A0; }
   @keyframes streakPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
+
+  .home-jackpot {
+    text-align: center; margin: 4px 0; direction: rtl;
+    padding: 8px 16px; border-radius: 12px;
+    background: linear-gradient(135deg, #FFF7E6, #FFF1D0);
+    border: 1px solid #FAC775;
+    font-size: 13px; color: #854F0B; font-weight: 600;
+    max-width: 280px; margin-left: auto; margin-right: auto;
+  }
+  .home-jackpot:empty { display: none; }
+  .home-jackpot .jp-pool { font-size: 20px; font-weight: 700; color: #412402; }
+  html[data-theme="dark"] .home-jackpot { background: linear-gradient(135deg, #3D2E0A, #2A2118); border-color: rgba(250,199,117,0.35); color: #FAC775; }
+  html[data-theme="dark"] .home-jackpot .jp-pool { color: #FFD37A; }
   html[data-theme="dark"] .home-social strong { color: #F2EFE9; }
 
   .home-mini-lb { margin-top: 6px; direction: rtl; }
@@ -3518,6 +3531,7 @@
         return '<div class="home-streak">' + flames + ' ' + n + ' ימים ברצף! <span>חזור מחר לשמור</span></div>';
       })() +
       '<div class="home-social" id="home-social"></div>' +
+      '<div class="home-jackpot" id="home-jackpot"></div>' +
       (activeContestCode
         ? '<button class="home-contest home-contest-active" id="home-contest"><span class="home-contest-badge home-contest-badge-active">פעיל</span>המשך תחרות חברים</button>'
         : '<button class="home-contest" id="home-contest"><span class="home-contest-badge">חדש</span>תחרות חברים</button>') +
@@ -3617,6 +3631,7 @@
     };
     refreshHomeChallengeCta();
     refreshHomeSocialProof();
+    refreshHomeJackpot();
     refreshHomeMyStats();
     // Wire the "איך משחקים?" link
     const tourLink = document.getElementById('home-tour-btn');
@@ -5324,6 +5339,18 @@
         el.innerHTML = html;
       }
     } catch (e) {}
+  }
+
+  async function refreshHomeJackpot() {
+    var el = document.getElementById('home-jackpot');
+    if (!el) return;
+    try {
+      var r = await fetch(API_BASE + '/api/jackpot/today');
+      var d = await r.json();
+      if (!d || !d.enabled || (d.pool | 0) === 0) { el.innerHTML = ''; return; }
+      el.innerHTML = '🎰 קופת הג\'קפוט היומי: <span class="jp-pool">' + (d.pool | 0) + ' 💎</span>' +
+        '<br><span style="font-size:11px;font-weight:400">' + (d.entries | 0) + ' משתתפים · הזוכים מקבלים בחצות</span>';
+    } catch (e) { el.innerHTML = ''; }
   }
 
   function refreshHomeChallengeCta() {

@@ -316,6 +316,34 @@ app.post('/api/score', async (req, res) => {
        ) AS rank`,
       [date, deviceId]
     );
+
+    // Daily jackpot auto-contribution (first submission only)
+    try {
+      const jpEnabled = await pool.query(`SELECT value FROM game_config WHERE key = 'jackpot_enabled'`);
+      if (!jpEnabled.rows.length || jpEnabled.rows[0].value !== 'false') {
+        const jpEntry = await pool.query(`SELECT value FROM game_config WHERE key = 'jackpot_entry'`);
+        const entryFee = parseInt((jpEntry.rows[0] || {}).value, 10) || 5;
+        if (entryFee > 0) {
+          // Check player has balance + hasn't contributed today
+          const player = await pool.query('SELECT balance FROM player_profiles WHERE device_id = $1', [deviceId]);
+          if (player.rows.length && player.rows[0].balance >= entryFee) {
+            const alreadyIn = await pool.query(
+              `SELECT 1 FROM wager_settlements WHERE contest_code = $1 AND device_id = $2 AND type = 'jackpot_entry'`,
+              ['JP:' + date, deviceId]);
+            if (!alreadyIn.rows.length) {
+              await pool.query(`UPDATE player_profiles SET balance = balance - $1, total_spent = total_spent + $1 WHERE device_id = $2`, [entryFee, deviceId]);
+              await pool.query(
+                `INSERT INTO daily_jackpot (date, pool, entries) VALUES ($1, $2, 1)
+                 ON CONFLICT (date) DO UPDATE SET pool = daily_jackpot.pool + $2, entries = daily_jackpot.entries + 1`,
+                [date, entryFee]);
+              await pool.query(`INSERT INTO wager_settlements (contest_code, device_id, amount, type) VALUES ($1, $2, $3, 'jackpot_entry')`,
+                ['JP:' + date, deviceId, -entryFee]);
+            }
+          }
+        }
+      }
+    } catch (jpErr) { /* non-critical */ }
+
     res.json({ ok: true, rank: parseInt(rankRes.rows[0].rank, 10) });
   } catch (e) {
     console.error('POST /api/score', e);
@@ -2362,6 +2390,75 @@ if (ADMIN_PATH && ADMIN_PASSWORD) {
     }
   });
 
+  // Jackpot stats
+  adminRouter.get('/api/jackpot/stats', async (_req, res) => {
+    try {
+      const r = await pool.query(`SELECT * FROM daily_jackpot ORDER BY date DESC LIMIT 14`);
+      res.json({ ok: true, days: r.rows });
+    } catch (e) {
+      res.status(500).json({ error: 'server' });
+    }
+  });
+
+  // Settle daily jackpot for a specific date
+  adminRouter.post('/api/jackpot/settle', async (req, res) => {
+    const { date } = req.body || {};
+    if (!date) return res.status(400).json({ error: 'missing_date' });
+    try {
+      const jp = await pool.query(`SELECT * FROM daily_jackpot WHERE date = $1`, [date]);
+      if (!jp.rows.length) return res.json({ ok: false, reason: 'no_jackpot' });
+      const j = jp.rows[0];
+      if (j.settled) return res.json({ ok: false, reason: 'already_settled' });
+      if ((j.pool | 0) <= 0) return res.json({ ok: false, reason: 'empty_pool' });
+
+      const cfgRows = await pool.query(`SELECT key, value FROM game_config WHERE key LIKE 'wager_%' OR key = 'jackpot_%'`);
+      const cfg = {}; for (const r of cfgRows.rows) cfg[r.key] = r.value;
+      const rake = parseInt(cfg.wager_rake, 10) || 5;
+      const pct1 = parseInt(cfg.wager_1st_pct, 10) || 60;
+      const pct2 = parseInt(cfg.wager_2nd_pct, 10) || 25;
+      const pct3 = parseInt(cfg.wager_3rd_pct, 10) || 10;
+      const minPlayers = parseInt(cfg.jackpot_min_players, 10) || 5;
+
+      // Get top 3 daily scores for that date
+      const top = await pool.query(
+        `SELECT device_id, name, score FROM daily_scores WHERE date = $1 ORDER BY score DESC LIMIT 3`, [date]);
+
+      if (top.rows.length < minPlayers && j.entries < minPlayers) {
+        return res.json({ ok: false, reason: 'not_enough_players', min: minPlayers, actual: j.entries });
+      }
+
+      const poolAmt = j.pool | 0;
+      const rakeAmt = Math.round(poolAmt * rake / 100);
+      const dist = poolAmt - rakeAmt;
+      const prizes = [
+        Math.round(dist * pct1 / (pct1 + pct2 + pct3)),
+        Math.round(dist * pct2 / (pct1 + pct2 + pct3)),
+        Math.round(dist * pct3 / (pct1 + pct2 + pct3))
+      ];
+
+      const winners = [];
+      for (let i = 0; i < Math.min(3, top.rows.length); i++) {
+        const prize = prizes[i] || 0;
+        if (prize <= 0) continue;
+        const p = top.rows[i];
+        await pool.query(`UPDATE player_profiles SET balance = balance + $1, total_earned = total_earned + $1 WHERE device_id = $2`, [prize, p.device_id]);
+        await pool.query(`INSERT INTO wager_settlements (contest_code, device_id, amount, type) VALUES ($1, $2, $3, $4)`,
+          ['JP:' + date, p.device_id, prize, 'jackpot_win_' + (i + 1)]);
+        winners.push({ name: p.name, score: p.score, prize, place: i + 1 });
+      }
+      if (rakeAmt > 0) {
+        await pool.query(`INSERT INTO wager_settlements (contest_code, device_id, amount, type) VALUES ($1, 'house', $2, 'jackpot_rake')`,
+          ['JP:' + date, rakeAmt]);
+      }
+      await pool.query(`UPDATE daily_jackpot SET settled = true, settled_at = NOW() WHERE date = $1`, [date]);
+      logAdminAction('jackpot.settle', date, date, { pool: poolAmt, rake: rakeAmt, winners });
+      res.json({ ok: true, pool: poolAmt, rake: rakeAmt, winners });
+    } catch (e) {
+      console.error('jackpot/settle', e.message);
+      res.status(500).json({ error: 'server' });
+    }
+  });
+
   // Wager stats for admin dashboard
   adminRouter.get('/api/wager/stats', async (_req, res) => {
     try {
@@ -2514,6 +2611,20 @@ if (ADMIN_PATH && ADMIN_PASSWORD) {
 // ============================================================
 // Player identity + referrals
 // ============================================================
+
+// GET /api/jackpot/today — current daily jackpot pool
+app.get('/api/jackpot/today', async (_req, res) => {
+  try {
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' });
+    const cfgRow = await pool.query(`SELECT value FROM game_config WHERE key = 'jackpot_enabled'`);
+    if (cfgRow.rows.length && cfgRow.rows[0].value === 'false') return res.json({ ok: true, enabled: false });
+    const r = await pool.query(`SELECT pool, entries FROM daily_jackpot WHERE date = $1`, [today]);
+    const row = r.rows[0] || { pool: 0, entries: 0 };
+    res.json({ ok: true, enabled: true, pool: row.pool | 0, entries: row.entries | 0, date: today });
+  } catch (e) {
+    res.json({ ok: true, enabled: false });
+  }
+});
 
 // Generate a unique BLOOM-XXXX code
 function generatePlayerCode() {
