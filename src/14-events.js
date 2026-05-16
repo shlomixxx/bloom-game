@@ -302,6 +302,7 @@
     score += bonus;
     showEventBanner('💣 BOOM!', '+' + bonus.toLocaleString(), 'bomb');
     buzz([100, 60, 100, 60, 100]);
+    shakeGrid(6);
     bumpScore();
     checkScoreMilestones();
     // Gravity will be applied by the merge loop

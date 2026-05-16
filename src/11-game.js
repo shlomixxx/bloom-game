@@ -630,71 +630,71 @@
     const cell = gridEl.children[cellIdx];
     if (!cell) return;
     const cellRect = cell.getBoundingClientRect();
-    const wrapRect = document.getElementById('grid-wrap').getBoundingClientRect();
     const fl = document.createElement('div');
     fl.className = 'float-score';
     fl.textContent = '+' + points.toLocaleString();
-    if (chainCount >= 3) { fl.style.fontSize = '17px'; fl.style.background = '#EF9F27'; fl.style.color = '#412402'; }
-    else if (chainCount >= 2) { fl.style.fontSize = '15px'; }
-    fl.style.left = (cellRect.left - wrapRect.left + cellRect.width / 2) + 'px';
-    fl.style.top = (cellRect.top - wrapRect.top + cellRect.height / 2) + 'px';
-    document.getElementById('grid-wrap').appendChild(fl);
-    setTimeout(function() { if (fl.parentNode) fl.parentNode.removeChild(fl); }, 900);
+    if (chainCount >= 3) { fl.style.fontSize = '18px'; fl.style.background = '#EF9F27'; fl.style.color = '#412402'; fl.style.boxShadow = '0 4px 12px rgba(239,159,39,0.4)'; }
+    else if (chainCount >= 2) { fl.style.fontSize = '16px'; }
+    fl.style.position = 'fixed';
+    fl.style.left = cellRect.left + cellRect.width / 2 + 'px';
+    fl.style.top = cellRect.top + 'px';
+    document.body.appendChild(fl);
+    setTimeout(function() { fl.remove(); }, 900);
   }
 
   function showChainBadge(chainCount, multiplier) {
-    const wrap = document.getElementById('grid-wrap');
-    if (!wrap) return;
-    const badge = document.createElement('div');
-    badge.className = 'chain-badge';
-    badge.textContent = 'שרשרת ×' + multiplier;
-    wrap.appendChild(badge);
-    setTimeout(function() { if (badge.parentNode) badge.parentNode.removeChild(badge); }, 750);
+    var badge = document.createElement('div');
+    badge.style.cssText = 'position:fixed;top:45%;left:50%;transform:translate(-50%,-50%);z-index:9999;background:#EF9F27;color:#412402;font-weight:900;font-size:' + (18 + chainCount * 2) + 'px;padding:10px 24px;border-radius:24px;letter-spacing:0.05em;pointer-events:none;text-align:center;box-shadow:0 6px 20px rgba(239,159,39,0.4);animation:chainPop 0.75s ease-out forwards';
+    badge.textContent = '🔥 שרשרת ×' + multiplier;
+    document.body.appendChild(badge);
+    setTimeout(function() { badge.remove(); }, 750);
   }
 
   // First-time-tier-up celebration. Bigger, slower, gold-on-black banner.
   // Fires at most once per (tier, game) — checked at the call site.
   function showMilestoneBanner(tier, bonusPts) {
-    const wrap = document.getElementById('grid-wrap');
-    if (!wrap) return;
     const t = (getActiveTiers() && getActiveTiers()[tier]) || { name: 'דרגה ' + tier, emoji: '⭐' };
-    const banner = document.createElement('div');
-    banner.className = 'milestone-banner';
+    var banner = document.createElement('div');
+    banner.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:9999;background:linear-gradient(135deg,#1C1A18,#412402);color:#FAC775;border:2px solid #FAC775;border-radius:18px;padding:16px 26px;pointer-events:none;text-align:center;direction:rtl;box-shadow:0 12px 36px rgba(0,0,0,0.35);min-width:180px';
     banner.innerHTML =
-      '<div class="milestone-banner-tier">' + t.emoji + ' ' + escapeHtml(t.name) + '</div>' +
-      '<div class="milestone-banner-bonus">+' + bonusPts.toLocaleString() + '</div>' +
-      '<div class="milestone-banner-sub">בונוס פעם-ראשונה במשחק זה</div>';
-    wrap.appendChild(banner);
-    setTimeout(function() { if (banner.parentNode) banner.parentNode.removeChild(banner); }, 1500);
+      '<div style="font-size:16px;font-weight:700;color:#FFD37A;margin-bottom:4px">' + t.emoji + ' ' + escapeHtml(t.name) + '</div>' +
+      '<div style="font-size:32px;font-weight:900">+' + bonusPts.toLocaleString() + '</div>' +
+      '<div style="font-size:10px;color:#BA7517;margin-top:4px">בונוס פעם-ראשונה!</div>';
+    document.body.appendChild(banner);
+    setTimeout(function() { banner.style.transition = 'opacity 0.3s'; banner.style.opacity = '0'; }, 1200);
+    setTimeout(function() { banner.remove(); }, 1500);
   }
 
   // Crown Merge explosion — gold wave across the row
   function showCrownExplosion(row) {
-    const wrap = document.getElementById('grid-wrap');
-    if (!wrap) return;
-    const banner = document.createElement('div');
-    banner.className = 'milestone-banner crown-explosion';
-    banner.innerHTML =
-      '<div class="milestone-banner-tier">💥 Crown Merge! 👑</div>' +
-      '<div class="milestone-banner-bonus">+50,000</div>' +
-      '<div class="milestone-banner-sub">שורה נמחקה!</div>';
-    wrap.appendChild(banner);
-    // Flash the grid row gold
+    // Full-screen gold flash
+    var flash = document.createElement('div');
+    flash.style.cssText = 'position:fixed;inset:0;background:rgba(250,199,117,0.25);z-index:9998;pointer-events:none';
+    document.body.appendChild(flash);
+    setTimeout(function() { flash.style.transition = 'opacity 0.3s'; flash.style.opacity = '0'; }, 200);
+    setTimeout(function() { flash.remove(); }, 500);
+    // Banner
+    var banner = document.createElement('div');
+    banner.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%) scale(0.5);opacity:0;z-index:9999;background:linear-gradient(135deg,#1C1A18,#412402);color:#FAC775;border:3px solid #FAC775;border-radius:20px;padding:20px 32px;pointer-events:none;text-align:center;box-shadow:0 0 40px rgba(250,199,117,0.5);min-width:200px;transition:transform 0.3s,opacity 0.2s';
+    banner.innerHTML = '<div style="font-size:22px;font-weight:800">💥 Crown Merge! 👑</div><div style="font-size:32px;font-weight:900;margin-top:4px">+50,000</div><div style="font-size:12px;color:#BA7517;margin-top:4px">שורה נמחקה!</div>';
+    document.body.appendChild(banner);
+    requestAnimationFrame(function() { banner.style.transform = 'translate(-50%,-50%) scale(1)'; banner.style.opacity = '1'; });
+    setTimeout(function() { banner.style.opacity = '0'; banner.style.transform = 'translate(-50%,-60%) scale(0.9)'; }, 1500);
+    setTimeout(function() { banner.remove(); }, 2000);
+    // Flash grid row gold + scale
     var gridEl = document.getElementById('grid');
     if (gridEl) {
       for (var cc = 0; cc < getBoardCols(); cc++) {
         var idx = row * getBoardCols() + cc;
         var cell = gridEl.children[idx];
         if (cell) {
-          cell.style.transition = 'background 0.15s';
+          cell.style.transition = 'background 0.15s,transform 0.15s';
           cell.style.background = '#FAC775';
-          (function(c) {
-            setTimeout(function() { c.style.background = ''; c.style.transition = ''; }, 500);
-          })(cell);
+          cell.style.transform = 'scale(1.1)';
+          (function(c) { setTimeout(function() { c.style.background = ''; c.style.transform = ''; c.style.transition = ''; }, 600); })(cell);
         }
       }
     }
-    setTimeout(function() { if (banner.parentNode) banner.parentNode.removeChild(banner); }, 2000);
   }
 
   // Score milestone celebrations during gameplay
@@ -723,31 +723,50 @@
   }
 
   function showScoreMilestoneBanner(label, reward) {
-    var wrap = document.getElementById('grid-wrap');
-    if (!wrap) return;
     var banner = document.createElement('div');
-    banner.className = 'milestone-banner score-milestone';
+    banner.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:9999;background:linear-gradient(135deg,#0F0D0B,#1C1A18);color:#FAC775;border:1px solid rgba(250,199,117,0.3);border-radius:18px;padding:14px 24px;pointer-events:none;text-align:center;box-shadow:0 8px 24px rgba(0,0,0,0.3);min-width:160px';
     banner.innerHTML =
-      '<div class="milestone-banner-tier">' + label + '</div>' +
-      (reward > 0 ? '<div class="milestone-banner-bonus">+' + reward + ' 💎</div>' : '');
-    wrap.appendChild(banner);
+      '<div style="font-size:24px;font-weight:900;letter-spacing:0.05em">' + label + '</div>' +
+      (reward > 0 ? '<div style="font-size:16px;font-weight:700;color:#BA7517;margin-top:4px">+' + reward + ' 💎</div>' : '');
+    document.body.appendChild(banner);
     bumpScore();
     buzz([40, 60]);
-    setTimeout(function() { if (banner.parentNode) banner.parentNode.removeChild(banner); }, 1200);
+    shakeGrid(2);
+    setTimeout(function() { banner.style.transition = 'opacity 0.3s'; banner.style.opacity = '0'; }, 1000);
+    setTimeout(function() { banner.remove(); }, 1300);
   }
 
   // Triple/Quad merge celebration
   function showMultiMergeBadge(count) {
     if (count < 3) return;
-    var wrap = document.getElementById('grid-wrap');
-    if (!wrap) return;
     var badge = document.createElement('div');
-    badge.className = 'chain-badge multi-merge';
-    badge.textContent = count === 3 ? 'Triple! ×1.5' : count === 4 ? 'Quad! ×2' : 'MEGA! ×' + count;
-    if (count >= 4) badge.style.background = '#FAC775';
-    wrap.appendChild(badge);
+    var label = count === 3 ? '✨ Triple!' : count === 4 ? '💥 Quad!' : '🌟 MEGA ×' + count;
+    badge.style.cssText = 'position:fixed;top:38%;left:50%;transform:translate(-50%,-50%);z-index:9999;background:' + (count >= 4 ? '#FAC775' : '#EF9F27') + ';color:#412402;font-weight:900;font-size:' + (20 + count * 2) + 'px;padding:12px 28px;border-radius:24px;pointer-events:none;text-align:center;box-shadow:0 8px 24px rgba(0,0,0,0.3);animation:chainPop 0.9s ease-out forwards';
+    badge.textContent = label;
+    document.body.appendChild(badge);
     buzz([60, 40]);
-    setTimeout(function() { if (badge.parentNode) badge.parentNode.removeChild(badge); }, 900);
+    shakeGrid(count >= 4 ? 6 : 3);
+    setTimeout(function() { badge.remove(); }, 900);
+  }
+
+  // Screen shake — makes big merges feel impactful
+  function shakeGrid(intensity) {
+    var gridEl = document.getElementById('grid');
+    if (!gridEl) return;
+    var i = intensity || 3;
+    gridEl.style.transition = 'none';
+    var shakeCount = 0;
+    var shakeInterval = setInterval(function() {
+      var x = (Math.random() - 0.5) * i * 2;
+      var y = (Math.random() - 0.5) * i * 2;
+      gridEl.style.transform = 'translate(' + x + 'px,' + y + 'px)';
+      shakeCount++;
+      if (shakeCount > 6) {
+        clearInterval(shakeInterval);
+        gridEl.style.transition = 'transform 0.1s';
+        gridEl.style.transform = '';
+      }
+    }, 40);
   }
 
   let _scoreAnimFrame = 0;
@@ -814,6 +833,7 @@
               bumpScore();
               checkScoreMilestones();
               buzz([100, 60, 120, 60, 100]);
+              shakeGrid(8);
               merged = [clearRow, 1];
               mergedTier = MAX_TIER;
               mergeSize = group.length;
@@ -872,6 +892,7 @@
               soundMilestone(nt);
               bumpScore();
               buzz([60, 40, 80]);
+              shakeGrid(nt >= 7 ? 5 : 3);
             }
             merged = [kr, kc];
             mergedTier = nt;

@@ -155,16 +155,14 @@
   const TOTAL_PLAY_TIME_KEY = 'bloom_total_play_ms';
 
   function showNewBestBanner() {
-    var wrap = document.getElementById('grid-wrap');
-    if (!wrap) return;
     var banner = document.createElement('div');
-    banner.className = 'milestone-banner new-best-banner';
-    banner.innerHTML =
-      '<div class="milestone-banner-tier">🎉 שיא חדש!</div>' +
-      '<div class="milestone-banner-bonus">' + score.toLocaleString() + '</div>';
-    wrap.appendChild(banner);
+    banner.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:9999;background:linear-gradient(135deg,#FAC775,#BA7517);border-radius:20px;padding:18px 30px;pointer-events:none;text-align:center;box-shadow:0 0 30px rgba(250,199,117,0.5);min-width:180px';
+    banner.innerHTML = '<div style="font-size:22px;font-weight:800;color:#1C1A18">🎉 שיא חדש!</div><div style="font-size:28px;font-weight:900;color:#412402;margin-top:4px">' + score.toLocaleString() + '</div>';
+    document.body.appendChild(banner);
     buzz([80, 40, 80, 40, 80]);
-    setTimeout(function() { if (banner.parentNode) banner.parentNode.removeChild(banner); }, 1800);
+    shakeGrid(4);
+    setTimeout(function() { banner.style.transition = 'opacity 0.3s'; banner.style.opacity = '0'; }, 1500);
+    setTimeout(function() { banner.remove(); }, 1800);
   }
 
   // Per-game tracking: which milestone tiers have already paid their bonus.
