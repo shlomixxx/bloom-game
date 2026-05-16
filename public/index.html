@@ -2262,12 +2262,162 @@
   const MAX_TIER = TIERS.length - 1;
   const WEIGHTS = [0, 55, 28, 12, 5];
 
+  // ============ SKIN PACKS ============
+  const SKIN_PACKS = {
+    classic: { id: 'classic', name: '🌸 קלאסי', price: 0, tiers: null }, // null = use TIERS
+    ocean: { id: 'ocean', name: '🌊 אוקיינוס', price: 200, tiers: [
+      null,
+      { svg: SVG.circle, bg: '#B8D4E3', fg: '#1A3A4A', name: 'חול',   emoji: '⬜' },
+      { svg: SVG.leaf,   bg: '#7EC8E3', fg: '#0A2540', name: 'גל',    emoji: '🟦' },
+      { svg: SVG.flower, bg: '#4CA1AF', fg: '#FFFFFF', name: 'אלמוג', emoji: '🟧' },
+      { svg: SVG.flame,  bg: '#2C7DA0', fg: '#FFFFFF', name: 'דג',    emoji: '🟥' },
+      { svg: SVG.bolt,   bg: '#1B6B93', fg: '#FFFFFF', name: 'דולפין', emoji: '🟨' },
+      { svg: SVG.star,   bg: '#14557B', fg: '#FFD700', name: 'כוכב ים', emoji: '⭐' },
+      { svg: SVG.diamond,bg: '#0E3F5C', fg: '#7FDBFF', name: 'פנינה', emoji: '💎' },
+      { svg: SVG.crown,  bg: '#072A40', fg: '#FFD700', name: 'פוסיידון', emoji: '👑' }
+    ]},
+    candy: { id: 'candy', name: '🍬 ממתקים', price: 200, tiers: [
+      null,
+      { svg: SVG.circle, bg: '#FFDEE9', fg: '#6B2043', name: 'סוכריה', emoji: '⬜' },
+      { svg: SVG.leaf,   bg: '#FF9AA2', fg: '#5C1A25', name: 'מסטיק', emoji: '🟩' },
+      { svg: SVG.flower, bg: '#FFB7B2', fg: '#5C2A25', name: 'גומי',   emoji: '🟧' },
+      { svg: SVG.flame,  bg: '#E2979C', fg: '#FFFFFF', name: 'שוקולד', emoji: '🟥' },
+      { svg: SVG.bolt,   bg: '#FFC8A2', fg: '#5C3A12', name: 'קרמל',  emoji: '🟨' },
+      { svg: SVG.star,   bg: '#B5EAD7', fg: '#1A4A35', name: 'מנטה',  emoji: '🟦' },
+      { svg: SVG.diamond,bg: '#C7CEEA', fg: '#2A2D5E', name: 'לביבה', emoji: '💎' },
+      { svg: SVG.crown,  bg: '#E8D5B7', fg: '#5C3A12', name: 'עוגה',   emoji: '👑' }
+    ]},
+    space: { id: 'space', name: '🌙 חלל', price: 300, tiers: [
+      null,
+      { svg: SVG.circle, bg: '#2D283E', fg: '#B8B5C8', name: 'אבק',    emoji: '⬜' },
+      { svg: SVG.leaf,   bg: '#564F6F', fg: '#E0DFEE', name: 'סלע',    emoji: '🟩' },
+      { svg: SVG.flower, bg: '#4A2A7A', fg: '#D4A5FF', name: 'ערפילית', emoji: '🟧' },
+      { svg: SVG.flame,  bg: '#9B59B6', fg: '#FFFFFF', name: 'כוכב',   emoji: '🟥' },
+      { svg: SVG.bolt,   bg: '#E74C3C', fg: '#FFFFFF', name: 'סופרנובה', emoji: '🟨' },
+      { svg: SVG.star,   bg: '#F39C12', fg: '#FFFFFF', name: 'שמש',    emoji: '🟦' },
+      { svg: SVG.diamond,bg: '#3498DB', fg: '#FFFFFF', name: 'גלקסיה', emoji: '💎' },
+      { svg: SVG.crown,  bg: '#1A1A2E', fg: '#FFD700', name: 'חור שחור', emoji: '👑' }
+    ]},
+    fire: { id: 'fire', name: '🔥 אש וקרח', price: 300, tiers: [
+      null,
+      { svg: SVG.circle, bg: '#E8E8E8', fg: '#333333', name: 'אפר',   emoji: '⬜' },
+      { svg: SVG.leaf,   bg: '#A8D8EA', fg: '#1A3A4A', name: 'קרח',   emoji: '🟩' },
+      { svg: SVG.flower, bg: '#78C4D4', fg: '#0A2540', name: 'כפור',  emoji: '🟧' },
+      { svg: SVG.flame,  bg: '#FFB347', fg: '#5C2A00', name: 'ניצוץ', emoji: '🟥' },
+      { svg: SVG.bolt,   bg: '#FF6B35', fg: '#FFFFFF', name: 'להבה',  emoji: '🟨' },
+      { svg: SVG.star,   bg: '#E63946', fg: '#FFFFFF', name: 'אש',    emoji: '🟦' },
+      { svg: SVG.diamond,bg: '#1D3557', fg: '#A8DADC', name: 'קריסטל', emoji: '💎' },
+      { svg: SVG.crown,  bg: '#0D1B2A', fg: '#FFD700', name: 'דרקון',  emoji: '👑' }
+    ]},
+    gold: { id: 'gold', name: '✨ VIP זהב', price: 500, tiers: [
+      null,
+      { svg: SVG.circle, bg: '#F5F0E1', fg: '#7A6B4E', name: 'חול',    emoji: '⬜' },
+      { svg: SVG.leaf,   bg: '#E8D9A0', fg: '#5C4A12', name: 'נחושת', emoji: '🟩' },
+      { svg: SVG.flower, bg: '#D4AF37', fg: '#3A2A00', name: 'ברונזה', emoji: '🟧' },
+      { svg: SVG.flame,  bg: '#C5A028', fg: '#FFFFFF', name: 'כסף',   emoji: '🟥' },
+      { svg: SVG.bolt,   bg: '#B8941E', fg: '#FFFFFF', name: 'זהב',   emoji: '🟨' },
+      { svg: SVG.star,   bg: '#A07818', fg: '#FFFFFF', name: 'פלטינה', emoji: '🟦' },
+      { svg: SVG.diamond,bg: '#8B6914', fg: '#FFE4A0', name: 'יהלום',  emoji: '💎' },
+      { svg: SVG.crown,  bg: '#6B4E0A', fg: '#FFD700', name: 'מלך',    emoji: '👑' }
+    ]}
+  };
+  const ACTIVE_SKIN_KEY = 'bloom_active_skin';
+  const OWNED_SKINS_KEY = 'bloom_owned_skins';
+  var activeSkinId = localStorage.getItem(ACTIVE_SKIN_KEY) || 'classic';
+  var ownedSkins = JSON.parse(localStorage.getItem(OWNED_SKINS_KEY) || '["classic"]');
+
   // ============ THEME / SKIN ABSTRACTION ============
-  // All getActiveTiers()[i] callsites should go through getActiveTiers() so a future
-  // skin-pack swap (a $1.99 IAP, planned for the app launch) can return a
-  // different palette at runtime without touching every callsite. Today this
-  // returns the original TIERS array unchanged — pure refactor.
-  function getActiveTiers() { return TIERS; }
+  function getActiveTiers() {
+    var pack = SKIN_PACKS[activeSkinId];
+    if (pack && pack.tiers) return pack.tiers;
+    return TIERS;
+  }
+
+  function showSkinShop() {
+    var existing = document.getElementById('skin-shop-modal');
+    if (existing) existing.remove();
+    var modal = document.createElement('div');
+    modal.id = 'skin-shop-modal';
+    modal.className = 'info-modal';
+    modal.onclick = function(e) { if (e.target === modal) modal.remove(); };
+    var html = '<div class="info-card" style="max-width:360px;direction:rtl">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">' +
+        '<span style="font-size:16px;font-weight:700">🎨 חנות סקינים</span>' +
+        '<span style="font-size:13px;font-weight:700;color:#BA7517">💎 ' + playerBalance + '</span>' +
+      '</div>';
+    Object.keys(SKIN_PACKS).forEach(function(id) {
+      var s = SKIN_PACKS[id];
+      var owned = ownedSkins.indexOf(id) >= 0;
+      var active = activeSkinId === id;
+      var tiers = s.tiers || TIERS;
+      // Preview: show 5 tier colors as circles
+      var preview = '';
+      for (var t = 1; t <= Math.min(5, tiers.length - 1); t++) {
+        preview += '<div style="width:28px;height:28px;border-radius:8px;background:' + tiers[t].bg + ';color:' + tiers[t].fg + ';display:flex;align-items:center;justify-content:center">' + tiers[t].svg + '</div>';
+      }
+      var btnHtml = '';
+      if (active) btnHtml = '<button class="btn sm" disabled style="opacity:0.5;min-width:70px">✓ פעיל</button>';
+      else if (owned) btnHtml = '<button class="btn sm skin-equip-btn" data-skin="' + id + '" style="min-width:70px">לבש</button>';
+      else btnHtml = '<button class="btn sm skin-buy-btn" data-skin="' + id + '" style="background:#BA7517;color:#FFF;min-width:70px">' + s.price + ' 💎</button>';
+
+      html += '<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid rgba(0,0,0,0.06)">' +
+        '<div style="flex:1">' +
+          '<div style="font-size:13px;font-weight:600">' + s.name + '</div>' +
+          '<div style="display:flex;gap:3px;margin-top:4px">' + preview + '</div>' +
+        '</div>' +
+        btnHtml +
+      '</div>';
+    });
+    html += '<button class="btn secondary" id="skin-shop-close" style="margin-top:12px;width:100%">סגור</button></div>';
+    modal.innerHTML = html;
+    document.body.appendChild(modal);
+    document.getElementById('skin-shop-close').onclick = function() { modal.remove(); };
+
+    // Wire buy buttons
+    modal.querySelectorAll('.skin-buy-btn').forEach(function(btn) {
+      btn.onclick = function() {
+        var skinId = this.getAttribute('data-skin');
+        var pack = SKIN_PACKS[skinId];
+        if (!pack) return;
+        if (playerBalance < pack.price) {
+          this.textContent = 'אין מספיק 💎';
+          setTimeout(function() { showSkinShop(); }, 1200);
+          return;
+        }
+        var self = this;
+        self.disabled = true; self.textContent = '...';
+        fetch(API_BASE + '/api/player/buy-skin', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ deviceId: deviceId, skinId: skinId, price: pack.price })
+        }).then(function(r) { return r.json(); }).then(function(d) {
+          if (d && d.ok) {
+            playerBalance = d.newBalance;
+            try { localStorage.setItem(PLAYER_BALANCE_KEY, String(d.newBalance)); } catch(e) {}
+            ownedSkins.push(skinId);
+            try { localStorage.setItem(OWNED_SKINS_KEY, JSON.stringify(ownedSkins)); } catch(e) {}
+            activeSkinId = skinId;
+            try { localStorage.setItem(ACTIVE_SKIN_KEY, skinId); } catch(e) {}
+            showSkinShop(); // refresh
+            render(); // apply new skin
+          } else {
+            self.textContent = d.reason || 'שגיאה';
+          }
+        }).catch(function() { self.textContent = 'שגיאה'; });
+      };
+    });
+
+    // Wire equip buttons
+    modal.querySelectorAll('.skin-equip-btn').forEach(function(btn) {
+      btn.onclick = function() {
+        var skinId = this.getAttribute('data-skin');
+        activeSkinId = skinId;
+        try { localStorage.setItem(ACTIVE_SKIN_KEY, skinId); } catch(e) {}
+        showSkinShop(); // refresh
+        render(); // apply
+      };
+    });
+  }
   // Same idea for board dimensions (added in Step 2 below).
   const BEST_KEY = 'bloom_best_score';
   const NAME_KEY = 'bloom_player_name';
@@ -3098,6 +3248,11 @@
       (!hasSeenTour()
         ? '<button class="home-skip" id="home-skip">אני יודע לשחק, דלג</button>'
         : '<button class="home-skip" id="home-tour-btn" style="margin-top:0;color:#BA7517">📖 איך משחקים?</button>') +
+      '<div style="display:flex;gap:8px;justify-content:center;margin-top:4px">' +
+        '<button class="home-share-game" id="home-skin-shop" aria-label="חנות סקינים" style="flex:0">' +
+          '<span>🎨 חנות סקינים</span>' +
+        '</button>' +
+      '</div>' +
       '<button class="home-share-game" id="home-share-game" aria-label="הזמן חבר">' +
         '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5L15.4 17.5M15.4 6.5L8.6 10.5"/></svg>' +
         '<span>🎮 הזמן חבר לשחק</span>' +
@@ -3184,6 +3339,8 @@
     // Wire the "איך משחקים?" link
     const tourLink = document.getElementById('home-tour-btn');
     if (tourLink) tourLink.onclick = function() { ensureAudio(); showTour({ onDone: enter }); };
+    var skinShopBtn = document.getElementById('home-skin-shop');
+    if (skinShopBtn) skinShopBtn.onclick = function() { showSkinShop(); };
     // First-ever-visit: gently auto-open the tour after the home settles in.
     // We defer it so the home animations land first, and only fire if the
     // player hasn't seen the tour AND hasn't already started learning the

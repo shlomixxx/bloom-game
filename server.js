@@ -2495,6 +2495,27 @@ app.post('/api/player/earn', async (req, res) => {
   }
 });
 
+// POST /api/player/buy-skin — purchase a skin with credits
+app.post('/api/player/buy-skin', async (req, res) => {
+  const { deviceId, skinId, price } = req.body || {};
+  if (!deviceId || !skinId) return res.status(400).json({ error: 'missing_params' });
+  try {
+    const player = await pool.query('SELECT balance FROM player_profiles WHERE device_id = $1', [deviceId]);
+    if (!player.rows.length) return res.json({ ok: false, reason: 'no_profile' });
+    const balance = player.rows[0].balance;
+    const cost = Math.max(0, parseInt(price, 10) || 0);
+    if (balance < cost) return res.json({ ok: false, reason: 'insufficient_balance' });
+    const newBalance = balance - cost;
+    await pool.query(
+      `UPDATE player_profiles SET balance = $1, total_spent = total_spent + $2 WHERE device_id = $3`,
+      [newBalance, cost, deviceId]);
+    res.json({ ok: true, skinId, newBalance });
+  } catch (e) {
+    console.error('buy-skin', e.message);
+    res.status(500).json({ error: 'server' });
+  }
+});
+
 app.post('/api/referral', async (req, res) => {
   const { deviceId, refCode } = req.body || {};
   if (!deviceId || !refCode) return res.status(400).json({ error: 'missing_params' });
