@@ -2629,42 +2629,107 @@ app.get('/player/:code', async (req, res) => {
   try {
     const p = await pool.query(
       `SELECT player_code, display_name, balance, total_earned, total_spent, COALESCE(xp, 0) as xp, COALESCE(level, 1) as level, created_at FROM player_profiles WHERE player_code = $1`, [code]);
-    if (!p.rows.length) return res.status(404).send('<!DOCTYPE html><html><body style="font-family:sans-serif;text-align:center;padding:40px"><h2>שחקן לא נמצא</h2><a href="/">שחק ב-BLOOM</a></body></html>');
+    if (!p.rows.length) return res.status(404).send('<!DOCTYPE html><html lang="he" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>שחקן לא נמצא — BLOOM</title><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:-apple-system,sans-serif;background:#F7F5F0;color:#1C1A18;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;text-align:center}h2{margin-bottom:16px}a{color:#BA7517;font-weight:600}</style></head><body><h2>🔍 שחקן לא נמצא</h2><p>הקוד ' + code + ' לא קיים</p><br><a href="/">🌸 שחק ב-BLOOM</a></body></html>');
     const player = p.rows[0];
     const lvl = calcLevel(player.xp);
-    const gamesRow = await pool.query(`SELECT COUNT(*) as games, MAX(score) as best FROM daily_scores WHERE device_id = (SELECT device_id FROM player_profiles WHERE player_code = $1)`, [code]);
-    const stats = gamesRow.rows[0] || { games: 0, best: 0 };
+    const nextXp = lvl.nextXp || lvl.xp;
+    const progress = lvl.progress || 100;
+
+    // Richer stats
+    const gamesRow = await pool.query(`SELECT COUNT(*) as games, MAX(score) as best, COUNT(DISTINCT date) as days_active FROM daily_scores WHERE device_id = (SELECT device_id FROM player_profiles WHERE player_code = $1)`, [code]);
+    const stats = gamesRow.rows[0] || { games: 0, best: 0, days_active: 0 };
+    const contestRow = await pool.query(`SELECT COUNT(DISTINCT contest_code) as contests, SUM(games_played) as contest_games FROM contest_scores WHERE device_id = (SELECT device_id FROM player_profiles WHERE player_code = $1)`, [code]);
+    const cStats = contestRow.rows[0] || { contests: 0, contest_games: 0 };
     const referrals = await pool.query(`SELECT COUNT(*) as count FROM referrals WHERE referrer_code = $1`, [code]);
+    const daysSinceJoin = Math.max(1, Math.round((Date.now() - new Date(player.created_at).getTime()) / 86400000));
     const joinDate = new Date(player.created_at).toLocaleDateString('he-IL');
+    const name = (player.display_name || 'שחקן').replace(/[<>"'&]/g, '');
+    const shareUrl = `https://bloom-web-production-f3bd.up.railway.app/player/${code}`;
+    const shareText = `🌸 ${name} ב-BLOOM — רמה ${lvl.level} ${lvl.title} · שיא ${(stats.best|0).toLocaleString()} נקודות. תצליח לנצח?`;
 
     res.send(`<!DOCTYPE html><html lang="he" dir="rtl">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>${player.display_name || code} — BLOOM</title>
-<meta property="og:title" content="${player.display_name || code} ב-BLOOM">
-<meta property="og:description" content="רמה ${lvl.level} ${lvl.title} · שיא ${(stats.best|0).toLocaleString()} נקודות">
-<style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#F7F5F0;color:#1C1A18;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
-.card{background:#FFF;border-radius:20px;padding:28px;max-width:360px;width:100%;box-shadow:0 4px 20px rgba(0,0,0,0.06)}
-.name{font-size:22px;font-weight:700;text-align:center}
-.code{font-size:13px;color:#6F6E68;text-align:center;letter-spacing:0.1em;margin:4px 0 12px}
-.level{text-align:center;font-size:14px;font-weight:600;color:#6C3483;margin-bottom:16px}
-.stats{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px}
-.stat{background:#FAFAF6;border-radius:12px;padding:12px;text-align:center}
-.stat-val{font-size:18px;font-weight:700}.stat-lbl{font-size:11px;color:#A8A6A0;margin-top:2px}
-.joined{text-align:center;font-size:11px;color:#A8A6A0;margin-bottom:16px}
-.cta{display:block;width:100%;padding:14px;background:#1C1A18;color:#FFF;border:none;border-radius:12px;font-size:15px;font-weight:700;text-decoration:none;text-align:center;font-family:inherit}
-</style></head><body>
+<title>${name} — BLOOM Player Profile</title>
+<meta name="description" content="${shareText}">
+<meta property="og:type" content="profile">
+<meta property="og:title" content="${name} — BLOOM 🌸">
+<meta property="og:description" content="רמה ${lvl.level} ${lvl.title} · שיא ${(stats.best|0).toLocaleString()} · ${stats.games|0} משחקים">
+<meta property="og:url" content="${shareUrl}">
+<meta property="og:image" content="https://bloom-web-production-f3bd.up.railway.app/assets/social-share.png">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="${name} — BLOOM">
+<meta name="twitter:description" content="רמה ${lvl.level} · שיא ${(stats.best|0).toLocaleString()} נקודות">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;direction:rtl}
+body.light{background:linear-gradient(180deg,#F5F5F0 0%,#FFF 60%);color:#1C1A18}
+body.dark{background:linear-gradient(180deg,#1F1D1B 0%,#1A1816 60%);color:#F2EFE9}
+.card{max-width:380px;width:100%;border-radius:24px;padding:32px 24px;animation:popIn 0.4s cubic-bezier(0.34,1.56,0.64,1)}
+.light .card{background:#FFF;box-shadow:0 8px 30px rgba(0,0,0,0.08)}
+.dark .card{background:#252320;box-shadow:0 8px 30px rgba(0,0,0,0.3)}
+@keyframes popIn{from{transform:scale(0.9);opacity:0}to{transform:scale(1);opacity:1}}
+.avatar{width:64px;height:64px;border-radius:50%;margin:0 auto 12px;display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:700}
+.light .avatar{background:linear-gradient(135deg,#FAC775,#BA7517);color:#FFF}
+.dark .avatar{background:linear-gradient(135deg,#3D2E0A,#BA7517);color:#FFF}
+.name{font-size:24px;font-weight:800;text-align:center;margin-bottom:2px}
+.code{font-size:12px;text-align:center;letter-spacing:0.12em;margin-bottom:12px}
+.light .code{color:#A8A6A0}.dark .code{color:#6F6E68}
+.level-badge{text-align:center;margin-bottom:6px}
+.level-badge span{display:inline-block;padding:6px 16px;border-radius:20px;font-size:14px;font-weight:700}
+.light .level-badge span{background:linear-gradient(135deg,#F0E6FF,#E8D8FF);color:#5B21B6}
+.dark .level-badge span{background:linear-gradient(135deg,#2A1F3D,#3D2E5A);color:#C4A7F0}
+.xp-bar{width:80%;margin:0 auto 16px;height:6px;border-radius:3px;overflow:hidden}
+.light .xp-bar{background:#F0E6FF}.dark .xp-bar{background:#2A1F3D}
+.xp-fill{height:100%;border-radius:3px;background:linear-gradient(90deg,#9B59B6,#6C3483);transition:width 1s ease-out}
+.xp-text{text-align:center;font-size:10px;margin-bottom:16px}
+.light .xp-text{color:#A8A6A0}.dark .xp-text{color:#6F6E68}
+.stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px}
+.stat{border-radius:14px;padding:14px 8px;text-align:center}
+.light .stat{background:#FAFAF6}.dark .stat{background:#1F1D1B}
+.stat-val{font-size:20px;font-weight:800}
+.stat-lbl{font-size:10px;margin-top:3px}
+.light .stat-lbl{color:#A8A6A0}.dark .stat-lbl{color:#6F6E68}
+.stat-val.gold{color:#BA7517}
+.stats2{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px}
+.joined{text-align:center;font-size:11px;margin-bottom:16px}
+.light .joined{color:#A8A6A0}.dark .joined{color:#6F6E68}
+.btns{display:flex;flex-direction:column;gap:8px}
+.btn-play{display:block;width:100%;padding:16px;border-radius:14px;font-size:16px;font-weight:700;text-decoration:none;text-align:center;font-family:inherit;border:none;cursor:pointer}
+.light .btn-play{background:#1C1A18;color:#FFF}.dark .btn-play{background:#FAC775;color:#1C1A18}
+.btn-share{display:flex;gap:8px}
+.btn-share button{flex:1;padding:12px;border-radius:12px;font-size:13px;font-weight:600;border:none;cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:6px}
+.btn-copy{}.light .btn-copy{background:#F5F2EC;color:#1C1A18}.dark .btn-copy{background:#2C2A28;color:#F2EFE9}
+.btn-wa{background:#25D366!important;color:#FFF!important}
+.btn-wa svg{width:16px;height:16px;fill:#FFF}
+</style>
+<script>(function(){var d=window.matchMedia&&window.matchMedia('(prefers-color-scheme:dark)').matches;document.body.className=d?'dark':'light'})()</script>
+</head><body>
 <div class="card">
-<div class="name">${player.display_name || 'שחקן'}</div>
+<div class="avatar">${name.charAt(0)}</div>
+<div class="name">${name}</div>
 <div class="code">${player.player_code}</div>
-<div class="level">${lvl.title} · רמה ${lvl.level}</div>
+<div class="level-badge"><span>${lvl.title} · רמה ${lvl.level}</span></div>
+<div class="xp-bar"><div class="xp-fill" style="width:${progress}%"></div></div>
+<div class="xp-text">${player.xp.toLocaleString()} / ${nextXp.toLocaleString()} XP</div>
 <div class="stats">
-<div class="stat"><div class="stat-val">${(stats.best|0).toLocaleString()}</div><div class="stat-lbl">🏆 שיא</div></div>
+<div class="stat"><div class="stat-val gold">${(stats.best|0).toLocaleString()}</div><div class="stat-lbl">🏆 שיא</div></div>
 <div class="stat"><div class="stat-val">${stats.games|0}</div><div class="stat-lbl">🎮 משחקים</div></div>
-<div class="stat"><div class="stat-val">${player.balance|0}</div><div class="stat-lbl">💎 קרדיטים</div></div>
+<div class="stat"><div class="stat-val">${player.balance|0} 💎</div><div class="stat-lbl">קרדיטים</div></div>
+</div>
+<div class="stats2">
+<div class="stat"><div class="stat-val">${stats.days_active|0}</div><div class="stat-lbl">📅 ימים פעילים</div></div>
+<div class="stat"><div class="stat-val">${cStats.contests|0}</div><div class="stat-lbl">🏅 תחרויות</div></div>
+<div class="stat"><div class="stat-val">${(player.total_earned|0).toLocaleString()}</div><div class="stat-lbl">💎 הרוויח</div></div>
 <div class="stat"><div class="stat-val">${referrals.rows[0].count|0}</div><div class="stat-lbl">🔗 הפניות</div></div>
 </div>
-<div class="joined">הצטרף ב-${joinDate}</div>
-<a class="cta" href="/?ref=${code}">🌸 שחק גם ב-BLOOM</a>
+<div class="joined">📆 הצטרף ב-${joinDate} · ${daysSinceJoin} ימים ב-BLOOM</div>
+<div class="btns">
+<a class="btn-play" href="/?ref=${code}">🌸 שחק גם ב-BLOOM</a>
+<div class="btn-share">
+<button class="btn-copy" onclick="var t='${shareText.replace(/'/g,"\\'")} ${shareUrl}';if(navigator.share)navigator.share({text:t}).catch(function(){});else if(navigator.clipboard){navigator.clipboard.writeText(t);this.textContent='✓ הועתק'}">📤 שתף פרופיל</button>
+<button class="btn-wa" onclick="window.open('https://wa.me/?text='+encodeURIComponent('${shareText.replace(/'/g,"\\'")} ${shareUrl}'),'_blank')"><svg viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>WhatsApp</button>
+</div>
+</div>
 </div></body></html>`);
   } catch (e) {
     console.error('profile', e.message);

@@ -1727,18 +1727,19 @@
     var duelBtn = document.getElementById('home-duel-btn');
     if (duelBtn) duelBtn.onclick = function() { showDuelModal(); };
 
-    // Show player code on home
+    // Show player code on home + profile link
     var pidEl = document.getElementById('home-player-id');
     if (pidEl && playerCode) {
       var lvlText = playerLevel > 1 ? ' · ' + getLevelIcon() + ' Lv.' + playerLevel : '';
-      pidEl.innerHTML = '<span class="pid-code">' + playerCode + '</span> · <span class="pid-balance">' + playerBalance + ' 💎</span>' + lvlText;
-      pidEl.onclick = function() {
+      pidEl.innerHTML = '<span class="pid-code">' + playerCode + '</span> · <span class="pid-balance">' + playerBalance + ' 💎</span>' + lvlText +
+        '<a href="/player/' + playerCode + '" target="_blank" class="pid-profile-link">👤 הפרופיל שלי</a>';
+      pidEl.querySelector('.pid-code').onclick = function(e) {
+        e.stopPropagation();
         if (navigator.clipboard) {
           navigator.clipboard.writeText(playerCode);
-          pidEl.innerHTML = '<span class="pid-code">✓ הועתק!</span>';
-          setTimeout(function() {
-            pidEl.innerHTML = '<span class="pid-code">' + playerCode + '</span> · <span class="pid-balance">' + playerBalance + ' 💎</span>';
-          }, 1500);
+          var sp = pidEl.querySelector('.pid-code');
+          sp.textContent = '✓ הועתק!';
+          setTimeout(function() { sp.textContent = playerCode; }, 1500);
         }
       };
     }

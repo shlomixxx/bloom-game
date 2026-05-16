@@ -971,7 +971,14 @@
   }
   .pid-code { font-weight: 700; letter-spacing: 0.08em; color: #6F6E68; }
   .pid-balance { font-weight: 700; color: #BA7517; }
+  .pid-profile-link {
+    display: block; margin-top: 4px;
+    font-size: 11px; color: #BA7517; text-decoration: none;
+    font-weight: 600;
+  }
+  .pid-profile-link:hover { text-decoration: underline; }
   html[data-theme="dark"] .pid-code { color: #8E8A82; }
+  html[data-theme="dark"] .pid-profile-link { color: #FAC775; }
 
   /* Skin trial banner */
   .skin-trial-banner {
