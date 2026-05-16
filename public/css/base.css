@@ -1,0 +1,565 @@
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    background: #F5F5F0;
+    color: #1C1A18;
+    overscroll-behavior: none;
+    -webkit-tap-highlight-color: transparent;
+    height: 100dvh;
+    /* No page-level scroll — modal/screen overlays scroll internally instead. */
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  body {
+    display: flex;
+    justify-content: center;
+    /* No body padding — the .app handles its own margin via @media below.
+       This ensures small phones get edge-to-edge UI without horizontal clipping. */
+    padding: 0;
+    min-height: 100vh;
+    min-height: 100dvh;
+  }
+  /* On larger viewports (tablet/desktop), give the .app some breathing room
+     and a centered card feel. On phones it goes edge-to-edge. */
+  @media (min-width: 421px) {
+    body { padding: 16px; }
+  }
+  .app {
+    width: 100%;
+    max-width: 380px;
+    margin: auto;
+    background: #FFFFFF;
+    border-radius: 24px;
+    overflow: hidden;
+    box-shadow: 0 2px 30px rgba(0,0,0,0.06);
+    position: relative;
+    /* Fill the available viewport exactly. The flex column inside lets the
+       grid-wrap consume any leftover space, so the board scales to the
+       phone instead of the page scrolling. */
+    height: 100%;
+    max-height: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+  .top, .mode-bar, .tier-bar { flex-shrink: 0; }
+  /* On phones (no body padding) — kill the rounded corners + box-shadow
+     so the app uses every pixel of the viewport edge-to-edge. */
+  @media (max-width: 420px) {
+    .app { border-radius: 0; max-width: 100%; box-shadow: none; }
+  }
+  .top {
+    padding: 8px 14px;
+    padding-top: max(8px, env(safe-area-inset-top));
+    border-bottom: 1px solid rgba(0,0,0,0.06);
+  }
+  .top-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .brand { font-size: 14px; letter-spacing: 0.22em; font-weight: 600; color: #6F6E68; }
+  .stats {
+    display: flex;
+    gap: 6px;
+    margin-top: 6px;
+    align-items: stretch;
+  }
+  .stats > .stat {
+    flex: 1;
+    background: #FAFAF6;
+    border-radius: 12px;
+    padding: 6px 12px;
+    text-align: right;
+    direction: rtl;
+    overflow: hidden;
+  }
+  /* The "primary" stat — the current score — is the dopamine center.
+     Larger, bolder, and visually distinct so it commands the top bar. */
+  .stats > .stat.stat-primary {
+    flex: 2;
+    background: linear-gradient(135deg, #1C1A18 0%, #2C2A28 100%);
+    color: #FFFFFF;
+    padding: 8px 14px;
+  }
+  .stats > .stat.stat-primary .stat-label { color: #FAC775; }
+  .stats > .stat.stat-primary .stat-val { color: #FFFFFF; font-size: 24px; }
+  html[data-theme="dark"] .stats > .stat.stat-primary { background: linear-gradient(135deg, #FAC775 0%, #BA7517 100%); }
+  html[data-theme="dark"] .stats > .stat.stat-primary .stat-val { color: #1C1A18; }
+  html[data-theme="dark"] .stats > .stat.stat-primary .stat-label { color: #412402; }
+  .stat-label { font-size: 9px; color: #A8A6A0; letter-spacing: 0.08em; text-transform: uppercase; }
+  .stat-val { font-size: 16px; font-weight: 700; color: #1C1A18; margin-top: 2px; display: block; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .stat-val.bump { animation: bump 0.32s ease-out; }
+  /* "Near best" — when current score is within 90% of personal best,
+     the שיא value gently pulses to nudge a record attempt. */
+  .stat-val.near-best { animation: nearBest 1.4s ease-in-out infinite; color: #BA7517; }
+  @keyframes nearBest {
+    0%, 100% { transform: scale(1); }
+    50%      { transform: scale(1.06); color: #FAC775; }
+  }
+  @keyframes bump {
+    0% { transform: scale(1); color: #1C1A18; }
+    40% { transform: scale(1.22); color: #BA7517; }
+    100% { transform: scale(1); color: #1C1A18; }
+  }
+  .top-buttons { display: flex; gap: 5px; }
+  .icon-btn {
+    background: none; border: 1px solid rgba(0,0,0,0.1); border-radius: 10px;
+    width: 36px; height: 36px;
+    min-width: 44px; min-height: 44px; /* Apple HIG touch target */
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; padding: 0; flex-shrink: 0;
+  }
+  .icon-btn svg { width: 16px; height: 16px; color: #6F6E68; }
+  .icon-btn:hover { background: #F5F5F0; }
+  .icon-btn.muted svg { color: #C84040; }
+
+  .mute-menu {
+    position: absolute;
+    z-index: 260;
+    top: 56px;
+    background: #FFFFFF;
+    border: 1px solid rgba(0,0,0,0.08);
+    border-radius: 11px;
+    padding: 5px;
+    min-width: 200px;
+    box-shadow: 0 10px 28px rgba(0,0,0,0.14);
+    direction: rtl;
+  }
+  .mute-menu.from-top { left: 14px; }
+  .mute-menu.from-home { top: 60px; left: 16px; }
+  .mute-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 11px; border-radius: 8px;
+    cursor: pointer; user-select: none;
+    font-size: 13px; color: #1C1A18;
+  }
+  .mute-item:hover { background: #FAFAF6; }
+  .mute-item-icon {
+    width: 22px; height: 22px;
+    display: flex; align-items: center; justify-content: center;
+    color: #6F6E68; flex-shrink: 0;
+  }
+  .mute-item-icon svg { width: 16px; height: 16px; }
+  .mute-item-label { flex: 1; text-align: right; font-weight: 500; }
+  .mute-item-state {
+    font-size: 10px; padding: 2px 8px;
+    border-radius: 10px;
+    background: #E6F4D7; color: #2E5A0F;
+    letter-spacing: 0.02em;
+  }
+  .mute-item.off .mute-item-state {
+    background: #FCE4E0; color: #B23A1A;
+  }
+  .mute-item.off .mute-item-icon { color: #C84040; }
+  .mute-item.off .mute-item-label { color: #6F6E68; }
+  .mute-item.mute-item-all {
+    margin-top: 3px;
+    border-top: 1px solid rgba(0,0,0,0.05);
+    border-radius: 0 0 8px 8px;
+    padding-top: 11px;
+    justify-content: center;
+    color: #6F6E68;
+    font-weight: 600;
+  }
+
+  /* Volume-slider variant of the popover */
+  .mute-menu.mute-menu-volumes { min-width: 240px; }
+  .mute-row { padding: 9px 11px 7px; border-radius: 8px; }
+  .mute-row + .mute-row { border-top: 1px solid rgba(0,0,0,0.04); }
+  .mute-row-head {
+    display: flex; align-items: center; gap: 10px;
+    margin-bottom: 7px;
+    font-size: 13px; color: #1C1A18;
+  }
+  .mute-row.off .mute-item-icon { color: #C84040; }
+  .mute-row.off .mute-item-label { color: #6F6E68; }
+  .mute-row-pct {
+    font-size: 11px; font-weight: 600;
+    color: #6F6E68;
+    font-variant-numeric: tabular-nums;
+    min-width: 34px; text-align: left;
+  }
+  .mute-row.off .mute-row-pct { color: #C84040; }
+  input.vol-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 4px;
+    background: linear-gradient(to left, #E5E2DA 0%, #E5E2DA 100%);
+    border-radius: 2px;
+    outline: none;
+    margin: 0;
+    cursor: pointer;
+    direction: rtl;
+  }
+  input.vol-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px; height: 16px;
+    background: #1C1A18;
+    border: 2px solid #FFFFFF;
+    border-radius: 50%;
+    cursor: pointer;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.18);
+  }
+  input.vol-slider::-moz-range-thumb {
+    width: 16px; height: 16px;
+    background: #1C1A18;
+    border: 2px solid #FFFFFF;
+    border-radius: 50%;
+    cursor: pointer;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.18);
+  }
+  input.vol-slider::-moz-range-track {
+    height: 4px; background: #E5E2DA; border-radius: 2px; border: none;
+  }
+  .mute-row.off input.vol-slider::-webkit-slider-thumb { background: #C84040; }
+  .mute-row.off input.vol-slider::-moz-range-thumb { background: #C84040; }
+  .mute-item.mute-item-all:hover { background: #F5F2EC; color: #1C1A18; }
+  .tier-bar {
+    direction: ltr;
+    padding: 6px 14px 8px;
+    display: flex; justify-content: space-between; align-items: flex-end; gap: 4px;
+    border-bottom: 1px solid rgba(0,0,0,0.06);
+  }
+  .tier-cell {
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    flex: 1 1 0; min-width: 0;
+    transition: transform 180ms ease-out;
+  }
+  .tier-icon {
+    width: 32px; height: 32px; border-radius: 9px;
+    display: flex; align-items: center; justify-content: center;
+    background: #F5F2EC;
+    transition: box-shadow 180ms ease-out;
+  }
+  .tier-icon svg { width: 18px; height: 18px; }
+  .tier-score {
+    font-size: 10px; font-weight: 600; color: #B5B1A8;
+    transition: color 180ms ease-out;
+    font-variant-numeric: tabular-nums;
+  }
+  .tier-cell.active, .tier-cell.cycling { transform: scale(1.22); z-index: 2; }
+  .tier-cell.active .tier-icon, .tier-cell.cycling .tier-icon {
+    box-shadow:
+      0 0 0 2px rgba(255,255,255,0.95),
+      0 0 0 4px var(--ring, #1C1A18),
+      0 5px 14px rgba(0,0,0,0.18);
+  }
+  .tier-cell.active .tier-score {
+    color: var(--ring, #1C1A18);
+    font-weight: 800;
+  }
+  @media (max-width: 380px) {
+    .tier-icon { width: 28px; height: 28px; border-radius: 8px; }
+    .tier-icon svg { width: 16px; height: 16px; }
+    .tier-score { font-size: 9px; }
+  }
+  .grid-wrap {
+    padding: 6px 6px 12px; direction: ltr; position: relative;
+    /* Consume all leftover height between mode/tier bars and the bottom of
+       the app. The grid (sized by fitGrid to be full-width squares) sits
+       at the TOP of this wrap; if it's taller than the available space,
+       scroll vertically inside the wrap. The user prefers edge-to-edge
+       squares with possible scroll over centered squares with side margins. */
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    grid-template-rows: repeat(6, 1fr);
+    gap: 5px;
+    /* Width + height are set by fitGrid() in JS to keep cells SQUARE.
+       The grid centers inside .grid-wrap when narrower than the container. */
+  }
+  .cell {
+    background: #F5F2EC; border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; transition: background 0.12s;
+    min-width: 0; min-height: 0;
+  }
+  .cell:hover { background: #EFEBE2; }
+  .cell.filled svg { width: 30px; height: 30px; }
+  .cell.appearing { animation: pop 0.22s ease-out; }
+  .cell.merging { animation: merge 0.24s ease-out; }
+  @keyframes pop { 0% { transform: scale(0.4); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+  @keyframes merge { 0% { transform: scale(1); } 50% { transform: scale(1.28); } 100% { transform: scale(1); } }
+
+  .float-score {
+    position: absolute;
+    background: #1C1A18;
+    color: #FFFFFF;
+    font-size: 14px;
+    font-weight: 700;
+    padding: 4px 9px;
+    border-radius: 12px;
+    pointer-events: none;
+    z-index: 20;
+    white-space: nowrap;
+    animation: floatUp 0.9s ease-out forwards;
+  }
+  @keyframes floatUp {
+    0%   { opacity: 0; transform: translate(-50%, 10%) scale(0.6); }
+    18%  { opacity: 1; transform: translate(-50%, -30%) scale(1.08); }
+    100% { opacity: 0; transform: translate(-50%, -130%) scale(1); }
+  }
+  .chain-badge {
+    position: absolute;
+    top: 50%; left: 50%;
+    background: #EF9F27;
+    color: #412402;
+    font-weight: 800;
+    font-size: 20px;
+    padding: 10px 22px;
+    border-radius: 24px;
+    letter-spacing: 0.05em;
+    pointer-events: none;
+    z-index: 25;
+    white-space: nowrap;
+    animation: chainPop 0.75s ease-out forwards;
+  }
+  /* First-time-tier-up celebration. Bigger + slower than chain-badge so the
+     player REALLY feels the moment. Gold-on-black for premium vibe. */
+  .milestone-banner {
+    position: absolute;
+    top: 50%; left: 50%;
+    background: linear-gradient(135deg, #1C1A18 0%, #412402 100%);
+    color: #FAC775;
+    border: 2px solid #FAC775;
+    border-radius: 18px;
+    padding: 16px 26px;
+    pointer-events: none;
+    z-index: 30;
+    text-align: center; direction: rtl;
+    box-shadow: 0 12px 36px rgba(0,0,0,0.35), 0 0 0 6px rgba(250,199,117,0.18);
+    animation: milestonePop 1.5s ease-out forwards;
+    min-width: 180px;
+  }
+  .milestone-banner-tier {
+    font-size: 14px; font-weight: 700;
+    color: #FFD37A; letter-spacing: 0.04em;
+    margin-bottom: 4px;
+  }
+  .milestone-banner-bonus {
+    font-size: 36px; font-weight: 900;
+    color: #FAC775; line-height: 1;
+    font-variant-numeric: tabular-nums;
+    text-shadow: 0 0 24px rgba(250,199,117,0.6);
+  }
+  .milestone-banner-sub {
+    font-size: 10px; color: #BA7517;
+    margin-top: 6px; font-weight: 600;
+    letter-spacing: 0.03em;
+  }
+  html[data-theme="dark"] .milestone-banner { background: linear-gradient(135deg, #FAC775 0%, #BA7517 100%); color: #1C1A18; border-color: #FFD37A; }
+  html[data-theme="dark"] .milestone-banner-tier { color: #412402; }
+  html[data-theme="dark"] .milestone-banner-bonus { color: #1C1A18; text-shadow: 0 0 24px rgba(255,255,255,0.4); }
+  html[data-theme="dark"] .milestone-banner-sub { color: #5A3500; }
+  @keyframes milestonePop {
+    0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.4) rotate(-8deg); }
+    15%  { opacity: 1; transform: translate(-50%, -50%) scale(1.15) rotate(2deg); }
+    25%  { opacity: 1; transform: translate(-50%, -50%) scale(1) rotate(0deg); }
+    80%  { opacity: 1; transform: translate(-50%, -50%) scale(1) rotate(0deg); }
+    100% { opacity: 0; transform: translate(-50%, -80%) scale(0.95); }
+  }
+  @keyframes chainPop {
+    0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.55) rotate(-6deg); }
+    20%  { opacity: 1; transform: translate(-50%, -50%) scale(1.18) rotate(-2deg); }
+    80%  { opacity: 1; transform: translate(-50%, -50%) scale(1) rotate(0); }
+    100% { opacity: 0; transform: translate(-50%, -75%) scale(0.95) rotate(0); }
+  }
+
+  .overlay {
+    padding: 20px 22px 32px; text-align: center; direction: rtl;
+    /* Overlays render inside .grid-wrap which has overflow:hidden so the
+       game grid never scrolls. But result screens (game-over, challenge
+       result, claim form) are content-tall and were getting clipped at the
+       bottom — losing the share button etc. Let the overlay scroll INSIDE
+       itself when content exceeds the available height. */
+    width: 100%;
+    max-height: 100%;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    /* Soft fade at the bottom hints there's more to scroll to. */
+    mask-image: linear-gradient(to bottom, #000 calc(100% - 14px), transparent);
+    -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 14px), transparent);
+  }
+  /* When the user has scrolled to the bottom (or content fits), kill the
+     fade so the last button isn't half-faded. JS toggles this class. */
+  .overlay.at-bottom { mask-image: none; -webkit-mask-image: none; }
+  .over-title { font-size: 13px; font-weight: 500; color: #6F6E68; letter-spacing: 0.08em; text-transform: uppercase; }
+  .over-score { font-size: 42px; font-weight: 700; color: #1C1A18; margin-top: 8px; line-height: 1.1; font-variant-numeric: tabular-nums; }
+  .over-sub { font-size: 13px; color: #6F6E68; margin-top: 6px; }
+  .tier-table { display: flex; flex-direction: column; gap: 4px; margin: 16px 0 4px; }
+  .tier-row { display: flex; align-items: center; gap: 10px; padding: 5px 8px; border-radius: 7px; }
+  .tier-row.reached { background: #FAFAF6; }
+  .tier-row.locked { opacity: 0.4; }
+  .tier-icon-sm { width: 26px; height: 26px; border-radius: 6px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .tier-icon-sm svg { width: 14px; height: 14px; }
+  .tier-name { flex: 1; font-size: 13px; color: #1C1A18; text-align: right; }
+  .tier-pts { font-size: 12px; color: #6F6E68; font-variant-numeric: tabular-nums; }
+
+  /* Game-over stats summary */
+  .game-stats-summary {
+    margin: 16px 0 8px; padding: 14px;
+    background: #FAFAF6; border-radius: 12px;
+    border: 1px solid rgba(0,0,0,0.05);
+    direction: rtl;
+  }
+  .gss-title { font-size: 12px; font-weight: 700; color: #1C1A18; margin-bottom: 6px; text-align: center; }
+  .gss-time { text-align: center; font-size: 13px; color: #6F6E68; margin-bottom: 10px; }
+  .gss-grid { display: flex; flex-direction: column; gap: 4px; }
+  .gss-row { display: flex; align-items: center; gap: 6px; padding: 2px 0; }
+  .gss-row.gss-top { background: #FFF9EE; border-radius: 6px; padding: 3px 6px; margin: 0 -6px; }
+  .gss-icon { width: 22px; height: 22px; border-radius: 6px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .gss-icon svg { width: 12px; height: 12px; }
+  .gss-bar-wrap { flex: 1; height: 12px; background: #F0EDE3; border-radius: 6px; overflow: hidden; }
+  .gss-bar { height: 100%; border-radius: 6px; min-width: 4px; transition: width 0.5s ease-out; }
+  .gss-merge-count { font-size: 11px; font-weight: 600; color: #6F6E68; width: 26px; text-align: center; }
+  .gss-pts { font-size: 11px; font-weight: 700; color: #1C1A18; width: 48px; text-align: left; font-variant-numeric: tabular-nums; direction: ltr; }
+  .gss-crown { font-size: 11px; flex-shrink: 0; }
+  .gss-footer {
+    display: flex; justify-content: center; gap: 12px;
+    margin-top: 10px; padding-top: 8px;
+    border-top: 1px solid rgba(0,0,0,0.05);
+    font-size: 11px; color: #6F6E68;
+    flex-wrap: wrap;
+  }
+  .gss-addiction {
+    margin-top: 10px; padding: 10px 12px;
+    background: linear-gradient(135deg, #FFF7E6 0%, #FFF1D0 100%);
+    border: 1px solid #FAC775;
+    border-radius: 10px;
+    font-size: 12px; color: #854F0B;
+    display: flex; align-items: center; gap: 8px;
+    justify-content: center;
+  }
+  .gss-addiction-icon { font-size: 18px; }
+  .gss-addiction strong { color: #412402; }
+  .share-label { font-size: 10px; color: #A8A6A0; margin: 14px 0 6px; letter-spacing: 0.08em; text-transform: uppercase; }
+
+  /* Credit earn toast */
+  .credit-toast {
+    position: fixed; top: 60px; left: 50%; transform: translateX(-50%) translateY(-20px);
+    z-index: 9999; padding: 10px 20px; border-radius: 12px;
+    background: linear-gradient(135deg, #FAC775, #F5A623); color: #412402;
+    font-weight: 700; font-size: 16px; box-shadow: 0 4px 16px rgba(250,199,117,0.4);
+    display: flex; flex-direction: column; align-items: center; gap: 2px;
+    opacity: 0; transition: opacity 0.3s, transform 0.3s; pointer-events: none;
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+  }
+  .credit-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* In-game tile shop */
+  #tile-shop-modal {
+    position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(28,26,24,0.6);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    z-index: 50; border-radius: 16px; padding: 12px;
+  }
+  .ts-header { display: flex; justify-content: space-between; width: 100%; max-width: 280px; font-size: 14px; font-weight: 700; color: #FFF; margin-bottom: 10px; direction: rtl; }
+  .ts-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; max-width: 280px; width: 100%; }
+  .ts-tile {
+    background: rgba(255,255,255,0.95); border: 2px solid transparent; border-radius: 12px;
+    padding: 8px 4px; text-align: center; cursor: pointer; font-family: inherit;
+    transition: transform 0.15s, border-color 0.15s;
+  }
+  .ts-tile:active { transform: scale(0.93); }
+  .ts-tile:hover { border-color: #FAC775; }
+  .ts-tile.ts-locked { opacity: 0.35; cursor: not-allowed; }
+  .ts-icon { width: 32px; height: 32px; border-radius: 8px; margin: 0 auto 4px; display: flex; align-items: center; justify-content: center; }
+  .ts-icon svg { width: 16px; height: 16px; }
+  .ts-name { font-size: 10px; font-weight: 600; color: #1C1A18; }
+  .ts-price { font-size: 10px; font-weight: 700; color: #BA7517; margin-top: 2px; }
+  .ts-close { position: absolute; top: 10px; left: 10px; background: rgba(255,255,255,0.2); border: none; color: #FFF; font-size: 18px; width: 32px; height: 32px; border-radius: 50%; cursor: pointer; }
+  html[data-theme="dark"] .ts-tile { background: rgba(44,42,40,0.95); }
+  html[data-theme="dark"] .ts-name { color: #F2EFE9; }
+  .stat-shop:active { transform: scale(0.95); }
+  .ts-section-label { font-size: 11px; font-weight: 600; color: rgba(255,255,255,0.7); margin-bottom: 6px; text-align: right; max-width: 280px; width: 100%; }
+  .ts-powerups { display: flex; flex-direction: column; gap: 4px; max-width: 280px; width: 100%; }
+  .ts-power {
+    display: flex; align-items: center; gap: 8px; padding: 8px 10px;
+    background: rgba(255,255,255,0.9); border: none; border-radius: 10px;
+    font-family: inherit; cursor: pointer; direction: rtl; transition: transform 0.15s;
+  }
+  .ts-power:active { transform: scale(0.97); }
+  .ts-power:disabled { opacity: 0.3; cursor: not-allowed; }
+  .ts-power-premium { background: linear-gradient(135deg, #FFF7E6, #FFE4A0) !important; border: 1px solid #FAC775; }
+  .ts-power-icon { font-size: 18px; flex-shrink: 0; }
+  .ts-power-name { flex: 1; font-size: 12px; font-weight: 600; color: #1C1A18; text-align: right; }
+  .ts-power-price { font-size: 11px; font-weight: 700; color: #BA7517; white-space: nowrap; }
+  .ts-hint { max-width: 280px; width: 100%; font-size: 9px; color: rgba(255,255,255,0.45); text-align: center; margin-top: 8px; line-height: 1.4; }
+  html[data-theme="dark"] .ts-power { background: rgba(44,42,40,0.95); }
+  html[data-theme="dark"] .ts-power-name { color: #F2EFE9; }
+  html[data-theme="dark"] .ts-power-premium { background: linear-gradient(135deg, #3D2E0A, #2A2118) !important; border-color: rgba(250,199,117,0.35); }
+  .powerup-hint {
+    position: absolute; top: 8px; left: 50%; transform: translateX(-50%);
+    background: #FAC775; color: #412402; padding: 6px 16px;
+    border-radius: 99px; font-size: 12px; font-weight: 700;
+    z-index: 20; animation: bubblePop 0.25s ease-out;
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    display: flex; align-items: center; gap: 6px; white-space: nowrap;
+  }
+  .powerup-cancel {
+    background: rgba(65,36,2,0.2); border: none; color: #412402;
+    font-size: 11px; font-weight: 700; padding: 3px 8px;
+    border-radius: 99px; cursor: pointer; font-family: inherit;
+  }
+  .powerup-cancel:active { opacity: 0.7; }
+
+  /* Roulette / slot machine animations for random power-ups */
+  .roulette-flash {
+    transition: transform 0.08s, box-shadow 0.08s;
+    transform: scale(1.08);
+    z-index: 5; position: relative;
+  }
+  @keyframes rouletteHit {
+    0% { transform: scale(1.15); opacity: 1; }
+    30% { transform: scale(1.3); opacity: 1; }
+    60% { transform: scale(0.2); opacity: 0.5; }
+    80% { transform: scale(0); opacity: 0; }
+    100% { transform: scale(0); opacity: 0; }
+  }
+  .roulette-hit {
+    animation: rouletteHit 0.5s ease-out forwards !important;
+    box-shadow: 0 0 24px 8px rgba(255,100,50,0.6), 0 0 60px 16px rgba(250,199,117,0.3) !important;
+    z-index: 10; position: relative;
+  }
+  .share-card {
+    padding: 12px 14px; background: #DCF8C6; border-radius: 10px;
+    direction: ltr; text-align: left;
+    font-size: 13px; line-height: 1.8; color: #1B5E20;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  }
+  .btn {
+    width: 100%; padding: 13px; border-radius: 10px;
+    background: #1C1A18; color: #FFFFFF;
+    border: none; font-size: 14px; font-weight: 600;
+    cursor: pointer; font-family: inherit; margin-top: 14px;
+  }
+  .btn.secondary { background: #F5F2EC; color: #1C1A18; margin-top: 8px; }
+  .btn:active { transform: scale(0.98); }
+
+  .info-modal {
+    position: fixed; inset: 0;
+    background: rgba(28,26,24,0.55);
+    z-index: 300; /* must be above home-screen (250) */
+    display: flex; align-items: center; justify-content: center;
+    padding: 20px;
+  }
+  .info-card {
+    background: #FFFFFF; border-radius: 16px; padding: 18px 18px 16px;
+    width: 100%; max-width: 340px;
+    max-height: calc(100vh - 40px);
+    max-height: calc(100dvh - 40px);
+    overflow-y: auto;
+  }
+
