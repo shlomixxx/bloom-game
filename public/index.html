@@ -495,6 +495,18 @@
   .gss-addiction-icon { font-size: 18px; }
   .gss-addiction strong { color: #412402; }
   .share-label { font-size: 10px; color: #A8A6A0; margin: 14px 0 6px; letter-spacing: 0.08em; text-transform: uppercase; }
+
+  /* Credit earn toast */
+  .credit-toast {
+    position: fixed; top: 60px; left: 50%; transform: translateX(-50%) translateY(-20px);
+    z-index: 9999; padding: 10px 20px; border-radius: 12px;
+    background: linear-gradient(135deg, #FAC775, #F5A623); color: #412402;
+    font-weight: 700; font-size: 16px; box-shadow: 0 4px 16px rgba(250,199,117,0.4);
+    display: flex; flex-direction: column; align-items: center; gap: 2px;
+    opacity: 0; transition: opacity 0.3s, transform 0.3s; pointer-events: none;
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+  }
+  .credit-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
   .share-card {
     padding: 12px 14px; background: #DCF8C6; border-radius: 10px;
     direction: ltr; text-align: left;
@@ -2837,6 +2849,12 @@
     bumpLifetimeMax(BEST_STREAK_KEY, s.count);
     renderStreakBadge();
     checkAchievements({ streakNow: s.count });
+    // Earn streak credits at milestones
+    if (!window.__bloomBotActive) {
+      if (s.count === 3) earnCredits('streak_3');
+      else if (s.count === 7) earnCredits('streak_7');
+      else if (s.count === 30) earnCredits('streak_30');
+    }
     return s;
   }
   function renderStreakBadge() {
@@ -4322,6 +4340,30 @@
   fetchPlayerCode();
   function getShareLink() {
     return window.location.origin + (playerCode ? '/?ref=' + playerCode : '');
+  }
+  function earnCredits(action, meta) {
+    fetch(API_BASE + '/api/player/earn', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ deviceId: deviceId, action: action, meta: meta || null })
+    }).then(function(r) { return r.json(); }).then(function(d) {
+      if (d && d.ok && d.reward > 0) {
+        playerBalance = d.newBalance;
+        try { localStorage.setItem(PLAYER_BALANCE_KEY, String(d.newBalance)); } catch(e) {}
+        showCreditToast(d.reward, action);
+      }
+    }).catch(function() {});
+  }
+  function showCreditToast(amount, action) {
+    var labels = { daily_complete: 'אתגר יומי', streak_3: 'רצף 3 ימים!', streak_7: 'רצף 7 ימים!', streak_30: 'רצף 30 ימים!',
+      contest_1st: 'מקום ראשון!', contest_2nd: 'מקום שני!', contest_3rd: 'מקום שלישי!' };
+    var label = labels[action] || '';
+    var t = document.createElement('div');
+    t.className = 'credit-toast';
+    t.innerHTML = '<span>+' + amount + ' 💎</span>' + (label ? '<span style="font-size:11px;opacity:0.8">' + label + '</span>' : '');
+    document.body.appendChild(t);
+    setTimeout(function() { t.classList.add('show'); }, 10);
+    setTimeout(function() { t.classList.remove('show'); setTimeout(function() { t.remove(); }, 400); }, 2800);
   }
 
   // ============ FRIENDS CONTEST HELPERS ============
@@ -6079,6 +6121,8 @@
       if (res.ok) {
         const data = await res.json();
         if (data && typeof data.rank === 'number') dailyRank = data.rank;
+        // Earn credits for daily completion
+        if (!window.__bloomBotActive) earnCredits('daily_complete');
       }
     } catch (e) {
       console.warn('Submit failed:', e);

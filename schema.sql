@@ -224,6 +224,20 @@ INSERT INTO game_config (key, value) VALUES ('referred_bonus', '25')
   ON CONFLICT (key) DO NOTHING;
 INSERT INTO game_config (key, value) VALUES ('welcome_bonus', '100')
   ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('daily_reward', '10')
+  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('streak_3_reward', '15')
+  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('streak_7_reward', '50')
+  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('streak_30_reward', '200')
+  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('contest_1st_reward', '100')
+  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('contest_2nd_reward', '40')
+  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('contest_3rd_reward', '20')
+  ON CONFLICT (key) DO NOTHING;
 
 -- ============================================================
 -- Player heartbeat — tracks ALL active players (any mode)

@@ -2437,6 +2437,64 @@ app.get('/api/player/code', async (req, res) => {
 });
 
 // POST /api/referral — register a referral
+
+// POST /api/player/earn — award credits for gameplay actions
+app.post('/api/player/earn', async (req, res) => {
+  const { deviceId, action, meta } = req.body || {};
+  if (!deviceId || !action) return res.status(400).json({ error: 'missing_params' });
+  try {
+    // Check player exists
+    const player = await pool.query('SELECT device_id, balance FROM player_profiles WHERE device_id = $1', [deviceId]);
+    if (!player.rows.length) return res.json({ ok: false, reason: 'no_profile' });
+
+    // Map action to config key
+    const actionMap = {
+      'daily_complete': 'daily_reward',
+      'streak_3': 'streak_3_reward',
+      'streak_7': 'streak_7_reward',
+      'streak_30': 'streak_30_reward',
+      'contest_1st': 'contest_1st_reward',
+      'contest_2nd': 'contest_2nd_reward',
+      'contest_3rd': 'contest_3rd_reward'
+    };
+    const configKey = actionMap[action];
+    if (!configKey) return res.json({ ok: false, reason: 'unknown_action' });
+
+    // Check for duplicate (prevent double-earning for same action+day)
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' });
+    const dedupKey = action + ':' + today + (meta ? ':' + JSON.stringify(meta) : '');
+    // Simple dedup using a flag field — use referrals table trick
+    // Actually, just prevent earning same daily reward twice per day
+    if (action === 'daily_complete') {
+      const dup = await pool.query(
+        `SELECT 1 FROM game_config WHERE key = $1`, ['_earn:' + deviceId + ':' + dedupKey]);
+      if (dup.rows.length) return res.json({ ok: false, reason: 'already_earned' });
+    }
+
+    const cfgRow = await pool.query('SELECT value FROM game_config WHERE key = $1', [configKey]);
+    const reward = parseInt((cfgRow.rows[0] || {}).value, 10) || 0;
+    if (reward <= 0) return res.json({ ok: false, reason: 'reward_disabled' });
+
+    // Award credits
+    await pool.query(
+      `UPDATE player_profiles SET balance = balance + $1, total_earned = total_earned + $1 WHERE device_id = $2`,
+      [reward, deviceId]);
+
+    // Dedup mark for daily
+    if (action === 'daily_complete') {
+      await pool.query(
+        `INSERT INTO game_config (key, value) VALUES ($1, $2) ON CONFLICT (key) DO NOTHING`,
+        ['_earn:' + deviceId + ':' + dedupKey, '1']).catch(() => {});
+    }
+
+    const newBal = player.rows[0].balance + reward;
+    res.json({ ok: true, action, reward, newBalance: newBal });
+  } catch (e) {
+    console.error('player/earn', e.message);
+    res.status(500).json({ error: 'server' });
+  }
+});
+
 app.post('/api/referral', async (req, res) => {
   const { deviceId, refCode } = req.body || {};
   if (!deviceId || !refCode) return res.status(400).json({ error: 'missing_params' });
