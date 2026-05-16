@@ -56,6 +56,7 @@
     syncHomeMuteUI();
     document.getElementById('home-mute').onclick = function(e) {
       e.stopPropagation();
+      ensureAudio();
       openMuteMenu('home');
     };
     const enter = function() {
