@@ -2329,6 +2329,94 @@ if (ADMIN_PATH && ADMIN_PASSWORD) {
 // ============================================================
 // PLAYER HEARTBEAT — tracks all active players (any mode)
 // ============================================================
+// ============================================================
+// Player identity + referrals
+// ============================================================
+
+// Generate a unique BLOOM-XXXX code
+function generatePlayerCode() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no I,O,0,1 for clarity
+  let code = '';
+  for (let i = 0; i < 4; i++) code += chars[Math.floor(Math.random() * chars.length)];
+  return 'BLOOM-' + code;
+}
+
+// GET /api/player/code — get or create player code
+app.get('/api/player/code', async (req, res) => {
+  const deviceId = req.headers['x-device-id'] || req.query.deviceId;
+  if (!deviceId) return res.status(400).json({ error: 'missing_device' });
+  try {
+    // Check if player already has a code
+    const existing = await pool.query(
+      'SELECT player_code, balance FROM player_profiles WHERE device_id = $1', [deviceId]);
+    if (existing.rows.length) {
+      return res.json({ ok: true, code: existing.rows[0].player_code, balance: existing.rows[0].balance });
+    }
+    // Generate unique code (retry if collision)
+    for (let attempt = 0; attempt < 10; attempt++) {
+      const code = generatePlayerCode();
+      try {
+        await pool.query(
+          `INSERT INTO player_profiles (device_id, player_code, balance) VALUES ($1, $2, 100)`,
+          [deviceId, code]);
+        return res.json({ ok: true, code: code, balance: 100, isNew: true });
+      } catch (e) {
+        if (e.code === '23505') continue; // unique violation, retry
+        throw e;
+      }
+    }
+    res.status(500).json({ error: 'code_generation_failed' });
+  } catch (e) {
+    console.error('player/code', e.message);
+    res.status(500).json({ error: 'server' });
+  }
+});
+
+// POST /api/referral — register a referral
+app.post('/api/referral', async (req, res) => {
+  const { deviceId, refCode } = req.body || {};
+  if (!deviceId || !refCode) return res.status(400).json({ error: 'missing_params' });
+  try {
+    // Check: can't refer yourself
+    const self = await pool.query(
+      'SELECT player_code FROM player_profiles WHERE device_id = $1', [deviceId]);
+    if (self.rows.length && self.rows[0].player_code === refCode) {
+      return res.json({ ok: false, reason: 'self_referral' });
+    }
+    // Check: already referred?
+    const alreadyReferred = await pool.query(
+      'SELECT id FROM referrals WHERE referred_device = $1', [deviceId]);
+    if (alreadyReferred.rows.length) {
+      return res.json({ ok: false, reason: 'already_referred' });
+    }
+    // Find referrer
+    const referrer = await pool.query(
+      'SELECT device_id FROM player_profiles WHERE player_code = $1', [refCode]);
+    if (!referrer.rows.length) {
+      return res.json({ ok: false, reason: 'invalid_code' });
+    }
+    const referrerDevice = referrer.rows[0].device_id;
+    const reward = 50; // credits per referral (configurable via game_config later)
+    // Record referral
+    await pool.query(
+      `INSERT INTO referrals (referrer_code, referrer_device, referred_device, credits_awarded)
+       VALUES ($1, $2, $3, $4)`,
+      [refCode, referrerDevice, deviceId, reward]);
+    // Award credits to referrer
+    await pool.query(
+      `UPDATE player_profiles SET balance = balance + $1, total_earned = total_earned + $1
+       WHERE device_id = $2`, [reward, referrerDevice]);
+    // Award welcome bonus to referred player (if they have a profile)
+    await pool.query(
+      `UPDATE player_profiles SET balance = balance + 25, total_earned = total_earned + 25,
+       referred_by = $1 WHERE device_id = $2`, [refCode, deviceId]);
+    res.json({ ok: true, referrerReward: reward, referredReward: 25 });
+  } catch (e) {
+    console.error('referral', e.message);
+    res.status(500).json({ error: 'server' });
+  }
+});
+
 app.post('/api/heartbeat', async (req, res) => {
   try {
     const { deviceId, displayName, mode, score, highestTier, grid } = req.body || {};

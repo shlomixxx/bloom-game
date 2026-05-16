@@ -229,3 +229,31 @@ CREATE TABLE IF NOT EXISTS player_heartbeat (
   grid_json   TEXT,
   updated_at  TIMESTAMP NOT NULL DEFAULT NOW()
 );
+
+-- ============================================================
+-- Player identity + wallet + referrals
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS player_profiles (
+  device_id    VARCHAR(64) PRIMARY KEY,
+  player_code  VARCHAR(10) UNIQUE NOT NULL,
+  display_name VARCHAR(100),
+  balance      INT NOT NULL DEFAULT 0,
+  total_earned INT NOT NULL DEFAULT 0,
+  total_spent  INT NOT NULL DEFAULT 0,
+  referred_by  VARCHAR(10),
+  created_at   TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_player_profiles_code
+  ON player_profiles (player_code);
+
+CREATE TABLE IF NOT EXISTS referrals (
+  id              SERIAL PRIMARY KEY,
+  referrer_code   VARCHAR(10) NOT NULL,
+  referrer_device VARCHAR(64) NOT NULL,
+  referred_device VARCHAR(64) NOT NULL,
+  credits_awarded INT NOT NULL DEFAULT 50,
+  created_at      TIMESTAMP NOT NULL DEFAULT NOW(),
+  UNIQUE(referred_device)
+);

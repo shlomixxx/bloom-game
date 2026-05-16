@@ -3130,7 +3130,7 @@
     const shareGameBtn = document.getElementById('home-share-game');
     if (shareGameBtn) shareGameBtn.onclick = function(e) {
       e.stopPropagation();
-      var link = window.location.origin;
+      var link = getShareLink();
       var bestS = parseInt(localStorage.getItem(BEST_KEY) || '0', 10) || 0;
       var text = bestS > 0
         ? '🌸 הגעתי ל-' + bestS.toLocaleString() + ' נקודות ב-BLOOM! תנסה לנצח אותי 😏\n' + link
@@ -4281,6 +4281,49 @@
   }
   ensureDeviceToken();
 
+  // ============ PLAYER CODE (BLOOM-XXXX) + REFERRALS ============
+  const PLAYER_CODE_KEY = 'bloom_player_code';
+  const PLAYER_BALANCE_KEY = 'bloom_balance';
+  let playerCode = localStorage.getItem(PLAYER_CODE_KEY) || null;
+  let playerBalance = parseInt(localStorage.getItem(PLAYER_BALANCE_KEY) || '0', 10) || 0;
+
+  function fetchPlayerCode() {
+    fetch(API_BASE + '/api/player/code?deviceId=' + encodeURIComponent(deviceId))
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        if (d && d.code) {
+          playerCode = d.code;
+          playerBalance = d.balance | 0;
+          try {
+            localStorage.setItem(PLAYER_CODE_KEY, d.code);
+            localStorage.setItem(PLAYER_BALANCE_KEY, String(d.balance | 0));
+          } catch(e) {}
+          // Process referral if ?ref= was in the URL
+          processReferral();
+        }
+      }).catch(function() {});
+  }
+  function processReferral() {
+    var refCode = new URLSearchParams(window.location.search).get('ref');
+    if (!refCode || refCode === playerCode) return;
+    if (localStorage.getItem('bloom_ref_done')) return; // already processed
+    fetch(API_BASE + '/api/referral', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ deviceId: deviceId, refCode: refCode })
+    }).then(function(r) { return r.json(); }).then(function(d) {
+      if (d && d.ok) {
+        localStorage.setItem('bloom_ref_done', '1');
+        playerBalance += (d.referredReward || 0);
+        try { localStorage.setItem(PLAYER_BALANCE_KEY, String(playerBalance)); } catch(e) {}
+      }
+    }).catch(function() {});
+  }
+  fetchPlayerCode();
+  function getShareLink() {
+    return window.location.origin + (playerCode ? '/?ref=' + playerCode : '');
+  }
+
   // ============ FRIENDS CONTEST HELPERS ============
   function setActiveContest(code) {
     const prev = activeContestCode;
@@ -4692,7 +4735,7 @@
         '🏆 שיא: ' + bestScore.toLocaleString() + ' · ' + tierName + '\n' +
         '🎮 ' + totalGames + ' משחקים' + (timeText ? ' · 🕐 ' + timeText : '') + '\n' +
         (level ? level + '\n' : '') +
-        '\nשחק גם: ' + window.location.origin;
+        '\nשחק גם: ' + getShareLink();
       if (navigator.share) navigator.share({ text: text }).catch(function(){});
       else if (navigator.clipboard) {
         navigator.clipboard.writeText(text);
@@ -6580,7 +6623,7 @@
     }
     const statsLine = '⏱' + durText + chainText + ' · 🎯' + gameTotalMerges + ' מיזוגים';
     const addictionLine = '🕐 סה"כ ' + totalText + ' ב-BLOOM';
-    const text = header + '\n' + emojis.join('') + '\n' + statsLine + '\n' + addictionLine + '\n\nשחק גם: ' + window.location.origin;
+    const text = header + '\n' + emojis.join('') + '\n' + statsLine + '\n' + addictionLine + '\n\nשחק גם: ' + getShareLink();
     if (navigator.share) {
       navigator.share({ text: text }).catch(function() {});
     } else if (navigator.clipboard) {
