@@ -383,10 +383,15 @@
       for (let t = 1; t <= highestTier; t++) emojis.push(getActiveTiers()[t].emoji);
 
       let title;
-      if (opts.isNewBest) title = '🎉 שיא חדש!';
-      else if (mode === 'daily' && opts.alreadyPlayed) title = 'סיימת את האתגר היומי';
-      else if (mode === 'daily') title = 'אתגר יומי הסתיים';
-      else title = 'המשחק נגמר';
+      if (opts.isNewBest) title = '🎉 שיא אישי חדש!';
+      else if (mode === 'daily' && opts.alreadyPlayed) title = '✅ סיימת את האתגר היומי';
+      else if (score >= 100000) title = '🔥 מטורף! ' + score.toLocaleString();
+      else if (score >= 50000) title = '💪 משחק אדיר!';
+      else if (score >= 20000) title = '⭐ יפה מאוד!';
+      else if (highestTier >= 7) title = '💎 הגעת ליהלום!';
+      else if (highestTier >= 6) title = '⭐ הגעת לכוכב!';
+      else if (score > best * 0.9 && best > 0) title = '😱 כמעט שיא!';
+      else title = '🎮 סיום משחק';
 
       let shareHeader;
       if (mode === 'daily') {
@@ -404,12 +409,33 @@
         ? '<button class="btn secondary" id="spec-open"><span style="display:inline-flex;align-items:center;gap:6px;justify-content:center"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>צא לצפייה במשחקים חיים</span></button>'
         : '';
 
+      // Build rival / motivation text from leaderboard data
+      var rivalHtml = '';
+      if (leaderboard.length > 0) {
+        for (var ri = 0; ri < leaderboard.length; ri++) {
+          if (leaderboard[ri].you && ri > 0) {
+            var rivalAbove = leaderboard[ri - 1];
+            var rivalGap = (rivalAbove.score || 0) - (leaderboard[ri].score || 0);
+            if (rivalGap > 0 && rivalGap < score * 0.5) {
+              rivalHtml = '<div class="over-rival">🎯 עוד <strong>' + rivalGap.toLocaleString() + '</strong> נקודות לנצח את <strong>' + escapeHtml(rivalAbove.name || 'אנונימי') + '</strong></div>';
+            }
+            break;
+          }
+        }
+        if (!rivalHtml && leaderboard.length > 0 && leaderboard[0].you) {
+          rivalHtml = '<div class="over-rival" style="color:#BA7517">👑 אתה מוביל את הטבלה!</div>';
+        }
+      }
+
       wrap.innerHTML =
         '<div class="overlay">' +
           '<div class="over-title">' + title + '</div>' +
           '<div class="over-score">' + score.toLocaleString() + '</div>' +
           '<div class="over-sub">הגעת ל' + getActiveTiers()[highestTier].name + ' · ' + highestTier + '/' + MAX_TIER + ' דרגות</div>' +
           (dailyRank ? '<div class="lb-rank-pill">המקום שלך היום: #' + dailyRank + '</div>' : '') +
+          rivalHtml +
+          // PRIMARY CTA — right after score, not buried at bottom
+          '<button class="btn over-again-btn" id="again">' + againLabel + '</button>' +
           (function() {
             if (mode !== 'daily' && mode !== 'practice') return '';
             var s = loadStreak();
@@ -515,7 +541,6 @@
             '</button>' +
           '</div>' +
           spectateBtn +
-          '<button class="btn secondary" id="again">' + againLabel + '</button>' +
         '</div>';
       document.getElementById('again').onclick = function() {
         if (isContestOver) init('contest', { fresh: true });

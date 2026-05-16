@@ -803,3 +803,30 @@
     font-size: 11px; color: #C8C5BE;
     letter-spacing: 0.12em;
   }
+
+  /* ── Game-Over: Rival message ── */
+  .over-rival {
+    margin: 8px 0; padding: 8px 16px;
+    background: rgba(250,199,117,0.08); border: 1px solid rgba(250,199,117,0.15);
+    border-radius: 10px; font-size: 13px; color: #6F6E68;
+    text-align: center; direction: rtl;
+    animation: rivalPulse 2s ease-in-out infinite;
+  }
+  @keyframes rivalPulse {
+    0%,100% { border-color: rgba(250,199,117,0.15); }
+    50% { border-color: rgba(250,199,117,0.4); }
+  }
+  html[data-theme="dark"] .over-rival { background: rgba(250,199,117,0.05); color: #B0AA9E; }
+
+  /* ── Game-Over: Prominent CTA ── */
+  .over-again-btn {
+    margin: 14px 0 8px !important; padding: 16px 48px !important;
+    font-size: 18px !important; font-weight: 800 !important;
+    border-radius: 14px !important;
+    background: #1C1A18 !important; color: #FFF !important;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.15) !important;
+    animation: ctaPop 0.4s ease-out;
+  }
+  .over-again-btn:active { transform: scale(0.97) !important; }
+  @keyframes ctaPop { 0% { transform: scale(0.9); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+  html[data-theme="dark"] .over-again-btn { background: #FAC775 !important; color: #1C1A18 !important; }
