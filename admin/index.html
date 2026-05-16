@@ -319,6 +319,32 @@
     </div>
   </section>
 
+  <!-- Player Management -->
+  <section id="players-section" style="margin-bottom:12px">
+    <h2>👤 שחקנים וקרדיטים <button class="tip-btn" data-tip="players">?</button></h2>
+    <div style="padding:12px 16px;background:var(--card);border-radius:10px;margin-top:8px">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+        <button class="btn sm" id="btn-load-players" style="flex:1">📋 טען רשימת שחקנים</button>
+        <button class="btn sm" id="btn-load-referrals" style="flex:1">🔗 הפניות</button>
+      </div>
+      <div style="border-top:1px solid rgba(0,0,0,0.06);padding-top:10px">
+        <div style="font-size:11px;color:#6F6E68;margin-bottom:6px;font-weight:600">🎁 שלח מתנת קרדיטים</div>
+        <div style="display:flex;gap:6px;align-items:end;flex-wrap:wrap">
+          <div>
+            <div style="font-size:9px;color:#A8A6A0;margin-bottom:2px">קוד שחקן</div>
+            <input id="gift-code" placeholder="BLOOM-XXXX" maxlength="10" style="width:110px;padding:5px 8px;border:1px solid rgba(0,0,0,0.12);border-radius:6px;font-family:inherit;font-size:12px;text-transform:uppercase;letter-spacing:0.08em;font-weight:700">
+          </div>
+          <div>
+            <div style="font-size:9px;color:#A8A6A0;margin-bottom:2px">כמות 💎</div>
+            <input type="number" id="gift-amount" value="100" min="1" style="width:60px;padding:5px;border:1px solid rgba(0,0,0,0.12);border-radius:6px;font-family:inherit;font-size:12px;text-align:center;font-weight:700">
+          </div>
+          <button class="btn sm" id="btn-gift" style="background:#2E8B6F">שלח 🎁</button>
+        </div>
+      </div>
+      <div id="players-list" style="margin-top:10px;max-height:300px;overflow-y:auto"></div>
+    </div>
+  </section>
+
   <!-- Server Bots -->
   <section id="bots-section" style="margin-bottom:12px">
     <h2>🤖 שחקני דמו <button class="tip-btn" data-tip="bots">?</button></h2>
@@ -598,7 +624,8 @@
     live: '<strong>קורה עכשיו</strong><br>מי משחק ברגע זה + מי צופה במישהו.<br><div class="tip-example">🟢 שחקנים פעילים: ניקוד חי, tier, תחרות<br>👁️ צופים: מי צופה במי<br>🔄 מתעדכן רק בלחיצה על "רענון"</div>',
     audit: '<strong>יומן פעולות אדמין</strong><br>כל פעולה שנעשתה מפאנל הניהול.<br><div class="tip-example">📋 מציג: מחיקת שחקן, שינוי הגדרה, סגירת תחרות<br>💡 מאפשר לעקוב אחרי כל שינוי שנעשה</div>',
     csv: '<strong>הורדת CSV</strong><br>ייצוא נתונים לאקסל.<br><div class="tip-example">📥 לחץ על טבלה → הורדה אוטומטית<br>📊 תומך בעברית (BOM) + עד 10,000 שורות<br>💡 שימושי לניתוח חיצוני או גיבוי</div>',
-    bots: '<strong>🤖 שחקני דמו</strong><br>שחקנים מדומים שרצים על השרת. נראים כמו אנשים אמיתיים.<br><div class="tip-example"><strong>איך זה עובד:</strong><br>1. בחר כמה בוטים (למשל 10)<br>2. בחר מצב: אימון / יומי / תחרות<br>3. לחץ הפעל — 10 "שחקנים" מתחילים לשחק<br><br><strong>החלפת שמות:</strong><br>כשבוט מפסיד (הלוח מלא) → הוא "יוצא".<br>אחרי 30-90 שניות שחקן חדש עם שם אחר מתחיל.<br>ב-24 שעות עוברים 200+ שמות שונים!<br><br><strong>מצבים:</strong><br>🏋️ אימון = משחקים חופשי, מופיעים בלייב<br>📊 יומי = מגישים ניקוד ללידרבורד היומי<br>🏆 תחרות = מצטרפים לתחרות עם קוד<br><br><strong>מהירויות:</strong><br>🐌 איטי = נראה ריאליסטי · 🏃 רגיל = ברירת מחדל<br>⚡ מהיר = מילוי לידרבורד · 🚀 מקסימום = stress test<br><br>💰 עלות: $0 עד 50 בוטים · ~$2/חודש ל-200</div>'
+    bots: '<strong>🤖 שחקני דמו</strong><br>שחקנים מדומים שרצים על השרת. נראים כמו אנשים אמיתיים.<br><div class="tip-example"><strong>איך זה עובד:</strong><br>1. בחר כמה בוטים (למשל 10)<br>2. בחר מצב: אימון / יומי / תחרות<br>3. לחץ הפעל — 10 "שחקנים" מתחילים לשחק<br><br><strong>החלפת שמות:</strong><br>כשבוט מפסיד (הלוח מלא) → הוא "יוצא".<br>אחרי 30-90 שניות שחקן חדש עם שם אחר מתחיל.<br>ב-24 שעות עוברים 200+ שמות שונים!<br><br><strong>מצבים:</strong><br>🏋️ אימון = משחקים חופשי, מופיעים בלייב<br>📊 יומי = מגישים ניקוד ללידרבורד היומי<br>🏆 תחרות = מצטרפים לתחרות עם קוד<br><br><strong>מהירויות:</strong><br>🐌 איטי = נראה ריאליסטי · 🏃 רגיל = ברירת מחדל<br>⚡ מהיר = מילוי לידרבורד · 🚀 מקסימום = stress test<br><br>💰 עלות: $0 עד 50 בוטים · ~$2/חודש ל-200</div>',
+    players: '<strong>👤 ניהול שחקנים וקרדיטים</strong><br>כל שחקן מקבל קוד ייחודי (BLOOM-XXXX) וארנק קרדיטים (💎).<br><div class="tip-example"><strong>מה אפשר לעשות:</strong><br>📋 טען רשימה — רואה כל שחקן עם הקוד, יתרה, הפניות<br>🎁 שלח מתנה — הזן קוד שחקן + כמות → קרדיטים מועברים מיד<br>🔗 הפניות — מי הזמין את מי וכמה קרדיטים חולקו<br><br><strong>הגדרות הפניות (בהגדרות משחק):</strong><br>referral_enabled = true/false (הפעל/כבה)<br>referral_reward = כמה 💎 למזמין<br>referred_bonus = כמה 💎 למוזמן<br>welcome_bonus = כמה 💎 לשחקן חדש<br><br>💡 ערוך דרך "הגדרות משחק" למטה</div>'
   };
 
   // Wire all .tip-btn elements after DOM load
@@ -1416,6 +1443,70 @@
   };
   refreshBotStatus();
   setInterval(refreshBotStatus, 15000);
+
+  // Player management
+  $('btn-load-players').onclick = async function() {
+    this.disabled = true; this.textContent = 'טוען...';
+    var d = await api('/players');
+    this.disabled = false; this.textContent = '📋 טען רשימת שחקנים';
+    var el = $('players-list');
+    if (!el || !d || !d.players) return;
+    if (!d.players.length) { el.innerHTML = '<div style="color:#A8A6A0;font-size:12px;text-align:center;padding:10px">אין שחקנים רשומים</div>'; return; }
+    var html = '<table style="width:100%;font-size:11px;border-collapse:collapse;direction:rtl">' +
+      '<tr style="background:rgba(0,0,0,0.03)"><th style="padding:4px">קוד</th><th>שם</th><th>💎</th><th>הפניות</th><th>פעולה</th></tr>';
+    d.players.forEach(function(p) {
+      html += '<tr style="border-top:1px solid rgba(0,0,0,0.05)">' +
+        '<td style="padding:4px;font-weight:700;font-size:10px;letter-spacing:0.05em">' + (p.player_code || '—') + '</td>' +
+        '<td>' + (p.display_name || 'אנונימי') + '</td>' +
+        '<td style="font-weight:700">' + (p.balance || 0) + '</td>' +
+        '<td>' + (p.referral_count || 0) + '</td>' +
+        '<td><button class="btn sm" style="font-size:9px;padding:2px 6px" onclick="document.getElementById(\'gift-code\').value=\'' + (p.player_code || '') + '\'">🎁</button></td>' +
+      '</tr>';
+    });
+    html += '</table>';
+    el.innerHTML = html;
+  };
+
+  $('btn-load-referrals').onclick = async function() {
+    this.disabled = true;
+    var d = await api('/referrals');
+    this.disabled = false;
+    var el = $('players-list');
+    if (!el || !d || !d.referrals) return;
+    if (!d.referrals.length) { el.innerHTML = '<div style="color:#A8A6A0;font-size:12px;text-align:center;padding:10px">אין הפניות</div>'; return; }
+    var html = '<table style="width:100%;font-size:11px;border-collapse:collapse;direction:rtl">' +
+      '<tr style="background:rgba(0,0,0,0.03)"><th style="padding:4px">מזמין</th><th>מוזמן</th><th>💎</th><th>תאריך</th></tr>';
+    d.referrals.forEach(function(r) {
+      var dt = new Date(r.created_at);
+      html += '<tr style="border-top:1px solid rgba(0,0,0,0.05)">' +
+        '<td style="padding:4px">' + (r.referrer_name || r.referrer_code) + '</td>' +
+        '<td>' + (r.referred_name || '?') + '</td>' +
+        '<td style="font-weight:700">' + (r.credits_awarded || 0) + '</td>' +
+        '<td style="font-size:10px;color:#A8A6A0">' + dt.toLocaleDateString('he-IL') + '</td>' +
+      '</tr>';
+    });
+    html += '</table>';
+    el.innerHTML = html;
+  };
+
+  $('btn-gift').onclick = async function() {
+    var code = ($('gift-code').value || '').trim().toUpperCase();
+    var amount = parseInt($('gift-amount').value, 10) || 0;
+    if (!code || amount <= 0) { toast('נא להזין קוד שחקן וכמות'); return; }
+    this.disabled = true;
+    var r = await api('/players/balance', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ playerCode: code, amount: amount, mode: 'add' })
+    });
+    this.disabled = false;
+    if (r && r.ok) {
+      toast('🎁 ' + amount + '💎 נשלחו ל-' + r.playerCode + ' (יתרה: ' + r.newBalance + ')');
+      $('gift-code').value = '';
+    } else {
+      toast('שגיאה: ' + ((r && r.error) || 'שחקן לא נמצא'));
+    }
+  };
 })();
 </script>
 

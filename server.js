@@ -2254,6 +2254,68 @@ if (ADMIN_PATH && ADMIN_PASSWORD) {
     res.json({ ok: true });
   });
 
+  // ---------- PLAYER MANAGEMENT ----------
+  // List all players with codes and balances
+  adminRouter.get('/api/players', async (_req, res) => {
+    try {
+      const r = await pool.query(
+        `SELECT p.device_id, p.player_code, p.display_name, p.balance, p.total_earned, p.total_spent,
+                p.referred_by, p.created_at,
+                (SELECT COUNT(*) FROM referrals WHERE referrer_device = p.device_id) as referral_count
+         FROM player_profiles p ORDER BY p.created_at DESC LIMIT 500`);
+      res.json({ ok: true, players: r.rows });
+    } catch (e) {
+      res.status(500).json({ error: 'server', msg: e.message });
+    }
+  });
+
+  // Update player balance (set exact amount or add/subtract)
+  adminRouter.post('/api/players/balance', async (req, res) => {
+    const { deviceId, playerCode, amount, mode } = req.body || {};
+    // Find player by code or deviceId
+    const identifier = playerCode || deviceId;
+    if (!identifier || amount == null) return res.status(400).json({ error: 'missing_params' });
+    try {
+      const findCol = playerCode ? 'player_code' : 'device_id';
+      const player = await pool.query(`SELECT device_id, player_code, balance FROM player_profiles WHERE ${findCol} = $1`, [identifier]);
+      if (!player.rows.length) return res.status(404).json({ error: 'player_not_found' });
+      const p = player.rows[0];
+      const amt = parseInt(amount, 10) || 0;
+      let newBalance;
+      if (mode === 'set') {
+        newBalance = Math.max(0, amt);
+        await pool.query(`UPDATE player_profiles SET balance = $1 WHERE device_id = $2`, [newBalance, p.device_id]);
+      } else if (mode === 'subtract') {
+        newBalance = Math.max(0, p.balance - Math.abs(amt));
+        await pool.query(`UPDATE player_profiles SET balance = $1, total_spent = total_spent + $2 WHERE device_id = $3`,
+          [newBalance, Math.abs(amt), p.device_id]);
+      } else {
+        // default: add
+        newBalance = p.balance + Math.abs(amt);
+        await pool.query(`UPDATE player_profiles SET balance = $1, total_earned = total_earned + $2 WHERE device_id = $3`,
+          [newBalance, Math.abs(amt), p.device_id]);
+      }
+      logAdminAction('player.balance', p.player_code, identifier, { mode: mode || 'add', amount: amt, newBalance });
+      res.json({ ok: true, playerCode: p.player_code, newBalance });
+    } catch (e) {
+      res.status(500).json({ error: 'server', msg: e.message });
+    }
+  });
+
+  // Get referral stats
+  adminRouter.get('/api/referrals', async (_req, res) => {
+    try {
+      const r = await pool.query(
+        `SELECT r.*, 
+                (SELECT display_name FROM player_profiles WHERE device_id = r.referrer_device) as referrer_name,
+                (SELECT display_name FROM player_profiles WHERE device_id = r.referred_device) as referred_name
+         FROM referrals r ORDER BY r.created_at DESC LIMIT 200`);
+      res.json({ ok: true, referrals: r.rows });
+    } catch (e) {
+      res.status(500).json({ error: 'server', msg: e.message });
+    }
+  });
+
   // ---------- GAME CONFIG (moved after bots) ----------
   adminRouter.get('/api/config', async (_req, res) => {
     try {
@@ -2353,13 +2415,15 @@ app.get('/api/player/code', async (req, res) => {
       return res.json({ ok: true, code: existing.rows[0].player_code, balance: existing.rows[0].balance });
     }
     // Generate unique code (retry if collision)
+    const wcfg = await pool.query(`SELECT value FROM game_config WHERE key = 'welcome_bonus'`);
+    const welcomeBonus = parseInt((wcfg.rows[0] || {}).value, 10) || 100;
     for (let attempt = 0; attempt < 10; attempt++) {
       const code = generatePlayerCode();
       try {
         await pool.query(
-          `INSERT INTO player_profiles (device_id, player_code, balance) VALUES ($1, $2, 100)`,
-          [deviceId, code]);
-        return res.json({ ok: true, code: code, balance: 100, isNew: true });
+          `INSERT INTO player_profiles (device_id, player_code, balance, total_earned) VALUES ($1, $2, $3, $3)`,
+          [deviceId, code, welcomeBonus]);
+        return res.json({ ok: true, code: code, balance: welcomeBonus, isNew: true });
       } catch (e) {
         if (e.code === '23505') continue; // unique violation, retry
         throw e;
@@ -2396,7 +2460,13 @@ app.post('/api/referral', async (req, res) => {
       return res.json({ ok: false, reason: 'invalid_code' });
     }
     const referrerDevice = referrer.rows[0].device_id;
-    const reward = 50; // credits per referral (configurable via game_config later)
+    // Read reward amounts from game_config
+    const cfgRows = await pool.query(`SELECT key, value FROM game_config WHERE key IN ('referral_enabled','referral_reward','referred_bonus')`);
+    const cfg = {};
+    for (const r of cfgRows.rows) cfg[r.key] = r.value;
+    if (cfg.referral_enabled === 'false') return res.json({ ok: false, reason: 'referrals_disabled' });
+    const reward = parseInt(cfg.referral_reward, 10) || 50;
+    const bonus = parseInt(cfg.referred_bonus, 10) || 25;
     // Record referral
     await pool.query(
       `INSERT INTO referrals (referrer_code, referrer_device, referred_device, credits_awarded)
@@ -2408,9 +2478,9 @@ app.post('/api/referral', async (req, res) => {
        WHERE device_id = $2`, [reward, referrerDevice]);
     // Award welcome bonus to referred player (if they have a profile)
     await pool.query(
-      `UPDATE player_profiles SET balance = balance + 25, total_earned = total_earned + 25,
-       referred_by = $1 WHERE device_id = $2`, [refCode, deviceId]);
-    res.json({ ok: true, referrerReward: reward, referredReward: 25 });
+      `UPDATE player_profiles SET balance = balance + $1, total_earned = total_earned + $1,
+       referred_by = $2 WHERE device_id = $3`, [bonus, refCode, deviceId]);
+    res.json({ ok: true, referrerReward: reward, referredReward: bonus });
   } catch (e) {
     console.error('referral', e.message);
     res.status(500).json({ error: 'server' });

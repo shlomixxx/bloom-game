@@ -216,6 +216,14 @@ CREATE TABLE IF NOT EXISTS game_config (
 -- Default merge mode: 'anchor' (new, result stays at drop) or 'classic' (old, leftmost wins)
 INSERT INTO game_config (key, value) VALUES ('merge_mode', 'anchor')
   ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('referral_enabled', 'true')
+  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('referral_reward', '50')
+  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('referred_bonus', '25')
+  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('welcome_bonus', '100')
+  ON CONFLICT (key) DO NOTHING;
 
 -- ============================================================
 -- Player heartbeat — tracks ALL active players (any mode)
