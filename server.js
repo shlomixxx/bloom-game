@@ -491,11 +491,12 @@ app.post('/api/contests', async (req, res) => {
     if (wager > 0) {
       const wcfg = await pool.query(`SELECT key, value FROM game_config WHERE key IN ('wager_enabled','wager_min','wager_max')`);
       const cfg = {}; for (const r of wcfg.rows) cfg[r.key] = r.value;
-      if (cfg.wager_enabled === 'false') wager = 0;
+      if (cfg.wager_enabled === 'false') { wager = 0; }
       else {
         const min = parseInt(cfg.wager_min, 10) || 10;
         const max = parseInt(cfg.wager_max, 10) || 500;
-        wager = Math.max(min, Math.min(max, wager));
+        if (wager < min) return res.status(400).json({ error: 'wager_too_low', min });
+        if (wager > max) wager = max;
         // Deduct from host
         const host = await pool.query('SELECT balance FROM player_profiles WHERE device_id = $1', [deviceId]);
         if (!host.rows.length || host.rows[0].balance < wager) {

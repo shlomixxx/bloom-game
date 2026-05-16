@@ -3868,10 +3868,11 @@
         '</div>' +
         '<div class="contest-form-hint" id="ctf-board-hint">כולם מקבלים את אותו לוח — השוואה הוגנת</div>' +
         '<div class="contest-form-label">🎰 הימור (אופציונלי)</div>' +
-        '<div style="display:flex;align-items:center;gap:8px;direction:rtl;margin-bottom:8px">' +
+        '<div style="display:flex;align-items:center;gap:8px;direction:rtl;margin-bottom:4px">' +
           '<input type="number" class="contest-input" id="ctf-wager" placeholder="0" min="0" max="500" value="0" style="width:80px;text-align:center;font-weight:700" />' +
           '<span style="font-size:12px;color:#6F6E68">💎 כל משתתף · קופה מחולקת לזוכים</span>' +
         '</div>' +
+        '<div style="font-size:11px;color:#A8A6A0;direction:rtl;margin-bottom:8px">היתרה שלך: <strong style="color:#BA7517">' + playerBalance + ' 💎</strong> · מינימום הימור: 10 · 0 = ללא הימור</div>' +
         '<button class="contest-submit-btn" id="ctf-submit">צור והעתק קוד</button>' +
         '<div class="contest-error" id="ctf-error"></div>' +
       '</div>';
@@ -3905,11 +3906,18 @@
       if (!nameVal) { errEl.textContent = 'נא לתת שם לתחרות'; return; }
       if (!hostVal) { errEl.textContent = 'נא להזין שם תצוגה'; return; }
 
+      const wagerVal = parseInt(document.getElementById('ctf-wager').value, 10) || 0;
+
+      // Client-side balance check BEFORE sending
+      if (wagerVal > 0 && playerBalance < wagerVal) {
+        errEl.textContent = '💎 אין מספיק קרדיטים (' + playerBalance + '). צריך ' + wagerVal + ' 💎';
+        return;
+      }
+
       this.disabled = true;
       this.textContent = 'יוצר...';
 
       try {
-        const wagerVal = parseInt(document.getElementById('ctf-wager').value, 10) || 0;
         const res = await fetch(API_BASE + '/api/contests', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -3928,14 +3936,29 @@
           this.textContent = 'צור והעתק קוד';
           return;
         }
-        if (!res.ok) throw new Error('Server error');
         const data = await res.json();
+        if (!res.ok || !data.ok) {
+          var errorMsg = 'שגיאה ביצירת התחרות';
+          if (data.error === 'insufficient_balance') errorMsg = '💎 אין מספיק קרדיטים להימור. יש לך ' + playerBalance + ' 💎';
+          else if (data.error === 'bad_name') errorMsg = 'שם התחרות לא תקין';
+          else if (data.error === 'bad_device') errorMsg = 'שגיאת מכשיר — רענן את הדף';
+          errEl.textContent = errorMsg;
+          this.disabled = false;
+          this.textContent = 'צור והעתק קוד';
+          return;
+        }
+        // Success — update balance if wager was paid
+        if (wagerVal > 0) {
+          playerBalance = Math.max(0, playerBalance - wagerVal);
+          try { localStorage.setItem(PLAYER_BALANCE_KEY, String(playerBalance)); } catch(e) {}
+          updateBalanceDisplay();
+        }
         setPlayerName(hostVal);
         setContestDisplayName(data.contest.code, hostVal);
         setActiveContest(data.contest.code);
         showContestShareScreen(data.contest);
       } catch (e) {
-        errEl.textContent = 'שגיאה ביצירת התחרות';
+        errEl.textContent = 'שגיאת רשת — בדוק חיבור ונסה שוב';
         this.disabled = false;
         this.textContent = 'צור והעתק קוד';
       }
@@ -4111,7 +4134,20 @@
             this.textContent = 'הצטרף ושחק';
             return;
           }
-          if (!res.ok) throw new Error('Join failed');
+          if (!res.ok) {
+            var errData = {};
+            try { errData = await res.json(); } catch(e) {}
+            var errMsg = 'שגיאה. נסה שוב.';
+            if (errData.error === 'insufficient_balance') errMsg = '💎 אין מספיק קרדיטים להימור. צריך ' + (errData.wagerRequired || '?') + ' 💎, יש לך ' + playerBalance;
+            else if (errData.error === 'ended') errMsg = 'התחרות הסתיימה';
+            else if (errData.error === 'not_found') errMsg = 'תחרות לא נמצאה';
+            document.getElementById('cjp-error').textContent = errMsg;
+            this.disabled = false;
+            this.textContent = 'הצטרף ושחק';
+            return;
+          }
+          // Update balance if wager was paid
+          fetchPlayerCode(); // refresh balance from server
           setPlayerName(nameVal);
           setContestDisplayName(code, nameVal);
           setActiveContest(code);
