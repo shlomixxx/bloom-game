@@ -2610,6 +2610,57 @@ if (ADMIN_PATH && ADMIN_PASSWORD) {
 // PLAYER HEARTBEAT — tracks all active players (any mode)
 // ============================================================
 // ============================================================
+// PUBLIC PLAYER PROFILE — /player/BLOOM-XXXX
+// ============================================================
+app.get('/player/:code', async (req, res) => {
+  const code = String(req.params.code || '').toUpperCase().slice(0, 10);
+  try {
+    const p = await pool.query(
+      `SELECT player_code, display_name, balance, total_earned, total_spent, COALESCE(xp, 0) as xp, COALESCE(level, 1) as level, created_at FROM player_profiles WHERE player_code = $1`, [code]);
+    if (!p.rows.length) return res.status(404).send('<!DOCTYPE html><html><body style="font-family:sans-serif;text-align:center;padding:40px"><h2>שחקן לא נמצא</h2><a href="/">שחק ב-BLOOM</a></body></html>');
+    const player = p.rows[0];
+    const lvl = calcLevel(player.xp);
+    const gamesRow = await pool.query(`SELECT COUNT(*) as games, MAX(score) as best FROM daily_scores WHERE device_id = (SELECT device_id FROM player_profiles WHERE player_code = $1)`, [code]);
+    const stats = gamesRow.rows[0] || { games: 0, best: 0 };
+    const referrals = await pool.query(`SELECT COUNT(*) as count FROM referrals WHERE referrer_code = $1`, [code]);
+    const joinDate = new Date(player.created_at).toLocaleDateString('he-IL');
+
+    res.send(`<!DOCTYPE html><html lang="he" dir="rtl">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${player.display_name || code} — BLOOM</title>
+<meta property="og:title" content="${player.display_name || code} ב-BLOOM">
+<meta property="og:description" content="רמה ${lvl.level} ${lvl.title} · שיא ${(stats.best|0).toLocaleString()} נקודות">
+<style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#F7F5F0;color:#1C1A18;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+.card{background:#FFF;border-radius:20px;padding:28px;max-width:360px;width:100%;box-shadow:0 4px 20px rgba(0,0,0,0.06)}
+.name{font-size:22px;font-weight:700;text-align:center}
+.code{font-size:13px;color:#6F6E68;text-align:center;letter-spacing:0.1em;margin:4px 0 12px}
+.level{text-align:center;font-size:14px;font-weight:600;color:#6C3483;margin-bottom:16px}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px}
+.stat{background:#FAFAF6;border-radius:12px;padding:12px;text-align:center}
+.stat-val{font-size:18px;font-weight:700}.stat-lbl{font-size:11px;color:#A8A6A0;margin-top:2px}
+.joined{text-align:center;font-size:11px;color:#A8A6A0;margin-bottom:16px}
+.cta{display:block;width:100%;padding:14px;background:#1C1A18;color:#FFF;border:none;border-radius:12px;font-size:15px;font-weight:700;text-decoration:none;text-align:center;font-family:inherit}
+</style></head><body>
+<div class="card">
+<div class="name">${player.display_name || 'שחקן'}</div>
+<div class="code">${player.player_code}</div>
+<div class="level">${lvl.title} · רמה ${lvl.level}</div>
+<div class="stats">
+<div class="stat"><div class="stat-val">${(stats.best|0).toLocaleString()}</div><div class="stat-lbl">🏆 שיא</div></div>
+<div class="stat"><div class="stat-val">${stats.games|0}</div><div class="stat-lbl">🎮 משחקים</div></div>
+<div class="stat"><div class="stat-val">${player.balance|0}</div><div class="stat-lbl">💎 קרדיטים</div></div>
+<div class="stat"><div class="stat-val">${referrals.rows[0].count|0}</div><div class="stat-lbl">🔗 הפניות</div></div>
+</div>
+<div class="joined">הצטרף ב-${joinDate}</div>
+<a class="cta" href="/?ref=${code}">🌸 שחק גם ב-BLOOM</a>
+</div></body></html>`);
+  } catch (e) {
+    console.error('profile', e.message);
+    res.status(500).send('שגיאה');
+  }
+});
+
+// ============================================================
 // Player identity + referrals
 // ============================================================
 

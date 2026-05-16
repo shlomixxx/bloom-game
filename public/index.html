@@ -5442,7 +5442,8 @@
         '<div class="hsb-cell"><div class="hsb-val">' + totalGames + '</div><div class="hsb-lbl">משחקים</div></div>' +
         (timeText ? '<div class="hsb-cell"><div class="hsb-val">' + timeText + '</div><div class="hsb-lbl">🕐 זמן</div></div>' : '') +
       '</div>' +
-      '<button class="hsb-share" id="hsb-share-btn">📤 שתף את הפרופיל</button>';
+      '<button class="hsb-share" id="hsb-share-btn">📤 שתף את הפרופיל</button>' +
+      (playerCode ? '<a href="/player/' + playerCode + '" target="_blank" style="display:block;text-align:center;font-size:11px;color:#6F6E68;margin-top:6px;text-decoration:underline">צפה בפרופיל הציבורי</a>' : '');
 
     document.getElementById('hsb-share-btn').onclick = function(e) {
       e.stopPropagation();
