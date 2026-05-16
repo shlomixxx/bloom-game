@@ -5178,6 +5178,7 @@ function trackEvent(n,p){try{gtag('event',n,p||{});}catch(e){}}
             localStorage.setItem(PLAYER_LEVEL_KEY, String(playerLevel));
             localStorage.setItem(PLAYER_LEVEL_TITLE_KEY, playerLevelTitle);
           } catch(e) {}
+          updateBalanceDisplay();
           processReferral();
         }
       }).catch(function() {});
@@ -8039,6 +8040,7 @@ function trackEvent(n,p){try{gtag('event',n,p||{});}catch(e){}}
     opts = opts || {};
     document.getElementById('score').textContent = score.toLocaleString();
     document.getElementById('best').textContent = best.toLocaleString();
+    updateBalanceDisplay();
     // "Near best" cue — once the current run gets within 10% of the personal
     // best, the best value pulses in gold to invite a record attempt.
     const bestEl = document.getElementById('best');
