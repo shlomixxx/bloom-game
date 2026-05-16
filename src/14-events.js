@@ -1,6 +1,7 @@
   // ============================================================
   // EVENT DROPS — special items that appear on the board
   // ============================================================
+  window.__bloomEventsLoaded = true;
 
   var activeEvent = null;       // { type, row, col, timer, maxTimer, interval }
   var lastEventTime = 0;        // timestamp of last event end

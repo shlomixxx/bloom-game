@@ -5169,7 +5169,7 @@
         const data = await res.json();
         if (data && typeof data.rank === 'number') dailyRank = data.rank;
         // Earn credits for daily completion
-        if (!window.__bloomBotActive) earnCredits('daily_complete');
+        if (!window.__bloomBotActive && mode === 'daily') earnCredits('daily_complete');
         trackEvent('game_over', { mode: mode, score: score, tier: highestTier });
       }
     } catch (e) {
@@ -6962,6 +6962,7 @@
   // ============================================================
   // EVENT DROPS — special items that appear on the board
   // ============================================================
+  window.__bloomEventsLoaded = true;
 
   var activeEvent = null;       // { type, row, col, timer, maxTimer, interval }
   var lastEventTime = 0;        // timestamp of last event end
