@@ -1,13 +1,15 @@
 /* BLOOM service worker — offline-first for the shell, network-only for the API.
    Bump CACHE_NAME whenever any pre-cached asset changes so the activate step
    evicts the old cache. */
-const CACHE_NAME = 'bloom-v1-2026-05-14';
+const CACHE_NAME = 'bloom-v1.2-2026-05-16';
 
 // Tiny, stable shell. mp3 files are deliberately NOT pre-cached because some
 // browsers (Safari) misbehave when a service worker tries to fulfil Range
 // requests for audio; the browser's HTTP cache handles them well enough.
 const PRECACHE = [
   '/',
+  '/styles.css',
+  '/app.js',
   '/manifest.json',
   '/assets/favicon.svg',
   '/assets/favicon-16.png',
