@@ -5517,6 +5517,7 @@
     if (row === -1) {
       // Column is full — check if the whole board is game-over
       if (isGameOver()) {
+        busy = true; // prevent further taps
         // Save best score BEFORE rendering game-over
         var isNewBest = score > best && !skinTrialMode;
         if (isNewBest) { best = score; localStorage.setItem(BEST_KEY, String(best)); }
@@ -5532,19 +5533,53 @@
           try { localStorage.setItem(TOTAL_PLAY_TIME_KEY, String(totalMs)); } catch(e) {}
         }
         checkAchievements();
-        // Submit practice scores to leaderboard too
+        // Challenge game-over
+        if (mode === 'challenge' && activeChallenge) {
+          var w = document.getElementById('grid-wrap');
+          if (w) w.innerHTML = '<div class="overlay"><div class="over-title">האתגר הסתיים</div><div class="contest-loading" style="margin-top:14px">שולח תוצאה…</div></div>';
+          (async function() {
+            var result = await completeChallengeRun();
+            renderChallengeResult(result);
+          })();
+          return;
+        }
+        // Daily + Practice: submit to leaderboard
         if ((mode === 'practice' || mode === 'daily') && !dailySubmitted) {
           if (mode === 'daily') {
             dailySubmitted = true;
             localStorage.setItem(DAILY_PLAYED_PREFIX + dailyDate, JSON.stringify({ score: score, tier: highestTier, ts: Date.now() }));
           }
+          render({ over: true, isNewBest: isNewBest });
           if (!playerName) {
             promptForName(function() { submitAndShowLeaderboard(); });
           } else {
             submitAndShowLeaderboard();
           }
+        } else {
+          render({ over: true, isNewBest: isNewBest });
         }
-        render({ over: true, isNewBest: isNewBest });
+        // Contest: submit score
+        if (mode === 'contest' && !contestSubmitted && activeContestCode) {
+          contestSubmitted = true;
+          clearContestGameState();
+          stopOvertakeWatch();
+          setLastFinalScore(activeContestCode, score | 0);
+          stopLivePush();
+          activeGameContestCode = null;
+          (async function() {
+            await submitContestScore(activeContestCode, score, highestTier);
+            await loadContestLeaderboard();
+            if (!window.__bloomBotActive && leaderboard.length > 0) {
+              for (var i = 0; i < Math.min(3, leaderboard.length); i++) {
+                if (leaderboard[i].you) {
+                  earnCredits(['contest_1st', 'contest_2nd', 'contest_3rd'][i]);
+                  break;
+                }
+              }
+            }
+          })();
+        }
+        if (mode === 'practice') clearPracticeGameState();
       }
       return;
     }
