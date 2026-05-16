@@ -1,6 +1,7 @@
 import express from 'express';
 import { timingSafeEqual, createHmac, randomBytes } from 'node:crypto';
 import { readFile as readFileSw } from 'node:fs/promises';
+import { readFileSync } from 'node:fs';
 import { pool, initDb } from './db.js';
 import { startBots, stopBots, getBotStatus } from './bot-engine.js';
 
@@ -56,6 +57,37 @@ app.get('/sw.js', async (_req, res) => {
     res.status(500).send('// sw.js unavailable');
   }
 });
+
+// ============================================================
+// SEO: robots.txt + sitemap.xml
+// ============================================================
+app.get('/robots.txt', (_req, res) => {
+  res.type('text/plain').send(`User-agent: *\nAllow: /\nSitemap: https://bloom-web-production-f3bd.up.railway.app/sitemap.xml`);
+});
+
+app.get('/sitemap.xml', (_req, res) => {
+  const base = 'https://bloom-web-production-f3bd.up.railway.app';
+  const today = new Date().toISOString().slice(0, 10);
+  res.type('application/xml').send(`<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>${base}/</loc><lastmod>${today}</lastmod><changefreq>daily</changefreq><priority>1.0</priority></url>
+</urlset>`);
+});
+
+// ============================================================
+// GA4 INJECTION — replaces GA_MEASUREMENT_ID with env var GA_ID
+// ============================================================
+const GA_ID = process.env.GA_ID || '';
+if (GA_ID) {
+  let indexHtml = '';
+  try { indexHtml = readFileSync('public/index.html', 'utf8'); } catch (e) {}
+  if (indexHtml) {
+    const injectedHtml = indexHtml.replace(/GA_MEASUREMENT_ID/g, GA_ID);
+    app.get('/', (_req, res) => {
+      res.type('html').send(injectedHtml);
+    });
+  }
+}
 
 app.use(express.static('public', { maxAge: '5m', extensions: ['html'] }));
 

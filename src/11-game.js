@@ -963,6 +963,7 @@
   function shareResultWhatsApp() {
     var text = buildShareText();
     window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank');
+    trackEvent('share', { method: 'whatsapp', type: 'result' });
   }
 
   function buildAddictionShareText() {
@@ -987,6 +988,7 @@
 
   function shareAddiction(via) {
     var text = buildAddictionShareText();
+    trackEvent('share', { method: via, type: 'addiction' });
     if (via === 'whatsapp') {
       window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank');
     } else if (navigator.share) {

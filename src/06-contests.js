@@ -497,6 +497,7 @@
           setPlayerName(nameVal);
           setContestDisplayName(code, nameVal);
           setActiveContest(code);
+          trackEvent('contest_join', { code: code });
           hideContestScreens();
           init('contest');
         } catch (e) {

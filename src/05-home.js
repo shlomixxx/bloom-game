@@ -164,6 +164,7 @@
       }
       text += '\n\nנסה וגלה אם תצליח לנצח אותי:\n' + link;
       window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank');
+      trackEvent('share', { method: 'whatsapp', type: 'invite' });
     };
     // Wire the "איך משחקים?" link
     const tourLink = document.getElementById('home-tour-btn');

@@ -204,6 +204,7 @@
     if (m) m.remove();
     if (opts.markSeen !== false) {
       try { localStorage.setItem(TOUR_KEY, '1'); } catch (e) {}
+      trackEvent('tutorial_complete');
     }
     if (_tourOnDone) { const cb = _tourOnDone; _tourOnDone = null; cb(); }
   }

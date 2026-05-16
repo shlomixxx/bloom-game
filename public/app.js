@@ -1720,6 +1720,7 @@
       }
       text += '\n\nנסה וגלה אם תצליח לנצח אותי:\n' + link;
       window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank');
+      trackEvent('share', { method: 'whatsapp', type: 'invite' });
     };
     // Wire the "איך משחקים?" link
     const tourLink = document.getElementById('home-tour-btn');
@@ -2268,6 +2269,7 @@
           setPlayerName(nameVal);
           setContestDisplayName(code, nameVal);
           setActiveContest(code);
+          trackEvent('contest_join', { code: code });
           hideContestScreens();
           init('contest');
         } catch (e) {
@@ -4011,6 +4013,7 @@
         setPlayerName(name);
         modal.remove();
         hideChallengeScreens();
+        trackEvent('challenge_enter', { slug: c.slug, type: c.challengeType });
         beginChallengeRun(c, data);
       } catch (e) {
         errEl.textContent = 'שגיאת חיבור. נסה שוב.';
@@ -5704,6 +5707,7 @@
   function shareResultWhatsApp() {
     var text = buildShareText();
     window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank');
+    trackEvent('share', { method: 'whatsapp', type: 'result' });
   }
 
   function buildAddictionShareText() {
@@ -5728,6 +5732,7 @@
 
   function shareAddiction(via) {
     var text = buildAddictionShareText();
+    trackEvent('share', { method: via, type: 'addiction' });
     if (via === 'whatsapp') {
       window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank');
     } else if (navigator.share) {
@@ -5943,6 +5948,7 @@
     if (m) m.remove();
     if (opts.markSeen !== false) {
       try { localStorage.setItem(TOUR_KEY, '1'); } catch (e) {}
+      trackEvent('tutorial_complete');
     }
     if (_tourOnDone) { const cb = _tourOnDone; _tourOnDone = null; cb(); }
   }

@@ -214,6 +214,7 @@
         setPlayerName(name);
         modal.remove();
         hideChallengeScreens();
+        trackEvent('challenge_enter', { slug: c.slug, type: c.challengeType });
         beginChallengeRun(c, data);
       } catch (e) {
         errEl.textContent = 'שגיאת חיבור. נסה שוב.';
