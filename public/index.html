@@ -882,6 +882,7 @@
   .lb-tab.active { background: #1C1A18; color: #FFF; box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
   }
   .lb-range { font-size: 11px; color: #A8A6A0; margin-bottom: 8px; direction: rtl; text-align: right; }
+  .lb-modal-card { min-height: 480px; }
 
   .streak-val { color: #D95A1B; font-variant-numeric: tabular-nums; }
   .streak-val.zero { color: #A8A6A0; }
@@ -7104,17 +7105,20 @@
     modal.id = 'lb-modal';
     modal.className = 'info-modal';
     modal.innerHTML =
-      '<div class="info-card">' +
+      '<div class="info-card lb-modal-card" style="direction:rtl;max-width:380px">' +
         '<button class="info-close" id="lb-modal-close" aria-label="סגור">' +
           '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>' +
         '</button>' +
-        '<div class="info-title">טבלת מובילים</div>' +
-        '<div class="lb-tabs">' +
-          '<button class="lb-tab" data-period="day">יומי</button>' +
-          '<button class="lb-tab" data-period="week">שבועי</button>' +
+        '<div style="text-align:center;margin-bottom:4px"><span style="font-size:22px">🏆</span></div>' +
+        '<div class="info-title" style="margin-bottom:2px">טבלת מובילים</div>' +
+        '<div class="lb-tabs" style="direction:ltr">' +
           '<button class="lb-tab" data-period="month">חודשי</button>' +
+          '<button class="lb-tab" data-period="week">שבועי</button>' +
+          '<button class="lb-tab" data-period="day">יומי</button>' +
         '</div>' +
-        '<div id="lb-modal-body"></div>' +
+        '<div id="lb-modal-range" style="font-size:11px;color:#A8A6A0;text-align:center;margin-bottom:6px"></div>' +
+        '<div id="lb-modal-body" style="max-height:340px;overflow-y:auto;-webkit-overflow-scrolling:touch"></div>' +
+        '<div id="lb-modal-footer" style="text-align:center;margin-top:8px"></div>' +
       '</div>';
     wrap.appendChild(modal);
     document.getElementById('lb-modal-close').onclick = closeLeaderboardModal;
@@ -7167,38 +7171,62 @@
 
   function renderLbModalBody() {
     const body = document.getElementById('lb-modal-body');
+    const rangeEl = document.getElementById('lb-modal-range');
+    const footerEl = document.getElementById('lb-modal-footer');
     if (!body) return;
     if (lbModalLoading) {
       body.innerHTML = '<div class="lb-loading">טוען…</div>';
+      if (rangeEl) rangeEl.textContent = '';
+      if (footerEl) footerEl.innerHTML = '';
       return;
     }
-    let rangeText = '';
-    if (lbModalRange) {
+    // Range text
+    if (rangeEl && lbModalRange) {
       if (lbModalPeriod === 'day') {
-        rangeText = formatDateHe(lbModalRange.to) + ' · ' + (lbModalRange.total || 0) + ' שחקנים';
+        rangeEl.textContent = formatDateHe(lbModalRange.to) + ' · ' + (lbModalRange.total || 0) + ' שחקנים';
       } else {
-        rangeText = formatDateHe(lbModalRange.from) + ' – ' + formatDateHe(lbModalRange.to) + ' · ' + (lbModalRange.total || 0) + ' שחקנים';
+        rangeEl.textContent = formatDateHe(lbModalRange.from) + ' – ' + formatDateHe(lbModalRange.to) + ' · ' + (lbModalRange.total || 0) + ' שחקנים';
       }
     }
     if (!lbModalList.length) {
-      body.innerHTML = (rangeText ? '<div class="lb-range">' + rangeText + '</div>' : '') +
-        '<div class="lb-empty">אין עדיין ניקודים בטווח הזה</div>';
+      body.innerHTML = '<div class="lb-empty">אין עדיין ניקודים בטווח הזה</div>';
+      if (footerEl) footerEl.innerHTML = '';
       return;
     }
+    const topScore = lbModalList[0] ? lbModalList[0].score : 1;
     const rows = lbModalList.slice(0, 50).map(function(row, i) {
       const isYou = row.you;
+      const rank = i + 1;
       const seed = isYou ? deviceId : (row.name || 'anon');
-      return '<div class="lb-row' + (isYou ? ' you' : '') + '">' +
-        '<div class="lb-rank">' + (i+1) + '</div>' +
+      var rankClass = rank === 1 ? ' lb-top1' : rank === 2 ? ' lb-top2' : rank === 3 ? ' lb-top3' : '';
+      var medal = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : String(rank);
+      var barPct = Math.max(5, Math.round(((row.score || 0) / topScore) * 100));
+      var barColor = rank === 1 ? 'linear-gradient(90deg,#FFD700,#FFA500)' : rank === 2 ? 'linear-gradient(90deg,#C0C0C0,#999)' : rank === 3 ? 'linear-gradient(90deg,#CD7F32,#A06020)' : rank <= 5 ? 'linear-gradient(90deg,#C0DD97,#8BBF5A)' : '#E8E6E0';
+      return '<div class="lb-row' + rankClass + (isYou ? ' you' : '') + '">' +
+        '<div class="lb-rank">' + medal + '</div>' +
         renderAvatarHtml(seed, 'sm') +
-        '<div class="lb-name">' + escapeHtml(row.name || 'אנונימי') + (isYou ? ' (אתה)' : '') + '</div>' +
+        '<div style="flex:1;overflow:hidden">' +
+          '<div class="lb-name">' + escapeHtml(row.name || 'אנונימי') + (isYou ? ' <span style="font-size:10px;opacity:0.7">(אתה)</span>' : '') + '</div>' +
+          '<div class="lb-bar" style="width:' + barPct + '%;background:' + barColor + '"></div>' +
+        '</div>' +
         '<div class="lb-score">' + (row.score || 0).toLocaleString() + '</div>' +
       '</div>';
     }).join('');
-    body.innerHTML =
-      (rangeText ? '<div class="lb-range">' + rangeText + '</div>' : '') +
-      '<div class="lb-list">' + rows + '</div>' +
-      (lbModalRank ? '<div class="lb-rank-pill">המקום שלך: #' + lbModalRank + '</div>' : '');
+    body.innerHTML = '<div class="lb-list">' + rows + '</div>';
+
+    // Motivation footer
+    if (footerEl) {
+      var yourRank = lbModalRank || -1;
+      if (yourRank <= 0) {
+        for (var j = 0; j < lbModalList.length; j++) { if (lbModalList[j].you) { yourRank = j + 1; break; } }
+      }
+      var mot = '';
+      if (yourRank > 0 && yourRank <= 3) mot = '<span style="font-size:13px;font-weight:700;color:#BA7517">🔥 אתה בטופ 3!</span>';
+      else if (yourRank > 0 && yourRank <= 5) mot = '<span style="font-size:12px;font-weight:600;color:#BA7517">💪 קרוב לטופ 3! עוד קצת!</span>';
+      else if (yourRank > 0 && yourRank <= 10) mot = '<span style="font-size:12px;font-weight:600;color:#6F6E68">⬆️ מקום #' + yourRank + ' — תשחק עוד!</span>';
+      else if (yourRank > 0) mot = '<span style="font-size:12px;color:#6F6E68">🎯 מקום #' + yourRank + ' — תכוון גבוה!</span>';
+      footerEl.innerHTML = mot;
+    }
   }
 
   function promptForName(cb) {
