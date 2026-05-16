@@ -2940,7 +2940,7 @@ app.get('/api/player/code', async (req, res) => {
 const XP_MAP = {
   daily_complete: 50, daily_login: 15, streak_3: 30, streak_7: 80, streak_30: 300,
   contest_1st: 100, contest_2nd: 50, contest_3rd: 30,
-  score_milestone: 10
+  score_milestone: 10, event_gift: 5
 };
 const LEVELS = [
   { level: 1,  xp: 0,      title: 'מתחיל' },
@@ -2981,20 +2981,46 @@ app.post('/api/player/earn', async (req, res) => {
       'contest_1st': 'contest_1st_reward',
       'contest_2nd': 'contest_2nd_reward',
       'contest_3rd': 'contest_3rd_reward',
-      'score_milestone': 'score_milestone_reward'
+      'score_milestone': 'score_milestone_reward',
+      'event_gift': '_custom_amount_'
     };
     const configKey = actionMap[action];
     if (!configKey) return res.json({ ok: false, reason: 'unknown_action' });
 
     const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' });
-    const dedupKey = action + ':' + today + (meta ? ':' + JSON.stringify(meta) : '');
-    // Dedup ALL actions per device per day (not just daily_login/daily_complete)
-    const dup = await pool.query(
-      `SELECT 1 FROM game_config WHERE key = $1`, ['_earn:' + deviceId + ':' + dedupKey]);
-    if (dup.rows.length) return res.json({ ok: false, reason: 'already_earned' });
 
-    const cfgRow = await pool.query('SELECT value FROM game_config WHERE key = $1', [configKey]);
-    const reward = parseInt((cfgRow.rows[0] || {}).value, 10) || 0;
+    // Event gifts: no daily dedup, but rate-limit to 1 per 10 seconds
+    if (action === 'event_gift') {
+      const rateKey = '_gift_rate:' + deviceId;
+      const rateCheck = await pool.query('SELECT value FROM game_config WHERE key = $1', [rateKey]);
+      if (rateCheck.rows.length) {
+        const lastTs = parseInt(rateCheck.rows[0].value, 10) || 0;
+        if (Date.now() - lastTs < 10000) return res.json({ ok: false, reason: 'rate_limited' });
+      }
+      await pool.query(
+        `INSERT INTO game_config (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2`,
+        [rateKey, String(Date.now())]).catch(() => {});
+    } else {
+      // All other actions: dedup per device per day (with meta for uniqueness)
+      const dedupKey = action + ':' + today + (meta ? ':' + JSON.stringify(meta) : '');
+      const dup = await pool.query(
+        `SELECT 1 FROM game_config WHERE key = $1`, ['_earn:' + deviceId + ':' + dedupKey]);
+      if (dup.rows.length) return res.json({ ok: false, reason: 'already_earned' });
+      // Save dedup key
+      await pool.query(
+        `INSERT INTO game_config (key, value) VALUES ($1, $2) ON CONFLICT (key) DO NOTHING`,
+        ['_earn:' + deviceId + ':' + dedupKey, '1']).catch(() => {});
+    }
+
+    // Calculate reward
+    let reward;
+    if (action === 'event_gift') {
+      // Custom amount from client, capped at 500 to prevent abuse
+      reward = Math.min(Math.max(parseInt((meta && meta.amount) || 0, 10), 1), 500);
+    } else {
+      const cfgRow = await pool.query('SELECT value FROM game_config WHERE key = $1', [configKey]);
+      reward = parseInt((cfgRow.rows[0] || {}).value, 10) || 0;
+    }
     if (reward <= 0) return res.json({ ok: false, reason: 'reward_disabled' });
 
     // Award credits + XP
@@ -3008,11 +3034,6 @@ app.post('/api/player/earn', async (req, res) => {
     await pool.query(
       `UPDATE player_profiles SET balance = balance + $1, total_earned = total_earned + $1, xp = COALESCE(xp, 0) + $2, level = $3 WHERE device_id = $4`,
       [reward, xpGain, newLevel.level, deviceId]);
-
-    // Save dedup key for ALL actions
-    await pool.query(
-      `INSERT INTO game_config (key, value) VALUES ($1, $2) ON CONFLICT (key) DO NOTHING`,
-      ['_earn:' + deviceId + ':' + dedupKey, '1']).catch(() => {});
 
     const newBal = player.rows[0].balance + reward;
     res.json({ ok: true, action, reward, xpGain, newBalance: newBal, level: newLevel, leveledUp });

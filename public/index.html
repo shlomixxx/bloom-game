@@ -130,71 +130,7 @@ function trackEvent(n,p){try{gtag('event',n,p||{});}catch(e){}}
   <div class="grid-wrap" id="grid-wrap"><div class="grid" id="grid"></div></div>
 </div>
 
-<script src="/app.js?v=20260517e"></script>
-
-<script>
-// Diagnostic v20260517e — runs outside IIFE
-window.addEventListener('load', function() {
-  // Show version
-  setTimeout(function() {
-    var d = document.createElement('div');
-    d.style.cssText = 'position:fixed;top:60px;left:10px;right:10px;padding:10px;z-index:9999;text-align:center;border-radius:8px;font-weight:bold;font-size:12px';
-    if (window.__bloomEventsLoaded) {
-      d.style.background = '#2E8B6F'; d.style.color = 'white';
-      d.textContent = '✅ Events code loaded (v20260517e)';
-    } else {
-      d.style.background = 'red'; d.style.color = 'white';
-      d.textContent = '⚠️ Events code NOT loaded — old cached version!';
-    }
-    document.body.appendChild(d);
-    setTimeout(function() { d.remove(); }, 5000);
-  }, 2000);
-
-  // Game detection: check every 2 seconds
-  var checkCount = 0;
-  var checker = setInterval(function() {
-    checkCount++;
-    if (checkCount > 20) { clearInterval(checker); return; }
-    
-    var homeScreen = document.getElementById('home-screen');
-    var gridEl = document.getElementById('grid');
-    var hasCells = gridEl && gridEl.children && gridEl.children.length > 0;
-    var isGameVisible = !homeScreen && hasCells;
-    
-    if (!isGameVisible) return;
-    clearInterval(checker);
-    
-    // Game is visible! Show diagnostic
-    var d = document.createElement('div');
-    d.style.cssText = 'position:fixed;bottom:100px;left:10px;right:10px;padding:12px;z-index:9999;text-align:center;border-radius:8px;font-weight:bold;font-size:13px;background:#9B59B6;color:#FFF';
-    d.textContent = '🟣 GAME VISIBLE! cells=' + gridEl.children.length + ' checking events...';
-    document.body.appendChild(d);
-    
-    // Try to find empty cell and put a visual on it
-    setTimeout(function() {
-      var cell = null;
-      for (var i = 0; i < gridEl.children.length; i++) {
-        if (!gridEl.children[i].classList.contains('filled')) {
-          cell = gridEl.children[i];
-          break;
-        }
-      }
-      if (cell) {
-        var rect = cell.getBoundingClientRect();
-        var marker = document.createElement('div');
-        marker.style.cssText = 'position:fixed;top:' + rect.top + 'px;left:' + rect.left + 'px;width:' + rect.width + 'px;height:' + rect.height + 'px;background:rgba(255,0,0,0.7);border:3px solid gold;border-radius:12px;z-index:9999;display:flex;align-items:center;justify-content:center;font-size:28px;pointer-events:none';
-        marker.textContent = '💣';
-        document.body.appendChild(marker);
-        d.textContent = '🟣 PLACED 💣 at cell ' + i + ' (top=' + Math.round(rect.top) + ',left=' + Math.round(rect.left) + ',w=' + Math.round(rect.width) + ')';
-        setTimeout(function() { marker.remove(); }, 8000);
-      } else {
-        d.textContent = '🟣 No empty cells found!';
-      }
-      setTimeout(function() { d.remove(); }, 8000);
-    }, 500);
-  }, 2000);
-});
-</script>
+<script src="/app.js?v=20260517f"></script>
 
 <script src="/bot.js"></script>
 

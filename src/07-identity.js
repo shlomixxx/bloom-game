@@ -241,10 +241,12 @@
   }
   var _earnedThisSession = {};
   function earnCredits(action, meta) {
-    // Client-side session dedup — never call server twice for same action
-    var dedupKey = action + (meta ? ':' + JSON.stringify(meta) : '');
-    if (_earnedThisSession[dedupKey]) return;
-    _earnedThisSession[dedupKey] = true;
+    // Client-side session dedup — except event_gift which can fire multiple times
+    if (action !== 'event_gift') {
+      var dedupKey = action + (meta ? ':' + JSON.stringify(meta) : '');
+      if (_earnedThisSession[dedupKey]) return;
+      _earnedThisSession[dedupKey] = true;
+    }
     fetch(API_BASE + '/api/player/earn', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -284,7 +286,7 @@
   }
   function showCreditToast(amount, action) {
     var labels = { daily_complete: 'אתגר יומי', streak_3: 'רצף 3 ימים!', streak_7: 'רצף 7 ימים!', streak_30: 'רצף 30 ימים!',
-      contest_1st: 'מקום ראשון!', contest_2nd: 'מקום שני!', contest_3rd: 'מקום שלישי!' };
+      contest_1st: 'מקום ראשון!', contest_2nd: 'מקום שני!', contest_3rd: 'מקום שלישי!', event_gift: '🎁 מתנה!' };
     var label = labels[action] || '';
     var t = document.createElement('div');
     t.className = 'credit-toast';

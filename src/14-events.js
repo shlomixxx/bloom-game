@@ -337,14 +337,18 @@
     var jpAmount = getEventNum('event_gift_jackpot_amount', 500);
 
     var isJackpot = Math.random() * 100 < jpChance;
+    var amount;
     if (isJackpot) {
-      showEventBanner('🎁 JACKPOT!!!', '+' + jpAmount + ' 💎', 'gift-jackpot');
+      amount = jpAmount;
+      showEventBanner('🎁 JACKPOT!!!', '+' + amount + ' 💎', 'gift-jackpot');
       buzz([80, 40, 80, 40, 80, 40, 80]);
-      if (!window.__bloomBotActive && !skinTrialMode) earnCredits('score_milestone');
     } else {
-      var amount = minC + Math.floor(Math.random() * (maxC - minC + 1));
+      amount = minC + Math.floor(Math.random() * (maxC - minC + 1));
       showEventBanner('🎁 מתנה!', '+' + amount + ' 💎', 'gift');
-      if (!window.__bloomBotActive && !skinTrialMode) earnCredits('score_milestone');
+    }
+    // Send actual amount to server (not fixed config value)
+    if (!window.__bloomBotActive && !skinTrialMode) {
+      earnCredits('event_gift', { amount: amount });
     }
   }
 

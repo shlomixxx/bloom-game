@@ -715,7 +715,8 @@
         scoreMilestonesHit[m.at] = true;
         showScoreMilestoneBanner(m.label, m.reward);
         if (m.reward > 0 && !window.__bloomBotActive && !skinTrialMode) {
-          earnCredits('score_milestone');
+          // Pass unique threshold as meta so each milestone is deduped individually
+          earnCredits('event_gift', { amount: m.reward, milestone: m.at });
         }
       }
     }

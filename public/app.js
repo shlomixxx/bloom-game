@@ -3053,10 +3053,12 @@
   }
   var _earnedThisSession = {};
   function earnCredits(action, meta) {
-    // Client-side session dedup — never call server twice for same action
-    var dedupKey = action + (meta ? ':' + JSON.stringify(meta) : '');
-    if (_earnedThisSession[dedupKey]) return;
-    _earnedThisSession[dedupKey] = true;
+    // Client-side session dedup — except event_gift which can fire multiple times
+    if (action !== 'event_gift') {
+      var dedupKey = action + (meta ? ':' + JSON.stringify(meta) : '');
+      if (_earnedThisSession[dedupKey]) return;
+      _earnedThisSession[dedupKey] = true;
+    }
     fetch(API_BASE + '/api/player/earn', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -3096,7 +3098,7 @@
   }
   function showCreditToast(amount, action) {
     var labels = { daily_complete: 'אתגר יומי', streak_3: 'רצף 3 ימים!', streak_7: 'רצף 7 ימים!', streak_30: 'רצף 30 ימים!',
-      contest_1st: 'מקום ראשון!', contest_2nd: 'מקום שני!', contest_3rd: 'מקום שלישי!' };
+      contest_1st: 'מקום ראשון!', contest_2nd: 'מקום שני!', contest_3rd: 'מקום שלישי!', event_gift: '🎁 מתנה!' };
     var label = labels[action] || '';
     var t = document.createElement('div');
     t.className = 'credit-toast';
@@ -5543,7 +5545,8 @@
         scoreMilestonesHit[m.at] = true;
         showScoreMilestoneBanner(m.label, m.reward);
         if (m.reward > 0 && !window.__bloomBotActive && !skinTrialMode) {
-          earnCredits('score_milestone');
+          // Pass unique threshold as meta so each milestone is deduped individually
+          earnCredits('event_gift', { amount: m.reward, milestone: m.at });
         }
       }
     }
@@ -7303,14 +7306,18 @@
     var jpAmount = getEventNum('event_gift_jackpot_amount', 500);
 
     var isJackpot = Math.random() * 100 < jpChance;
+    var amount;
     if (isJackpot) {
-      showEventBanner('🎁 JACKPOT!!!', '+' + jpAmount + ' 💎', 'gift-jackpot');
+      amount = jpAmount;
+      showEventBanner('🎁 JACKPOT!!!', '+' + amount + ' 💎', 'gift-jackpot');
       buzz([80, 40, 80, 40, 80, 40, 80]);
-      if (!window.__bloomBotActive && !skinTrialMode) earnCredits('score_milestone');
     } else {
-      var amount = minC + Math.floor(Math.random() * (maxC - minC + 1));
+      amount = minC + Math.floor(Math.random() * (maxC - minC + 1));
       showEventBanner('🎁 מתנה!', '+' + amount + ' 💎', 'gift');
-      if (!window.__bloomBotActive && !skinTrialMode) earnCredits('score_milestone');
+    }
+    // Send actual amount to server (not fixed config value)
+    if (!window.__bloomBotActive && !skinTrialMode) {
+      earnCredits('event_gift', { amount: amount });
     }
   }
 
