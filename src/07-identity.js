@@ -239,7 +239,12 @@
   function getShareLink() {
     return window.location.origin + (playerCode ? '/?ref=' + playerCode : '');
   }
+  var _earnedThisSession = {};
   function earnCredits(action, meta) {
+    // Client-side session dedup — never call server twice for same action
+    var dedupKey = action + (meta ? ':' + JSON.stringify(meta) : '');
+    if (_earnedThisSession[dedupKey]) return;
+    _earnedThisSession[dedupKey] = true;
     fetch(API_BASE + '/api/player/earn', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

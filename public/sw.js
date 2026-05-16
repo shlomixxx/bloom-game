@@ -1,7 +1,7 @@
 /* BLOOM service worker — offline-first for the shell, network-only for the API.
    Bump CACHE_NAME whenever any pre-cached asset changes so the activate step
    evicts the old cache. */
-const CACHE_NAME = 'bloom-v2.1-events-fix';
+const CACHE_NAME = 'bloom-v3.0-netfirst';
 
 // Tiny, stable shell. mp3 files are deliberately NOT pre-cached because some
 // browsers (Safari) misbehave when a service worker tries to fulfil Range
@@ -71,7 +71,27 @@ self.addEventListener('fetch', function(event) {
     return;
   }
 
-  // Static assets: cache-first, then network (and fill the cache for next time).
+  // Static assets: network-first for JS/CSS (ensures latest code),
+  // cache-first for images/fonts (rarely change).
+  var isCode = url.pathname.endsWith('.js') || url.pathname.endsWith('.css');
+  if (isCode) {
+    event.respondWith(
+      fetch(req)
+        .then(function(res) {
+          if (res && res.ok) {
+            var clone = res.clone();
+            caches.open(CACHE_NAME).then(function(cache) { cache.put(req, clone); });
+          }
+          return res;
+        })
+        .catch(function() {
+          return caches.match(req);
+        })
+    );
+    return;
+  }
+
+  // Other static assets: cache-first, then network.
   event.respondWith(
     caches.match(req).then(function(cached) {
       if (cached) return cached;
