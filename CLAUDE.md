@@ -347,6 +347,7 @@ Railway project: `bloom-game` / service `bloom-web` / Postgres `Postgres-z2RQ`.
 - ✅ **Source code split** — `public/index.html` split to HTML shell (121 lines) + `public/styles.css` (from `css/*.css`, 5 files) + `public/app.js` (from `src/*.js`, 13 files). Build via `./build.sh`. Same IIFE, zero behavior change.
 - ✅ **Daily Login Reward (v1.3)** — `daily_login` action on server (25💎, daily dedup, 15 XP). Client shows animated reward modal on home screen with escalating display based on streak. "Come back tomorrow" messages in game-over include tomorrow's reward amount.
 - ✅ **Premium Player Profile** — `/player/BLOOM-XXXX` upgraded: dark mode auto-detect, avatar, XP progress bar, level badge, 7 stat cards (best score, games, credits, days active, contests, total earned, referrals), days since join, full OG/Twitter meta tags, share profile + WhatsApp buttons. Home screen links to own profile.
+- ✅ **Weekly Auto-Challenge** — server creates a new weekly contest automatically (runs on boot + hourly check). `contest_type` column on `contests` table (`'private'`/`'weekly'`). `GET /api/weekly` returns active weekly + player stats + prize. Home screen shows premium gold banner with prize, countdown, player count, and join CTA. Admin shows "שבועי" badge on weekly contests. Config: `weekly_enabled`, `weekly_prize` (500💎), `weekly_name`.
 
 ---
 
@@ -356,10 +357,9 @@ Railway project: `bloom-game` / service `bloom-web` / Postgres `Postgres-z2RQ`.
 2. **Google Analytics activation** — replace GA_MEASUREMENT_ID placeholder
 3. **Landing page + SEO** — public marketing page
 4. **Push notification reminders** — "חזור לאתגר היומי!"
-5. **Weekly auto-challenge** — automatic weekly contest
-6. **App Store listing** (PWA)
-7. **Monetization** — ads / premium themes
-8. **Sound asset polish** — optional voice cues
+5. **App Store listing** (PWA)
+6. **Monetization** — ads / premium themes
+7. **Sound asset polish** — optional voice cues
 
 ---
 
