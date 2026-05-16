@@ -2617,6 +2617,8 @@ function trackEvent(n,p){try{gtag('event',n,p||{});}catch(e){}}
     removeSkinTrialBanner();
     var pack = SKIN_PACKS[skinId];
     if (!pack) return;
+    // Add bottom padding so last row isn't hidden behind banner
+    document.body.style.paddingBottom = '56px';
     var banner = document.createElement('div');
     banner.id = 'skin-trial-banner';
     banner.className = 'skin-trial-banner';
@@ -2671,13 +2673,15 @@ function trackEvent(n,p){try{gtag('event',n,p||{});}catch(e){}}
     skinTrialOriginal = null;
     removeSkinTrialBanner();
     buildTierBar(true);
+    updateModeBar(); // refresh title back to "אימון חופשי"
     render();
-    showSkinShop(); // return to shop so player can buy or try another
+    showSkinShop();
   }
 
   function removeSkinTrialBanner() {
     var b = document.getElementById('skin-trial-banner');
     if (b) b.remove();
+    document.body.style.paddingBottom = '';
   }
   // ============ 1v1 DUEL SYSTEM ============
   function showDuelModal() {
