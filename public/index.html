@@ -2652,6 +2652,7 @@ function trackEvent(n,p){try{gtag('event',n,p||{});}catch(e){}}
           try { localStorage.setItem(ACTIVE_SKIN_KEY, skinId); } catch(e) {}
           skinTrialMode = false; skinTrialId = null;
           removeSkinTrialBanner();
+          updateModeBar();
           showCreditToast(-pack.price, pack.name + ' נרכש!');
           trackEvent('purchase', { item: 'skin', skin: skinId, cost: pack.price });
         }
@@ -2673,8 +2674,8 @@ function trackEvent(n,p){try{gtag('event',n,p||{});}catch(e){}}
     skinTrialOriginal = null;
     removeSkinTrialBanner();
     buildTierBar(true);
-    updateModeBar(); // refresh title back to "אימון חופשי"
-    render();
+    init('practice', { fresh: true }); // fresh game so trial score doesn't leak
+    updateModeBar();
     showSkinShop();
   }
 
@@ -7700,13 +7701,14 @@ function trackEvent(n,p){try{gtag('event',n,p||{});}catch(e){}}
     // in the background as a visual indicator only, never gating input.
     rollNextPiece();
     render();
-    if (score > best && mode !== 'practice') { best = score; localStorage.setItem(BEST_KEY, String(best)); }
+    var isNewBest = score > best && !skinTrialMode;
+    if (isNewBest) { best = score; localStorage.setItem(BEST_KEY, String(best)); }
     if (isGameOver()) {
       soundGameOver();
       buzz([60, 80, 100]);
       playMusic('fail');
       // Skip stat tracking when bot is playing (keep graphs clean)
-      if (!window.__bloomBotActive) {
+      if (!window.__bloomBotActive && !skinTrialMode) {
         incrementGamesPlayed();
         bumpLifetimeMax(BEST_TIER_KEY, highestTier);
         addLifetimeTotal(TOTAL_SCORE_KEY, score);
@@ -7730,14 +7732,14 @@ function trackEvent(n,p){try{gtag('event',n,p||{});}catch(e){}}
       if (mode === 'daily' && !dailySubmitted) {
         dailySubmitted = true;
         localStorage.setItem(DAILY_PLAYED_PREFIX + dailyDate, JSON.stringify({ score: score, tier: highestTier, ts: Date.now() }));
-        render({ over: true });
+        render({ over: true, isNewBest: isNewBest });
         if (!playerName) {
           promptForName(function() { submitAndShowLeaderboard(); });
         } else {
           submitAndShowLeaderboard();
         }
       } else {
-        render({ over: true });
+        render({ over: true, isNewBest: isNewBest });
       }
       if (mode === 'practice') clearPracticeGameState();
       if (mode === 'contest' && !contestSubmitted && activeContestCode) {
@@ -8214,7 +8216,8 @@ function trackEvent(n,p){try{gtag('event',n,p||{});}catch(e){}}
       for (let t = 1; t <= highestTier; t++) emojis.push(getActiveTiers()[t].emoji);
 
       let title;
-      if (mode === 'daily' && opts.alreadyPlayed) title = 'סיימת את האתגר היומי';
+      if (opts.isNewBest) title = '🎉 שיא חדש!';
+      else if (mode === 'daily' && opts.alreadyPlayed) title = 'סיימת את האתגר היומי';
       else if (mode === 'daily') title = 'אתגר יומי הסתיים';
       else title = 'המשחק נגמר';
 
