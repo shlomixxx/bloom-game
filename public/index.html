@@ -2534,11 +2534,11 @@
     html += '<button class="ts-power" data-power="choose_tile"' + (playerBalance < pp.choose_tile ? ' disabled' : '') + '>' +
       '<span class="ts-power-icon">🎯</span><span class="ts-power-name">מחק אריח לבחירה</span><span class="ts-power-price">' + pp.choose_tile + ' 💎</span></button>';
     html += '<button class="ts-power" data-power="random_row"' + (playerBalance < pp.random_row ? ' disabled' : '') + '>' +
-      '<span class="ts-power-icon">🎲</span><span class="ts-power-name">מחק שורה רנדומלית</span><span class="ts-power-price">' + pp.random_row + ' 💎</span></button>';
+      '<span class="ts-power-icon">🎲</span><span class="ts-power-name">פנה שורה רנדומלית</span><span class="ts-power-price">' + pp.random_row + ' 💎</span></button>';
     html += '<button class="ts-power ts-power-premium" data-power="choose_row"' + (playerBalance < pp.choose_row ? ' disabled' : '') + '>' +
-      '<span class="ts-power-icon">👑</span><span class="ts-power-name">מחק שורה לבחירה</span><span class="ts-power-price">' + pp.choose_row + ' 💎</span></button>';
+      '<span class="ts-power-icon">👑</span><span class="ts-power-name">פנה שורה לבחירה</span><span class="ts-power-price">' + pp.choose_row + ' 💎</span></button>';
     html += '</div>';
-    html += '<div class="ts-hint">🎲 = המערכת בוחרת (זול, עלול למחוק כתרים!) · 🎯 = אתה בוחר (יקר, לא מוחק שורת כתרים)</div>';
+    html += '<div class="ts-hint">🎲 זול = המערכת בוחרת מה לפנות · 🎯 יקר = אתה שולט בדיוק מה לפנות</div>';
 
     html += '<button class="ts-close" id="ts-close-btn">✕</button>';
     modal.innerHTML = html;
@@ -2612,14 +2612,14 @@
         grid[pick[0]][pick[1]] = 0;
         applyGravity();
         render();
-        showCreditToast(-cost, 'מחיקת אריח 🎲');
+        showCreditToast(-cost, 'פינוי אריח 🎲');
       }
       if (mode === 'practice') savePracticeGameState();
     }
     else if (type === 'choose_tile') {
       activePowerup = 'choose_tile';
-      showPowerupHint('🎯 לחץ על אריח למחיקה');
-      showCreditToast(-cost, 'בחר אריח למחיקה');
+      showPowerupHint('🎯 לחץ על האריח שרוצה לפנות');
+      showCreditToast(-cost, 'בחר אריח לפינוי');
     }
     else if (type === 'random_row') {
       var filledRows = [];
@@ -2631,14 +2631,14 @@
         for (var c = 0; c < getBoardCols(); c++) grid[rowIdx][c] = 0;
         applyGravity();
         render();
-        showCreditToast(-cost, 'מחיקת שורה 🎲');
+        showCreditToast(-cost, 'פינוי שורה 🎲');
       }
       if (mode === 'practice') savePracticeGameState();
     }
     else if (type === 'choose_row') {
       activePowerup = 'choose_row';
-      showPowerupHint('👑 לחץ על שורה למחיקה');
-      showCreditToast(-cost, 'בחר שורה למחיקה');
+      showPowerupHint('👑 לחץ על השורה שרוצה לפנות');
+      showCreditToast(-cost, 'בחר שורה לפינוי');
     }
   }
 
@@ -2671,7 +2671,7 @@
       // Can't delete a row where ALL cells are max tier (crowns)
       var allMax = grid[row].every(function(c) { return c === MAX_TIER; });
       if (allMax) {
-        showPowerupHint('❌ אי אפשר למחוק שורת כתרים! בחר שורה אחרת');
+        showPowerupHint('❌ שורה מלאת כתרים! בחר שורה אחרת');
         return true;
       }
       for (var c = 0; c < getBoardCols(); c++) grid[row][c] = 0;
