@@ -833,17 +833,31 @@
     font-size: 10px; color: #A8A6A0; letter-spacing: 0.08em; text-transform: uppercase;
     margin-bottom: 6px;
   }
-  .lb-list { display: flex; flex-direction: column; gap: 3px; }
+  .lb-list { display: flex; flex-direction: column; gap: 2px; }
   .lb-row {
     display: flex; align-items: center; gap: 8px;
-    padding: 6px 10px; border-radius: 8px; background: #FAFAF6;
-    font-size: 13px;
+    padding: 8px 10px; border-radius: 10px; background: #FAFAF6;
+    font-size: 13px; transition: transform 0.15s;
   }
-  .lb-row.you { background: #FFF1D0; }
-  .lb-rank { width: 22px; font-weight: 600; color: #6F6E68; font-variant-numeric: tabular-nums; text-align: center; flex-shrink: 0; }
+  .lb-row:active { transform: scale(0.98); }
+  .lb-row.you { background: linear-gradient(135deg, #FFF7E6, #FFF1D0); border: 1.5px solid #FAC775; }
+  .lb-row.lb-top1 { background: linear-gradient(135deg, #FFF7E0, #FFE89A); border: 1.5px solid #E8C840; }
+  .lb-row.lb-top2 { background: linear-gradient(135deg, #F5F5F5, #E8E8E8); border: 1.5px solid #C0C0C0; }
+  .lb-row.lb-top3 { background: linear-gradient(135deg, #FFF0E5, #F5D6BA); border: 1.5px solid #CD7F32; }
+  .lb-rank { width: 26px; font-weight: 800; color: #6F6E68; font-variant-numeric: tabular-nums; text-align: center; flex-shrink: 0; font-size: 14px; }
   .lb-row.you .lb-rank { color: #BA7517; }
+  .lb-row.lb-top1 .lb-rank { font-size: 18px; }
+  .lb-row.lb-top2 .lb-rank { font-size: 16px; }
+  .lb-row.lb-top3 .lb-rank { font-size: 15px; }
   .lb-name { flex: 1; color: #1C1A18; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: right; }
-  .lb-score { font-weight: 600; color: #1C1A18; font-variant-numeric: tabular-nums; }
+  .lb-row.lb-top1 .lb-name { font-weight: 700; }
+  .lb-score { font-weight: 700; color: #1C1A18; font-variant-numeric: tabular-nums; }
+  .lb-row.lb-top1 .lb-score { font-size: 15px; color: #8B6914; }
+  .lb-row.lb-top2 .lb-score { color: #666; }
+  .lb-row.lb-top3 .lb-score { color: #8B5E3C; }
+  .lb-diff { font-size: 10px; font-weight: 600; margin-right: 2px; }
+  .lb-diff.up { color: #2E8B6F; }
+  .lb-diff.down { color: #C8472F; }
   .lb-empty { font-size: 12px; color: #A8A6A0; text-align: center; padding: 14px 8px; }
   .lb-loading { font-size: 12px; color: #A8A6A0; text-align: center; padding: 14px 8px; }
   .lb-rank-pill {
@@ -852,14 +866,21 @@
     padding: 4px 10px; border-radius: 14px; font-size: 12px; font-weight: 600;
     margin-top: 8px;
   }
+  .lb-bar { height: 3px; border-radius: 2px; margin-top: 2px; }
+  .lb-row.lb-top1 .lb-bar { background: linear-gradient(90deg, #FFD700, #FFA500); }
+  .lb-row.lb-top2 .lb-bar { background: linear-gradient(90deg, #C0C0C0, #A0A0A0); }
+  .lb-row.lb-top3 .lb-bar { background: linear-gradient(90deg, #CD7F32, #A0622E); }
   .lb-tabs { display: flex; gap: 6px; margin: 6px 0 12px; }
   .lb-tab {
-    flex: 1; padding: 8px 10px; border-radius: 8px;
+    flex: 1; padding: 8px 10px; border-radius: 10px;
     background: #F5F2EC; color: #6F6E68;
     border: none; cursor: pointer;
-    font-family: inherit; font-size: 13px; font-weight: 500;
+    font-family: inherit; font-size: 13px; font-weight: 600;
+    transition: all 0.15s;
   }
-  .lb-tab.active { background: #1C1A18; color: #FFFFFF; }
+  .lb-tab:active { transform: scale(0.96); }
+  .lb-tab.active { background: #1C1A18; color: #FFF; box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
+  }
   .lb-range { font-size: 11px; color: #A8A6A0; margin-bottom: 8px; direction: rtl; text-align: right; }
 
   .streak-val { color: #D95A1B; font-variant-numeric: tabular-nums; }
@@ -2049,7 +2070,13 @@
   /* In-game leaderboard */
   html[data-theme="dark"] .leaderboard { color: #F2EFE9; }
   html[data-theme="dark"] .lb-row { background: #2C2A28; }
-  html[data-theme="dark"] .lb-row.you { background: #3D2E0A; }
+  html[data-theme="dark"] .lb-row.you { background: linear-gradient(135deg, #3D2E0A, #2A2118); border-color: rgba(250,199,117,0.4); }
+  html[data-theme="dark"] .lb-row.lb-top1 { background: linear-gradient(135deg, #3D3010, #2A2118); border-color: #8B6914; }
+  html[data-theme="dark"] .lb-row.lb-top2 { background: linear-gradient(135deg, #2E2E2E, #282828); border-color: #666; }
+  html[data-theme="dark"] .lb-row.lb-top3 { background: linear-gradient(135deg, #33261A, #2A2118); border-color: #8B5E3C; }
+  html[data-theme="dark"] .lb-name { color: #F2EFE9; }
+  html[data-theme="dark"] .lb-score { color: #F2EFE9; }
+  html[data-theme="dark"] .lb-row.lb-top1 .lb-score { color: #FFD700; }
   html[data-theme="dark"] .lb-rank { color: #8E8A82; }
   /* Home screen */
   html[data-theme="dark"] .home-screen { background: linear-gradient(180deg, #1F1D1B 0%, #1A1816 100%); }
@@ -6955,21 +6982,37 @@
     if (!leaderboard.length) {
       return '<div class="leaderboard"><div class="lb-head"><span>' + escapeHtml(headerText) + '</span></div><div class="lb-empty">' + emptyText + '</div></div>';
     }
-    const rows = leaderboard.slice(0, 10).map(function(row, i) {
+    const topScore = leaderboard[0] ? leaderboard[0].score : 1;
+    const rows = leaderboard.slice(0, 15).map(function(row, i) {
       const isYou = row.you;
-      // No deviceId in the public daily leaderboard; hash on the name. Same-named
-      // players will collide visually — acceptable for the small daily board.
+      const rank = i + 1;
       const seed = isYou ? deviceId : (row.name || 'anon');
-      return '<div class="lb-row' + (isYou ? ' you' : '') + '">' +
-        '<div class="lb-rank">' + (i+1) + '</div>' +
+      var rankClass = rank === 1 ? ' lb-top1' : rank === 2 ? ' lb-top2' : rank === 3 ? ' lb-top3' : '';
+      var medal = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : String(rank);
+      var barPct = Math.max(5, Math.round(((row.score || 0) / topScore) * 100));
+      var barColor = rank === 1 ? 'linear-gradient(90deg,#FFD700,#FFA500)' : rank === 2 ? 'linear-gradient(90deg,#C0C0C0,#999)' : rank === 3 ? 'linear-gradient(90deg,#CD7F32,#A06020)' : rank <= 5 ? 'linear-gradient(90deg,#C0DD97,#8BBF5A)' : '#E8E6E0';
+      return '<div class="lb-row' + rankClass + (isYou ? ' you' : '') + '">' +
+        '<div class="lb-rank">' + medal + '</div>' +
         renderAvatarHtml(seed, 'sm') +
-        '<div class="lb-name">' + escapeHtml(row.name || 'אנונימי') + (isYou ? ' (אתה)' : '') + '</div>' +
+        '<div style="flex:1;overflow:hidden">' +
+          '<div class="lb-name">' + escapeHtml(row.name || 'אנונימי') + (isYou ? ' <span style="font-size:10px;opacity:0.7">(אתה)</span>' : '') + '</div>' +
+          '<div class="lb-bar" style="width:' + barPct + '%;background:' + barColor + '"></div>' +
+        '</div>' +
         '<div class="lb-score">' + (row.score || 0).toLocaleString() + '</div>' +
       '</div>';
     }).join('');
+    var yourRank = -1;
+    for (var j = 0; j < leaderboard.length; j++) { if (leaderboard[j].you) { yourRank = j + 1; break; } }
+    var motivationText = '';
+    if (yourRank > 0 && yourRank <= 3) motivationText = '🔥 אתה בטופ 3!';
+    else if (yourRank > 0 && yourRank <= 5) motivationText = '💪 קרוב לטופ 3! עוד קצת!';
+    else if (yourRank > 0 && yourRank <= 10) motivationText = '⬆️ תשחק עוד כדי לעלות!';
+    else if (yourRank > 0) motivationText = '🎯 מקום ' + yourRank + ' — תכוון גבוה!';
+
     return '<div class="leaderboard">' +
       '<div class="lb-head"><span>' + escapeHtml(headerText) + '</span><span>' + leaderboard.length + ' שחקנים</span></div>' +
       '<div class="lb-list">' + rows + '</div>' +
+      (motivationText ? '<div style="text-align:center;font-size:12px;font-weight:600;margin-top:8px;color:#BA7517">' + motivationText + '</div>' : '') +
     '</div>';
   }
 
