@@ -867,9 +867,10 @@
     margin-top: 8px;
   }
   .lb-bar { height: 3px; border-radius: 2px; margin-top: 2px; }
-  .lb-row.lb-top1 .lb-bar { background: linear-gradient(90deg, #FFD700, #FFA500); }
-  .lb-row.lb-top2 .lb-bar { background: linear-gradient(90deg, #C0C0C0, #A0A0A0); }
-  .lb-row.lb-top3 .lb-bar { background: linear-gradient(90deg, #CD7F32, #A0622E); }
+  .lb-gap { font-size: 9px; color: #A8A6A0; margin-top: 1px; direction: rtl; }
+  .lb-gap.you-gap { font-size: 10px; font-weight: 700; color: #BA7517; }
+  html[data-theme="dark"] .lb-gap { color: #6F6E68; }
+  html[data-theme="dark"] .lb-gap.you-gap { color: #FAC775; }
   .lb-tabs { display: flex; gap: 6px; margin: 6px 0 12px; }
   .lb-tab {
     flex: 1; padding: 8px 10px; border-radius: 10px;
@@ -6990,25 +6991,44 @@
       const seed = isYou ? deviceId : (row.name || 'anon');
       var rankClass = rank === 1 ? ' lb-top1' : rank === 2 ? ' lb-top2' : rank === 3 ? ' lb-top3' : '';
       var medal = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : String(rank);
-      var barPct = Math.max(5, Math.round(((row.score || 0) / topScore) * 100));
-      var barColor = rank === 1 ? 'linear-gradient(90deg,#FFD700,#FFA500)' : rank === 2 ? 'linear-gradient(90deg,#C0C0C0,#999)' : rank === 3 ? 'linear-gradient(90deg,#CD7F32,#A06020)' : rank <= 5 ? 'linear-gradient(90deg,#C0DD97,#8BBF5A)' : '#E8E6E0';
+      // Gap to player above
+      var gapText = '';
+      if (rank > 1 && isYou) {
+        var above = leaderboard[i - 1];
+        var gap = (above.score || 0) - (row.score || 0);
+        if (gap > 0) gapText = '<div class="lb-gap you-gap">↑ עוד ' + gap.toLocaleString() + ' למקום ' + (rank - 1) + '</div>';
+      } else if (rank > 1 && i > 0) {
+        var above = leaderboard[i - 1];
+        var gap = (above.score || 0) - (row.score || 0);
+        if (gap > 0) gapText = '<div class="lb-gap">-' + gap.toLocaleString() + '</div>';
+      }
       return '<div class="lb-row' + rankClass + (isYou ? ' you' : '') + '">' +
         '<div class="lb-rank">' + medal + '</div>' +
         renderAvatarHtml(seed, 'sm') +
         '<div style="flex:1;overflow:hidden">' +
           '<div class="lb-name">' + escapeHtml(row.name || 'אנונימי') + (isYou ? ' <span style="font-size:10px;opacity:0.7">(אתה)</span>' : '') + '</div>' +
-          '<div class="lb-bar" style="width:' + barPct + '%;background:' + barColor + '"></div>' +
+          gapText +
         '</div>' +
         '<div class="lb-score">' + (row.score || 0).toLocaleString() + '</div>' +
       '</div>';
     }).join('');
     var yourRank = -1;
-    for (var j = 0; j < leaderboard.length; j++) { if (leaderboard[j].you) { yourRank = j + 1; break; } }
+    var yourGapText = '';
+    for (var j = 0; j < leaderboard.length; j++) {
+      if (leaderboard[j].you) {
+        yourRank = j + 1;
+        if (j > 0) {
+          var gap = (leaderboard[j-1].score || 0) - (leaderboard[j].score || 0);
+          if (gap > 0) yourGapText = ' (עוד ' + gap.toLocaleString() + ' נקודות)';
+        }
+        break;
+      }
+    }
     var motivationText = '';
-    if (yourRank > 0 && yourRank <= 3) motivationText = '🔥 אתה בטופ 3!';
-    else if (yourRank > 0 && yourRank <= 5) motivationText = '💪 קרוב לטופ 3! עוד קצת!';
-    else if (yourRank > 0 && yourRank <= 10) motivationText = '⬆️ תשחק עוד כדי לעלות!';
-    else if (yourRank > 0) motivationText = '🎯 מקום ' + yourRank + ' — תכוון גבוה!';
+    if (yourRank === 1) motivationText = '👑 אתה מוביל!';
+    else if (yourRank > 0 && yourRank <= 3) motivationText = '🔥 אתה בטופ 3!' + yourGapText;
+    else if (yourRank > 0 && yourRank <= 5) motivationText = '💪 מקום ' + yourRank + yourGapText;
+    else if (yourRank > 0) motivationText = '🎯 מקום ' + yourRank + yourGapText;
 
     return '<div class="leaderboard">' +
       '<div class="lb-head"><span>' + escapeHtml(headerText) + '</span><span>' + leaderboard.length + ' שחקנים</span></div>' +
@@ -7200,14 +7220,22 @@
       const seed = isYou ? deviceId : (row.name || 'anon');
       var rankClass = rank === 1 ? ' lb-top1' : rank === 2 ? ' lb-top2' : rank === 3 ? ' lb-top3' : '';
       var medal = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : String(rank);
-      var barPct = Math.max(5, Math.round(((row.score || 0) / topScore) * 100));
-      var barColor = rank === 1 ? 'linear-gradient(90deg,#FFD700,#FFA500)' : rank === 2 ? 'linear-gradient(90deg,#C0C0C0,#999)' : rank === 3 ? 'linear-gradient(90deg,#CD7F32,#A06020)' : rank <= 5 ? 'linear-gradient(90deg,#C0DD97,#8BBF5A)' : '#E8E6E0';
+      var gapText = '';
+      if (rank > 1 && isYou) {
+        var above = lbModalList[i - 1];
+        var gap = (above.score || 0) - (row.score || 0);
+        if (gap > 0) gapText = '<div class="lb-gap you-gap">↑ עוד ' + gap.toLocaleString() + ' למקום ' + (rank - 1) + '</div>';
+      } else if (rank > 1 && i > 0) {
+        var above = lbModalList[i - 1];
+        var gap = (above.score || 0) - (row.score || 0);
+        if (gap > 0) gapText = '<div class="lb-gap">-' + gap.toLocaleString() + '</div>';
+      }
       return '<div class="lb-row' + rankClass + (isYou ? ' you' : '') + '">' +
         '<div class="lb-rank">' + medal + '</div>' +
         renderAvatarHtml(seed, 'sm') +
         '<div style="flex:1;overflow:hidden">' +
           '<div class="lb-name">' + escapeHtml(row.name || 'אנונימי') + (isYou ? ' <span style="font-size:10px;opacity:0.7">(אתה)</span>' : '') + '</div>' +
-          '<div class="lb-bar" style="width:' + barPct + '%;background:' + barColor + '"></div>' +
+          gapText +
         '</div>' +
         '<div class="lb-score">' + (row.score || 0).toLocaleString() + '</div>' +
       '</div>';
@@ -7221,10 +7249,21 @@
         for (var j = 0; j < lbModalList.length; j++) { if (lbModalList[j].you) { yourRank = j + 1; break; } }
       }
       var mot = '';
-      if (yourRank > 0 && yourRank <= 3) mot = '<span style="font-size:13px;font-weight:700;color:#BA7517">🔥 אתה בטופ 3!</span>';
-      else if (yourRank > 0 && yourRank <= 5) mot = '<span style="font-size:12px;font-weight:600;color:#BA7517">💪 קרוב לטופ 3! עוד קצת!</span>';
-      else if (yourRank > 0 && yourRank <= 10) mot = '<span style="font-size:12px;font-weight:600;color:#6F6E68">⬆️ מקום #' + yourRank + ' — תשחק עוד!</span>';
-      else if (yourRank > 0) mot = '<span style="font-size:12px;color:#6F6E68">🎯 מקום #' + yourRank + ' — תכוון גבוה!</span>';
+      var gapToAbove = '';
+      if (yourRank > 1) {
+        for (var k = 0; k < lbModalList.length; k++) {
+          if (lbModalList[k].you && k > 0) {
+            var gap = (lbModalList[k-1].score || 0) - (lbModalList[k].score || 0);
+            if (gap > 0) gapToAbove = ' (עוד ' + gap.toLocaleString() + ' נקודות)';
+            break;
+          }
+        }
+      }
+      if (yourRank === 1) mot = '<span style="font-size:13px;font-weight:700;color:#BA7517">👑 אתה מוביל!</span>';
+      else if (yourRank > 0 && yourRank <= 3) mot = '<span style="font-size:13px;font-weight:700;color:#BA7517">🔥 אתה בטופ 3!' + gapToAbove + '</span>';
+      else if (yourRank > 0 && yourRank <= 5) mot = '<span style="font-size:12px;font-weight:600;color:#BA7517">💪 מקום #' + yourRank + gapToAbove + '</span>';
+      else if (yourRank > 0 && yourRank <= 10) mot = '<span style="font-size:12px;font-weight:600;color:#6F6E68">⬆️ מקום #' + yourRank + gapToAbove + '</span>';
+      else if (yourRank > 0) mot = '<span style="font-size:12px;color:#6F6E68">🎯 מקום #' + yourRank + gapToAbove + '</span>';
       footerEl.innerHTML = mot;
     }
   }
