@@ -8526,6 +8526,27 @@ function trackEvent(n,p){try{gtag('event',n,p||{});}catch(e){}}
       restart: function() { init('practice'); },
     };
   }
+
+  // ============ PWA INSTALL PROMPTS ============
+  // iOS: show banner after 3 games (Safari doesn't auto-prompt)
+  function maybeShowInstallPrompt() {
+    var isIos = /iphone|ipad|ipod/i.test(navigator.userAgent);
+    var isStandalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone;
+    var dismissed = localStorage.getItem('bloom_install_dismissed');
+    if (!isIos || isStandalone || dismissed) return;
+    var games = parseInt(localStorage.getItem('bloom_total_games') || '0', 10);
+    if (games < 3) return;
+    var banner = document.createElement('div');
+    banner.style.cssText = 'position:fixed;bottom:0;left:0;right:0;background:#1C1A18;color:#FFF;padding:14px 16px;z-index:9999;display:flex;align-items:center;gap:10px;direction:rtl;font-family:-apple-system,sans-serif;box-shadow:0 -4px 20px rgba(0,0,0,0.2);border-radius:16px 16px 0 0';
+    banner.innerHTML = '<img src="/assets/icon-192.png" style="width:40px;height:40px;border-radius:10px">' +
+      '<div style="flex:1"><div style="font-size:13px;font-weight:700">התקן את BLOOM</div><div style="font-size:11px;color:#A8A6A0">לחץ <strong>שתף ⬆️</strong> → <strong>הוסף למסך הבית</strong></div></div>' +
+      '<button style="background:none;border:none;color:#A8A6A0;font-size:18px;cursor:pointer;padding:4px" onclick="this.parentElement.remove();localStorage.setItem(\'bloom_install_dismissed\',\'1\')">✕</button>';
+    document.body.appendChild(banner);
+  }
+  setTimeout(maybeShowInstallPrompt, 5000);
+
+  // Android: catch beforeinstallprompt
+  window.addEventListener('beforeinstallprompt', function(e) { e.preventDefault(); });
 })();
 </script>
 

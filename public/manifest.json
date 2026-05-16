@@ -1,14 +1,16 @@
 {
-  "name": "BLOOM",
+  "name": "BLOOM — משחק מיזוג",
   "short_name": "BLOOM",
-  "description": "משחק מיזוג בעברית",
+  "description": "משחק מיזוג ממכר בעברית! מזג אריחים, גלה 8 דרגות, הגע לכתר. תחרות חברים, הימורים, סקינים.",
   "start_url": "/",
+  "id": "/",
   "display": "standalone",
   "background_color": "#F5F5F0",
   "theme_color": "#F5F5F0",
   "orientation": "portrait",
   "lang": "he",
   "dir": "rtl",
+  "categories": ["games", "puzzle"],
   "icons": [
     {
       "src": "/assets/icon-192.png",
@@ -27,6 +29,12 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
+    },
+    {
+      "src": "/assets/icon-1024.png",
+      "sizes": "1024x1024",
+      "type": "image/png",
+      "purpose": "any"
     }
   ]
 }
