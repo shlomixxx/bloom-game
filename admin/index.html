@@ -324,8 +324,9 @@
     <h2>👤 שחקנים וקרדיטים <button class="tip-btn" data-tip="players">?</button></h2>
     <div style="padding:12px 16px;background:var(--card);border-radius:10px;margin-top:8px">
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
-        <button class="btn sm" id="btn-load-players" style="flex:1">📋 טען רשימת שחקנים</button>
-        <button class="btn sm" id="btn-load-referrals" style="flex:1">🔗 הפניות</button>
+        <input id="player-search" placeholder="🔍 חפש לפי קוד או שם..." style="flex:1;min-width:120px;padding:6px 10px;border:1px solid rgba(0,0,0,0.12);border-radius:8px;font-family:inherit;font-size:12px;direction:rtl">
+        <button class="btn sm" id="btn-load-players" style="flex:0;white-space:nowrap">📋 טען</button>
+        <button class="btn sm" id="btn-load-referrals" style="flex:0;white-space:nowrap">🔗 הפניות</button>
       </div>
       <div style="border-top:1px solid rgba(0,0,0,0.06);padding-top:10px">
         <div style="font-size:11px;color:#6F6E68;margin-bottom:6px;font-weight:600">🎁 שלח מתנת קרדיטים</div>
@@ -1446,15 +1447,34 @@
 
   // Player management
   $('btn-load-players').onclick = async function() {
-    this.disabled = true; this.textContent = 'טוען...';
+    this.disabled = true; this.textContent = '...';
     var d = await api('/players');
-    this.disabled = false; this.textContent = '📋 טען רשימת שחקנים';
+    this.disabled = false; this.textContent = '📋 טען';
     var el = $('players-list');
     if (!el || !d || !d.players) return;
     if (!d.players.length) { el.innerHTML = '<div style="color:#A8A6A0;font-size:12px;text-align:center;padding:10px">אין שחקנים רשומים</div>'; return; }
+    // Store for filtering
+    window._allPlayers = d.players;
+    renderPlayerList(d.players);
+  };
+  // Search filter
+  $('player-search').oninput = function() {
+    if (!window._allPlayers) return;
+    var q = (this.value || '').trim().toUpperCase();
+    if (!q) { renderPlayerList(window._allPlayers); return; }
+    var filtered = window._allPlayers.filter(function(p) {
+      return (p.player_code || '').toUpperCase().indexOf(q) >= 0 ||
+             (p.display_name || '').toUpperCase().indexOf(q) >= 0;
+    });
+    renderPlayerList(filtered);
+  };
+  function renderPlayerList(players) {
+    var el = $('players-list');
+    if (!el) return;
+    if (!players.length) { el.innerHTML = '<div style="color:#A8A6A0;font-size:12px;text-align:center;padding:10px">אין תוצאות</div>'; return; }
     var html = '<table style="width:100%;font-size:11px;border-collapse:collapse;direction:rtl">' +
       '<tr style="background:rgba(0,0,0,0.03)"><th style="padding:4px">קוד</th><th>שם</th><th>💎</th><th>הפניות</th><th>פעולה</th></tr>';
-    d.players.forEach(function(p) {
+    players.forEach(function(p) {
       html += '<tr style="border-top:1px solid rgba(0,0,0,0.05)">' +
         '<td style="padding:4px;font-weight:700;font-size:10px;letter-spacing:0.05em">' + (p.player_code || '—') + '</td>' +
         '<td>' + (p.display_name || 'אנונימי') + '</td>' +
@@ -1465,7 +1485,7 @@
     });
     html += '</table>';
     el.innerHTML = html;
-  };
+  }
 
   $('btn-load-referrals').onclick = async function() {
     this.disabled = true;

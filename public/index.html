@@ -966,6 +966,13 @@
     margin-bottom: 42px; max-width: 280px;
     line-height: 1.6;
   }
+  .home-player-id {
+    text-align: center; margin: -32px 0 20px; cursor: pointer;
+    font-size: 12px; color: #A8A6A0; direction: ltr;
+  }
+  .pid-code { font-weight: 700; letter-spacing: 0.08em; color: #6F6E68; }
+  .pid-balance { font-weight: 700; color: #BA7517; }
+  html[data-theme="dark"] .pid-code { color: #8E8A82; }
   .home-start {
     width: 100%; max-width: 300px;
     padding: 18px 20px; border-radius: 14px;
@@ -3488,6 +3495,7 @@
       '</div>' +
       '<div class="home-brand">BLOOM</div>' +
       '<div class="home-sub">מזג חפצים, גלה דרגות חדשות, והגע עד לכתר</div>' +
+      '<div class="home-player-id" id="home-player-id"></div>' +
       '<div id="home-mystats-host"></div>' +
       '<div class="home-stats-bubble" id="home-stats-bubble" style="display:none"></div>' +
       // Returning players see "שחק עכשיו" and the tour link below.
@@ -3609,6 +3617,21 @@
     if (tourLink) tourLink.onclick = function() { ensureAudio(); showTour({ onDone: enter }); };
     var skinShopBtn = document.getElementById('home-skin-shop');
     if (skinShopBtn) skinShopBtn.onclick = function() { showSkinShop(); };
+
+    // Show player code on home
+    var pidEl = document.getElementById('home-player-id');
+    if (pidEl && playerCode) {
+      pidEl.innerHTML = '<span class="pid-code">' + playerCode + '</span> · <span class="pid-balance">' + playerBalance + ' 💎</span>';
+      pidEl.onclick = function() {
+        if (navigator.clipboard) {
+          navigator.clipboard.writeText(playerCode);
+          pidEl.innerHTML = '<span class="pid-code">✓ הועתק!</span>';
+          setTimeout(function() {
+            pidEl.innerHTML = '<span class="pid-code">' + playerCode + '</span> · <span class="pid-balance">' + playerBalance + ' 💎</span>';
+          }, 1500);
+        }
+      };
+    }
     // First-ever-visit: gently auto-open the tour after the home settles in.
     // We defer it so the home animations land first, and only fire if the
     // player hasn't seen the tour AND hasn't already started learning the
@@ -7619,7 +7642,10 @@
             statsHtml += '</div>';
             return statsHtml;
           })() +
-          (playerBalance > 0 ? '<div style="text-align:center;margin:8px 0;font-size:13px;color:#BA7517;font-weight:600">💎 ' + playerBalance.toLocaleString() + ' קרדיטים</div>' : '') +
+          (playerBalance > 0 || playerCode ? '<div style="text-align:center;margin:8px 0;font-size:12px;direction:ltr">' +
+            (playerCode ? '<span style="color:#6F6E68;letter-spacing:0.08em;font-weight:600">' + playerCode + '</span>' : '') +
+            (playerBalance > 0 ? ' · <span style="color:#BA7517;font-weight:700">' + playerBalance.toLocaleString() + ' 💎</span>' : '') +
+          '</div>' : '') +
           '<div class="share-label">התוצאה לשיתוף</div>' +
           (function() {
             var gameDur = Date.now() - (gameStartTime || Date.now());
