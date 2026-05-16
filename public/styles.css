@@ -586,6 +586,39 @@
     overflow-y: auto;
   }
 
+
+  /* ── Crown Explosion ── */
+  .crown-explosion {
+    background: linear-gradient(135deg, #1C1A18, #412402) !important;
+    border: 2px solid #FAC775 !important;
+    animation: crownFlash 0.3s ease-out, fadeUp 2s ease-out forwards !important;
+  }
+  .crown-explosion .milestone-banner-tier { font-size: 18px !important; }
+  .crown-explosion .milestone-banner-bonus { color: #FAC775 !important; font-size: 22px !important; }
+  @keyframes crownFlash {
+    0% { transform: scale(0.5) translateX(-50%); opacity: 0; box-shadow: 0 0 40px rgba(250,199,117,0.8); }
+    50% { transform: scale(1.1) translateX(-50%); box-shadow: 0 0 60px rgba(250,199,117,0.5); }
+    100% { transform: scale(1) translateX(-50%); box-shadow: 0 0 20px rgba(250,199,117,0.3); }
+  }
+
+  /* ── Score Milestones ── */
+  .score-milestone {
+    background: linear-gradient(135deg, #0F0D0B, #1C1A18) !important;
+    border: 1px solid rgba(250,199,117,0.3) !important;
+    animation: milestonePop 0.25s ease-out, fadeUp 1.2s ease-out forwards !important;
+  }
+  .score-milestone .milestone-banner-tier { font-size: 22px !important; letter-spacing: 0.05em; }
+  .score-milestone .milestone-banner-bonus { color: #FAC775 !important; }
+  @keyframes milestonePop {
+    0% { transform: scale(1.3) translateX(-50%); }
+    100% { transform: scale(1) translateX(-50%); }
+  }
+
+  /* ── Multi-merge badge ── */
+  .multi-merge {
+    font-size: 16px !important; font-weight: 900 !important;
+    letter-spacing: 0.05em;
+  }
   /* ============ TOUR / TUTORIAL ("סייר") ============ */
   .tour-card {
     background: #FFFFFF; border-radius: 18px; padding: 0;

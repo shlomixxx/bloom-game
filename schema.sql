@@ -390,3 +390,6 @@ CREATE TABLE IF NOT EXISTS referrals (
   created_at      TIMESTAMP NOT NULL DEFAULT NOW(),
   UNIQUE(referred_device)
 );
+
+INSERT INTO game_config (key, value) VALUES ('score_milestone_reward', '5')
+  ON CONFLICT (key) DO NOTHING;

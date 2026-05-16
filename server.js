@@ -2939,7 +2939,8 @@ app.get('/api/player/code', async (req, res) => {
 // XP per action and level thresholds
 const XP_MAP = {
   daily_complete: 50, daily_login: 15, streak_3: 30, streak_7: 80, streak_30: 300,
-  contest_1st: 100, contest_2nd: 50, contest_3rd: 30
+  contest_1st: 100, contest_2nd: 50, contest_3rd: 30,
+  score_milestone: 10
 };
 const LEVELS = [
   { level: 1,  xp: 0,      title: 'מתחיל' },
@@ -2979,7 +2980,8 @@ app.post('/api/player/earn', async (req, res) => {
       'streak_30': 'streak_30_reward',
       'contest_1st': 'contest_1st_reward',
       'contest_2nd': 'contest_2nd_reward',
-      'contest_3rd': 'contest_3rd_reward'
+      'contest_3rd': 'contest_3rd_reward',
+      'score_milestone': 'score_milestone_reward'
     };
     const configKey = actionMap[action];
     if (!configKey) return res.json({ ok: false, reason: 'unknown_action' });

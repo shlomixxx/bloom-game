@@ -4812,6 +4812,7 @@
     score = 0; highestTier = 1; busy = false; dropsCount = 0;
     currentGameMaxChain = 0;
     tierUpHit = {};   // reset milestone-bonus tracker for this fresh game
+    scoreMilestonesHit = {}; // reset score milestones
     gameMergesPerTier = {};
     gamePointsPerTier = {};
     gameBestMergeTier = 0;
@@ -5469,6 +5470,87 @@
     setTimeout(function() { if (banner.parentNode) banner.parentNode.removeChild(banner); }, 1500);
   }
 
+  // Crown Merge explosion — gold wave across the row
+  function showCrownExplosion(row) {
+    const wrap = document.getElementById('grid-wrap');
+    if (!wrap) return;
+    const banner = document.createElement('div');
+    banner.className = 'milestone-banner crown-explosion';
+    banner.innerHTML =
+      '<div class="milestone-banner-tier">💥 Crown Merge! 👑</div>' +
+      '<div class="milestone-banner-bonus">+50,000</div>' +
+      '<div class="milestone-banner-sub">שורה נמחקה!</div>';
+    wrap.appendChild(banner);
+    // Flash the grid row gold
+    var gridEl = document.getElementById('grid');
+    if (gridEl) {
+      for (var cc = 0; cc < getBoardCols(); cc++) {
+        var idx = row * getBoardCols() + cc;
+        var cell = gridEl.children[idx];
+        if (cell) {
+          cell.style.transition = 'background 0.15s';
+          cell.style.background = '#FAC775';
+          (function(c) {
+            setTimeout(function() { c.style.background = ''; c.style.transition = ''; }, 500);
+          })(cell);
+        }
+      }
+    }
+    setTimeout(function() { if (banner.parentNode) banner.parentNode.removeChild(banner); }, 2000);
+  }
+
+  // Score milestone celebrations during gameplay
+  var SCORE_MILESTONES = [
+    { at: 10000,  label: '🔥 10K!',  reward: 5 },
+    { at: 25000,  label: '⚡ 25K!',  reward: 10 },
+    { at: 50000,  label: '⭐ 50K!',  reward: 20 },
+    { at: 100000, label: '💎 100K!', reward: 50 },
+    { at: 200000, label: '👑 200K!', reward: 100 },
+    { at: 500000, label: '🌟 500K!', reward: 250 }
+  ];
+  var scoreMilestonesHit = {};
+
+  function checkScoreMilestones() {
+    for (var i = 0; i < SCORE_MILESTONES.length; i++) {
+      var m = SCORE_MILESTONES[i];
+      if (score >= m.at && !scoreMilestonesHit[m.at]) {
+        scoreMilestonesHit[m.at] = true;
+        showScoreMilestoneBanner(m.label, m.reward);
+        if (m.reward > 0 && !window.__bloomBotActive && !skinTrialMode) {
+          earnCredits('score_milestone');
+        }
+      }
+    }
+  }
+
+  function showScoreMilestoneBanner(label, reward) {
+    var wrap = document.getElementById('grid-wrap');
+    if (!wrap) return;
+    var banner = document.createElement('div');
+    banner.className = 'milestone-banner score-milestone';
+    banner.innerHTML =
+      '<div class="milestone-banner-tier">' + label + '</div>' +
+      (reward > 0 ? '<div class="milestone-banner-bonus">+' + reward + ' 💎</div>' : '');
+    wrap.appendChild(banner);
+    bumpScore();
+    buzz([40, 60]);
+    setTimeout(function() { if (banner.parentNode) banner.parentNode.removeChild(banner); }, 1200);
+  }
+
+  // Triple/Quad merge celebration
+  function showMultiMergeBadge(count) {
+    if (count < 3) return;
+    var wrap = document.getElementById('grid-wrap');
+    if (!wrap) return;
+    var badge = document.createElement('div');
+    badge.className = 'chain-badge multi-merge';
+    badge.textContent = count === 3 ? 'Triple! ×1.5' : count === 4 ? 'Quad! ×2' : 'MEGA! ×' + count;
+    if (count >= 4) badge.style.background = '#FAC775';
+    wrap.appendChild(badge);
+    buzz([60, 40]);
+    setTimeout(function() { if (badge.parentNode) badge.parentNode.removeChild(badge); }, 900);
+  }
+
   let _scoreAnimFrame = 0;
   function bumpScore() {
     const el = document.getElementById('score');
@@ -5506,9 +5588,41 @@
       outer: for (let r = 0; r < getBoardRows(); r++) {
         for (let c = 0; c < getBoardCols(); c++) {
           const t = grid[r][c];
-          if (t === 0 || t === MAX_TIER) continue;
+          if (t === 0) continue;
           const group = findGroup(r, c, t);
           if (group.length >= 2) {
+            // ── CROWN MERGE SPECIAL: two crowns → explosion ──
+            if (t === MAX_TIER) {
+              // Clear ALL crowns in the group
+              for (let i = 0; i < group.length; i++) {
+                grid[group[i][0]][group[i][1]] = 0;
+              }
+              // Clear the row where the bottommost crown was
+              let clearRow = 0;
+              for (let i = 0; i < group.length; i++) {
+                if (group[i][0] > clearRow) clearRow = group[i][0];
+              }
+              for (let cc = 0; cc < getBoardCols(); cc++) grid[clearRow][cc] = 0;
+              chainCount++;
+              var crownBonus = 50000;
+              score += crownBonus;
+              gameTotalMerges++;
+              gameMergesPerTier[MAX_TIER] = (gameMergesPerTier[MAX_TIER] || 0) + 1;
+              gamePointsPerTier[MAX_TIER] = (gamePointsPerTier[MAX_TIER] || 0) + crownBonus;
+              showFloatingScore(clearRow, 1, crownBonus, chainCount);
+              showCrownExplosion(clearRow);
+              soundMilestone(MAX_TIER);
+              bumpScore();
+              checkScoreMilestones();
+              buzz([100, 60, 120, 60, 100]);
+              merged = [clearRow, 1];
+              mergedTier = MAX_TIER;
+              mergeSize = group.length;
+              if (chainCount > currentGameMaxChain) currentGameMaxChain = chainCount;
+              bumpLifetimeMax(BEST_CHAIN_KEY, chainCount);
+              break outer;
+            }
+            // ── REGULAR MERGE ──
             // Choose survivor cell: bottommost (gravity-friendly).
             // Horizontal tie-breaker depends on admin-controlled merge_mode:
             // 'anchor' = closest to drop column (natural), 'classic' = leftmost.
@@ -5565,6 +5679,8 @@
             showFloatingScore(kr, kc, points, chainCount);
             bumpScore();
             soundMerge(nt);
+            checkScoreMilestones();
+            if (group.length >= 3) showMultiMergeBadge(group.length);
             if (chainCount > currentGameMaxChain) currentGameMaxChain = chainCount;
             bumpLifetimeMax(BEST_CHAIN_KEY, chainCount);
             // Onboarding: first merge → step 2; first chain (≥2) → step 3.
