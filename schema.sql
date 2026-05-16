@@ -398,3 +398,42 @@ INSERT INTO game_config (key, value) VALUES ('crown_merge_enabled', 'true')
   ON CONFLICT (key) DO NOTHING;
 INSERT INTO game_config (key, value) VALUES ('crown_merge_bonus', '50000')
   ON CONFLICT (key) DO NOTHING;
+
+-- Events system config
+INSERT INTO game_config (key, value) VALUES ('events_enabled', 'true') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('events_start_delay', '30') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('events_min_gap', '20') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('events_max_gap', '45') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('events_min_empty_cells', '4') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('event_bomb_enabled', 'true') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('event_bomb_weight', '25') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('event_bomb_timer', '8') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('event_bomb_radius', '1') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('event_bomb_points_per_tile', '2000') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('event_star_enabled', 'true') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('event_star_weight', '20') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('event_star_timer', '6') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('event_star_upgrade', '1') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('event_star_points', '500') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('event_gift_enabled', 'true') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('event_gift_weight', '25') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('event_gift_timer', '10') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('event_gift_credits_min', '5') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('event_gift_credits_max', '50') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('event_gift_jackpot_chance', '5') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('event_gift_jackpot_amount', '500') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('event_fever_enabled', 'true') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('event_fever_weight', '12') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('event_fever_timer', '5') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('event_fever_duration', '10') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('event_fever_multiplier', '3') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('event_freeze_enabled', 'true') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('event_freeze_weight', '8') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('event_freeze_timer', '4') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('event_freeze_clear_rows', '1') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('event_freeze_points', '1000') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('event_freeze_min_filled_rows', '3') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('event_target_enabled', 'true') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('event_target_weight', '10') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('event_target_timer', '12') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('event_target_multiplier', '5') ON CONFLICT (key) DO NOTHING;

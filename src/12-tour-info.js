@@ -623,6 +623,10 @@
         if (chip.firstChild) wrap.appendChild(chip.firstChild);
       }
     }
+    // Re-render active event on the grid (grid is rebuilt each render)
+    if (activeEvent && !opts.over) {
+      renderEventOnCell(activeEvent);
+    }
   }
 
   document.getElementById('reset').onclick = function() {

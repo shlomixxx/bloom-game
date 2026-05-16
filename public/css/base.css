@@ -283,6 +283,7 @@
        The grid centers inside .grid-wrap when narrower than the container. */
   }
   .cell {
+    position: relative;
     background: #F5F2EC; border-radius: 10px;
     display: flex; align-items: center; justify-content: center;
     cursor: pointer; transition: background 0.12s;
@@ -643,3 +644,75 @@
     60% { transform: scale(1.15) translateX(-50%); }
     100% { transform: scale(1) translateX(-50%); }
   }
+
+  /* ══════ EVENT DROPS ══════ */
+  .event-cell-overlay {
+    position: absolute; inset: 0; z-index: 10;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    border-radius: 12px; pointer-events: none;
+    animation: eventAppear 0.3s ease-out;
+  }
+  @keyframes eventAppear { 0% { transform: scale(0.3); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+  .event-emoji { font-size: 22px; z-index: 2; animation: eventBob 1s ease-in-out infinite; }
+  @keyframes eventBob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+  .event-ring { position: absolute; width: 36px; height: 36px; }
+  .event-ring-fg { transition: stroke 0.3s, stroke-dashoffset 0.1s; }
+  .event-timer-text { font-size: 9px; font-weight: 700; color: #FFF; margin-top: 2px; text-shadow: 0 1px 3px rgba(0,0,0,0.5); }
+  .event-urgent { animation: eventUrgent 0.3s ease-in-out infinite !important; }
+  @keyframes eventUrgent { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+  .event-bomb { background: radial-gradient(circle, rgba(200,71,47,0.3) 0%, transparent 70%); }
+  .event-star { background: radial-gradient(circle, rgba(250,199,117,0.3) 0%, transparent 70%); }
+  .event-gift { background: radial-gradient(circle, rgba(158,225,203,0.3) 0%, transparent 70%); }
+  .event-fever { background: radial-gradient(circle, rgba(255,107,53,0.3) 0%, transparent 70%); }
+  .event-freeze { background: radial-gradient(circle, rgba(78,205,196,0.3) 0%, transparent 70%); }
+
+  /* Event banners */
+  .event-banner-bomb { background: linear-gradient(135deg, #C8472F, #8B0000) !important; }
+  .event-banner-bomb .milestone-banner-tier { color: #FFF !important; }
+  .event-banner-bomb .milestone-banner-bonus { color: #FAC775 !important; }
+
+  .event-banner-star { background: linear-gradient(135deg, #FAC775, #BA7517) !important; }
+  .event-banner-star .milestone-banner-tier { color: #1C1A18 !important; }
+  .event-banner-star .milestone-banner-bonus { color: #412402 !important; }
+
+  .event-banner-gift { background: linear-gradient(135deg, #2E8B6F, #1A5C47) !important; }
+  .event-banner-gift .milestone-banner-bonus { color: #9FE1CB !important; }
+
+  .event-banner-gift-jackpot { background: linear-gradient(135deg, #FAC775, #FF6B35) !important; animation: jackpotFlash 0.2s ease-out 3 !important; }
+  .event-banner-gift-jackpot .milestone-banner-tier { font-size: 20px !important; color: #1C1A18 !important; }
+  @keyframes jackpotFlash { 0%,100% { opacity: 1; } 50% { opacity: 0.7; } }
+
+  .event-banner-fever { background: linear-gradient(135deg, #FF6B35, #C8472F) !important; }
+  .event-banner-fever .milestone-banner-bonus { color: #FFF !important; }
+
+  .event-banner-freeze { background: linear-gradient(135deg, #4ECDC4, #2E8B6F) !important; }
+  .event-banner-freeze .milestone-banner-bonus { color: #FFF !important; }
+
+  .event-banner-target { background: linear-gradient(135deg, #9B8AE8, #6B5CE7) !important; }
+  .event-banner-target .milestone-banner-bonus { color: #FFF !important; }
+
+  /* Fever bar */
+  .fever-bar {
+    position: absolute; top: 0; left: 0; right: 0; height: 4px; z-index: 20;
+    background: rgba(0,0,0,0.2); border-radius: 2px; overflow: hidden;
+  }
+  .fever-bar-fill { height: 100%; background: linear-gradient(90deg, #FF6B35, #FAC775); transition: width 0.05s linear; border-radius: 2px; }
+  .fever-bar-text {
+    position: absolute; top: 6px; left: 50%; transform: translateX(-50%);
+    font-size: 11px; font-weight: 800; color: #FF6B35;
+    text-shadow: 0 1px 4px rgba(0,0,0,0.3);
+    animation: feverPulse 0.5s ease-in-out infinite;
+  }
+  @keyframes feverPulse { 0%,100% { transform: translateX(-50%) scale(1); } 50% { transform: translateX(-50%) scale(1.15); } }
+
+  /* Fever active border */
+  #grid.fever-active { box-shadow: 0 0 16px rgba(255,107,53,0.5), inset 0 0 8px rgba(255,107,53,0.2); }
+
+  /* Target highlight on tier bar */
+  .tier-target-highlight {
+    animation: targetPulse 0.6s ease-in-out infinite !important;
+    box-shadow: 0 0 12px rgba(155,138,232,0.6) !important;
+    border: 2px solid #9B8AE8 !important;
+  }
+  @keyframes targetPulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.12); } }

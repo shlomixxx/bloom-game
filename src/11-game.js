@@ -147,6 +147,8 @@
     maybeOnboardStep1();
     // Persist current mode so page refresh restores context.
     try { localStorage.setItem('bloom_last_mode', mode); } catch (e) {}
+    // Start event drops system
+    startEventSystem();
   }
 
   function updateModeBar() {
@@ -849,7 +851,8 @@
             grid[kr][kc] = nt;
             chainCount++;
             const multiplier = 1 + (chainCount - 1) * 0.5;
-            const points = pointsFor(nt, group.length, multiplier);
+            var eventMult = getFeverMultiplier() * checkTargetMerge(nt);
+            const points = Math.round(pointsFor(nt, group.length, multiplier) * eventMult);
             score += points;
             if (nt > highestTier) highestTier = nt;
             // Track per-tier merge stats for game-over summary
@@ -927,6 +930,7 @@
       // Column is full — check if the whole board is game-over
       if (isGameOver()) {
         busy = true; // prevent further taps
+        stopEventSystem();
         // Save best score BEFORE rendering game-over
         var isNewBest = score > best && !skinTrialMode;
         if (isNewBest) { best = score; localStorage.setItem(BEST_KEY, String(best)); }
@@ -1007,6 +1011,8 @@
     }
     grid[row][col] = nextPiece;
     if (nextPiece > highestTier) highestTier = nextPiece;
+    // Check if tile landed on an event cell
+    checkEventTrigger(row, col);
     // Dismiss the step-1 coach toast the moment a player actually drops —
     // they've understood the input; no need to keep the arrow up.
     dismissCoach();
@@ -1021,6 +1027,7 @@
     var isNewBest = score > best && !skinTrialMode;
     if (isNewBest) { best = score; localStorage.setItem(BEST_KEY, String(best)); }
     if (isGameOver()) {
+      stopEventSystem();
       soundGameOver();
       buzz([60, 80, 100]);
       playMusic('fail');

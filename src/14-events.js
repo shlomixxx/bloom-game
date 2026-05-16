@@ -1,0 +1,454 @@
+  // ============================================================
+  // EVENT DROPS — special items that appear on the board
+  // ============================================================
+
+  var activeEvent = null;       // { type, row, col, timer, maxTimer, interval }
+  var lastEventTime = 0;        // timestamp of last event end
+  var eventSpawnTimer = null;    // setInterval handle
+  var feverActive = false;       // is Fever mode on?
+  var feverEndTime = 0;          // when Fever ends
+  var feverMultiplier = 1;       // current multiplier (1 = normal)
+  var targetTier = 0;            // which tier is targeted (🎯)
+  var targetActive = false;
+
+  var EVENT_TYPES = [
+    { id: 'bomb',   emoji: '💣', label: 'פצצה' },
+    { id: 'star',   emoji: '⭐', label: 'כוכב זהב' },
+    { id: 'gift',   emoji: '🎁', label: 'מתנה' },
+    { id: 'fever',  emoji: '🔥', label: 'טירוף' },
+    { id: 'freeze', emoji: '❄️', label: 'הקפאה' },
+    { id: 'target', emoji: '🎯', label: 'מטרה' }
+  ];
+
+  function getEventConfig(key, fallback) {
+    if (gameConfig && gameConfig[key] !== undefined) return gameConfig[key];
+    return fallback;
+  }
+  function getEventNum(key, fallback) {
+    return parseInt(getEventConfig(key, fallback), 10) || fallback;
+  }
+
+  function eventsEnabled() {
+    return getEventConfig('events_enabled', 'true') === 'true';
+  }
+
+  function startEventSystem() {
+    stopEventSystem();
+    if (!eventsEnabled()) return;
+    lastEventTime = Date.now();
+    eventSpawnTimer = setInterval(trySpawnEvent, 1000);
+  }
+
+  function stopEventSystem() {
+    if (eventSpawnTimer) { clearInterval(eventSpawnTimer); eventSpawnTimer = null; }
+    clearActiveEvent();
+    feverActive = false;
+    feverMultiplier = 1;
+    targetActive = false;
+    targetTier = 0;
+    var feverBar = document.getElementById('fever-bar');
+    if (feverBar) feverBar.remove();
+    var targetHL = document.querySelector('.tier-target-highlight');
+    if (targetHL) targetHL.classList.remove('tier-target-highlight');
+  }
+
+  function clearActiveEvent() {
+    if (activeEvent) {
+      if (activeEvent.interval) clearInterval(activeEvent.interval);
+      var el = document.getElementById('event-overlay-' + activeEvent.row + '-' + activeEvent.col);
+      if (el) el.remove();
+      activeEvent = null;
+    }
+  }
+
+  function countEmptyCells() {
+    var count = 0;
+    for (var r = 0; r < getBoardRows(); r++)
+      for (var c = 0; c < getBoardCols(); c++)
+        if (grid[r][c] === 0) count++;
+    return count;
+  }
+
+  function countFilledRows() {
+    var count = 0;
+    for (var r = 0; r < getBoardRows(); r++) {
+      var full = true;
+      for (var c = 0; c < getBoardCols(); c++) {
+        if (grid[r][c] === 0) { full = false; break; }
+      }
+      if (full) count++;
+    }
+    return count;
+  }
+
+  function trySpawnEvent() {
+    if (!eventsEnabled() || busy) return;
+    if (activeEvent || feverActive || targetActive) return;
+
+    var startDelay = getEventNum('events_start_delay', 30) * 1000;
+    if (Date.now() - gameStartTime < startDelay) return;
+
+    var minGap = getEventNum('events_min_gap', 20) * 1000;
+    var maxGap = getEventNum('events_max_gap', 45) * 1000;
+    var elapsed = Date.now() - lastEventTime;
+    if (elapsed < minGap) return;
+
+    var minEmpty = getEventNum('events_min_empty_cells', 4);
+    if (countEmptyCells() < minEmpty) return;
+
+    // Probability increases linearly from 0% at minGap to 100% at maxGap
+    var prob = Math.min(1, (elapsed - minGap) / (maxGap - minGap));
+    if (Math.random() > prob * 0.15) return; // ~15% check per second at max
+
+    spawnRandomEvent();
+  }
+
+  function spawnRandomEvent() {
+    // Build weighted list of enabled events
+    var pool = [];
+    var totalWeight = 0;
+    EVENT_TYPES.forEach(function(et) {
+      if (getEventConfig('event_' + et.id + '_enabled', 'true') !== 'true') return;
+      // Freeze only when board is mostly full
+      if (et.id === 'freeze') {
+        var minFilled = getEventNum('event_freeze_min_filled_rows', 3);
+        if (countFilledRows() < minFilled) return;
+      }
+      var w = getEventNum('event_' + et.id + '_weight', 15);
+      if (w <= 0) return;
+      totalWeight += w;
+      pool.push({ type: et, weight: w, cumWeight: totalWeight });
+    });
+    if (pool.length === 0) return;
+
+    // Weighted random pick
+    var roll = Math.random() * totalWeight;
+    var chosen = pool[0].type;
+    for (var i = 0; i < pool.length; i++) {
+      if (roll <= pool[i].cumWeight) { chosen = pool[i].type; break; }
+    }
+
+    // Target is special — doesn't go on a cell
+    if (chosen.id === 'target') {
+      spawnTargetEvent();
+      return;
+    }
+
+    // Find random empty cell
+    var emptyCells = [];
+    for (var r = 0; r < getBoardRows(); r++)
+      for (var c = 0; c < getBoardCols(); c++)
+        if (grid[r][c] === 0) emptyCells.push([r, c]);
+    if (emptyCells.length === 0) return;
+
+    var cell = emptyCells[Math.floor(Math.random() * emptyCells.length)];
+    var timerSec = getEventNum('event_' + chosen.id + '_timer', 8);
+
+    activeEvent = {
+      type: chosen.id,
+      emoji: chosen.emoji,
+      label: chosen.label,
+      row: cell[0],
+      col: cell[1],
+      maxTimer: timerSec,
+      timer: timerSec,
+      startTime: Date.now()
+    };
+
+    renderEventOnCell(activeEvent);
+
+    // Countdown
+    activeEvent.interval = setInterval(function() {
+      if (!activeEvent) return;
+      var elapsed = (Date.now() - activeEvent.startTime) / 1000;
+      activeEvent.timer = Math.max(0, activeEvent.maxTimer - elapsed);
+      updateEventTimer(activeEvent);
+      if (activeEvent.timer <= 0) {
+        // Expired!
+        clearActiveEvent();
+        lastEventTime = Date.now();
+      }
+    }, 100);
+  }
+
+  function renderEventOnCell(evt) {
+    var gridEl = document.getElementById('grid');
+    if (!gridEl) return;
+    var idx = evt.row * getBoardCols() + evt.col;
+    var cell = gridEl.children[idx];
+    if (!cell) return;
+
+    var overlay = document.createElement('div');
+    overlay.id = 'event-overlay-' + evt.row + '-' + evt.col;
+    overlay.className = 'event-cell-overlay event-' + evt.type;
+    overlay.innerHTML =
+      '<span class="event-emoji">' + evt.emoji + '</span>' +
+      '<svg class="event-ring" viewBox="0 0 36 36">' +
+        '<circle class="event-ring-bg" cx="18" cy="18" r="16" fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="2.5"/>' +
+        '<circle class="event-ring-fg" cx="18" cy="18" r="16" fill="none" stroke="#2E8B6F" stroke-width="2.5" stroke-dasharray="100.5" stroke-dashoffset="0" stroke-linecap="round" transform="rotate(-90 18 18)"/>' +
+      '</svg>' +
+      '<span class="event-timer-text">' + evt.maxTimer + 's</span>';
+    cell.style.position = 'relative';
+    cell.appendChild(overlay);
+  }
+
+  function updateEventTimer(evt) {
+    var el = document.getElementById('event-overlay-' + evt.row + '-' + evt.col);
+    if (!el) return;
+    var pct = evt.timer / evt.maxTimer;
+    var ring = el.querySelector('.event-ring-fg');
+    var text = el.querySelector('.event-timer-text');
+    if (ring) {
+      var offset = 100.5 * (1 - pct);
+      ring.style.strokeDashoffset = offset;
+      // Color: green → yellow → red
+      if (pct > 0.5) ring.style.stroke = '#2E8B6F';
+      else if (pct > 0.25) ring.style.stroke = '#FAC775';
+      else ring.style.stroke = '#C8472F';
+    }
+    if (text) text.textContent = evt.timer.toFixed(1) + 's';
+    // Flash when urgent
+    if (pct < 0.25) el.classList.add('event-urgent');
+    else el.classList.remove('event-urgent');
+  }
+
+  // Called when a tile is placed at (row, col)
+  function checkEventTrigger(row, col) {
+    if (!activeEvent) return false;
+    if (activeEvent.row === row && activeEvent.col === col) {
+      triggerEvent(activeEvent);
+      return true;
+    }
+    return false;
+  }
+
+  function triggerEvent(evt) {
+    var type = evt.type;
+    clearActiveEvent();
+    lastEventTime = Date.now();
+    buzz([60, 40]);
+
+    if (type === 'bomb') triggerBomb(evt);
+    else if (type === 'star') triggerStar(evt);
+    else if (type === 'gift') triggerGift(evt);
+    else if (type === 'fever') triggerFever(evt);
+    else if (type === 'freeze') triggerFreeze(evt);
+  }
+
+  // ── 💣 BOMB ──
+  function triggerBomb(evt) {
+    var radius = getEventNum('event_bomb_radius', 1);
+    var ptsPerTile = getEventNum('event_bomb_points_per_tile', 2000);
+    var destroyed = 0;
+
+    for (var dr = -radius; dr <= radius; dr++) {
+      for (var dc = -radius; dc <= radius; dc++) {
+        if (dr === 0 && dc === 0) continue; // skip center (the placed tile stays)
+        var r = evt.row + dr, c = evt.col + dc;
+        if (r < 0 || r >= getBoardRows() || c < 0 || c >= getBoardCols()) continue;
+        if (grid[r][c] !== 0) {
+          grid[r][c] = 0;
+          destroyed++;
+          // Flash cell
+          var gridEl = document.getElementById('grid');
+          if (gridEl) {
+            var idx = r * getBoardCols() + c;
+            var cell = gridEl.children[idx];
+            if (cell) {
+              cell.style.transition = 'background 0.15s';
+              cell.style.background = '#C8472F';
+              (function(ce) { setTimeout(function() { ce.style.background = ''; ce.style.transition = ''; }, 400); })(cell);
+            }
+          }
+        }
+      }
+    }
+
+    var bonus = destroyed * ptsPerTile;
+    score += bonus;
+    showEventBanner('💣 BOOM!', '+' + bonus.toLocaleString(), 'bomb');
+    buzz([100, 60, 100, 60, 100]);
+    bumpScore();
+    checkScoreMilestones();
+    // Gravity will be applied by the merge loop
+  }
+
+  // ── ⭐ STAR ──
+  function triggerStar(evt) {
+    var upgrade = getEventNum('event_star_upgrade', 1);
+    var pts = getEventNum('event_star_points', 500);
+    var tile = grid[evt.row][evt.col];
+    if (tile > 0 && tile < MAX_TIER) {
+      grid[evt.row][evt.col] = Math.min(tile + upgrade, MAX_TIER);
+      var newTier = grid[evt.row][evt.col];
+      var tierInfo = getActiveTiers()[newTier];
+      score += pts;
+      showEventBanner('⭐ Level Up!', tierInfo.name + '! +' + pts, 'star');
+      bumpScore();
+      checkScoreMilestones();
+    } else if (tile === MAX_TIER) {
+      score += pts * 5;
+      showEventBanner('⭐ כתר מוזהב!', '+' + (pts * 5).toLocaleString(), 'star');
+      bumpScore();
+      checkScoreMilestones();
+    }
+  }
+
+  // ── 🎁 GIFT ──
+  function triggerGift(evt) {
+    var minC = getEventNum('event_gift_credits_min', 5);
+    var maxC = getEventNum('event_gift_credits_max', 50);
+    var jpChance = getEventNum('event_gift_jackpot_chance', 5);
+    var jpAmount = getEventNum('event_gift_jackpot_amount', 500);
+
+    var isJackpot = Math.random() * 100 < jpChance;
+    if (isJackpot) {
+      showEventBanner('🎁 JACKPOT!!!', '+' + jpAmount + ' 💎', 'gift-jackpot');
+      buzz([80, 40, 80, 40, 80, 40, 80]);
+      if (!window.__bloomBotActive && !skinTrialMode) earnCredits('score_milestone');
+    } else {
+      var amount = minC + Math.floor(Math.random() * (maxC - minC + 1));
+      showEventBanner('🎁 מתנה!', '+' + amount + ' 💎', 'gift');
+      if (!window.__bloomBotActive && !skinTrialMode) earnCredits('score_milestone');
+    }
+  }
+
+  // ── 🔥 FEVER ──
+  function triggerFever(evt) {
+    var duration = getEventNum('event_fever_duration', 10);
+    var mult = getEventNum('event_fever_multiplier', 3);
+    feverActive = true;
+    feverMultiplier = mult;
+    feverEndTime = Date.now() + duration * 1000;
+
+    showEventBanner('🔥 FEVER MODE!', '×' + mult + ' ניקוד למשך ' + duration + 's', 'fever');
+    buzz([80, 40, 80]);
+
+    // Add fever bar
+    var wrap = document.getElementById('grid-wrap');
+    if (wrap) {
+      var bar = document.createElement('div');
+      bar.id = 'fever-bar';
+      bar.className = 'fever-bar';
+      bar.innerHTML = '<div class="fever-bar-fill" id="fever-bar-fill"></div><span class="fever-bar-text">🔥 ×' + mult + '</span>';
+      wrap.appendChild(bar);
+    }
+
+    // Add fever border
+    var gridEl = document.getElementById('grid');
+    if (gridEl) gridEl.classList.add('fever-active');
+
+    // Update fever countdown
+    var feverInterval = setInterval(function() {
+      var remaining = feverEndTime - Date.now();
+      if (remaining <= 0) {
+        feverActive = false;
+        feverMultiplier = 1;
+        clearInterval(feverInterval);
+        var fb = document.getElementById('fever-bar');
+        if (fb) fb.remove();
+        if (gridEl) gridEl.classList.remove('fever-active');
+        return;
+      }
+      var pct = remaining / (duration * 1000);
+      var fill = document.getElementById('fever-bar-fill');
+      if (fill) fill.style.width = (pct * 100) + '%';
+    }, 50);
+  }
+
+  // ── ❄️ FREEZE ──
+  function triggerFreeze(evt) {
+    var clearRows = getEventNum('event_freeze_clear_rows', 1);
+    var pts = getEventNum('event_freeze_points', 1000);
+    var cleared = 0;
+
+    // Clear from top
+    for (var r = 0; r < clearRows && r < getBoardRows(); r++) {
+      for (var c = 0; c < getBoardCols(); c++) {
+        if (grid[r][c] !== 0) { grid[r][c] = 0; cleared++; }
+      }
+      // Flash row blue
+      var gridEl = document.getElementById('grid');
+      if (gridEl) {
+        for (var cc = 0; cc < getBoardCols(); cc++) {
+          var idx = r * getBoardCols() + cc;
+          var cell = gridEl.children[idx];
+          if (cell) {
+            cell.style.transition = 'background 0.15s';
+            cell.style.background = '#4ECDC4';
+            (function(ce) { setTimeout(function() { ce.style.background = ''; ce.style.transition = ''; }, 500); })(cell);
+          }
+        }
+      }
+    }
+
+    score += pts;
+    showEventBanner('❄️ הצלה!', 'שורה נמחקה! +' + pts.toLocaleString(), 'freeze');
+    buzz([60, 40, 60]);
+    bumpScore();
+    checkScoreMilestones();
+  }
+
+  // ── 🎯 TARGET ──
+  function spawnTargetEvent() {
+    var timerSec = getEventNum('event_target_timer', 12);
+    // Pick a random tier 2-6
+    targetTier = 2 + Math.floor(Math.random() * 5);
+    targetActive = true;
+
+    // Highlight in tier bar
+    var tierBar = document.getElementById('tier-bar');
+    if (tierBar) {
+      var items = tierBar.querySelectorAll('.tier-item');
+      if (items[targetTier]) {
+        items[targetTier].classList.add('tier-target-highlight');
+      }
+    }
+
+    showEventBanner('🎯 מטרה!', 'מזג ' + getActiveTiers()[targetTier].name + ' תוך ' + timerSec + 's!', 'target');
+    lastEventTime = Date.now();
+
+    // Timer
+    setTimeout(function() {
+      if (targetActive) {
+        targetActive = false;
+        targetTier = 0;
+        var items2 = document.querySelectorAll('.tier-target-highlight');
+        items2.forEach(function(el) { el.classList.remove('tier-target-highlight'); });
+      }
+    }, timerSec * 1000);
+  }
+
+  // Called when any merge happens — check if it matches target
+  function checkTargetMerge(newTier) {
+    if (!targetActive || newTier !== targetTier) return 1;
+    // Hit!
+    targetActive = false;
+    var mult = getEventNum('event_target_multiplier', 5);
+    var items = document.querySelectorAll('.tier-target-highlight');
+    items.forEach(function(el) { el.classList.remove('tier-target-highlight'); });
+    showEventBanner('🎯 פגיעה!', '×' + mult + ' בונוס!', 'target');
+    buzz([60, 40, 60, 40, 60]);
+    targetTier = 0;
+    return mult;
+  }
+
+  // Get current fever multiplier
+  function getFeverMultiplier() {
+    if (!feverActive) return 1;
+    if (Date.now() > feverEndTime) { feverActive = false; feverMultiplier = 1; return 1; }
+    return feverMultiplier;
+  }
+
+  // Show event banner
+  function showEventBanner(title, sub, cssClass) {
+    var wrap = document.getElementById('grid-wrap');
+    if (!wrap) return;
+    var banner = document.createElement('div');
+    banner.className = 'milestone-banner event-banner event-banner-' + (cssClass || '');
+    banner.innerHTML =
+      '<div class="milestone-banner-tier">' + title + '</div>' +
+      '<div class="milestone-banner-bonus">' + sub + '</div>';
+    wrap.appendChild(banner);
+    setTimeout(function() { if (banner.parentNode) banner.parentNode.removeChild(banner); }, 1500);
+  }
