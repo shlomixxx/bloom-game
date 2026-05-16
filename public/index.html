@@ -558,7 +558,14 @@
     border-radius: 99px; font-size: 12px; font-weight: 700;
     z-index: 20; animation: bubblePop 0.25s ease-out;
     font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    display: flex; align-items: center; gap: 6px; white-space: nowrap;
   }
+  .powerup-cancel {
+    background: rgba(65,36,2,0.2); border: none; color: #412402;
+    font-size: 11px; font-weight: 700; padding: 3px 8px;
+    border-radius: 99px; cursor: pointer; font-family: inherit;
+  }
+  .powerup-cancel:active { opacity: 0.7; }
 
   /* Roulette / slot machine animations for random power-ups */
   .roulette-flash {
@@ -2649,7 +2656,8 @@
   }
 
   // Active power-up mode
-  var activePowerup = null; // 'choose_tile' or 'choose_row'
+  var activePowerup = null;
+  var activePowerupCost = 0;
 
   function showTileShop() {
     if (!tilePrices) { loadTilePrices().then(showTileShop); return; }
@@ -2728,6 +2736,11 @@
     // Wire power-up buttons
     modal.querySelectorAll('.ts-power:not([disabled])').forEach(function(btn) {
       btn.onclick = function() {
+        // Block double-buy
+        if (activePowerup) {
+          modal.remove();
+          return;
+        }
         var power = this.getAttribute('data-power');
         var self = this;
         self.style.opacity = '0.5';
@@ -2770,6 +2783,7 @@
     }
     else if (type === 'choose_tile') {
       activePowerup = 'choose_tile';
+      activePowerupCost = cost;
       showPowerupHint('🎯 לחץ על האריח שרוצה לפנות');
       showCreditToast(-cost, 'בחר אריח לפינוי');
     }
@@ -2791,6 +2805,7 @@
     }
     else if (type === 'choose_row') {
       activePowerup = 'choose_row';
+      activePowerupCost = cost;
       showPowerupHint('👑 לחץ על השורה שרוצה לפנות');
       showCreditToast(-cost, 'בחר שורה לפינוי');
     }
@@ -2895,37 +2910,82 @@
     var hint = document.createElement('div');
     hint.id = 'powerup-hint';
     hint.className = 'powerup-hint';
-    hint.textContent = text;
+    hint.innerHTML = '<span>' + text + '</span><button id="powerup-cancel-btn" class="powerup-cancel">✕ ביטול</button>';
     var wrap = document.getElementById('grid-wrap');
     if (wrap) wrap.appendChild(hint);
+    document.getElementById('powerup-cancel-btn').onclick = function(e) {
+      e.stopPropagation();
+      cancelPowerup();
+    };
+  }
+
+  function cancelPowerup() {
+    if (!activePowerup) return;
+    // Refund credits
+    if (activePowerupCost > 0) {
+      playerBalance += activePowerupCost;
+      try { localStorage.setItem(PLAYER_BALANCE_KEY, String(playerBalance)); } catch(e) {}
+      updateBalanceDisplay();
+      showCreditToast(activePowerupCost, 'ביטול — החזר 💎');
+      // Server refund
+      fetch(API_BASE + '/api/player/buy-powerup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deviceId: deviceId, powerup: 'refund', refundAmount: activePowerupCost })
+      }).catch(function() {});
+    }
+    activePowerup = null;
+    activePowerupCost = 0;
+    var hint = document.getElementById('powerup-hint');
+    if (hint) hint.remove();
   }
 
   function handlePowerupClick(row, col) {
     if (!activePowerup) return false;
     if (activePowerup === 'choose_tile') {
       if (grid[row][col] > 0) {
-        grid[row][col] = 0;
-        applyGravity();
-        render();
-        if (mode === 'practice') savePracticeGameState();
+        // Explosion animation then delete
+        var gridEl = document.getElementById('grid');
+        var COLS = getBoardCols();
+        var cell = gridEl ? gridEl.children[row * COLS + col] : null;
+        if (cell) {
+          cell.classList.add('roulette-hit');
+          setTimeout(function() {
+            grid[row][col] = 0;
+            applyGravity();
+            render();
+            if (mode === 'practice') savePracticeGameState();
+          }, 450);
+        } else {
+          grid[row][col] = 0; applyGravity(); render();
+          if (mode === 'practice') savePracticeGameState();
+        }
       }
-      activePowerup = null;
+      activePowerup = null; activePowerupCost = 0;
       var hint = document.getElementById('powerup-hint');
       if (hint) hint.remove();
       return true;
     }
     if (activePowerup === 'choose_row') {
-      // Can't delete a row where ALL cells are max tier (crowns)
       var allMax = grid[row].every(function(c) { return c === MAX_TIER; });
       if (allMax) {
         showPowerupHint('❌ שורה מלאת כתרים! בחר שורה אחרת');
         return true;
       }
-      for (var c = 0; c < getBoardCols(); c++) grid[row][c] = 0;
-      applyGravity();
-      render();
-      if (mode === 'practice') savePracticeGameState();
-      activePowerup = null;
+      // Explosion animation for entire row
+      var gridEl = document.getElementById('grid');
+      var COLS = getBoardCols();
+      for (var c = 0; c < COLS; c++) {
+        var cell = gridEl ? gridEl.children[row * COLS + c] : null;
+        if (cell) cell.classList.add('roulette-hit');
+      }
+      setTimeout(function() {
+        for (var c = 0; c < getBoardCols(); c++) grid[row][c] = 0;
+        applyGravity();
+        render();
+        if (mode === 'practice') savePracticeGameState();
+      }, 450);
+      activePowerup = null; activePowerupCost = 0;
       var hint = document.getElementById('powerup-hint');
       if (hint) hint.remove();
       return true;

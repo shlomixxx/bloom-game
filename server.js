@@ -2840,8 +2840,19 @@ app.get('/api/tile-prices', async (_req, res) => {
 
 // POST /api/player/buy-powerup — buy a delete power-up
 app.post('/api/player/buy-powerup', async (req, res) => {
-  const { deviceId, powerup } = req.body || {};
-  if (!deviceId || !powerup) return res.status(400).json({ error: 'missing_params' });
+  const { deviceId, powerup, refundAmount } = req.body || {};
+  if (!deviceId) return res.status(400).json({ error: 'missing_params' });
+
+  // Handle refund (cancel)
+  if (powerup === 'refund' && refundAmount > 0) {
+    try {
+      await pool.query(`UPDATE player_profiles SET balance = balance + $1, total_spent = total_spent - $1 WHERE device_id = $2`,
+        [Math.min(refundAmount, 1000), deviceId]); // cap refund at 1000 for safety
+      return res.json({ ok: true, refunded: refundAmount });
+    } catch (e) { return res.status(500).json({ error: 'server' }); }
+  }
+
+  if (!powerup) return res.status(400).json({ error: 'missing_params' });
   const validPowerups = ['powerup_random_tile', 'powerup_choose_tile', 'powerup_random_row', 'powerup_choose_row'];
   if (!validPowerups.includes(powerup)) return res.json({ ok: false, reason: 'invalid_powerup' });
   try {
