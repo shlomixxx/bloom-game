@@ -85,11 +85,11 @@
     if (!eventsEnabled() || busy) return;
     if (activeEvent || feverActive || targetActive) return;
 
-    var startDelay = getEventNum('events_start_delay', 30) * 1000;
+    var startDelay = getEventNum('events_start_delay', 15) * 1000;
     if (Date.now() - gameStartTime < startDelay) return;
 
-    var minGap = getEventNum('events_min_gap', 20) * 1000;
-    var maxGap = getEventNum('events_max_gap', 45) * 1000;
+    var minGap = getEventNum('events_min_gap', 15) * 1000;
+    var maxGap = getEventNum('events_max_gap', 35) * 1000;
     var elapsed = Date.now() - lastEventTime;
     if (elapsed < minGap) return;
 
@@ -98,7 +98,7 @@
 
     // Probability increases linearly from 0% at minGap to 100% at maxGap
     var prob = Math.min(1, (elapsed - minGap) / (maxGap - minGap));
-    if (Math.random() > prob * 0.15) return; // ~15% check per second at max
+    if (Math.random() > prob * 0.4) return; // ~40% check per second at max
 
     spawnRandomEvent();
   }
@@ -215,21 +215,23 @@
   // Called when a tile is placed at (row, col)
   function checkEventTrigger(row, col) {
     if (!activeEvent) return false;
-    if (activeEvent.row === row && activeEvent.col === col) {
-      triggerEvent(activeEvent);
+    // Trigger if tile dropped in the same COLUMN as the event
+    // (not exact cell — tile falls to bottom, event can be anywhere)
+    if (activeEvent.col === col) {
+      triggerEvent(activeEvent, row);
       return true;
     }
     return false;
   }
 
-  function triggerEvent(evt) {
+  function triggerEvent(evt, landingRow) {
     var type = evt.type;
     clearActiveEvent();
     lastEventTime = Date.now();
     buzz([60, 40]);
 
     if (type === 'bomb') triggerBomb(evt);
-    else if (type === 'star') triggerStar(evt);
+    else if (type === 'star') triggerStar(evt, landingRow);
     else if (type === 'gift') triggerGift(evt);
     else if (type === 'fever') triggerFever(evt);
     else if (type === 'freeze') triggerFreeze(evt);
@@ -274,13 +276,14 @@
   }
 
   // ── ⭐ STAR ──
-  function triggerStar(evt) {
+  function triggerStar(evt, landingRow) {
     var upgrade = getEventNum('event_star_upgrade', 1);
     var pts = getEventNum('event_star_points', 500);
-    var tile = grid[evt.row][evt.col];
+    var tRow = (landingRow != null) ? landingRow : evt.row;
+    var tile = grid[tRow][evt.col];
     if (tile > 0 && tile < MAX_TIER) {
-      grid[evt.row][evt.col] = Math.min(tile + upgrade, MAX_TIER);
-      var newTier = grid[evt.row][evt.col];
+      grid[tRow][evt.col] = Math.min(tile + upgrade, MAX_TIER);
+      var newTier = grid[tRow][evt.col];
       var tierInfo = getActiveTiers()[newTier];
       score += pts;
       showEventBanner('⭐ Level Up!', tierInfo.name + '! +' + pts, 'star');
