@@ -225,4 +225,3 @@
 
   // Android: catch beforeinstallprompt
   window.addEventListener('beforeinstallprompt', function(e) { e.preventDefault(); });
-})();

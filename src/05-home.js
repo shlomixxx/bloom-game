@@ -70,28 +70,6 @@
       // Start/restart event system when entering the game
       startEventSystem();
 
-      // === VISUAL TEST: inject directly into grid after 3 seconds ===
-      setTimeout(function() {
-        var g = document.getElementById('grid');
-        if (!g || !g.children.length) return;
-        // Find first empty cell
-        for (var i = 0; i < g.children.length; i++) {
-          var c = g.children[i];
-          if (!c.classList.contains('filled')) {
-            var test = document.createElement('div');
-            test.style.cssText = 'position:absolute;inset:-2px;background:rgba(255,0,0,0.8);border:3px solid gold;border-radius:12px;display:flex;align-items:center;justify-content:center;z-index:50;pointer-events:none;font-size:24px';
-            test.textContent = '💣';
-            c.style.position = 'relative';
-            c.appendChild(test);
-            // Also show banner
-            showEventBanner('🔴 TEST', 'event overlay works!', 'bomb');
-            setTimeout(function() { test.remove(); }, 5000);
-            break;
-          }
-        }
-      }, 3000);
-      // === END VISUAL TEST ===
-
       // If we're returning to a paused contest game, make sure the overtake
       // watcher is running again (it was stopped when navigating away).
       if (mode === 'contest' && activeContestCode && !overtakeTimer) {
