@@ -466,7 +466,7 @@ app.get('/api/contests/mine', async (req, res) => {
 // POST /api/contests — יצירת תחרות חדשה
 app.post('/api/contests', async (req, res) => {
   try {
-    const { name, hostName, deviceId, durationDays, boardType } = req.body || {};
+    const { name, hostName, deviceId, durationDays, boardType, wagerAmount } = req.body || {};
 
     const cleanedName = cleanContestName(name);
     if (!cleanedName) return res.status(400).json({ error: 'bad_name' });
@@ -486,13 +486,38 @@ app.post('/api/contests', async (req, res) => {
     const seed = type === 'shared' ? Math.floor(Math.random() * 2147483647) : null;
     const endsAt = new Date(Date.now() + dur * 24 * 60 * 60 * 1000);
 
+    // Wager handling
+    let wager = parseInt(wagerAmount, 10) || 0;
+    if (wager > 0) {
+      const wcfg = await pool.query(`SELECT key, value FROM game_config WHERE key IN ('wager_enabled','wager_min','wager_max')`);
+      const cfg = {}; for (const r of wcfg.rows) cfg[r.key] = r.value;
+      if (cfg.wager_enabled === 'false') wager = 0;
+      else {
+        const min = parseInt(cfg.wager_min, 10) || 10;
+        const max = parseInt(cfg.wager_max, 10) || 500;
+        wager = Math.max(min, Math.min(max, wager));
+        // Deduct from host
+        const host = await pool.query('SELECT balance FROM player_profiles WHERE device_id = $1', [deviceId]);
+        if (!host.rows.length || host.rows[0].balance < wager) {
+          return res.status(400).json({ error: 'insufficient_balance' });
+        }
+        await pool.query(`UPDATE player_profiles SET balance = balance - $1, total_spent = total_spent + $1 WHERE device_id = $2`, [wager, deviceId]);
+      }
+    }
+
     const code = await generateUniqueContestCode();
 
     const result = await pool.query(
-      `INSERT INTO contests (code, name, host_name, host_device_id, board_seed, board_type, duration_days, ends_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
-      [code, cleanedName, cleanedHost, deviceId, seed, type, dur, endsAt]
+      `INSERT INTO contests (code, name, host_name, host_device_id, board_seed, board_type, duration_days, ends_at, wager_amount, wager_pool)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
+      [code, cleanedName, cleanedHost, deviceId, seed, type, dur, endsAt, wager, wager]
     );
+
+    // Record settlement entry for host
+    if (wager > 0) {
+      await pool.query(`INSERT INTO wager_settlements (contest_code, device_id, amount, type) VALUES ($1, $2, $3, 'entry')`,
+        [code, deviceId, -wager]);
+    }
 
     await pool.query(
       `INSERT INTO contest_scores (contest_code, device_id, display_name, score, highest_tier)
@@ -647,7 +672,25 @@ app.post('/api/contests/:code/join', async (req, res) => {
       [code, deviceId, cleanedName]
     );
 
-    res.json({ ok: true, contest: contestResult.rows[0] });
+    // Handle wager payment for new joiners
+    const contest = contestResult.rows[0];
+    const wagerAmt = contest.wager_amount | 0;
+    if (wagerAmt > 0 && contest.host_device_id !== deviceId) {
+      // Check if already paid (re-join shouldn't double-charge)
+      const alreadyPaid = await pool.query(
+        `SELECT 1 FROM wager_settlements WHERE contest_code = $1 AND device_id = $2 AND type = 'entry'`, [code, deviceId]);
+      if (!alreadyPaid.rows.length) {
+        const player = await pool.query('SELECT balance FROM player_profiles WHERE device_id = $1', [deviceId]);
+        if (!player.rows.length || player.rows[0].balance < wagerAmt) {
+          return res.status(400).json({ error: 'insufficient_balance', wagerRequired: wagerAmt });
+        }
+        await pool.query(`UPDATE player_profiles SET balance = balance - $1, total_spent = total_spent + $1 WHERE device_id = $2`, [wagerAmt, deviceId]);
+        await pool.query(`UPDATE contests SET wager_pool = wager_pool + $1 WHERE code = $2`, [wagerAmt, code]);
+        await pool.query(`INSERT INTO wager_settlements (contest_code, device_id, amount, type) VALUES ($1, $2, $3, 'entry')`, [code, deviceId, -wagerAmt]);
+      }
+    }
+
+    res.json({ ok: true, contest: contest });
   } catch (e) {
     console.error('POST /api/contests/:code/join', e);
     res.status(500).json({ error: 'server' });
@@ -2255,6 +2298,82 @@ if (ADMIN_PATH && ADMIN_PASSWORD) {
   });
 
   // ---------- PLAYER MANAGEMENT ----------
+
+  // Settle contest wager — distribute pool to top 3
+  adminRouter.post('/api/wager/settle', async (req, res) => {
+    const { contestCode } = req.body || {};
+    if (!contestCode) return res.status(400).json({ error: 'missing_code' });
+    try {
+      const contest = await pool.query('SELECT * FROM contests WHERE code = $1', [contestCode]);
+      if (!contest.rows.length) return res.status(404).json({ error: 'not_found' });
+      const c = contest.rows[0];
+      if ((c.wager_amount | 0) === 0) return res.json({ ok: false, reason: 'no_wager' });
+      if (c.wager_settled) return res.json({ ok: false, reason: 'already_settled' });
+      const pool_amount = c.wager_pool | 0;
+      if (pool_amount <= 0) return res.json({ ok: false, reason: 'empty_pool' });
+
+      // Get top 3 players who actually played (score > 0)
+      const top = await pool.query(
+        `SELECT device_id, display_name, score FROM contest_scores
+         WHERE contest_code = $1 AND score > 0 ORDER BY score DESC LIMIT 3`, [contestCode]);
+
+      // Get config percentages
+      const cfgRows = await pool.query(`SELECT key, value FROM game_config WHERE key LIKE 'wager_%'`);
+      const cfg = {}; for (const r of cfgRows.rows) cfg[r.key] = r.value;
+      const rake = parseInt(cfg.wager_rake, 10) || 5;
+      const pct1 = parseInt(cfg.wager_1st_pct, 10) || 60;
+      const pct2 = parseInt(cfg.wager_2nd_pct, 10) || 25;
+      const pct3 = parseInt(cfg.wager_3rd_pct, 10) || 10;
+
+      const rakeAmount = Math.round(pool_amount * rake / 100);
+      const distributable = pool_amount - rakeAmount;
+      const prizes = [
+        Math.round(distributable * pct1 / (pct1 + pct2 + pct3)),
+        Math.round(distributable * pct2 / (pct1 + pct2 + pct3)),
+        Math.round(distributable * pct3 / (pct1 + pct2 + pct3))
+      ];
+
+      const winners = [];
+      for (let i = 0; i < Math.min(3, top.rows.length); i++) {
+        const prize = prizes[i] || 0;
+        if (prize <= 0) continue;
+        const p = top.rows[i];
+        await pool.query(`UPDATE player_profiles SET balance = balance + $1, total_earned = total_earned + $1 WHERE device_id = $2`, [prize, p.device_id]);
+        await pool.query(`INSERT INTO wager_settlements (contest_code, device_id, amount, type) VALUES ($1, $2, $3, $4)`,
+          [contestCode, p.device_id, prize, 'win_' + (i + 1)]);
+        winners.push({ name: p.display_name, score: p.score, prize, place: i + 1 });
+      }
+
+      // Record rake
+      if (rakeAmount > 0) {
+        await pool.query(`INSERT INTO wager_settlements (contest_code, device_id, amount, type) VALUES ($1, 'house', $2, 'rake')`,
+          [contestCode, rakeAmount]);
+      }
+
+      // Mark as settled
+      await pool.query(`UPDATE contests SET wager_settled = true WHERE code = $1`, [contestCode]);
+      logAdminAction('wager.settle', contestCode, contestCode, { pool: pool_amount, rake: rakeAmount, winners });
+
+      res.json({ ok: true, pool: pool_amount, rake: rakeAmount, winners });
+    } catch (e) {
+      console.error('wager/settle', e.message);
+      res.status(500).json({ error: 'server' });
+    }
+  });
+
+  // Wager stats for admin dashboard
+  adminRouter.get('/api/wager/stats', async (_req, res) => {
+    try {
+      const active = await pool.query(
+        `SELECT c.code, c.name, c.wager_amount, c.wager_pool, c.wager_settled, c.ends_at,
+                (SELECT COUNT(*) FROM contest_scores WHERE contest_code = c.code) as players
+         FROM contests c WHERE c.wager_amount > 0 ORDER BY c.created_at DESC LIMIT 50`);
+      const totalRake = await pool.query(`SELECT COALESCE(SUM(amount), 0) as total FROM wager_settlements WHERE type = 'rake'`);
+      res.json({ ok: true, contests: active.rows, totalRake: totalRake.rows[0].total | 0 });
+    } catch (e) {
+      res.status(500).json({ error: 'server' });
+    }
+  });
   // List all players with codes and balances
   adminRouter.get('/api/players', async (_req, res) => {
     try {

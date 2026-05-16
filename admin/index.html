@@ -320,6 +320,15 @@
   </section>
 
   <!-- Player Management -->
+  <section id="wager-section" style="margin-bottom:12px">
+    <h2>🎰 הימורים <button class="tip-btn" data-tip="wager">?</button></h2>
+    <div style="padding:12px 16px;background:var(--card);border-radius:10px;margin-top:8px">
+      <button class="btn sm" id="btn-load-wagers" style="width:100%;margin-bottom:8px">📊 טען תחרויות עם הימורים</button>
+      <div id="wager-list" style="max-height:250px;overflow-y:auto"></div>
+    </div>
+  </section>
+
+  <!-- Player Management -->
   <section id="players-section" style="margin-bottom:12px">
     <h2>👤 שחקנים וקרדיטים <button class="tip-btn" data-tip="players">?</button></h2>
     <div style="padding:12px 16px;background:var(--card);border-radius:10px;margin-top:8px">
@@ -626,7 +635,8 @@
     audit: '<strong>יומן פעולות אדמין</strong><br>כל פעולה שנעשתה מפאנל הניהול.<br><div class="tip-example">📋 מציג: מחיקת שחקן, שינוי הגדרה, סגירת תחרות<br>💡 מאפשר לעקוב אחרי כל שינוי שנעשה</div>',
     csv: '<strong>הורדת CSV</strong><br>ייצוא נתונים לאקסל.<br><div class="tip-example">📥 לחץ על טבלה → הורדה אוטומטית<br>📊 תומך בעברית (BOM) + עד 10,000 שורות<br>💡 שימושי לניתוח חיצוני או גיבוי</div>',
     bots: '<strong>🤖 שחקני דמו</strong><br>שחקנים מדומים שרצים על השרת. נראים כמו אנשים אמיתיים.<br><div class="tip-example"><strong>איך זה עובד:</strong><br>1. בחר כמה בוטים (למשל 10)<br>2. בחר מצב: אימון / יומי / תחרות<br>3. לחץ הפעל — 10 "שחקנים" מתחילים לשחק<br><br><strong>החלפת שמות:</strong><br>כשבוט מפסיד (הלוח מלא) → הוא "יוצא".<br>אחרי 30-90 שניות שחקן חדש עם שם אחר מתחיל.<br>ב-24 שעות עוברים 200+ שמות שונים!<br><br><strong>מצבים:</strong><br>🏋️ אימון = משחקים חופשי, מופיעים בלייב<br>📊 יומי = מגישים ניקוד ללידרבורד היומי<br>🏆 תחרות = מצטרפים לתחרות עם קוד<br><br><strong>מהירויות:</strong><br>🐌 איטי = נראה ריאליסטי · 🏃 רגיל = ברירת מחדל<br>⚡ מהיר = מילוי לידרבורד · 🚀 מקסימום = stress test<br><br>💰 עלות: $0 עד 50 בוטים · ~$2/חודש ל-200</div>',
-    players: '<strong>👤 ניהול שחקנים וקרדיטים</strong><br>כל שחקן מקבל קוד ייחודי (BLOOM-XXXX) וארנק קרדיטים (💎).<br><div class="tip-example"><strong>מה אפשר לעשות:</strong><br>📋 טען רשימה — רואה כל שחקן עם הקוד, יתרה, הפניות<br>🎁 שלח מתנה — הזן קוד שחקן + כמות → קרדיטים מועברים מיד<br>🔗 הפניות — מי הזמין את מי וכמה קרדיטים חולקו<br><br><strong>הגדרות הפניות (בהגדרות משחק):</strong><br>referral_enabled = true/false (הפעל/כבה)<br>referral_reward = כמה 💎 למזמין<br>referred_bonus = כמה 💎 למוזמן<br>welcome_bonus = כמה 💎 לשחקן חדש<br><br>💡 ערוך דרך "הגדרות משחק" למטה</div>'
+    players: '<strong>👤 ניהול שחקנים וקרדיטים</strong><br>כל שחקן מקבל קוד ייחודי (BLOOM-XXXX) וארנק קרדיטים (💎).<br><div class="tip-example"><strong>מה אפשר לעשות:</strong><br>📋 טען רשימה — רואה כל שחקן עם הקוד, יתרה, הפניות<br>🎁 שלח מתנה — הזן קוד שחקן + כמות → קרדיטים מועברים מיד<br>🔗 הפניות — מי הזמין את מי וכמה קרדיטים חולקו<br><br><strong>הגדרות הפניות (בהגדרות משחק):</strong><br>referral_enabled = true/false (הפעל/כבה)<br>referral_reward = כמה 💎 למזמין<br>referred_bonus = כמה 💎 למוזמן<br>welcome_bonus = כמה 💎 לשחקן חדש<br><br>💡 ערוך דרך "הגדרות משחק" למטה</div>',
+    wager: '<strong>🎰 מערכת הימורים</strong><br>שחקנים מהמרים 💎 על תחרויות. הזוכים מחלקים את הקופה.<br><div class="tip-example"><strong>איך עובד:</strong><br>1. שחקן יוצר תחרות עם הימור (למשל 50💎)<br>2. כל מצטרף משלם 50💎 → נכנס לקופה<br>3. בסיום → אדמין לוחץ "סלק" → הקופה מחולקת:<br>🥇 60% · 🥈 25% · 🥉 10% · 🏠 5% עמלה<br><br><strong>הגדרות (בהגדרות משחק):</strong><br>wager_enabled, wager_min, wager_max<br>wager_rake, wager_1st/2nd/3rd_pct</div>'
   };
 
   // Wire all .tip-btn elements after DOM load
@@ -1444,6 +1454,54 @@
   };
   refreshBotStatus();
   setInterval(refreshBotStatus, 15000);
+
+  // Player management
+  // Wager management
+  $('btn-load-wagers').onclick = async function() {
+    this.disabled = true; this.textContent = '...';
+    var d = await api('/wager/stats');
+    this.disabled = false; this.textContent = '📊 טען תחרויות עם הימורים';
+    var el = $('wager-list');
+    if (!el || !d || !d.contests) return;
+    if (!d.contests.length) { el.innerHTML = '<div style="color:#A8A6A0;font-size:12px;text-align:center;padding:10px">אין תחרויות עם הימורים</div>'; return; }
+    var html = '<div style="font-size:11px;color:#BA7517;font-weight:600;margin-bottom:6px">💰 סה"כ עמלות: ' + (d.totalRake || 0) + ' 💎</div>';
+    html += '<table style="width:100%;font-size:11px;border-collapse:collapse;direction:rtl">' +
+      '<tr style="background:rgba(0,0,0,0.03)"><th style="padding:4px">קוד</th><th>שם</th><th>💎 הימור</th><th>קופה</th><th>שחקנים</th><th></th></tr>';
+    d.contests.forEach(function(c) {
+      var ended = new Date(c.ends_at) < new Date();
+      var settled = c.wager_settled;
+      var actionBtn = settled ? '<span style="color:#2E8B6F;font-weight:600">✓</span>'
+        : ended ? '<button class="btn sm" style="font-size:9px;padding:2px 6px;background:#BA7517" onclick="settleWager(\'' + c.code + '\')">סלק</button>'
+        : '<span style="color:#6F6E68">פעיל</span>';
+      html += '<tr style="border-top:1px solid rgba(0,0,0,0.05)">' +
+        '<td style="padding:4px;font-weight:700">' + c.code + '</td>' +
+        '<td>' + (c.name || '') + '</td>' +
+        '<td style="font-weight:700">' + (c.wager_amount || 0) + '</td>' +
+        '<td style="font-weight:700;color:#BA7517">' + (c.wager_pool || 0) + '</td>' +
+        '<td>' + (c.players || 0) + '</td>' +
+        '<td>' + actionBtn + '</td>' +
+      '</tr>';
+    });
+    html += '</table>';
+    el.innerHTML = html;
+  };
+  window.settleWager = async function(code) {
+    if (!confirm('לסלק את ההימור של ' + code + '? הקופה תחולק לזוכים.')) return;
+    var r = await api('/wager/settle', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contestCode: code })
+    });
+    if (r && r.ok) {
+      var msg = '🏆 קופה ' + r.pool + '💎 חולקה:\n';
+      (r.winners || []).forEach(function(w) { msg += '  ' + ['🥇','🥈','🥉'][w.place-1] + ' ' + w.name + ': ' + w.prize + '💎\n'; });
+      msg += '  🏠 עמלה: ' + r.rake + '💎';
+      toast('✅ סולק!');
+      alert(msg);
+      $('btn-load-wagers').click();
+    } else {
+      toast('שגיאה: ' + ((r && r.reason) || 'unknown'));
+    }
+  };
 
   // Player management
   $('btn-load-players').onclick = async function() {

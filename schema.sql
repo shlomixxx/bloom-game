@@ -264,6 +264,48 @@ INSERT INTO game_config (key, value) VALUES ('powerup_random_row', '60')
   ON CONFLICT (key) DO NOTHING;
 INSERT INTO game_config (key, value) VALUES ('powerup_choose_row', '100')
   ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('wager_enabled', 'true')
+  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('wager_min', '10')
+  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('wager_max', '500')
+  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('wager_rake', '5')
+  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('wager_1st_pct', '60')
+  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('wager_2nd_pct', '25')
+  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('wager_3rd_pct', '10')
+  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('jackpot_enabled', 'true')
+  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('jackpot_entry', '5')
+  ON CONFLICT (key) DO NOTHING;
+
+-- Wager settlements (tracks every credit movement from bets)
+CREATE TABLE IF NOT EXISTS wager_settlements (
+  id           SERIAL PRIMARY KEY,
+  contest_code VARCHAR(8),
+  device_id    VARCHAR(64) NOT NULL,
+  amount       INT NOT NULL,
+  type         VARCHAR(20) NOT NULL,
+  created_at   TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_wager_settlements_contest
+  ON wager_settlements (contest_code);
+CREATE INDEX IF NOT EXISTS idx_wager_settlements_device
+  ON wager_settlements (device_id);
+
+-- Daily jackpot pool
+CREATE TABLE IF NOT EXISTS daily_jackpot (
+  date     DATE PRIMARY KEY,
+  pool     INT NOT NULL DEFAULT 0,
+  entries  INT NOT NULL DEFAULT 0,
+  settled  BOOLEAN NOT NULL DEFAULT false,
+  settled_at TIMESTAMP
+);
 
 -- ============================================================
 -- Player heartbeat — tracks ALL active players (any mode)

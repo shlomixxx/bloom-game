@@ -3867,6 +3867,11 @@
           '<div class="contest-duration-pill" data-board="free">חופשי</div>' +
         '</div>' +
         '<div class="contest-form-hint" id="ctf-board-hint">כולם מקבלים את אותו לוח — השוואה הוגנת</div>' +
+        '<div class="contest-form-label">🎰 הימור (אופציונלי)</div>' +
+        '<div style="display:flex;align-items:center;gap:8px;direction:rtl;margin-bottom:8px">' +
+          '<input type="number" class="contest-input" id="ctf-wager" placeholder="0" min="0" max="500" value="0" style="width:80px;text-align:center;font-weight:700" />' +
+          '<span style="font-size:12px;color:#6F6E68">💎 כל משתתף · קופה מחולקת לזוכים</span>' +
+        '</div>' +
         '<button class="contest-submit-btn" id="ctf-submit">צור והעתק קוד</button>' +
         '<div class="contest-error" id="ctf-error"></div>' +
       '</div>';
@@ -3904,6 +3909,7 @@
       this.textContent = 'יוצר...';
 
       try {
+        const wagerVal = parseInt(document.getElementById('ctf-wager').value, 10) || 0;
         const res = await fetch(API_BASE + '/api/contests', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -3912,7 +3918,8 @@
             hostName: hostVal,
             deviceId: deviceId,
             durationDays: selectedDays,
-            boardType: selectedBoardType
+            boardType: selectedBoardType,
+            wagerAmount: wagerVal
           })
         });
         if (res.status === 429) {
