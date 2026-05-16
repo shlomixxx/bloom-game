@@ -6993,14 +6993,10 @@
       var medal = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : String(rank);
       // Gap to player above
       var gapText = '';
-      if (rank > 1 && isYou) {
+      if (rank > 1 && isYou && i > 0) {
         var above = leaderboard[i - 1];
         var gap = (above.score || 0) - (row.score || 0);
         if (gap > 0) gapText = '<div class="lb-gap you-gap">↑ עוד ' + gap.toLocaleString() + ' למקום ' + (rank - 1) + '</div>';
-      } else if (rank > 1 && i > 0) {
-        var above = leaderboard[i - 1];
-        var gap = (above.score || 0) - (row.score || 0);
-        if (gap > 0) gapText = '<div class="lb-gap">-' + gap.toLocaleString() + '</div>';
       }
       return '<div class="lb-row' + rankClass + (isYou ? ' you' : '') + '">' +
         '<div class="lb-rank">' + medal + '</div>' +
@@ -7221,14 +7217,10 @@
       var rankClass = rank === 1 ? ' lb-top1' : rank === 2 ? ' lb-top2' : rank === 3 ? ' lb-top3' : '';
       var medal = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : String(rank);
       var gapText = '';
-      if (rank > 1 && isYou) {
+      if (rank > 1 && isYou && i > 0) {
         var above = lbModalList[i - 1];
         var gap = (above.score || 0) - (row.score || 0);
         if (gap > 0) gapText = '<div class="lb-gap you-gap">↑ עוד ' + gap.toLocaleString() + ' למקום ' + (rank - 1) + '</div>';
-      } else if (rank > 1 && i > 0) {
-        var above = lbModalList[i - 1];
-        var gap = (above.score || 0) - (row.score || 0);
-        if (gap > 0) gapText = '<div class="lb-gap">-' + gap.toLocaleString() + '</div>';
       }
       return '<div class="lb-row' + rankClass + (isYou ? ' you' : '') + '">' +
         '<div class="lb-rank">' + medal + '</div>' +
