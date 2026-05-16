@@ -1158,6 +1158,41 @@
     color: #FFFFFF;
   }
 
+
+  /* ── Home: Actions grid (2-column layout) ── */
+  .home-actions-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+    width: 100%; max-width: 300px; margin-top: 12px;
+  }
+  .home-action-btn {
+    position: relative; padding: 16px 12px;
+    border-radius: 14px; border: 1px solid rgba(0,0,0,0.06);
+    background: #FAFAF6; color: #1C1A18;
+    font-size: 14px; font-weight: 700;
+    cursor: pointer; font-family: inherit;
+    text-align: center; direction: rtl;
+    transition: transform 0.12s;
+  }
+  .home-action-btn:active { transform: scale(0.97); }
+  .home-action-badge {
+    display: inline-block; padding: 2px 8px;
+    border-radius: 6px; font-size: 10px; font-weight: 700;
+    background: #E8E6E0; color: #6F6E68;
+    margin-bottom: 4px;
+  }
+  .home-action-badge.active { background: #25D366; color: #FFF; }
+  .home-action-badge.prize { background: #FAC775; color: #412402; }
+  .home-action-contest { border-color: rgba(0,0,0,0.08); }
+  .home-action-contest.active { border-color: #25D366; background: #F0FFF4; }
+  .home-action-challenge { border-color: rgba(250,199,117,0.3); background: #FFF9EE; }
+  .home-action-secondary {
+    padding: 12px; font-size: 13px; font-weight: 600;
+    background: #F5F2EC; border-color: transparent; color: #444441;
+  }
+  html[data-theme="dark"] .home-action-btn { background: #252320; border-color: rgba(255,255,255,0.06); color: #F2EFE9; }
+  html[data-theme="dark"] .home-action-contest.active { background: #1A2E1F; border-color: rgba(37,211,102,0.3); }
+  html[data-theme="dark"] .home-action-challenge { background: #2A2118; border-color: rgba(250,199,117,0.2); }
+  html[data-theme="dark"] .home-action-secondary { background: #1F1D1B; color: #8E8A82; }
   /* Contest screens - shared styles */
   .contest-screen {
     position: absolute; inset: 0;

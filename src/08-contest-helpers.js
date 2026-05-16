@@ -678,7 +678,9 @@
       var timeLeft = hoursLeft >= 24 ? Math.ceil(hoursLeft / 24) + ' ימים' : hoursLeft + ' שעות';
       var statusText = w.joined
         ? 'הציון שלך: <strong>' + (w.myScore | 0).toLocaleString() + '</strong> · ' + (w.myGames || 0) + ' משחקים'
-        : '<strong>' + (w.players || 0) + '</strong> משתתפים · הצטרף עכשיו!';
+        : (w.players || 0) > 0
+          ? '<strong>' + (w.players || 0) + '</strong> משתתפים · הצטרף עכשיו!'
+          : 'היה הראשון להצטרף! 🏅';
 
       host.innerHTML =
         '<div class="home-weekly" id="home-weekly-btn">' +
