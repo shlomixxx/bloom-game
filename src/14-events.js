@@ -3,6 +3,41 @@
   // ============================================================
   window.__bloomEventsLoaded = true;
 
+  // AUTO-DIAGNOSTIC: runs independently every 3 seconds, doesn't depend on any function call
+  var _evtDiagCount = 0;
+  var _evtDiagInterval = setInterval(function() {
+    _evtDiagCount++;
+    if (_evtDiagCount > 10) { clearInterval(_evtDiagInterval); return; } // stop after 30 seconds
+    var hasGrid = typeof grid !== 'undefined' && grid && grid.length > 0;
+    var isHomeShowing = !!document.getElementById('home-screen');
+    var gridEl = document.getElementById('grid');
+    var hasCells = gridEl && gridEl.children.length > 0;
+    if (!hasGrid || isHomeShowing || !hasCells) return; // wait until game is active
+    clearInterval(_evtDiagInterval); // stop diagnostics once game is found
+
+    var d = document.createElement('div');
+    d.style.cssText = 'position:fixed;bottom:80px;left:10px;right:10px;padding:10px;z-index:9999;text-align:center;border-radius:8px;font-weight:bold;font-size:11px;background:#9B59B6;color:#FFF';
+    d.textContent = '🟣 Game detected! Spawning event NOW...';
+    document.body.appendChild(d);
+    setTimeout(function() { d.remove(); }, 3000);
+
+    // Force spawn directly
+    try {
+      spawnRandomEvent();
+      var d2 = document.createElement('div');
+      d2.style.cssText = 'position:fixed;top:40%;left:10px;right:10px;padding:12px;z-index:9999;text-align:center;border-radius:8px;font-weight:bold;font-size:14px;background:#2E8B6F;color:#FFF';
+      d2.textContent = '✅ spawnRandomEvent() succeeded! activeEvent=' + (activeEvent ? activeEvent.type : 'null');
+      document.body.appendChild(d2);
+      setTimeout(function() { d2.remove(); }, 4000);
+    } catch(e) {
+      var d3 = document.createElement('div');
+      d3.style.cssText = 'position:fixed;top:40%;left:10px;right:10px;padding:12px;z-index:9999;text-align:center;border-radius:8px;font-weight:bold;font-size:12px;background:#C8472F;color:#FFF';
+      d3.textContent = '❌ spawnRandomEvent ERROR: ' + (e.message || e);
+      document.body.appendChild(d3);
+      setTimeout(function() { d3.remove(); }, 8000);
+    }
+  }, 3000);
+
   var activeEvent = null;       // { type, row, col, timer, maxTimer, interval }
   var lastEventTime = 0;        // timestamp of last event end
   var eventSpawnTimer = null;    // setInterval handle
