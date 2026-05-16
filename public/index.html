@@ -2015,6 +2015,133 @@ function trackEvent(n,p){try{gtag('event',n,p||{});}catch(e){}}
     font-size: 11px; color: #C8C5BE;
     letter-spacing: 0.12em;
   }
+  /* ── Home: Streak hero ── */
+  .home-streak {
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+    margin-bottom: 6px; padding: 10px 18px;
+    background: linear-gradient(135deg, #FFF7E6 0%, #FFF1D0 100%);
+    border: 1px solid #FAC775; border-radius: 14px;
+    width: 100%; max-width: 300px;
+    animation: streakPulseIn 0.4s ease-out;
+  }
+  .home-streak .streak-fire { font-size: 26px; line-height: 1; }
+  .home-streak .streak-num { font-size: 28px; font-weight: 800; color: #D95A1B; font-variant-numeric: tabular-nums; }
+  .home-streak .streak-label { font-size: 12px; color: #854F0B; line-height: 1.3; }
+  .home-streak .streak-label strong { color: #412402; }
+  .home-streak.zero { background: #F5F2EC; border-color: rgba(0,0,0,0.06); }
+  .home-streak.zero .streak-num { color: #A8A6A0; font-size: 22px; }
+  .home-streak.zero .streak-label { color: #A8A6A0; }
+  @keyframes streakPulseIn { 0% { transform: scale(0.9); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+  html[data-theme="dark"] .home-streak { background: linear-gradient(135deg, #3D2E0A 0%, #2A2118 100%); border-color: rgba(250,199,117,0.35); }
+  html[data-theme="dark"] .home-streak .streak-num { color: #FAC775; }
+  html[data-theme="dark"] .home-streak .streak-label { color: #8E8A82; }
+  html[data-theme="dark"] .home-streak .streak-label strong { color: #F2EFE9; }
+  html[data-theme="dark"] .home-streak.zero { background: #252320; border-color: rgba(255,255,255,0.06); }
+  html[data-theme="dark"] .home-streak.zero .streak-num { color: #6F6E68; }
+
+  /* ── Home: Mini leaderboard ── */
+  .home-mini-lb {
+    width: 100%; max-width: 300px;
+    margin-top: 10px; padding: 10px 14px;
+    background: #FAFAF6; border: 1px solid rgba(0,0,0,0.06);
+    border-radius: 12px; direction: rtl;
+  }
+  .home-mini-lb-title {
+    font-size: 10px; color: #A8A6A0; letter-spacing: 0.08em;
+    text-transform: uppercase; margin-bottom: 8px; text-align: center;
+  }
+  .home-mini-lb-row {
+    display: flex; align-items: center; gap: 8px;
+    padding: 5px 0;
+    font-size: 13px; color: #444441;
+  }
+  .home-mini-lb-row + .home-mini-lb-row { border-top: 1px solid rgba(0,0,0,0.04); }
+  .home-mini-lb-rank { width: 22px; text-align: center; font-weight: 700; color: #BA7517; font-size: 14px; }
+  .home-mini-lb-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+  .home-mini-lb-score { font-variant-numeric: tabular-nums; font-weight: 700; color: #1C1A18; }
+  .home-mini-lb-row.me { background: rgba(250,199,117,0.12); border-radius: 8px; margin: 0 -6px; padding: 5px 6px; }
+  html[data-theme="dark"] .home-mini-lb { background: #252320; border-color: rgba(255,255,255,0.06); }
+  html[data-theme="dark"] .home-mini-lb-title { color: #6F6E68; }
+  html[data-theme="dark"] .home-mini-lb-row { color: #8E8A82; }
+  html[data-theme="dark"] .home-mini-lb-score { color: #F2EFE9; }
+  html[data-theme="dark"] .home-mini-lb-row + .home-mini-lb-row { border-color: rgba(255,255,255,0.04); }
+
+  /* ── Home: Addiction badge ── */
+  .home-addiction {
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    margin-top: 10px; padding: 8px 14px;
+    background: linear-gradient(135deg, #F0E6FF 0%, #E8D8FF 100%);
+    border: 1px solid rgba(155,89,230,0.3);
+    border-radius: 12px; width: 100%; max-width: 300px;
+    font-size: 12px; color: #5B21B6;
+  }
+  .home-addiction strong { color: #3B0F8A; font-weight: 700; }
+  .home-addiction .addiction-emoji { font-size: 16px; }
+  html[data-theme="dark"] .home-addiction { background: linear-gradient(135deg, #2A1F3D 0%, #231A33 100%); border-color: rgba(155,89,230,0.3); color: #C4A7F0; }
+  html[data-theme="dark"] .home-addiction strong { color: #D8C2F5; }
+
+  /* ── Home: Addiction share buttons ── */
+  .home-addiction-share-row {
+    display: flex; gap: 8px; margin-top: 8px;
+    width: 100%; max-width: 300px;
+  }
+  .home-addiction-share-btn {
+    flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    padding: 8px 12px; border-radius: 10px;
+    background: #F0E6FF; color: #5B21B6;
+    border: 1px solid rgba(155,89,230,0.2);
+    font-size: 12px; font-weight: 600;
+    cursor: pointer; font-family: inherit;
+    transition: transform 0.12s;
+  }
+  .home-addiction-share-btn:active { transform: scale(0.97); }
+  .home-addiction-share-btn svg { width: 14px; height: 14px; }
+  .home-addiction-share-wa {
+    background: #25D366; color: #FFFFFF; border-color: rgba(37,211,102,0.3);
+  }
+  .home-addiction-share-wa svg { width: 14px; height: 14px; fill: #FFFFFF; stroke: none; }
+  html[data-theme="dark"] .home-addiction-share-btn { background: #2A1F3D; color: #C4A7F0; border-color: rgba(155,89,230,0.25); }
+  html[data-theme="dark"] .home-addiction-share-wa { background: #1A8A48; color: #FFFFFF; border-color: rgba(37,211,102,0.3); }
+
+  /* ── Home: WhatsApp invite button ── */
+  .home-invite-wa {
+    display: inline-flex; align-items: center; gap: 8px;
+    margin-top: 16px; padding: 12px 22px;
+    background: #25D366; color: #FFFFFF;
+    border: none; border-radius: 14px;
+    font-size: 14px; font-weight: 700;
+    cursor: pointer; font-family: inherit;
+    width: 100%; max-width: 300px;
+    justify-content: center;
+    box-shadow: 0 4px 14px rgba(37,211,102,0.25);
+    transition: transform 0.12s, box-shadow 0.15s;
+  }
+  .home-invite-wa:hover { box-shadow: 0 6px 18px rgba(37,211,102,0.35); }
+  .home-invite-wa:active { transform: scale(0.97); }
+  .home-invite-wa svg { width: 18px; height: 18px; fill: #FFFFFF; }
+
+  /* ── Game-over: WhatsApp share + addiction share ── */
+  .share-actions { display: flex; gap: 8px; margin-top: 14px; }
+  .share-actions .btn { flex: 1; margin-top: 0; }
+  .share-wa-btn {
+    flex: 1; padding: 13px; border-radius: 10px;
+    background: #25D366; color: #FFFFFF;
+    border: none; font-size: 14px; font-weight: 600;
+    cursor: pointer; font-family: inherit;
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  }
+  .share-wa-btn svg { width: 16px; height: 16px; fill: #FFFFFF; }
+  .gss-addiction-share { margin-top: 6px; text-align: center; }
+  .gss-addiction-share-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 7px 16px; border-radius: 8px;
+    background: #25D366; color: #FFFFFF;
+    border: none; font-size: 12px; font-weight: 600;
+    cursor: pointer; font-family: inherit;
+    transition: transform 0.12s;
+  }
+  .gss-addiction-share-btn:active { transform: scale(0.97); }
+
   .home-share-game {
     display: inline-flex; align-items: center; gap: 7px;
     margin-top: 24px;
@@ -3964,6 +4091,7 @@ function trackEvent(n,p){try{gtag('event',n,p||{});}catch(e){}}
       '</div>' +
       '<div class="home-brand">BLOOM</div>' +
       '<div class="home-sub">מזג חפצים, גלה דרגות חדשות, והגע עד לכתר</div>' +
+      '<div id="home-streak-host"></div>' +
       '<div class="home-player-id" id="home-player-id"></div>' +
       '<div id="home-mystats-host"></div>' +
       '<div class="home-stats-bubble" id="home-stats-bubble" style="display:none"></div>' +
@@ -3972,15 +4100,8 @@ function trackEvent(n,p){try{gtag('event',n,p||{});}catch(e){}}
       (hasSeenTour()
         ? '<button class="home-start" id="home-start">שחק עכשיו</button>'
         : '<button class="home-start" id="home-start">בוא נתחיל</button>') +
-      // Streak badge (returning players with 2+ day streak)
-      (function() {
-        var s = loadStreak();
-        var n = s.count | 0;
-        if (n < 2) return '';
-        var flames = n >= 7 ? '🔥🔥🔥' : n >= 3 ? '🔥🔥' : '🔥';
-        return '<div class="home-streak">' + flames + ' ' + n + ' ימים ברצף! <span>חזור מחר לשמור</span></div>';
-      })() +
       '<div class="home-social" id="home-social"></div>' +
+      '<div id="home-mini-lb-host"></div>' +
       '<div class="home-jackpot" id="home-jackpot"></div>' +
       (activeContestCode
         ? '<button class="home-contest home-contest-active" id="home-contest"><span class="home-contest-badge home-contest-badge-active">פעיל</span>המשך תחרות חברים</button>'
@@ -4006,7 +4127,12 @@ function trackEvent(n,p){try{gtag('event',n,p||{});}catch(e){}}
         '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5L15.4 17.5M15.4 6.5L8.6 10.5"/></svg>' +
         '<span>🎮 הזמן חבר לשחק</span>' +
       '</button>' +
-      '<div class="home-version">v1.1</div>';
+      '<div id="home-addiction-host"></div>' +
+      '<button class="home-invite-wa" id="home-invite-wa">' +
+        '<svg viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>' +
+        '<span>הזמן חבר דרך WhatsApp</span>' +
+      '</button>' +
+      '<div class="home-version">v1.2</div>';
     app.appendChild(h);
     syncHomeMuteUI();
     document.getElementById('home-mute').onclick = function(e) {
@@ -4087,6 +4213,30 @@ function trackEvent(n,p){try{gtag('event',n,p||{});}catch(e){}}
     refreshHomeSocialProof();
     refreshHomeJackpot();
     refreshHomeMyStats();
+    refreshHomeStreak();
+    refreshHomeMiniLb();
+    refreshHomeAddiction();
+    // WhatsApp invite button
+    var waInvite = document.getElementById('home-invite-wa');
+    if (waInvite) waInvite.onclick = function(e) {
+      e.stopPropagation();
+      var link = window.location.origin + window.location.pathname;
+      var totalMs = parseInt(localStorage.getItem(TOTAL_PLAY_TIME_KEY) || '0', 10) || 0;
+      var totalGames = parseInt(localStorage.getItem(GAMES_COUNT_KEY) || '0', 10) || 0;
+      var playerNm = (getPlayerName() || '').trim();
+      var text = '🌸 ';
+      if (playerNm) text += playerNm + ' מזמין/ה אותך ל-BLOOM!\n\n';
+      else text += 'הזמנה ל-BLOOM!\n\n';
+      text += 'משחק מיזוג ממכר בעברית 🎮\n';
+      if (totalGames > 0) text += 'כבר שיחקתי ' + totalGames + ' משחקים';
+      if (totalMs > 60000) {
+        var h = Math.floor(totalMs / 3600000);
+        var m = Math.floor((totalMs % 3600000) / 60000);
+        text += h > 0 ? ' (' + h + ' שעות ו-' + m + ' דקות 🤯)' : ' (' + m + ' דקות!)';
+      }
+      text += '\n\nנסה וגלה אם תצליח לנצח אותי:\n' + link;
+      window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank');
+    };
     // Wire the "איך משחקים?" link
     const tourLink = document.getElementById('home-tour-btn');
     if (tourLink) tourLink.onclick = function() { ensureAudio(); showTour({ onDone: enter }); };
@@ -5855,6 +6005,99 @@ function trackEvent(n,p){try{gtag('event',n,p||{});}catch(e){}}
       el.innerHTML = '🎰 קופת הג\'קפוט היומי: <span class="jp-pool">' + (d.pool | 0) + ' 💎</span>' +
         '<br><span style="font-size:11px;font-weight:400">' + (d.entries | 0) + ' משתתפים · הזוכים מקבלים בחצות</span>';
     } catch (e) { el.innerHTML = ''; }
+  }
+
+  // ── Home: Streak hero badge ──
+  function refreshHomeStreak() {
+    var host = document.getElementById('home-streak-host');
+    if (!host) return;
+    var s = loadStreak();
+    var today = todayInIsrael();
+    var n = s.count | 0;
+    if (s.lastPlayed && daysBetween(s.lastPlayed, today) > 1) n = 0;
+    var bestStreak = parseInt(localStorage.getItem(BEST_STREAK_KEY) || '0', 10) || 0;
+    if (n === 0 && bestStreak === 0) {
+      host.innerHTML =
+        '<div class="home-streak zero">' +
+          '<span class="streak-fire">🔥</span>' +
+          '<span class="streak-num">0</span>' +
+          '<div class="streak-label">שחק היום ותתחיל <strong>רצף יומי!</strong></div>' +
+        '</div>';
+    } else if (n === 0) {
+      host.innerHTML =
+        '<div class="home-streak zero">' +
+          '<span class="streak-fire">💔</span>' +
+          '<span class="streak-num">0</span>' +
+          '<div class="streak-label">הרצף נשבר! שיא: <strong>' + bestStreak + ' ימים</strong><br>שחק עכשיו להתחיל מחדש</div>' +
+        '</div>';
+    } else {
+      var msg = n >= 30 ? '🏆 אלוף!' : n >= 7 ? '💪 שבוע שלם!' : n >= 3 ? '🔥 ממשיכים!' : 'חזור מחר!';
+      host.innerHTML =
+        '<div class="home-streak">' +
+          '<span class="streak-fire">🔥</span>' +
+          '<span class="streak-num">' + n + '</span>' +
+          '<div class="streak-label"><strong>' + n + ' ימים ברצף</strong><br>' + msg + '</div>' +
+        '</div>';
+    }
+  }
+
+  // ── Home: Mini leaderboard — shows player rank if not in top 3 ──
+  // The top-3 is already shown by refreshHomeSocialProof. This adds the
+  // player's own rank row when they're ranked 4th or lower.
+  async function refreshHomeMiniLb() {
+    var host = document.getElementById('home-mini-lb-host');
+    if (!host) return;
+    try {
+      var res = await fetch(API_BASE + '/api/leaderboard/' + encodeURIComponent(dailyDate) + '?deviceId=' + encodeURIComponent(deviceId));
+      if (!res.ok) return;
+      var data = await res.json();
+      var myRank = data.rank | 0;
+      if (myRank <= 3 || myRank === 0) { host.innerHTML = ''; return; }
+      var list = (data && data.list) || [];
+      var myEntry = list.find(function(p) { return p.device_id === deviceId; });
+      if (!myEntry) { host.innerHTML = ''; return; }
+      host.innerHTML =
+        '<div class="home-mini-lb">' +
+          '<div class="home-mini-lb-row me">' +
+            '<span class="home-mini-lb-rank" style="color:#6F6E68">#' + myRank + '</span>' +
+            '<span class="home-mini-lb-name">' + escapeHtml(myEntry.name || 'אנונימי') + ' (את/ה)</span>' +
+            '<span class="home-mini-lb-score">' + (myEntry.score | 0).toLocaleString() + '</span>' +
+          '</div>' +
+        '</div>';
+    } catch (e) {}
+  }
+
+  // ── Home: Addiction badge (total play time) ──
+  function refreshHomeAddiction() {
+    var host = document.getElementById('home-addiction-host');
+    if (!host) return;
+    var totalMs = parseInt(localStorage.getItem(TOTAL_PLAY_TIME_KEY) || '0', 10) || 0;
+    if (totalMs < 60000) { host.innerHTML = ''; return; }
+    var totalHours = Math.floor(totalMs / 3600000);
+    var totalMins = Math.floor((totalMs % 3600000) / 60000);
+    var emoji, text;
+    if (totalHours >= 10) { emoji = '🤯'; text = 'שיחקת <strong>' + totalHours + ' שעות ו-' + totalMins + ' דקות</strong> ב-BLOOM. אין עליך!'; }
+    else if (totalHours >= 1) { emoji = '⏰'; text = 'כבר <strong>' + totalHours + ' שעות ו-' + totalMins + ' דקות</strong> ב-BLOOM!'; }
+    else { emoji = '🕐'; text = '<strong>' + totalMins + ' דקות</strong> ב-BLOOM עד עכשיו'; }
+    host.innerHTML =
+      '<div class="home-addiction">' +
+        '<span class="addiction-emoji">' + emoji + '</span>' +
+        '<span>' + text + '</span>' +
+      '</div>' +
+      '<div class="home-addiction-share-row">' +
+        '<button class="home-addiction-share-btn" id="home-addiction-share">' +
+          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5L15.4 17.5M15.4 6.5L8.6 10.5"/></svg>' +
+          'שתף התמכרות' +
+        '</button>' +
+        '<button class="home-addiction-share-btn home-addiction-share-wa" id="home-addiction-share-wa">' +
+          '<svg viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>' +
+          'WhatsApp' +
+        '</button>' +
+      '</div>';
+    var shareBtn = document.getElementById('home-addiction-share');
+    if (shareBtn) shareBtn.onclick = function() { shareAddiction('share'); };
+    var waBtn = document.getElementById('home-addiction-share-wa');
+    if (waBtn) waBtn.onclick = function() { shareAddiction('whatsapp'); };
   }
 
   function refreshHomeChallengeCta() {
@@ -7792,43 +8035,80 @@ function trackEvent(n,p){try{gtag('event',n,p||{});}catch(e){}}
     }
   }
 
-  function shareResult() {
-    const emojis = [];
-    for (let t = 1; t <= highestTier; t++) emojis.push(getActiveTiers()[t].emoji);
-    // Game duration
+  function buildShareText() {
+    var emojis = [];
+    for (var t = 1; t <= highestTier; t++) emojis.push(getActiveTiers()[t].emoji);
     var gameDur = Date.now() - (gameStartTime || Date.now());
     var durMin = Math.floor(gameDur / 60000);
     var durSec = Math.floor((gameDur % 60000) / 1000);
     var durText = durMin > 0 ? durMin + ':' + String(durSec).padStart(2, '0') : durSec + ' שנ\'';
-    // Total play time
     var totalMs = loadLifetimeInt(TOTAL_PLAY_TIME_KEY);
     var totalH = Math.floor(totalMs / 3600000);
     var totalM = Math.floor((totalMs % 3600000) / 60000);
     var totalText = totalH > 0 ? totalH + ' שעות ו-' + totalM + ' דקות' : totalM + ' דקות';
-    // Chain
     var chainText = currentGameMaxChain >= 2 ? ' · 🔗×' + currentGameMaxChain : '';
 
-    let header;
+    var header;
     if (mode === 'daily') {
       header = '🌸 BLOOM · אתגר יומי ' + formatDateHe(dailyDate) + '\n' + score.toLocaleString() + ' נקודות';
       if (dailyRank) header += ' · מקום #' + dailyRank;
     } else {
       header = '🌸 BLOOM — ' + score.toLocaleString() + ' נקודות';
     }
-    const statsLine = '⏱' + durText + chainText + ' · 🎯' + gameTotalMerges + ' מיזוגים';
-    const addictionLine = '🕐 סה"כ ' + totalText + ' ב-BLOOM';
-    const text = header + '\n' + emojis.join('') + '\n' + statsLine + '\n' + addictionLine + '\n\nשחק גם: ' + getShareLink();
+    var statsLine = '⏱' + durText + chainText + ' · 🎯' + gameTotalMerges + ' מיזוגים';
+    var addictionLine = '🕐 סה"כ ' + totalText + ' ב-BLOOM';
+    return header + '\n' + emojis.join('') + '\n' + statsLine + '\n' + addictionLine + '\n\nשחק גם: ' + getShareLink();
+  }
+
+  function shareResult() {
+    var text = buildShareText();
     if (navigator.share) {
       navigator.share({ text: text }).catch(function() {});
     } else if (navigator.clipboard) {
       navigator.clipboard.writeText(text).then(function() {
-        const btn = document.getElementById('share-btn');
+        var btn = document.getElementById('share-btn');
         if (btn) {
-          const orig = btn.textContent;
+          var orig = btn.textContent;
           btn.textContent = '✓ הועתק ללוח';
           setTimeout(function() { btn.textContent = orig; }, 1600);
         }
       });
+    }
+  }
+
+  function shareResultWhatsApp() {
+    var text = buildShareText();
+    window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank');
+  }
+
+  function buildAddictionShareText() {
+    var totalMs = parseInt(localStorage.getItem(TOTAL_PLAY_TIME_KEY) || '0', 10) || 0;
+    var totalHours = Math.floor(totalMs / 3600000);
+    var totalMins = Math.floor((totalMs % 3600000) / 60000);
+    var timeStr = totalHours > 0 ? totalHours + ' שעות ו-' + totalMins + ' דקות' : totalMins + ' דקות';
+    var totalGames = parseInt(localStorage.getItem(GAMES_COUNT_KEY) || '0', 10) || 0;
+    var bestScore = parseInt(localStorage.getItem(BEST_KEY) || '0', 10) || 0;
+    var s = loadStreak();
+    var today = todayInIsrael();
+    var streakN = s.count | 0;
+    if (s.lastPlayed && daysBetween(s.lastPlayed, today) > 1) streakN = 0;
+
+    var text = '🕐 שיחקתי ' + timeStr + ' ב-BLOOM!\n';
+    if (totalGames > 0) text += '🎮 ' + totalGames + ' משחקים';
+    if (bestScore > 0) text += ' · 🏆 שיא: ' + bestScore.toLocaleString();
+    if (streakN > 0) text += ' · 🔥 ' + streakN + ' ימים ברצף';
+    text += '\n\nמסוגל/ת לנצח אותי? 😏\n' + getShareLink();
+    return text;
+  }
+
+  function shareAddiction(via) {
+    var text = buildAddictionShareText();
+    if (via === 'whatsapp') {
+      window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank');
+    } else if (navigator.share) {
+      navigator.share({ text: text }).catch(function() {});
+    } else if (navigator.clipboard) {
+      navigator.clipboard.writeText(text);
     }
   }
 
@@ -8311,6 +8591,9 @@ function trackEvent(n,p){try{gtag('event',n,p||{});}catch(e){}}
             statsHtml += '<div class="gss-addiction">' +
               '<span class="gss-addiction-icon">🕐</span>' +
               '<span>סה"כ שיחקת <strong>' + totalText + '</strong> ב-BLOOM</span>' +
+            '</div>' +
+            '<div class="gss-addiction-share">' +
+              '<button class="gss-addiction-share-btn" id="gss-addiction-share">📤 שתף את ההתמכרות שלך</button>' +
             '</div>';
 
             statsHtml += '</div>';
@@ -8336,7 +8619,13 @@ function trackEvent(n,p){try{gtag('event',n,p||{});}catch(e){}}
               '<br><span style="font-size:10px;opacity:0.6">🕐 סה"כ ' + totalText + ' ב-BLOOM</span>' +
               '<br><br>🎮 ' + (window.location.host || 'bloom-game') + '</div>';
           })() +
-          '<button class="btn" id="share-btn">שתף תוצאה</button>' +
+          '<div class="share-actions">' +
+            '<button class="btn" id="share-btn">שתף תוצאה</button>' +
+            '<button class="share-wa-btn" id="share-wa-btn">' +
+              '<svg viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>' +
+              '<span>WhatsApp</span>' +
+            '</button>' +
+          '</div>' +
           spectateBtn +
           '<button class="btn secondary" id="again">' + againLabel + '</button>' +
         '</div>';
@@ -8345,6 +8634,10 @@ function trackEvent(n,p){try{gtag('event',n,p||{});}catch(e){}}
         else init('practice', { fresh: true });
       };
       document.getElementById('share-btn').onclick = shareResult;
+      var waShareBtn = document.getElementById('share-wa-btn');
+      if (waShareBtn) waShareBtn.onclick = function() { shareResultWhatsApp(); };
+      var gssAddictionShare = document.getElementById('gss-addiction-share');
+      if (gssAddictionShare) gssAddictionShare.onclick = function() { shareAddiction('whatsapp'); };
       const specBtn = document.getElementById('spec-open');
       if (specBtn) specBtn.onclick = function() { openSpectatorPicker('game-over'); };
       if (showCountdown) startCountdown();
