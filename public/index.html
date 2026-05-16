@@ -507,6 +507,32 @@
     font-family: -apple-system, BlinkMacSystemFont, sans-serif;
   }
   .credit-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* In-game tile shop */
+  #tile-shop-modal {
+    position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(28,26,24,0.6);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    z-index: 50; border-radius: 16px; padding: 12px;
+  }
+  .ts-header { display: flex; justify-content: space-between; width: 100%; max-width: 280px; font-size: 14px; font-weight: 700; color: #FFF; margin-bottom: 10px; direction: rtl; }
+  .ts-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; max-width: 280px; width: 100%; }
+  .ts-tile {
+    background: rgba(255,255,255,0.95); border: 2px solid transparent; border-radius: 12px;
+    padding: 8px 4px; text-align: center; cursor: pointer; font-family: inherit;
+    transition: transform 0.15s, border-color 0.15s;
+  }
+  .ts-tile:active { transform: scale(0.93); }
+  .ts-tile:hover { border-color: #FAC775; }
+  .ts-tile.ts-locked { opacity: 0.35; cursor: not-allowed; }
+  .ts-icon { width: 32px; height: 32px; border-radius: 8px; margin: 0 auto 4px; display: flex; align-items: center; justify-content: center; }
+  .ts-icon svg { width: 16px; height: 16px; }
+  .ts-name { font-size: 10px; font-weight: 600; color: #1C1A18; }
+  .ts-price { font-size: 10px; font-weight: 700; color: #BA7517; margin-top: 2px; }
+  .ts-close { position: absolute; top: 10px; left: 10px; background: rgba(255,255,255,0.2); border: none; color: #FFF; font-size: 18px; width: 32px; height: 32px; border-radius: 50%; cursor: pointer; }
+  html[data-theme="dark"] .ts-tile { background: rgba(44,42,40,0.95); }
+  html[data-theme="dark"] .ts-name { color: #F2EFE9; }
+  .stat-shop:active { transform: scale(0.95); }
   .share-card {
     padding: 12px 14px; background: #DCF8C6; border-radius: 10px;
     direction: ltr; text-align: left;
@@ -2210,6 +2236,7 @@
       <div class="stat stat-primary"><div class="stat-label">ניקוד</div><div class="stat-val" id="score">0</div></div>
       <div class="stat"><div class="stat-label">שיא</div><div class="stat-val" id="best">0</div></div>
       <div class="stat"><div class="stat-label">רצף</div><div class="stat-val streak-val zero" id="streak">🔥 0</div></div>
+      <div class="stat stat-shop" id="tile-shop-stat" style="cursor:pointer"><div class="stat-label">חנות</div><div class="stat-val" id="balance-display" style="color:#BA7517">💎 0</div></div>
     </div>
   </div>
   <div class="mode-bar" id="mode-bar">
@@ -2418,6 +2445,82 @@
       };
     });
   }
+  // ============ IN-GAME TILE SHOP ============
+  var tilePrices = null; // fetched once from server
+
+  async function loadTilePrices() {
+    if (tilePrices) return;
+    try {
+      var r = await fetch(API_BASE + '/api/tile-prices');
+      var d = await r.json();
+      if (d && d.ok && d.enabled) tilePrices = d.prices;
+      else tilePrices = null;
+    } catch (e) { tilePrices = null; }
+  }
+
+  function updateBalanceDisplay() {
+    var el = document.getElementById('balance-display');
+    if (el) el.textContent = '💎 ' + playerBalance;
+  }
+
+  function showTileShop() {
+    if (!tilePrices) { loadTilePrices().then(showTileShop); return; }
+    if (busy) return; // don't open while dropping
+    var existing = document.getElementById('tile-shop-modal');
+    if (existing) { existing.remove(); return; } // toggle
+
+    var modal = document.createElement('div');
+    modal.id = 'tile-shop-modal';
+    var html = '<div class="ts-header"><span>קנה אריח</span><span style="color:#BA7517;font-weight:700">💎 ' + playerBalance + '</span></div>';
+    html += '<div class="ts-grid">';
+    for (var t = 2; t <= MAX_TIER; t++) {
+      var ti = getActiveTiers()[t];
+      var price = tilePrices[t] || 0;
+      var canBuy = playerBalance >= price;
+      html += '<button class="ts-tile' + (!canBuy ? ' ts-locked' : '') + '" data-tier="' + t + '" data-price="' + price + '"' + (!canBuy ? ' disabled' : '') + '>' +
+        '<div class="ts-icon" style="background:' + ti.bg + ';color:' + ti.fg + '">' + ti.svg + '</div>' +
+        '<div class="ts-name">' + ti.name + '</div>' +
+        '<div class="ts-price">' + price + ' 💎</div>' +
+      '</button>';
+    }
+    html += '</div>';
+    html += '<button class="ts-close" id="ts-close-btn">✕</button>';
+    modal.innerHTML = html;
+    document.getElementById('grid-wrap').appendChild(modal);
+
+    document.getElementById('ts-close-btn').onclick = function() { modal.remove(); };
+    // Tap outside
+    modal.addEventListener('pointerdown', function(e) { if (e.target === modal) modal.remove(); });
+
+    modal.querySelectorAll('.ts-tile:not([disabled])').forEach(function(btn) {
+      btn.onclick = function() {
+        var tier = parseInt(this.getAttribute('data-tier'), 10);
+        var price = parseInt(this.getAttribute('data-price'), 10);
+        var self = this;
+        self.style.opacity = '0.5';
+        fetch(API_BASE + '/api/player/buy-tile', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ deviceId: deviceId, tier: tier })
+        }).then(function(r) { return r.json(); }).then(function(d) {
+          if (d && d.ok) {
+            playerBalance = d.newBalance;
+            try { localStorage.setItem(PLAYER_BALANCE_KEY, String(d.newBalance)); } catch(e) {}
+            updateBalanceDisplay();
+            nextPiece = tier;
+            render();
+            modal.remove();
+            showCreditToast(-d.cost, getActiveTiers()[tier].name);
+          } else {
+            self.style.opacity = '1';
+            var msg = d.reason === 'insufficient_balance' ? 'אין מספיק 💎' : 'שגיאה';
+            self.querySelector('.ts-price').textContent = msg;
+          }
+        }).catch(function() { self.style.opacity = '1'; });
+      };
+    });
+  }
+
   // Same idea for board dimensions (added in Step 2 below).
   const BEST_KEY = 'bloom_best_score';
   const NAME_KEY = 'bloom_player_name';
@@ -7417,6 +7520,10 @@
     init(undefined, { fresh: true });
   };
   document.getElementById('info').onclick = showInfo;
+  // Tile shop
+  document.getElementById('tile-shop-stat').onclick = function() { showTileShop(); };
+  loadTilePrices();
+  updateBalanceDisplay();
   document.getElementById('mute').onclick = function() { openMuteMenu('top'); };
   document.getElementById('leaderboard').onclick = openLeaderboardModal;
   document.getElementById('achievements').onclick = openAchievementsModal;

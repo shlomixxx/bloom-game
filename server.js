@@ -2495,6 +2495,55 @@ app.post('/api/player/earn', async (req, res) => {
   }
 });
 
+// GET /api/tile-prices — get current tile prices for in-game shop
+app.get('/api/tile-prices', async (_req, res) => {
+  try {
+    const r = await pool.query(`SELECT key, value FROM game_config WHERE key LIKE 'tile_%'`);
+    const cfg = {};
+    for (const row of r.rows) cfg[row.key] = row.value;
+    if (cfg.tile_shop_enabled === 'false') return res.json({ ok: true, enabled: false });
+    const mult = parseFloat(cfg.tile_price_multiplier) || 1.0;
+    const prices = {};
+    for (let t = 2; t <= 8; t++) {
+      prices[t] = Math.round((parseInt(cfg['tile_price_' + t], 10) || (t * 10)) * mult);
+    }
+    res.json({ ok: true, enabled: true, prices, multiplier: mult });
+  } catch (e) {
+    res.status(500).json({ error: 'server' });
+  }
+});
+
+// POST /api/player/buy-tile — buy a specific tile during gameplay
+app.post('/api/player/buy-tile', async (req, res) => {
+  const { deviceId, tier } = req.body || {};
+  if (!deviceId || !tier) return res.status(400).json({ error: 'missing_params' });
+  try {
+    const t = parseInt(tier, 10);
+    if (t < 2 || t > 8) return res.json({ ok: false, reason: 'invalid_tier' });
+    // Check tile shop enabled
+    const enabledRow = await pool.query(`SELECT value FROM game_config WHERE key = 'tile_shop_enabled'`);
+    if (enabledRow.rows.length && enabledRow.rows[0].value === 'false') return res.json({ ok: false, reason: 'shop_disabled' });
+    // Get price
+    const priceRow = await pool.query(`SELECT value FROM game_config WHERE key = $1`, ['tile_price_' + t]);
+    const multRow = await pool.query(`SELECT value FROM game_config WHERE key = 'tile_price_multiplier'`);
+    const basePrice = parseInt((priceRow.rows[0] || {}).value, 10) || (t * 10);
+    const mult = parseFloat((multRow.rows[0] || {}).value) || 1.0;
+    const cost = Math.round(basePrice * mult);
+    // Check balance
+    const player = await pool.query('SELECT balance FROM player_profiles WHERE device_id = $1', [deviceId]);
+    if (!player.rows.length) return res.json({ ok: false, reason: 'no_profile' });
+    if (player.rows[0].balance < cost) return res.json({ ok: false, reason: 'insufficient_balance' });
+    // Deduct
+    const newBalance = player.rows[0].balance - cost;
+    await pool.query(`UPDATE player_profiles SET balance = $1, total_spent = total_spent + $2 WHERE device_id = $3`,
+      [newBalance, cost, deviceId]);
+    res.json({ ok: true, tier: t, cost, newBalance });
+  } catch (e) {
+    console.error('buy-tile', e.message);
+    res.status(500).json({ error: 'server' });
+  }
+});
+
 // POST /api/player/buy-skin — purchase a skin with credits
 app.post('/api/player/buy-skin', async (req, res) => {
   const { deviceId, skinId, price } = req.body || {};

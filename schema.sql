@@ -238,6 +238,24 @@ INSERT INTO game_config (key, value) VALUES ('contest_2nd_reward', '40')
   ON CONFLICT (key) DO NOTHING;
 INSERT INTO game_config (key, value) VALUES ('contest_3rd_reward', '20')
   ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('tile_shop_enabled', 'true')
+  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('tile_price_2', '5')
+  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('tile_price_3', '10')
+  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('tile_price_4', '20')
+  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('tile_price_5', '35')
+  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('tile_price_6', '50')
+  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('tile_price_7', '80')
+  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('tile_price_8', '150')
+  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('tile_price_multiplier', '1.0')
+  ON CONFLICT (key) DO NOTHING;
 
 -- ============================================================
 -- Player heartbeat — tracks ALL active players (any mode)
