@@ -1,4 +1,5 @@
   function showHome() {
+    stopEventSystem(); // don't run events behind home screen
     const app = document.querySelector('.app');
     if (!app || document.getElementById('home-screen')) return;
     const h = document.createElement('div');
@@ -66,6 +67,8 @@
       const onOverScreen = wrap && wrap.querySelector('.overlay');
       if (onOverScreen) init('practice');
       playMusic('game');
+      // Start/restart event system when entering the game
+      startEventSystem();
       // If we're returning to a paused contest game, make sure the overtake
       // watcher is running again (it was stopped when navigating away).
       if (mode === 'contest' && activeContestCode && !overtakeTimer) {

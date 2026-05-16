@@ -43,9 +43,12 @@
     setTimeout(function() {
       try {
         if (!activeEvent && !feverActive && !targetActive && grid) {
+          showEventBanner('🎯 Event!', 'מערכת events פעילה', 'star');
           spawnRandomEvent();
         }
-      } catch(e) {}
+      } catch(e) {
+        showEventBanner('⚠️ Error', String(e.message || e), 'bomb');
+      }
     }, 5000);
   }
 
@@ -65,10 +68,10 @@
   function clearActiveEvent() {
     if (activeEvent) {
       if (activeEvent.interval) clearInterval(activeEvent.interval);
-      var el = document.getElementById('event-overlay-' + activeEvent.row + '-' + activeEvent.col);
-      if (el) el.remove();
       activeEvent = null;
     }
+    var el = document.getElementById('event-drop-overlay');
+    if (el) el.remove();
   }
 
   function countEmptyCells() {
@@ -184,48 +187,55 @@
 
   function renderEventOnCell(evt) {
     var gridEl = document.getElementById('grid');
-    if (!gridEl) return;
+    var wrap = document.getElementById('grid-wrap');
+    if (!gridEl || !wrap) return;
+
+    // Remove existing overlay
+    var old = document.getElementById('event-drop-overlay');
+    if (old) old.remove();
+
+    // Calculate cell position
     var idx = evt.row * getBoardCols() + evt.col;
     var cell = gridEl.children[idx];
     if (!cell) return;
 
-    // Remove existing overlay on this cell if any
-    var old = document.getElementById('event-overlay-' + evt.row + '-' + evt.col);
-    if (old) old.remove();
+    var gridRect = gridEl.getBoundingClientRect();
+    var cellRect = cell.getBoundingClientRect();
+    var top = cellRect.top - gridRect.top;
+    var left = cellRect.left - gridRect.left;
+    var w = cellRect.width;
+    var h = cellRect.height;
 
     var overlay = document.createElement('div');
-    overlay.id = 'event-overlay-' + evt.row + '-' + evt.col;
-    overlay.className = 'event-cell-overlay event-' + evt.type;
+    overlay.id = 'event-drop-overlay';
+    overlay.className = 'event-drop event-' + evt.type;
+    overlay.style.cssText = 'position:absolute;top:' + top + 'px;left:' + left + 'px;width:' + w + 'px;height:' + h + 'px;z-index:30;pointer-events:none;display:flex;flex-direction:column;align-items:center;justify-content:center;border-radius:12px;border:3px solid #FAC775;background:rgba(0,0,0,0.75);animation:eventAppear 0.3s ease-out;';
     overlay.innerHTML =
-      '<span class="event-emoji">' + evt.emoji + '</span>' +
-      '<svg class="event-ring" viewBox="0 0 36 36">' +
-        '<circle class="event-ring-bg" cx="18" cy="18" r="16" fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="2.5"/>' +
-        '<circle class="event-ring-fg" cx="18" cy="18" r="16" fill="none" stroke="#2E8B6F" stroke-width="2.5" stroke-dasharray="100.5" stroke-dashoffset="0" stroke-linecap="round" transform="rotate(-90 18 18)"/>' +
+      '<span style="font-size:28px;animation:eventBob 1s ease-in-out infinite">' + evt.emoji + '</span>' +
+      '<svg width="40" height="40" viewBox="0 0 36 36" style="position:absolute">' +
+        '<circle cx="18" cy="18" r="16" fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="2.5"/>' +
+        '<circle id="event-ring-fg" cx="18" cy="18" r="16" fill="none" stroke="#2E8B6F" stroke-width="2.5" stroke-dasharray="100.5" stroke-dashoffset="0" stroke-linecap="round" transform="rotate(-90 18 18)"/>' +
       '</svg>' +
-      '<span class="event-timer-text">' + evt.maxTimer + 's</span>';
-    cell.style.position = 'relative';
-    cell.style.overflow = 'visible';
-    cell.appendChild(overlay);
+      '<span id="event-timer-text" style="font-size:12px;font-weight:800;color:#FFF;margin-top:2px;text-shadow:0 1px 3px rgba(0,0,0,0.8)">' + evt.maxTimer + 's</span>';
+    gridEl.style.position = 'relative';
+    gridEl.appendChild(overlay);
   }
 
   function updateEventTimer(evt) {
-    var el = document.getElementById('event-overlay-' + evt.row + '-' + evt.col);
-    if (!el) return;
+    var ring = document.getElementById('event-ring-fg');
+    var text = document.getElementById('event-timer-text');
+    if (!ring || !text) return;
     var pct = evt.timer / evt.maxTimer;
-    var ring = el.querySelector('.event-ring-fg');
-    var text = el.querySelector('.event-timer-text');
-    if (ring) {
-      var offset = 100.5 * (1 - pct);
-      ring.style.strokeDashoffset = offset;
-      // Color: green → yellow → red
-      if (pct > 0.5) ring.style.stroke = '#2E8B6F';
-      else if (pct > 0.25) ring.style.stroke = '#FAC775';
-      else ring.style.stroke = '#C8472F';
+    var offset = 100.5 * (1 - pct);
+    ring.style.strokeDashoffset = offset;
+    if (pct > 0.5) ring.style.stroke = '#2E8B6F';
+    else if (pct > 0.25) ring.style.stroke = '#FAC775';
+    else ring.style.stroke = '#C8472F';
+    text.textContent = evt.timer.toFixed(1) + 's';
+    var overlay = document.getElementById('event-drop-overlay');
+    if (overlay) {
+      if (pct < 0.25) overlay.style.animation = 'eventUrgent 0.3s ease-in-out infinite';
     }
-    if (text) text.textContent = evt.timer.toFixed(1) + 's';
-    // Flash when urgent
-    if (pct < 0.25) el.classList.add('event-urgent');
-    else el.classList.remove('event-urgent');
   }
 
   // Called when a tile is placed at (row, col)

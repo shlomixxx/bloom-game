@@ -625,7 +625,7 @@
     }
     // Re-render active event on the grid (grid is rebuilt each render)
     if (activeEvent && !opts.over) {
-      renderEventOnCell(activeEvent);
+      requestAnimationFrame(function() { renderEventOnCell(activeEvent); });
     }
   }
 
