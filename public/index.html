@@ -130,7 +130,7 @@ function trackEvent(n,p){try{gtag('event',n,p||{});}catch(e){}}
   <div class="grid-wrap" id="grid-wrap"><div class="grid" id="grid"></div></div>
 </div>
 
-<script src="/app.js?v=20260517a"></script>
+<script src="/app.js?v=20260517b"></script>
 
 <script>
 // Inline test: verify event system loaded
@@ -140,7 +140,7 @@ window.addEventListener('load', function() {
     d.style.cssText = 'position:fixed;top:60px;left:10px;right:10px;padding:10px;z-index:9999;text-align:center;border-radius:8px;font-weight:bold;font-size:12px';
     if (window.__bloomEventsLoaded) {
       d.style.background = '#2E8B6F'; d.style.color = 'white';
-      d.textContent = '✅ Events code loaded (v20260516e)';
+      d.textContent = '✅ Events code loaded (v20260517b)';
     } else {
       d.style.background = 'red'; d.style.color = 'white';
       d.textContent = '⚠️ Events code NOT loaded — old cached version!';

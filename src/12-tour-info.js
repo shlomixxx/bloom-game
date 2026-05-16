@@ -623,9 +623,9 @@
         if (chip.firstChild) wrap.appendChild(chip.firstChild);
       }
     }
-    // Re-render active event on the grid (grid is rebuilt each render)
+    // Reposition event overlay (it's fixed on body, needs coord update after grid rebuild)
     if (activeEvent && !opts.over) {
-      requestAnimationFrame(function() { renderEventOnCell(activeEvent); });
+      requestAnimationFrame(repositionEventOverlay);
     }
   }
 

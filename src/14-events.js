@@ -75,6 +75,22 @@
     if (el) el.remove();
   }
 
+  function repositionEventOverlay() {
+    if (!activeEvent) return;
+    var gridEl = document.getElementById('grid');
+    if (!gridEl) return;
+    var idx = activeEvent.row * getBoardCols() + activeEvent.col;
+    var cell = gridEl.children[idx];
+    if (!cell) return;
+    var overlay = document.getElementById('event-drop-overlay');
+    if (!overlay) return;
+    var rect = cell.getBoundingClientRect();
+    overlay.style.top = rect.top + 'px';
+    overlay.style.left = rect.left + 'px';
+    overlay.style.width = rect.width + 'px';
+    overlay.style.height = rect.height + 'px';
+  }
+
   function countEmptyCells() {
     var count = 0;
     for (var r = 0; r < getBoardRows(); r++)
@@ -188,29 +204,22 @@
 
   function renderEventOnCell(evt) {
     var gridEl = document.getElementById('grid');
-    var wrap = document.getElementById('grid-wrap');
-    if (!gridEl || !wrap) return;
+    if (!gridEl) return;
 
     // Remove existing overlay
     var old = document.getElementById('event-drop-overlay');
     if (old) old.remove();
 
-    // Calculate cell position
     var idx = evt.row * getBoardCols() + evt.col;
     var cell = gridEl.children[idx];
     if (!cell) return;
 
-    var gridRect = gridEl.getBoundingClientRect();
-    var cellRect = cell.getBoundingClientRect();
-    var top = cellRect.top - gridRect.top;
-    var left = cellRect.left - gridRect.left;
-    var w = cellRect.width;
-    var h = cellRect.height;
+    var rect = cell.getBoundingClientRect();
+    if (rect.width === 0) return; // not laid out yet
 
     var overlay = document.createElement('div');
     overlay.id = 'event-drop-overlay';
-    overlay.className = 'event-drop event-' + evt.type;
-    overlay.style.cssText = 'position:absolute;top:' + top + 'px;left:' + left + 'px;width:' + w + 'px;height:' + h + 'px;z-index:30;pointer-events:none;display:flex;flex-direction:column;align-items:center;justify-content:center;border-radius:12px;border:3px solid #FAC775;background:rgba(0,0,0,0.75);animation:eventAppear 0.3s ease-out;';
+    overlay.style.cssText = 'position:fixed;top:' + rect.top + 'px;left:' + rect.left + 'px;width:' + rect.width + 'px;height:' + rect.height + 'px;z-index:100;pointer-events:none;display:flex;flex-direction:column;align-items:center;justify-content:center;border-radius:12px;border:3px solid #FAC775;background:rgba(0,0,0,0.8);animation:eventAppear 0.3s ease-out';
     overlay.innerHTML =
       '<span style="font-size:28px;animation:eventBob 1s ease-in-out infinite">' + evt.emoji + '</span>' +
       '<svg width="40" height="40" viewBox="0 0 36 36" style="position:absolute">' +
@@ -218,8 +227,7 @@
         '<circle id="event-ring-fg" cx="18" cy="18" r="16" fill="none" stroke="#2E8B6F" stroke-width="2.5" stroke-dasharray="100.5" stroke-dashoffset="0" stroke-linecap="round" transform="rotate(-90 18 18)"/>' +
       '</svg>' +
       '<span id="event-timer-text" style="font-size:12px;font-weight:800;color:#FFF;margin-top:2px;text-shadow:0 1px 3px rgba(0,0,0,0.8)">' + evt.maxTimer + 's</span>';
-    gridEl.style.position = 'relative';
-    gridEl.appendChild(overlay);
+    document.body.appendChild(overlay);
   }
 
   function updateEventTimer(evt) {
@@ -470,15 +478,13 @@
     return feverMultiplier;
   }
 
-  // Show event banner
+  // Show event banner — FIXED on screen (not inside grid-wrap)
   function showEventBanner(title, sub, cssClass) {
-    var wrap = document.getElementById('grid-wrap');
-    if (!wrap) return;
     var banner = document.createElement('div');
-    banner.className = 'milestone-banner event-banner event-banner-' + (cssClass || '');
+    banner.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:9999;background:linear-gradient(135deg,#1C1A18,#412402);color:#FAC775;border:2px solid #FAC775;border-radius:18px;padding:16px 26px;pointer-events:none;text-align:center;direction:rtl;box-shadow:0 12px 36px rgba(0,0,0,0.35);min-width:180px;animation:milestonePop 1.5s ease-out forwards';
     banner.innerHTML =
-      '<div class="milestone-banner-tier">' + title + '</div>' +
-      '<div class="milestone-banner-bonus">' + sub + '</div>';
-    wrap.appendChild(banner);
+      '<div style="font-size:16px;font-weight:700;color:#FFD37A;margin-bottom:4px">' + title + '</div>' +
+      '<div style="font-size:28px;font-weight:900;color:#FAC775;line-height:1">' + sub + '</div>';
+    document.body.appendChild(banner);
     setTimeout(function() { if (banner.parentNode) banner.parentNode.removeChild(banner); }, 1500);
   }
