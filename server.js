@@ -2466,8 +2466,9 @@ if (ADMIN_PATH && ADMIN_PASSWORD) {
         `SELECT c.code, c.name, c.wager_amount, c.wager_pool, c.wager_settled, c.ends_at,
                 (SELECT COUNT(*) FROM contest_scores WHERE contest_code = c.code) as players
          FROM contests c WHERE c.wager_amount > 0 ORDER BY c.created_at DESC LIMIT 50`);
-      const totalRake = await pool.query(`SELECT COALESCE(SUM(amount), 0) as total FROM wager_settlements WHERE type = 'rake'`);
-      res.json({ ok: true, contests: active.rows, totalRake: totalRake.rows[0].total | 0 });
+      const totalRake = await pool.query(`SELECT COALESCE(SUM(amount), 0) as total FROM wager_settlements WHERE type = 'rake' OR type = 'jackpot_rake'`);
+      const duels = await pool.query(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status = 'pending') as pending, COUNT(*) FILTER (WHERE status = 'settled') as settled FROM duels`);
+      res.json({ ok: true, contests: active.rows, totalRake: totalRake.rows[0].total | 0, duels: duels.rows[0] });
     } catch (e) {
       res.status(500).json({ error: 'server' });
     }
@@ -2895,6 +2896,148 @@ app.post('/api/referral', async (req, res) => {
     res.json({ ok: true, referrerReward: reward, referredReward: bonus });
   } catch (e) {
     console.error('referral', e.message);
+    res.status(500).json({ error: 'server' });
+  }
+});
+
+// ============================================================
+// 1v1 DUELS
+// ============================================================
+
+// Create a duel challenge
+app.post('/api/duels', async (req, res) => {
+  const { deviceId, opponentCode, amount } = req.body || {};
+  if (!deviceId || !opponentCode) return res.status(400).json({ error: 'missing_params' });
+  try {
+    const duelEnabled = await pool.query(`SELECT value FROM game_config WHERE key = 'duel_enabled'`);
+    if (duelEnabled.rows.length && duelEnabled.rows[0].value === 'false') return res.json({ ok: false, reason: 'duels_disabled' });
+
+    const challenger = await pool.query('SELECT player_code, display_name, balance FROM player_profiles WHERE device_id = $1', [deviceId]);
+    if (!challenger.rows.length) return res.json({ ok: false, reason: 'no_profile' });
+    if (challenger.rows[0].player_code === opponentCode) return res.json({ ok: false, reason: 'self_duel' });
+
+    const bet = Math.max(0, parseInt(amount, 10) || 0);
+    if (bet > 0 && challenger.rows[0].balance < bet) return res.json({ ok: false, reason: 'insufficient_balance' });
+
+    // Check opponent exists
+    const opponent = await pool.query('SELECT device_id, display_name FROM player_profiles WHERE player_code = $1', [opponentCode]);
+    if (!opponent.rows.length) return res.json({ ok: false, reason: 'opponent_not_found' });
+
+    const timeoutH = await pool.query(`SELECT value FROM game_config WHERE key = 'duel_timeout_hours'`);
+    const hours = parseInt((timeoutH.rows[0] || {}).value, 10) || 24;
+    const seed = Math.floor(Math.random() * 2147483647);
+    const expiresAt = new Date(Date.now() + hours * 3600000);
+
+    // Deduct from challenger
+    if (bet > 0) {
+      await pool.query(`UPDATE player_profiles SET balance = balance - $1, total_spent = total_spent + $1 WHERE device_id = $2`, [bet, deviceId]);
+    }
+
+    const r = await pool.query(
+      `INSERT INTO duels (challenger_device, challenger_name, challenger_code, opponent_code, opponent_device, opponent_name, amount, board_seed, expires_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
+      [deviceId, challenger.rows[0].display_name, challenger.rows[0].player_code, opponentCode, opponent.rows[0].device_id, opponent.rows[0].display_name, bet, seed, expiresAt]);
+
+    res.json({ ok: true, duelId: r.rows[0].id, seed, amount: bet, expiresAt });
+  } catch (e) {
+    console.error('duels/create', e.message);
+    res.status(500).json({ error: 'server' });
+  }
+});
+
+// Get my duels (pending, active, completed)
+app.get('/api/duels/mine', async (req, res) => {
+  const deviceId = req.query.deviceId;
+  if (!deviceId) return res.status(400).json({ error: 'missing_device' });
+  try {
+    const playerCode = await pool.query('SELECT player_code FROM player_profiles WHERE device_id = $1', [deviceId]);
+    const code = playerCode.rows.length ? playerCode.rows[0].player_code : '';
+    const r = await pool.query(
+      `SELECT * FROM duels WHERE challenger_device = $1 OR opponent_device = $1 OR opponent_code = $2
+       ORDER BY created_at DESC LIMIT 20`, [deviceId, code]);
+    res.json({ ok: true, duels: r.rows });
+  } catch (e) {
+    res.status(500).json({ error: 'server' });
+  }
+});
+
+// Accept a duel
+app.post('/api/duels/:id/accept', async (req, res) => {
+  const { deviceId } = req.body || {};
+  const duelId = parseInt(req.params.id, 10);
+  try {
+    const d = await pool.query('SELECT * FROM duels WHERE id = $1', [duelId]);
+    if (!d.rows.length) return res.json({ ok: false, reason: 'not_found' });
+    const duel = d.rows[0];
+    if (duel.status !== 'pending') return res.json({ ok: false, reason: 'not_pending' });
+    if (new Date(duel.expires_at) < new Date()) return res.json({ ok: false, reason: 'expired' });
+
+    // Verify this is the opponent
+    const player = await pool.query('SELECT player_code, balance FROM player_profiles WHERE device_id = $1', [deviceId]);
+    if (!player.rows.length || player.rows[0].player_code !== duel.opponent_code) return res.json({ ok: false, reason: 'not_opponent' });
+
+    const bet = duel.amount | 0;
+    if (bet > 0 && player.rows[0].balance < bet) return res.json({ ok: false, reason: 'insufficient_balance' });
+
+    if (bet > 0) {
+      await pool.query(`UPDATE player_profiles SET balance = balance - $1, total_spent = total_spent + $1 WHERE device_id = $2`, [bet, deviceId]);
+    }
+    await pool.query(`UPDATE duels SET status = 'accepted', opponent_device = $1 WHERE id = $2`, [deviceId, duelId]);
+    res.json({ ok: true, duel: { ...duel, status: 'accepted' } });
+  } catch (e) {
+    res.status(500).json({ error: 'server' });
+  }
+});
+
+// Submit duel score
+app.post('/api/duels/:id/score', async (req, res) => {
+  const { deviceId, score } = req.body || {};
+  const duelId = parseInt(req.params.id, 10);
+  try {
+    const d = await pool.query('SELECT * FROM duels WHERE id = $1', [duelId]);
+    if (!d.rows.length) return res.json({ ok: false, reason: 'not_found' });
+    const duel = d.rows[0];
+    if (duel.status !== 'accepted') return res.json({ ok: false, reason: 'not_accepted' });
+
+    const s = Math.max(0, parseInt(score, 10) || 0);
+    const isChallenger = duel.challenger_device === deviceId;
+    const isOpponent = duel.opponent_device === deviceId;
+    if (!isChallenger && !isOpponent) return res.json({ ok: false, reason: 'not_participant' });
+
+    if (isChallenger) await pool.query(`UPDATE duels SET challenger_score = $1 WHERE id = $2`, [s, duelId]);
+    else await pool.query(`UPDATE duels SET opponent_score = $1 WHERE id = $2`, [s, duelId]);
+
+    // Check if both scored → settle
+    const updated = await pool.query('SELECT * FROM duels WHERE id = $1', [duelId]);
+    const u = updated.rows[0];
+    if (u.challenger_score != null && u.opponent_score != null) {
+      // Settle!
+      const rake = 5; // use config if needed
+      const totalPool = (u.amount | 0) * 2;
+      const rakeAmt = Math.round(totalPool * rake / 100);
+      const prize = totalPool - rakeAmt;
+      let winner = null;
+      if (u.challenger_score > u.opponent_score) winner = u.challenger_device;
+      else if (u.opponent_score > u.challenger_score) winner = u.opponent_device;
+      // Tie → refund both
+      if (!winner) {
+        if ((u.amount | 0) > 0) {
+          await pool.query(`UPDATE player_profiles SET balance = balance + $1 WHERE device_id = $2`, [u.amount, u.challenger_device]);
+          await pool.query(`UPDATE player_profiles SET balance = balance + $1 WHERE device_id = $2`, [u.amount, u.opponent_device]);
+        }
+        await pool.query(`UPDATE duels SET status = 'tie', winner_device = NULL WHERE id = $1`, [duelId]);
+        return res.json({ ok: true, result: 'tie', refunded: true });
+      }
+      if (prize > 0) {
+        await pool.query(`UPDATE player_profiles SET balance = balance + $1, total_earned = total_earned + $1 WHERE device_id = $2`, [prize, winner]);
+      }
+      await pool.query(`UPDATE duels SET status = 'settled', winner_device = $1 WHERE id = $2`, [winner, duelId]);
+      res.json({ ok: true, result: 'settled', winner: winner === deviceId ? 'you' : 'opponent', prize });
+    } else {
+      res.json({ ok: true, result: 'waiting', yourScore: s });
+    }
+  } catch (e) {
+    console.error('duels/score', e.message);
     res.status(500).json({ error: 'server' });
   }
 });

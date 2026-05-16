@@ -2489,6 +2489,110 @@
       };
     });
   }
+  // ============ 1v1 DUEL SYSTEM ============
+  function showDuelModal() {
+    var existing = document.getElementById('duel-modal');
+    if (existing) existing.remove();
+    var modal = document.createElement('div');
+    modal.id = 'duel-modal';
+    modal.className = 'info-modal';
+    modal.onclick = function(e) { if (e.target === modal) modal.remove(); };
+    modal.innerHTML = '<div class="info-card" style="max-width:340px;direction:rtl">' +
+      '<div style="font-size:16px;font-weight:700;margin-bottom:12px">⚔️ דו-קרב 1v1</div>' +
+      '<div style="font-size:12px;color:#6F6E68;margin-bottom:12px">אתגר שחקן ספציפי! שניכם משחקים על אותו לוח — מי שמשיג יותר נקודות מנצח.</div>' +
+      '<div style="font-size:11px;font-weight:600;margin-bottom:4px">קוד היריב</div>' +
+      '<input id="duel-opponent" placeholder="BLOOM-XXXX" maxlength="10" style="width:100%;padding:8px;border:1px solid rgba(0,0,0,0.12);border-radius:8px;font-family:inherit;font-size:14px;text-transform:uppercase;letter-spacing:0.1em;font-weight:700;text-align:center;box-sizing:border-box;margin-bottom:8px">' +
+      '<div style="font-size:11px;font-weight:600;margin-bottom:4px">הימור (אופציונלי)</div>' +
+      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">' +
+        '<input type="number" id="duel-amount" value="0" min="0" style="width:80px;padding:6px;border:1px solid rgba(0,0,0,0.12);border-radius:8px;font-family:inherit;font-size:14px;text-align:center;font-weight:700">' +
+        '<span style="font-size:12px;color:#6F6E68">💎 · המנצח לוקח הכל (minus 5% עמלה)</span>' +
+      '</div>' +
+      '<button class="btn" id="duel-send" style="width:100%;margin-bottom:10px">שלח אתגר ⚔️</button>' +
+      '<div id="duel-error" style="color:#C8472F;font-size:12px;text-align:center;min-height:18px"></div>' +
+      '<div style="border-top:1px solid rgba(0,0,0,0.06);margin-top:10px;padding-top:10px">' +
+        '<div style="font-size:12px;font-weight:600;margin-bottom:6px">הדו-קרבות שלי</div>' +
+        '<div id="duel-list" style="font-size:12px;color:#6F6E68">טוען...</div>' +
+      '</div>' +
+      '<button class="btn secondary" style="width:100%;margin-top:10px" onclick="this.closest(\'.info-modal\').remove()">סגור</button>' +
+    '</div>';
+    document.body.appendChild(modal);
+
+    // Load my duels
+    loadMyDuels();
+
+    // Send challenge
+    document.getElementById('duel-send').onclick = async function() {
+      var opp = (document.getElementById('duel-opponent').value || '').trim().toUpperCase();
+      var amt = parseInt(document.getElementById('duel-amount').value, 10) || 0;
+      var errEl = document.getElementById('duel-error');
+      errEl.textContent = '';
+      if (!opp || opp.length < 6) { errEl.textContent = 'נא להזין קוד שחקן (BLOOM-XXXX)'; return; }
+      if (amt > 0 && playerBalance < amt) { errEl.textContent = '💎 אין מספיק קרדיטים (' + playerBalance + ')'; return; }
+      this.disabled = true; this.textContent = '...';
+      try {
+        var r = await fetch(API_BASE + '/api/duels', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ deviceId: deviceId, opponentCode: opp, amount: amt })
+        });
+        var d = await r.json();
+        this.disabled = false; this.textContent = 'שלח אתגר ⚔️';
+        if (d && d.ok) {
+          if (amt > 0) { playerBalance -= amt; updateBalanceDisplay(); }
+          errEl.style.color = '#2E8B6F';
+          errEl.textContent = '✅ אתגר נשלח! ממתין ליריב...';
+          loadMyDuels();
+        } else {
+          var msgs = { self_duel: 'לא ניתן לאתגר את עצמך', opponent_not_found: 'שחקן לא נמצא', insufficient_balance: 'אין מספיק 💎', duels_disabled: 'דו-קרבות מושבתים' };
+          errEl.textContent = msgs[d.reason] || 'שגיאה';
+        }
+      } catch(e) { this.disabled = false; this.textContent = 'שלח אתגר ⚔️'; errEl.textContent = 'שגיאת רשת'; }
+    };
+  }
+
+  async function loadMyDuels() {
+    var el = document.getElementById('duel-list');
+    if (!el) return;
+    try {
+      var r = await fetch(API_BASE + '/api/duels/mine?deviceId=' + encodeURIComponent(deviceId));
+      var d = await r.json();
+      if (!d || !d.duels || !d.duels.length) { el.textContent = 'אין דו-קרבות'; return; }
+      var html = '';
+      d.duels.forEach(function(duel) {
+        var isChallenger = duel.challenger_device === deviceId;
+        var otherName = isChallenger ? (duel.opponent_name || duel.opponent_code) : (duel.challenger_name || duel.challenger_code);
+        var statusMap = { pending: '⏳ ממתין', accepted: '🎮 משחקים', settled: '✅ הסתיים', tie: '🤝 תיקו', expired: '⏰ פג תוקף' };
+        var statusText = statusMap[duel.status] || duel.status;
+        var amtText = (duel.amount | 0) > 0 ? ' · ' + duel.amount + '💎' : '';
+        var winText = '';
+        if (duel.status === 'settled' && duel.winner_device) {
+          winText = duel.winner_device === deviceId ? ' · <strong style="color:#2E8B6F">ניצחת!</strong>' : ' · <span style="color:#C8472F">הפסדת</span>';
+        }
+        var actionBtn = '';
+        if (duel.status === 'pending' && !isChallenger) {
+          actionBtn = '<button class="btn sm" style="font-size:10px;padding:3px 8px" onclick="acceptDuel(' + duel.id + ')">קבל ⚔️</button>';
+        }
+        html += '<div style="padding:6px 0;border-top:1px solid rgba(0,0,0,0.04)">' +
+          '<span style="font-weight:600">vs ' + otherName + '</span>' + amtText + ' · ' + statusText + winText + ' ' + actionBtn +
+        '</div>';
+      });
+      el.innerHTML = html;
+    } catch(e) { el.textContent = 'שגיאה בטעינה'; }
+  }
+
+  window.acceptDuel = async function(id) {
+    var r = await fetch(API_BASE + '/api/duels/' + id + '/accept', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ deviceId: deviceId })
+    });
+    var d = await r.json();
+    if (d && d.ok) {
+      fetchPlayerCode(); // refresh balance
+      loadMyDuels();
+    } else {
+      alert((d && d.reason) || 'שגיאה');
+    }
+  };
+
   // ============ IN-GAME TILE SHOP ============
   var tilePrices = null; // fetched once from server
 
@@ -3546,7 +3650,10 @@
         : '<button class="home-skip" id="home-tour-btn" style="margin-top:0;color:#BA7517">📖 איך משחקים?</button>') +
       '<div style="display:flex;gap:8px;justify-content:center;margin-top:4px">' +
         '<button class="home-share-game" id="home-skin-shop" aria-label="חנות סקינים" style="flex:0">' +
-          '<span>🎨 חנות סקינים</span>' +
+          '<span>🎨 סקינים</span>' +
+        '</button>' +
+        '<button class="home-share-game" id="home-duel-btn" aria-label="דו-קרב" style="flex:0">' +
+          '<span>⚔️ דו-קרב 1v1</span>' +
         '</button>' +
       '</div>' +
       '<button class="home-share-game" id="home-share-game" aria-label="הזמן חבר">' +
@@ -3638,6 +3745,8 @@
     if (tourLink) tourLink.onclick = function() { ensureAudio(); showTour({ onDone: enter }); };
     var skinShopBtn = document.getElementById('home-skin-shop');
     if (skinShopBtn) skinShopBtn.onclick = function() { showSkinShop(); };
+    var duelBtn = document.getElementById('home-duel-btn');
+    if (duelBtn) duelBtn.onclick = function() { showDuelModal(); };
 
     // Show player code on home
     var pidEl = document.getElementById('home-player-id');

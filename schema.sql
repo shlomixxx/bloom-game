@@ -286,6 +286,10 @@ INSERT INTO game_config (key, value) VALUES ('jackpot_min_players', '5')
   ON CONFLICT (key) DO NOTHING;
 INSERT INTO game_config (key, value) VALUES ('jackpot_auto_settle', 'true')
   ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('duel_enabled', 'true')
+  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('duel_timeout_hours', '24')
+  ON CONFLICT (key) DO NOTHING;
 
 -- Wager settlements (tracks every credit movement from bets)
 CREATE TABLE IF NOT EXISTS wager_settlements (
@@ -310,6 +314,28 @@ CREATE TABLE IF NOT EXISTS daily_jackpot (
   settled  BOOLEAN NOT NULL DEFAULT false,
   settled_at TIMESTAMP
 );
+
+-- 1v1 Duels
+CREATE TABLE IF NOT EXISTS duels (
+  id                SERIAL PRIMARY KEY,
+  challenger_device VARCHAR(64) NOT NULL,
+  challenger_name   VARCHAR(100),
+  challenger_code   VARCHAR(10),
+  opponent_device   VARCHAR(64),
+  opponent_name     VARCHAR(100),
+  opponent_code     VARCHAR(10) NOT NULL,
+  amount            INT NOT NULL DEFAULT 0,
+  board_seed        BIGINT NOT NULL,
+  challenger_score  INT,
+  opponent_score    INT,
+  winner_device     VARCHAR(64),
+  status            VARCHAR(20) NOT NULL DEFAULT 'pending',
+  created_at        TIMESTAMP NOT NULL DEFAULT NOW(),
+  expires_at        TIMESTAMP NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_duels_opponent ON duels (opponent_code, status);
+CREATE INDEX IF NOT EXISTS idx_duels_challenger ON duels (challenger_device, status);
 
 -- ============================================================
 -- Player heartbeat — tracks ALL active players (any mode)
