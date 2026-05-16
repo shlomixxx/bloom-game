@@ -804,7 +804,29 @@
     for (let r = getBoardRows() - 1; r >= 0; r--) {
       if (grid[r][col] === 0) { row = r; break; }
     }
-    if (row === -1) return;
+    if (row === -1) {
+      // Column is full — check if the whole board is game-over
+      if (isGameOver()) {
+        soundGameOver();
+        buzz([60, 80, 100]);
+        playMusic('fail');
+        if (!window.__bloomBotActive && !skinTrialMode) {
+          incrementGamesPlayed();
+          bumpLifetimeMax(BEST_TIER_KEY, highestTier);
+          addLifetimeTotal(TOTAL_SCORE_KEY, score);
+          var gameDuration = Date.now() - (gameStartTime || Date.now());
+          var totalMs = loadLifetimeInt(TOTAL_PLAY_TIME_KEY) + gameDuration;
+          try { localStorage.setItem(TOTAL_PLAY_TIME_KEY, String(totalMs)); } catch(e) {}
+        }
+        checkAchievements();
+        // Submit practice scores to leaderboard too
+        if (mode === 'practice' && !dailySubmitted) {
+          submitAndShowLeaderboard();
+        }
+        render({ over: true });
+      }
+      return;
+    }
     busy = true;
     queuedCol = -1;
     dropsCount++;
@@ -864,6 +886,16 @@
           promptForName(function() { submitAndShowLeaderboard(); });
         } else {
           submitAndShowLeaderboard();
+        }
+      } else if (mode === 'practice') {
+        render({ over: true, isNewBest: isNewBest });
+        // Practice scores also go to daily leaderboard — every game counts!
+        if (!window.__bloomBotActive && !skinTrialMode) {
+          if (!playerName) {
+            promptForName(function() { submitAndShowLeaderboard(); });
+          } else {
+            submitAndShowLeaderboard();
+          }
         }
       } else {
         render({ over: true, isNewBest: isNewBest });

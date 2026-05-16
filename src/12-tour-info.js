@@ -396,7 +396,7 @@
       }
 
       const showCountdown = mode === 'daily';
-      const showLeaderboard = mode === 'daily' || mode === 'contest';
+      const showLeaderboard = mode === 'daily' || mode === 'contest' || mode === 'practice';
       const isContestOver = mode === 'contest' && activeContestCode;
       const againLabel = isContestOver ? 'שחק עוד משחק בתחרות'
         : (mode === 'daily') ? 'שחק באימון חופשי' : 'שחק שוב';
@@ -411,7 +411,7 @@
           '<div class="over-sub">הגעת ל' + getActiveTiers()[highestTier].name + ' · ' + highestTier + '/' + MAX_TIER + ' דרגות</div>' +
           (dailyRank ? '<div class="lb-rank-pill">המקום שלך היום: #' + dailyRank + '</div>' : '') +
           (function() {
-            if (mode !== 'daily') return '';
+            if (mode !== 'daily' && mode !== 'practice') return '';
             var s = loadStreak();
             var n = s.count | 0;
             var tomorrowReward = getDailyRewardAmount((n || 0) + 1);
