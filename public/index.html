@@ -3,6 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<!-- Google Analytics 4 — החלף GA_MEASUREMENT_ID ב-ID שלך מ-analytics.google.com -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=GA_MEASUREMENT_ID"></script>
+<script>
+window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}
+gtag('js',new Date());gtag('config','GA_MEASUREMENT_ID');
+function trackEvent(n,p){try{gtag('event',n,p||{});}catch(e){}}
+</script>
 <meta name="theme-color" content="#F5F5F0">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="BLOOM">
@@ -2528,6 +2535,7 @@
             try { localStorage.setItem(ACTIVE_SKIN_KEY, skinId); } catch(e) {}
             showSkinShop(); // refresh
             render(); // apply new skin
+            trackEvent('purchase', { item: 'skin', skin: skinId, cost: pack.price });
           } else {
             self.textContent = d.reason || 'שגיאה';
           }
@@ -2754,6 +2762,7 @@
             render();
             modal.remove();
             showCreditToast(-d.cost, getActiveTiers()[tier].name);
+            trackEvent('purchase', { item: 'tile', tier: tier, cost: d.cost });
           } else {
             self.style.opacity = '1';
             self.querySelector('.ts-price').textContent = d.reason === 'insufficient_balance' ? 'אין 💎' : 'שגיאה';
@@ -2785,6 +2794,7 @@
             updateBalanceDisplay();
             modal.remove();
             executePowerup(power, d.cost);
+            trackEvent('purchase', { item: 'powerup', type: power, cost: d.cost });
           } else {
             self.style.opacity = '1';
           }
@@ -3930,6 +3940,7 @@
         navigator.share({ title: 'BLOOM', text: text, url: link }).catch(function() {
           if (navigator.clipboard) navigator.clipboard.writeText(text).then(flash, flash);
         });
+        trackEvent('share', { method: 'native' });
       } else if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(text).then(flash, flash);
       } else {
@@ -5219,6 +5230,7 @@
     }).catch(function() {});
   }
   function showLevelUpToast(level) {
+    trackEvent('level_up', { level: level.level, title: level.title });
     var t = document.createElement('div');
     t.className = 'credit-toast';
     t.style.background = 'linear-gradient(135deg, #9B59B6, #6C3483)';
@@ -6742,6 +6754,7 @@
     gameBestMergeTier = 0;
     gameTotalMerges = 0;
     gameStartTime = Date.now();
+    trackEvent('game_start', { mode: mode });
     leaderboard = [];
     dailyRank = null;
     // Cleared at top of init: by the time we know we're entering contest mode,
@@ -7059,6 +7072,7 @@
         if (data && typeof data.rank === 'number') dailyRank = data.rank;
         // Earn credits for daily completion
         if (!window.__bloomBotActive) earnCredits('daily_complete');
+        trackEvent('game_over', { mode: mode, score: score, tier: highestTier });
       }
     } catch (e) {
       console.warn('Submit failed:', e);
