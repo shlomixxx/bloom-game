@@ -29,6 +29,18 @@ app.use('/api', (req, res, next) => {
 
 app.use(express.json({ limit: '4kb' }));
 
+// SEO: robots.txt + sitemap
+app.get('/robots.txt', (_req, res) => {
+  res.type('text').send('User-agent: *\nAllow: /\nSitemap: https://bloom-web-production-f3bd.up.railway.app/sitemap.xml');
+});
+app.get('/sitemap.xml', (_req, res) => {
+  const base = 'https://bloom-web-production-f3bd.up.railway.app';
+  res.type('xml').send(`<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+<url><loc>${base}/</loc><changefreq>daily</changefreq><priority>1.0</priority></url>
+</urlset>`);
+});
+
 // Serve sw.js dynamically so CACHE_NAME auto-bumps on every deploy.
 // The boot timestamp ensures users always get fresh cache after a Railway restart.
 const BOOT_TS = new Date().toISOString().replace(/[^0-9]/g, '').slice(0, 14);
