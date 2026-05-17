@@ -397,9 +397,9 @@
     });
     var d = await r.json();
     if (d && d.ok) {
-      fetchPlayerCode(); // refresh balance
+      fetchPlayerCode();
       loadMyDuels();
-      // Auto-start the duel game
+      activeDuelOpponentName = d.duel ? (d.duel.challenger_name || d.duel.challenger_code || 'יריב') : 'יריב';
       startDuelGame(id, d.duel.board_seed);
     } else {
       var msgs = { not_opponent: 'אתה לא היריב', not_pending: 'כבר קיבלת', expired: 'פג תוקף', insufficient_balance: 'אין מספיק 💎' };
@@ -414,12 +414,15 @@
       if (!d || !d.duels) return;
       var duel = d.duels.find(function(dd) { return dd.id === id; });
       if (!duel || duel.status !== 'accepted') { alert('הדו-קרב לא פעיל'); return; }
+      var isChallenger = duel.challenger_device === deviceId;
+      activeDuelOpponentName = isChallenger ? (duel.opponent_name || duel.opponent_code || 'יריב') : (duel.challenger_name || duel.challenger_code || 'יריב');
       startDuelGame(id, duel.board_seed);
     } catch(e) { alert('שגיאת רשת'); }
   };
 
   // Active duel state
   var activeDuelId = null;
+  var activeDuelOpponentName = 'יריב';
 
   function startDuelGame(duelId, seed) {
     activeDuelId = duelId;
@@ -429,7 +432,9 @@
     // Hide home if open
     hideHome();
     // Start the game with the duel's seed
-    mode = 'practice'; // reuse practice mode UI
+    mode = 'practice'; // engine uses practice mode
+    window._duelMode = true; // flag for UI
+    window._duelOpponentName = activeDuelOpponentName || 'יריב';
     dailyDate = todayInIsrael();
     grid = Array.from({length: getBoardRows()}, function() { return Array(getBoardCols()).fill(0); });
     score = 0; highestTier = 1; busy = false; dropsCount = 0;
@@ -445,11 +450,6 @@
     dailySubmitted = false;
     nextPiece = pickPiece();
     updateModeBar();
-    // Override the mode title to show duel info
-    var titleEl = document.getElementById('mode-title');
-    var subEl = document.getElementById('mode-sub');
-    if (titleEl) titleEl.textContent = '⚔️ דו-קרב 1v1';
-    if (subEl) subEl.textContent = 'אותו לוח ליריב — מי ישיג יותר?';
     render();
     playMusic('game');
     ensureAudio();
@@ -461,27 +461,67 @@
   function submitDuelScore(finalScore) {
     if (!activeDuelId) return;
     var duelId = activeDuelId;
-    activeDuelId = null; // clear so it's one-shot
+    var oppName = window._duelOpponentName || 'יריב';
+    activeDuelId = null;
+    window._duelMode = false;
     fetch(API_BASE + '/api/duels/' + duelId + '/score', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ deviceId: deviceId, score: finalScore })
     }).then(function(r) { return r.json(); }).then(function(d) {
-      if (d && d.result === 'tie') {
-        showDuelResultToast('🤝 תיקו! ההימור הוחזר');
-        fetchPlayerCode();
-      } else if (d && d.result === 'settled' && d.winner === 'you') {
-        showDuelResultToast('🏆 ניצחת בדו-קרב! +' + (d.prize || 0) + ' 💎');
-        fetchPlayerCode();
-      } else if (d && d.result === 'settled' && d.winner === 'opponent') {
-        showDuelResultToast('😔 הפסדת בדו-קרב. היריב היה טוב יותר');
-      } else if (d && d.result === 'waiting') {
-        showDuelResultToast('⚔️ ניקוד נשלח: ' + (d.yourScore || 0).toLocaleString() + ' · ממתין ליריב...');
-      }
+      showDuelResultOverlay(d, finalScore, oppName);
+      if (d && (d.result === 'tie' || (d.result === 'settled' && d.winner === 'you'))) fetchPlayerCode();
       trackEvent('duel_score', { duelId: duelId, result: d && d.result });
-    }).catch(function() {});
+    }).catch(function() {
+      showDuelResultOverlay({ result: 'error' }, finalScore, oppName);
+    });
+  }
+
+  function showDuelResultOverlay(d, myScore, oppName) {
+    var emoji, title, detail, color, showConfettiFlag = false;
+    if (d && d.result === 'settled' && d.winner === 'you') {
+      emoji = '🏆'; title = 'ניצחת!'; color = '#2E8B6F'; showConfettiFlag = true;
+      detail = '<div style="font-size:14px;color:#9FE1CB;margin-top:6px">+' + (d.prize || 0) + ' 💎 פרס</div>';
+    } else if (d && d.result === 'settled' && d.winner === 'opponent') {
+      emoji = '😔'; title = 'הפסדת'; color = '#C8472F';
+      detail = '<div style="font-size:14px;color:#F5C4B3;margin-top:6px">היריב היה טוב יותר הפעם</div>';
+    } else if (d && d.result === 'tie') {
+      emoji = '🤝'; title = 'תיקו!'; color = '#BA7517';
+      detail = '<div style="font-size:14px;color:#FAC775;margin-top:6px">ההימור הוחזר</div>';
+    } else if (d && d.result === 'waiting') {
+      emoji = '⏳'; title = 'ממתין ליריב...'; color = '#6B5CE7';
+      detail = '<div style="font-size:13px;color:#B5B3F0;margin-top:6px">הניקוד שלך נשלח. נעדכן כשהיריב יסיים</div>';
+    } else {
+      emoji = '⚔️'; title = 'דו-קרב נשלח'; color = '#6B5CE7';
+      detail = '';
+    }
+
+    // Build scores comparison
+    var oppScore = (d && d.opponentScore) ? d.opponentScore : null;
+    var scoresHtml = '<div style="display:flex;justify-content:center;gap:20px;margin:14px 0;font-size:13px">' +
+      '<div style="text-align:center"><div style="font-size:11px;color:#A8A6A0">אתה</div><div style="font-size:22px;font-weight:900;color:#FAC775">' + myScore.toLocaleString() + '</div></div>' +
+      '<div style="align-self:center;font-size:18px;color:#A8A6A0">vs</div>' +
+      '<div style="text-align:center"><div style="font-size:11px;color:#A8A6A0">' + escapeHtml(oppName) + '</div><div style="font-size:22px;font-weight:900;color:' + (oppScore != null ? '#FAC775' : '#555') + '">' + (oppScore != null ? oppScore.toLocaleString() : '...') + '</div></div>' +
+    '</div>';
+
+    var overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;display:flex;align-items:center;justify-content:center;direction:rtl';
+    overlay.innerHTML =
+      '<div style="background:#1C1A18;border-radius:20px;padding:28px 24px;max-width:320px;width:90%;text-align:center;border:2px solid ' + color + ';box-shadow:0 0 40px ' + color + '33">' +
+        '<div style="font-size:48px;margin-bottom:8px">' + emoji + '</div>' +
+        '<div style="font-size:24px;font-weight:900;color:' + color + '">' + title + '</div>' +
+        scoresHtml +
+        detail +
+        '<button onclick="this.closest(\'div[style]\').parentElement.remove();init(\'practice\',{fresh:true})" style="margin-top:18px;width:100%;padding:12px;border:none;border-radius:12px;background:#FAC775;color:#412402;font-size:16px;font-weight:800;cursor:pointer;font-family:inherit">שחק שוב</button>' +
+      '</div>';
+    document.body.appendChild(overlay);
+
+    if (showConfettiFlag && typeof showConfetti === 'function') showConfetti(40);
+    if (showConfettiFlag) buzz([80, 40, 80, 40, 80]);
+    if (d && d.result === 'settled' && d.winner === 'you') shakeGrid(4);
   }
 
   function showDuelResultToast(text) {
+    // Kept for backward compat — but overlay is used now
     var t = document.createElement('div');
     t.className = 'credit-toast';
     t.style.background = 'linear-gradient(135deg, #1C1A18, #2C2A28)';
@@ -4956,6 +4996,8 @@
     scoreMilestonesHit = {}; // reset score milestones
     bestBeatenThisGame = false; // reset live best tracking
     usedContinue = false; // reset second chance
+    // Clear duel mode unless this init was called from startDuelGame
+    if (!opts.keepDuel) { window._duelMode = false; window._duelOpponentName = ''; }
     gameMergesPerTier = {};
     gamePointsPerTier = {};
     gameBestMergeTier = 0;
@@ -5126,6 +5168,10 @@
       var trialPack = SKIN_PACKS[skinTrialId];
       title.textContent = '🎨 ניסיון · ' + (trialPack ? trialPack.name : '');
       sub.textContent = 'ניקוד לא נשמר · שחק ותחליט';
+    } else if (window._duelMode && activeDuelId) {
+      bar.classList.remove('practice');
+      title.textContent = '⚔️ דו-קרב 1v1';
+      sub.textContent = 'vs ' + (window._duelOpponentName || 'יריב') + ' — מי ישיג יותר?';
     } else {
       bar.classList.add('practice');
       title.textContent = 'משחק חופשי';

@@ -10,6 +10,8 @@
     scoreMilestonesHit = {}; // reset score milestones
     bestBeatenThisGame = false; // reset live best tracking
     usedContinue = false; // reset second chance
+    // Clear duel mode unless this init was called from startDuelGame
+    if (!opts.keepDuel) { window._duelMode = false; window._duelOpponentName = ''; }
     gameMergesPerTier = {};
     gamePointsPerTier = {};
     gameBestMergeTier = 0;
@@ -180,6 +182,10 @@
       var trialPack = SKIN_PACKS[skinTrialId];
       title.textContent = '🎨 ניסיון · ' + (trialPack ? trialPack.name : '');
       sub.textContent = 'ניקוד לא נשמר · שחק ותחליט';
+    } else if (window._duelMode && activeDuelId) {
+      bar.classList.remove('practice');
+      title.textContent = '⚔️ דו-קרב 1v1';
+      sub.textContent = 'vs ' + (window._duelOpponentName || 'יריב') + ' — מי ישיג יותר?';
     } else {
       bar.classList.add('practice');
       title.textContent = 'משחק חופשי';
