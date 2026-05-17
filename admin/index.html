@@ -404,7 +404,18 @@
       <p><strong>ערך 0 = כבוי.</strong> ערכים מומלצים: 2-4 = עדין, 6-8 = דרמטי, 10+ = מוגזם.</p>
 
       <!-- ── 8. מצבי Retention ── -->
-      <h3 style="color:var(--gold);margin-top:16px;font-size:14px;border-bottom:1px solid rgba(255,255,255,0.06);padding-bottom:6px">🔄 8. מנגנוני שימור</h3>
+      <h3 style="color:var(--gold);margin-top:16px;font-size:14px;border-bottom:1px solid rgba(255,255,255,0.06);padding-bottom:6px">⚡ 8. התראות תחרות חיות</h3>
+      <p>כשמשחקים תחרות חברים, המערכת בודקת כל X שניות מה קורה ומציגה באנרים דרמטיים:</p>
+      <table style="width:100%;font-size:11px;border-collapse:collapse">
+        <tr style="background:rgba(0,0,0,0.1)"><th style="padding:4px 6px;text-align:right">התראה</th><th>מתי</th><th>מפתח shake</th></tr>
+        <tr><td>⚡ "X עבר אותך!"</td><td>מישהו עבר את הניקוד שלך</td><td><code>contest_alert_shake_overtake</code> (3)</td></tr>
+        <tr><td>👑 "אתה מוביל!"</td><td>חזרת למקום 1</td><td><code>contest_alert_shake_first</code> (4)</td></tr>
+        <tr><td>🔥 "X תפס מקום 1!"</td><td>מישהו אחר הגיע למקום 1</td><td><code>contest_alert_shake_leader</code> (2)</td></tr>
+        <tr><td>💪 "עוד X נקודות!"</td><td>קרוב לעבור את מי שמעליך</td><td>ללא shake</td></tr>
+      </table>
+      <p><strong>הגדרות:</strong> <code>contest_alerts_enabled</code> (true/false), <code>contest_alert_interval</code> (12 שניות), <code>contest_alert_duration</code> (3500 מ"ש), <code>contest_alert_gap_pct</code> (0.1 = 10%), <code>contest_alert_gap_max</code> (5000 נק').</p>
+
+      <h3 style="color:var(--gold);margin-top:16px;font-size:14px;border-bottom:1px solid rgba(255,255,255,0.06);padding-bottom:6px">🔄 9. מנגנוני שימור</h3>
       <p><strong>רצף יומי:</strong> שחקן שחוזר כל יום מקבל streak עולה (🔥). בונוס גדל: 25💎 → 50💎 → 200💎 (30 ימים).</p>
       <p><strong>אתגר שבועי:</strong> תחרות שבועית אוטומטית עם 500💎 פרס. שחקנים מתחרים על מקום ראשון.</p>
       <p><strong>לוח מובילים:</strong> כל משחק (כולל חופשי) מופיע בלוח. שחקן רואה "עוד X נקודות למקום Y" → מוטיבציה.</p>

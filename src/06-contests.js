@@ -686,7 +686,9 @@
       });
       if (aboveMe) {
         var gap = aboveMe.score - realMyScore;
-        if (gap > 0 && gap < realMyScore * 0.1 && gap < 5000) {
+        var gapPct = parseFloat(getEventConfig('contest_alert_gap_pct', '0.1')) || 0.1;
+        var gapMax = getEventNum('contest_alert_gap_max', 5000);
+        if (gap > 0 && gap < realMyScore * gapPct && gap < gapMax) {
           almostOvertake = { name: aboveMe.name, gap: gap };
         }
       }
@@ -717,7 +719,10 @@
         var data = await fetchContest(code);
         if (data) overtakeBaseline = snapshotFromContestData(data);
       } catch(e) {}
-      if (overtakeCode) overtakeTimer = setInterval(refreshOvertake, 12000);
+      if (overtakeCode) {
+        var pollMs = getEventNum('contest_alert_interval', 12) * 1000;
+        overtakeTimer = setInterval(refreshOvertake, pollMs);
+      }
     })();
   }
 
@@ -728,6 +733,9 @@
   }
 
   function showContestAlert(type, player, extraCount) {
+    // Check if alerts are enabled
+    if (getEventConfig('contest_alerts_enabled', 'true') !== 'true') return;
+
     var emoji, text, bgColor, borderColor, shakeInt;
 
     if (type === 'overtake') {
@@ -736,19 +744,19 @@
       text = escapeHtml(player.name) + ' עבר אותך!' + extra + ' · ' + (player.score | 0).toLocaleString();
       bgColor = '#C8472F';
       borderColor = '#FF6B35';
-      shakeInt = 3;
+      shakeInt = getEventNum('contest_alert_shake_overtake', 3);
     } else if (type === 'you_first') {
       emoji = '👑';
       text = 'אתה מוביל את התחרות!';
       bgColor = '#BA7517';
       borderColor = '#FAC775';
-      shakeInt = 4;
+      shakeInt = getEventNum('contest_alert_shake_first', 4);
     } else if (type === 'new_leader') {
       emoji = '🔥';
       text = escapeHtml(player.name) + ' תפס את המקום הראשון! · ' + (player.score | 0).toLocaleString();
       bgColor = '#8B0000';
       borderColor = '#C8472F';
-      shakeInt = 2;
+      shakeInt = getEventNum('contest_alert_shake_leader', 2);
     } else if (type === 'almost') {
       emoji = '💪';
       text = 'עוד ' + player.gap.toLocaleString() + ' נקודות לעבור את ' + escapeHtml(player.name) + '!';
@@ -756,6 +764,8 @@
       borderColor = '#9FE1CB';
       shakeInt = 0;
     }
+
+    var displayMs = getEventNum('contest_alert_duration', 3500);
 
     // Dramatic banner
     var banner = document.createElement('div');
@@ -784,7 +794,7 @@
     setTimeout(function() {
       banner.style.transform = 'translateY(-100%)';
       setTimeout(function() { banner.remove(); }, 400);
-    }, 3500);
+    }, displayMs);
   }
 
   async function showContestLeaderboard(code) {

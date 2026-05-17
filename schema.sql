@@ -446,3 +446,13 @@ INSERT INTO game_config (key, value) VALUES ('shake_multi_merge', '4') ON CONFLI
 INSERT INTO game_config (key, value) VALUES ('shake_new_best', '4') ON CONFLICT (key) DO NOTHING;
 INSERT INTO game_config (key, value) VALUES ('event_bomb_shake', '6') ON CONFLICT (key) DO NOTHING;
 INSERT INTO game_config (key, value) VALUES ('event_freeze_shake', '4') ON CONFLICT (key) DO NOTHING;
+
+-- Contest alerts config
+INSERT INTO game_config (key, value) VALUES ('contest_alerts_enabled', 'true') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('contest_alert_interval', '12') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('contest_alert_duration', '3500') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('contest_alert_shake_overtake', '3') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('contest_alert_shake_first', '4') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('contest_alert_shake_leader', '2') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('contest_alert_gap_pct', '0.1') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('contest_alert_gap_max', '5000') ON CONFLICT (key) DO NOTHING;
