@@ -5998,7 +5998,10 @@
     await processChains(row, col);
     if (pendingEvent && activeEvent === pendingEvent) {
       triggerEvent(pendingEvent, row);
+      // After bomb/freeze: tiles cleared + gravity, but new merges may exist
+      applyGravity();
       render();
+      await processChains(row, col);
     }
     rollNextPiece();
     render();
