@@ -144,20 +144,32 @@
 
     // Show player code on home + profile link
     var pidEl = document.getElementById('home-player-id');
-    if (pidEl && playerCode) {
+    function renderHomePid() {
+      if (!pidEl || !playerCode) return;
       var lvlText = playerLevel > 1 ? ' · ' + getLevelIcon() + ' Lv.' + playerLevel : '';
-      pidEl.innerHTML = '<span class="pid-code">' + playerCode + '</span> · <span class="pid-balance">' + playerBalance + ' 💎</span>' + lvlText +
+      var nm = (getPlayerName() || '').trim();
+      var nameBit = nm && nm !== 'אנונימי'
+        ? '<span class="pid-name">' + nm + '</span> <button class="pid-edit-name" type="button" title="ערוך שם" aria-label="ערוך שם">✏️</button> · '
+        : '<button class="pid-edit-name" type="button" title="בחר שם" aria-label="בחר שם">✏️ בחר שם</button> · ';
+      pidEl.innerHTML = nameBit +
+        '<span class="pid-code">' + playerCode + '</span> · <span class="pid-balance">' + playerBalance + ' 💎</span>' + lvlText +
         '<a href="/player/' + playerCode + '" target="_blank" class="pid-profile-link">👤 הפרופיל שלי</a>';
-      pidEl.querySelector('.pid-code').onclick = function(e) {
+      var codeEl = pidEl.querySelector('.pid-code');
+      if (codeEl) codeEl.onclick = function(e) {
         e.stopPropagation();
         if (navigator.clipboard) {
           navigator.clipboard.writeText(playerCode);
-          var sp = pidEl.querySelector('.pid-code');
-          sp.textContent = '✓ הועתק!';
-          setTimeout(function() { sp.textContent = playerCode; }, 1500);
+          codeEl.textContent = '✓ הועתק!';
+          setTimeout(function() { codeEl.textContent = playerCode; }, 1500);
         }
       };
+      var editBtn = pidEl.querySelector('.pid-edit-name');
+      if (editBtn) editBtn.onclick = function(e) {
+        e.stopPropagation();
+        promptForName(function() { renderHomePid(); }, { edit: true });
+      };
     }
+    renderHomePid();
     // First-ever-visit: gently auto-open the tour after the home settles in.
     // We defer it so the home animations land first, and only fire if the
     // player hasn't seen the tour AND hasn't already started learning the

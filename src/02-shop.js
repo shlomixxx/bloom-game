@@ -1,16 +1,31 @@
   // ============ 1v1 DUEL SYSTEM ============
-  function showDuelModal() {
+  // opts: { prefillSuffix } — used when launching from leaderboard "challenge" buttons
+  function showDuelModal(opts) {
+    opts = opts || {};
+    var pre = (opts.prefillSuffix || '').toString().toUpperCase().replace(/[^A-HJ-NP-Z2-9]/g, '').slice(0, 4);
     var existing = document.getElementById('duel-modal');
     if (existing) existing.remove();
     var modal = document.createElement('div');
     modal.id = 'duel-modal';
     modal.className = 'info-modal';
     modal.onclick = function(e) { if (e.target === modal) modal.remove(); };
+    var myCodePill = '';
+    if (typeof playerCode !== 'undefined' && playerCode) {
+      myCodePill = '<div id="duel-my-code" style="font-size:11px;background:#FFF7E6;border:1px solid #FAC775;border-radius:8px;padding:6px 10px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;gap:8px;cursor:pointer" title="הקוד שלי — לחץ כדי להעתיק ולשלוח לחבר">' +
+        '<span style="color:#6F6E68">הקוד שלי</span>' +
+        '<strong style="font-family:ui-monospace,monospace;letter-spacing:0.08em">' + playerCode + '</strong>' +
+        '<span style="color:#BA7517">📋 העתק</span>' +
+      '</div>';
+    }
     modal.innerHTML = '<div class="info-card" style="max-width:340px;direction:rtl">' +
       '<div style="font-size:16px;font-weight:700;margin-bottom:12px">⚔️ דו-קרב 1v1</div>' +
       '<div style="font-size:12px;color:#6F6E68;margin-bottom:12px">אתגר שחקן ספציפי! שניכם משחקים על אותו לוח — מי שמשיג יותר נקודות מנצח.</div>' +
+      myCodePill +
       '<div style="font-size:11px;font-weight:600;margin-bottom:4px">קוד היריב</div>' +
-      '<input id="duel-opponent" placeholder="BLOOM-XXXX" maxlength="10" style="width:100%;padding:8px;border:1px solid rgba(0,0,0,0.12);border-radius:8px;font-family:inherit;font-size:14px;text-transform:uppercase;letter-spacing:0.1em;font-weight:700;text-align:center;box-sizing:border-box;margin-bottom:8px">' +
+      '<div class="duel-code-input" style="display:flex;align-items:stretch;border:1px solid rgba(0,0,0,0.12);border-radius:8px;overflow:hidden;margin-bottom:8px;background:#FFFFFF">' +
+        '<span style="background:#1C1A18;color:#FAC775;padding:8px 10px;font-weight:700;letter-spacing:0.08em;font-family:ui-monospace,monospace;display:flex;align-items:center">BLOOM-</span>' +
+        '<input id="duel-opponent-suffix" maxlength="4" inputmode="latin" autocapitalize="characters" autocomplete="off" placeholder="XXXX" value="' + pre + '" style="flex:1;padding:8px;border:0;font-family:ui-monospace,monospace;font-size:16px;text-transform:uppercase;letter-spacing:0.2em;font-weight:700;text-align:center;outline:none;background:transparent">' +
+      '</div>' +
       '<div style="font-size:11px;font-weight:600;margin-bottom:4px">💪 רמת קושי (לשניכם)</div>' +
       '<div id="duel-difficulty" style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:10px">' +
         '<button type="button" class="diff-pill selected" data-diff="default" style="flex:1;min-width:60px;padding:5px 8px;font-size:11px;border:1px solid rgba(0,0,0,0.12);border-radius:6px;background:#1C1A18;color:#FAC775;font-weight:600;cursor:pointer">📦 רגיל</button>' +
@@ -53,13 +68,49 @@
       };
     });
 
+    // "My code" pill — copy to clipboard
+    var myPill = document.getElementById('duel-my-code');
+    if (myPill) {
+      myPill.onclick = function() {
+        if (typeof playerCode === 'undefined' || !playerCode) return;
+        var copy = function() {
+          var orig = myPill.innerHTML;
+          myPill.innerHTML = '<span style="color:#2E8B6F;font-weight:700">✓ הקוד הועתק! שלח לחבר שיאתגר אותך</span>';
+          setTimeout(function() { myPill.innerHTML = orig; }, 1800);
+        };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(playerCode).then(copy, copy);
+        } else { copy(); }
+      };
+    }
+
+    // Suffix input: strip "BLOOM-" prefix on paste, enforce charset
+    var suffixEl = document.getElementById('duel-opponent-suffix');
+    if (suffixEl) {
+      suffixEl.addEventListener('paste', function(e) {
+        var t = (e.clipboardData || window.clipboardData).getData('text') || '';
+        var cleaned = t.toUpperCase().replace(/^BLOOM-/, '').replace(/[^A-HJ-NP-Z2-9]/g, '').slice(0, 4);
+        if (cleaned) {
+          e.preventDefault();
+          suffixEl.value = cleaned;
+        }
+      });
+      suffixEl.addEventListener('input', function() {
+        var v = (suffixEl.value || '').toUpperCase().replace(/[^A-HJ-NP-Z2-9]/g, '').slice(0, 4);
+        if (v !== suffixEl.value) suffixEl.value = v;
+      });
+      setTimeout(function() { try { suffixEl.focus(); } catch(_) {} }, 50);
+    }
+
     // Send challenge
     document.getElementById('duel-send').onclick = async function() {
-      var opp = (document.getElementById('duel-opponent').value || '').trim().toUpperCase();
+      var suf = ((document.getElementById('duel-opponent-suffix') || {}).value || '').trim().toUpperCase().replace(/[^A-HJ-NP-Z2-9]/g, '');
+      var opp = 'BLOOM-' + suf;
       var amt = parseInt(document.getElementById('duel-amount').value, 10) || 0;
       var errEl = document.getElementById('duel-error');
+      errEl.style.color = '#C8472F';
       errEl.textContent = '';
-      if (!opp || opp.length < 6) { errEl.textContent = 'נא להזין קוד שחקן (BLOOM-XXXX)'; return; }
+      if (suf.length !== 4) { errEl.textContent = 'הקוד חייב להיות 4 תווים (אותיות וספרות)'; return; }
       if (amt > 0 && playerBalance < amt) { errEl.textContent = '💎 אין מספיק קרדיטים (' + playerBalance + ')'; return; }
       this.disabled = true; this.textContent = '...';
       try {

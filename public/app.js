@@ -294,18 +294,33 @@
     document.body.style.paddingBottom = '';
   }
   // ============ 1v1 DUEL SYSTEM ============
-  function showDuelModal() {
+  // opts: { prefillSuffix } — used when launching from leaderboard "challenge" buttons
+  function showDuelModal(opts) {
+    opts = opts || {};
+    var pre = (opts.prefillSuffix || '').toString().toUpperCase().replace(/[^A-HJ-NP-Z2-9]/g, '').slice(0, 4);
     var existing = document.getElementById('duel-modal');
     if (existing) existing.remove();
     var modal = document.createElement('div');
     modal.id = 'duel-modal';
     modal.className = 'info-modal';
     modal.onclick = function(e) { if (e.target === modal) modal.remove(); };
+    var myCodePill = '';
+    if (typeof playerCode !== 'undefined' && playerCode) {
+      myCodePill = '<div id="duel-my-code" style="font-size:11px;background:#FFF7E6;border:1px solid #FAC775;border-radius:8px;padding:6px 10px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;gap:8px;cursor:pointer" title="הקוד שלי — לחץ כדי להעתיק ולשלוח לחבר">' +
+        '<span style="color:#6F6E68">הקוד שלי</span>' +
+        '<strong style="font-family:ui-monospace,monospace;letter-spacing:0.08em">' + playerCode + '</strong>' +
+        '<span style="color:#BA7517">📋 העתק</span>' +
+      '</div>';
+    }
     modal.innerHTML = '<div class="info-card" style="max-width:340px;direction:rtl">' +
       '<div style="font-size:16px;font-weight:700;margin-bottom:12px">⚔️ דו-קרב 1v1</div>' +
       '<div style="font-size:12px;color:#6F6E68;margin-bottom:12px">אתגר שחקן ספציפי! שניכם משחקים על אותו לוח — מי שמשיג יותר נקודות מנצח.</div>' +
+      myCodePill +
       '<div style="font-size:11px;font-weight:600;margin-bottom:4px">קוד היריב</div>' +
-      '<input id="duel-opponent" placeholder="BLOOM-XXXX" maxlength="10" style="width:100%;padding:8px;border:1px solid rgba(0,0,0,0.12);border-radius:8px;font-family:inherit;font-size:14px;text-transform:uppercase;letter-spacing:0.1em;font-weight:700;text-align:center;box-sizing:border-box;margin-bottom:8px">' +
+      '<div class="duel-code-input" style="display:flex;align-items:stretch;border:1px solid rgba(0,0,0,0.12);border-radius:8px;overflow:hidden;margin-bottom:8px;background:#FFFFFF">' +
+        '<span style="background:#1C1A18;color:#FAC775;padding:8px 10px;font-weight:700;letter-spacing:0.08em;font-family:ui-monospace,monospace;display:flex;align-items:center">BLOOM-</span>' +
+        '<input id="duel-opponent-suffix" maxlength="4" inputmode="latin" autocapitalize="characters" autocomplete="off" placeholder="XXXX" value="' + pre + '" style="flex:1;padding:8px;border:0;font-family:ui-monospace,monospace;font-size:16px;text-transform:uppercase;letter-spacing:0.2em;font-weight:700;text-align:center;outline:none;background:transparent">' +
+      '</div>' +
       '<div style="font-size:11px;font-weight:600;margin-bottom:4px">💪 רמת קושי (לשניכם)</div>' +
       '<div id="duel-difficulty" style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:10px">' +
         '<button type="button" class="diff-pill selected" data-diff="default" style="flex:1;min-width:60px;padding:5px 8px;font-size:11px;border:1px solid rgba(0,0,0,0.12);border-radius:6px;background:#1C1A18;color:#FAC775;font-weight:600;cursor:pointer">📦 רגיל</button>' +
@@ -348,13 +363,49 @@
       };
     });
 
+    // "My code" pill — copy to clipboard
+    var myPill = document.getElementById('duel-my-code');
+    if (myPill) {
+      myPill.onclick = function() {
+        if (typeof playerCode === 'undefined' || !playerCode) return;
+        var copy = function() {
+          var orig = myPill.innerHTML;
+          myPill.innerHTML = '<span style="color:#2E8B6F;font-weight:700">✓ הקוד הועתק! שלח לחבר שיאתגר אותך</span>';
+          setTimeout(function() { myPill.innerHTML = orig; }, 1800);
+        };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(playerCode).then(copy, copy);
+        } else { copy(); }
+      };
+    }
+
+    // Suffix input: strip "BLOOM-" prefix on paste, enforce charset
+    var suffixEl = document.getElementById('duel-opponent-suffix');
+    if (suffixEl) {
+      suffixEl.addEventListener('paste', function(e) {
+        var t = (e.clipboardData || window.clipboardData).getData('text') || '';
+        var cleaned = t.toUpperCase().replace(/^BLOOM-/, '').replace(/[^A-HJ-NP-Z2-9]/g, '').slice(0, 4);
+        if (cleaned) {
+          e.preventDefault();
+          suffixEl.value = cleaned;
+        }
+      });
+      suffixEl.addEventListener('input', function() {
+        var v = (suffixEl.value || '').toUpperCase().replace(/[^A-HJ-NP-Z2-9]/g, '').slice(0, 4);
+        if (v !== suffixEl.value) suffixEl.value = v;
+      });
+      setTimeout(function() { try { suffixEl.focus(); } catch(_) {} }, 50);
+    }
+
     // Send challenge
     document.getElementById('duel-send').onclick = async function() {
-      var opp = (document.getElementById('duel-opponent').value || '').trim().toUpperCase();
+      var suf = ((document.getElementById('duel-opponent-suffix') || {}).value || '').trim().toUpperCase().replace(/[^A-HJ-NP-Z2-9]/g, '');
+      var opp = 'BLOOM-' + suf;
       var amt = parseInt(document.getElementById('duel-amount').value, 10) || 0;
       var errEl = document.getElementById('duel-error');
+      errEl.style.color = '#C8472F';
       errEl.textContent = '';
-      if (!opp || opp.length < 6) { errEl.textContent = 'נא להזין קוד שחקן (BLOOM-XXXX)'; return; }
+      if (suf.length !== 4) { errEl.textContent = 'הקוד חייב להיות 4 תווים (אותיות וספרות)'; return; }
       if (amt > 0 && playerBalance < amt) { errEl.textContent = '💎 אין מספיק קרדיטים (' + playerBalance + ')'; return; }
       this.disabled = true; this.textContent = '...';
       try {
@@ -2361,20 +2412,32 @@
 
     // Show player code on home + profile link
     var pidEl = document.getElementById('home-player-id');
-    if (pidEl && playerCode) {
+    function renderHomePid() {
+      if (!pidEl || !playerCode) return;
       var lvlText = playerLevel > 1 ? ' · ' + getLevelIcon() + ' Lv.' + playerLevel : '';
-      pidEl.innerHTML = '<span class="pid-code">' + playerCode + '</span> · <span class="pid-balance">' + playerBalance + ' 💎</span>' + lvlText +
+      var nm = (getPlayerName() || '').trim();
+      var nameBit = nm && nm !== 'אנונימי'
+        ? '<span class="pid-name">' + nm + '</span> <button class="pid-edit-name" type="button" title="ערוך שם" aria-label="ערוך שם">✏️</button> · '
+        : '<button class="pid-edit-name" type="button" title="בחר שם" aria-label="בחר שם">✏️ בחר שם</button> · ';
+      pidEl.innerHTML = nameBit +
+        '<span class="pid-code">' + playerCode + '</span> · <span class="pid-balance">' + playerBalance + ' 💎</span>' + lvlText +
         '<a href="/player/' + playerCode + '" target="_blank" class="pid-profile-link">👤 הפרופיל שלי</a>';
-      pidEl.querySelector('.pid-code').onclick = function(e) {
+      var codeEl = pidEl.querySelector('.pid-code');
+      if (codeEl) codeEl.onclick = function(e) {
         e.stopPropagation();
         if (navigator.clipboard) {
           navigator.clipboard.writeText(playerCode);
-          var sp = pidEl.querySelector('.pid-code');
-          sp.textContent = '✓ הועתק!';
-          setTimeout(function() { sp.textContent = playerCode; }, 1500);
+          codeEl.textContent = '✓ הועתק!';
+          setTimeout(function() { codeEl.textContent = playerCode; }, 1500);
         }
       };
+      var editBtn = pidEl.querySelector('.pid-edit-name');
+      if (editBtn) editBtn.onclick = function(e) {
+        e.stopPropagation();
+        promptForName(function() { renderHomePid(); }, { edit: true });
+      };
     }
+    renderHomePid();
     // First-ever-visit: gently auto-open the tour after the home settles in.
     // We defer it so the home animations land first, and only fire if the
     // player hasn't seen the tour AND hasn't already started learning the
@@ -6364,7 +6427,11 @@
         flagHtml = '<span class="lb-flag" title="' + (rowCc ? countryName(rowCc) : 'לא צוין') + '">' +
           (rowCc ? flagEmoji(rowCc) : '🏳️') + '</span>';
       }
-      return '<div class="lb-row' + rankClass + (isYou ? ' you' : '') + '">' +
+      // Challenge affordance — only on rows with a known BLOOM code and not "you".
+      var canChallenge = !isYou && row.player_code && /^BLOOM-[A-HJ-NP-Z2-9]{4}$/.test(row.player_code);
+      var rowExtra = canChallenge ? ' lb-row-challengeable" data-pcode="' + row.player_code + '" data-pname="' + escapeHtml(row.name || 'אנונימי') + '"' : '"';
+      var challengeBtn = canChallenge ? '<button class="lb-row-challenge" type="button" data-challenge title="אתגר ל-1v1">⚔️</button>' : '';
+      return '<div class="lb-row' + rankClass + (isYou ? ' you' : '') + rowExtra + '>' +
         '<div class="lb-rank">' + medal + '</div>' +
         renderAvatarHtml(seed, 'sm') +
         '<div style="flex:1;overflow:hidden">' +
@@ -6372,9 +6439,27 @@
           gapText +
         '</div>' +
         '<div class="lb-score">' + (row.score || 0).toLocaleString() + '</div>' +
+        challengeBtn +
       '</div>';
     }).join('');
     body.innerHTML = '<div class="lb-list">' + rows + '</div>';
+
+    // Delegated click handler — challenge a leaderboard row by tapping it or
+    // the ⚔️ button. Opens the duel modal with the suffix pre-filled.
+    var listEl = body.querySelector('.lb-list');
+    if (listEl) {
+      listEl.addEventListener('click', function(e) {
+        var rowEl = e.target.closest('.lb-row-challengeable');
+        if (!rowEl) return;
+        var code = rowEl.getAttribute('data-pcode') || '';
+        if (!code) return;
+        var suffix = code.replace(/^BLOOM-/, '');
+        closeLeaderboardModal();
+        if (typeof showDuelModal === 'function') {
+          setTimeout(function() { showDuelModal({ prefillSuffix: suffix }); }, 120);
+        }
+      });
+    }
 
     // Motivation footer
     if (footerEl) {
@@ -6460,39 +6545,63 @@
     setTimeout(function() { search && search.focus(); }, 50);
   }
 
-  function promptForName(cb) {
-    const wrap = document.getElementById('grid-wrap');
+  function promptForName(cb, opts) {
+    opts = opts || {};
+    const wrap = document.getElementById('grid-wrap') || document.body;
     if (!wrap || document.getElementById('name-modal')) { cb && cb(); return; }
     const modal = document.createElement('div');
     modal.id = 'name-modal';
     modal.className = 'info-modal';
+    const isEdit = !!opts.edit;
+    const prefillVal = (opts.prefill || (isEdit ? (playerName || '') : '')).replace(/"/g, '&quot;');
     modal.innerHTML =
       '<div class="info-card">' +
-        '<div class="info-title">איך לקרוא לך בטבלת המובילים?</div>' +
-        '<div class="info-sub">השם יישמר במכשיר ויופיע ליד התוצאה שלך.</div>' +
-        '<input class="name-input" id="name-input" autocapitalize="words" maxlength="24" placeholder="השם שלך" />' +
-        '<button class="btn" id="name-save">שמור והמשך</button>' +
-        '<button class="btn secondary" id="name-skip">דלג</button>' +
+        '<div class="info-title">' + (isEdit ? 'עריכת שם' : 'איך לקרוא לך בטבלת המובילים?') + '</div>' +
+        '<div class="info-sub">' + (isEdit ? 'השם יתעדכן בכל הטבלאות מיד.' : 'השם יישמר במכשיר ויופיע ליד התוצאה שלך.') + '</div>' +
+        '<input class="name-input" id="name-input" autocapitalize="words" maxlength="24" placeholder="השם שלך" value="' + prefillVal + '" />' +
+        '<button class="btn" id="name-save">שמור</button>' +
+        '<button class="btn secondary" id="name-skip">' + (isEdit ? 'בטל' : 'דלג') + '</button>' +
       '</div>';
     wrap.appendChild(modal);
     const input = document.getElementById('name-input');
-    setTimeout(function() { input && input.focus(); }, 50);
+    setTimeout(function() {
+      if (input) {
+        input.focus();
+        try { input.setSelectionRange(input.value.length, input.value.length); } catch (e) {}
+      }
+    }, 50);
     function maybeChainCountry(after) {
       // Only chain the flag picker on the very first name-pick (no stored
       // country yet). Returning users keep the picker behind the leaderboard
       // modal's "edit my flag" affordance — don't interrupt their flow.
+      if (isEdit) { after(); return; }
       if (!getCountry()) promptForCountry(after);
       else after();
     }
+    function syncServerName(name) {
+      if (!name || name === 'אנונימי') return;
+      try {
+        fetch(API_BASE + '/api/profile/name', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ deviceId: deviceId, name: name })
+        }).catch(function() {});
+      } catch (e) {}
+    }
     function save() {
       const v = (input.value || '').trim().slice(0, 24);
-      if (v) { playerName = v; localStorage.setItem(NAME_KEY, v); }
+      if (v) {
+        playerName = v;
+        localStorage.setItem(NAME_KEY, v);
+        syncServerName(v);
+      }
       modal.remove();
       maybeChainCountry(function() { cb && cb(); });
     }
     function skip() {
-      if (!playerName) { playerName = 'אנונימי'; }
+      if (!playerName && !isEdit) { playerName = 'אנונימי'; }
       modal.remove();
+      if (isEdit) { cb && cb(); return; }
       maybeChainCountry(function() { cb && cb(); });
     }
     document.getElementById('name-save').onclick = save;

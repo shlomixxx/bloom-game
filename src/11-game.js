@@ -763,7 +763,11 @@
         flagHtml = '<span class="lb-flag" title="' + (rowCc ? countryName(rowCc) : 'לא צוין') + '">' +
           (rowCc ? flagEmoji(rowCc) : '🏳️') + '</span>';
       }
-      return '<div class="lb-row' + rankClass + (isYou ? ' you' : '') + '">' +
+      // Challenge affordance — only on rows with a known BLOOM code and not "you".
+      var canChallenge = !isYou && row.player_code && /^BLOOM-[A-HJ-NP-Z2-9]{4}$/.test(row.player_code);
+      var rowExtra = canChallenge ? ' lb-row-challengeable" data-pcode="' + row.player_code + '" data-pname="' + escapeHtml(row.name || 'אנונימי') + '"' : '"';
+      var challengeBtn = canChallenge ? '<button class="lb-row-challenge" type="button" data-challenge title="אתגר ל-1v1">⚔️</button>' : '';
+      return '<div class="lb-row' + rankClass + (isYou ? ' you' : '') + rowExtra + '>' +
         '<div class="lb-rank">' + medal + '</div>' +
         renderAvatarHtml(seed, 'sm') +
         '<div style="flex:1;overflow:hidden">' +
@@ -771,9 +775,27 @@
           gapText +
         '</div>' +
         '<div class="lb-score">' + (row.score || 0).toLocaleString() + '</div>' +
+        challengeBtn +
       '</div>';
     }).join('');
     body.innerHTML = '<div class="lb-list">' + rows + '</div>';
+
+    // Delegated click handler — challenge a leaderboard row by tapping it or
+    // the ⚔️ button. Opens the duel modal with the suffix pre-filled.
+    var listEl = body.querySelector('.lb-list');
+    if (listEl) {
+      listEl.addEventListener('click', function(e) {
+        var rowEl = e.target.closest('.lb-row-challengeable');
+        if (!rowEl) return;
+        var code = rowEl.getAttribute('data-pcode') || '';
+        if (!code) return;
+        var suffix = code.replace(/^BLOOM-/, '');
+        closeLeaderboardModal();
+        if (typeof showDuelModal === 'function') {
+          setTimeout(function() { showDuelModal({ prefillSuffix: suffix }); }, 120);
+        }
+      });
+    }
 
     // Motivation footer
     if (footerEl) {
@@ -859,39 +881,63 @@
     setTimeout(function() { search && search.focus(); }, 50);
   }
 
-  function promptForName(cb) {
-    const wrap = document.getElementById('grid-wrap');
+  function promptForName(cb, opts) {
+    opts = opts || {};
+    const wrap = document.getElementById('grid-wrap') || document.body;
     if (!wrap || document.getElementById('name-modal')) { cb && cb(); return; }
     const modal = document.createElement('div');
     modal.id = 'name-modal';
     modal.className = 'info-modal';
+    const isEdit = !!opts.edit;
+    const prefillVal = (opts.prefill || (isEdit ? (playerName || '') : '')).replace(/"/g, '&quot;');
     modal.innerHTML =
       '<div class="info-card">' +
-        '<div class="info-title">איך לקרוא לך בטבלת המובילים?</div>' +
-        '<div class="info-sub">השם יישמר במכשיר ויופיע ליד התוצאה שלך.</div>' +
-        '<input class="name-input" id="name-input" autocapitalize="words" maxlength="24" placeholder="השם שלך" />' +
-        '<button class="btn" id="name-save">שמור והמשך</button>' +
-        '<button class="btn secondary" id="name-skip">דלג</button>' +
+        '<div class="info-title">' + (isEdit ? 'עריכת שם' : 'איך לקרוא לך בטבלת המובילים?') + '</div>' +
+        '<div class="info-sub">' + (isEdit ? 'השם יתעדכן בכל הטבלאות מיד.' : 'השם יישמר במכשיר ויופיע ליד התוצאה שלך.') + '</div>' +
+        '<input class="name-input" id="name-input" autocapitalize="words" maxlength="24" placeholder="השם שלך" value="' + prefillVal + '" />' +
+        '<button class="btn" id="name-save">שמור</button>' +
+        '<button class="btn secondary" id="name-skip">' + (isEdit ? 'בטל' : 'דלג') + '</button>' +
       '</div>';
     wrap.appendChild(modal);
     const input = document.getElementById('name-input');
-    setTimeout(function() { input && input.focus(); }, 50);
+    setTimeout(function() {
+      if (input) {
+        input.focus();
+        try { input.setSelectionRange(input.value.length, input.value.length); } catch (e) {}
+      }
+    }, 50);
     function maybeChainCountry(after) {
       // Only chain the flag picker on the very first name-pick (no stored
       // country yet). Returning users keep the picker behind the leaderboard
       // modal's "edit my flag" affordance — don't interrupt their flow.
+      if (isEdit) { after(); return; }
       if (!getCountry()) promptForCountry(after);
       else after();
     }
+    function syncServerName(name) {
+      if (!name || name === 'אנונימי') return;
+      try {
+        fetch(API_BASE + '/api/profile/name', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ deviceId: deviceId, name: name })
+        }).catch(function() {});
+      } catch (e) {}
+    }
     function save() {
       const v = (input.value || '').trim().slice(0, 24);
-      if (v) { playerName = v; localStorage.setItem(NAME_KEY, v); }
+      if (v) {
+        playerName = v;
+        localStorage.setItem(NAME_KEY, v);
+        syncServerName(v);
+      }
       modal.remove();
       maybeChainCountry(function() { cb && cb(); });
     }
     function skip() {
-      if (!playerName) { playerName = 'אנונימי'; }
+      if (!playerName && !isEdit) { playerName = 'אנונימי'; }
       modal.remove();
+      if (isEdit) { cb && cb(); return; }
       maybeChainCountry(function() { cb && cb(); });
     }
     document.getElementById('name-save').onclick = save;

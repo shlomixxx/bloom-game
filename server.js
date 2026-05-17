@@ -505,6 +505,16 @@ app.post('/api/score', async (req, res) => {
          WHERE daily_scores.score < EXCLUDED.score`,
       [date, deviceId, safeName, Math.floor(score), Math.floor(tier), safeCountry]
     );
+    // Keep player_profiles.display_name in sync so admin/duel/profile always
+    // shows the same name the player picked on the daily leaderboard.
+    if (safeName && safeName !== 'אנונימי') {
+      try {
+        await pool.query(
+          `UPDATE player_profiles SET display_name = $1 WHERE device_id = $2 AND (display_name IS NULL OR display_name <> $1)`,
+          [safeName, deviceId]
+        );
+      } catch (e) { /* profile may not exist yet for legacy devices */ }
+    }
     const rankRes = await pool.query(
       `SELECT 1 + (
          SELECT COUNT(*) FROM daily_scores
@@ -622,6 +632,34 @@ app.post('/api/profile/country', async (req, res) => {
   }
 });
 
+// POST /api/profile/name — let a player rename themselves from the home pill.
+// Writes the new name to player_profiles.display_name. The daily-score upsert
+// (POST /api/score) will re-sync on the next submission, so this gives an
+// immediate effect even before they play another game.
+app.post('/api/profile/name', async (req, res) => {
+  try {
+    const { deviceId, name } = req.body || {};
+    if (typeof deviceId !== 'string' || deviceId.length < 8 || deviceId.length > 64) {
+      return res.status(400).json({ error: 'bad_device' });
+    }
+    if (!checkRateLimit('profile:name', deviceId, 10, 60 * 60 * 1000)) {
+      return res.status(429).json({ error: 'rate_limited' });
+    }
+    const safe = cleanName(name);
+    if (!safe || safe === 'אנונימי') return res.status(400).json({ error: 'bad_name' });
+    try {
+      await pool.query(
+        `UPDATE player_profiles SET display_name = $1 WHERE device_id = $2`,
+        [safe, deviceId]
+      );
+    } catch (e) { /* profile row may not exist yet */ }
+    res.json({ ok: true, name: safe });
+  } catch (e) {
+    console.error('POST /api/profile/name', e);
+    res.status(500).json({ error: 'server' });
+  }
+});
+
 // POST /api/score/practice — non-daily best-per-difficulty leaderboard.
 // Practice and duel modes both flow through here. Daily scores DO NOT call
 // this (admin-controlled fairness); duel writes one row per participant.
@@ -718,13 +756,14 @@ app.get('/api/leaderboard/v2', async (req, res) => {
       const baseParams = [startDate, endDate, difficulty];
       listQ = {
         text:
-          `SELECT name, score, tier, device_id, country FROM (
+          `SELECT best.name, best.score, best.tier, best.device_id, best.country, pp.player_code FROM (
              SELECT DISTINCT ON (device_id) name, score, tier, device_id, country
              FROM difficulty_scores
              WHERE date >= $1 AND date <= $2 AND difficulty_label = $3
              ORDER BY device_id, score DESC, updated_at ASC
            ) best
-           ORDER BY score DESC LIMIT 50`,
+           LEFT JOIN player_profiles pp ON pp.device_id = best.device_id
+           ORDER BY best.score DESC LIMIT 50`,
         values: baseParams
       };
       totalQ = {
@@ -751,13 +790,14 @@ app.get('/api/leaderboard/v2', async (req, res) => {
       const baseParams = [startDate, endDate, viewerCountry];
       listQ = {
         text:
-          `SELECT name, score, tier, device_id, country FROM (
+          `SELECT best.name, best.score, best.tier, best.device_id, best.country, pp.player_code FROM (
              SELECT DISTINCT ON (device_id) name, score, tier, device_id, country
              FROM daily_scores
              WHERE date >= $1 AND date <= $2 AND country = $3
              ORDER BY device_id, score DESC, updated_at ASC
            ) best
-           ORDER BY score DESC LIMIT 50`,
+           LEFT JOIN player_profiles pp ON pp.device_id = best.device_id
+           ORDER BY best.score DESC LIMIT 50`,
         values: baseParams
       };
       totalQ = {
@@ -785,13 +825,14 @@ app.get('/api/leaderboard/v2', async (req, res) => {
       const baseParams = [startDate, endDate];
       listQ = {
         text:
-          `SELECT name, score, tier, device_id, country FROM (
+          `SELECT best.name, best.score, best.tier, best.device_id, best.country, pp.player_code FROM (
              SELECT DISTINCT ON (device_id) name, score, tier, device_id, country
              FROM daily_scores
              WHERE date >= $1 AND date <= $2
              ORDER BY device_id, score DESC, updated_at ASC
            ) best
-           ORDER BY score DESC LIMIT 50`,
+           LEFT JOIN player_profiles pp ON pp.device_id = best.device_id
+           ORDER BY best.score DESC LIMIT 50`,
         values: baseParams
       };
       totalQ = {
@@ -822,6 +863,7 @@ app.get('/api/leaderboard/v2', async (req, res) => {
       score: r.score,
       tier: r.tier,
       country: r.country || null,
+      player_code: r.player_code || null,
       you: !!(deviceId && r.device_id === deviceId)
     }));
     let rank = null;
@@ -2353,26 +2395,34 @@ if (ADMIN_PATH && ADMIN_PASSWORD) {
       let where = '';
       if (q) {
         params.push('%' + q + '%');
-        where = `WHERE name ILIKE $${params.length} OR device_id ILIKE $${params.length}`;
+        const i = params.length;
+        // Match on display name (daily_scores), device_id, player_code, or profile display_name
+        where = `WHERE ds.name ILIKE $${i} OR ds.device_id ILIKE $${i} OR pp.player_code ILIKE $${i} OR pp.display_name ILIKE $${i}`;
       }
       const rows = await pool.query(
         `SELECT
-           device_id,
-           MAX(name)              AS name,
-           COUNT(*)::int          AS games_played,
-           MAX(score)             AS best_score,
-           MAX(tier)              AS best_tier,
-           MIN(date)              AS first_played,
-           MAX(date)              AS last_played
-         FROM daily_scores
+           ds.device_id,
+           COALESCE(pp.display_name, MAX(ds.name)) AS name,
+           pp.player_code                          AS player_code,
+           pp.country                              AS country,
+           COUNT(*)::int                           AS games_played,
+           MAX(ds.score)                           AS best_score,
+           MAX(ds.tier)                            AS best_tier,
+           MIN(ds.date)                            AS first_played,
+           MAX(ds.date)                            AS last_played
+         FROM daily_scores ds
+         LEFT JOIN player_profiles pp ON pp.device_id = ds.device_id
          ${where}
-         GROUP BY device_id
+         GROUP BY ds.device_id, pp.display_name, pp.player_code, pp.country
          ORDER BY last_played DESC
          LIMIT $1 OFFSET $2`,
         params
       );
       const total = await pool.query(
-        `SELECT COUNT(DISTINCT device_id)::int AS c FROM daily_scores ${where}`,
+        `SELECT COUNT(DISTINCT ds.device_id)::int AS c
+         FROM daily_scores ds
+         LEFT JOIN player_profiles pp ON pp.device_id = ds.device_id
+         ${where}`,
         q ? [params[2]] : []
       );
       res.json({ ok: true, players: rows.rows, total: total.rows[0].c });
@@ -3012,20 +3062,6 @@ if (ADMIN_PATH && ADMIN_PASSWORD) {
       res.status(500).json({ error: 'server' });
     }
   });
-  // List all players with codes and balances
-  adminRouter.get('/api/players', async (_req, res) => {
-    try {
-      const r = await pool.query(
-        `SELECT p.device_id, p.player_code, p.display_name, p.balance, p.total_earned, p.total_spent,
-                p.referred_by, p.created_at, COALESCE(p.xp, 0) as xp, COALESCE(p.level, 1) as level,
-                (SELECT COUNT(*) FROM referrals WHERE referrer_device = p.device_id) as referral_count
-         FROM player_profiles p ORDER BY p.created_at DESC LIMIT 500`);
-      res.json({ ok: true, players: r.rows });
-    } catch (e) {
-      res.status(500).json({ error: 'server', msg: e.message });
-    }
-  });
-
   // Update player balance (set exact amount or add/subtract)
   adminRouter.post('/api/players/balance', async (req, res) => {
     const { deviceId, playerCode, amount, mode } = req.body || {};

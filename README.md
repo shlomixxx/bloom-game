@@ -76,7 +76,7 @@ The daily run is gated by `localStorage`; on a second visit the same day, the pl
 - **6 skin packs** — classic, neon, ocean, galaxy, candy, zen (with try-before-buy trial mode)
 - **Tile shop** — buy power-ups with BLOOM credits (💎)
 - **Credits/wallet system** — BLOOM-XXXX codes, referral credits, daily bonuses
-- **1v1 duels** — head-to-head matches with wagers
+- **1v1 duels** — head-to-head matches with wagers. Challenge by typing only the 4-char BLOOM suffix (the `BLOOM-` prefix is built in), pasting a full code, or tapping the ⚔️ button on any leaderboard row. Your own code is one tap away to copy at the top of the duel modal.
 - **Daily jackpot** — auto-settled at midnight Israel time
 - **XP leveling** — 11 levels with progression
 - **Server-side bots** — 200 Israeli names, 3 modes, 4 speeds, admin-controlled

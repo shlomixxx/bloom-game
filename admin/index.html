@@ -1057,6 +1057,12 @@
   function fmtDate(s) { if (!s) return '—'; return new Date(s).toLocaleDateString('he-IL'); }
   function fmtDateShort(s) { if (!s) return '—'; const d = new Date(s); return d.getDate() + '/' + (d.getMonth() + 1); }
   function fmtTime(s) { if (!s) return '—'; return new Date(s).toLocaleString('he-IL', { hour: '2-digit', minute: '2-digit', month: 'numeric', day: 'numeric' }); }
+  function flagEmoji(cc) {
+    if (!cc || typeof cc !== 'string' || cc.length !== 2) return '';
+    var up = cc.toUpperCase();
+    if (!/^[A-Z]{2}$/.test(up)) return '';
+    return String.fromCodePoint(0x1F1E6 + up.charCodeAt(0) - 65, 0x1F1E6 + up.charCodeAt(1) - 65);
+  }
 
   async function api(path, opts) {
     const res = await fetch(API + path, opts);
@@ -1476,11 +1482,14 @@
       return;
     }
     let html = '<table><thead><tr>' +
-      '<th>שם</th><th>device</th><th>משחקים</th><th>ניקוד שיא</th><th>tier שיא</th><th>שיחק לאחרונה</th><th></th>' +
+      '<th>BLOOM</th><th>שם</th><th>device</th><th>משחקים</th><th>ניקוד שיא</th><th>tier שיא</th><th>שיחק לאחרונה</th><th></th>' +
       '</tr></thead><tbody>';
     data.players.forEach(function(p) {
+      var code = p.player_code ? escHtml(p.player_code) : '<span class="muted">—</span>';
+      var flag = p.country ? flagEmoji(p.country) + ' ' : '';
       html += '<tr>' +
-        '<td>' + escHtml(p.name) + '</td>' +
+        '<td style="font-family:ui-monospace,monospace;font-weight:700;font-size:11px;letter-spacing:0.05em">' + code + '</td>' +
+        '<td>' + flag + escHtml(p.name || 'אנונימי') + '</td>' +
         '<td class="right">' + escHtml(String(p.device_id).slice(0, 14)) + '…</td>' +
         '<td>' + fmtNum(p.games_played) + '</td>' +
         '<td><strong>' + fmtNum(p.best_score) + '</strong></td>' +

@@ -1339,6 +1339,14 @@
     font-size: 12px; color: #A8A6A0; direction: ltr;
   }
   .pid-code { font-weight: 700; letter-spacing: 0.08em; color: #6F6E68; }
+  .pid-name { font-weight: 600; color: #1C1A18; direction: rtl; }
+  .pid-edit-name {
+    background: transparent; border: 1px solid rgba(0,0,0,0.08);
+    border-radius: 6px; padding: 1px 5px; font-size: 11px; line-height: 1;
+    cursor: pointer; color: #6F6E68; margin: 0 2px;
+    font-family: inherit;
+  }
+  .pid-edit-name:hover { background: rgba(0,0,0,0.04); color: #1C1A18; }
   .pid-balance { font-weight: 700; color: #BA7517; }
   .pid-profile-link {
     display: block; margin-top: 4px;
@@ -1347,7 +1355,29 @@
   }
   .pid-profile-link:hover { text-decoration: underline; }
   html[data-theme="dark"] .pid-code { color: #8E8A82; }
+  html[data-theme="dark"] .pid-name { color: #F2EDE3; }
+  html[data-theme="dark"] .pid-edit-name { color: #A8A6A0; border-color: rgba(255,255,255,0.1); }
+  html[data-theme="dark"] .pid-edit-name:hover { background: rgba(255,255,255,0.05); color: #F2EDE3; }
   html[data-theme="dark"] .pid-profile-link { color: #FAC775; }
+
+  /* Leaderboard challenge button — only appears on rows with a known BLOOM code */
+  .lb-row-challengeable { cursor: pointer; }
+  .lb-row-challengeable:hover { background: rgba(250, 199, 117, 0.08); }
+  .lb-row-challenge {
+    background: #1C1A18; color: #FAC775; border: 0;
+    border-radius: 6px; padding: 4px 8px; font-size: 13px; line-height: 1;
+    cursor: pointer; margin-right: 6px; font-family: inherit;
+    transition: transform 0.1s ease;
+  }
+  .lb-row-challenge:hover { transform: scale(1.08); }
+  .lb-row-challenge:active { transform: scale(0.95); }
+  html[data-theme="dark"] .lb-row-challengeable:hover { background: rgba(250, 199, 117, 0.06); }
+
+  /* Duel modal: split code input layout (pill prefix + suffix input) */
+  .duel-code-input:focus-within {
+    border-color: #FAC775;
+    box-shadow: 0 0 0 3px rgba(250, 199, 117, 0.2);
+  }
 
   /* Skin trial banner */
   .skin-trial-banner {
