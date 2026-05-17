@@ -702,6 +702,27 @@
       // Music tempo: speed up as board fills (Tetris style)
       updateMusicTempo(filledRows);
     }
+    // Ghost piece: show where next tile will land (on every column)
+    if (!opts.over && typeof nextPiece !== 'undefined' && nextPiece > 0 && !busy) {
+      var ti = getActiveTiers()[nextPiece];
+      if (ti) {
+        for (var gc = 0; gc < getBoardCols(); gc++) {
+          // Find bottom-most empty cell in this column
+          var ghostRow = -1;
+          for (var gr = getBoardRows() - 1; gr >= 0; gr--) {
+            if (grid[gr][gc] === 0) { ghostRow = gr; break; }
+          }
+          if (ghostRow >= 0) {
+            var gIdx = ghostRow * getBoardCols() + gc;
+            var gCell = gridEl.children[gIdx];
+            if (gCell && !gCell.classList.contains('filled')) {
+              gCell.classList.add('ghost-piece');
+              gCell.style.setProperty('--ghost-bg', ti.bg);
+            }
+          }
+        }
+      }
+    }
     // Challenge-mode visual: pin the prize chip over the grid + hide the reset
     // button (which would otherwise let the player rage-restart their only attempt).
     const resetEl = document.getElementById('reset');
