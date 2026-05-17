@@ -718,3 +718,41 @@
     border: 2px solid #9B8AE8 !important;
   }
   @keyframes targetPulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.12); } }
+
+  /* ── Enhanced merge: pulse ripple ── */
+  .cell.merging {
+    animation: mergePulse 0.35s ease-out !important;
+  }
+  @keyframes mergePulse {
+    0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(250,199,117,0.6); }
+    40% { transform: scale(1.3); box-shadow: 0 0 0 8px rgba(250,199,117,0.2); }
+    100% { transform: scale(1); box-shadow: 0 0 0 16px rgba(250,199,117,0); }
+  }
+
+  /* ── Confetti (CSS-only particles for celebrations) ── */
+  .confetti-host {
+    position: fixed; inset: 0; z-index: 9998; pointer-events: none; overflow: hidden;
+  }
+  .confetti-piece {
+    position: absolute; width: 8px; height: 8px; border-radius: 2px;
+    animation: confettiFall 1.5s ease-in forwards;
+    opacity: 0.9;
+  }
+  @keyframes confettiFall {
+    0% { transform: translateY(-20px) rotate(0deg) scale(1); opacity: 1; }
+    100% { transform: translateY(100vh) rotate(720deg) scale(0.3); opacity: 0; }
+  }
+
+  /* ── Combo counter (persistent during chains) ── */
+  .combo-counter {
+    position: fixed; top: 50%; right: 12px; transform: translateY(-50%);
+    z-index: 80; pointer-events: none;
+    background: linear-gradient(135deg, #EF9F27, #E8730C);
+    color: #412402; font-weight: 900; font-size: 20px;
+    padding: 8px 14px; border-radius: 14px;
+    box-shadow: 0 4px 16px rgba(239,159,39,0.4);
+    animation: comboPop 0.2s ease-out;
+    text-align: center; direction: ltr;
+  }
+  .combo-counter .combo-mult { font-size: 12px; display: block; }
+  @keyframes comboPop { 0% { transform: translateY(-50%) scale(0.7); } 100% { transform: translateY(-50%) scale(1); } }

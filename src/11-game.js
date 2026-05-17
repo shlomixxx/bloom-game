@@ -680,6 +680,7 @@
     banner.innerHTML = '<div style="font-size:22px;font-weight:800">💥 Crown Merge! 👑</div><div style="font-size:32px;font-weight:900;margin-top:4px">+50,000</div><div style="font-size:12px;color:#BA7517;margin-top:4px">שורה נמחקה!</div>';
     document.body.appendChild(banner);
     requestAnimationFrame(function() { banner.style.transform = 'translate(-50%,-50%) scale(1)'; banner.style.opacity = '1'; });
+    showConfetti(40);
     setTimeout(function() { banner.style.opacity = '0'; banner.style.transform = 'translate(-50%,-60%) scale(0.9)'; }, 1500);
     setTimeout(function() { banner.remove(); }, 2000);
     // Flash grid row gold + scale
@@ -918,6 +919,7 @@
               const m = chainCount === 2 ? '1.5' : chainCount === 3 ? '2' : chainCount === 4 ? '2.5' : '3';
               showChainBadge(chainCount, m);
               soundChain(chainCount);
+              showComboCounter(chainCount, m);
             }
             break outer;
           }
@@ -1032,6 +1034,7 @@
     ensureAudio();
     playMusic('game');
     soundDrop();
+    if (!isSfxMuted()) buzz([8]); // subtle haptic on every drop
     if (!streakBumpedThisSession) {
       bumpStreak();
       streakBumpedThisSession = true;

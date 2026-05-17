@@ -1427,6 +1427,7 @@
     banner.innerHTML = '<div style="font-size:22px;font-weight:800;color:#1C1A18">🎉 שיא חדש!</div><div style="font-size:28px;font-weight:900;color:#412402;margin-top:4px">' + score.toLocaleString() + '</div>';
     document.body.appendChild(banner);
     buzz([80, 40, 80, 40, 80]);
+    showConfetti(25);
     var bestShake = parseInt(getEventConfig('shake_new_best', '4'), 10) || 0;
     if (bestShake > 0) shakeGrid(bestShake);
     setTimeout(function() { banner.style.transition = 'opacity 0.3s'; banner.style.opacity = '0'; }, 1500);
@@ -5615,6 +5616,7 @@
     banner.innerHTML = '<div style="font-size:22px;font-weight:800">💥 Crown Merge! 👑</div><div style="font-size:32px;font-weight:900;margin-top:4px">+50,000</div><div style="font-size:12px;color:#BA7517;margin-top:4px">שורה נמחקה!</div>';
     document.body.appendChild(banner);
     requestAnimationFrame(function() { banner.style.transform = 'translate(-50%,-50%) scale(1)'; banner.style.opacity = '1'; });
+    showConfetti(40);
     setTimeout(function() { banner.style.opacity = '0'; banner.style.transform = 'translate(-50%,-60%) scale(0.9)'; }, 1500);
     setTimeout(function() { banner.remove(); }, 2000);
     // Flash grid row gold + scale
@@ -5853,6 +5855,7 @@
               const m = chainCount === 2 ? '1.5' : chainCount === 3 ? '2' : chainCount === 4 ? '2.5' : '3';
               showChainBadge(chainCount, m);
               soundChain(chainCount);
+              showComboCounter(chainCount, m);
             }
             break outer;
           }
@@ -5967,6 +5970,7 @@
     ensureAudio();
     playMusic('game');
     soundDrop();
+    if (!isSfxMuted()) buzz([8]); // subtle haptic on every drop
     if (!streakBumpedThisSession) {
       bumpStreak();
       streakBumpedThisSession = true;
@@ -7535,6 +7539,7 @@
       amount = jpAmount;
       showEventBanner('🎁 JACKPOT!!!', '+' + amount + ' 💎', 'gift-jackpot');
       buzz([80, 40, 80, 40, 80, 40, 80]);
+      showConfetti(35);
     } else {
       amount = minC + Math.floor(Math.random() * (maxC - minC + 1));
       showEventBanner('🎁 מתנה!', '+' + amount + ' 💎', 'gift');
@@ -7727,5 +7732,58 @@
         }, 500);
       }
     }, 1000);
+  }
+
+  // ============================================================
+  // CONFETTI — CSS-only particles for celebrations
+  // ============================================================
+  var CONFETTI_COLORS = ['#FAC775','#EF9F27','#FF6B35','#C8472F','#9B8AE8','#2E8B6F','#4ECDC4','#F4C0D1'];
+
+  function showConfetti(count) {
+    count = count || 30;
+    var host = document.createElement('div');
+    host.className = 'confetti-host';
+    for (var i = 0; i < count; i++) {
+      var p = document.createElement('div');
+      p.className = 'confetti-piece';
+      p.style.left = (Math.random() * 100) + '%';
+      p.style.background = CONFETTI_COLORS[Math.floor(Math.random() * CONFETTI_COLORS.length)];
+      p.style.animationDelay = (Math.random() * 0.5) + 's';
+      p.style.animationDuration = (1 + Math.random() * 1) + 's';
+      p.style.width = (4 + Math.random() * 8) + 'px';
+      p.style.height = (4 + Math.random() * 6) + 'px';
+      host.appendChild(p);
+    }
+    document.body.appendChild(host);
+    setTimeout(function() { host.remove(); }, 2500);
+  }
+
+  // ============================================================
+  // COMBO COUNTER — persistent chain display during gameplay
+  // ============================================================
+  var comboEl = null;
+  var comboTimeout = null;
+
+  function showComboCounter(chainCount, multiplier) {
+    if (chainCount < 2) return;
+    if (comboTimeout) clearTimeout(comboTimeout);
+
+    if (!comboEl) {
+      comboEl = document.createElement('div');
+      comboEl.className = 'combo-counter';
+      document.body.appendChild(comboEl);
+    }
+    comboEl.innerHTML = '🔥 ×' + chainCount + '<span class="combo-mult">×' + multiplier.toFixed(1) + '</span>';
+    comboEl.style.animation = 'none';
+    void comboEl.offsetWidth;
+    comboEl.style.animation = 'comboPop 0.2s ease-out';
+    // Scale up for bigger chains
+    comboEl.style.fontSize = Math.min(20 + chainCount * 3, 36) + 'px';
+
+    comboTimeout = setTimeout(function() {
+      if (comboEl && comboEl.parentNode) comboEl.remove();
+      comboEl = null;
+      comboTimeout = null;
+    }, 1500);
   }
 })();
