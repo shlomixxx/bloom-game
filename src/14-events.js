@@ -717,7 +717,16 @@
       comboEl.className = 'combo-counter';
       document.body.appendChild(comboEl);
     }
-    comboEl.innerHTML = '🔥 ×' + chainCount + '<span class="combo-mult">×' + multiplier.toFixed(1) + '</span>';
+    // multiplier can arrive as a string ('1.5', '2', '2.5', '3') from the
+    // call site in src/11-game.js. Coerce to a Number for .toFixed(). The
+    // string-multiplier path threw TypeError, which propagated out of the
+    // merge logic and SKIPPED the trailing [merge] log + applyGravity() —
+    // leaving a floating tile that the render-time invariant had to
+    // auto-heal. Tracked down by user-supplied [merge-early] vs missing
+    // [merge] log evidence.
+    var multNum = Number(multiplier);
+    if (!Number.isFinite(multNum)) multNum = 1;
+    comboEl.innerHTML = '🔥 ×' + chainCount + '<span class="combo-mult">×' + multNum.toFixed(1) + '</span>';
     comboEl.style.animation = 'none';
     comboEl.style.opacity = '1';
     void comboEl.offsetWidth;

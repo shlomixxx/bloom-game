@@ -1307,21 +1307,30 @@
             mergeSize = group.length;
             // Update anchor to last merge position — chain reactions follow the flow
             anchorRow = kr; anchorCol = kc;
-            showFloatingScore(kr, kc, points, chainCount);
-            bumpScore();
-            soundMerge(nt);
-            checkScoreMilestones();
-            if (group.length >= 3) showMultiMergeBadge(group.length);
-            if (chainCount > currentGameMaxChain) currentGameMaxChain = chainCount;
-            bumpLifetimeMax(BEST_CHAIN_KEY, chainCount);
-            // Onboarding: first merge → step 2; first chain (≥2) → step 3.
-            if (chainCount === 1) maybeOnboardStep2();
-            else if (chainCount >= 2) maybeOnboardStep3();
-            if (chainCount >= 2) {
-              const m = chainCount === 2 ? '1.5' : chainCount === 3 ? '2' : chainCount === 4 ? '2.5' : '3';
-              showChainBadge(chainCount, m);
-              soundChain(chainCount);
-              showComboCounter(chainCount, m);
+            // SIDE EFFECTS (UI + audio + stats) — wrapped in try/catch so a
+            // single broken DOM/audio call CAN'T derail the merge loop. Before
+            // this guard, a TypeError inside showComboCounter (string vs Number)
+            // skipped the trailing [merge] log + applyGravity, leaving a floating
+            // tile that the render-time invariant had to clean up after the fact.
+            try {
+              showFloatingScore(kr, kc, points, chainCount);
+              bumpScore();
+              soundMerge(nt);
+              checkScoreMilestones();
+              if (group.length >= 3) showMultiMergeBadge(group.length);
+              if (chainCount > currentGameMaxChain) currentGameMaxChain = chainCount;
+              bumpLifetimeMax(BEST_CHAIN_KEY, chainCount);
+              // Onboarding: first merge → step 2; first chain (≥2) → step 3.
+              if (chainCount === 1) maybeOnboardStep2();
+              else if (chainCount >= 2) maybeOnboardStep3();
+              if (chainCount >= 2) {
+                const m = chainCount === 2 ? 1.5 : chainCount === 3 ? 2 : chainCount === 4 ? 2.5 : 3;
+                showChainBadge(chainCount, m);
+                soundChain(chainCount);
+                showComboCounter(chainCount, m);
+              }
+            } catch (sideEffectErr) {
+              if (window.__bloomEngineLog) console.warn('[merge] side-effect failed (ignored)', sideEffectErr);
             }
             break outer;
           }
