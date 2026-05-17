@@ -158,6 +158,7 @@
     render();
     playMusic('game');
     ensureAudio();
+    startEventSystem();
     trackEvent('duel_start', { duelId: duelId });
   }
 
