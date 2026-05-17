@@ -349,7 +349,12 @@
       // board reads as a horizontal mirror of what the opponent actually sees.
       '<div class="dspec-grid" style="direction:ltr;display:grid;grid-template-columns:repeat(' + COLS + ',1fr);gap:3px;background:#0E0D0C;padding:6px;border-radius:8px;max-width:200px;margin:0 auto">' + cellsHtml + '</div>' +
       '<style>' +
-        '.dspec-cell{aspect-ratio:1;background:#2A2724;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:14px}' +
+        '.dspec-cell{aspect-ratio:1;background:#2A2724;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:14px;overflow:hidden}' +
+        // Tier SVGs have viewBox but no width/height. Without explicit sizing
+        // they fall back to UA-default ~300×150 and either overflow or render
+        // invisibly — leaving cells looking like plain coloured squares. 65%
+        // of the cell matches the main game ratio.
+        '.dspec-cell svg{width:65%;height:65%;display:block}' +
         '@keyframes dspecPulse{0%,100%{opacity:1}50%{opacity:0.3}}' +
       '</style>';
     // Insert before the "Play Again" button — last child of card.
