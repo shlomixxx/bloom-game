@@ -549,9 +549,12 @@ app.post('/api/score', async (req, res) => {
   }
 });
 
-app.get('/api/leaderboard/:date', async (req, res) => {
+app.get('/api/leaderboard/:date', async (req, res, next) => {
   try {
     const date = req.params.date;
+    // Express matches /v2 against this :date param. Fall through to the
+    // more-specific handlers (v2, range/:period) instead of 400'ing.
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return next();
     if (!isValidDate(date)) return res.status(400).json({ error: 'bad_date' });
     const deviceId = String(req.query.deviceId || '').slice(0, 64);
     const rows = await pool.query(
