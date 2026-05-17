@@ -234,6 +234,15 @@
     if (!currentTrack) return;
     setTrackLevel(currentTrack, isMusicMuted() ? 0 : musicVolume);
   }
+  // Tetris-style music tempo: speed up as board fills
+  function updateMusicTempo(filledRows) {
+    var t = MUSIC_TRACKS.game;
+    if (!t || !t.source || !t.source.playbackRate) return;
+    // 0 rows = ×1.0, 3 rows = ×1.1, 5 rows = ×1.25, 6 rows = ×1.35
+    var maxRows = 6;
+    var rate = 1.0 + (Math.min(filledRows, maxRows) / maxRows) * 0.35;
+    try { t.source.playbackRate.value = rate; } catch(e) {}
+  }
   function tone(opts) {
     if (isSfxMuted()) return;
     const c = ensureAudio();

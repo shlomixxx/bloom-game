@@ -1126,6 +1126,15 @@
     if (!currentTrack) return;
     setTrackLevel(currentTrack, isMusicMuted() ? 0 : musicVolume);
   }
+  // Tetris-style music tempo: speed up as board fills
+  function updateMusicTempo(filledRows) {
+    var t = MUSIC_TRACKS.game;
+    if (!t || !t.source || !t.source.playbackRate) return;
+    // 0 rows = ×1.0, 3 rows = ×1.1, 5 rows = ×1.25, 6 rows = ×1.35
+    var maxRows = 6;
+    var rate = 1.0 + (Math.min(filledRows, maxRows) / maxRows) * 0.35;
+    try { t.source.playbackRate.value = rate; } catch(e) {}
+  }
   function tone(opts) {
     if (isSfxMuted()) return;
     const c = ensureAudio();
@@ -5576,7 +5585,7 @@
     fl.style.left = cellRect.left + cellRect.width / 2 + 'px';
     fl.style.top = cellRect.top + 'px';
     document.body.appendChild(fl);
-    setTimeout(function() { fl.remove(); }, 900);
+    setTimeout(function() { fl.remove(); }, 1100);
   }
 
   function showChainBadge(chainCount, multiplier) {
@@ -6862,6 +6871,8 @@
         cell.className = 'cell';
         if (t > 0) {
           cell.classList.add('filled');
+          if (t >= 5 && t < MAX_TIER) cell.classList.add('tier-high');
+          if (t === MAX_TIER) cell.classList.add('tier-crown');
           const ti = getActiveTiers()[t];
           cell.style.background = ti.bg;
           cell.style.color = ti.fg;
@@ -6877,6 +6888,14 @@
         })(r, c);
         gridEl.appendChild(cell);
       }
+    }
+    // Near-death warning: red glow when board is almost full
+    if (!opts.over) {
+      var filledRows = countFilledRows();
+      if (filledRows >= 4) gridEl.classList.add('near-death');
+      else gridEl.classList.remove('near-death');
+      // Music tempo: speed up as board fills (Tetris style)
+      updateMusicTempo(filledRows);
     }
     // Challenge-mode visual: pin the prize chip over the grid + hide the reset
     // button (which would otherwise let the player rage-restart their only attempt).
@@ -7386,15 +7405,25 @@
     };
 
     renderEventOnCell(activeEvent);
+    // Sound: "ding!" when event appears
+    if (!isSfxMuted()) {
+      tone({ freq: 880, duration: 0.08, type: 'sine', vol: 0.06 });
+      setTimeout(function() { tone({ freq: 1100, duration: 0.06, type: 'sine', vol: 0.05 }); }, 80);
+    }
 
-    // Countdown
+    // Countdown + near-expiry vibration
+    var warnedExpiry = false;
     activeEvent.interval = setInterval(function() {
       if (!activeEvent) return;
       var elapsed = (Date.now() - activeEvent.startTime) / 1000;
       activeEvent.timer = Math.max(0, activeEvent.maxTimer - elapsed);
       updateEventTimer(activeEvent);
+      // Vibrate warning at 25% time remaining
+      if (!warnedExpiry && activeEvent.timer < activeEvent.maxTimer * 0.25 && activeEvent.timer > 0) {
+        warnedExpiry = true;
+        if (!isSfxMuted()) buzz([20, 30, 20]);
+      }
       if (activeEvent.timer <= 0) {
-        // Expired!
         clearActiveEvent();
         lastEventTime = Date.now();
       }
@@ -7792,9 +7821,12 @@
     comboEl.style.fontSize = Math.min(20 + chainCount * 3, 36) + 'px';
 
     comboTimeout = setTimeout(function() {
-      if (comboEl && comboEl.parentNode) comboEl.remove();
-      comboEl = null;
+      if (comboEl && comboEl.parentNode) {
+        comboEl.style.transition = 'opacity 0.3s';
+        comboEl.style.opacity = '0';
+        setTimeout(function() { if (comboEl) { comboEl.remove(); comboEl = null; } }, 300);
+      }
       comboTimeout = null;
-    }, 1500);
+    }, 3000);
   }
 })();

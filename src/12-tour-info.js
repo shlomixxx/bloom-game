@@ -676,6 +676,8 @@
         cell.className = 'cell';
         if (t > 0) {
           cell.classList.add('filled');
+          if (t >= 5 && t < MAX_TIER) cell.classList.add('tier-high');
+          if (t === MAX_TIER) cell.classList.add('tier-crown');
           const ti = getActiveTiers()[t];
           cell.style.background = ti.bg;
           cell.style.color = ti.fg;
@@ -691,6 +693,14 @@
         })(r, c);
         gridEl.appendChild(cell);
       }
+    }
+    // Near-death warning: red glow when board is almost full
+    if (!opts.over) {
+      var filledRows = countFilledRows();
+      if (filledRows >= 4) gridEl.classList.add('near-death');
+      else gridEl.classList.remove('near-death');
+      // Music tempo: speed up as board fills (Tetris style)
+      updateMusicTempo(filledRows);
     }
     // Challenge-mode visual: pin the prize chip over the grid + hide the reset
     // button (which would otherwise let the player rage-restart their only attempt).

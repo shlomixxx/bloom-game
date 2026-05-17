@@ -640,7 +640,7 @@
     fl.style.left = cellRect.left + cellRect.width / 2 + 'px';
     fl.style.top = cellRect.top + 'px';
     document.body.appendChild(fl);
-    setTimeout(function() { fl.remove(); }, 900);
+    setTimeout(function() { fl.remove(); }, 1100);
   }
 
   function showChainBadge(chainCount, multiplier) {

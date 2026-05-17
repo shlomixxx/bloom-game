@@ -190,15 +190,25 @@
     };
 
     renderEventOnCell(activeEvent);
+    // Sound: "ding!" when event appears
+    if (!isSfxMuted()) {
+      tone({ freq: 880, duration: 0.08, type: 'sine', vol: 0.06 });
+      setTimeout(function() { tone({ freq: 1100, duration: 0.06, type: 'sine', vol: 0.05 }); }, 80);
+    }
 
-    // Countdown
+    // Countdown + near-expiry vibration
+    var warnedExpiry = false;
     activeEvent.interval = setInterval(function() {
       if (!activeEvent) return;
       var elapsed = (Date.now() - activeEvent.startTime) / 1000;
       activeEvent.timer = Math.max(0, activeEvent.maxTimer - elapsed);
       updateEventTimer(activeEvent);
+      // Vibrate warning at 25% time remaining
+      if (!warnedExpiry && activeEvent.timer < activeEvent.maxTimer * 0.25 && activeEvent.timer > 0) {
+        warnedExpiry = true;
+        if (!isSfxMuted()) buzz([20, 30, 20]);
+      }
       if (activeEvent.timer <= 0) {
-        // Expired!
         clearActiveEvent();
         lastEventTime = Date.now();
       }
@@ -596,8 +606,11 @@
     comboEl.style.fontSize = Math.min(20 + chainCount * 3, 36) + 'px';
 
     comboTimeout = setTimeout(function() {
-      if (comboEl && comboEl.parentNode) comboEl.remove();
-      comboEl = null;
+      if (comboEl && comboEl.parentNode) {
+        comboEl.style.transition = 'opacity 0.3s';
+        comboEl.style.opacity = '0';
+        setTimeout(function() { if (comboEl) { comboEl.remove(); comboEl = null; } }, 300);
+      }
       comboTimeout = null;
-    }, 1500);
+    }, 3000);
   }
