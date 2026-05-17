@@ -601,6 +601,7 @@
           render();
           showEventBanner('💪 חיים נוספים!', 'המשך לשחק!', 'continue');
           shakeGrid(3);
+          if (mode === 'practice') savePracticeGameState();
         });
       };
       if (continuePayBtn) continuePayBtn.onclick = function() {
@@ -627,6 +628,7 @@
             render();
             showEventBanner('💪 חיים נוספים!', 'המשך לשחק!', 'continue');
             shakeGrid(3);
+            if (mode === 'practice') savePracticeGameState();
           } else {
             continuePayBtn.textContent = 'אין מספיק 💎';
           }

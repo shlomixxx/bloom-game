@@ -3413,6 +3413,7 @@
         pointsPerTier: gamePointsPerTier,
         totalMerges: gameTotalMerges,
         startTime: gameStartTime,
+        usedContinue: usedContinue,
         ts: Date.now()
       }));
     } catch (e) {}
@@ -5074,6 +5075,7 @@
           gamePointsPerTier = saved.pointsPerTier || {};
           gameTotalMerges = saved.totalMerges || 0;
           if (saved.startTime) gameStartTime = saved.startTime;
+          usedContinue = saved.usedContinue || false;
           if (saved.nextPiece) {
             nextPiece = saved.nextPiece;
             restoredContestState = true; // reuse flag to skip pickPiece
@@ -6799,6 +6801,7 @@
           render();
           showEventBanner('💪 חיים נוספים!', 'המשך לשחק!', 'continue');
           shakeGrid(3);
+          if (mode === 'practice') savePracticeGameState();
         });
       };
       if (continuePayBtn) continuePayBtn.onclick = function() {
@@ -6825,6 +6828,7 @@
             render();
             showEventBanner('💪 חיים נוספים!', 'המשך לשחק!', 'continue');
             shakeGrid(3);
+            if (mode === 'practice') savePracticeGameState();
           } else {
             continuePayBtn.textContent = 'אין מספיק 💎';
           }

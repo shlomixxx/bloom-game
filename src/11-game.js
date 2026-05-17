@@ -129,6 +129,7 @@
           gamePointsPerTier = saved.pointsPerTier || {};
           gameTotalMerges = saved.totalMerges || 0;
           if (saved.startTime) gameStartTime = saved.startTime;
+          usedContinue = saved.usedContinue || false;
           if (saved.nextPiece) {
             nextPiece = saved.nextPiece;
             restoredContestState = true; // reuse flag to skip pickPiece

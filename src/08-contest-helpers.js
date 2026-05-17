@@ -188,6 +188,7 @@
         pointsPerTier: gamePointsPerTier,
         totalMerges: gameTotalMerges,
         startTime: gameStartTime,
+        usedContinue: usedContinue,
         ts: Date.now()
       }));
     } catch (e) {}
