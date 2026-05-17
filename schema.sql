@@ -456,3 +456,22 @@ INSERT INTO game_config (key, value) VALUES ('contest_alert_shake_first', '4') O
 INSERT INTO game_config (key, value) VALUES ('contest_alert_shake_leader', '2') ON CONFLICT (key) DO NOTHING;
 INSERT INTO game_config (key, value) VALUES ('contest_alert_gap_pct', '0.1') ON CONFLICT (key) DO NOTHING;
 INSERT INTO game_config (key, value) VALUES ('contest_alert_gap_max', '5000') ON CONFLICT (key) DO NOTHING;
+
+-- Monetization config
+INSERT INTO game_config (key, value) VALUES ('continue_price', '200') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('ad_watch_reward', '30') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('ad_cooldown_seconds', '30') ON CONFLICT (key) DO NOTHING;
+
+-- Economy rebalance (UPDATE existing values for production)
+UPDATE game_config SET value = '15' WHERE key = 'daily_login_reward' AND value = '25';
+UPDATE game_config SET value = '5' WHERE key = 'daily_reward' AND value = '10';
+UPDATE game_config SET value = '2' WHERE key = 'event_gift_credits_min' AND value = '5';
+UPDATE game_config SET value = '10' WHERE key = 'event_gift_credits_max' AND value = '50';
+UPDATE game_config SET value = '100' WHERE key = 'event_gift_jackpot_amount' AND value = '500';
+UPDATE game_config SET value = '300' WHERE key = 'tile_price_8' AND value = '150';
+UPDATE game_config SET value = '150' WHERE key = 'tile_price_7' AND value = '80';
+UPDATE game_config SET value = '100' WHERE key = 'tile_price_6' AND value = '50';
+UPDATE game_config SET value = '200' WHERE key = 'powerup_price_choose_row' AND value = '100';
+UPDATE game_config SET value = '120' WHERE key = 'powerup_price_random_row' AND value = '60';
+UPDATE game_config SET value = '80' WHERE key = 'powerup_price_choose_tile' AND value = '40';
+UPDATE game_config SET value = '30' WHERE key = 'powerup_price_random_tile' AND value = '15';

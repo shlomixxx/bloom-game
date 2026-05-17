@@ -1418,6 +1418,7 @@
   let gameTotalMerges = 0;    // total merge events
   let gameStartTime = 0;      // Date.now() when game started
   let bestBeatenThisGame = false; // live best tracking
+  let usedContinue = false;       // second chance (once per game)
   const TOTAL_PLAY_TIME_KEY = 'bloom_total_play_ms';
 
   function showNewBestBanner() {
@@ -4943,6 +4944,7 @@
     tierUpHit = {};   // reset milestone-bonus tracker for this fresh game
     scoreMilestonesHit = {}; // reset score milestones
     bestBeatenThisGame = false; // reset live best tracking
+    usedContinue = false; // reset second chance
     gameMergesPerTier = {};
     gamePointsPerTier = {};
     gameBestMergeTier = 0;
@@ -5633,12 +5635,12 @@
 
   // Score milestone celebrations during gameplay
   var SCORE_MILESTONES = [
-    { at: 10000,  label: '🔥 10K!',  reward: 5 },
-    { at: 25000,  label: '⚡ 25K!',  reward: 10 },
-    { at: 50000,  label: '⭐ 50K!',  reward: 20 },
-    { at: 100000, label: '💎 100K!', reward: 50 },
-    { at: 200000, label: '👑 200K!', reward: 100 },
-    { at: 500000, label: '🌟 500K!', reward: 250 }
+    { at: 10000,  label: '🔥 10K!',  reward: 2 },
+    { at: 25000,  label: '⚡ 25K!',  reward: 3 },
+    { at: 50000,  label: '⭐ 50K!',  reward: 5 },
+    { at: 100000, label: '💎 100K!', reward: 10 },
+    { at: 200000, label: '👑 200K!', reward: 20 },
+    { at: 500000, label: '🌟 500K!', reward: 50 }
   ];
   var scoreMilestonesHit = {};
 
@@ -6616,6 +6618,21 @@
         }
       }
 
+      // Second chance: continue playing (once per game)
+      var continuePrice = getEventNum('continue_price', 200);
+      var canContinue = !opts.alreadyPlayed && !usedContinue && score > 5000 && mode !== 'challenge';
+      var continueHtml = '';
+      if (canContinue) {
+        continueHtml =
+          '<div style="display:flex;gap:8px;justify-content:center;margin:10px 0">' +
+            '<button class="btn" id="continue-ad" style="background:#2E8B6F;color:#FFF;padding:10px 18px;font-size:13px;border-radius:12px;font-weight:700">▶️ צפה בפרסומת והמשך</button>' +
+            '<button class="btn" id="continue-pay" style="background:transparent;border:1px solid #BA7517;color:#BA7517;padding:10px 14px;font-size:12px;border-radius:12px;font-weight:600">' + continuePrice + '💎 המשך</button>' +
+          '</div>';
+      }
+      // Watch ad for credits (always available)
+      var adCredits = getEventNum('ad_watch_reward', 30);
+      var watchAdHtml = '<button class="btn" id="watch-ad-btn" style="background:transparent;border:1px solid #2E8B6F;color:#2E8B6F;padding:8px 16px;font-size:12px;border-radius:10px;margin-top:6px;font-weight:600">▶️ צפה בפרסומת וקבל ' + adCredits + '💎</button>';
+
       wrap.innerHTML =
         '<div class="overlay">' +
           '<div class="over-title">' + title + '</div>' +
@@ -6623,8 +6640,10 @@
           '<div class="over-sub">הגעת ל' + getActiveTiers()[highestTier].name + ' · ' + highestTier + '/' + MAX_TIER + ' דרגות</div>' +
           (dailyRank ? '<div class="lb-rank-pill">המקום שלך היום: #' + dailyRank + '</div>' : '') +
           rivalHtml +
-          // PRIMARY CTA — right after score, not buried at bottom
+          continueHtml +
+          // PRIMARY CTA — right after score
           '<button class="btn over-again-btn" id="again">' + againLabel + '</button>' +
+          watchAdHtml +
           (function() {
             if (mode !== 'daily' && mode !== 'practice') return '';
             var s = loadStreak();
@@ -6735,6 +6754,70 @@
         if (isContestOver) init('contest', { fresh: true });
         else init('practice', { fresh: true });
       };
+
+      // Continue (second chance) — watch ad or pay
+      var continueAdBtn = document.getElementById('continue-ad');
+      var continuePayBtn = document.getElementById('continue-pay');
+      if (continueAdBtn) continueAdBtn.onclick = function() {
+        this.disabled = true; this.textContent = '⏳ טוען פרסומת...';
+        simulateAdWatch(function() {
+          usedContinue = true;
+          // Clear top 2 rows
+          for (var r = 0; r < 2; r++)
+            for (var c = 0; c < getBoardCols(); c++) grid[r][c] = 0;
+          applyGravity();
+          busy = false;
+          startEventSystem();
+          playMusic('game');
+          render();
+          showEventBanner('💪 חיים נוספים!', 'המשך לשחק!', 'continue');
+          shakeGrid(3);
+        });
+      };
+      if (continuePayBtn) continuePayBtn.onclick = function() {
+        var price = getEventNum('continue_price', 200);
+        if ((parseInt(document.getElementById('tile-shop-stat').textContent.replace(/[^\d]/g,''),10)||0) < price) {
+          this.textContent = 'אין מספיק 💎';
+          this.disabled = true;
+          return;
+        }
+        this.disabled = true; this.textContent = '⏳...';
+        fetch(API_BASE + '/api/player/spend', {
+          method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Device-Id': deviceId },
+          body: JSON.stringify({ deviceId: deviceId, amount: price, reason: 'continue' })
+        }).then(function(r) { return r.json(); }).then(function(d) {
+          if (d && d.ok) {
+            usedContinue = true;
+            fetchPlayerCode();
+            for (var r = 0; r < 2; r++)
+              for (var c = 0; c < getBoardCols(); c++) grid[r][c] = 0;
+            applyGravity();
+            busy = false;
+            startEventSystem();
+            playMusic('game');
+            render();
+            showEventBanner('💪 חיים נוספים!', 'המשך לשחק!', 'continue');
+            shakeGrid(3);
+          } else {
+            continuePayBtn.textContent = 'אין מספיק 💎';
+          }
+        }).catch(function() { continuePayBtn.textContent = 'שגיאה'; });
+      };
+
+      // Watch ad for free credits
+      var watchAdBtn = document.getElementById('watch-ad-btn');
+      if (watchAdBtn) watchAdBtn.onclick = function() {
+        this.disabled = true; this.textContent = '⏳ טוען פרסומת...';
+        var self = this;
+        simulateAdWatch(function() {
+          var reward = getEventNum('ad_watch_reward', 30);
+          earnCredits('event_gift', { amount: reward });
+          self.textContent = '✓ קיבלת ' + reward + '💎';
+          self.style.background = '#2E8B6F'; self.style.color = '#FFF';
+          fetchPlayerCode();
+        });
+      };
+
       document.getElementById('share-btn').onclick = shareResult;
       var waShareBtn = document.getElementById('share-wa-btn');
       if (waShareBtn) waShareBtn.onclick = function() { shareResultWhatsApp(); };
@@ -7603,5 +7686,46 @@
     // Fade out after 1.2s
     setTimeout(function() { d.style.transition = 'opacity 0.3s'; d.style.opacity = '0'; }, 1200);
     setTimeout(function() { d.remove(); }, 1600);
+  }
+
+  // ============================================================
+  // AD SYSTEM — simulate ad watching (replace with real SDK later)
+  // ============================================================
+  var lastAdWatchTime = 0;
+
+  function simulateAdWatch(callback) {
+    // Rate limit: 1 ad per 30 seconds
+    if (Date.now() - lastAdWatchTime < 30000) {
+      showEventBanner('⏰ המתן', 'פרסומת חדשה בעוד מעט', '');
+      return;
+    }
+    // Show "ad" overlay (replace with real ad SDK integration)
+    var overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:#000;z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#FFF;font-family:inherit;direction:rtl';
+    overlay.innerHTML =
+      '<div style="font-size:14px;color:#888;margin-bottom:20px">פרסומת</div>' +
+      '<div style="font-size:48px;font-weight:900" id="ad-countdown">3</div>' +
+      '<div style="font-size:13px;color:#666;margin-top:20px">הפרסומת תסתיים בעוד מספר שניות...</div>' +
+      '<div style="width:200px;height:4px;background:#333;border-radius:2px;margin-top:16px;overflow:hidden"><div id="ad-progress" style="width:0%;height:100%;background:#FAC775;transition:width 1s linear"></div></div>';
+    document.body.appendChild(overlay);
+
+    var sec = 3;
+    var countEl = overlay.querySelector('#ad-countdown');
+    var progEl = overlay.querySelector('#ad-progress');
+    requestAnimationFrame(function() { progEl.style.width = '33%'; });
+
+    var adInterval = setInterval(function() {
+      sec--;
+      if (countEl) countEl.textContent = sec > 0 ? sec : '✓';
+      if (progEl) progEl.style.width = ((3 - sec) / 3 * 100) + '%';
+      if (sec <= 0) {
+        clearInterval(adInterval);
+        lastAdWatchTime = Date.now();
+        setTimeout(function() {
+          overlay.remove();
+          if (callback) callback();
+        }, 500);
+      }
+    }, 1000);
   }
 })();

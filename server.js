@@ -3043,6 +3043,21 @@ app.post('/api/player/earn', async (req, res) => {
   }
 });
 
+// POST /api/player/spend — deduct credits (for continue, premium items)
+app.post('/api/player/spend', async (req, res) => {
+  const { deviceId, amount, reason } = req.body || {};
+  if (!deviceId || !amount || amount <= 0) return res.json({ ok: false, reason: 'invalid' });
+  try {
+    const player = await pool.query('SELECT balance FROM player_profiles WHERE device_id = $1', [deviceId]);
+    if (!player.rows.length) return res.json({ ok: false, reason: 'not_found' });
+    if (player.rows[0].balance < amount) return res.json({ ok: false, reason: 'insufficient' });
+    await pool.query('UPDATE player_profiles SET balance = balance - $1 WHERE device_id = $2', [amount, deviceId]);
+    res.json({ ok: true, newBalance: player.rows[0].balance - amount });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: 'server' });
+  }
+});
+
 // GET /api/tile-prices — get current tile prices for in-game shop
 app.get('/api/tile-prices', async (_req, res) => {
   try {

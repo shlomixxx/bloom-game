@@ -506,3 +506,44 @@
     setTimeout(function() { d.style.transition = 'opacity 0.3s'; d.style.opacity = '0'; }, 1200);
     setTimeout(function() { d.remove(); }, 1600);
   }
+
+  // ============================================================
+  // AD SYSTEM — simulate ad watching (replace with real SDK later)
+  // ============================================================
+  var lastAdWatchTime = 0;
+
+  function simulateAdWatch(callback) {
+    // Rate limit: 1 ad per 30 seconds
+    if (Date.now() - lastAdWatchTime < 30000) {
+      showEventBanner('⏰ המתן', 'פרסומת חדשה בעוד מעט', '');
+      return;
+    }
+    // Show "ad" overlay (replace with real ad SDK integration)
+    var overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:#000;z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#FFF;font-family:inherit;direction:rtl';
+    overlay.innerHTML =
+      '<div style="font-size:14px;color:#888;margin-bottom:20px">פרסומת</div>' +
+      '<div style="font-size:48px;font-weight:900" id="ad-countdown">3</div>' +
+      '<div style="font-size:13px;color:#666;margin-top:20px">הפרסומת תסתיים בעוד מספר שניות...</div>' +
+      '<div style="width:200px;height:4px;background:#333;border-radius:2px;margin-top:16px;overflow:hidden"><div id="ad-progress" style="width:0%;height:100%;background:#FAC775;transition:width 1s linear"></div></div>';
+    document.body.appendChild(overlay);
+
+    var sec = 3;
+    var countEl = overlay.querySelector('#ad-countdown');
+    var progEl = overlay.querySelector('#ad-progress');
+    requestAnimationFrame(function() { progEl.style.width = '33%'; });
+
+    var adInterval = setInterval(function() {
+      sec--;
+      if (countEl) countEl.textContent = sec > 0 ? sec : '✓';
+      if (progEl) progEl.style.width = ((3 - sec) / 3 * 100) + '%';
+      if (sec <= 0) {
+        clearInterval(adInterval);
+        lastAdWatchTime = Date.now();
+        setTimeout(function() {
+          overlay.remove();
+          if (callback) callback();
+        }, 500);
+      }
+    }, 1000);
+  }

@@ -9,6 +9,7 @@
     tierUpHit = {};   // reset milestone-bonus tracker for this fresh game
     scoreMilestonesHit = {}; // reset score milestones
     bestBeatenThisGame = false; // reset live best tracking
+    usedContinue = false; // reset second chance
     gameMergesPerTier = {};
     gamePointsPerTier = {};
     gameBestMergeTier = 0;
@@ -699,12 +700,12 @@
 
   // Score milestone celebrations during gameplay
   var SCORE_MILESTONES = [
-    { at: 10000,  label: '🔥 10K!',  reward: 5 },
-    { at: 25000,  label: '⚡ 25K!',  reward: 10 },
-    { at: 50000,  label: '⭐ 50K!',  reward: 20 },
-    { at: 100000, label: '💎 100K!', reward: 50 },
-    { at: 200000, label: '👑 200K!', reward: 100 },
-    { at: 500000, label: '🌟 500K!', reward: 250 }
+    { at: 10000,  label: '🔥 10K!',  reward: 2 },
+    { at: 25000,  label: '⚡ 25K!',  reward: 3 },
+    { at: 50000,  label: '⭐ 50K!',  reward: 5 },
+    { at: 100000, label: '💎 100K!', reward: 10 },
+    { at: 200000, label: '👑 200K!', reward: 20 },
+    { at: 500000, label: '🌟 500K!', reward: 50 }
   ];
   var scoreMilestonesHit = {};
 
