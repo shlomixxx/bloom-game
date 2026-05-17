@@ -626,52 +626,99 @@
   // cause one missed toast.
   let overtakeTimer = null;
   let overtakeCode = null;
-  let overtakeBaseline = null;          // { myScore, others: Map(name -> score) }
+  let overtakeBaseline = null;          // { myScore, myRank, others: Map(name -> {score, rank}) }
+  let overtakeMyLiveScore = 0;          // track local score for comparison
 
   function snapshotFromContestData(data) {
-    const me = (data.players || []).find(function(p) { return p.you; });
+    const sorted = (data.players || []).slice().sort(function(a, b) { return (b.score | 0) - (a.score | 0); });
+    const me = sorted.find(function(p) { return p.you; });
     const myScore = me ? (me.score | 0) : 0;
+    const myRank = me ? sorted.indexOf(me) + 1 : 999;
     const others = new Map();
-    (data.players || []).forEach(function(p) {
-      if (!p.you) others.set(p.name, p.score | 0);
+    sorted.forEach(function(p, idx) {
+      if (!p.you) others.set(p.name, { score: p.score | 0, rank: idx + 1 });
     });
-    return { myScore: myScore, others: others };
+    return { myScore: myScore, myRank: myRank, others: others, leader: sorted[0] ? sorted[0].name : '' };
   }
 
   async function refreshOvertake() {
     if (!overtakeCode || !overtakeBaseline) return;
     if (typeof document !== 'undefined' && document.hidden) return;
     if (mode !== 'contest' || activeContestCode !== overtakeCode) return;
-    const data = await fetchContest(overtakeCode);
+    var data;
+    try { data = await fetchContest(overtakeCode); } catch(e) { return; }
     if (!data) return;
-    if (!overtakeTimer) return; // got stopped during the fetch
+    if (!overtakeTimer) return;
+
+    const prev = overtakeBaseline;
     const next = snapshotFromContestData(data);
-    const overtakers = [];
-    next.others.forEach(function(newScore, name) {
-      const prevScore = overtakeBaseline.others.get(name) || 0;
-      if (newScore > next.myScore && prevScore <= overtakeBaseline.myScore) {
-        overtakers.push({ name: name, score: newScore });
+
+    // Use local score if higher (we may not have submitted yet)
+    var realMyScore = Math.max(next.myScore, score || 0);
+
+    // --- 1. Someone overtook you ---
+    var overtakers = [];
+    next.others.forEach(function(info, name) {
+      var prevInfo = prev.others.get(name);
+      var prevScore = prevInfo ? prevInfo.score : 0;
+      if (info.score > realMyScore && prevScore <= prev.myScore) {
+        overtakers.push({ name: name, score: info.score, rank: info.rank });
       }
     });
+
+    // --- 2. You took back #1 ---
+    var youTookFirst = prev.myRank > 1 && next.myRank === 1;
+
+    // --- 3. Someone else took #1 (not you) ---
+    var newLeader = null;
+    if (next.leader !== prev.leader && next.leader !== '' && next.myRank > 1) {
+      var leaderInfo = next.others.get(next.leader);
+      if (leaderInfo) newLeader = { name: next.leader, score: leaderInfo.score };
+    }
+
+    // --- 4. Gap closing: you're close to overtaking someone ---
+    var almostOvertake = null;
+    if (next.myRank > 1) {
+      // Find player just above me
+      var aboveMe = null;
+      next.others.forEach(function(info, name) {
+        if (info.rank === next.myRank - 1) aboveMe = { name: name, score: info.score };
+      });
+      if (aboveMe) {
+        var gap = aboveMe.score - realMyScore;
+        if (gap > 0 && gap < realMyScore * 0.1 && gap < 5000) {
+          almostOvertake = { name: aboveMe.name, gap: gap };
+        }
+      }
+    }
+
     overtakeBaseline = next;
-    if (!overtakers.length) return;
-    overtakers.sort(function(a, b) { return b.score - a.score; });
-    showOvertakeToast(overtakers[0], overtakers.length - 1);
+
+    // --- Show notifications (priority order) ---
+    if (overtakers.length > 0) {
+      overtakers.sort(function(a, b) { return a.rank - b.rank; });
+      showContestAlert('overtake', overtakers[0], overtakers.length - 1);
+    } else if (youTookFirst) {
+      showContestAlert('you_first', null, 0);
+    } else if (newLeader) {
+      showContestAlert('new_leader', newLeader, 0);
+    } else if (almostOvertake) {
+      showContestAlert('almost', almostOvertake, 0);
+    }
   }
 
   function startOvertakeWatch(code) {
     stopOvertakeWatch();
     if (!code) return;
     overtakeCode = code;
-    overtakeTimer = setTimeout(function tick() {
-      if (!overtakeTimer) return;
-      // First tick seeds the baseline silently; rearm with the regular interval.
-      (async function() {
-        const data = await fetchContest(code);
+    // Seed baseline immediately, then poll every 12 seconds
+    (async function() {
+      try {
+        var data = await fetchContest(code);
         if (data) overtakeBaseline = snapshotFromContestData(data);
-        if (overtakeTimer) overtakeTimer = setInterval(refreshOvertake, 45000);
-      })();
-    }, 0);
+      } catch(e) {}
+      if (overtakeCode) overtakeTimer = setInterval(refreshOvertake, 12000);
+    })();
   }
 
   function stopOvertakeWatch() {
@@ -680,17 +727,64 @@
     overtakeBaseline = null;
   }
 
-  function showOvertakeToast(player, extraCount) {
-    const t = document.createElement('div');
-    t.className = 'ach-unlock-toast overtake';
-    const extra = extraCount > 0 ? ' (+' + extraCount + ')' : '';
-    t.innerHTML =
-      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z"/></svg>' +
-      '<span>' + escapeHtml(player.name) + ' עבר אותך' + extra + ' · ' + (player.score | 0).toLocaleString() + ' נק׳</span>';
-    document.body.appendChild(t);
-    setTimeout(function() { t.remove(); }, 3500);
-    if (!isSfxMuted()) buzz([30, 40, 30]);
-    if (!isSfxMuted()) tone({ freq: 392, bendTo: 294, duration: 0.22, type: 'sawtooth', vol: 0.09, filter: 2400 });
+  function showContestAlert(type, player, extraCount) {
+    var emoji, text, bgColor, borderColor, shakeInt;
+
+    if (type === 'overtake') {
+      emoji = '⚡';
+      var extra = extraCount > 0 ? ' (+' + extraCount + ' נוספים)' : '';
+      text = escapeHtml(player.name) + ' עבר אותך!' + extra + ' · ' + (player.score | 0).toLocaleString();
+      bgColor = '#C8472F';
+      borderColor = '#FF6B35';
+      shakeInt = 3;
+    } else if (type === 'you_first') {
+      emoji = '👑';
+      text = 'אתה מוביל את התחרות!';
+      bgColor = '#BA7517';
+      borderColor = '#FAC775';
+      shakeInt = 4;
+    } else if (type === 'new_leader') {
+      emoji = '🔥';
+      text = escapeHtml(player.name) + ' תפס את המקום הראשון! · ' + (player.score | 0).toLocaleString();
+      bgColor = '#8B0000';
+      borderColor = '#C8472F';
+      shakeInt = 2;
+    } else if (type === 'almost') {
+      emoji = '💪';
+      text = 'עוד ' + player.gap.toLocaleString() + ' נקודות לעבור את ' + escapeHtml(player.name) + '!';
+      bgColor = '#2E8B6F';
+      borderColor = '#9FE1CB';
+      shakeInt = 0;
+    }
+
+    // Dramatic banner
+    var banner = document.createElement('div');
+    banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;padding:14px 16px;text-align:center;direction:rtl;font-weight:700;font-size:14px;color:#FFF;pointer-events:none;background:' + bgColor + ';border-bottom:3px solid ' + borderColor + ';transform:translateY(-100%);transition:transform 0.3s ease-out;box-shadow:0 4px 20px rgba(0,0,0,0.3)';
+    banner.innerHTML = '<span style="font-size:20px;margin-left:6px">' + emoji + '</span> ' + text;
+    document.body.appendChild(banner);
+
+    // Slide in
+    requestAnimationFrame(function() {
+      requestAnimationFrame(function() { banner.style.transform = 'translateY(0)'; });
+    });
+
+    // Shake + vibration
+    if (shakeInt > 0) shakeGrid(shakeInt);
+    if (!isSfxMuted()) buzz([40, 60, 40]);
+    if (!isSfxMuted() && type === 'overtake') {
+      tone({ freq: 392, bendTo: 294, duration: 0.22, type: 'sawtooth', vol: 0.09, filter: 2400 });
+    }
+    if (!isSfxMuted() && type === 'you_first') {
+      tone({ freq: 523, duration: 0.12, type: 'sine', vol: 0.08 });
+      setTimeout(function() { tone({ freq: 659, duration: 0.12, type: 'sine', vol: 0.08 }); }, 120);
+      setTimeout(function() { tone({ freq: 784, duration: 0.2, type: 'sine', vol: 0.08 }); }, 240);
+    }
+
+    // Slide out
+    setTimeout(function() {
+      banner.style.transform = 'translateY(-100%)';
+      setTimeout(function() { banner.remove(); }, 400);
+    }, 3500);
   }
 
   async function showContestLeaderboard(code) {
