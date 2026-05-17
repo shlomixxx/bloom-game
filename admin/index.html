@@ -455,6 +455,43 @@
     .bsim-btn.active { background: #3D3320; }
     .bsim-tip { background: #1A1816; color: #F2EFE9; border-color: #2C2A28; }
   }
+
+  /* ============ TAB BAR ============ */
+  .admin-tabs {
+    position: sticky; top: 0; z-index: 50;
+    display: flex; gap: 6px; padding: 8px;
+    background: rgba(250,250,246,0.96);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border-bottom: 1px solid rgba(0,0,0,0.06);
+    margin: 0 -16px 14px;
+    overflow-x: auto;
+    scrollbar-width: thin;
+  }
+  .admin-tabs::-webkit-scrollbar { height: 4px; }
+  .admin-tabs::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); border-radius: 999px; }
+  .admin-tab {
+    flex-shrink: 0;
+    padding: 9px 16px; border: 1px solid transparent; border-radius: 10px;
+    background: transparent; cursor: pointer; font-family: inherit;
+    font-weight: 600; font-size: 13px; color: #6F6E68;
+    white-space: nowrap; transition: all 0.15s;
+  }
+  .admin-tab:hover { background: #F5F2EC; color: #1C1A18; }
+  .admin-tab.active { background: #1C1A18; color: #FFFFFF; box-shadow: 0 2px 8px rgba(0,0,0,0.12); }
+  .admin-tab-panel { display: none; }
+  .admin-tab-panel.active { display: block; animation: tabFadeIn 0.18s ease-out; }
+  @keyframes tabFadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+  @media (max-width: 720px) {
+    .admin-tabs { gap: 4px; padding: 6px; }
+    .admin-tab { padding: 8px 12px; font-size: 12px; }
+  }
+  @media (prefers-color-scheme: dark) {
+    .admin-tabs { background: rgba(26,24,22,0.96); border-bottom-color: rgba(255,255,255,0.06); }
+    .admin-tab { color: #8E8A82; }
+    .admin-tab:hover { background: #2C2A28; color: #F2EFE9; }
+    .admin-tab.active { background: #F2EFE9; color: #1A1816; box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
+  }
 </style>
 </head>
 <body>
@@ -473,7 +510,17 @@
 
   <div id="anomaly-host"></div>
 
+  <nav class="admin-tabs" id="admin-tabs" role="tablist" aria-label="ניווט בין קטעי האדמין">
+    <button class="admin-tab active" data-tab="dashboard" role="tab" aria-selected="true">📊 דשבורד</button>
+    <button class="admin-tab"        data-tab="game"      role="tab" aria-selected="false">🎮 משחק</button>
+    <button class="admin-tab"        data-tab="economy"   role="tab" aria-selected="false">💰 כלכלה</button>
+    <button class="admin-tab"        data-tab="players"   role="tab" aria-selected="false">👥 שחקנים</button>
+    <button class="admin-tab"        data-tab="contests"  role="tab" aria-selected="false">🏆 תחרויות</button>
+    <button class="admin-tab"        data-tab="monitor"   role="tab" aria-selected="false">🔧 ניטור</button>
+  </nav>
+
   <!-- ═══════════ ADMIN GUIDE ═══════════ -->
+  <div class="admin-tab-panel" data-tab="monitor">
   <details id="admin-guide" style="margin-bottom:16px;background:var(--card);border-radius:12px;border:1px solid rgba(250,199,117,0.2)">
     <summary style="cursor:pointer;padding:14px 16px;font-weight:700;font-size:15px;color:var(--gold);display:flex;align-items:center;gap:8px">
       📖 מדריך מנהל מלא — לחץ לפתיחה
@@ -625,13 +672,15 @@
 
     </div>
   </details>
+  </div><!-- /admin-tab-panel monitor:admin-guide -->
 
+  <div class="admin-tab-panel" data-tab="game">
   <!-- Game Config (Admin-controlled) -->
   <section id="config-section" style="margin-bottom:12px">
     <h2>הגדרות משחק <button class="tip-btn" data-tip="config">?</button></h2>
     <div class="config-row" style="display:flex;align-items:center;gap:12px;padding:12px 16px;background:var(--card);border-radius:10px;margin-top:8px">
       <div style="flex:1">
-        <strong style="font-size:13px">כיוון מיזוג</strong>
+        <strong style="font-size:13px">כיוון מיזוג <button class="tip-btn" data-tip-text="<strong>כיוון מיזוג</strong><br>איפה נשאר האריח אחרי שלוש (או יותר) אריחים זהים מתמזגים.<br><div class=&quot;tip-example&quot;>🎯 <code>anchor</code> (מומלץ): התוצאה נשארת ליד מקום הזריקה. השחקן יכול לכוון בדיוק לאן ייפול האריח החדש.<br>⬅ <code>classic</code>: התוצאה תמיד נופלת שמאלה (סטייל Suika המקורי). פחות אינטואיטיבי לעין ישראלית RTL.<br><br>שינוי לוקח אפקט מיידי לשחקנים חדשים; פעילים יראו אחרי refresh.</div>">?</button></strong>
         <div style="font-size:11px;color:var(--muted);margin-top:2px">anchor = תוצאה נשארת ליד מקום הזריקה · classic = תוצאה תמיד שמאלה</div>
       </div>
       <button class="btn sm" id="btn-merge-mode" style="min-width:90px">טוען…</button>
@@ -651,25 +700,27 @@
 
       <!-- Drop pool weights -->
       <div style="margin-bottom:14px">
-        <div style="font-size:13px;font-weight:700;color:var(--gold);margin-bottom:6px">📊 בריכת אריחים — מה נופל וכמה</div>
+        <div style="font-size:13px;font-weight:700;color:var(--gold);margin-bottom:6px">📊 בריכת אריחים — מה נופל וכמה <button class="tip-btn" data-tip-text="<strong>בריכת אריחים</strong><br>כל נפילה טבעית מגרילה אריח לפי המשקלים האלה. רק דרגות 1-4 נופלות באופן טבעי במשחק הרגיל — דרגות 5-8 נוצרות רק ממיזוגים.<br><div class=&quot;tip-example&quot;>💡 <strong>איך זה משפיע על קושי</strong>:<br>• הרבה אריחים מדרגה 1 → קל לבנות שרשרת ארוכה<br>• מעט אריחים מדרגה 1 + הרבה דרגה 4 → קשה (מעט מקום למיזוגים)<br>• כל הערכים על 0 → חוזר לברירת מחדל אוטומטית (55/28/12/5/0/0/0/0)<br><br>השינוי נכנס לתוקף ב-page reload של השחקן (או בכל init() חדש).</div>">?</button></div>
         <div style="font-size:11px;color:var(--muted);margin-bottom:8px">משקל לכל דרגה (0 = לא נופל טבעי). הוצאת אריחים קלים מהבריכה הופכת את המשחק להרבה יותר קשה. אם כולם 0 → חוזר לברירת מחדל אוטומטית.</div>
         <div id="drop-weights-rows" style="display:flex;flex-direction:column;gap:6px"></div>
-        <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">
+        <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap;align-items:center">
           <button class="btn sm preset-btn" data-preset="default" style="flex:1;min-width:80px">📦 ברירת מחדל</button>
           <button class="btn sm preset-btn" data-preset="easy" style="flex:1;min-width:80px">😊 קל</button>
           <button class="btn sm preset-btn" data-preset="medium" style="flex:1;min-width:80px">🎯 בינוני</button>
           <button class="btn sm preset-btn" data-preset="hard" style="flex:1;min-width:80px">🔥 קשה</button>
           <button class="btn sm preset-btn" data-preset="insane" style="flex:1;min-width:80px">💀 גהינום</button>
+          <button class="tip-btn" data-tip-text="<strong>מה כל preset עושה?</strong><div class=&quot;tip-example&quot;>📦 <strong>ברירת מחדל</strong>: 55/28/12/5/0/0/0/0 — איזון קלאסי, מומלץ ל-90% מהשחקנים.<br><br>😊 <strong>קל</strong>: הרבה דרגה 1 ומעט דרגה 4 — שרשראות ארוכות בקלות. טוב לטיוטות וחימום.<br><br>🎯 <strong>בינוני</strong>: יחס דומה ל-default אבל מאוזן יותר. אתגר מתון.<br><br>🔥 <strong>קשה</strong>: יותר דרגה 3-4 מהרגיל. דורש תכנון מהיר.<br><br>💀 <strong>גהינום</strong>: בעיקר דרגה 4. כמעט בלתי אפשרי לבנות שרשרת. נסיוני.<br><br>💡 כל preset רק <em>טוען</em> את המשקלים לשדות — חייבים ללחוץ ״💾 שמור בריכה״ כדי שיוחל על השחקנים.</div>">?</button>
         </div>
         <div style="margin-top:10px;display:flex;gap:8px;align-items:center">
           <button class="btn sm" id="btn-drop-save" style="flex:1;background:#9FE1CB;color:#1C1A18;font-weight:700">💾 שמור בריכה</button>
+          <button class="tip-btn" data-tip-text="<strong>שמירת בריכת אריחים</strong><br>שולח PATCH ל-<code>/api/config/drop_weights</code> עם הערכים הנוכחיים.<div class=&quot;tip-example&quot;>📡 <strong>תפוצה</strong>: נכנס לתוקף לכל שחקן חדש שיפתח את הדף, או כשמשחק קיים יקרא ל-init() (מצב חדש או refresh).<br>⚠️ <strong>השפעה על תחרויות חיות</strong>: תחרויות שכבר רצות לא משתנות — הן צילמו את ההגדרות בעת היצירה.<br>✅ <strong>שמירה מיידית</strong>: אין צורך ב-deploy.</div>">?</button>
           <div id="drop-weights-status" style="font-size:11px;color:var(--muted);min-width:80px"></div>
         </div>
       </div>
 
       <!-- Game speed -->
       <div style="margin-bottom:14px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.08)">
-        <div style="font-size:13px;font-weight:700;color:var(--gold);margin-bottom:6px">⚡ מהירות משחק (מיזוגים + גרוויטציה + תגובה)</div>
+        <div style="font-size:13px;font-weight:700;color:var(--gold);margin-bottom:6px">⚡ מהירות משחק (מיזוגים + גרוויטציה + תגובה) <button class="tip-btn" data-tip-text="<strong>מהירות משחק</strong><br>מכפיל גלובלי על כל ה-sleeps בלולאת המשחק.<div class=&quot;tip-example&quot;>⚡ <strong>איך זה עובד</strong>: <code>gsleep(ms) = sleep(ms × speedScale)</code><br><br>📊 <strong>ערכים מומלצים</strong>:<br>• <code>50%</code> = פי-2 מהיר. אנימציות חדות, מתאים ל-stress testing<br>• <code>80-90%</code> = ״רענן״, הרבה שחקנים מעדיפים<br>• <code>100%</code> = ברירת מחדל (איזון)<br>• <code>150%</code> = איטי, מתאים לטוטוריאל או לשחקנים חדשים<br>• <code>200%</code> = איטי מאוד, יכול להרגיש עצלני<br><br>💡 משפיע על drop, merge, gravity, chain-pause — כל הסדרת ה-await sleep() במנוע.</div>">?</button></div>
         <div style="font-size:11px;color:var(--muted);margin-bottom:8px">50% = פי-2 מהיר · 100% = ברירת מחדל · 200% = איטי. משפיע על כל ה-sleeps בלולאת המשחק (drop / merge / gravity).</div>
         <div style="display:flex;gap:10px;align-items:center">
           <input type="range" id="game-speed-slider" min="50" max="200" step="5" value="100" style="flex:1">
@@ -680,21 +731,24 @@
 
       <!-- Slot machine -->
       <div style="padding-top:12px;border-top:1px solid rgba(255,255,255,0.08)">
-        <div style="font-size:13px;font-weight:700;color:var(--gold);margin-bottom:6px">🎰 סלוט מכונה — תצוגת האריח הבא</div>
+        <div style="font-size:13px;font-weight:700;color:var(--gold);margin-bottom:6px">🎰 סלוט מכונה — תצוגת האריח הבא <button class="tip-btn" data-tip-text="<strong>סלוט מכונה</strong><br>האנימציה הזו מוצגת בתצוגת ״הבא״ — שורת האריחים בראש הלוח שמראה מה ייפול אחרי הזריקה הנוכחית.<div class=&quot;tip-example&quot;>🎰 <strong>מה זה עושה</strong>: במקום להראות מיד את האריח הבא, האנימציה מסתובבת בין דרגות 1-8 (או חלק מהן) ועוצרת בדרמטיות על הדרגה שתיפול.<br><br>🎯 <strong>פעיל</strong>: <code>true</code> = אנימציה דרמטית, <code>false</code> = snap מיידי לדרגה הבאה.<br>⏱ <strong>משך כולל</strong>: כמה זמן הסיבוב נמשך לפני שעוצר.<br>🎚 <strong>דרגות בסיבוב</strong>: כמה דרגות שונות מופיעות במהלך הסיבוב. 8 = מסתובב על כל הסקלה (מרגיש כמו סלוט אמיתי), 4 = מסתובב רק על דרגות 1-4 (פחות דרמטי, מהיר יותר).</div>">?</button></div>
         <div style="font-size:11px;color:var(--muted);margin-bottom:8px">אנימציית סלוט מסתובבת בין הדרגות ועוצרת על האריח שיפול. אפשר לכבות לגמרי או להאריך/לקצר.</div>
         <div style="display:flex;gap:10px;align-items:center;margin-bottom:10px">
           <strong style="font-size:12px;min-width:70px">פעיל:</strong>
           <button class="btn sm" id="btn-slot-toggle" style="min-width:90px">טוען…</button>
+          <button class="tip-btn" data-tip-text="<strong>הפעלת/כיבוי סלוט</strong><br><code>true</code> = אנימציה דרמטית של 650ms (ברירת מחדל). <code>false</code> = snap מיידי, תצוגת ״הבא״ מתעדכנת ב-0ms — מהיר אבל פחות מהנה.<br><div class=&quot;tip-example&quot;>💡 לכבות יכול להיות שימושי אם שחקנים מתלוננים שהם לא מספיקים לראות מה הבא לפני שהם זורקים.</div>">?</button>
         </div>
         <div style="display:flex;gap:10px;align-items:center;margin-bottom:8px">
           <strong style="font-size:12px;min-width:70px">משך כולל:</strong>
           <input type="range" id="slot-dur-slider" min="200" max="2000" step="50" value="650" style="flex:1">
           <div style="font-size:13px;font-weight:700;color:var(--gold);min-width:70px;text-align:center" id="slot-dur-val">650ms</div>
+          <button class="tip-btn" data-tip-text="<strong>משך הסלוט</strong><br>מילישניות מתחילת הסיבוב עד הירידה הסופית (לפני אנימציית bounce-up).<div class=&quot;tip-example&quot;>⏱ <strong>טווח</strong>: 200ms (מהיר מאוד, כמעט snap) עד 2000ms (איטי דרמטי).<br>🎯 <strong>ערך מומלץ</strong>: 650ms (ברירת מחדל) — מהיר מספיק לא לעצבן, איטי מספיק להרגיש.</div>">?</button>
         </div>
         <div style="display:flex;gap:10px;align-items:center;margin-bottom:10px">
           <strong style="font-size:12px;min-width:70px">דרגות בסיבוב:</strong>
           <input type="range" id="slot-int-slider" min="1" max="8" step="1" value="8" style="flex:1">
           <div style="font-size:13px;font-weight:700;color:var(--gold);min-width:70px;text-align:center" id="slot-int-val">1..8</div>
+          <button class="tip-btn" data-tip-text="<strong>דרגות בסיבוב</strong><br>כמה דרגות שונות מופיעות במהלך הסיבוב לפני שהוא עוצר.<div class=&quot;tip-example&quot;>🎚 <strong>8 (ברירת מחדל)</strong>: הסלוט מסתובב על כל 8 הדרגות. מרגיש דרמטי כמו בקזינו.<br>🎚 <strong>4</strong>: רק דרגות 1-4 מופיעות. פחות דרמטי, יותר מציאותי (כי רק דרגות 1-4 נופלות טבעי).<br>🎚 <strong>1</strong>: בעצם משבית את האפקט — רק הדרגה הסופית מופיעה.</div>">?</button>
         </div>
         <button class="btn sm" id="btn-slot-save" style="width:100%;background:#9FE1CB;color:#1C1A18;font-weight:700">💾 שמור הגדרות סלוט</button>
       </div>
@@ -716,6 +770,7 @@
           <option value="country">🇮🇱 מדינתי</option>
           <option value="difficulty">🎚️ קושי</option>
         </select>
+        <button class="tip-btn" data-tip-text="<strong>טאב ברירת מחדל</strong><br>כשהשחקן פותח את מודאל הלידרבורד — איזה טאב נבחר אוטומטית.<div class=&quot;tip-example&quot;>💡 רוב השחקנים יראו רק את הטאב הזה — לרובם לא יהיה כוח להחליף. תבחר את הטאב שהכי מעניין לקהל שלך.<br><br>🌍 עולמי = הכי כללי, מעודד תחרות בכל הזמן.<br>🇮🇱 מדינתי = פטריוטי, יוצר ״קהילה״ של ישראלים שמתחרים זה בזה.<br>🎚️ קושי = מתאים אם הרוב משחקים practice עם קושי לא-default.</div>">?</button>
       </div>
       <div style="display:flex;gap:10px;align-items:center;margin-bottom:10px">
         <strong style="font-size:12px;min-width:110px">קושי ברירת מחדל:</strong>
@@ -726,6 +781,7 @@
           <option value="hard">🔥 קשה</option>
           <option value="insane">💀 גהינום</option>
         </select>
+        <button class="tip-btn" data-tip-text="<strong>קושי ברירת מחדל לטאב ״קושי״</strong><br>כשהשחקן נכנס לטאב ״🎚️ קושי״, איזו דרגה מסומנת כברירת מחדל.<div class=&quot;tip-example&quot;>💡 רלוונטי רק לטאב ״קושי״. שאר הטאבים לא מסננים לפי קושי.<br><br>📦 ברירת מחדל = הציון של רוב השחקנים, הכי מאוכלס.<br>💀 גהינום = הציון של ה-elite. מעט שחקנים אבל ניקודים מרשימים.</div>">?</button>
       </div>
       <div style="display:flex;gap:8px;align-items:center">
         <button class="btn sm" id="btn-lb-tabs-save" style="flex:1;background:#9FE1CB;color:#1C1A18;font-weight:700">💾 שמור</button>
@@ -733,7 +789,9 @@
       </div>
     </div>
   </section>
+  </div><!-- /admin-tab-panel game:config+difficulty+lb-tabs -->
 
+  <div class="admin-tab-panel" data-tab="economy">
   <!-- Monetization -->
   <section id="monetization-section" style="margin-bottom:12px">
     <h2>💰 מונטיזציה <button class="tip-btn" data-tip="monetization">?</button></h2>
@@ -741,7 +799,7 @@
 
       <!-- AdSense -->
       <div style="margin-bottom:14px">
-        <div style="font-size:13px;font-weight:700;color:var(--gold);margin-bottom:6px">📺 Google AdSense</div>
+        <div style="font-size:13px;font-weight:700;color:var(--gold);margin-bottom:6px">📺 Google AdSense <button class="tip-btn" data-tip-text="<strong>📺 Google AdSense</strong><br>פרסומות = ההכנסה הראשונה של המשחק החינמי.<div class=&quot;tip-example&quot;><strong>איך מתחילים?</strong><br>1. נכנסים ל-<code>google.com/adsense</code> ומבקשים אישור (דורש דומיין פעיל).<br>2. אחרי האישור (1-14 ימים) מקבלים <code>ca-pub-XXXXXXXX</code>.<br>3. מדביקים כאן ושומרים.<br>4. הסקריפט של AdSense מוחדר אוטומטית ל-HTML של המשחק.<br><br>💡 <strong>טיפ</strong>: התחל עם ad reward בלבד (שחקן צופה בפרסומת ומקבל 💎). זה לא מציק לחוויית המשחק וההכנסה דומה לפרסומת רגילה.</div>">?</button></div>
         <div style="font-size:11px;color:var(--muted);margin-bottom:8px">הדבק את ה-Client ID מ-AdSense. פורמט: ca-pub-XXXXXXXXXXXXXXXX</div>
         <div style="display:flex;gap:6px">
           <input id="adsense-input" placeholder="ca-pub-..." style="flex:1;padding:8px 10px;border:1px solid rgba(255,255,255,0.1);border-radius:8px;background:rgba(0,0,0,0.15);color:var(--text);font-family:monospace;font-size:12px;direction:ltr">
@@ -752,7 +810,7 @@
 
       <!-- Stripe -->
       <div style="margin-bottom:14px">
-        <div style="font-size:13px;font-weight:700;color:var(--gold);margin-bottom:6px">💳 Stripe (תשלומים)</div>
+        <div style="font-size:13px;font-weight:700;color:var(--gold);margin-bottom:6px">💳 Stripe (תשלומים) <button class="tip-btn" data-tip-text="<strong>💳 Stripe</strong><br>תשלומים אמיתיים לרכישת חבילות 💎.<div class=&quot;tip-example&quot;><strong>שני סוגי מפתחות:</strong><br>🔓 <code>pk_live_...</code> = <strong>Publishable Key</strong> — בטוח לחשיפה בדפדפן, מדביקים כאן.<br>🔒 <code>sk_live_...</code> = <strong>Secret Key</strong> — סודי! מוגדר ב-env של Railway (לא כאן!).<br><br><strong>איך מתחילים?</strong><br>1. נרשמים ב-<code>stripe.com</code> (זמין בישראל).<br>2. בדאשבורד → Developers → API Keys → מעתיקים את ה-Publishable.<br>3. מדביקים כאן.<br><br>💡 שני מצבים: <code>pk_test_</code> לפיתוח (תשלומים מזויפים), <code>pk_live_</code> לפרודקשן (כסף אמיתי).</div>">?</button></div>
         <div style="font-size:11px;color:var(--muted);margin-bottom:8px">הדבק את ה-Publishable Key מ-Stripe Dashboard. פורמט: pk_live_...</div>
         <div style="display:flex;gap:6px">
           <input id="stripe-input" placeholder="pk_live_..." style="flex:1;padding:8px 10px;border:1px solid rgba(255,255,255,0.1);border-radius:8px;background:rgba(0,0,0,0.15);color:var(--text);font-family:monospace;font-size:12px;direction:ltr">
@@ -763,14 +821,14 @@
 
       <!-- Diamond Packs -->
       <div style="margin-bottom:8px">
-        <div style="font-size:13px;font-weight:700;color:var(--gold);margin-bottom:6px">💎 חבילות יהלומים</div>
+        <div style="font-size:13px;font-weight:700;color:var(--gold);margin-bottom:6px">💎 חבילות יהלומים <button class="tip-btn" data-tip-text="<strong>💎 חבילות יהלומים</strong><br>4 חבילות שונות שהשחקן יכול לקנות ב-Stripe.<div class=&quot;tip-example&quot;>💡 <strong>כלל אצבע</strong>: כל חבילה צריכה להיות value יותר טוב מהקודמת:<br>• חבילה 1: 100💎 ב-9.90₪ (סטנדרט)<br>• חבילה 2: 250💎 ב-19.90₪ (+25% bonus)<br>• חבילה 3: 600💎 ב-39.90₪ (+50% bonus)<br>• חבילה 4: 1500💎 ב-79.90₪ (+87% bonus)<br><br>📝 ערוך ב-<strong>Tab משחק → כל ההגדרות</strong> → חפש <code>diamond_pack_</code>.</div>">?</button></div>
         <div style="font-size:11px;color:var(--muted);margin-bottom:6px">ערוך את החבילות דרך "הגדרות משחק → כל ההגדרות" (diamond_pack_1-4_amount/price)</div>
         <div id="diamond-packs-preview" style="font-size:11px;color:var(--muted)">טוען...</div>
       </div>
 
       <!-- Economy status -->
       <div style="padding-top:10px;border-top:1px solid rgba(255,255,255,0.06)">
-        <div style="font-size:13px;font-weight:700;color:var(--gold);margin-bottom:6px">📊 סטטוס כלכלה</div>
+        <div style="font-size:13px;font-weight:700;color:var(--gold);margin-bottom:6px">📊 סטטוס כלכלה <button class="tip-btn" data-tip-text="<strong>📊 סטטוס כלכלה</strong><br>4 ערכים חשובים שמגדירים את האיזון בין הכנסה חופשית למחירי premium.<div class=&quot;tip-example&quot;>💡 <strong>חישוב מהיר</strong>:<br>• Continue (200💎) = ~3 ad-watches (30💎 כל אחד)<br>• כתר (300💎) = ~10 ad-watches או יום שלם של לוגינים יומיים (25💎 + bonuses)<br><br>📐 <strong>איזון נכון</strong>: שחקן מרוויח ~295💎/יום בלי פרסומות. אם פריט premium עולה <em>פחות</em> מהכנסה יומית — לא מעניין. אם <em>יותר מדי</em> — שחקנים יוותרו.<br><br>🎯 <strong>יעד</strong>: ארנק התואם לערך פריט אחד (300-500💎). ערך גבוה יותר ימכור פרסומות; נמוך יותר ימכור חבילות יהלומים.</div>">?</button></div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;font-size:11px">
           <span style="background:rgba(0,0,0,0.15);padding:4px 8px;border-radius:6px">Continue: <strong id="eco-continue">—</strong>💎</span>
           <span style="background:rgba(0,0,0,0.15);padding:4px 8px;border-radius:6px">Ad reward: <strong id="eco-ad">—</strong>💎</span>
@@ -785,25 +843,31 @@
   <section id="wager-section" style="margin-bottom:12px">
     <h2>🎰 הימורים וג'קפוט <button class="tip-btn" data-tip="wager">?</button></h2>
     <div style="padding:12px 16px;background:var(--card);border-radius:10px;margin-top:8px">
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;align-items:center">
         <button class="btn sm" id="btn-load-wagers" style="flex:1">🏆 תחרויות</button>
+        <button class="tip-btn" data-tip-text="<strong>🏆 תחרויות עם הימור</strong><br>טעינה של כל התחרויות שיש בהן <code>wager_amount > 0</code> (כלומר השחקנים שילמו 💎 כדי להצטרף).<div class=&quot;tip-example&quot;>🏠 <strong>החלטה אדמינית</strong>: אם תחרות מסתיימת בלי מנצח ברור, אתה יכול לסלק ידנית או להחזיר את ההימור לכל שחקן.<br>💰 חלוקה אוטומטית: 🥇 60% · 🥈 25% · 🥉 10% · 🏠 5% עמלה.</div>">?</button>
         <button class="btn sm" id="btn-load-jackpot" style="flex:1">🎰 ג'קפוט</button>
+        <button class="tip-btn" data-tip-text="<strong>🎰 ג'קפוט מערכת</strong><br>בכל פעם ש-event מתנה (🎁) מגריל ג'קפוט (5% סיכוי) — 500💎 מתווספים לקופה מערכתית. הקופה תחולק כשהיא תגיע לסף או באופן ידני.<div class=&quot;tip-example&quot;>💡 הסטטיסטיקה כוללת: סך הקופה הנוכחית, מספר השחקנים שתרמו, ושעת התרומה האחרונה.</div>">?</button>
       </div>
       <div id="wager-list" style="max-height:300px;overflow-y:auto"></div>
     </div>
   </section>
+  </div><!-- /admin-tab-panel economy:monetization+wager -->
 
+  <div class="admin-tab-panel" data-tab="players">
   <!-- Player Management -->
   <section id="players-section" style="margin-bottom:12px">
     <h2>👤 שחקנים וקרדיטים <button class="tip-btn" data-tip="players">?</button></h2>
     <div style="padding:12px 16px;background:var(--card);border-radius:10px;margin-top:8px">
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;align-items:center">
         <input id="player-search" placeholder="🔍 חפש לפי קוד או שם..." style="flex:1;min-width:120px;padding:6px 10px;border:1px solid rgba(0,0,0,0.12);border-radius:8px;font-family:inherit;font-size:12px;direction:rtl">
+        <button class="tip-btn" data-tip-text="<strong>🔍 חיפוש שחקן</strong><br>חיפוש לפי: שם תצוגה, קוד <code>BLOOM-XXXX</code>, device_id חלקי.<div class=&quot;tip-example&quot;>💡 כתוב לפחות 2 תווים. החיפוש לא מבדיל בין גדולות לקטנות. ל-BLOOM-XXXX אפשר לכתוב רק את 4 התווים האחרונים.</div>">?</button>
         <button class="btn sm" id="btn-load-players" style="flex:0;white-space:nowrap">📋 טען</button>
         <button class="btn sm" id="btn-load-referrals" style="flex:0;white-space:nowrap">🔗 הפניות</button>
+        <button class="tip-btn" data-tip-text="<strong>🔗 רשימת הפניות</strong><br>טוען טבלה של מי הפנה את מי. עמודות: מזמין → מוזמן → תאריך → בונוס למזמין → בונוס למוזמן.<div class=&quot;tip-example&quot;>💡 שימושי לבדוק אם יש שחקן שיוצר עשרות חשבונות מזויפים כדי לקבל בונוסים — אם תראה את אותו מזמין עם רשימה ארוכה של מוזמנים שכולם משחק 1-2 פעמים, יש כאן בעיה.</div>">?</button>
       </div>
       <div style="border-top:1px solid rgba(0,0,0,0.06);padding-top:10px">
-        <div style="font-size:11px;color:#6F6E68;margin-bottom:6px;font-weight:600">🎁 שלח מתנת קרדיטים</div>
+        <div style="font-size:11px;color:#6F6E68;margin-bottom:6px;font-weight:600">🎁 שלח מתנת קרדיטים <button class="tip-btn" data-tip-text="<strong>🎁 שלח מתנת קרדיטים</strong><br>הוספת 💎 לארנק שחקן ספציפי באופן ידני.<div class=&quot;tip-example&quot;><strong>שימושים נפוצים</strong>:<br>💌 פיצוי על באג שגרם להפסד 💎.<br>🎁 מתנה לשחקן ויראלי שמרבה בהפניות.<br>🏆 פרס מותאם לקבוצה ספציפית (גם אם לא היה אתגר רשמי).<br><br>📋 <strong>פורמט קוד</strong>: <code>BLOOM-XXXX</code> או רק <code>XXXX</code>. גם אותיות קטנות מתאימות.<br>📜 כל מתנה נרשמת ב-audit log.</div>">?</button></div>
         <div style="display:flex;gap:6px;align-items:end;flex-wrap:wrap">
           <div>
             <div style="font-size:9px;color:#A8A6A0;margin-bottom:2px">קוד שחקן</div>
@@ -826,11 +890,11 @@
     <div style="display:flex;flex-direction:column;gap:10px;padding:12px 16px;background:var(--card);border-radius:10px;margin-top:8px">
       <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:end">
         <div>
-          <div style="font-size:10px;color:#6F6E68;margin-bottom:3px">כמות</div>
+          <div style="font-size:10px;color:#6F6E68;margin-bottom:3px">כמות <button class="tip-btn" data-tip-text="<strong>כמות בוטים</strong><br>כמה ״שחקנים מדומים״ ירוצו על השרת בו-זמנית.<div class=&quot;tip-example&quot;>💰 <strong>עלות שרת</strong>:<br>• 1-50 בוטים: $0 (תוכנית חינמית)<br>• 50-200 בוטים: ~$2/חודש (Pro)<br>• 200+: דורש סקייל גדול יותר<br><br>🎯 <strong>שימוש</strong>:<br>• 5-10 = להציג ״כאן יש פעילות״ בתחילת השקה<br>• 50 = למלא לידרבורד יומי בלי לידרבורד ריק<br>• 200 = stress test רציני</div>">?</button></div>
           <input type="number" id="bot-count" min="1" max="200" value="10" style="width:60px;padding:6px;border:1px solid rgba(0,0,0,0.12);border-radius:8px;font-family:inherit;font-size:14px;font-weight:700;text-align:center">
         </div>
         <div>
-          <div style="font-size:10px;color:#6F6E68;margin-bottom:3px">מצב משחק</div>
+          <div style="font-size:10px;color:#6F6E68;margin-bottom:3px">מצב משחק <button class="tip-btn" data-tip-text="<strong>מצב משחק לבוט</strong><br>קובע איפה הציון של הבוט נשמר.<div class=&quot;tip-example&quot;>🏋️ <strong>אימון</strong>: heartbeat בלבד — מופיע ב-״live״ אבל לא בלידרבורד. הכי זול.<br><br>📊 <strong>יומי</strong>: INSERT אמיתי ל-<code>daily_scores</code>. מופיע בלידרבורד יומי/שבועי/חודשי. הכי שימושי למילוי lid'.<br><br>🏆 <strong>תחרות</strong>: INSERT ל-<code>contest_scores</code> של תחרות ספציפית (צריך לציין קוד). מומלץ להציג ״תחרות סוערת״.<br><br>⚔️ <strong>דו-קרב</strong>: בוטים מסתדרים בצמדים → רשומה אמיתית ב-<code>duels</code>. מציג שיש פעילות 1v1.<br><br>🎁 <strong>אתגר</strong>: INSERT ל-<code>challenge_entries</code> של אתגר ספציפי (צריך slug). מציג תחרות הולכת ומתפתחת.</div>">?</button></div>
           <select id="bot-mode" style="padding:6px 8px;border:1px solid rgba(0,0,0,0.12);border-radius:8px;font-family:inherit;font-size:12px">
             <option value="practice">🏋️ אימון</option>
             <option value="daily">📊 יומי (לידרבורד)</option>
@@ -840,7 +904,7 @@
           </select>
         </div>
         <div>
-          <div style="font-size:10px;color:#6F6E68;margin-bottom:3px">מהירות</div>
+          <div style="font-size:10px;color:#6F6E68;margin-bottom:3px">מהירות <button class="tip-btn" data-tip-text="<strong>מהירות בוט</strong><br>כל כמה זמן הבוט מבצע drop.<div class=&quot;tip-example&quot;>🐌 <strong>איטי</strong>: ~5 שניות בין drops. נראה הכי אנושי. טוב לצופים אמיתיים שעוקבים ב-spectator.<br><br>🏃 <strong>רגיל</strong>: ~2 שניות. ברירת מחדל מאוזנת.<br><br>⚡ <strong>מהיר</strong>: ~1 שניה. למילוי לידרבורד מהיר.<br><br>🚀 <strong>מקסימום</strong>: drops רצופים, כמעט ללא pause. לבדיקות עומס בלבד.<br><br>⚠️ <strong>אזהרה</strong>: ב-״מקסימום״ הבוטים יקודקדו לפסגת הלידרבורד תוך דקות.</div>">?</button></div>
           <select id="bot-speed" style="padding:6px 8px;border:1px solid rgba(0,0,0,0.12);border-radius:8px;font-family:inherit;font-size:12px">
             <option value="slow">🐌 איטי</option>
             <option value="normal" selected>🏃 רגיל</option>
@@ -859,7 +923,7 @@
       </div>
       <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:end">
         <div>
-          <div style="font-size:10px;color:#6F6E68;margin-bottom:3px">החלפת שם אחרי game-over (שניות)</div>
+          <div style="font-size:10px;color:#6F6E68;margin-bottom:3px">החלפת שם אחרי game-over (שניות) <button class="tip-btn" data-tip-text="<strong>החלפת שמות אוטומטית</strong><br>כשבוט מסיים game-over, הוא לא חוזר מיד עם אותו שם.<div class=&quot;tip-example&quot;>🎭 <strong>איך זה עובד</strong>: אחרי כל game-over, השרת בוחר עיכוב רנדומלי בטווח [min, max] שניות, ואז יוצר ״שחקן חדש״ עם שם אחר מתוך 200 שמות ישראליים.<br><br>🎯 <strong>אפקט</strong>: ב-24 שעות עוברים על-פני 200+ שמות שונים. השחקנים האמיתיים רואים ״מגוון״ במקום אותו שם חוזר.<br><br>💡 <strong>טווח מומלץ</strong>: 30-90 שניות (ברירת מחדל) — נראה כמו תזמון של שחקן אנושי שעובר משחק למשחק.</div>">?</button></div>
           <div style="display:flex;gap:4px;align-items:center">
             <input type="number" id="bot-delay-min" min="5" max="300" value="30" style="width:50px;padding:5px;border:1px solid rgba(0,0,0,0.12);border-radius:6px;font-family:inherit;font-size:12px;text-align:center">
             <span style="font-size:11px;color:#6F6E68">עד</span>
@@ -883,7 +947,9 @@
       <div id="bots-status-list" style="max-height:280px;overflow-y:auto;background:rgba(0,0,0,0.03);border-radius:10px;padding:6px"></div>
     </div>
   </section>
+  </div><!-- /admin-tab-panel players:players-section+bots -->
 
+  <div class="admin-tab-panel" data-tab="game">
   <!-- Bonus simulator -->
   <section id="bonus-sim-section" style="margin-bottom:12px">
     <h2>🎁 סימולטור בונוסים <button class="tip-btn" data-tip="bonus_sim">?</button></h2>
@@ -919,7 +985,9 @@
       </div>
     </div>
   </section>
+  </div><!-- /admin-tab-panel game:bonus-sim -->
 
+  <div class="admin-tab-panel active" data-tab="dashboard">
   <!-- KPI cards -->
   <section>
     <h2>מטריקות-על <button class="tip-btn" data-tip="kpi">?</button> <span class="badge" id="kpi-tag">היום</span></h2>
@@ -963,7 +1031,9 @@
     </div>
     <div class="help">צבע כהה = יותר משחקים שהסתיימו באותה שעה. שימושי לתזמון תזכורות.</div>
   </section>
+  </div><!-- /admin-tab-panel dashboard -->
 
+  <div class="admin-tab-panel" data-tab="players">
   <!-- Top scores -->
   <section>
     <h2>ניקודים מובילים <button class="tip-btn" data-tip="scores">?</button> · <span class="badge" id="ts-date">היום</span></h2>
@@ -972,7 +1042,9 @@
     </div>
     <div class="help">⚠ OUTLIER = z-score &gt; 3 (סטטיסטית חשוד). אם רואים — בחן את המכשיר.</div>
   </section>
+  </div><!-- /admin-tab-panel players:top-scores -->
 
+  <div class="admin-tab-panel" data-tab="contests">
   <!-- Active contests -->
   <section>
     <h2>תחרויות <button class="tip-btn" data-tip="contests">?</button></h2>
@@ -985,13 +1057,16 @@
   <section>
     <h2>🎁 אתגרי פרס <button class="tip-btn" data-tip="challenges">?</button> <span class="badge" id="ch-tag">—</span>
       <button class="btn sm" id="ch-new" style="margin-right:auto">+ צור אתגר</button>
+      <button class="tip-btn" data-tip-text="<strong>+ צור אתגר</strong><br>פותח modal לבחירת סוג אתגר.<div class=&quot;tip-example&quot;>📋 <strong>שדות נדרשים</strong>:<br>• שם + slug (זיהוי URL)<br>• סוג (race / top_n / beat / first_to_tier)<br>• starts_at + ends_at (ISO timestamps)<br>• prize_text + winner_slots_count<br><br>🔒 <strong>אחרי שנכנסים שחקנים</strong>: רוב השדות נעולים — רק שם, תיאור, פרס, ו-ends_at (להארכה בלבד) ניתן לעריכה.</div>">?</button>
     </h2>
     <div class="table-wrap" id="challenges-host">
       <div class="loading">טוען…</div>
     </div>
     <div class="help">אתגרים פתוחים לכל גולש. ניסיון אחד למכשיר. ⚠ = z-score outlier או יחס drops/score חשוד — בדוק לפני שאתה משלם.</div>
   </section>
+  </div><!-- /admin-tab-panel contests:contests+challenges -->
 
+  <div class="admin-tab-panel" data-tab="players">
   <!-- Players -->
   <section>
     <h2>שחקנים <button class="tip-btn" data-tip="players">?</button></h2>
@@ -1003,12 +1078,15 @@
       <div class="loading">טוען…</div>
     </div>
   </section>
+  </div><!-- /admin-tab-panel players:players-list -->
 
+  <div class="admin-tab-panel" data-tab="monitor">
   <!-- Live -->
   <section>
     <h2>קורה עכשיו <button class="tip-btn" data-tip="live">?</button> <span class="live-dot"></span>
       <button class="btn sm secondary" id="btn-live-refresh" style="margin-right:auto;font-size:10px">↻ רענן</button>
       <label style="font-size:10px;color:#6F6E68;display:flex;align-items:center;gap:4px"><input type="checkbox" id="live-auto" checked> אוטומטי</label>
+      <button class="tip-btn" data-tip-text="<strong>רענון אוטומטי</strong><br>כאשר מסומן — הרשימה מתעדכנת כל 10 שניות באופן אוטומטי.<div class=&quot;tip-example&quot;>📡 דורש 1 קריאת API לשרת כל 10 שניות — לא משמעותי לעלות.<br>💡 כבה אם אתה מעדכן הגדרות אחרות ולא רוצה רענונים מסיחים.<br>📋 גם כשמכובה, ה״↻ רענן״ תמיד עובד.</div>">?</button>
     </h2>
     <div id="live-host">
       <div class="loading">טוען…</div>
@@ -1026,10 +1104,13 @@
 
   <!-- Exports -->
   <section>
-    <h2>הורדת CSV <button class="tip-btn" data-tip="csv">?</button></h2>
+    <h2>הורדת CSV <button class="tip-btn" data-tip="csv">?</button>
+      <button class="tip-btn" data-tip-text="<strong>📥 ייצוא CSV</strong><br>הקלקה על כל כפתור מורידה את הטבלה כקובץ <code>.csv</code> עם UTF-8 BOM (כדי שעברית תיפתח נכון ב-Excel).<div class=&quot;tip-example&quot;>📊 <strong>טבלאות זמינות</strong>:<br>• <code>daily_scores</code> — כל הניקודים היומיים<br>• <code>contests</code> — תחרויות חברים<br>• <code>contest_scores</code> — חברי תחרויות + ניקוד<br>• <code>device_visits</code> — ביקורים יומיים לכל מכשיר<br>• <code>admin_actions</code> — audit log<br><br>📏 <strong>גבול</strong>: עד 10,000 שורות לטבלה. אם יש יותר — קח את ה-10K האחרונים.</div>">?</button>
+    </h2>
     <div class="exports" id="exports-host"></div>
     <div class="help">תוצא אוטומטית עם BOM ל-Excel + עברית. עד 10,000 שורות לטבלה.</div>
   </section>
+  </div><!-- /admin-tab-panel monitor:live+audit+csv -->
 
 </div>
 
@@ -1165,13 +1246,139 @@
     lb_tabs: '<strong>🏆 טבלאות מובילים</strong><br>שולט באילו טאבים מופיעים במודאל הלידרבורד בצד השחקן.<br><div class="tip-example"><strong>שלושה טאבים זמינים:</strong><br>🌍 <strong>עולמי</strong> — כל השחקנים, ללא פילטר. מציג דגל ליד כל שם.<br>🇮🇱 <strong>מדינתי</strong> — רק שחקנים מאותה מדינה. מבוסס על הדגל שכל אחד בחר.<br>🎚️ <strong>קושי</strong> — best per device לכל אחת מ-5 דרגות הקושי, מאוסף מ-<code>practice</code> ו-<code>duel</code> (יומי תמיד default).<br><br><strong>סינון משני (תמיד פעיל):</strong><br>בתוך כל טאב — יומי/שבועי/חודשי.<br><br><strong>סדר וברירת מחדל:</strong><br>גרור עם החצים ↑↓ לקבוע את סדר הטאבים. הברירה הראשונה היא מה שהשחקן רואה כשהוא פותח את המודאל. אם רק טאב אחד פעיל — שורת הטאבים לא מוצגת.<br><br><strong>חידוש:</strong><br>שחקנים בוחרים דגל פעם אחת (אחרי השם), נשמר ב-<code>player_profiles.country</code>. ניתן לשנות מתוך מודאל הלידרבורד.</div>'
   };
 
-  // Wire all .tip-btn elements after DOM load
+  // Per-key explanations for the giant 42-key config table.
+  // Each entry is shown when the admin clicks the small ? next to the key row.
+  // Keys without an entry simply hide the ? button (no harm done).
+  var TIPS_PER_KEY = {
+    // ---- Core gameplay ----
+    merge_mode: 'כיוון מיזוג. <code>anchor</code> = התוצאה נשארת ליד מקום הזריקה (מומלץ). <code>classic</code> = התוצאה תמיד נופלת שמאלה.',
+    crown_merge_enabled: 'מתג ראשי לפיצוץ Crown. כאשר <code>true</code> — שני 👑 + 👑 = פיצוץ שורה שלמה + בונוס.',
+    crown_merge_bonus: 'כמה נקודות בונוס מתווספות מעבר לניקוד המיזוג הרגיל כאשר 2 כתרים מתאחדים. ברירת מחדל: <code>50000</code>.',
+    // ---- Events: global ----
+    events_enabled: 'מתג ראשי לכל ה-events. <code>false</code> → אף event לא מופיע במשחק.',
+    events_start_delay: 'שניות מתחילת המשחק עד שה-event הראשון מופיע. ברירת מחדל: <code>15</code>.',
+    events_min_gap: 'מינימום שניות בין event ל-event. ברירת מחדל: <code>15</code>.',
+    events_max_gap: 'מקסימום שניות בין event ל-event. ברירת מחדל: <code>35</code>.',
+    // ---- Bomb ----
+    event_bomb_enabled: 'מתג ל-event פצצה.',
+    event_bomb_weight: 'הסתברות יחסית של פצצה. (weight של פצצה ÷ סכום כל ה-weights). 25 ≈ 25% אם הסכום הכולל הוא 100.',
+    event_bomb_timer: 'שניות עד שהפצצה נעלמת מהלוח אם השחקן לא פעל. ברירת מחדל: <code>8</code>.',
+    event_bomb_radius: 'רדיוס הפיצוץ. <code>1</code> = 3×3 (8 שכנים מסביב). ערכים גבוהים מעלים את ההרס משמעותית.',
+    event_bomb_points_per_tile: 'נקודות שמתווספות לכל אריח שמתפוצץ. ברירת מחדל: <code>2000</code>.',
+    event_bomb_shake: 'עוצמת רעידת המסך בעת פיצוץ. <code>0</code> = כבוי. מומלץ 4–8.',
+    // ---- Star ----
+    event_star_enabled: 'מתג ל-event כוכב — מקפיץ אריח שדרגה +1.',
+    event_star_weight: 'הסתברות יחסית של כוכב.',
+    event_star_timer: 'שניות עד שהכוכב נעלם מהלוח.',
+    event_star_bonus_points: 'נקודות בונוס כשמפעילים את הכוכב.',
+    // ---- Gift ----
+    event_gift_enabled: 'מתג ל-event מתנה — מעניק 5–50 💎 (5% סיכוי לג׳קפוט גדול).',
+    event_gift_weight: 'הסתברות יחסית של מתנה.',
+    event_gift_timer: 'שניות עד שהמתנה נעלמת.',
+    event_gift_credits_min: 'מינימום 💎 שמתנה רגילה מעניקה.',
+    event_gift_credits_max: 'מקסימום 💎 שמתנה רגילה מעניקה.',
+    event_gift_jackpot_chance: 'הסתברות לג׳קפוט (0–1). ברירת מחדל: <code>0.05</code> (5%).',
+    event_gift_jackpot_amount: 'סכום הג׳קפוט ב-💎. ברירת מחדל: <code>500</code>.',
+    // ---- Fever ----
+    event_fever_enabled: 'מתג ל-event טירוף — מכפיל ניקוד ×3 לזמן מוגבל.',
+    event_fever_weight: 'הסתברות יחסית של טירוף.',
+    event_fever_timer: 'שניות עד שה-event נעלם אם השחקן לא הגיב.',
+    event_fever_duration: 'משך הטירוף עצמו במילישניות. ברירת מחדל: <code>10000</code> (10 שניות).',
+    event_fever_multiplier: 'מכפיל הניקוד בזמן טירוף. ברירת מחדל: <code>3</code>.',
+    // ---- Freeze ----
+    event_freeze_enabled: 'מתג ל-event הקפאה — מנקה שורה תחתונה (הצלה).',
+    event_freeze_weight: 'הסתברות יחסית של הקפאה.',
+    event_freeze_timer: 'שניות עד שהקפאה נעלמת.',
+    event_freeze_min_filled_rows: 'מינימום שורות מלאות בלוח לפני שהקפאה יכולה להופיע. ברירת מחדל: <code>3</code>.',
+    event_freeze_bonus_points: 'נקודות בונוס שמתווספות בעת הקפאה.',
+    event_freeze_shake: 'עוצמת רעידת המסך בעת הקפאה.',
+    // ---- Target ----
+    event_target_enabled: 'מתג ל-event מטרה — מכפיל ×5 על מיזוג של דרגה ספציפית.',
+    event_target_weight: 'הסתברות יחסית של מטרה.',
+    event_target_timer: 'שניות לפני שהמטרה נעלמת אם לא הופעלה.',
+    event_target_multiplier: 'מכפיל הניקוד למיזוג של הדרגה המסומנת. ברירת מחדל: <code>5</code>.',
+    // ---- Shake ----
+    shake_tier_up: 'עוצמת רעידת המסך כשמגיעים לדרגה חדשה (5+). מומלץ 3–5.',
+    shake_crown_merge: 'עוצמת רעידה ב-Crown Merge. מומלץ 6–10 (אירוע דרמטי).',
+    shake_milestone: 'עוצמת רעידה במעבר milestone של ניקוד (10K, 50K, 100K).',
+    shake_multi_merge: 'עוצמת רעידה במיזוג של 3+ אריחים בו-זמנית.',
+    shake_new_best: 'עוצמת רעידה כשנשבר שיא אישי.',
+    contest_alert_shake_overtake: 'עוצמת רעידה כשמישהו עובר את הניקוד שלך בתחרות חברים.',
+    contest_alert_shake_first: 'עוצמת רעידה כשחזרת למקום ראשון.',
+    contest_alert_shake_leader: 'עוצמת רעידה כשמישהו אחר הגיע למקום הראשון.',
+    // ---- Rewards / credits ----
+    welcome_bonus: 'כמות 💎 שמקבל שחקן חדש פעם אחת בהרשמה.',
+    daily_login_reward: 'בונוס 💎 לכניסה יומית. מתחדש בכל יום בחצות שעון ירושלים.',
+    daily_reward: 'בונוס 💎 לסיום אתגר יומי.',
+    streak_3_reward: 'בונוס 💎 ברצף של 3 ימי כניסה.',
+    streak_7_reward: 'בונוס 💎 ברצף של 7 ימי כניסה.',
+    streak_30_reward: 'בונוס 💎 ברצף של 30 ימי כניסה.',
+    contest_1st_reward: 'בונוס 💎 על מקום ראשון בתחרות יומית.',
+    ad_watch_reward: '💎 שהשחקן מקבל בעבור צפייה בפרסומת. ברירת מחדל: <code>30</code>.',
+    ad_cooldown_seconds: 'שניות מינימום בין צפיות מתוגמלות. מונע ניצול. ברירת מחדל: <code>30</code>.',
+    continue_price: 'מחיר ב-💎 להמשך משחק אחרי game-over (חיים נוספים). ברירת מחדל: <code>200</code>.',
+    // ---- Wager ----
+    wager_enabled: 'מתג ראשי להימורים בתחרויות חברים.',
+    wager_min: 'מינימום 💎 להימור בתחרות.',
+    wager_max: 'מקסימום 💎 להימור בתחרות.',
+    wager_rake: 'אחוז עמלה למערכת מהקופה. ברירת מחדל: <code>0.05</code> (5%).',
+    wager_1st_pct: 'אחוז הקופה למקום ראשון. ברירת מחדל: <code>0.60</code> (60%).',
+    wager_2nd_pct: 'אחוז הקופה למקום שני. ברירת מחדל: <code>0.25</code> (25%).',
+    wager_3rd_pct: 'אחוז הקופה למקום שלישי. ברירת מחדל: <code>0.10</code> (10%).',
+    // ---- Referral ----
+    referral_enabled: 'מתג ראשי למערכת הפניות (הזמן חבר → שניכם מקבלים 💎).',
+    referral_reward: 'כמות 💎 שהמזמין מקבל לכל חבר שהצטרף דרך הלינק שלו.',
+    referred_bonus: 'כמות 💎 שהמוזמן מקבל בעת ההצטרפות הראשונה.',
+    // ---- Shop / tile prices ----
+    tile_price_5: 'מחיר ב-💎 לקניית אריח דרגה 5 (⚡ ברק) בחנות.',
+    tile_price_6: 'מחיר ב-💎 לקניית אריח דרגה 6 (⭐ כוכב).',
+    tile_price_7: 'מחיר ב-💎 לקניית אריח דרגה 7 (💎 יהלום).',
+    tile_price_8: 'מחיר ב-💎 לקניית אריח דרגה 8 (👑 כתר).',
+    // ---- Weekly auto-contest ----
+    weekly_enabled: 'מתג להפעלת תחרות שבועית אוטומטית. נוצרת כל 7 ימים.',
+    weekly_prize: 'פרס ב-💎 לזוכה הראשון בתחרות השבועית.',
+    weekly_name: 'שם התחרות השבועית כפי שמופיע לשחקנים.',
+    // ---- Contest alerts ----
+    contest_alerts_enabled: 'מתג להתראות חיות בתחרויות חברים (״עברו אותך״, ״חזרת למקום 1״).',
+    contest_alert_interval: 'שניות בין בדיקות התראה. ברירת מחדל: <code>12</code>.',
+    contest_alert_duration: 'מילישניות שההתראה מוצגת על המסך.',
+    contest_alert_gap_pct: 'פער יחסי בין השחקנים שמפעיל התראה ״עוד נקודות״. ברירת מחדל: <code>0.1</code> (10%).',
+    contest_alert_gap_max: 'פער מקסימלי בנקודות מוחלטות שמפעיל את ההתראה.',
+    // ---- Diamond packs (premium IAP) ----
+    diamond_pack_1_amount: 'כמות 💎 בחבילה 1.',
+    diamond_pack_1_price: 'מחיר חבילה 1 ב-₪.',
+    diamond_pack_2_amount: 'כמות 💎 בחבילה 2.',
+    diamond_pack_2_price: 'מחיר חבילה 2 ב-₪.',
+    diamond_pack_3_amount: 'כמות 💎 בחבילה 3.',
+    diamond_pack_3_price: 'מחיר חבילה 3 ב-₪.',
+    diamond_pack_4_amount: 'כמות 💎 בחבילה 4.',
+    diamond_pack_4_price: 'מחיר חבילה 4 ב-₪.',
+    // ---- API keys ----
+    adsense_client_id: 'מזהה לקוח AdSense בפורמט ca-pub-XXXXXXXXXXXXXXXX. נדרש כדי שפרסומות יעבדו.',
+    stripe_publishable_key: 'מפתח ציבורי של Stripe (pk_live_...). הסוד נשמר ב-env. נדרש להפעלת רכישות.',
+    // ---- Difficulty / speed / slot (already covered in UI but mapped for table) ----
+    drop_weights: 'משקלים של נפילות טבעיות לכל 8 הדרגות, מופרדים בפסיקים. אם כולם 0 → נטען ברירת המחדל אוטומטית.',
+    game_speed_pct: 'אחוז מהירות (50–200). 50% = פי-2 מהיר, 200% = איטי כפול. ברירת מחדל: <code>100</code>.',
+    slot_enabled: 'הפעלת אנימציית הסלוט בתצוגת ״הבא״. <code>false</code> = snap מיידי לדרגה.',
+    slot_duration_ms: 'משך כל הסיבוב במילישניות. 200 = מהיר, 2000 = איטי דרמטי.',
+    slot_intensity: 'כמה דרגות שונות מופיעות במהלך הסיבוב (1–8).',
+    // ---- Leaderboard tabs (UI mirrors) ----
+    leaderboard_tabs_enabled: 'CSV שמגדיר אילו טאבים זמינים ובאיזה סדר (world,country,difficulty).',
+    leaderboard_default_tab: 'הטאב שמוצג כברירת מחדל כאשר השחקן פותח את הלידרבורד.',
+    leaderboard_default_difficulty: 'דרגת הקושי שנבחרת מראש בכניסה לטאב ״קושי״.'
+  };
+
+  // Wire all .tip-btn elements after DOM load. Two modes:
+  //   - data-tip="KEY"       → looks up TIPS[KEY] (section-level, shared text)
+  //   - data-tip-text="HTML" → uses the inline HTML directly (per-control)
   function wireTips() {
-    document.querySelectorAll('.tip-btn[data-tip]').forEach(function(btn) {
+    document.querySelectorAll('.tip-btn').forEach(function(btn) {
       btn.onclick = function(e) {
         e.stopPropagation();
+        var inline = btn.getAttribute('data-tip-text');
+        if (inline) { showTip(btn, inline); return; }
         var key = btn.getAttribute('data-tip');
-        if (TIPS[key]) showTip(btn, TIPS[key]);
+        if (key && TIPS[key]) showTip(btn, TIPS[key]);
       };
     });
   }
@@ -2726,19 +2933,26 @@
         if (!groups[prefix]) groups[prefix] = [];
         groups[prefix].push(r);
       });
-      var html = '<div style="font-size:11px;color:var(--muted);margin-bottom:8px">לחץ על ערך לעריכה. שינויים נשמרים מיד.</div>';
+      var html = '<div style="font-size:11px;color:var(--muted);margin-bottom:8px">לחץ על ערך לעריכה. שינויים נשמרים מיד. לחץ על <strong>?</strong> להסבר על כל מפתח.</div>';
       html += '<table style="width:100%;border-collapse:collapse;font-size:12px">';
-      html += '<tr style="background:rgba(0,0,0,0.04)"><th style="text-align:right;padding:6px 8px">מפתח</th><th style="text-align:right;padding:6px 8px">ערך</th><th style="width:60px"></th></tr>';
+      html += '<tr style="background:rgba(0,0,0,0.04)"><th style="text-align:right;padding:6px 8px">מפתח</th><th style="text-align:right;padding:6px 8px">ערך</th><th style="width:30px"></th><th style="width:60px"></th></tr>';
       rows.forEach(function(r) {
         if (r.key.startsWith('_earn:')) return; // skip dedup keys
+        var hint = TIPS_PER_KEY[r.key];
+        var hintCell = hint
+          ? '<td style="padding:6px 2px;text-align:center"><button class="tip-btn" data-tip-text="' + escHtml(hint) + '">?</button></td>'
+          : '<td style="padding:6px 2px"></td>';
         html += '<tr data-config-key="' + escHtml(r.key) + '" style="border-top:1px solid rgba(0,0,0,0.04)">' +
           '<td style="padding:6px 8px;font-weight:600;font-family:monospace;font-size:11px;direction:ltr;color:var(--gold)">' + escHtml(r.key) + '</td>' +
           '<td style="padding:6px 8px"><input class="cfg-val" data-key="' + escHtml(r.key) + '" value="' + escHtml(r.value) + '" style="width:100%;padding:4px 6px;border:1px solid rgba(0,0,0,0.1);border-radius:6px;font-family:inherit;font-size:12px;box-sizing:border-box;direction:ltr"></td>' +
+          hintCell +
           '<td style="padding:6px 4px"><button class="btn sm cfg-save" data-key="' + escHtml(r.key) + '" style="font-size:10px;padding:2px 8px">שמור</button></td>' +
         '</tr>';
       });
       html += '</table>';
       host.innerHTML = html;
+      // Re-wire tooltips for the freshly-rendered ? buttons inside the table.
+      wireTips();
       // Wire save buttons
       host.querySelectorAll('.cfg-save').forEach(function(btn) {
         btn.onclick = async function() {
@@ -2768,6 +2982,31 @@
       });
     } catch(e) { host.innerHTML = 'שגיאת רשת'; }
   };
+
+  // ============ TAB SWITCHING ============
+  var ADMIN_TAB_KEY = 'bloom_admin_active_tab';
+  var VALID_TABS = ['dashboard', 'game', 'economy', 'players', 'contests', 'monitor'];
+  function switchAdminTab(name) {
+    if (VALID_TABS.indexOf(name) < 0) name = 'dashboard';
+    document.querySelectorAll('.admin-tab').forEach(function(b) {
+      var match = b.getAttribute('data-tab') === name;
+      b.classList.toggle('active', match);
+      b.setAttribute('aria-selected', match ? 'true' : 'false');
+    });
+    document.querySelectorAll('.admin-tab-panel').forEach(function(p) {
+      p.classList.toggle('active', p.getAttribute('data-tab') === name);
+    });
+    try { localStorage.setItem(ADMIN_TAB_KEY, name); } catch (e) {}
+    closeTip();
+    window.scrollTo(0, 0);
+  }
+  document.querySelectorAll('.admin-tab').forEach(function(b) {
+    b.onclick = function() { switchAdminTab(b.getAttribute('data-tab')); };
+  });
+  // Restore last visited tab
+  var savedTab = null;
+  try { savedTab = localStorage.getItem(ADMIN_TAB_KEY); } catch (e) {}
+  if (savedTab && VALID_TABS.indexOf(savedTab) >= 0) switchAdminTab(savedTab);
 
   initPrefs(); // restore saved preferences before refreshAll
   refreshAll();
