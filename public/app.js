@@ -8762,20 +8762,33 @@
                              // including empty ones — so the user sees the
                              // full footprint even when some cells were empty.
 
+    // SHIFT the blast center so the (2*radius+1)² area ALWAYS fits on the
+    // board. Without this, a bomb at col 3 (rightmost) clips to a 2×3 = 6-
+    // cell blast, which the user perceives as "the bomb didn't really do
+    // 3×3". Now the center slides inward to keep all 9 cells on the board.
+    var bcRow = evt.row, bcCol = evt.col;
+    if (bcRow - radius < 0) bcRow = radius;
+    if (bcRow + radius > getBoardRows() - 1) bcRow = getBoardRows() - 1 - radius;
+    if (bcCol - radius < 0) bcCol = radius;
+    if (bcCol + radius > getBoardCols() - 1) bcCol = getBoardCols() - 1 - radius;
+
     // Stage 1: capture cell rects BEFORE clearing the grid (so we know
     // where to spawn explosion overlays, independent of render()).
     var hitCells = [];
     for (var dr = -radius; dr <= radius; dr++) {
       for (var dc = -radius; dc <= radius; dc++) {
-        var r = evt.row + dr, c = evt.col + dc;
+        var r = bcRow + dr, c = bcCol + dc;
         if (r < 0 || r >= getBoardRows() || c < 0 || c >= getBoardCols()) continue;
         var dist = Math.max(Math.abs(dr), Math.abs(dc));
         hitCells.push({ r: r, c: c, dist: dist, hadTile: grid[r][c] !== 0 });
         blastZoneCells.push({ r: r, c: c }); // ALL cells in the radius
-        // Always show the explosion (even on empty cells inside the radius) —
-        // the SHAPE of the blast is what tells the player what got hit.
-        // But only destroy tiles that actually exist (don't bomb the center).
-        if (grid[r][c] !== 0 && !(dr === 0 && dc === 0)) {
+        // Destroy every non-empty cell in the blast zone — INCLUDING the
+        // center. Previously the center was excluded with the reasoning
+        // "don't bomb the bomb's own cell", but when a player drops a tile
+        // into the bomb's column, that tile lands AT the bomb's cell and
+        // was then surviving the explosion ("מאחורי הפצצה יש אריח"). The
+        // dropped tile is the trigger; it should be consumed by the blast.
+        if (grid[r][c] !== 0) {
           destroyedCells.push({ r: r, c: c, tier: grid[r][c] });
           grid[r][c] = 0;
           destroyed++;
