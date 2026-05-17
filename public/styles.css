@@ -785,23 +785,7 @@
     50% { box-shadow: inset 0 0 24px rgba(200,71,47,0.4); }
   }
 
-  /* ── Drop target: tiny dot showing where tile will land ── */
-  .cell.drop-target::after {
-    content: '';
-    position: absolute;
-    width: 8px; height: 8px;
-    top: 50%; left: 50%;
-    transform: translate(-50%, -50%);
-    border-radius: 50%;
-    background: var(--target-color, rgba(250,199,117,0.5));
-    opacity: 0.4;
-    animation: targetDot 1.5s ease-in-out infinite;
-    pointer-events: none;
-  }
-  @keyframes targetDot {
-    0%,100% { opacity: 0.25; transform: translate(-50%,-50%) scale(0.8); }
-    50% { opacity: 0.45; transform: translate(-50%,-50%) scale(1.1); }
-  }
+  /* (drop-target removed — clean board is better on 4-column grid) */
   /* ============ TOUR / TUTORIAL ("סייר") ============ */
   .tour-card {
     background: #FFFFFF; border-radius: 18px; padding: 0;
