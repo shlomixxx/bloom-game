@@ -270,6 +270,35 @@
   .lb-range { font-size: 11px; color: #A8A6A0; margin-bottom: 8px; direction: rtl; text-align: right; }
   .lb-modal-card { min-height: 480px; }
 
+  /* Compact pill style for the secondary tab rows (period + difficulty) so
+     three rows still fit comfortably inside the leaderboard modal. */
+  .lb-period-tabs .lb-tab,
+  .lb-diff-tabs .lb-tab,
+  .lb-scope-tab {
+    font-size: 12px; padding: 6px 8px; border-radius: 8px;
+  }
+  .lb-diff-tabs { flex-wrap: wrap; }
+  .lb-diff-tabs .lb-tab { min-width: 60px; }
+  .lb-flag {
+    margin-inline-start: 6px; font-size: 12px;
+    display: inline-block; vertical-align: -1px;
+  }
+  /* Flag picker grid — 4 columns of tappable country cells. */
+  .country-grid .country-cell {
+    appearance: none;
+    background: #F5F2EC; border: 1px solid rgba(0,0,0,0.06); border-radius: 12px;
+    padding: 10px 6px; cursor: pointer; transition: transform 0.1s, background 0.15s;
+    display: flex; flex-direction: column; align-items: center; gap: 2px;
+    font-family: inherit;
+  }
+  .country-grid .country-cell:hover { background: #EDE9E0; }
+  .country-grid .country-cell:active { transform: scale(0.95); }
+  html[data-theme="dark"] .country-grid .country-cell {
+    background: #2C2A28; border-color: rgba(255,255,255,0.06); color: #F2EFE9;
+  }
+  html[data-theme="dark"] .country-grid .country-cell:hover { background: #38332E; }
+  html[data-theme="dark"] .country-grid .country-cell div:last-child { color: #F2EFE9; }
+
   .streak-val { color: #D95A1B; font-variant-numeric: tabular-nums; }
   .streak-val.zero { color: #A8A6A0; }
 

@@ -289,6 +289,27 @@ function shiftDateBack(iso, daysBack) {
   return d.toISOString().slice(0, 10);
 }
 
+// Accepts an ISO-3166 alpha-2 country code (e.g. "IL", "us"). Returns the
+// canonical upper-case form, or null if the input doesn't look like a
+// country code. We deliberately don't gate on a fixed allow-list — players
+// from arbitrary territories should still get a flag. Empty string + "??"
+// + "XX" are normalized to null so they never pollute the country index.
+function cleanCountry(c) {
+  if (!c) return null;
+  const s = String(c).trim().toUpperCase();
+  if (!/^[A-Z]{2}$/.test(s)) return null;
+  if (s === 'XX' || s === '??') return null;
+  return s;
+}
+
+// Valid difficulty labels for the leaderboard query/insert path. The actual
+// gameplay presets live in DIFFICULTY_PRESETS; this is just the input gate.
+const DIFFICULTY_LABELS = ['default', 'easy', 'medium', 'hard', 'insane'];
+function cleanDifficultyLabel(v) {
+  const s = String(v || 'default').toLowerCase().trim();
+  return DIFFICULTY_LABELS.includes(s) ? s : 'default';
+}
+
 // Validates a serialized 4x6 grid coming from a spectated client.
 // Returns the canonical JSON string or null if the payload doesn't fit
 // the expected shape (24 cells, each tier 0-8). Anything off-shape is
@@ -433,7 +454,7 @@ function isCodeBlacklisted(code) {
 
 app.post('/api/score', async (req, res) => {
   try {
-    const { date, deviceId, name, score, tier, drops, token } = req.body || {};
+    const { date, deviceId, name, score, tier, drops, token, country } = req.body || {};
     if (!isValidDate(date)) return res.status(400).json({ error: 'bad_date' });
     if (typeof deviceId !== 'string' || deviceId.length < 8 || deviceId.length > 64) {
       return res.status(400).json({ error: 'bad_device' });
@@ -463,16 +484,26 @@ app.post('/api/score', async (req, res) => {
       return res.status(400).json({ error: 'implausible_score' });
     }
     const safeName = cleanName(name);
+    const safeCountry = cleanCountry(country);
+    if (safeCountry) {
+      try {
+        await pool.query(
+          `UPDATE player_profiles SET country = $1 WHERE device_id = $2 AND (country IS NULL OR country <> $1)`,
+          [safeCountry, deviceId]
+        );
+      } catch (e) { /* table may not have the column on legacy DBs */ }
+    }
     await pool.query(
-      `INSERT INTO daily_scores (date, device_id, name, score, tier)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO daily_scores (date, device_id, name, score, tier, country)
+       VALUES ($1, $2, $3, $4, $5, $6)
        ON CONFLICT (date, device_id) DO UPDATE
          SET name = EXCLUDED.name,
              score = EXCLUDED.score,
              tier = EXCLUDED.tier,
+             country = COALESCE(EXCLUDED.country, daily_scores.country),
              updated_at = NOW()
          WHERE daily_scores.score < EXCLUDED.score`,
-      [date, deviceId, safeName, Math.floor(score), Math.floor(tier)]
+      [date, deviceId, safeName, Math.floor(score), Math.floor(tier), safeCountry]
     );
     const rankRes = await pool.query(
       `SELECT 1 + (
@@ -555,6 +586,255 @@ app.get('/api/leaderboard/:date', async (req, res) => {
     res.json({ list, total: total.rows[0].c, rank });
   } catch (e) {
     console.error('GET /api/leaderboard', e);
+    res.status(500).json({ error: 'server' });
+  }
+});
+
+// POST /api/profile/country — one-time flag picker. Idempotent. Stores the
+// country on player_profiles (auto-creates a stub row if absent) so future
+// score submissions can default to it server-side when the client forgets.
+app.post('/api/profile/country', async (req, res) => {
+  try {
+    const { deviceId, country } = req.body || {};
+    if (typeof deviceId !== 'string' || deviceId.length < 8 || deviceId.length > 64) {
+      return res.status(400).json({ error: 'bad_device' });
+    }
+    if (!checkRateLimit('profile:country', deviceId, 10, 60 * 60 * 1000)) {
+      return res.status(429).json({ error: 'rate_limited' });
+    }
+    const cc = cleanCountry(country);
+    if (!cc && country !== null && country !== '') {
+      return res.status(400).json({ error: 'bad_country' });
+    }
+    try {
+      await pool.query(
+        `UPDATE player_profiles SET country = $1 WHERE device_id = $2`,
+        [cc, deviceId]
+      );
+    } catch (e) { /* column missing on legacy DB */ }
+    res.json({ ok: true, country: cc });
+  } catch (e) {
+    console.error('POST /api/profile/country', e);
+    res.status(500).json({ error: 'server' });
+  }
+});
+
+// POST /api/score/practice — non-daily best-per-difficulty leaderboard.
+// Practice and duel modes both flow through here. Daily scores DO NOT call
+// this (admin-controlled fairness); duel writes one row per participant.
+// Body: { date, deviceId, name, score, tier, difficulty, country, source, drops, token }
+app.post('/api/score/practice', async (req, res) => {
+  try {
+    const { date, deviceId, name, score, tier, drops, token, country, difficulty, source } = req.body || {};
+    if (!isValidDate(date)) return res.status(400).json({ error: 'bad_date' });
+    if (typeof deviceId !== 'string' || deviceId.length < 8 || deviceId.length > 64) {
+      return res.status(400).json({ error: 'bad_device' });
+    }
+    if (token && !verifyDeviceToken(deviceId, token)) {
+      return res.status(403).json({ error: 'bad_token' });
+    }
+    if (!checkRateLimit('practice:score', deviceId, 120, 60 * 60 * 1000)) {
+      return res.status(429).json({ error: 'rate_limited' });
+    }
+    if (typeof score !== 'number' || !Number.isFinite(score) || score < 0 || score > 10_000_000) {
+      return res.status(400).json({ error: 'bad_score' });
+    }
+    if (typeof tier !== 'number' || tier < 1 || tier > 8) {
+      return res.status(400).json({ error: 'bad_tier' });
+    }
+    const dropsN = typeof drops === 'number' && Number.isFinite(drops) && drops >= 0 ? Math.floor(drops) : null;
+    if (dropsN !== null && challengeDropsImplausible(score, dropsN)) {
+      console.warn(`[anti-cheat] practice score rejected: device=${deviceId} score=${score} drops=${dropsN}`);
+      return res.status(400).json({ error: 'implausible_score' });
+    }
+    const safeName = cleanName(name);
+    const safeCountry = cleanCountry(country);
+    const safeDiff = cleanDifficultyLabel(difficulty);
+    const safeSource = (source === 'duel') ? 'duel' : 'practice';
+    if (safeCountry) {
+      try {
+        await pool.query(
+          `UPDATE player_profiles SET country = $1 WHERE device_id = $2 AND (country IS NULL OR country <> $1)`,
+          [safeCountry, deviceId]
+        );
+      } catch (e) {}
+    }
+    await pool.query(
+      `INSERT INTO difficulty_scores (date, device_id, difficulty_label, name, score, tier, country, source)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       ON CONFLICT (date, device_id, difficulty_label) DO UPDATE
+         SET name = EXCLUDED.name,
+             score = EXCLUDED.score,
+             tier = EXCLUDED.tier,
+             country = COALESCE(EXCLUDED.country, difficulty_scores.country),
+             source = EXCLUDED.source,
+             updated_at = NOW()
+         WHERE difficulty_scores.score < EXCLUDED.score`,
+      [date, deviceId, safeDiff, safeName, Math.floor(score), Math.floor(tier), safeCountry, safeSource]
+    );
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('POST /api/score/practice', e);
+    res.status(500).json({ error: 'server' });
+  }
+});
+
+// GET /api/leaderboard/v2 — unified scope × time leaderboard.
+//   scope=world      → all daily_scores rows in the date window
+//   scope=country    → daily_scores rows filtered by the player's country
+//                      (or ?country=XX override; defaults to viewer's country)
+//   scope=difficulty → difficulty_scores rows for ?difficulty=...
+// period=day|week|month, endDate=YYYY-MM-DD.
+app.get('/api/leaderboard/v2', async (req, res) => {
+  try {
+    const scope = String(req.query.scope || 'world');
+    const period = String(req.query.period || 'day');
+    const endDate = String(req.query.endDate || '');
+    if (!isValidDate(endDate)) return res.status(400).json({ error: 'bad_date' });
+    if (!['day', 'week', 'month'].includes(period)) return res.status(400).json({ error: 'bad_period' });
+    if (!['world', 'country', 'difficulty'].includes(scope)) return res.status(400).json({ error: 'bad_scope' });
+    const deviceId = String(req.query.deviceId || '').slice(0, 64);
+    const daysBack = period === 'day' ? 0 : period === 'week' ? 6 : 29;
+    const startDate = shiftDateBack(endDate, daysBack);
+
+    // Country scope: prefer ?country=, fall back to the viewer's profile.
+    let viewerCountry = cleanCountry(req.query.country);
+    if (scope === 'country' && !viewerCountry && deviceId) {
+      try {
+        const r = await pool.query(`SELECT country FROM player_profiles WHERE device_id = $1`, [deviceId]);
+        if (r.rows.length && r.rows[0].country) viewerCountry = cleanCountry(r.rows[0].country);
+      } catch (e) {}
+    }
+    if (scope === 'country' && !viewerCountry) {
+      return res.json({ list: [], total: 0, rank: null, from: startDate, to: endDate, period, scope, country: null, needsCountry: true });
+    }
+
+    const difficulty = cleanDifficultyLabel(req.query.difficulty);
+    let listQ, rankQ, totalQ;
+    if (scope === 'difficulty') {
+      const baseParams = [startDate, endDate, difficulty];
+      listQ = {
+        text:
+          `SELECT name, score, tier, device_id, country FROM (
+             SELECT DISTINCT ON (device_id) name, score, tier, device_id, country
+             FROM difficulty_scores
+             WHERE date >= $1 AND date <= $2 AND difficulty_label = $3
+             ORDER BY device_id, score DESC, updated_at ASC
+           ) best
+           ORDER BY score DESC LIMIT 50`,
+        values: baseParams
+      };
+      totalQ = {
+        text: `SELECT COUNT(DISTINCT device_id)::int AS c FROM difficulty_scores
+               WHERE date >= $1 AND date <= $2 AND difficulty_label = $3`,
+        values: baseParams
+      };
+      if (deviceId) {
+        rankQ = {
+          text:
+            `WITH best AS (
+               SELECT DISTINCT ON (device_id) device_id, score
+               FROM difficulty_scores
+               WHERE date >= $1 AND date <= $2 AND difficulty_label = $3
+               ORDER BY device_id, score DESC
+             ),
+             me AS (SELECT score FROM best WHERE device_id = $4)
+             SELECT 1 + (SELECT COUNT(*) FROM best WHERE score > COALESCE((SELECT score FROM me), -1)) AS rank,
+                    EXISTS (SELECT 1 FROM me) AS has_score`,
+          values: [startDate, endDate, difficulty, deviceId]
+        };
+      }
+    } else if (scope === 'country') {
+      const baseParams = [startDate, endDate, viewerCountry];
+      listQ = {
+        text:
+          `SELECT name, score, tier, device_id, country FROM (
+             SELECT DISTINCT ON (device_id) name, score, tier, device_id, country
+             FROM daily_scores
+             WHERE date >= $1 AND date <= $2 AND country = $3
+             ORDER BY device_id, score DESC, updated_at ASC
+           ) best
+           ORDER BY score DESC LIMIT 50`,
+        values: baseParams
+      };
+      totalQ = {
+        text: `SELECT COUNT(DISTINCT device_id)::int AS c FROM daily_scores
+               WHERE date >= $1 AND date <= $2 AND country = $3`,
+        values: baseParams
+      };
+      if (deviceId) {
+        rankQ = {
+          text:
+            `WITH best AS (
+               SELECT DISTINCT ON (device_id) device_id, score
+               FROM daily_scores
+               WHERE date >= $1 AND date <= $2 AND country = $3
+               ORDER BY device_id, score DESC
+             ),
+             me AS (SELECT score FROM best WHERE device_id = $4)
+             SELECT 1 + (SELECT COUNT(*) FROM best WHERE score > COALESCE((SELECT score FROM me), -1)) AS rank,
+                    EXISTS (SELECT 1 FROM me) AS has_score`,
+          values: [startDate, endDate, viewerCountry, deviceId]
+        };
+      }
+    } else {
+      // world
+      const baseParams = [startDate, endDate];
+      listQ = {
+        text:
+          `SELECT name, score, tier, device_id, country FROM (
+             SELECT DISTINCT ON (device_id) name, score, tier, device_id, country
+             FROM daily_scores
+             WHERE date >= $1 AND date <= $2
+             ORDER BY device_id, score DESC, updated_at ASC
+           ) best
+           ORDER BY score DESC LIMIT 50`,
+        values: baseParams
+      };
+      totalQ = {
+        text: `SELECT COUNT(DISTINCT device_id)::int AS c FROM daily_scores
+               WHERE date >= $1 AND date <= $2`,
+        values: baseParams
+      };
+      if (deviceId) {
+        rankQ = {
+          text:
+            `WITH best AS (
+               SELECT DISTINCT ON (device_id) device_id, score
+               FROM daily_scores
+               WHERE date >= $1 AND date <= $2
+               ORDER BY device_id, score DESC
+             ),
+             me AS (SELECT score FROM best WHERE device_id = $3)
+             SELECT 1 + (SELECT COUNT(*) FROM best WHERE score > COALESCE((SELECT score FROM me), -1)) AS rank,
+                    EXISTS (SELECT 1 FROM me) AS has_score`,
+          values: [startDate, endDate, deviceId]
+        };
+      }
+    }
+
+    const rowsRes = await pool.query(listQ);
+    const list = rowsRes.rows.map((r) => ({
+      name: r.name,
+      score: r.score,
+      tier: r.tier,
+      country: r.country || null,
+      you: !!(deviceId && r.device_id === deviceId)
+    }));
+    let rank = null;
+    if (rankQ) {
+      const rr = await pool.query(rankQ);
+      if (rr.rows.length && rr.rows[0].has_score) rank = parseInt(rr.rows[0].rank, 10);
+    }
+    const total = (await pool.query(totalQ)).rows[0].c;
+    res.json({
+      list, total, rank,
+      from: startDate, to: endDate, period, scope,
+      country: viewerCountry || null,
+      difficulty: scope === 'difficulty' ? difficulty : null
+    });
+  } catch (e) {
+    console.error('GET /api/leaderboard/v2', e);
     res.status(500).json({ error: 'server' });
   }
 });

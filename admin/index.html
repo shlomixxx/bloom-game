@@ -702,6 +702,38 @@
     </div>
   </section>
 
+  <!-- Leaderboard tabs config -->
+  <section id="leaderboard-tabs-section" style="margin-bottom:12px">
+    <h2>🏆 טבלאות מובילים <button class="tip-btn" data-tip="lb_tabs">?</button></h2>
+    <div style="padding:12px 16px;background:var(--card);border-radius:10px;margin-top:8px">
+      <div style="font-size:13px;font-weight:700;color:var(--gold);margin-bottom:6px">אילו טאבים להציג במודאל הלידרבורד</div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:10px">סדר התצוגה הוא לפי הסדר שמופיע למטה. ניתן לכבות לחלוטין טאבים שאינם רלוונטיים. אם מסומן רק טאב אחד — שורת ה-tabs לא מוצגת לשחקן.</div>
+      <div id="lb-tabs-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px"></div>
+      <div style="display:flex;gap:10px;align-items:center;margin-bottom:8px">
+        <strong style="font-size:12px;min-width:110px">טאב ברירת מחדל:</strong>
+        <select id="lb-default-tab" style="flex:1;padding:6px 10px;border-radius:8px;background:rgba(0,0,0,0.15);color:var(--text);border:1px solid rgba(255,255,255,0.1);font-family:inherit">
+          <option value="world">🌍 עולמי</option>
+          <option value="country">🇮🇱 מדינתי</option>
+          <option value="difficulty">🎚️ קושי</option>
+        </select>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center;margin-bottom:10px">
+        <strong style="font-size:12px;min-width:110px">קושי ברירת מחדל:</strong>
+        <select id="lb-default-diff" style="flex:1;padding:6px 10px;border-radius:8px;background:rgba(0,0,0,0.15);color:var(--text);border:1px solid rgba(255,255,255,0.1);font-family:inherit">
+          <option value="default">📦 ברירת מחדל</option>
+          <option value="easy">😊 קל</option>
+          <option value="medium">🎯 בינוני</option>
+          <option value="hard">🔥 קשה</option>
+          <option value="insane">💀 גהינום</option>
+        </select>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="btn sm" id="btn-lb-tabs-save" style="flex:1;background:#9FE1CB;color:#1C1A18;font-weight:700">💾 שמור</button>
+        <div id="lb-tabs-status" style="font-size:11px;color:var(--muted);min-width:80px"></div>
+      </div>
+    </div>
+  </section>
+
   <!-- Monetization -->
   <section id="monetization-section" style="margin-bottom:12px">
     <h2>💰 מונטיזציה <button class="tip-btn" data-tip="monetization">?</button></h2>
@@ -1123,7 +1155,8 @@
     bots: '<strong>🤖 שחקני דמו (Cheats)</strong><br>שחקנים מדומים שרצים על השרת. כל heartbeat (כל ~5 שניות) משדר את הלוח החי שלהם — מופיעים בכל מקום ששחקן אמיתי מופיע (admin live, contest spectator, universal /?watch).<br><div class="tip-example"><strong>איך זה עובד:</strong><br>1. בחר כמה בוטים (למשל 10)<br>2. בחר מצב: אימון / יומי / תחרות / דו-קרב / אתגר<br>3. לחץ הפעל — N "שחקנים" מתחילים לשחק מיד<br><br><strong>החלפת שמות:</strong><br>כשבוט מפסיד (הלוח מלא) → הוא "יוצא".<br>אחרי 30-90 שניות שחקן חדש עם שם אחר מתחיל.<br>ב-24 שעות עוברים 200+ שמות שונים!<br><br><strong>מצבים — לאן הציון נכתב:</strong><br>🏋️ <strong>אימון</strong> = heartbeat בלבד, אין רישום ללוח<br>📊 <strong>יומי</strong> = INSERT אמיתי ל-<code>daily_scores</code> (לוח יומי/שבועי/חודשי)<br>🏆 <strong>תחרות</strong> = INSERT ל-<code>contest_scores</code> (חבר מלא בתחרות)<br>⚔️ <strong>דו-קרב</strong> = בוטים מסתדרים בצמדים → רשומה אמיתית ב-<code>duels</code><br>🎁 <strong>אתגר</strong> = INSERT ל-<code>challenge_entries</code> עם <code>drops_count</code> סביר<br><br><strong>מהירויות:</strong><br>🐌 איטי = נראה ריאליסטי · 🏃 רגיל = ברירת מחדל<br>⚡ מהיר = מילוי לידרבורד · 🚀 מקסימום = stress test<br><br>💰 עלות: $0 עד 50 בוטים · ~$2/חודש ל-200<br><br>💡 <strong>טיפ</strong>: יצרת בוט חזק מדי? פתח "ניקודים מובילים" ולחץ 🗑 על השורה — נמחקת מכל הלוחות בו-זמנית.</div>',
     players: '<strong>👤 ניהול שחקנים וקרדיטים</strong><br>כל שחקן מקבל קוד ייחודי (BLOOM-XXXX) וארנק קרדיטים (💎).<br><div class="tip-example"><strong>מה אפשר לעשות:</strong><br>📋 טען רשימה — רואה כל שחקן עם הקוד, יתרה, הפניות<br>🎁 שלח מתנה — הזן קוד שחקן + כמות → קרדיטים מועברים מיד<br>🔗 הפניות — מי הזמין את מי וכמה קרדיטים חולקו<br><br><strong>הגדרות הפניות (בהגדרות משחק):</strong><br>referral_enabled = true/false (הפעל/כבה)<br>referral_reward = כמה 💎 למזמין<br>referred_bonus = כמה 💎 למוזמן<br>welcome_bonus = כמה 💎 לשחקן חדש<br><br>💡 ערוך דרך "הגדרות משחק" למטה</div>',
     bonus_sim: '<strong>🎁 סימולטור בונוסים</strong><br>הצגה ויזואלית של כל הבונוסים שמופיעים על הלוח במשחק.<br><div class="tip-example"><strong>מה זה נותן לך?</strong><br>• להבין במבט אחד מה כל בונוס עושה — בלי להיכנס למשחק<br>• להראות לשחקנים/משקיעים איך מערכת ה-events עובדת<br>• להחליט אילו ערכים לכוון ב"הגדרות משחק" (תדירות, נקודות, רדיוס)<br><br><strong>איך השווה לאמיתי:</strong><br>📊 הנתונים זהים: <code>+2000/אריח</code> לפצצה, <code>×3</code> לטירוף, וכו׳<br>🎨 האנימציות זהות: אותו <code>fx-explode</code> ו-<code>fx-freeze</code> שרצים אצל שחקנים<br>⚙️ <strong>שינוי הערכים</strong>: ערוך ב"הגדרות משחק" → טען מחדש את הדף → צפה בשינוי<br><br>💡 <strong>הצעת זרימה</strong>: כל פעם שאתה שוקל לשנות הגדרת event — צפה כאן קודם.</div>',
-    wager: '<strong>🎰 מערכת הימורים</strong><br>שחקנים מהמרים 💎 על תחרויות. הזוכים מחלקים את הקופה.<br><div class="tip-example"><strong>איך עובד:</strong><br>1. שחקן יוצר תחרות עם הימור (למשל 50💎)<br>2. כל מצטרף משלם 50💎 → נכנס לקופה<br>3. בסיום → אדמין לוחץ "סלק" → הקופה מחולקת:<br>🥇 60% · 🥈 25% · 🥉 10% · 🏠 5% עמלה<br><br><strong>הגדרות (בהגדרות משחק):</strong><br>wager_enabled, wager_min, wager_max<br>wager_rake, wager_1st/2nd/3rd_pct</div>'
+    wager: '<strong>🎰 מערכת הימורים</strong><br>שחקנים מהמרים 💎 על תחרויות. הזוכים מחלקים את הקופה.<br><div class="tip-example"><strong>איך עובד:</strong><br>1. שחקן יוצר תחרות עם הימור (למשל 50💎)<br>2. כל מצטרף משלם 50💎 → נכנס לקופה<br>3. בסיום → אדמין לוחץ "סלק" → הקופה מחולקת:<br>🥇 60% · 🥈 25% · 🥉 10% · 🏠 5% עמלה<br><br><strong>הגדרות (בהגדרות משחק):</strong><br>wager_enabled, wager_min, wager_max<br>wager_rake, wager_1st/2nd/3rd_pct</div>',
+    lb_tabs: '<strong>🏆 טבלאות מובילים</strong><br>שולט באילו טאבים מופיעים במודאל הלידרבורד בצד השחקן.<br><div class="tip-example"><strong>שלושה טאבים זמינים:</strong><br>🌍 <strong>עולמי</strong> — כל השחקנים, ללא פילטר. מציג דגל ליד כל שם.<br>🇮🇱 <strong>מדינתי</strong> — רק שחקנים מאותה מדינה. מבוסס על הדגל שכל אחד בחר.<br>🎚️ <strong>קושי</strong> — best per device לכל אחת מ-5 דרגות הקושי, מאוסף מ-<code>practice</code> ו-<code>duel</code> (יומי תמיד default).<br><br><strong>סינון משני (תמיד פעיל):</strong><br>בתוך כל טאב — יומי/שבועי/חודשי.<br><br><strong>סדר וברירת מחדל:</strong><br>גרור עם החצים ↑↓ לקבוע את סדר הטאבים. הברירה הראשונה היא מה שהשחקן רואה כשהוא פותח את המודאל. אם רק טאב אחד פעיל — שורת הטאבים לא מוצגת.<br><br><strong>חידוש:</strong><br>שחקנים בוחרים דגל פעם אחת (אחרי השם), נשמר ב-<code>player_profiles.country</code>. ניתן לשנות מתוך מודאל הלידרבורד.</div>'
   };
 
   // Wire all .tip-btn elements after DOM load
@@ -1936,6 +1969,99 @@
       }
     };
   }
+
+  // Leaderboard tabs config — fetched from /api/config (already cached above).
+  // Order matters: the CSV preserves the tab order in the modal. The list is
+  // editable inline with up/down arrows; saving writes a single CSV row.
+  var LB_TAB_LABELS = { world: '🌍 עולמי', country: '🇮🇱 מדינתי', difficulty: '🎚️ קושי' };
+  var LB_TAB_KEYS = ['world', 'country', 'difficulty'];
+  async function loadLbTabsConfig() {
+    var listHost = $('lb-tabs-list');
+    if (!listHost) return;
+    try {
+      var d = await api('/config');
+      var rows = (d && Array.isArray(d.config)) ? d.config : [];
+      var enabledRaw = (rows.find(function(r) { return r.key === 'leaderboard_tabs_enabled'; }) || {}).value || 'world,country,difficulty';
+      var defaultTab = (rows.find(function(r) { return r.key === 'leaderboard_default_tab'; }) || {}).value || 'world';
+      var defaultDiff = (rows.find(function(r) { return r.key === 'leaderboard_default_difficulty'; }) || {}).value || 'default';
+      renderLbTabsList(enabledRaw);
+      var tabSel = $('lb-default-tab'); if (tabSel) tabSel.value = defaultTab;
+      var diffSel = $('lb-default-diff'); if (diffSel) diffSel.value = defaultDiff;
+    } catch (e) {
+      listHost.innerHTML = '<div style="font-size:12px;color:var(--muted)">שגיאת טעינה</div>';
+    }
+  }
+  function renderLbTabsList(csv) {
+    var listHost = $('lb-tabs-list');
+    if (!listHost) return;
+    var enabled = String(csv || '').split(',').map(function(s) { return s.trim(); }).filter(function(s) { return LB_TAB_KEYS.indexOf(s) >= 0; });
+    // Append any missing keys as unchecked options so the admin can re-enable them.
+    var missing = LB_TAB_KEYS.filter(function(k) { return enabled.indexOf(k) < 0; });
+    var allInOrder = enabled.concat(missing);
+    listHost.innerHTML = allInOrder.map(function(key, idx) {
+      var isEnabled = enabled.indexOf(key) >= 0;
+      return '<div data-lbtab="' + key + '" style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.05)">' +
+        '<input type="checkbox" data-lb-enabled ' + (isEnabled ? 'checked' : '') + ' style="width:18px;height:18px;cursor:pointer">' +
+        '<div style="flex:1;font-size:13px;font-weight:600">' + LB_TAB_LABELS[key] + '</div>' +
+        '<button class="btn sm" data-lb-up ' + (idx === 0 ? 'disabled' : '') + ' style="min-width:32px">↑</button>' +
+        '<button class="btn sm" data-lb-down ' + (idx === allInOrder.length - 1 ? 'disabled' : '') + ' style="min-width:32px">↓</button>' +
+      '</div>';
+    }).join('');
+    // Wire reorder buttons
+    listHost.querySelectorAll('[data-lb-up]').forEach(function(btn) {
+      btn.onclick = function() {
+        var row = btn.closest('[data-lbtab]');
+        if (row && row.previousElementSibling) listHost.insertBefore(row, row.previousElementSibling);
+        refreshArrowStates();
+      };
+    });
+    listHost.querySelectorAll('[data-lb-down]').forEach(function(btn) {
+      btn.onclick = function() {
+        var row = btn.closest('[data-lbtab]');
+        if (row && row.nextElementSibling) listHost.insertBefore(row.nextElementSibling, row);
+        refreshArrowStates();
+      };
+    });
+    function refreshArrowStates() {
+      var rows = listHost.querySelectorAll('[data-lbtab]');
+      rows.forEach(function(r, i) {
+        var up = r.querySelector('[data-lb-up]');
+        var dn = r.querySelector('[data-lb-down]');
+        if (up) up.disabled = (i === 0);
+        if (dn) dn.disabled = (i === rows.length - 1);
+      });
+    }
+  }
+  async function saveLbTabsConfig() {
+    var listHost = $('lb-tabs-list');
+    if (!listHost) return;
+    var rows = listHost.querySelectorAll('[data-lbtab]');
+    var enabled = [];
+    rows.forEach(function(r) {
+      var cb = r.querySelector('[data-lb-enabled]');
+      if (cb && cb.checked) enabled.push(r.getAttribute('data-lbtab'));
+    });
+    if (!enabled.length) { toast('חייב להיות לפחות טאב אחד'); return; }
+    var defaultTab = ($('lb-default-tab') || {}).value || 'world';
+    if (enabled.indexOf(defaultTab) < 0) defaultTab = enabled[0];
+    var defaultDiff = ($('lb-default-diff') || {}).value || 'default';
+    var status = $('lb-tabs-status');
+    if (status) status.textContent = 'שומר…';
+    try {
+      await api('/config/leaderboard_tabs_enabled', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ value: enabled.join(',') }) });
+      await api('/config/leaderboard_default_tab', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ value: defaultTab }) });
+      await api('/config/leaderboard_default_difficulty', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ value: defaultDiff }) });
+      if (status) status.textContent = '✓ נשמר';
+      toast('הגדרות הלידרבורד נשמרו');
+      setTimeout(function() { if (status) status.textContent = ''; }, 2000);
+    } catch (e) {
+      if (status) status.textContent = 'שגיאה';
+      toast('שגיאת רשת');
+    }
+  }
+  var lbSaveBtn = $('btn-lb-tabs-save');
+  if (lbSaveBtn) lbSaveBtn.onclick = saveLbTabsConfig;
+  loadLbTabsConfig();
 
   renderExports();
   loadGameConfig();

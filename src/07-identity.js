@@ -156,6 +156,71 @@
   }
   const deviceId = getDeviceId();
 
+  // ============ COUNTRY (for the country/world leaderboard tabs) ============
+  // Player-chosen ISO-3166 alpha-2. Set once via the flag picker after the
+  // name prompt, then sent with every score submission. Null = not chosen
+  // (player skipped); those scores are excluded from the country tab.
+  const COUNTRY_KEY = 'bloom_country';
+  // Hebrew-labeled set covering ~95% of actual + plausible BLOOM players.
+  // Add to the list rather than relying on locale APIs so the modal renders
+  // identically on every browser (Safari iOS lacks Intl.DisplayNames in some
+  // older builds, which would silently degrade to ISO codes).
+  const COUNTRY_LIST = [
+    ['IL', 'ישראל'], ['US', 'ארה״ב'], ['GB', 'בריטניה'], ['CA', 'קנדה'],
+    ['DE', 'גרמניה'], ['FR', 'צרפת'], ['IT', 'איטליה'], ['ES', 'ספרד'],
+    ['PT', 'פורטוגל'], ['NL', 'הולנד'], ['BE', 'בלגיה'], ['CH', 'שווייץ'],
+    ['AT', 'אוסטריה'], ['SE', 'שוודיה'], ['NO', 'נורווגיה'], ['DK', 'דנמרק'],
+    ['FI', 'פינלנד'], ['PL', 'פולין'], ['CZ', 'צ׳כיה'], ['HU', 'הונגריה'],
+    ['RO', 'רומניה'], ['BG', 'בולגריה'], ['GR', 'יוון'], ['IE', 'אירלנד'],
+    ['RU', 'רוסיה'], ['UA', 'אוקראינה'], ['TR', 'טורקיה'], ['EG', 'מצרים'],
+    ['MA', 'מרוקו'], ['SA', 'ערב הסעודית'], ['AE', 'איחוד האמירויות'],
+    ['JO', 'ירדן'], ['LB', 'לבנון'], ['ZA', 'דרום אפריקה'],
+    ['AU', 'אוסטרליה'], ['NZ', 'ניו זילנד'], ['BR', 'ברזיל'],
+    ['AR', 'ארגנטינה'], ['MX', 'מקסיקו'], ['CL', 'צ׳ילה'],
+    ['JP', 'יפן'], ['KR', 'דרום קוריאה'], ['CN', 'סין'], ['HK', 'הונג קונג'],
+    ['SG', 'סינגפור'], ['TH', 'תאילנד'], ['VN', 'וייטנאם'], ['ID', 'אינדונזיה'],
+    ['PH', 'הפיליפינים'], ['MY', 'מלזיה'], ['IN', 'הודו'], ['PK', 'פקיסטן'],
+    ['NG', 'ניגריה'], ['KE', 'קניה'], ['ET', 'אתיופיה']
+  ];
+  function countryName(cc) {
+    if (!cc) return '';
+    for (var i = 0; i < COUNTRY_LIST.length; i++) if (COUNTRY_LIST[i][0] === cc) return COUNTRY_LIST[i][1];
+    return cc;
+  }
+  function flagEmoji(cc) {
+    if (!cc || typeof cc !== 'string' || cc.length !== 2) return '🏳️';
+    var s = cc.toUpperCase();
+    try {
+      return String.fromCodePoint(
+        0x1F1E6 + (s.charCodeAt(0) - 65),
+        0x1F1E6 + (s.charCodeAt(1) - 65)
+      );
+    } catch (e) { return '🏳️'; }
+  }
+  function getCountry() {
+    var c = localStorage.getItem(COUNTRY_KEY) || '';
+    return /^[A-Z]{2}$/.test(c) ? c : '';
+  }
+  function setCountry(cc) {
+    var v = cc ? String(cc).toUpperCase().slice(0, 2) : '';
+    if (v && !/^[A-Z]{2}$/.test(v)) v = '';
+    try {
+      if (v) localStorage.setItem(COUNTRY_KEY, v);
+      else localStorage.removeItem(COUNTRY_KEY);
+    } catch (e) {}
+    // Fire-and-forget — server stores it on player_profiles so the v2
+    // leaderboard can resolve the country tab even if the client forgets
+    // to pass it explicitly later.
+    try {
+      fetch(API_BASE + '/api/profile/country', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deviceId: deviceId, country: v || null })
+      }).catch(function() {});
+    } catch (e) {}
+  }
+  var playerCountry = getCountry();
+
   // Device token — HMAC proof that this deviceId was registered server-side.
   // Fetched once, stored forever. Sent with score submissions for anti-spoofing.
   const DEVICE_TOKEN_KEY = 'bloom_device_token';

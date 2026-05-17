@@ -443,7 +443,8 @@
           score: score,
           tier: highestTier,
           drops: dropsCount | 0,
-          token: deviceToken
+          token: deviceToken,
+          country: getCountry() || null
         })
       });
       if (res.ok) {
@@ -456,7 +457,40 @@
     } catch (e) {
       console.warn('Submit failed:', e);
     }
+    // Practice + duel scores also feed the difficulty leaderboard. Daily
+    // mode is excluded by design (fairness — the daily seed is uniform and
+    // its difficulty is admin-controlled, never per-player).
+    submitPracticeOrDuelScore();
     await loadLeaderboard();
+  }
+
+  // Writes one row to difficulty_scores per game so the "לפי קושי" tab can
+  // aggregate best-per-difficulty across practice + duel without polluting
+  // the daily leaderboard. No-op for daily mode and during skin trials.
+  function submitPracticeOrDuelScore() {
+    if (skinTrialMode) return;
+    if (mode !== 'practice') return; // engine uses practice mode for duels too
+    if (window.__bloomBotActive) return;
+    var label = (sessionDifficulty && sessionDifficulty.label) || 'default';
+    var source = window._duelMode ? 'duel' : 'practice';
+    try {
+      fetch(API_BASE + '/api/score/practice', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          date: dailyDate,
+          deviceId: deviceId,
+          name: (playerName || 'אנונימי').slice(0, 24),
+          score: score,
+          tier: highestTier,
+          drops: dropsCount | 0,
+          token: deviceToken,
+          country: getCountry() || null,
+          difficulty: label,
+          source: source
+        })
+      }).catch(function() {});
+    } catch (e) {}
   }
 
   async function loadLeaderboard() {
@@ -500,43 +534,101 @@
     if (wrap) render({ over: true });
   }
 
-  /* ============ LEADERBOARD MODAL (day/week/month) ============ */
-  let lbModalPeriod = 'day';
+  /* ============ LEADERBOARD MODAL (scope × time × difficulty) ============ */
+  // Two-axis filter: scope (world / country / difficulty) + period (day/week/month).
+  // Difficulty scope adds a third pill row to pick the preset. Admin can hide
+  // any scope via gameConfig.leaderboard_tabs_enabled. Last selection persisted
+  // to localStorage so a returning player lands where they left off.
+  const LB_SCOPE_KEY = 'bloom_lb_scope';
+  const LB_PERIOD_KEY = 'bloom_lb_period';
+  const LB_DIFF_KEY = 'bloom_lb_difficulty';
+  let lbModalScope = localStorage.getItem(LB_SCOPE_KEY) || 'world';
+  let lbModalPeriod = localStorage.getItem(LB_PERIOD_KEY) || 'day';
+  let lbModalDifficulty = localStorage.getItem(LB_DIFF_KEY) || 'default';
   let lbModalList = [];
   let lbModalLoading = false;
   let lbModalRange = null;
   let lbModalRank = null;
+  let lbModalNeedsCountry = false;
+
+  function getEnabledLbTabs() {
+    var raw = (typeof gameConfig === 'object' && gameConfig && gameConfig.leaderboard_tabs_enabled) || 'world,country,difficulty';
+    var arr = String(raw).split(',').map(function(s) { return s.trim(); })
+      .filter(function(s) { return s === 'world' || s === 'country' || s === 'difficulty'; });
+    return arr.length ? arr : ['world'];
+  }
+
+  function lbScopeLabel(s) {
+    if (s === 'country') {
+      var cc = getCountry();
+      return cc ? (flagEmoji(cc) + ' מדינתי') : '🇮🇱 מדינתי';
+    }
+    if (s === 'difficulty') return '🎚️ קושי';
+    return '🌍 עולמי';
+  }
+  function lbPeriodLabel(p) { return p === 'month' ? 'חודשי' : p === 'week' ? 'שבועי' : 'יומי'; }
 
   function openLeaderboardModal() {
     const wrap = document.getElementById('grid-wrap');
     if (!wrap || document.getElementById('lb-modal')) return;
+    const enabled = getEnabledLbTabs();
+    if (enabled.indexOf(lbModalScope) < 0) lbModalScope = enabled[0];
     const modal = document.createElement('div');
     modal.id = 'lb-modal';
     modal.className = 'info-modal';
+
+    const scopeBtns = enabled.map(function(s) {
+      return '<button class="lb-tab lb-scope-tab" data-scope="' + s + '">' + lbScopeLabel(s) + '</button>';
+    }).reverse().join(''); // reversed because the row is direction:ltr inside RTL
+
     modal.innerHTML =
       '<div class="info-card lb-modal-card" style="direction:rtl;max-width:380px">' +
         '<button class="info-close" id="lb-modal-close" aria-label="סגור">' +
           '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>' +
         '</button>' +
         '<div style="text-align:center;margin-bottom:4px"><span style="font-size:22px">🏆</span></div>' +
-        '<div class="info-title" style="margin-bottom:2px">טבלת מובילים</div>' +
-        '<div class="lb-tabs" style="direction:ltr">' +
-          '<button class="lb-tab" data-period="month">חודשי</button>' +
-          '<button class="lb-tab" data-period="week">שבועי</button>' +
-          '<button class="lb-tab" data-period="day">יומי</button>' +
+        '<div class="info-title" style="margin-bottom:6px">טבלת מובילים</div>' +
+        (enabled.length > 1 ?
+          '<div class="lb-tabs" style="direction:ltr;margin-bottom:4px">' + scopeBtns + '</div>' : '') +
+        '<div class="lb-tabs lb-period-tabs" style="direction:ltr;margin-bottom:4px">' +
+          '<button class="lb-tab lb-period-tab" data-period="month">חודשי</button>' +
+          '<button class="lb-tab lb-period-tab" data-period="week">שבועי</button>' +
+          '<button class="lb-tab lb-period-tab" data-period="day">יומי</button>' +
+        '</div>' +
+        '<div id="lb-diff-row" class="lb-tabs lb-diff-tabs" style="direction:ltr;margin-bottom:4px;display:none">' +
+          '<button class="lb-tab lb-diff-tab" data-diff="insane">💀 גהינום</button>' +
+          '<button class="lb-tab lb-diff-tab" data-diff="hard">🔥 קשה</button>' +
+          '<button class="lb-tab lb-diff-tab" data-diff="medium">🎯 בינוני</button>' +
+          '<button class="lb-tab lb-diff-tab" data-diff="easy">😊 קל</button>' +
+          '<button class="lb-tab lb-diff-tab" data-diff="default">📦 ברירת מחדל</button>' +
         '</div>' +
         '<div id="lb-modal-range" style="font-size:11px;color:#A8A6A0;text-align:center;margin-bottom:6px"></div>' +
         '<div id="lb-modal-body" style="max-height:340px;overflow-y:auto;-webkit-overflow-scrolling:touch"></div>' +
         '<div id="lb-modal-footer" style="text-align:center;margin-top:8px"></div>' +
+        '<div style="text-align:center;margin-top:8px">' +
+          '<button class="btn secondary" id="lb-flag-edit" type="button" style="font-size:11px;padding:6px 12px">' +
+            (getCountry() ? (flagEmoji(getCountry()) + ' החלף דגל') : '🌍 בחר דגל') +
+          '</button>' +
+        '</div>' +
       '</div>';
     wrap.appendChild(modal);
     document.getElementById('lb-modal-close').onclick = closeLeaderboardModal;
     modal.onclick = function(e) { if (e.target === modal) closeLeaderboardModal(); };
-    const tabs = modal.querySelectorAll('.lb-tab');
-    tabs.forEach(function(t) {
-      t.onclick = function() { switchLbTab(t.getAttribute('data-period')); };
+    modal.querySelectorAll('.lb-scope-tab').forEach(function(t) {
+      t.onclick = function() { switchLbScope(t.getAttribute('data-scope')); };
     });
-    switchLbTab(lbModalPeriod);
+    modal.querySelectorAll('.lb-period-tab').forEach(function(t) {
+      t.onclick = function() { switchLbPeriod(t.getAttribute('data-period')); };
+    });
+    modal.querySelectorAll('.lb-diff-tab').forEach(function(t) {
+      t.onclick = function() { switchLbDifficulty(t.getAttribute('data-diff')); };
+    });
+    document.getElementById('lb-flag-edit').onclick = function() {
+      closeLeaderboardModal();
+      promptForCountry(function() { openLeaderboardModal(); });
+    };
+    refreshLbActiveStates();
+    loadLbModal();
   }
 
   function closeLeaderboardModal() {
@@ -544,29 +636,58 @@
     if (m) m.remove();
   }
 
-  function switchLbTab(period) {
-    lbModalPeriod = period;
-    const tabs = document.querySelectorAll('#lb-modal .lb-tab');
-    tabs.forEach(function(t) {
-      if (t.getAttribute('data-period') === period) t.classList.add('active');
-      else t.classList.remove('active');
+  function refreshLbActiveStates() {
+    document.querySelectorAll('#lb-modal .lb-scope-tab').forEach(function(t) {
+      t.classList.toggle('active', t.getAttribute('data-scope') === lbModalScope);
     });
-    loadLbModal(period);
+    document.querySelectorAll('#lb-modal .lb-period-tab').forEach(function(t) {
+      t.classList.toggle('active', t.getAttribute('data-period') === lbModalPeriod);
+    });
+    document.querySelectorAll('#lb-modal .lb-diff-tab').forEach(function(t) {
+      t.classList.toggle('active', t.getAttribute('data-diff') === lbModalDifficulty);
+    });
+    const diffRow = document.getElementById('lb-diff-row');
+    if (diffRow) diffRow.style.display = lbModalScope === 'difficulty' ? '' : 'none';
   }
 
-  async function loadLbModal(period) {
+  function switchLbScope(scope) {
+    lbModalScope = scope;
+    try { localStorage.setItem(LB_SCOPE_KEY, scope); } catch (e) {}
+    refreshLbActiveStates();
+    loadLbModal();
+  }
+  function switchLbPeriod(period) {
+    lbModalPeriod = period;
+    try { localStorage.setItem(LB_PERIOD_KEY, period); } catch (e) {}
+    refreshLbActiveStates();
+    loadLbModal();
+  }
+  function switchLbDifficulty(d) {
+    lbModalDifficulty = d;
+    try { localStorage.setItem(LB_DIFF_KEY, d); } catch (e) {}
+    refreshLbActiveStates();
+    loadLbModal();
+  }
+
+  async function loadLbModal() {
     lbModalLoading = true;
+    lbModalNeedsCountry = false;
     renderLbModalBody();
     try {
-      const url = API_BASE + '/api/leaderboard/range/' + encodeURIComponent(period) +
-        '?endDate=' + encodeURIComponent(dailyDate) +
+      var qs = 'scope=' + encodeURIComponent(lbModalScope) +
+        '&period=' + encodeURIComponent(lbModalPeriod) +
+        '&endDate=' + encodeURIComponent(dailyDate) +
         '&deviceId=' + encodeURIComponent(deviceId);
+      if (lbModalScope === 'difficulty') qs += '&difficulty=' + encodeURIComponent(lbModalDifficulty);
+      if (lbModalScope === 'country' && getCountry()) qs += '&country=' + encodeURIComponent(getCountry());
+      const url = API_BASE + '/api/leaderboard/v2?' + qs;
       const res = await fetch(url, { method: 'GET' });
       if (res.ok) {
         const data = await res.json();
         lbModalList = (data && data.list) || [];
         lbModalRange = data ? { from: data.from, to: data.to, total: data.total } : null;
         lbModalRank = data && typeof data.rank === 'number' ? data.rank : null;
+        lbModalNeedsCountry = !!(data && data.needsCountry);
       } else {
         lbModalList = []; lbModalRange = null; lbModalRank = null;
       }
@@ -591,11 +712,31 @@
     }
     // Range text
     if (rangeEl && lbModalRange) {
-      if (lbModalPeriod === 'day') {
-        rangeEl.textContent = formatDateHe(lbModalRange.to) + ' · ' + (lbModalRange.total || 0) + ' שחקנים';
-      } else {
-        rangeEl.textContent = formatDateHe(lbModalRange.from) + ' – ' + formatDateHe(lbModalRange.to) + ' · ' + (lbModalRange.total || 0) + ' שחקנים';
+      var rangeStr = (lbModalPeriod === 'day')
+        ? formatDateHe(lbModalRange.to) + ' · ' + (lbModalRange.total || 0) + ' שחקנים'
+        : formatDateHe(lbModalRange.from) + ' – ' + formatDateHe(lbModalRange.to) + ' · ' + (lbModalRange.total || 0) + ' שחקנים';
+      if (lbModalScope === 'difficulty') {
+        var DIFF_NAMES = { default: '📦 ברירת מחדל', easy: '😊 קל', medium: '🎯 בינוני', hard: '🔥 קשה', insane: '💀 גהינום' };
+        rangeStr = (DIFF_NAMES[lbModalDifficulty] || lbModalDifficulty) + ' · ' + rangeStr;
+      } else if (lbModalScope === 'country' && getCountry()) {
+        rangeStr = flagEmoji(getCountry()) + ' ' + countryName(getCountry()) + ' · ' + rangeStr;
       }
+      rangeEl.textContent = rangeStr;
+    }
+    if (lbModalNeedsCountry) {
+      body.innerHTML =
+        '<div class="lb-empty" style="padding:24px 16px;text-align:center">' +
+          '<div style="font-size:32px;margin-bottom:8px">🌍</div>' +
+          '<div style="margin-bottom:10px">בחר את המדינה שלך כדי לראות את הטבלה המדינית</div>' +
+          '<button class="btn" type="button" id="lb-empty-flag">בחר דגל</button>' +
+        '</div>';
+      var btn = document.getElementById('lb-empty-flag');
+      if (btn) btn.onclick = function() {
+        closeLeaderboardModal();
+        promptForCountry(function() { openLeaderboardModal(); });
+      };
+      if (footerEl) footerEl.innerHTML = '';
+      return;
     }
     if (!lbModalList.length) {
       body.innerHTML = '<div class="lb-empty">אין עדיין ניקודים בטווח הזה</div>';
@@ -603,6 +744,7 @@
       return;
     }
     const topScore = lbModalList[0] ? lbModalList[0].score : 1;
+    const showFlag = lbModalScope === 'world';
     const rows = lbModalList.slice(0, 50).map(function(row, i) {
       const isYou = row.you;
       const rank = i + 1;
@@ -615,11 +757,17 @@
         var gap = (above.score || 0) - (row.score || 0);
         if (gap > 0) gapText = '<div class="lb-gap you-gap">↑ עוד ' + gap.toLocaleString() + ' למקום ' + (rank - 1) + '</div>';
       }
+      var flagHtml = '';
+      if (showFlag) {
+        var rowCc = row.country || '';
+        flagHtml = '<span class="lb-flag" title="' + (rowCc ? countryName(rowCc) : 'לא צוין') + '">' +
+          (rowCc ? flagEmoji(rowCc) : '🏳️') + '</span>';
+      }
       return '<div class="lb-row' + rankClass + (isYou ? ' you' : '') + '">' +
         '<div class="lb-rank">' + medal + '</div>' +
         renderAvatarHtml(seed, 'sm') +
         '<div style="flex:1;overflow:hidden">' +
-          '<div class="lb-name">' + escapeHtml(row.name || 'אנונימי') + (isYou ? ' <span style="font-size:10px;opacity:0.7">(אתה)</span>' : '') + '</div>' +
+          '<div class="lb-name">' + escapeHtml(row.name || 'אנונימי') + flagHtml + (isYou ? ' <span style="font-size:10px;opacity:0.7">(אתה)</span>' : '') + '</div>' +
           gapText +
         '</div>' +
         '<div class="lb-score">' + (row.score || 0).toLocaleString() + '</div>' +
@@ -653,6 +801,64 @@
     }
   }
 
+  // Flag picker — shown once after the name picker on first home view, then
+  // never again unless the user reopens it from the leaderboard modal. Null
+  // (skipped) is a valid final state: country tab simply excludes those rows.
+  function promptForCountry(cb) {
+    var wrap = document.getElementById('grid-wrap');
+    if (!wrap || document.getElementById('country-modal')) { cb && cb(); return; }
+    var modal = document.createElement('div');
+    modal.id = 'country-modal';
+    modal.className = 'info-modal';
+    var grid = COUNTRY_LIST.map(function(row) {
+      return '<button class="country-cell" data-cc="' + row[0] + '" type="button">' +
+        '<div style="font-size:28px;line-height:1">' + flagEmoji(row[0]) + '</div>' +
+        '<div style="font-size:11px;margin-top:2px;color:#1C1A18">' + row[1] + '</div>' +
+      '</button>';
+    }).join('');
+    modal.innerHTML =
+      '<div class="info-card" style="direction:rtl;max-width:420px">' +
+        '<button class="info-close" id="country-modal-close" aria-label="סגור">' +
+          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>' +
+        '</button>' +
+        '<div style="text-align:center;margin-bottom:6px"><span style="font-size:28px">🌍</span></div>' +
+        '<div class="info-title" style="margin-bottom:2px">מאיפה אתה משחק?</div>' +
+        '<div class="info-sub" style="margin-bottom:10px">הדגל יופיע ליד הניקוד שלך בטבלה. נשמר במכשיר — אפשר לשנות בהמשך.</div>' +
+        '<input class="name-input" id="country-search" type="search" autocapitalize="words" placeholder="🔎 חפש מדינה..." style="margin-bottom:10px" />' +
+        '<div id="country-grid" class="country-grid" style="max-height:340px;overflow-y:auto;-webkit-overflow-scrolling:touch;display:grid;grid-template-columns:repeat(4,1fr);gap:8px;padding:4px 0">' + grid + '</div>' +
+        '<div style="margin-top:10px;text-align:center"><button class="btn secondary" id="country-skip" type="button">העדפתי לא לומר</button></div>' +
+      '</div>';
+    wrap.appendChild(modal);
+    var grid_el = document.getElementById('country-grid');
+    var search = document.getElementById('country-search');
+    function pick(cc) {
+      setCountry(cc);
+      playerCountry = cc || '';
+      trackEvent('country_selected', { country: cc || 'skip' });
+      modal.remove();
+      cb && cb();
+    }
+    grid_el.addEventListener('click', function(e) {
+      var t = e.target.closest('.country-cell');
+      if (!t) return;
+      pick(t.getAttribute('data-cc'));
+    });
+    document.getElementById('country-skip').onclick = function() { pick(''); };
+    document.getElementById('country-modal-close').onclick = function() { pick(''); };
+    modal.addEventListener('click', function(e) { if (e.target === modal) pick(''); });
+    search.addEventListener('input', function() {
+      var q = (search.value || '').trim().toLowerCase();
+      var cells = grid_el.querySelectorAll('.country-cell');
+      cells.forEach(function(c) {
+        if (!q) { c.style.display = ''; return; }
+        var cc = (c.getAttribute('data-cc') || '').toLowerCase();
+        var name = (c.textContent || '').toLowerCase();
+        c.style.display = (cc.indexOf(q) >= 0 || name.indexOf(q) >= 0) ? '' : 'none';
+      });
+    });
+    setTimeout(function() { search && search.focus(); }, 50);
+  }
+
   function promptForName(cb) {
     const wrap = document.getElementById('grid-wrap');
     if (!wrap || document.getElementById('name-modal')) { cb && cb(); return; }
@@ -670,14 +876,23 @@
     wrap.appendChild(modal);
     const input = document.getElementById('name-input');
     setTimeout(function() { input && input.focus(); }, 50);
+    function maybeChainCountry(after) {
+      // Only chain the flag picker on the very first name-pick (no stored
+      // country yet). Returning users keep the picker behind the leaderboard
+      // modal's "edit my flag" affordance — don't interrupt their flow.
+      if (!getCountry()) promptForCountry(after);
+      else after();
+    }
     function save() {
       const v = (input.value || '').trim().slice(0, 24);
       if (v) { playerName = v; localStorage.setItem(NAME_KEY, v); }
-      modal.remove(); cb && cb();
+      modal.remove();
+      maybeChainCountry(function() { cb && cb(); });
     }
     function skip() {
       if (!playerName) { playerName = 'אנונימי'; }
-      modal.remove(); cb && cb();
+      modal.remove();
+      maybeChainCountry(function() { cb && cb(); });
     }
     document.getElementById('name-save').onclick = save;
     document.getElementById('name-skip').onclick = skip;
@@ -1202,6 +1417,9 @@
           }
         } else {
           render({ over: true, isNewBest: isNewBest });
+          // Non-fair practice/duel still feed the difficulty leaderboard —
+          // submitAndShowLeaderboard() (which calls this) is skipped for them.
+          if (mode === 'practice') submitPracticeOrDuelScore();
         }
         // Contest: submit score
         if (mode === 'contest' && !contestSubmitted && activeContestCode) {
@@ -1317,6 +1535,9 @@
           } else {
             submitAndShowLeaderboard();
           }
+        } else if (!fair && !window.__bloomBotActive && !skinTrialMode) {
+          // Non-default practice or duel — feeds only the difficulty board.
+          submitPracticeOrDuelScore();
         }
       } else {
         render({ over: true, isNewBest: isNewBest });

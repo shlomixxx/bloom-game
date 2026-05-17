@@ -20,6 +20,12 @@ CREATE TABLE IF NOT EXISTS daily_scores (
 CREATE INDEX IF NOT EXISTS idx_daily_scores_date_score
   ON daily_scores (date, score DESC);
 
+-- Country (ISO-3166 alpha-2). Populated from the flag picker on first home.
+-- NULL = player hasn't picked yet. Used for the "מדינתי" leaderboard tab.
+ALTER TABLE daily_scores ADD COLUMN IF NOT EXISTS country VARCHAR(2);
+CREATE INDEX IF NOT EXISTS idx_daily_scores_country
+  ON daily_scores (country, date, score DESC) WHERE country IS NOT NULL;
+
 -- Migration: legacy DBs created `date` as TEXT; admin queries compare it to
 -- CURRENT_DATE. Postgres rejects `text = date` without an explicit cast.
 -- Idempotent: only ALTERs if the column is still text.
@@ -390,6 +396,45 @@ CREATE TABLE IF NOT EXISTS referrals (
   created_at      TIMESTAMP NOT NULL DEFAULT NOW(),
   UNIQUE(referred_device)
 );
+
+-- Player country (ISO-3166 alpha-2). The flag picker writes here and the
+-- value is mirrored onto every score submission so the leaderboard tabs
+-- ("עולמי" / "מדינתי") can filter without an extra JOIN. NULL = not chosen.
+ALTER TABLE player_profiles ADD COLUMN IF NOT EXISTS country VARCHAR(2);
+
+-- ============================================================
+-- Difficulty leaderboard (practice + duel best per device per difficulty)
+-- ============================================================
+-- Mirrors daily_scores' shape so day/week/month windows reuse the same
+-- DISTINCT ON (device_id) idiom. One row per (date, device, difficulty) —
+-- "best score wins" upsert keeps it idempotent. Daily mode is excluded
+-- (admin-controlled fairness); only practice & duel write here.
+CREATE TABLE IF NOT EXISTS difficulty_scores (
+  date              DATE NOT NULL,
+  device_id         VARCHAR(64) NOT NULL,
+  difficulty_label  VARCHAR(20) NOT NULL DEFAULT 'default',
+  name              VARCHAR(32) NOT NULL DEFAULT 'אנונימי',
+  score             INTEGER NOT NULL DEFAULT 0,
+  tier              INTEGER NOT NULL DEFAULT 1,
+  country           VARCHAR(2),
+  source            VARCHAR(16) NOT NULL DEFAULT 'practice',
+  created_at        TIMESTAMP NOT NULL DEFAULT NOW(),
+  updated_at        TIMESTAMP NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (date, device_id, difficulty_label)
+);
+CREATE INDEX IF NOT EXISTS idx_difficulty_scores_lookup
+  ON difficulty_scores (difficulty_label, date, score DESC);
+CREATE INDEX IF NOT EXISTS idx_difficulty_scores_country
+  ON difficulty_scores (difficulty_label, country, date, score DESC) WHERE country IS NOT NULL;
+
+-- Leaderboard tabs admin config (which scope-tabs the modal exposes).
+-- Stored as a CSV of: world / country / difficulty (order matters → tab order).
+INSERT INTO game_config (key, value) VALUES ('leaderboard_tabs_enabled', 'world,country,difficulty')
+  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('leaderboard_default_tab', 'world')
+  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('leaderboard_default_difficulty', 'default')
+  ON CONFLICT (key) DO NOTHING;
 
 INSERT INTO game_config (key, value) VALUES ('score_milestone_reward', '5')
   ON CONFLICT (key) DO NOTHING;
