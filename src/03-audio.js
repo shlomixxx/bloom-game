@@ -9,6 +9,35 @@
       .catch(function() {});
   })();
 
+  // Per-game difficulty override. Populated by init() from the active
+  // contest/duel row, or by practice mode from localStorage. When null,
+  // getDropWeights() and gameSpeedScale() fall back to gameConfig (admin).
+  // Shape: { label: 'hard', weights: '5,15,30,30,15,5,0,0', speed_pct: 100 }
+  var sessionDifficulty = null;
+  // Mirror of server's DIFFICULTY_PRESETS — kept in sync at the source.
+  var DIFFICULTY_PRESETS = {
+    default: { label: 'default', weights: null,                    speed_pct: null, name: 'ברירת מחדל', emoji: '📦' },
+    easy:    { label: 'easy',    weights: '70,25,5,0,0,0,0,0',     speed_pct: 100,  name: 'קל',         emoji: '😊' },
+    medium:  { label: 'medium',  weights: '30,35,25,10,0,0,0,0',   speed_pct: 100,  name: 'בינוני',     emoji: '🎯' },
+    hard:    { label: 'hard',    weights: '5,15,30,30,15,5,0,0',   speed_pct: 100,  name: 'קשה',        emoji: '🔥' },
+    insane:  { label: 'insane',  weights: '0,0,10,30,35,20,5,0',   speed_pct: 100,  name: 'גהינום',     emoji: '💀' }
+  };
+  var PRACTICE_DIFF_KEY = 'bloom_practice_difficulty';
+  function readPracticeDifficulty() {
+    try {
+      var raw = localStorage.getItem(PRACTICE_DIFF_KEY);
+      if (!raw) return null;
+      var p = DIFFICULTY_PRESETS[raw];
+      return p || null;
+    } catch (e) { return null; }
+  }
+  function writePracticeDifficulty(label) {
+    try {
+      if (!label || label === 'default') localStorage.removeItem(PRACTICE_DIFF_KEY);
+      else localStorage.setItem(PRACTICE_DIFF_KEY, label);
+    } catch (e) {}
+  }
+
   /* ============ AUDIO ============ */
   let audioCtx = null;
   // Channel volumes (0–1). Music drives the mp3 cross-fade target; sfx
@@ -22,21 +51,32 @@
   const VOL_MUTE_THRESHOLD = 0.005;
   function readVolumeKey(key, fallback) {
     const raw = localStorage.getItem(key);
-    if (raw === null || raw === '') {
-      // Migration: read the legacy boolean keys
-      const oldKey = (key === MUSIC_VOL_KEY) ? MUSIC_MUTE_KEY : SFX_MUTE_KEY;
-      const oldRaw = localStorage.getItem(oldKey);
-      if (oldRaw === '1') return 0;
-      if (oldRaw === '0' || localStorage.getItem(MUTE_KEY) === '0') return fallback;
-      if (localStorage.getItem(MUTE_KEY) === '1') return 0;
-      return fallback;
+    if (raw !== null && raw !== '') {
+      const v = parseFloat(raw);
+      if (!Number.isFinite(v)) return fallback;
+      return Math.max(0, Math.min(1, v));
     }
-    const v = parseFloat(raw);
-    if (!Number.isFinite(v)) return fallback;
-    return Math.max(0, Math.min(1, v));
+    // One-time migration from the old boolean mute keys. Only per-channel
+    // mutes are honored — the legacy *unified* `bloom_muted` is intentionally
+    // ignored, because users who tapped it once on an old version got stuck
+    // permanently silent after the per-channel split (no UI affordance to
+    // recover). Defaulting to audible is recoverable; defaulting to mute isn't.
+    const oldKey = (key === 'bloom_music_volume') ? 'bloom_muted_music' : 'bloom_muted_sfx';
+    const oldRaw = localStorage.getItem(oldKey);
+    if (oldRaw === '1') return 0;
+    return fallback;
   }
   let musicVolume = readVolumeKey(MUSIC_VOL_KEY, DEFAULT_MUSIC_VOLUME);
   let sfxVolume = readVolumeKey(SFX_VOL_KEY, DEFAULT_SFX_VOLUME);
+  // Persist the resolved values immediately so the migration only runs once,
+  // then clear the legacy keys so they can never re-mute on future loads.
+  try {
+    localStorage.setItem(MUSIC_VOL_KEY, String(musicVolume));
+    localStorage.setItem(SFX_VOL_KEY, String(sfxVolume));
+    localStorage.removeItem('bloom_muted');
+    localStorage.removeItem('bloom_muted_music');
+    localStorage.removeItem('bloom_muted_sfx');
+  } catch (e) {}
   function isMusicMuted() { return musicVolume < VOL_MUTE_THRESHOLD; }
   function isSfxMuted() { return sfxVolume < VOL_MUTE_THRESHOLD; }
   function isAnyMuted() { return isMusicMuted() || isSfxMuted(); }
@@ -49,9 +89,40 @@
 
   function ensureAudio() {
     if (!audioCtx) try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) {}
-    if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume().catch(function() {});
+    if (audioCtx && audioCtx.state === 'suspended') {
+      audioCtx.resume().then(function() {
+        // Browser autoplay policy: any playMusic() called before the first
+        // user gesture left its BufferSource scheduled on a suspended ctx —
+        // on Safari that source never recovers. Re-arm the current track
+        // here, on the first successful resume, so music actually starts.
+        if (currentTrack && !isMusicMuted()) {
+          var t = MUSIC_TRACKS[currentTrack];
+          if (!t || !t.source || currentTrackLevel(currentTrack) < 0.001) {
+            fadeInTrack(currentTrack, MUSIC_FADE_MS, musicVolume);
+          }
+        }
+      }).catch(function() {});
+    }
     return audioCtx;
   }
+
+  // Belt-and-suspenders: register a one-shot first-interaction listener so
+  // audio unlocks even if no code path through ensureAudio() runs inside the
+  // first click handler. Removes itself after the first successful resume.
+  (function attachFirstGestureUnlock() {
+    var unlocked = false;
+    function tryUnlock() {
+      if (unlocked) return;
+      unlocked = true;
+      ensureAudio();
+      document.removeEventListener('pointerdown', tryUnlock, true);
+      document.removeEventListener('touchstart', tryUnlock, true);
+      document.removeEventListener('keydown', tryUnlock, true);
+    }
+    document.addEventListener('pointerdown', tryUnlock, true);
+    document.addEventListener('touchstart', tryUnlock, true);
+    document.addEventListener('keydown', tryUnlock, true);
+  })();
 
   /* Music manager: 3 tracks (lobby/game/fail) with 0.5s cross-fade */
   const MUSIC_FADE_MS = 500;

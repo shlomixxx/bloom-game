@@ -302,38 +302,79 @@
   // Token bumps with each new roll so a stale animation (still cycling from
   // the previous drop) bails out the moment a new pick arrives.
   let revealToken = 0;
+
+  // Dramatic slot-machine animation. Three full passes through tiers 1..N
+  // (admin-controlled), decelerating like a real slot, then a landing bounce
+  // on the chosen tier. Cost-aware: bails out the moment a newer roll fires.
   async function revealNextTier(finalTier) {
     const bar = document.getElementById('tier-bar');
     if (!bar) return;
+
+    // Admin kill-switch: if disabled, just snap and skip the animation.
+    if ((gameConfig && gameConfig.slot_enabled) === 'false') {
+      highlightNextTier(finalTier);
+      return;
+    }
+
     const myToken = ++revealToken;
     const cells = bar.querySelectorAll('.tier-cell');
-    // Keep the 'active' highlight on the chosen tier throughout the cycle —
-    // a fast player needs to know what they're about to drop, even mid-anim.
     cells.forEach(function(c) {
       const tier = parseInt(c.getAttribute('data-tier'), 10);
       if (tier !== finalTier) c.classList.remove('active');
       c.classList.remove('cycling');
+      c.classList.remove('slot-landed');
     });
-    const sweep = [1, 2, 3, 4, 1, 2, 3, 4, 1, 2, 3, 4];
+
+    // Admin-tunable spin parameters
+    var maxSpinTier = parseInt((gameConfig && gameConfig.slot_intensity) || '8', 10) || 8;
+    if (maxSpinTier < 1) maxSpinTier = 1;
+    if (maxSpinTier > MAX_TIER) maxSpinTier = MAX_TIER;
+    var totalDur = parseInt((gameConfig && gameConfig.slot_duration_ms) || '650', 10) || 650;
+    if (totalDur < 150) totalDur = 150;
+    if (totalDur > 2500) totalDur = 2500;
+    // Speed scale also affects the slot — a faster game gets a faster slot.
+    totalDur = Math.round(totalDur * (typeof gameSpeedScale === 'function' ? gameSpeedScale() : 1));
+
+    // Build the spin: 3 full passes through 1..maxSpinTier, then land on finalTier.
+    const sweep = [];
+    const passes = 3;
+    for (let p = 0; p < passes; p++) {
+      for (let t = 1; t <= maxSpinTier; t++) sweep.push(t);
+    }
     sweep.push(finalTier);
-    const startMs = 28;
-    const endMs = 95;
+
+    // Per-frame durations: ease-in-quad (fast → slow), then normalize so
+    // the sum lands exactly on totalDur.
+    const n = sweep.length;
+    const startMs = 22;
+    const endMs = Math.max(70, totalDur / 8);
+    const rawDurs = [];
+    for (let i = 0; i < n; i++) {
+      const prog = n > 1 ? i / (n - 1) : 1;
+      rawDurs.push(startMs + (endMs - startMs) * (prog * prog));
+    }
+    const sumRaw = rawDurs.reduce(function(a,b) { return a+b; }, 0);
+    const scale = sumRaw > 0 ? totalDur / sumRaw : 1;
+
     for (let i = 0; i < sweep.length; i++) {
-      // If a newer roll started, abandon this cycle — highlightNextTier
-      // (called synchronously by rollNextPiece) has already snapped the bar
-      // to the new chosen tier.
       if (myToken !== revealToken) return;
       cells.forEach(function(c) { c.classList.remove('cycling'); });
       const cell = bar.querySelector('.tier-cell[data-tier="' + sweep[i] + '"]');
       if (cell) cell.classList.add('cycling');
-      const t = sweep.length > 1 ? i / (sweep.length - 1) : 1;
-      const dur = Math.round(startMs + (endMs - startMs) * (t * t));
-      await sleep(dur);
+      await sleep(Math.round(rawDurs[i] * scale));
     }
+
     if (myToken !== revealToken) return;
     cells.forEach(function(c) { c.classList.remove('cycling'); });
     const finalCell = bar.querySelector('.tier-cell[data-tier="' + finalTier + '"]');
-    if (finalCell) finalCell.classList.add('active');
+    if (finalCell) {
+      finalCell.classList.add('active');
+      // Landing bounce — short bouncy scale-up so the slot feels like it "clicks" home.
+      finalCell.classList.add('slot-landed');
+      setTimeout(function() {
+        if (finalCell) finalCell.classList.remove('slot-landed');
+      }, 380);
+    }
   }
 
   // Pick the next piece IMMEDIATELY so a fast tapper can drop again the

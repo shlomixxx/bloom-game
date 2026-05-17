@@ -7,6 +7,11 @@
     if (typeof clearTransientBanners === 'function') clearTransientBanners();
     if (nextMode) mode = nextMode;
     dailyDate = todayInIsrael();
+    // Resolve per-game difficulty BEFORE the first board paint. Daily stays
+    // admin-only so its leaderboard is comparable. Practice reads from
+    // localStorage. Contest/duel pull from their fetched row (set later).
+    sessionDifficulty = null;
+    if (mode === 'practice') sessionDifficulty = readPracticeDifficulty();
     grid = Array.from({length: getBoardRows()}, function() { return Array(getBoardCols()).fill(0); });
     score = 0; highestTier = 1; busy = false; dropsCount = 0;
     currentGameMaxChain = 0;
@@ -91,6 +96,16 @@
       rng = activeContestData && activeContestData.board_seed != null
         ? mulberry32(activeContestData.board_seed)
         : Math.random;
+      // Apply the host-chosen difficulty to this contest game. Stored on
+      // the contest row at creation time so changing the preset table
+      // later never re-balances live contests.
+      if (activeContestData && activeContestData.difficulty_weights) {
+        sessionDifficulty = {
+          label: activeContestData.difficulty_label || 'custom',
+          weights: activeContestData.difficulty_weights,
+          speed_pct: activeContestData.difficulty_speed_pct || null
+        };
+      }
       if (fresh) {
         clearContestGameState();
       } else if (activeContestCode) {
@@ -176,7 +191,11 @@
     } else if (mode === 'contest') {
       bar.classList.remove('practice');
       title.textContent = 'תחרות חברים';
-      sub.textContent = activeContestData ? activeContestData.name : 'תחרות פעילה';
+      var contestDiffPreset = sessionDifficulty && DIFFICULTY_PRESETS[sessionDifficulty.label];
+      var contestDiffStr = contestDiffPreset && sessionDifficulty.label !== 'default'
+        ? ' · ' + contestDiffPreset.emoji + ' ' + contestDiffPreset.name
+        : '';
+      sub.textContent = (activeContestData ? activeContestData.name : 'תחרות פעילה') + contestDiffStr;
     } else if (mode === 'challenge' && activeChallenge) {
       bar.classList.remove('practice');
       title.textContent = '🎁 אתגר פרס';
@@ -189,11 +208,35 @@
     } else if (window._duelMode && activeDuelId) {
       bar.classList.remove('practice');
       title.textContent = '⚔️ דו-קרב 1v1';
-      sub.textContent = 'vs ' + (window._duelOpponentName || 'יריב') + ' — מי ישיג יותר?';
+      var duelDiffPreset = sessionDifficulty && DIFFICULTY_PRESETS[sessionDifficulty.label];
+      var duelDiffStr = duelDiffPreset && sessionDifficulty.label !== 'default'
+        ? ' · ' + duelDiffPreset.emoji + ' ' + duelDiffPreset.name
+        : '';
+      sub.textContent = 'vs ' + (window._duelOpponentName || 'יריב') + duelDiffStr;
     } else {
       bar.classList.add('practice');
       title.textContent = 'משחק חופשי';
-      sub.textContent = 'שחק ותתחרה על לוח המובילים 🏆';
+      var pdiff = sessionDifficulty && DIFFICULTY_PRESETS[sessionDifficulty.label]
+        ? DIFFICULTY_PRESETS[sessionDifficulty.label]
+        : DIFFICULTY_PRESETS.default;
+      // Compact single-line subtitle. Previously this was "<chip> · תתחרה על
+      // לוח המובילים 🏆" which wrapped to a second line on narrow phones,
+      // stealing pixels from grid-wrap → fitGrid shrank every cell. Now: chip
+      // + small trophy icon for "counts toward leaderboard" (or muted "off"
+      // when difficulty != default). Tooltip on hover gives the full meaning.
+      var lbBadge = sessionDifficulty
+        ? '<span title="לא נספר ללוח המובילים" style="color:#A8A6A0;font-size:11px;margin-right:6px">⊘</span>'
+        : '<span title="נספר ללוח המובילים" style="margin-right:6px;font-size:12px">🏆</span>';
+      sub.innerHTML = '<button class="practice-diff-chip" id="practice-diff-chip" type="button" aria-label="החלף רמת קושי">' +
+        pdiff.emoji + ' ' + pdiff.name + ' <span style="opacity:0.6">⌄</span></button>' + lbBadge;
+    }
+    // Wire the practice difficulty chip (added in practice branch above).
+    var pdBtn = document.getElementById('practice-diff-chip');
+    if (pdBtn) {
+      pdBtn.onclick = function(e) {
+        e.stopPropagation();
+        showPracticeDifficultyPicker();
+      };
     }
 
     // In contest mode, the mode-info area becomes a tap target that opens
@@ -248,6 +291,54 @@
           return;
         }
         init(target);
+      };
+    });
+  }
+
+  // Picker modal for practice difficulty. Player chooses, we save to
+  // localStorage and restart the practice game so the new weights take
+  // effect cleanly on a fresh board. Daily/contest/duel use other paths.
+  function showPracticeDifficultyPicker() {
+    var existing = document.getElementById('pdp-modal');
+    if (existing) existing.remove();
+    var current = (sessionDifficulty && sessionDifficulty.label) || 'default';
+    var modal = document.createElement('div');
+    modal.id = 'pdp-modal';
+    modal.className = 'info-modal';
+    modal.onclick = function(e) { if (e.target === modal) modal.remove(); };
+    var optionsHtml = '';
+    var order = ['default', 'easy', 'medium', 'hard', 'insane'];
+    var hints = {
+      default: 'משקלי האדמין (ברירת מחדל). הניקוד נספר ללוח המובילים היומי.',
+      easy:    'אריחים נמוכים שולטים — נעים לחימום. הניקוד לא נספר ללוח.',
+      medium:  'בעיקר tier 2-4 — יותר אתגר. הניקוד לא נספר ללוח.',
+      hard:    'בעיקר tier 3-5 — לוח מתמלא מהר, ניקוד גבוה למיזוגים. הניקוד לא נספר ללוח.',
+      insane:  'אבן ועלה לא נופלים בכלל. רק לרוצחים סדרתיים. הניקוד לא נספר ללוח.'
+    };
+    for (var k = 0; k < order.length; k++) {
+      var key = order[k];
+      var p = DIFFICULTY_PRESETS[key];
+      var isCur = key === current;
+      optionsHtml += '<button class="pdp-opt" data-diff="' + key + '" style="display:block;width:100%;text-align:right;direction:rtl;margin-bottom:8px;padding:10px 12px;border-radius:10px;border:2px solid ' + (isCur ? '#BA7517' : 'rgba(0,0,0,0.08)') + ';background:' + (isCur ? '#FFF6E6' : '#FFFFFF') + ';cursor:pointer;font-family:inherit">' +
+        '<div style="font-size:14px;font-weight:700;color:#1C1A18">' + p.emoji + ' ' + p.name + (isCur ? '  <span style="color:#BA7517;font-size:11px">✓ נבחר</span>' : '') + '</div>' +
+        '<div style="font-size:11px;color:#6F6E68;margin-top:2px">' + hints[key] + '</div>' +
+      '</button>';
+    }
+    modal.innerHTML = '<div class="info-card" style="max-width:340px;direction:rtl">' +
+      '<div style="font-size:16px;font-weight:700;margin-bottom:6px">💪 רמת קושי · אימון חופשי</div>' +
+      '<div style="font-size:11px;color:#6F6E68;margin-bottom:12px">בחירת רמה תפתח משחק חדש. רק "רגיל" נספר בלוח המובילים היומי.</div>' +
+      optionsHtml +
+      '<button class="btn secondary" id="pdp-cancel" style="width:100%;margin-top:6px">בטל</button>' +
+    '</div>';
+    document.body.appendChild(modal);
+    document.getElementById('pdp-cancel').onclick = function() { modal.remove(); };
+    modal.querySelectorAll('.pdp-opt').forEach(function(btn) {
+      btn.onclick = function() {
+        var label = btn.getAttribute('data-diff') || 'default';
+        writePracticeDifficulty(label === 'default' ? null : label);
+        modal.remove();
+        // Fresh game with the new weights — never carry old grid into new difficulty.
+        init('practice', { fresh: true });
       };
     });
   }
@@ -593,15 +684,57 @@
     input.onkeydown = function(e) { if (e.key === 'Enter') save(); };
   }
 
+  // Drop pool resolution order:
+  //   1) sessionDifficulty (per-game override: contest host / duel challenger / practice picker)
+  //   2) gameConfig.drop_weights (admin global)
+  //   3) WEIGHTS (the original 55/28/12/5 fallback)
+  // Empty/malformed/all-zero at any layer falls through to the next.
+  function getDropWeights() {
+    var raw = '';
+    if (sessionDifficulty && sessionDifficulty.weights) {
+      raw = sessionDifficulty.weights;
+    } else if (typeof gameConfig === 'object' && gameConfig && gameConfig.drop_weights) {
+      raw = gameConfig.drop_weights;
+    }
+    if (!raw) return WEIGHTS;
+    var parts = String(raw).split(',').map(function(x) { return parseInt(x, 10) || 0; });
+    while (parts.length < 8) parts.push(0);
+    parts.length = 8;
+    var total = parts.reduce(function(a,b) { return a + Math.max(0, b); }, 0);
+    if (total <= 0) return WEIGHTS;
+    // Prepend the always-zero tier-0 slot so indices line up with the rest
+    // of the engine (grid uses 1..MAX_TIER, 0 = empty).
+    return [0, parts[0], parts[1], parts[2], parts[3], parts[4], parts[5], parts[6], parts[7]];
+  }
+
   function pickPiece() {
-    const total = WEIGHTS.reduce(function(a,b) { return a+b; }, 0);
-    let r = rng() * total;
-    for (let i = 1; i < WEIGHTS.length; i++) {
-      r -= WEIGHTS[i];
+    var weights = getDropWeights();
+    var total = 0;
+    for (var k = 1; k < weights.length; k++) total += Math.max(0, weights[k]);
+    if (total <= 0) return 1;
+    var r = rng() * total;
+    for (var i = 1; i < weights.length; i++) {
+      r -= Math.max(0, weights[i]);
       if (r <= 0) return i;
     }
     return 1;
   }
+
+  // Speed resolution mirrors getDropWeights: session override → admin global
+  // → default 100%. 50 = 2× faster, 100 = default, 200 = half-speed. Clamped
+  // to [25, 400] so misconfig can't make the engine instant or unplayably slow.
+  function gameSpeedScale() {
+    var pct = 100;
+    if (sessionDifficulty && sessionDifficulty.speed_pct) {
+      pct = parseInt(sessionDifficulty.speed_pct, 10) || 100;
+    } else {
+      pct = parseInt((gameConfig && gameConfig.game_speed_pct) || '100', 10) || 100;
+    }
+    if (pct < 25) pct = 25;
+    if (pct > 400) pct = 400;
+    return pct / 100;
+  }
+  function gsleep(ms) { return sleep(Math.round(ms * gameSpeedScale())); }
 
   function findGroup(sr, sc, tier) {
     const visited = new Set();
@@ -622,16 +755,45 @@
   }
 
   function applyGravity() {
+    var moves = 0;
     for (let c = 0; c < getBoardCols(); c++) {
       let w = getBoardRows() - 1;
       for (let r = getBoardRows() - 1; r >= 0; r--) {
         if (grid[r][c] !== 0) {
-          if (r !== w) { grid[w][c] = grid[r][c]; grid[r][c] = 0; }
+          if (r !== w) { grid[w][c] = grid[r][c]; grid[r][c] = 0; moves++; }
           w--;
         }
       }
     }
+    if (window.__bloomEngineLog) console.log('[gravity]', 'moves=' + moves, 'grid=' + serializeGrid());
   }
+  // Compact one-line grid serialization for engine logs. Each row is printed
+  // bottom-up as 4 digits (0 = empty, 1-8 = tier). Lets the user paste a
+  // console line and instantly see the board state at that moment.
+  function serializeGrid() {
+    var s = '';
+    for (var r = getBoardRows() - 1; r >= 0; r--) {
+      var row = '';
+      for (var c = 0; c < getBoardCols(); c++) row += (grid[r][c] | 0);
+      s += row + (r === 0 ? '' : '|');
+    }
+    return s;
+  }
+  // Expose to window so the user can call from devtools console to dump
+  // state at any moment ("why is this tile floating?").
+  window.__bloomDumpGrid = function() {
+    var lines = [];
+    for (var r = 0; r < getBoardRows(); r++) {
+      var row = '';
+      for (var c = 0; c < getBoardCols(); c++) {
+        var v = grid[r][c] | 0;
+        row += v === 0 ? '·' : v;
+      }
+      lines.push('r' + r + ' ' + row);
+    }
+    console.log('[grid dump]\n' + lines.join('\n'));
+    return grid.map(function(r) { return r.slice(); });
+  };
 
   function sleep(ms) { return new Promise(function(r) { setTimeout(r, ms); }); }
 
@@ -678,7 +840,8 @@
 
   // Crown Merge explosion — gold wave across the row
   function showCrownExplosion(row) {
-    // Full-screen gold flash — tagged so init()'s sweep catches it too.
+    // Full-screen gold flash — uses the same data-bloom-banner sweep so a
+    // stuck flash from the previous round can't linger.
     var flash = document.createElement('div');
     flash.setAttribute('data-bloom-banner', 'crown-flash');
     flash.style.cssText = 'position:fixed;inset:0;background:rgba(250,199,117,0.25);z-index:9998;pointer-events:none';
@@ -688,8 +851,8 @@
     setTimeout(function() { flash.style.transition = 'opacity 0.3s'; flash.style.opacity = '0'; }, 200);
     setTimeout(killFlash, 500);
     setTimeout(killFlash, 2000); // safety net for tab-throttling
-    // Banner via showTransientBanner — gets click-to-dismiss + auto-cleanup.
-    showTransientBanner({
+    // Banner — click-to-dismiss + auto-cleanup via showTransientBanner
+    var banner = showTransientBanner({
       tag: 'crown',
       holdMs: 1500, fadeMs: 500,
       exitTransform: 'translate(-50%,-60%) scale(0.9)',
@@ -942,11 +1105,12 @@
         }
       }
       if (!merged) break;
+      if (window.__bloomEngineLog) console.log('[merge]', 'chain=' + chainCount, 'tier=t' + mergedTier, 'size=' + mergeSize, 'at=' + merged[0] + ',' + merged[1]);
       render({ merging: merged });
-      await sleep(150);
+      await gsleep(150);
       applyGravity();
       render();
-      await sleep(80);
+      await gsleep(80);
     }
     if (highestTier > prevHighestTier) {
       soundMilestone(highestTier);
@@ -1001,8 +1165,14 @@
           })();
           return;
         }
-        // Daily + Practice: submit to leaderboard
-        if ((mode === 'practice' || mode === 'daily') && !dailySubmitted) {
+        // Daily + Practice: submit to leaderboard.
+        // PRACTICE EXCLUSION: if the player chose a non-default difficulty in
+        // practice, the score is incomparable to the global daily leaderboard
+        // and must NOT be submitted (fairness). Personal-best in localStorage
+        // is still tracked above. Duels also run inside the practice mode
+        // engine — never submit those to the daily leaderboard either.
+        var practiceFairForLeaderboard = (mode === 'practice') && !sessionDifficulty && !window._duelMode;
+        if (((mode === 'daily') || practiceFairForLeaderboard) && !dailySubmitted) {
           if (mode === 'daily') {
             dailySubmitted = true;
             localStorage.setItem(DAILY_PLAYED_PREFIX + dailyDate, JSON.stringify({ score: score, tier: highestTier, ts: Date.now() }));
@@ -1061,19 +1231,23 @@
     }
     grid[row][col] = nextPiece;
     if (nextPiece > highestTier) highestTier = nextPiece;
+    if (window.__bloomEngineLog) console.log('[drop]', 'col=' + col, '→ row=' + row, 'piece=t' + nextPiece, 'grid(after)=' + serializeGrid());
     var pendingEvent = (activeEvent && activeEvent.col === col) ? activeEvent : null;
     dismissCoach();
     render({ appearing: [row, col] });
     try {
-    await sleep(80);
-    await processChains(row, col);
+    await gsleep(80);
+    // Trigger the event FIRST when the player drops in the event column —
+    // otherwise long chain reactions push the explosion off by 1-2s, which
+    // feels like an unrelated event ("delay" bug the user reported). The
+    // event itself handles its own gravity+render before chains continue.
     if (pendingEvent && activeEvent === pendingEvent) {
       triggerEvent(pendingEvent, row);
-      // After bomb/freeze: tiles cleared + gravity, but new merges may exist
-      applyGravity();
-      render();
-      await processChains(row, col);
+      // Brief pause so the explosion is visible before chain merges start
+      // shifting the board around it.
+      await gsleep(120);
     }
+    await processChains(row, col);
     rollNextPiece();
     render();
     var isNewBest = score > best && !skinTrialMode;
@@ -1117,8 +1291,12 @@
         }
       } else if (mode === 'practice') {
         render({ over: true, isNewBest: isNewBest });
-        // Practice scores also go to daily leaderboard — every game counts!
-        if (!window.__bloomBotActive && !skinTrialMode) {
+        // Practice scores go to the daily leaderboard, but ONLY when the
+        // player is on the default difficulty — non-default would inflate
+        // (or deflate) the score relative to other players. Duel games
+        // also reuse the practice engine; never submit those to daily.
+        var fair = !sessionDifficulty && !window._duelMode;
+        if (fair && !window.__bloomBotActive && !skinTrialMode) {
           if (!playerName) {
             promptForName(function() { submitAndShowLeaderboard(); });
           } else {

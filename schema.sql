@@ -476,6 +476,24 @@ UPDATE game_config SET value = '120' WHERE key = 'powerup_price_random_row' AND 
 UPDATE game_config SET value = '80' WHERE key = 'powerup_price_choose_tile' AND value = '40';
 UPDATE game_config SET value = '30' WHERE key = 'powerup_price_random_tile' AND value = '15';
 
+-- ============================================================
+-- Difficulty + speed controls (admin-tunable)
+-- ============================================================
+-- drop_weights: 8 comma-separated integers — weight of each tier (1..8) in the
+-- drop pool. Default 55/28/12/5/0/0/0/0 mirrors the original frontend constant.
+-- Set a tier's weight to 0 to keep it out of the natural drop pool (it can
+-- still appear via merges). All-zero falls back to the default at runtime.
+INSERT INTO game_config (key, value) VALUES ('drop_weights', '55,28,12,5,0,0,0,0') ON CONFLICT (key) DO NOTHING;
+-- game_speed_pct: 50–200. 100=default, lower=faster animations.
+-- Multiplies the merge/gravity/drop sleeps in the gameplay loop.
+INSERT INTO game_config (key, value) VALUES ('game_speed_pct', '100') ON CONFLICT (key) DO NOTHING;
+-- slot_enabled: dramatic slot-machine spin on the tier ladder before each drop
+INSERT INTO game_config (key, value) VALUES ('slot_enabled', 'true') ON CONFLICT (key) DO NOTHING;
+-- slot_duration_ms: total time of the slot spin (200..2000)
+INSERT INTO game_config (key, value) VALUES ('slot_duration_ms', '650') ON CONFLICT (key) DO NOTHING;
+-- slot_intensity: how many tier slots the spin cycles through (1..8)
+INSERT INTO game_config (key, value) VALUES ('slot_intensity', '8') ON CONFLICT (key) DO NOTHING;
+
 -- AdSense + Stripe config
 INSERT INTO game_config (key, value) VALUES ('adsense_client_id', '') ON CONFLICT (key) DO NOTHING;
 INSERT INTO game_config (key, value) VALUES ('stripe_publishable_key', '') ON CONFLICT (key) DO NOTHING;

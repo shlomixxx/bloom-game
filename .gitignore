@@ -12,3 +12,4 @@ ACCESS.md
 
 # Throwaway test/scratch files served from /public
 public/__*.html
+.claude/

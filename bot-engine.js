@@ -341,14 +341,18 @@ async function submitBotScore(bot) {
     if (bot.mode === 'daily') {
       // Submit to daily leaderboard
       const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' });
+      // Schema has columns: date, device_id, name, score, tier (verified in
+      // schema.sql). Earlier rev used `display_name`/`highest_tier` which
+      // silently failed on the INSERT — bot scores never landed.
       await botPool.query(
-        `INSERT INTO daily_scores (device_id, display_name, date, score, highest_tier, games_played, drops_count)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)
-         ON CONFLICT (device_id, date) DO UPDATE
+        `INSERT INTO daily_scores (date, device_id, name, score, tier)
+         VALUES ($1, $2, $3, $4, $5)
+         ON CONFLICT (date, device_id) DO UPDATE
          SET score = GREATEST(daily_scores.score, EXCLUDED.score),
-             highest_tier = GREATEST(daily_scores.highest_tier, EXCLUDED.highest_tier),
-             games_played = daily_scores.games_played + 1`,
-        [bot.deviceId, bot.name, today, bot.score, bot.highestTier, 1, 50 + Math.floor(Math.random() * 100)]
+             tier  = GREATEST(daily_scores.tier,  EXCLUDED.tier),
+             name  = EXCLUDED.name,
+             updated_at = NOW()`,
+        [today, bot.deviceId, bot.name, bot.score, bot.highestTier]
       );
     } else if (bot.mode === 'contest' && bot.contestCode) {
       // Submit to contest leaderboard
@@ -362,9 +366,74 @@ async function submitBotScore(bot) {
              last_played_at = NOW()`,
         [bot.contestCode, bot.deviceId, bot.name, bot.score, bot.highestTier]
       );
+    } else if (bot.mode === 'duel') {
+      // Pair finished duel bots into a synthetic duel row so the duels table
+      // reflects "bot vs bot" matches. Pairing waits up to one tick for a
+      // partner; if none, the bot writes a self-vs-self placeholder row.
+      _pendingDuelFinish.push({ deviceId: bot.deviceId, name: bot.name, score: bot.score, tier: bot.highestTier, at: Date.now() });
+      await tryPairDuelBots();
+    } else if (bot.mode === 'challenge' && bot.challengeSlug) {
+      // challenge_entries is keyed by (challenge_id, device_id). Resolve
+      // the slug → id once, then insert a completed entry. drops_count is
+      // derived from score so the cheat-flag heuristic doesn't auto-flag.
+      const plausibleDrops = Math.max(25, Math.min(300, Math.floor(bot.score / 1500)));
+      try {
+        const ch = await botPool.query(`SELECT id FROM challenges WHERE slug = $1 LIMIT 1`, [bot.challengeSlug]);
+        if (ch.rows.length) {
+          await botPool.query(
+            `INSERT INTO challenge_entries (challenge_id, device_id, display_name, score, highest_tier, drops_count, status, completed_at)
+             VALUES ($1, $2, $3, $4, $5, $6, 'completed', NOW())
+             ON CONFLICT (challenge_id, device_id) DO UPDATE
+             SET score = GREATEST(challenge_entries.score, EXCLUDED.score),
+                 highest_tier = GREATEST(challenge_entries.highest_tier, EXCLUDED.highest_tier),
+                 drops_count = challenge_entries.drops_count + EXCLUDED.drops_count,
+                 status = 'completed',
+                 completed_at = NOW()`,
+            [ch.rows[0].id, bot.deviceId, bot.name, bot.score, bot.highestTier, plausibleDrops]
+          );
+        }
+      } catch (e) { /* silent — slug typo or stale challenge */ }
     }
+    // practice mode: heartbeat-only (already done by flushBots). The score
+    // is visible in the admin live view but never submitted to a leaderboard.
   } catch (e) {
     // Silent — non-critical
+  }
+}
+
+// ============================================================
+// DUEL BOT PAIRING — when two bots in duel mode finish back-to-back,
+// pair them into a real `duels` row (challenger=A, opponent=B) so the
+// admin live view, audit log, and player profile stats all see a real
+// completed duel. If a bot finishes alone, it sits in the queue for up
+// to 30 seconds before getting paired with itself (rare edge case).
+// ============================================================
+const _pendingDuelFinish = []; // FIFO: { deviceId, name, score, tier, at }
+async function tryPairDuelBots() {
+  if (!botPool) return;
+  const now = Date.now();
+  // Drain any finishers older than 30 seconds that never got a partner.
+  while (_pendingDuelFinish.length >= 2 || (_pendingDuelFinish.length && now - _pendingDuelFinish[0].at > 30000)) {
+    const a = _pendingDuelFinish.shift();
+    const b = _pendingDuelFinish.length ? _pendingDuelFinish.shift() : a; // self-pair fallback
+    const seed = Math.floor(Math.random() * 1e9);
+    let winnerDevice = null, status = 'tie';
+    if (a.score > b.score) { winnerDevice = a.deviceId; status = 'settled'; }
+    else if (b.score > a.score) { winnerDevice = b.deviceId; status = 'settled'; }
+    // opponent_code and expires_at are NOT NULL on the duels table; use
+    // synthetic placeholders since the bots never came through the real
+    // /api/duels flow. The row is still useful for admin visibility.
+    const fakeCode = 'BOT-' + b.deviceId.slice(-4).toUpperCase();
+    const expiresAt = new Date(now + 60 * 60 * 1000); // +1 hour, well past insert time
+    try {
+      await botPool.query(
+        `INSERT INTO duels (challenger_device, challenger_name, opponent_device, opponent_name,
+                            opponent_code, challenger_score, opponent_score, amount, board_seed,
+                            status, winner_device, expires_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, 0, $8, $9, $10, $11)`,
+        [a.deviceId, a.name, b.deviceId, b.name, fakeCode, a.score, b.score, seed, status, winnerDevice, expiresAt]
+      );
+    } catch (e) { /* schema mismatch — silent */ }
   }
 }
 

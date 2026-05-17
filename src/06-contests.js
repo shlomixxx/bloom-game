@@ -213,6 +213,15 @@
           '<div class="contest-duration-pill" data-board="free">חופשי</div>' +
         '</div>' +
         '<div class="contest-form-hint" id="ctf-board-hint">כולם מקבלים את אותו לוח — השוואה הוגנת</div>' +
+        '<div class="contest-form-label">💪 רמת קושי <span style="color:#A8A6A0;font-weight:400">(לכל המשתתפים)</span></div>' +
+        '<div class="contest-duration-row" id="ctf-difficulty" style="flex-wrap:wrap">' +
+          '<div class="contest-duration-pill selected" data-diff="default">📦 רגיל</div>' +
+          '<div class="contest-duration-pill" data-diff="easy">😊 קל</div>' +
+          '<div class="contest-duration-pill" data-diff="medium">🎯 בינוני</div>' +
+          '<div class="contest-duration-pill" data-diff="hard">🔥 קשה</div>' +
+          '<div class="contest-duration-pill" data-diff="insane">💀 גהינום</div>' +
+        '</div>' +
+        '<div class="contest-form-hint" id="ctf-difficulty-hint">המארגן בוחר רמה אחת לכולם — כך התחרות הוגנת</div>' +
         '<div class="contest-form-label">🎰 הימור (אופציונלי)</div>' +
         '<div style="display:flex;align-items:center;gap:8px;direction:rtl;margin-bottom:4px">' +
           '<input type="number" class="contest-input" id="ctf-wager" placeholder="0" min="0" max="500" value="0" style="width:80px;text-align:center;font-weight:700" />' +
@@ -225,6 +234,14 @@
 
     let selectedDays = 7;
     let selectedBoardType = 'shared';
+    let selectedDifficulty = 'default';
+    const DIFF_HINTS = {
+      default: 'המארגן בוחר רמה אחת לכולם — כך התחרות הוגנת',
+      easy:    '😊 קל · אריחים נמוכים שולטים — נעים לחימום',
+      medium:  '🎯 בינוני · יותר אריחים גבוהים, פחות מקום לטעויות',
+      hard:    '🔥 קשה · בעיקר tier 3-5 נופלים — ניקוד גבוה אבל game-over מהיר',
+      insane:  '💀 גהינום · אבן/עלה לא נופלים בכלל — לרוצחים סדרתיים בלבד'
+    };
     document.querySelectorAll('#ctf-duration .contest-duration-pill').forEach(function(pill) {
       pill.onclick = function() {
         document.querySelectorAll('#ctf-duration .contest-duration-pill').forEach(function(p) { p.classList.remove('selected'); });
@@ -241,6 +258,15 @@
         if (hint) hint.textContent = selectedBoardType === 'free'
           ? 'לוח אקראי לכל שחקן — תחרות ניקוד טהורה'
           : 'כולם מקבלים את אותו לוח — השוואה הוגנת';
+      };
+    });
+    document.querySelectorAll('#ctf-difficulty .contest-duration-pill').forEach(function(pill) {
+      pill.onclick = function() {
+        document.querySelectorAll('#ctf-difficulty .contest-duration-pill').forEach(function(p) { p.classList.remove('selected'); });
+        pill.classList.add('selected');
+        selectedDifficulty = pill.dataset.diff;
+        const hint = document.getElementById('ctf-difficulty-hint');
+        if (hint) hint.textContent = DIFF_HINTS[selectedDifficulty] || DIFF_HINTS.default;
       };
     });
 
@@ -273,7 +299,8 @@
             deviceId: deviceId,
             durationDays: selectedDays,
             boardType: selectedBoardType,
-            wagerAmount: wagerVal
+            wagerAmount: wagerVal,
+            difficulty: selectedDifficulty
           })
         });
         if (res.status === 429) {
@@ -1046,6 +1073,25 @@
     const cell = Math.max(1, Math.min(cellByW, cellByH));
     grid.style.width  = (cell * cols + (cols - 1) * gap) + 'px';
     grid.style.height = (cell * rows + (rows - 1) * gap) + 'px';
+    // Layout diagnostics — captured on every render so a single screenshot
+    // of the console reveals whether cells are being squeezed by a tall
+    // mode-bar or by a small viewport. Bounded by the W/H constraint that
+    // actually fired (cellByW < cellByH = width-bound; otherwise height-bound).
+    if (window.__bloomLayoutLog !== false) {
+      var bound = cellByW < cellByH ? 'WIDTH-bound' : 'HEIGHT-bound';
+      var mb = document.getElementById('mode-bar');
+      var tb = document.getElementById('tier-bar');
+      var mbH = mb ? mb.getBoundingClientRect().height : 0;
+      var tbH = tb ? tb.getBoundingClientRect().height : 0;
+      console.log('[fitGrid]',
+        'cell=' + cell + 'px',
+        '(' + bound + ')',
+        'wrap=' + wrap.clientWidth + 'x' + wrap.clientHeight,
+        'mode-bar=' + Math.round(mbH) + 'px',
+        'tier-bar=' + Math.round(tbH) + 'px',
+        'viewport=' + window.innerWidth + 'x' + window.innerHeight
+      );
+    }
   }
   // Re-fit on resize/orientation/dpr changes — phones rotate, browser
   // address bar shows/hides, etc.

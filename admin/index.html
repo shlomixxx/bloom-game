@@ -290,6 +290,171 @@
     /* The heatmap intensities reference rgba(250,199,117,…) which already
        reads fine on dark — only the empty fallback changes above. */
   }
+
+  /* ========= BONUS SIMULATOR ========= */
+  .bsim-howto {
+    background: linear-gradient(90deg, #FFF7E6 0%, #FFFFFF 100%);
+    border: 1px solid #FAC775;
+    border-radius: 10px;
+    padding: 10px 14px;
+    font-size: 12px;
+    color: #5A4A20;
+    line-height: 1.6;
+    margin-bottom: 12px;
+  }
+  .bsim-howto strong { color: #8B5500; }
+  .bsim-layout { display: grid; grid-template-columns: 200px 1fr; gap: 14px; }
+  @media (max-width: 720px) { .bsim-layout { grid-template-columns: 1fr; } }
+  .bsim-list { display: flex; flex-direction: column; gap: 6px; }
+  .bsim-btn {
+    display: flex; align-items: center; gap: 8px;
+    background: #F5F2EC; color: #1C1A18; border: 2px solid transparent;
+    padding: 10px 12px; border-radius: 10px; font-weight: 600; font-size: 13px;
+    cursor: pointer; font-family: inherit; text-align: right;
+    transition: all 0.15s;
+  }
+  .bsim-btn:hover { background: #F0EDE3; transform: translateX(-2px); }
+  .bsim-btn.active { background: #FFF7E6; border-color: #FAC775; box-shadow: 0 2px 8px rgba(250,199,117,0.25); }
+  .bsim-btn .emoji { font-size: 18px; line-height: 1; }
+  .bsim-stage {
+    background: #FAFAF6; border-radius: 12px; padding: 14px;
+    border: 1px solid rgba(0,0,0,0.04);
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  .bsim-scorebar {
+    display: flex; align-items: center; gap: 10px;
+    background: #1C1A18; color: #F2EFE9;
+    padding: 8px 14px; border-radius: 10px; font-weight: 700;
+  }
+  .bsim-scorebar .lbl { font-size: 10px; color: #A8A6A0; letter-spacing: 0.08em; text-transform: uppercase; font-weight: 600; }
+  .bsim-scorebar .num { font-size: 22px; font-variant-numeric: tabular-nums; flex: 1; transition: transform 0.2s; }
+  .bsim-scorebar .num.bump { transform: scale(1.15); color: #FAC775; }
+  .bsim-fever-pill {
+    background: linear-gradient(90deg, #FF6B35, #FAC775); color: #1C1A18;
+    padding: 3px 10px; border-radius: 999px; font-size: 11px; font-weight: 800;
+    display: none;
+  }
+  .bsim-fever-pill.on { display: inline-block; animation: bsimPulse 0.8s ease-in-out infinite; }
+  @keyframes bsimPulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.08); } }
+  .bsim-board-wrap {
+    position: relative; display: flex; justify-content: center; padding: 8px 0;
+  }
+  .bsim-board {
+    display: grid; grid-template-columns: repeat(4, 48px); grid-template-rows: repeat(6, 48px);
+    gap: 4px; padding: 8px; background: #1C1A18; border-radius: 10px;
+    border: 3px solid transparent; transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .bsim-board.fever {
+    border-color: #FF6B35;
+    box-shadow: 0 0 20px rgba(255,107,53,0.5);
+    animation: bsimFeverGlow 1s ease-in-out infinite;
+  }
+  @keyframes bsimFeverGlow { 0%,100% { box-shadow: 0 0 20px rgba(255,107,53,0.5); } 50% { box-shadow: 0 0 32px rgba(255,107,53,0.85); } }
+  .bsim-board.shake { animation: bsimShake 0.4s ease-in-out; }
+  @keyframes bsimShake {
+    0%,100% { transform: translateX(0); }
+    20% { transform: translateX(-4px) rotate(-0.6deg); }
+    40% { transform: translateX(4px) rotate(0.6deg); }
+    60% { transform: translateX(-3px); }
+    80% { transform: translateX(3px); }
+  }
+  .bsim-cell {
+    background: #2A2724; border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px; font-weight: 700; color: #1C1A18;
+    position: relative; transition: background 0.2s, transform 0.15s;
+  }
+  .bsim-cell.filled { box-shadow: inset 0 -2px 0 rgba(0,0,0,0.12); }
+  .bsim-cell.target-glow {
+    box-shadow: 0 0 0 3px #FAC775, 0 0 18px rgba(250,199,117,0.7);
+    animation: bsimTargetPulse 0.8s ease-in-out infinite;
+  }
+  @keyframes bsimTargetPulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.06); } }
+  .bsim-cell.upgraded { animation: bsimMerge 0.5s ease-out; }
+  @keyframes bsimMerge {
+    0% { transform: scale(0.6) rotate(-12deg); }
+    50% { transform: scale(1.25) rotate(8deg); }
+    100% { transform: scale(1) rotate(0); }
+  }
+  .bsim-cell.bomb, .bsim-cell.star-icon, .bsim-cell.gift-icon, .bsim-cell.fever-icon, .bsim-cell.freeze-icon, .bsim-cell.target-icon {
+    background: rgba(0,0,0,0.85); border: 2px solid #FAC775;
+    color: #FFF; font-size: 24px;
+    animation: bsimEventAppear 0.3s ease-out;
+  }
+  @keyframes bsimEventAppear { 0% { transform: scale(0.3); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+  .bsim-overlay {
+    position: absolute; pointer-events: none; border-radius: 50%;
+    transform: scale(0.2); opacity: 0.95;
+    width: 76px; height: 76px; margin: -14px;
+  }
+  .bsim-overlay.explode {
+    background: radial-gradient(circle,
+      rgba(255,240,180,1) 0%, rgba(255,165,40,0.92) 32%,
+      rgba(220,60,30,0.78) 60%, rgba(140,30,10,0) 100%);
+    box-shadow: 0 0 40px rgba(255,120,30,0.7), 0 0 80px rgba(255,60,20,0.45);
+    animation: bsimExplode 700ms cubic-bezier(0.16,0.84,0.34,1.16) forwards;
+  }
+  .bsim-overlay.freeze {
+    background: radial-gradient(circle,
+      rgba(220,250,255,0.95) 0%, rgba(130,200,240,0.85) 35%,
+      rgba(60,130,200,0.55) 70%, rgba(20,60,120,0) 100%);
+    box-shadow: 0 0 30px rgba(120,200,240,0.7), 0 0 60px rgba(80,170,220,0.4);
+    animation: bsimFreezeFx 720ms cubic-bezier(0.22,0.82,0.36,1.06) forwards;
+  }
+  @keyframes bsimExplode {
+    0% { transform: scale(0.2); opacity: 0.5; }
+    18% { transform: scale(1.05); opacity: 1; }
+    55% { transform: scale(1.55); opacity: 0.85; }
+    100% { transform: scale(2.1); opacity: 0; }
+  }
+  @keyframes bsimFreezeFx {
+    0% { transform: scale(0.3); opacity: 0.4; }
+    25% { transform: scale(1.10); opacity: 1; }
+    60% { transform: scale(1.35); opacity: 0.7; }
+    100% { transform: scale(1.65); opacity: 0; }
+  }
+  .bsim-banner {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
+    background: #1C1A18; color: #FAC775;
+    padding: 14px 22px; border-radius: 14px;
+    text-align: center; min-width: 160px; pointer-events: none;
+    border: 2px solid #FAC775; box-shadow: 0 12px 36px rgba(0,0,0,0.45);
+    animation: bsimBannerIn 0.25s ease-out;
+  }
+  @keyframes bsimBannerIn { from { transform: translate(-50%,-50%) scale(0.6); opacity: 0; } to { transform: translate(-50%,-50%) scale(1); opacity: 1; } }
+  .bsim-banner.out { animation: bsimBannerOut 0.3s ease-in forwards; }
+  @keyframes bsimBannerOut { to { transform: translate(-50%,-50%) scale(0.9); opacity: 0; } }
+  .bsim-banner .title { font-size: 14px; font-weight: 700; margin-bottom: 4px; }
+  .bsim-banner .sub { font-size: 22px; font-weight: 900; }
+  .bsim-confetti {
+    position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+    pointer-events: none; overflow: hidden; border-radius: 10px;
+  }
+  .bsim-confetti span {
+    position: absolute; top: -10px; width: 6px; height: 8px;
+    animation: bsimConfettiFall 1.4s ease-in forwards;
+  }
+  @keyframes bsimConfettiFall {
+    0% { transform: translateY(0) rotate(0deg); opacity: 1; }
+    100% { transform: translateY(360px) rotate(720deg); opacity: 0; }
+  }
+  .bsim-tip {
+    background: #FFFFFF; border: 1px solid rgba(0,0,0,0.06);
+    border-radius: 10px; padding: 12px 14px; font-size: 12px; line-height: 1.7;
+    color: #1C1A18; min-height: 56px;
+  }
+  .bsim-tip .tip-head { font-weight: 800; color: #8B5500; margin-bottom: 4px; font-size: 13px; }
+  .bsim-tip code { background: #F5F2EC; padding: 1px 5px; border-radius: 4px; font-size: 11px; }
+  .bsim-actions { display: flex; gap: 6px; }
+  @media (prefers-color-scheme: dark) {
+    .bsim-howto { background: #2C2A28; border-color: #FAC775; color: #F2EFE9; }
+    .bsim-howto strong { color: #FAC775; }
+    .bsim-stage { background: #1A1816; border-color: #2C2A28; }
+    .bsim-btn { background: #2C2A28; color: #F2EFE9; }
+    .bsim-btn:hover { background: #3A3733; }
+    .bsim-btn.active { background: #3D3320; }
+    .bsim-tip { background: #1A1816; color: #F2EFE9; border-color: #2C2A28; }
+  }
 </style>
 </head>
 <body>
@@ -299,6 +464,7 @@
   <header>
     <h1>BLOOM אדמין <small id="hdr-date">—</small></h1>
     <div class="actions">
+      <span id="hdr-version" style="font-size:10px;color:#6F6E68;padding:6px 10px;background:#F5F2EC;border-radius:8px;font-family:ui-monospace,Menlo,monospace;letter-spacing:0.02em" title="גרסה פעילה של המשחק">build —</span>
       <button class="btn ghost sm" id="btn-help" title="עזרה">?</button>
       <button class="btn secondary sm" id="btn-logout">יציאה</button>
       <button class="btn sm" id="btn-refresh">↻ רענון</button>
@@ -478,6 +644,64 @@
     </details>
   </section>
 
+  <!-- Difficulty + Speed + Slot Machine -->
+  <section id="difficulty-section" style="margin-bottom:12px">
+    <h2>🎮 קושי, מהירות וסלוט <button class="tip-btn" data-tip="difficulty">?</button></h2>
+    <div style="padding:12px 16px;background:var(--card);border-radius:10px;margin-top:8px">
+
+      <!-- Drop pool weights -->
+      <div style="margin-bottom:14px">
+        <div style="font-size:13px;font-weight:700;color:var(--gold);margin-bottom:6px">📊 בריכת אריחים — מה נופל וכמה</div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:8px">משקל לכל דרגה (0 = לא נופל טבעי). הוצאת אריחים קלים מהבריכה הופכת את המשחק להרבה יותר קשה. אם כולם 0 → חוזר לברירת מחדל אוטומטית.</div>
+        <div id="drop-weights-rows" style="display:flex;flex-direction:column;gap:6px"></div>
+        <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">
+          <button class="btn sm preset-btn" data-preset="default" style="flex:1;min-width:80px">📦 ברירת מחדל</button>
+          <button class="btn sm preset-btn" data-preset="easy" style="flex:1;min-width:80px">😊 קל</button>
+          <button class="btn sm preset-btn" data-preset="medium" style="flex:1;min-width:80px">🎯 בינוני</button>
+          <button class="btn sm preset-btn" data-preset="hard" style="flex:1;min-width:80px">🔥 קשה</button>
+          <button class="btn sm preset-btn" data-preset="insane" style="flex:1;min-width:80px">💀 גהינום</button>
+        </div>
+        <div style="margin-top:10px;display:flex;gap:8px;align-items:center">
+          <button class="btn sm" id="btn-drop-save" style="flex:1;background:#9FE1CB;color:#1C1A18;font-weight:700">💾 שמור בריכה</button>
+          <div id="drop-weights-status" style="font-size:11px;color:var(--muted);min-width:80px"></div>
+        </div>
+      </div>
+
+      <!-- Game speed -->
+      <div style="margin-bottom:14px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.08)">
+        <div style="font-size:13px;font-weight:700;color:var(--gold);margin-bottom:6px">⚡ מהירות משחק (מיזוגים + גרוויטציה + תגובה)</div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:8px">50% = פי-2 מהיר · 100% = ברירת מחדל · 200% = איטי. משפיע על כל ה-sleeps בלולאת המשחק (drop / merge / gravity).</div>
+        <div style="display:flex;gap:10px;align-items:center">
+          <input type="range" id="game-speed-slider" min="50" max="200" step="5" value="100" style="flex:1">
+          <div style="font-size:15px;font-weight:800;color:var(--gold);min-width:70px;text-align:center" id="game-speed-val">100%</div>
+          <button class="btn sm" id="btn-speed-save" style="min-width:70px;background:#9FE1CB;color:#1C1A18;font-weight:700">💾</button>
+        </div>
+      </div>
+
+      <!-- Slot machine -->
+      <div style="padding-top:12px;border-top:1px solid rgba(255,255,255,0.08)">
+        <div style="font-size:13px;font-weight:700;color:var(--gold);margin-bottom:6px">🎰 סלוט מכונה — תצוגת האריח הבא</div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:8px">אנימציית סלוט מסתובבת בין הדרגות ועוצרת על האריח שיפול. אפשר לכבות לגמרי או להאריך/לקצר.</div>
+        <div style="display:flex;gap:10px;align-items:center;margin-bottom:10px">
+          <strong style="font-size:12px;min-width:70px">פעיל:</strong>
+          <button class="btn sm" id="btn-slot-toggle" style="min-width:90px">טוען…</button>
+        </div>
+        <div style="display:flex;gap:10px;align-items:center;margin-bottom:8px">
+          <strong style="font-size:12px;min-width:70px">משך כולל:</strong>
+          <input type="range" id="slot-dur-slider" min="200" max="2000" step="50" value="650" style="flex:1">
+          <div style="font-size:13px;font-weight:700;color:var(--gold);min-width:70px;text-align:center" id="slot-dur-val">650ms</div>
+        </div>
+        <div style="display:flex;gap:10px;align-items:center;margin-bottom:10px">
+          <strong style="font-size:12px;min-width:70px">דרגות בסיבוב:</strong>
+          <input type="range" id="slot-int-slider" min="1" max="8" step="1" value="8" style="flex:1">
+          <div style="font-size:13px;font-weight:700;color:var(--gold);min-width:70px;text-align:center" id="slot-int-val">1..8</div>
+        </div>
+        <button class="btn sm" id="btn-slot-save" style="width:100%;background:#9FE1CB;color:#1C1A18;font-weight:700">💾 שמור הגדרות סלוט</button>
+      </div>
+
+    </div>
+  </section>
+
   <!-- Monetization -->
   <section id="monetization-section" style="margin-bottom:12px">
     <h2>💰 מונטיזציה <button class="tip-btn" data-tip="monetization">?</button></h2>
@@ -576,9 +800,11 @@
         <div>
           <div style="font-size:10px;color:#6F6E68;margin-bottom:3px">מצב משחק</div>
           <select id="bot-mode" style="padding:6px 8px;border:1px solid rgba(0,0,0,0.12);border-radius:8px;font-family:inherit;font-size:12px">
-            <option value="practice">אימון</option>
-            <option value="daily">יומי (לידרבורד)</option>
-            <option value="contest">תחרות חברים</option>
+            <option value="practice">🏋️ אימון</option>
+            <option value="daily">📊 יומי (לידרבורד)</option>
+            <option value="contest">🏆 תחרות חברים</option>
+            <option value="duel">⚔️ דו-קרב (בוט נגד בוט)</option>
+            <option value="challenge">🎁 אתגר פרס</option>
           </select>
         </div>
         <div>
@@ -595,6 +821,10 @@
         <div style="font-size:10px;color:#6F6E68;margin-bottom:3px">קוד תחרות</div>
         <input id="bot-contest-code" placeholder="ABC123" maxlength="8" style="width:120px;padding:6px 8px;border:1px solid rgba(0,0,0,0.12);border-radius:8px;font-family:inherit;font-size:13px;text-transform:uppercase;letter-spacing:0.15em;font-weight:700">
       </div>
+      <div id="bot-challenge-row" style="display:none">
+        <div style="font-size:10px;color:#6F6E68;margin-bottom:3px">slug אתגר</div>
+        <input id="bot-challenge-slug" placeholder="weekly-may-17" maxlength="60" style="width:200px;padding:6px 8px;border:1px solid rgba(0,0,0,0.12);border-radius:8px;font-family:inherit;font-size:13px;letter-spacing:0.05em">
+      </div>
       <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:end">
         <div>
           <div style="font-size:10px;color:#6F6E68;margin-bottom:3px">החלפת שם אחרי game-over (שניות)</div>
@@ -610,7 +840,52 @@
         <button class="btn sm" id="btn-bots-stop" style="background:#C8472F;flex:1">⏹ עצור</button>
       </div>
     </div>
-    <div id="bots-status" style="margin-top:8px;font-size:12px;color:#6F6E68;padding:0 16px"></div>
+    <div id="bots-status-summary" style="margin-top:10px;font-size:12px;color:#6F6E68;padding:0 16px"></div>
+    <div id="bots-status-full" style="margin-top:8px;padding:0 16px;display:none">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+        <div style="font-size:11px;color:#A8A6A0">משחקים פעילים — שידור חי כל 3 שניות</div>
+        <label style="font-size:11px;color:#6F6E68;display:flex;gap:4px;align-items:center;cursor:pointer">
+          <input type="checkbox" id="bots-auto-refresh" checked> רענון אוטומטי
+        </label>
+      </div>
+      <div id="bots-status-list" style="max-height:280px;overflow-y:auto;background:rgba(0,0,0,0.03);border-radius:10px;padding:6px"></div>
+    </div>
+  </section>
+
+  <!-- Bonus simulator -->
+  <section id="bonus-sim-section" style="margin-bottom:12px">
+    <h2>🎁 סימולטור בונוסים <button class="tip-btn" data-tip="bonus_sim">?</button></h2>
+    <div class="bsim-howto">
+      💡 <strong>טיפ לשימוש</strong>: בחר בונוס מהרשימה משמאל — תראה איך הוא נראה ופועל על לוח אמיתי. זה לא משחק חי, אלא הצגה ויזואלית מדויקת. השווה בין הבונוסים כדי להחליט אילו ערכים (כוח, נקודות, תדירות) לכוון ב<strong>"הגדרות משחק"</strong> למעלה. הניקוד והאפקטים מבוססים על הערכים האמיתיים שבמערכת.
+    </div>
+    <div class="bsim-layout">
+      <div class="bsim-list">
+        <button class="bsim-btn" data-bonus="bomb"><span class="emoji">💣</span><span>פצצה</span></button>
+        <button class="bsim-btn" data-bonus="star"><span class="emoji">⭐</span><span>כוכב זהב</span></button>
+        <button class="bsim-btn" data-bonus="gift"><span class="emoji">🎁</span><span>מתנה</span></button>
+        <button class="bsim-btn" data-bonus="fever"><span class="emoji">🔥</span><span>טירוף</span></button>
+        <button class="bsim-btn" data-bonus="freeze"><span class="emoji">❄️</span><span>הקפאה</span></button>
+        <button class="bsim-btn" data-bonus="target"><span class="emoji">🎯</span><span>מטרה</span></button>
+      </div>
+      <div class="bsim-stage">
+        <div class="bsim-scorebar">
+          <span class="lbl">ניקוד</span>
+          <span class="num" id="bsim-score">0</span>
+          <span class="bsim-fever-pill" id="bsim-fever-pill">🔥 ×3</span>
+        </div>
+        <div class="bsim-board-wrap">
+          <div class="bsim-board" id="bsim-board"></div>
+        </div>
+        <div class="bsim-tip" id="bsim-tip">
+          <div class="tip-head">בחר בונוס מהרשימה</div>
+          לחץ על אחד הבונוסים משמאל כדי לראות הדגמה ויזואלית של איך הוא פועל במשחק האמיתי, כולל המספרים שמרכיבים אותו.
+        </div>
+        <div class="bsim-actions">
+          <button class="btn sm secondary" id="bsim-replay" disabled>▶ הפעל שוב</button>
+          <button class="btn sm ghost" id="bsim-reset">🔄 איפוס לוח</button>
+        </div>
+      </div>
+    </div>
   </section>
 
   <!-- KPI cards -->
@@ -795,7 +1070,7 @@
   }
   // Restore + watch all admin prefs
   function initPrefs() {
-    var ids = ['live-auto', 'bot-count', 'bot-mode', 'bot-speed', 'bot-delay-min', 'bot-delay-max', 'bot-contest-code'];
+    var ids = ['live-auto', 'bot-count', 'bot-mode', 'bot-speed', 'bot-delay-min', 'bot-delay-max', 'bot-contest-code', 'bot-challenge-slug', 'bots-auto-refresh'];
     ids.forEach(function(id) { restorePref(id); watchPref(id); });
     // Trigger mode change to show/hide contest field
     if ($('bot-mode')) $('bot-mode').dispatchEvent(new Event('change'));
@@ -830,13 +1105,14 @@
 
   // Help content per section
   var TIPS = {
+    difficulty: '<strong>קושי, מהירות וסלוט</strong><br>שלוש שליטות שמשנות את הרגשת המשחק בלי לשבור את הניקוד או ה-leaderboards.<br><div class="tip-example">📊 <strong>בריכת אריחים</strong>: משקל לכל דרגה 1-8. אם אבן/עלה הם 0 → המשחק נהיה הרבה יותר קשה (כי הקלים לא נופלים). הוצא משקל גבוה מהדרגות הגבוהות כדי לגרום לשחקנים לעבוד קשה. כל הערכים 0 → ברירת מחדל אוטומטית.<br><br>⚡ <strong>מהירות (50-200%)</strong>: 50% = פי-2 מהיר מהרגיל (drop+merge+gravity). 200% = איטי יותר. מומלץ 80-90% לחווייה חדה יותר.<br><br>🎰 <strong>סלוט מכונה</strong>: אנימציה דרמטית של 3 סיבובים שעוצרת על האריח הבא. אפשר לכבות לגמרי (snap מיידי), לקצר (200ms), או להאריך (2000ms). דרגות בסיבוב = כמה דרגות שונות מופיעות בספין.<br><br>💡 שינויים נכנסים לתוקף מיידית — שחקנים פעילים יראו אותם ב-page reload (או אחרי טעינת /api/config הבאה).</div>',
     config: '<strong>הגדרות משחק</strong><br>שליטה על כל התנהגות המשחק.<br><div class="tip-example">🎯 <strong>merge_mode</strong>: anchor (תוצאה ליד הזריקה) / classic (תוצאה שמאלה)<br>👑 <strong>crown_merge_enabled</strong>: true/false — מיזוג 2 כתרים = פיצוץ<br>👑 <strong>crown_merge_bonus</strong>: נקודות בונוס (ברירת מחדל: 50,000)<br><br>🎯 <strong>Events:</strong><br>events_enabled: true/false — מתג ראשי<br>events_start_delay: שניות עד event ראשון (15)<br>events_min/max_gap: מרווח בין events (15-35)<br>event_X_enabled: true/false לכל event<br>event_X_weight: הסתברות (גבוה = תכוף)<br>event_X_timer: שניות לפני שנעלם<br><br>📳 <strong>Shake:</strong><br>shake_tier_up/crown_merge/milestone...: 0=כבוי, 4=רגיל, 8+=דרמטי<br><br>💡 שינויים נכנסים לתוקף מיידית לכל השחקנים</div>',
     kpi: '<strong>מטריקות-על</strong><br>המספרים הכי חשובים של המשחק.<br><div class="tip-example">📊 <strong>DAU</strong> = שחקנים ייחודיים שנכנסו היום<br>📊 <strong>D1</strong> = כמה % חזרו יום אחרי ההתקנה<br>📊 <strong>D7/D30</strong> = אחוז שחזר אחרי שבוע/חודש<br>🎯 יעדים: D1 ≥ 40% · D7 ≥ 20% · D30 ≥ 7%<br>ירוק = מעל היעד · אדום = מתחת</div>',
     dau: '<strong>DAU · 30 ימים</strong><br>גרף של כמה שחקנים ייחודיים נכנסו כל יום.<br><div class="tip-example">📈 עלייה = המשחק גדל<br>📉 ירידה = שחקנים נושרים<br>🔍 חפש דפוסים: סופ"ש בד"כ גבוה יותר</div>',
     funnel: '<strong>משפך שחקנים</strong><br>מראה את ההמרה — כמה מתוך מי שנכנס באמת משחק.<br><div class="tip-example">ביקור → שחק משחק → השיג 50+ → הגיע tier 3+<br>⚠️ <strong>ירידה מעל 50%</strong> בין שלבים = בעיה. משמעות: שחקנים נוטשים בנקודה הזו.</div>',
     retention: '<strong>Cohort Retention</strong><br>כל שורה = קבוצת שחקנים שהתחילו באותו שבוע.<br><div class="tip-example">📅 שבוע 12 מאי: 10 שחקנים חדשים<br>→ D1: 40% (4 חזרו למחרת)<br>→ D7: 20% (2 חזרו אחרי שבוע)<br>🟢 ירוק = מעל ממוצע · 🔴 אדום = מתחת</div>',
     heatmap: '<strong>מפת חום</strong><br>מתי שחקנים משחקים — לפי שעה ויום בשבוע.<br><div class="tip-example">🔥 צבע כהה = הרבה משחקים<br>🕐 שימושי לתזמון: תזכורות push, אתגרים חדשים, תחרויות.<br>לדוגמה: אם 20:00-22:00 הכי פעיל → שלח תזכורת ב-19:30</div>',
-    scores: '<strong>ניקודים מובילים</strong><br>השחקנים עם הניקוד הגבוה ביותר היום.<br><div class="tip-example">⚠️ <strong>OUTLIER</strong> = ניקוד חשוד סטטיסטית (z-score > 3)<br>פירוש: הניקוד רחוק מאוד מהממוצע — יכול להיות רמאי או פשוט שחקן מעולה.<br>💡 בדוק: כמות drops, tier, ו-games played</div>',
+    scores: '<strong>ניקודים מובילים</strong><br>השחקנים עם הניקוד הגבוה ביותר היום.<br><div class="tip-example">⚠️ <strong>OUTLIER</strong> = ניקוד חשוד סטטיסטית (z-score > 3)<br>פירוש: הניקוד רחוק מאוד מהממוצע — יכול להיות רמאי או פשוט שחקן מעולה.<br>💡 בדוק: כמות drops, tier, ו-games played<br><br>🗑 <strong>מחיקה ספציפית</strong>: לחץ על הסל לצד שורה כדי להסיר אותה מ-<code>daily_scores</code>. השפעה: יורד מלוח <strong>יומי, שבועי וחודשי</strong> כי כולם נשענים על אותה טבלה. לא משפיע על תחרויות נפרדות.<br><br>💡 <strong>תרחיש שימוש</strong>: בוט קיבל ניקוד דמיוני, או שחקן בודד פגע בחוויה של אחרים — מחק שורה ספציפית במקום למחוק את כל השחקן.</div>',
     contests: '<strong>תחרויות חברים</strong><br>כל התחרויות הפעילות שנוצרו ע"י שחקנים.<br><div class="tip-example">📋 כל תחרות מציגה: קוד, יוצר, מספר שחקנים, זמן שנותר<br>🔧 אפשר לסגור תחרות חשודה ידנית</div>',
     challenges: '<strong>אתגרי פרס</strong><br>אתגרים שאתה יוצר — עם פרס אמיתי לזוכים.<br><div class="tip-example">🎁 <strong>race</strong> = ראשון שמגיע לרף ניקוד זוכה<br>🎁 <strong>top_n</strong> = N המובילים זוכים<br>🎁 <strong>beat</strong> = כל מי שעובר את הרף זוכה<br>⚠️ בדוק OUTLIER לפני שאתה מעביר פרס!</div>',
     players: '<strong>שחקנים</strong><br>חיפוש שחקנים לפי שם או device ID.<br><div class="tip-example">🔍 חפש "שלומי" או הדבק device ID<br>📋 תראה: סך משחקים, שיא, דרגה, תאריך אחרון<br>🗑️ אפשר למחוק שחקן (cascade — מוחק את כל הנתונים שלו)</div>',
@@ -844,8 +1120,9 @@
     audit: '<strong>יומן פעולות אדמין</strong><br>כל פעולה שנעשתה מפאנל הניהול.<br><div class="tip-example">📋 מציג: מחיקת שחקן, שינוי הגדרה, סגירת תחרות<br>💡 מאפשר לעקוב אחרי כל שינוי שנעשה</div>',
     csv: '<strong>הורדת CSV</strong><br>ייצוא נתונים לאקסל.<br><div class="tip-example">📥 לחץ על טבלה → הורדה אוטומטית<br>📊 תומך בעברית (BOM) + עד 10,000 שורות<br>💡 שימושי לניתוח חיצוני או גיבוי</div>',
     monetization: '<strong>💰 מונטיזציה</strong><br>ניהול פרסומות ורכישות.<br><div class="tip-example"><strong>📺 AdSense:</strong><br>1. הרשם ב-google.com/adsense<br>2. קבל Client ID (ca-pub-XXX)<br>3. הדבק כאן → שמור<br>4. חכה לאישור גוגל (1-14 ימים)<br>5. פרסומות מתחילות להציג!<br><br><strong>💳 Stripe (רכישות):</strong><br>1. הרשם ב-stripe.com<br>2. קבל Publishable Key (pk_live_XXX)<br>3. הדבק כאן → שמור<br>4. שחקנים יכולים לקנות 💎<br><br><strong>📊 כלכלה:</strong><br>שחקן מרוויח ~295💎/יום חינם<br>כתר עולה 300💎 (=יום שלם)<br>פרסומת = 30💎 (=10 פרסומות לכתר)<br>→ שחקנים יצפו בפרסומות או יקנו!</div>',
-    bots: '<strong>🤖 שחקני דמו</strong><br>שחקנים מדומים שרצים על השרת. נראים כמו אנשים אמיתיים.<br><div class="tip-example"><strong>איך זה עובד:</strong><br>1. בחר כמה בוטים (למשל 10)<br>2. בחר מצב: אימון / יומי / תחרות<br>3. לחץ הפעל — 10 "שחקנים" מתחילים לשחק<br><br><strong>החלפת שמות:</strong><br>כשבוט מפסיד (הלוח מלא) → הוא "יוצא".<br>אחרי 30-90 שניות שחקן חדש עם שם אחר מתחיל.<br>ב-24 שעות עוברים 200+ שמות שונים!<br><br><strong>מצבים:</strong><br>🏋️ אימון = משחקים חופשי, מופיעים בלייב<br>📊 יומי = מגישים ניקוד ללידרבורד היומי<br>🏆 תחרות = מצטרפים לתחרות עם קוד<br><br><strong>מהירויות:</strong><br>🐌 איטי = נראה ריאליסטי · 🏃 רגיל = ברירת מחדל<br>⚡ מהיר = מילוי לידרבורד · 🚀 מקסימום = stress test<br><br>💰 עלות: $0 עד 50 בוטים · ~$2/חודש ל-200</div>',
+    bots: '<strong>🤖 שחקני דמו (Cheats)</strong><br>שחקנים מדומים שרצים על השרת. כל heartbeat (כל ~5 שניות) משדר את הלוח החי שלהם — מופיעים בכל מקום ששחקן אמיתי מופיע (admin live, contest spectator, universal /?watch).<br><div class="tip-example"><strong>איך זה עובד:</strong><br>1. בחר כמה בוטים (למשל 10)<br>2. בחר מצב: אימון / יומי / תחרות / דו-קרב / אתגר<br>3. לחץ הפעל — N "שחקנים" מתחילים לשחק מיד<br><br><strong>החלפת שמות:</strong><br>כשבוט מפסיד (הלוח מלא) → הוא "יוצא".<br>אחרי 30-90 שניות שחקן חדש עם שם אחר מתחיל.<br>ב-24 שעות עוברים 200+ שמות שונים!<br><br><strong>מצבים — לאן הציון נכתב:</strong><br>🏋️ <strong>אימון</strong> = heartbeat בלבד, אין רישום ללוח<br>📊 <strong>יומי</strong> = INSERT אמיתי ל-<code>daily_scores</code> (לוח יומי/שבועי/חודשי)<br>🏆 <strong>תחרות</strong> = INSERT ל-<code>contest_scores</code> (חבר מלא בתחרות)<br>⚔️ <strong>דו-קרב</strong> = בוטים מסתדרים בצמדים → רשומה אמיתית ב-<code>duels</code><br>🎁 <strong>אתגר</strong> = INSERT ל-<code>challenge_entries</code> עם <code>drops_count</code> סביר<br><br><strong>מהירויות:</strong><br>🐌 איטי = נראה ריאליסטי · 🏃 רגיל = ברירת מחדל<br>⚡ מהיר = מילוי לידרבורד · 🚀 מקסימום = stress test<br><br>💰 עלות: $0 עד 50 בוטים · ~$2/חודש ל-200<br><br>💡 <strong>טיפ</strong>: יצרת בוט חזק מדי? פתח "ניקודים מובילים" ולחץ 🗑 על השורה — נמחקת מכל הלוחות בו-זמנית.</div>',
     players: '<strong>👤 ניהול שחקנים וקרדיטים</strong><br>כל שחקן מקבל קוד ייחודי (BLOOM-XXXX) וארנק קרדיטים (💎).<br><div class="tip-example"><strong>מה אפשר לעשות:</strong><br>📋 טען רשימה — רואה כל שחקן עם הקוד, יתרה, הפניות<br>🎁 שלח מתנה — הזן קוד שחקן + כמות → קרדיטים מועברים מיד<br>🔗 הפניות — מי הזמין את מי וכמה קרדיטים חולקו<br><br><strong>הגדרות הפניות (בהגדרות משחק):</strong><br>referral_enabled = true/false (הפעל/כבה)<br>referral_reward = כמה 💎 למזמין<br>referred_bonus = כמה 💎 למוזמן<br>welcome_bonus = כמה 💎 לשחקן חדש<br><br>💡 ערוך דרך "הגדרות משחק" למטה</div>',
+    bonus_sim: '<strong>🎁 סימולטור בונוסים</strong><br>הצגה ויזואלית של כל הבונוסים שמופיעים על הלוח במשחק.<br><div class="tip-example"><strong>מה זה נותן לך?</strong><br>• להבין במבט אחד מה כל בונוס עושה — בלי להיכנס למשחק<br>• להראות לשחקנים/משקיעים איך מערכת ה-events עובדת<br>• להחליט אילו ערכים לכוון ב"הגדרות משחק" (תדירות, נקודות, רדיוס)<br><br><strong>איך השווה לאמיתי:</strong><br>📊 הנתונים זהים: <code>+2000/אריח</code> לפצצה, <code>×3</code> לטירוף, וכו׳<br>🎨 האנימציות זהות: אותו <code>fx-explode</code> ו-<code>fx-freeze</code> שרצים אצל שחקנים<br>⚙️ <strong>שינוי הערכים</strong>: ערוך ב"הגדרות משחק" → טען מחדש את הדף → צפה בשינוי<br><br>💡 <strong>הצעת זרימה</strong>: כל פעם שאתה שוקל לשנות הגדרת event — צפה כאן קודם.</div>',
     wager: '<strong>🎰 מערכת הימורים</strong><br>שחקנים מהמרים 💎 על תחרויות. הזוכים מחלקים את הקופה.<br><div class="tip-example"><strong>איך עובד:</strong><br>1. שחקן יוצר תחרות עם הימור (למשל 50💎)<br>2. כל מצטרף משלם 50💎 → נכנס לקופה<br>3. בסיום → אדמין לוחץ "סלק" → הקופה מחולקת:<br>🥇 60% · 🥈 25% · 🥉 10% · 🏠 5% עמלה<br><br><strong>הגדרות (בהגדרות משחק):</strong><br>wager_enabled, wager_min, wager_max<br>wager_rake, wager_1st/2nd/3rd_pct</div>'
   };
 
@@ -1024,11 +1301,16 @@
       return;
     }
     let html = '<table><thead><tr>' +
-      '<th>#</th><th>שם</th><th>ניקוד</th><th>tier</th><th>z-score</th><th>device</th><th>שעה</th>' +
+      '<th>#</th><th>שם</th><th>ניקוד</th><th>tier</th><th>z-score</th><th>device</th><th>שעה</th><th></th>' +
       '</tr></thead><tbody>';
     data.scores.forEach(function(r, i) {
       const cls = r.outlier ? ' class="row-flag"' : '';
       const flag = r.outlier ? ' <span class="pill outlier">⚠ OUTLIER</span>' : '';
+      const dateForDel = (r.date && /^\d{4}-\d{2}-\d{2}/.test(String(r.date)))
+        ? String(r.date).slice(0, 10) : (data.date || '');
+      const delBtn = (dateForDel && r.device_id)
+        ? '<button class="btn danger sm" data-del-score data-date="' + escHtml(dateForDel) + '" data-did="' + escHtml(String(r.device_id)) + '" data-name="' + escHtml(r.name) + '" data-score="' + (r.score | 0) + '" title="מחק רשומה זו מלוח המובילים">🗑</button>'
+        : '';
       html += '<tr' + cls + '>' +
         '<td>' + (i + 1) + '</td>' +
         '<td>' + escHtml(r.name) + flag + '</td>' +
@@ -1037,10 +1319,23 @@
         '<td>' + (r.zscore != null ? r.zscore.toFixed(2) : '—') + '</td>' +
         '<td class="right">' + escHtml(String(r.device_id).slice(0, 12)) + '…</td>' +
         '<td class="muted">' + fmtTime(r.updated_at) + '</td>' +
+        '<td class="actions">' + delBtn + '</td>' +
       '</tr>';
     });
     html += '</tbody></table>';
     $('top-scores-host').innerHTML = html;
+    $('top-scores-host').querySelectorAll('[data-del-score]').forEach(function(b) {
+      b.onclick = async function() {
+        var date = b.getAttribute('data-date');
+        var did = b.getAttribute('data-did');
+        var name = b.getAttribute('data-name');
+        var score = b.getAttribute('data-score');
+        if (!confirm('למחוק את הרשומה של ' + name + ' (' + fmtNum(score) + ') מתאריך ' + date + '?\\nזה ישפיע על לוחות יומי, שבועי וחודשי.')) return;
+        var r = await api('/score/' + encodeURIComponent(date) + '/' + encodeURIComponent(did), { method: 'DELETE' });
+        if (r && r.ok) { toast('רשומה נמחקה'); loadTopScores(); loadAudit(); }
+        else { toast('שגיאה'); }
+      };
+    });
   }
 
   // ---------- CONTESTS ----------
@@ -1069,10 +1364,12 @@
         '<td>' + fmtDate(c.ends_at) + '</td>' +
         '<td>' + statusPill + '</td>' +
         '<td class="actions">' +
+          '<button class="btn ghost sm" data-show-entries="' + escHtml(c.code) + '" title="הצג חברים + מחיקת רשומה">👁</button> ' +
           (active ? '<button class="btn ghost sm" data-end="' + escHtml(c.code) + '">סיים</button> ' : '') +
           '<button class="btn danger sm" data-del-c="' + escHtml(c.code) + '">מחק</button>' +
         '</td>' +
-      '</tr>';
+      '</tr>' +
+      '<tr data-entries-row="' + escHtml(c.code) + '" style="display:none"><td colspan="8" style="background:rgba(0,0,0,0.02);padding:8px 12px"><div data-entries-host>טוען…</div></td></tr>';
     });
     html += '</tbody></table>';
     $('contests-host').innerHTML = html;
@@ -1094,6 +1391,44 @@
         if (!confirm('למחוק לצמיתות את התחרות ' + code + '? כל הניקודים של חבריה יימחקו.')) return;
         const r = await api('/contest/' + encodeURIComponent(code), { method: 'DELETE' });
         if (r && r.ok) { toast('נמחק'); loadContests(); loadAudit(); }
+      };
+    });
+    // Wire toggle: "👁 הצג חברים" — fetches the contest's score rows and
+    // renders per-row 🗑 buttons that DELETE single contest_scores entries.
+    $('contests-host').querySelectorAll('[data-show-entries]').forEach(function(btn) {
+      btn.onclick = async function() {
+        const code = btn.getAttribute('data-show-entries');
+        const row = document.querySelector('[data-entries-row="' + code + '"]');
+        if (!row) return;
+        const host = row.querySelector('[data-entries-host]');
+        if (row.style.display === 'none') {
+          row.style.display = '';
+          host.innerHTML = 'טוען…';
+          const d = await api('/contest/' + encodeURIComponent(code) + '/scores');
+          if (!d || !d.scores) { host.innerHTML = 'שגיאה'; return; }
+          if (!d.scores.length) { host.innerHTML = '<em style="color:#A8A6A0">אין חברים</em>'; return; }
+          let h = '<table style="font-size:11px"><thead><tr><th>#</th><th>שם</th><th>ניקוד</th><th>tier</th><th>משחקים</th><th>device</th><th></th></tr></thead><tbody>';
+          d.scores.forEach(function(s, i) {
+            const delBtn = '<button class="btn danger sm" data-del-cs data-code="' + escHtml(code) + '" data-did="' + escHtml(String(s.device_id)) + '" data-name="' + escHtml(s.display_name) + '" data-score="' + (s.score | 0) + '" title="מחק רשומה זו מהתחרות">🗑</button>';
+            h += '<tr><td>' + (i + 1) + '</td><td>' + escHtml(s.display_name) + '</td><td><strong>' + fmtNum(s.score) + '</strong></td><td>' + (s.highest_tier | 0) + '</td><td>' + (s.games_played | 0) + '</td><td class="right">' + escHtml(String(s.device_id).slice(0, 12)) + '…</td><td class="actions">' + delBtn + '</td></tr>';
+          });
+          h += '</tbody></table>';
+          host.innerHTML = h;
+          host.querySelectorAll('[data-del-cs]').forEach(function(bb) {
+            bb.onclick = async function() {
+              const code2 = bb.getAttribute('data-code');
+              const did = bb.getAttribute('data-did');
+              const name = bb.getAttribute('data-name');
+              const score = bb.getAttribute('data-score');
+              if (!confirm('למחוק את ' + name + ' (' + fmtNum(score) + ') מתחרות ' + code2 + '?')) return;
+              const rr = await api('/contest-score/' + encodeURIComponent(code2) + '/' + encodeURIComponent(did), { method: 'DELETE' });
+              if (rr && rr.ok) { toast('נמחק מהתחרות'); btn.onclick(); btn.onclick(); loadAudit(); }
+              else toast('שגיאה');
+            };
+          });
+        } else {
+          row.style.display = 'none';
+        }
       };
     });
   }
@@ -1606,6 +1941,641 @@
   loadGameConfig();
   wireTips();
 
+  // ====== BONUS SIMULATOR ======
+  // Self-contained visual demo of every event/bonus in the game.
+  // Mirrors values from src/14-events.js (defaults). No server calls, no game state mutation.
+  (function() {
+    var BSIM_TIERS = [
+      null,
+      { name: 'אבן',   emoji: '⬜', bg: '#D3D1C7' },
+      { name: 'עלה',   emoji: '🟩', bg: '#C0DD97' },
+      { name: 'פרח',   emoji: '🟧', bg: '#F4C0D1' },
+      { name: 'אש',    emoji: '🟥', bg: '#F5C4B3' },
+      { name: 'ברק',   emoji: '🟨', bg: '#FAC775' },
+      { name: 'כוכב',  emoji: '🟦', bg: '#9FE1CB' },
+      { name: 'יהלום', emoji: '💎', bg: '#B5D4F4' },
+      { name: 'כתר',   emoji: '👑', bg: '#CECBF6' }
+    ];
+    var ROWS = 6, COLS = 4;
+    var INITIAL_GRID = [
+      [0, 0, 0, 0],
+      [0, 0, 0, 0],
+      [0, 2, 0, 0],
+      [1, 3, 0, 2],
+      [2, 4, 1, 3],
+      [3, 5, 2, 4]
+    ];
+    var grid = INITIAL_GRID.map(function(r) { return r.slice(); });
+    var score = 0;
+    var feverOn = false;
+    var feverTimer = null;
+    var lastBonus = null;
+
+    var TIPS_PER_BONUS = {
+      bomb: {
+        title: '💣 פצצה',
+        body: 'מופיעה על תא אקראי. כשהשחקן מפיל אריח באותה <strong>עמודה</strong> — מתפוצצת בטווח 1 (3×3 סביב המרכז) ומעניקה <code>+2,000</code> לכל אריח שנהרס.<br><br><strong>טיפ הגדרה</strong>: ערוך <code>event_bomb_radius</code> ל-2 → פיצוץ 5×5 (חזק מדי). ערוך <code>event_bomb_points_per_tile</code> כדי לאזן.'
+      },
+      star: {
+        title: '⭐ כוכב זהב',
+        body: 'משדרגת את האריח שנופל לדרגה הבאה (תוספת <code>event_star_upgrade</code> = 1). מעניקה <code>+500</code> נקודות. אם נופל על כתר → ×5 נקודות.<br><br><strong>טיפ</strong>: זהו הבונוס "מציל המשחק" — מאפשר לעבור מ-ברק → כוכב בלי לחבר 4 ברקים.'
+      },
+      gift: {
+        title: '🎁 מתנה',
+        body: 'נותנת <code>5-50 💎</code> אקראי. ב-<code>5%</code> מהמקרים → <strong>ג׳קפוט</strong> של <code>500 💎</code> + קונפטי.<br><br><strong>טיפ</strong>: זה הבונוס היחיד שמשפיע על הכלכלה. אם שחקנים צוברים יותר מדי 💎 — הורד <code>event_gift_credits_max</code> או הקטן את <code>event_gift_jackpot_chance</code>.'
+      },
+      fever: {
+        title: '🔥 טירוף',
+        body: 'מפעיל מצב <code>×3</code> ניקוד למשך <code>10</code> שניות. גבול הלוח נצבע באדום, סרגל זמן מופיע. <strong>כל</strong> ניקוד באותה תקופה מוכפל.<br><br><strong>טיפ</strong>: הבונוס המרגש ביותר ויזואלית. שקול להעלות <code>event_fever_weight</code> אם שחקנים נושרים — זה מחזיר אותם.'
+      },
+      freeze: {
+        title: '❄️ הקפאה',
+        body: 'מוחק את <code>השורה העליונה</code> כולה ומעניק <code>+1,000</code>. מופיע <strong>רק</strong> כשהלוח מלא ב-3 שורות מלאות לפחות — בונוס הצלה.<br><br><strong>טיפ</strong>: הוא ה-"safety net". אם שחקנים מתסכלים מהפסדים מוקדמים — הורד <code>event_freeze_min_filled_rows</code> ל-2.'
+      },
+      target: {
+        title: '🎯 מטרה',
+        body: 'מסמן דרגה אקראית (בד״כ 2-6) ב<strong>סרגל הדרגות</strong>. אם השחקן ממזג את הדרגה הזו תוך <code>12</code> שניות → <code>×5</code> בונוס על כל הניקוד מהמיזוג.<br><br><strong>טיפ</strong>: הבונוס היחיד שדורש <em>אסטרטגיה</em> — לא נופל לבד אלא דורש משחק מכוון.'
+      }
+    };
+
+    function renderBoard() {
+      var board = $('bsim-board');
+      if (!board) return;
+      board.innerHTML = '';
+      for (var r = 0; r < ROWS; r++) {
+        for (var c = 0; c < COLS; c++) {
+          var cell = document.createElement('div');
+          cell.className = 'bsim-cell';
+          cell.dataset.r = r;
+          cell.dataset.c = c;
+          var t = grid[r][c];
+          if (t > 0) {
+            cell.classList.add('filled');
+            cell.style.background = BSIM_TIERS[t].bg;
+            cell.textContent = BSIM_TIERS[t].emoji;
+          }
+          board.appendChild(cell);
+        }
+      }
+    }
+    function cellAt(r, c) {
+      var board = $('bsim-board');
+      if (!board) return null;
+      return board.children[r * COLS + c];
+    }
+    function setScore(n) {
+      score = n;
+      var el = $('bsim-score');
+      if (!el) return;
+      el.textContent = score.toLocaleString();
+      el.classList.add('bump');
+      setTimeout(function() { el.classList.remove('bump'); }, 220);
+    }
+    function showBanner(title, sub) {
+      var wrap = document.querySelector('#bonus-sim-section .bsim-board-wrap');
+      if (!wrap) return;
+      var existing = wrap.querySelector('.bsim-banner');
+      if (existing) existing.remove();
+      var b = document.createElement('div');
+      b.className = 'bsim-banner';
+      b.innerHTML = '<div class="title">' + title + '</div><div class="sub">' + sub + '</div>';
+      wrap.appendChild(b);
+      setTimeout(function() { b.classList.add('out'); }, 1100);
+      setTimeout(function() { if (b.parentNode) b.remove(); }, 1500);
+    }
+    function spawnOverlay(r, c, kind, delayMs) {
+      setTimeout(function() {
+        var cell = cellAt(r, c);
+        if (!cell) return;
+        var wrap = document.querySelector('#bonus-sim-section .bsim-board-wrap');
+        if (!wrap) return;
+        var cellRect = cell.getBoundingClientRect();
+        var wrapRect = wrap.getBoundingClientRect();
+        var ov = document.createElement('div');
+        ov.className = 'bsim-overlay ' + kind;
+        ov.style.left = (cellRect.left - wrapRect.left + cellRect.width / 2 - 38) + 'px';
+        ov.style.top = (cellRect.top - wrapRect.top + cellRect.height / 2 - 38) + 'px';
+        ov.style.margin = '0';
+        wrap.appendChild(ov);
+        setTimeout(function() { if (ov.parentNode) ov.remove(); }, 720);
+      }, delayMs || 0);
+    }
+    function shakeBoard() {
+      var board = $('bsim-board');
+      if (!board) return;
+      board.classList.remove('shake');
+      void board.offsetWidth;
+      board.classList.add('shake');
+    }
+    function applyGravity() {
+      for (var c = 0; c < COLS; c++) {
+        var stack = [];
+        for (var r = ROWS - 1; r >= 0; r--) {
+          if (grid[r][c] !== 0) stack.push(grid[r][c]);
+        }
+        for (var r2 = ROWS - 1; r2 >= 0; r2--) {
+          grid[r2][c] = stack.shift() || 0;
+        }
+      }
+    }
+    function spawnConfetti(n) {
+      n = n || 28;
+      var wrap = document.querySelector('#bonus-sim-section .bsim-board-wrap');
+      if (!wrap) return;
+      var host = document.createElement('div');
+      host.className = 'bsim-confetti';
+      var colors = ['#FAC775','#EF9F27','#FF6B35','#C8472F','#9B8AE8','#2E8B6F','#4ECDC4','#F4C0D1'];
+      for (var i = 0; i < n; i++) {
+        var p = document.createElement('span');
+        p.style.left = (Math.random() * 100) + '%';
+        p.style.background = colors[Math.floor(Math.random() * colors.length)];
+        p.style.animationDelay = (Math.random() * 0.4) + 's';
+        p.style.animationDuration = (1 + Math.random() * 0.8) + 's';
+        host.appendChild(p);
+      }
+      wrap.appendChild(host);
+      setTimeout(function() { if (host.parentNode) host.remove(); }, 2200);
+    }
+    function clearFever() {
+      if (feverTimer) { clearTimeout(feverTimer); feverTimer = null; }
+      feverOn = false;
+      var pill = $('bsim-fever-pill');
+      var board = $('bsim-board');
+      if (pill) pill.classList.remove('on');
+      if (board) board.classList.remove('fever');
+    }
+    function setTip(bonus) {
+      var t = TIPS_PER_BONUS[bonus];
+      if (!t) return;
+      var el = $('bsim-tip');
+      if (!el) return;
+      el.innerHTML = '<div class="tip-head">' + t.title + '</div>' + t.body;
+    }
+    function resetSim() {
+      grid = INITIAL_GRID.map(function(r) { return r.slice(); });
+      score = 0;
+      setScore(0);
+      clearFever();
+      renderBoard();
+      var existing = document.querySelector('#bonus-sim-section .bsim-banner');
+      if (existing) existing.remove();
+    }
+
+    // ─── BONUS PLAYERS ───
+    function playBomb() {
+      // Place bomb on bottom-most empty per random column; if none, center
+      var col = 1 + Math.floor(Math.random() * 2);
+      var row = -1;
+      for (var r = ROWS - 1; r >= 0; r--) {
+        if (grid[r][col] === 0) { row = r; break; }
+      }
+      if (row < 0) { row = 1; col = 1; }
+      var bombCell = cellAt(row, col);
+      if (bombCell) {
+        bombCell.className = 'bsim-cell bomb';
+        bombCell.textContent = '💣';
+        bombCell.style.background = '';
+      }
+      // After short "fuse", explode 3x3
+      setTimeout(function() {
+        var destroyed = 0;
+        var hits = [];
+        for (var dr = -1; dr <= 1; dr++) {
+          for (var dc = -1; dc <= 1; dc++) {
+            var rr = row + dr, cc = col + dc;
+            if (rr < 0 || rr >= ROWS || cc < 0 || cc >= COLS) continue;
+            var dist = Math.max(Math.abs(dr), Math.abs(dc));
+            hits.push({ r: rr, c: cc, d: dist });
+            if (grid[rr][cc] !== 0 && !(dr === 0 && dc === 0)) {
+              grid[rr][cc] = 0;
+              destroyed++;
+            }
+          }
+        }
+        hits.forEach(function(h) { spawnOverlay(h.r, h.c, 'explode', h.d * 55); });
+        var bonus = destroyed * 2000;
+        setScore(score + bonus);
+        shakeBoard();
+        applyGravity();
+        setTimeout(function() {
+          renderBoard();
+          showBanner('💣 BOOM!', '+' + bonus.toLocaleString());
+        }, 250);
+      }, 700);
+    }
+    function playStar() {
+      // Pick a non-empty tile that can upgrade
+      var candidates = [];
+      for (var r = 0; r < ROWS; r++) {
+        for (var c = 0; c < COLS; c++) {
+          if (grid[r][c] > 0 && grid[r][c] < 8) candidates.push({ r: r, c: c });
+        }
+      }
+      if (!candidates.length) { showBanner('⭐', 'אין אריח לשדרג'); return; }
+      var pick = candidates[Math.floor(Math.random() * candidates.length)];
+      var cell = cellAt(pick.r, pick.c);
+      if (cell) {
+        cell.className = 'bsim-cell star-icon';
+        cell.textContent = '⭐';
+        cell.style.background = '';
+      }
+      setTimeout(function() {
+        grid[pick.r][pick.c] += 1;
+        var t = grid[pick.r][pick.c];
+        renderBoard();
+        var newCell = cellAt(pick.r, pick.c);
+        if (newCell) newCell.classList.add('upgraded');
+        setScore(score + 500);
+        showBanner('⭐ Level Up!', BSIM_TIERS[t].name + ' · +500');
+      }, 600);
+    }
+    function playGift() {
+      // 25% jackpot for demo to make it feel rewarding to test
+      var jackpot = Math.random() < 0.25;
+      var amount = jackpot ? 500 : (5 + Math.floor(Math.random() * 46));
+      // Show gift icon then trigger
+      var col = Math.floor(Math.random() * COLS);
+      var row = -1;
+      for (var r = ROWS - 1; r >= 0; r--) {
+        if (grid[r][col] === 0) { row = r; break; }
+      }
+      if (row < 0) { row = 0; col = 0; }
+      var cell = cellAt(row, col);
+      if (cell) {
+        cell.className = 'bsim-cell gift-icon';
+        cell.textContent = '🎁';
+        cell.style.background = '';
+      }
+      setTimeout(function() {
+        renderBoard();
+        if (jackpot) {
+          spawnConfetti(34);
+          showBanner('🎁 JACKPOT!!!', '+' + amount + ' 💎');
+        } else {
+          showBanner('🎁 מתנה!', '+' + amount + ' 💎');
+        }
+      }, 600);
+    }
+    function playFever() {
+      clearFever();
+      feverOn = true;
+      var board = $('bsim-board');
+      var pill = $('bsim-fever-pill');
+      if (pill) pill.classList.add('on');
+      if (board) board.classList.add('fever');
+      showBanner('🔥 FEVER MODE!', '×3 ניקוד למשך 10s');
+      // Demo: simulate a merge worth +152 every 1s during fever, multiplied by 3
+      var pulses = 0;
+      var pulseInt = setInterval(function() {
+        if (!feverOn) { clearInterval(pulseInt); return; }
+        pulses++;
+        setScore(score + 152 * 3);
+        if (pulses >= 4) clearInterval(pulseInt);
+      }, 1100);
+      feverTimer = setTimeout(function() {
+        clearFever();
+        showBanner('🔥', 'הסתיים');
+      }, 5000); // Shorter for demo (real game: 10s)
+    }
+    function playFreeze() {
+      // Clear top row
+      var col = Math.floor(Math.random() * COLS);
+      var cell = cellAt(0, col);
+      if (cell) {
+        cell.className = 'bsim-cell freeze-icon';
+        cell.textContent = '❄️';
+        cell.style.background = '';
+      }
+      setTimeout(function() {
+        for (var c = 0; c < COLS; c++) {
+          spawnOverlay(0, c, 'freeze', c * 45);
+          if (grid[0][c] !== 0) grid[0][c] = 0;
+        }
+        applyGravity();
+        setScore(score + 1000);
+        shakeBoard();
+        setTimeout(function() {
+          renderBoard();
+          showBanner('❄️ הצלה!', 'שורה נמחקה! +1,000');
+        }, 200);
+      }, 600);
+    }
+    function playTarget() {
+      // Pick tier 2-5 that exists on the board (so we can show the merge)
+      var existing = {};
+      for (var r = 0; r < ROWS; r++)
+        for (var c = 0; c < COLS; c++)
+          if (grid[r][c] >= 2 && grid[r][c] <= 5) existing[grid[r][c]] = true;
+      var pool = Object.keys(existing);
+      var tier = pool.length ? +pool[Math.floor(Math.random() * pool.length)] : 3;
+      // Find all matching cells and glow them
+      var matched = [];
+      for (var r2 = 0; r2 < ROWS; r2++) {
+        for (var c2 = 0; c2 < COLS; c2++) {
+          if (grid[r2][c2] === tier) matched.push({ r: r2, c: c2 });
+        }
+      }
+      matched.forEach(function(m) {
+        var cell = cellAt(m.r, m.c);
+        if (cell) cell.classList.add('target-glow');
+      });
+      showBanner('🎯 מטרה!', 'מזג ' + BSIM_TIERS[tier].name + ' תוך 12s');
+      // After 1.5s simulate hitting the target
+      setTimeout(function() {
+        matched.forEach(function(m) {
+          var cell = cellAt(m.r, m.c);
+          if (cell) cell.classList.remove('target-glow');
+        });
+        if (matched.length >= 2) {
+          // Simulate the merge: clear all matched, place upgraded tile at first position
+          var first = matched[0];
+          for (var i = 0; i < matched.length; i++) grid[matched[i].r][matched[i].c] = 0;
+          var newTier = Math.min(tier + 1, 8);
+          grid[first.r][first.c] = newTier;
+          applyGravity();
+          renderBoard();
+          var basePts = tier * 10 * (1 + (tier - 1) * 0.3) * matched.length;
+          var bonus = Math.round(basePts * 5);
+          setScore(score + bonus);
+          showBanner('🎯 פגיעה!', '×5 בונוס · +' + bonus.toLocaleString());
+        } else {
+          showBanner('🎯', 'לא היה מיזוג בזמן');
+        }
+      }, 1500);
+    }
+
+    var PLAYERS = {
+      bomb: playBomb, star: playStar, gift: playGift,
+      fever: playFever, freeze: playFreeze, target: playTarget
+    };
+
+    function selectBonus(name) {
+      lastBonus = name;
+      // Reset board if non-fever
+      if (name !== 'fever') {
+        // Don't reset score so admin can compare bonuses; reset grid only
+        grid = INITIAL_GRID.map(function(r) { return r.slice(); });
+        renderBoard();
+        clearFever();
+      }
+      // Mark active button
+      document.querySelectorAll('.bsim-btn').forEach(function(b) {
+        b.classList.toggle('active', b.getAttribute('data-bonus') === name);
+      });
+      setTip(name);
+      var replay = $('bsim-replay');
+      if (replay) replay.disabled = false;
+      if (PLAYERS[name]) PLAYERS[name]();
+    }
+
+    function wireBonusSim() {
+      renderBoard();
+      setScore(0);
+      document.querySelectorAll('.bsim-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          selectBonus(btn.getAttribute('data-bonus'));
+        });
+      });
+      var replay = $('bsim-replay');
+      if (replay) replay.addEventListener('click', function() {
+        if (lastBonus) selectBonus(lastBonus);
+      });
+      var reset = $('bsim-reset');
+      if (reset) reset.addEventListener('click', resetSim);
+    }
+    wireBonusSim();
+  })();
+
+  // ====== DIFFICULTY + SPEED + SLOT ======
+  var TIER_META = [
+    null,
+    { name: 'אבן',   emoji: '⬜', bg: '#D3D1C7' },
+    { name: 'עלה',   emoji: '🟩', bg: '#C0DD97' },
+    { name: 'פרח',   emoji: '🟧', bg: '#F4C0D1' },
+    { name: 'אש',    emoji: '🟥', bg: '#F5C4B3' },
+    { name: 'ברק',   emoji: '🟨', bg: '#FAC775' },
+    { name: 'כוכב',  emoji: '🟦', bg: '#9FE1CB' },
+    { name: 'יהלום', emoji: '💎', bg: '#B5D4F4' },
+    { name: 'כתר',   emoji: '👑', bg: '#CECBF6' }
+  ];
+  var DROP_PRESETS = {
+    default: [55, 28, 12,  5,  0,  0, 0, 0],
+    easy:    [70, 25,  5,  0,  0,  0, 0, 0],
+    medium:  [30, 35, 25, 10,  0,  0, 0, 0],
+    hard:    [ 5, 15, 30, 30, 15,  5, 0, 0],
+    insane:  [ 0,  0, 10, 30, 35, 20, 5, 0]
+  };
+  var currentWeights = DROP_PRESETS.default.slice();
+
+  function renderDropWeights() {
+    var host = $('drop-weights-rows');
+    if (!host) return;
+    var rows = '';
+    for (var i = 1; i <= 8; i++) {
+      var w = currentWeights[i - 1] | 0;
+      var meta = TIER_META[i];
+      rows += '<div style="display:flex;align-items:center;gap:8px;background:rgba(0,0,0,0.04);border-radius:8px;padding:6px 10px">' +
+        '<div style="width:28px;height:28px;border-radius:6px;background:' + meta.bg + ';display:flex;align-items:center;justify-content:center;font-size:14px">' + meta.emoji + '</div>' +
+        '<div style="flex:0 0 60px;font-size:12px;font-weight:600">' + meta.name + '</div>' +
+        '<input type="range" class="dw-slider" data-tier="' + i + '" min="0" max="100" step="1" value="' + Math.min(100, w) + '" style="flex:1">' +
+        '<input type="number" class="dw-num" data-tier="' + i + '" min="0" max="999" value="' + w + '" style="width:54px;padding:3px 5px;font-size:11px;text-align:center;border:1px solid rgba(0,0,0,0.1);border-radius:5px;direction:ltr">' +
+        '<div class="dw-pct" data-tier="' + i + '" style="min-width:48px;text-align:left;font-size:11px;font-weight:700;color:var(--gold)">0.0%</div>' +
+      '</div>';
+    }
+    host.innerHTML = rows;
+    // Wire inputs (no rebuild on input — preserves focus)
+    host.querySelectorAll('.dw-slider').forEach(function(el) {
+      el.oninput = function() {
+        var tier = parseInt(this.getAttribute('data-tier'), 10);
+        var v = parseInt(this.value, 10) || 0;
+        currentWeights[tier - 1] = v;
+        var num = host.querySelector('.dw-num[data-tier="' + tier + '"]');
+        if (num) num.value = v;
+        syncDropPctLabels();
+      };
+    });
+    host.querySelectorAll('.dw-num').forEach(function(el) {
+      el.oninput = function() {
+        var tier = parseInt(this.getAttribute('data-tier'), 10);
+        var v = parseInt(this.value, 10) || 0;
+        if (v < 0) v = 0;
+        if (v > 999) v = 999;
+        currentWeights[tier - 1] = v;
+        var slider = host.querySelector('.dw-slider[data-tier="' + tier + '"]');
+        if (slider) slider.value = String(Math.min(100, v));
+        syncDropPctLabels();
+      };
+    });
+    syncDropPctLabels();
+  }
+
+  function syncDropPctLabels() {
+    var host = $('drop-weights-rows');
+    if (!host) return;
+    var total = currentWeights.reduce(function(a,b) { return a + Math.max(0, b); }, 0);
+    host.querySelectorAll('.dw-pct').forEach(function(el) {
+      var tier = parseInt(el.getAttribute('data-tier'), 10);
+      var w = Math.max(0, currentWeights[tier - 1] | 0);
+      var pct = total > 0 ? ((w / total) * 100).toFixed(1) : '0.0';
+      el.textContent = pct + '%';
+      el.style.opacity = w === 0 ? '0.35' : '1';
+    });
+  }
+
+  function applyDropPreset(name) {
+    var p = DROP_PRESETS[name];
+    if (!p) return;
+    currentWeights = p.slice();
+    renderDropWeights();
+    var st = $('drop-weights-status');
+    if (st) { st.textContent = '⚙️ הוחל (לא נשמר)'; st.style.color = 'var(--muted)'; }
+  }
+
+  async function saveDropWeights() {
+    var btn = $('btn-drop-save');
+    var st = $('drop-weights-status');
+    if (!btn) return;
+    btn.disabled = true; var orig = btn.textContent; btn.textContent = '...';
+    var value = currentWeights.map(function(w) { return Math.max(0, w | 0); }).join(',');
+    try {
+      var r = await api('/config/drop_weights', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ value: value })
+      });
+      if (r && r.ok) {
+        toast('בריכת אריחים נשמרה');
+        if (st) { st.textContent = '✅ נשמר'; st.style.color = '#1A8B6F'; }
+      } else {
+        if (st) { st.textContent = '❌ שגיאה'; st.style.color = '#C92A2A'; }
+      }
+    } catch (e) {
+      if (st) { st.textContent = '❌ שגיאת רשת'; st.style.color = '#C92A2A'; }
+    }
+    btn.disabled = false; btn.textContent = orig;
+  }
+
+  async function saveGameSpeed() {
+    var btn = $('btn-speed-save');
+    var slider = $('game-speed-slider');
+    if (!btn || !slider) return;
+    btn.disabled = true; var orig = btn.textContent; btn.textContent = '...';
+    try {
+      var r = await api('/config/game_speed_pct', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ value: String(parseInt(slider.value, 10) || 100) })
+      });
+      if (r && r.ok) toast('מהירות נשמרה'); else toast('שגיאה');
+    } catch (e) { toast('שגיאת רשת'); }
+    btn.disabled = false; btn.textContent = orig;
+  }
+
+  async function saveSlotConfig() {
+    var btn = $('btn-slot-save');
+    var dur = $('slot-dur-slider');
+    var intensity = $('slot-int-slider');
+    if (!btn || !dur || !intensity) return;
+    btn.disabled = true; var orig = btn.textContent; btn.textContent = '...';
+    try {
+      await api('/config/slot_duration_ms', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ value: String(parseInt(dur.value, 10) || 650) })
+      });
+      await api('/config/slot_intensity', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ value: String(parseInt(intensity.value, 10) || 8) })
+      });
+      toast('הגדרות סלוט נשמרו');
+    } catch (e) { toast('שגיאת רשת'); }
+    btn.disabled = false; btn.textContent = orig;
+  }
+
+  function setSlotBtnUI(val) {
+    var btn = $('btn-slot-toggle');
+    if (!btn) return;
+    var on = val !== 'false';
+    btn.textContent = on ? '✅ מופעל' : '⛔ כבוי';
+    btn.style.background = on ? '#9FE1CB' : '#F4C0D1';
+    btn.style.color = '#1C1A18';
+    btn.disabled = false;
+    btn.onclick = async function() {
+      var next = on ? 'false' : 'true';
+      btn.disabled = true; btn.textContent = '...';
+      try {
+        var r = await api('/config/slot_enabled', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ value: next })
+        });
+        if (r && r.ok) {
+          toast('סלוט → ' + (next === 'true' ? 'מופעל' : 'כבוי'));
+          setSlotBtnUI(next);
+        } else { setSlotBtnUI(on ? 'true' : 'false'); }
+      } catch (e) { setSlotBtnUI(on ? 'true' : 'false'); }
+    };
+  }
+
+  async function loadDifficultyConfig() {
+    try {
+      var d = await api('/config');
+      if (!d || !d.config) return;
+      var byKey = {};
+      d.config.forEach(function(r) { byKey[r.key] = r.value; });
+      // Drop weights
+      var rawW = byKey.drop_weights || '55,28,12,5,0,0,0,0';
+      var parts = rawW.split(',').map(function(x) { return parseInt(x, 10) || 0; });
+      while (parts.length < 8) parts.push(0);
+      parts.length = 8;
+      currentWeights = parts;
+      renderDropWeights();
+      // Game speed
+      var speed = parseInt(byKey.game_speed_pct, 10) || 100;
+      var sSlider = $('game-speed-slider'); if (sSlider) sSlider.value = String(speed);
+      var sVal = $('game-speed-val'); if (sVal) sVal.textContent = speed + '%';
+      // Slot
+      setSlotBtnUI(byKey.slot_enabled === 'false' ? 'false' : 'true');
+      var slotDur = parseInt(byKey.slot_duration_ms, 10) || 650;
+      var slotInt = parseInt(byKey.slot_intensity, 10) || 8;
+      var dEl = $('slot-dur-slider'); if (dEl) dEl.value = String(slotDur);
+      var dVal = $('slot-dur-val'); if (dVal) dVal.textContent = slotDur + 'ms';
+      var iEl = $('slot-int-slider'); if (iEl) iEl.value = String(slotInt);
+      var iVal = $('slot-int-val'); if (iVal) iVal.textContent = '1..' + slotInt;
+    } catch (e) {}
+  }
+
+  // Wire static handlers
+  document.querySelectorAll('.preset-btn').forEach(function(btn) {
+    btn.onclick = function() { applyDropPreset(btn.getAttribute('data-preset')); };
+  });
+  var dropSaveBtn = $('btn-drop-save'); if (dropSaveBtn) dropSaveBtn.onclick = saveDropWeights;
+  var speedSlider = $('game-speed-slider');
+  if (speedSlider) {
+    speedSlider.oninput = function() {
+      var v = parseInt(this.value, 10) || 100;
+      var lbl = $('game-speed-val'); if (lbl) lbl.textContent = v + '%';
+    };
+  }
+  var speedSaveBtn = $('btn-speed-save'); if (speedSaveBtn) speedSaveBtn.onclick = saveGameSpeed;
+  var slotDurSlider = $('slot-dur-slider');
+  if (slotDurSlider) {
+    slotDurSlider.oninput = function() {
+      var v = parseInt(this.value, 10) || 650;
+      var lbl = $('slot-dur-val'); if (lbl) lbl.textContent = v + 'ms';
+    };
+  }
+  var slotIntSlider = $('slot-int-slider');
+  if (slotIntSlider) {
+    slotIntSlider.oninput = function() {
+      var v = parseInt(this.value, 10) || 8;
+      var lbl = $('slot-int-val'); if (lbl) lbl.textContent = '1..' + v;
+    };
+  }
+  var slotSaveBtn = $('btn-slot-save'); if (slotSaveBtn) slotSaveBtn.onclick = saveSlotConfig;
+  loadDifficultyConfig();
+
   // ====== FULL CONFIG TABLE ======
   $('btn-load-all-config').onclick = async function() {
     var host = $('config-table-host');
@@ -1738,46 +2708,97 @@
     if ($('live-auto') && $('live-auto').checked) loadLive();
   }, 10000);
 
-  // Bot controls
+  // ============ VERSION INFO ============
+  async function loadVersion() {
+    try {
+      var v = await api('/version');
+      if (!v) return;
+      var el = $('hdr-version');
+      if (!el) return;
+      var sha = v.gitSha ? ' · ' + v.gitSha : '';
+      var uptime = v.uptimeSec != null ? ' · ↑' + (v.uptimeSec < 60 ? v.uptimeSec + 's' : v.uptimeSec < 3600 ? Math.floor(v.uptimeSec / 60) + 'm' : Math.floor(v.uptimeSec / 3600) + 'h') : '';
+      el.textContent = 'build ' + (v.appVersion || '—') + sha + uptime;
+      el.title = 'גרסת קוח: ' + (v.appVersion || '—') +
+        '\\nGit: ' + (v.gitSha || 'unknown') + (v.gitBranch ? ' (' + v.gitBranch + ')' : '') +
+        '\\nNode: ' + (v.nodeVersion || '—') +
+        '\\nServer started: ' + (v.startedAt || '—');
+    } catch (e) { /* silent */ }
+  }
+  loadVersion();
+  setInterval(loadVersion, 60000); // refresh uptime once a minute
+
+  // ============ BOT CONTROLS ============
+  var BOT_MODE_META = {
+    practice:  { label: 'אימון',      emoji: '🏋️' },
+    daily:     { label: 'יומי',       emoji: '📊' },
+    contest:   { label: 'תחרות',      emoji: '🏆' },
+    duel:      { label: 'דו-קרב',     emoji: '⚔️' },
+    challenge: { label: 'אתגר',       emoji: '🎁' }
+  };
+  function botModeLabel(m) {
+    var meta = BOT_MODE_META[m] || { label: m || '?', emoji: '🤖' };
+    return meta.emoji + ' ' + meta.label;
+  }
   async function refreshBotStatus() {
     var d = await api('/bots');
-    var el = $('bots-status');
-    if (!el) return;
-    if (!d) { el.textContent = ''; return; }
-    if (d.running) {
-      var modeLabel = d.config.mode === 'daily' ? 'יומי' : d.config.mode === 'contest' ? 'תחרות' : 'אימון';
-      var speedLabel = d.config.speed === 'slow' ? '🐌' : d.config.speed === 'fast' ? '⚡' : d.config.speed === 'instant' ? '🚀' : '🏃';
-      el.innerHTML = '🟢 <strong>' + d.count + ' משחקים</strong> · ' + modeLabel + ' ' + speedLabel +
-        (d.pending > 0 ? ' · ⏳ ' + d.pending + ' ממתינים' : '') +
-        (d.config.contestCode ? ' · קוד: ' + d.config.contestCode : '') + '<br>' +
-        d.bots.slice(0, 8).map(function(b) { return b.name + ' <strong>' + (b.score|0).toLocaleString() + '</strong>'; }).join(' · ') +
-        (d.count > 8 ? ' <span style="color:#A8A6A0">ועוד ' + (d.count - 8) + '</span>' : '');
-    } else {
-      el.textContent = '⚪ לא פעיל';
+    var summaryEl = $('bots-status-summary');
+    var fullEl = $('bots-status-full');
+    var listEl = $('bots-status-list');
+    if (!summaryEl) return;
+    if (!d || !d.running) {
+      summaryEl.textContent = '⚪ לא פעיל';
+      if (fullEl) fullEl.style.display = 'none';
+      if (listEl) listEl.innerHTML = '';
+      return;
     }
+    var speedLabel = d.config.speed === 'slow' ? '🐌 איטי' : d.config.speed === 'fast' ? '⚡ מהיר' : d.config.speed === 'instant' ? '🚀 מקס' : '🏃 רגיל';
+    var extra = '';
+    if (d.config.contestCode) extra += ' · קוד: <strong>' + escHtml(d.config.contestCode) + '</strong>';
+    if (d.config.challengeSlug) extra += ' · אתגר: <strong>' + escHtml(d.config.challengeSlug) + '</strong>';
+    summaryEl.innerHTML = '🟢 <strong>' + d.count + ' משחקים פעילים</strong> · ' + botModeLabel(d.config.mode) + ' ' + speedLabel +
+      (d.pending > 0 ? ' · ⏳ ' + d.pending + ' ממתינים להחלפה' : '') + extra;
+    if (fullEl) fullEl.style.display = '';
+    if (!listEl) return;
+    if (!d.bots.length) { listEl.innerHTML = '<div style="color:#A8A6A0;font-size:11px;padding:8px;text-align:center">אין בוטים פעילים</div>'; return; }
+    // Render every bot, not just 8. Compact row with name/score/tier/games.
+    var rows = d.bots.map(function(b) {
+      var scoreFmt = (b.score | 0).toLocaleString();
+      return '<div style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-bottom:1px solid rgba(0,0,0,0.05);font-size:12px">' +
+        '<span style="font-size:14px">🤖</span>' +
+        '<span style="flex:1;font-weight:600">' + escHtml(b.name) + '</span>' +
+        '<span style="font-family:ui-monospace,Menlo,monospace;color:#A8A6A0">tier ' + (b.tier | 0) + '</span>' +
+        '<span style="color:#6F6E68">·</span>' +
+        '<span style="font-family:ui-monospace,Menlo,monospace;color:#6F6E68">' + (b.games | 0) + ' משחקים</span>' +
+        '<span style="font-weight:800;color:#BA7517;min-width:80px;text-align:left">' + scoreFmt + '</span>' +
+      '</div>';
+    }).join('');
+    listEl.innerHTML = rows;
   }
-  // Show/hide contest code field based on mode
+  // Show/hide mode-specific input fields
   $('bot-mode').onchange = function() {
     $('bot-contest-row').style.display = this.value === 'contest' ? '' : 'none';
+    var chRow = $('bot-challenge-row');
+    if (chRow) chRow.style.display = this.value === 'challenge' ? '' : 'none';
   };
   $('btn-bots-start').onclick = async function() {
     var count = parseInt($('bot-count').value, 10) || 10;
     var mode = $('bot-mode').value;
     var speed = $('bot-speed').value;
     var contestCode = mode === 'contest' ? ($('bot-contest-code').value || '').trim().toUpperCase() : null;
+    var challengeSlug = mode === 'challenge' ? (($('bot-challenge-slug') && $('bot-challenge-slug').value) || '').trim() : null;
     var restartMin = parseInt($('bot-delay-min').value, 10) || 30;
     var restartMax = parseInt($('bot-delay-max').value, 10) || 90;
     if (mode === 'contest' && !contestCode) { toast('נא להזין קוד תחרות'); return; }
+    if (mode === 'challenge' && !challengeSlug) { toast('נא להזין slug של אתגר'); return; }
     this.disabled = true; this.textContent = '...';
     var r = await api('/bots/start', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ count: count, mode: mode, speed: speed, contestCode: contestCode, restartMin: restartMin, restartMax: restartMax })
+      body: JSON.stringify({ count: count, mode: mode, speed: speed, contestCode: contestCode, challengeSlug: challengeSlug, restartMin: restartMin, restartMax: restartMax })
     });
     this.disabled = false; this.textContent = '▶ הפעל';
     if (r && r.ok) {
-      var label = mode === 'daily' ? 'יומי' : mode === 'contest' ? 'תחרות' : 'אימון';
-      toast('🤖 ' + r.count + ' בוטים · ' + label);
+      toast('🤖 ' + r.count + ' בוטים · ' + botModeLabel(mode));
       refreshBotStatus();
     }
   };
@@ -1788,7 +2809,13 @@
     if (r && r.ok) { toast('בוטים נעצרו'); refreshBotStatus(); }
   };
   refreshBotStatus();
-  setInterval(refreshBotStatus, 15000);
+  // Auto-refresh every 3 seconds for a live feel. Stops polling if the
+  // checkbox is unchecked or the bot is not running (refreshBotStatus
+  // returns quickly when there's nothing to render).
+  setInterval(function() {
+    var auto = $('bots-auto-refresh');
+    if (!auto || auto.checked) refreshBotStatus();
+  }, 3000);
 
   // Player management
   // Wager management

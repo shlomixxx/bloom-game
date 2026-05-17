@@ -306,6 +306,14 @@
       '<div style="font-size:12px;color:#6F6E68;margin-bottom:12px">אתגר שחקן ספציפי! שניכם משחקים על אותו לוח — מי שמשיג יותר נקודות מנצח.</div>' +
       '<div style="font-size:11px;font-weight:600;margin-bottom:4px">קוד היריב</div>' +
       '<input id="duel-opponent" placeholder="BLOOM-XXXX" maxlength="10" style="width:100%;padding:8px;border:1px solid rgba(0,0,0,0.12);border-radius:8px;font-family:inherit;font-size:14px;text-transform:uppercase;letter-spacing:0.1em;font-weight:700;text-align:center;box-sizing:border-box;margin-bottom:8px">' +
+      '<div style="font-size:11px;font-weight:600;margin-bottom:4px">💪 רמת קושי (לשניכם)</div>' +
+      '<div id="duel-difficulty" style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:10px">' +
+        '<button type="button" class="diff-pill selected" data-diff="default" style="flex:1;min-width:60px;padding:5px 8px;font-size:11px;border:1px solid rgba(0,0,0,0.12);border-radius:6px;background:#1C1A18;color:#FAC775;font-weight:600;cursor:pointer">📦 רגיל</button>' +
+        '<button type="button" class="diff-pill" data-diff="easy" style="flex:1;min-width:60px;padding:5px 8px;font-size:11px;border:1px solid rgba(0,0,0,0.12);border-radius:6px;background:#F5F2EC;color:#1C1A18;font-weight:600;cursor:pointer">😊 קל</button>' +
+        '<button type="button" class="diff-pill" data-diff="medium" style="flex:1;min-width:60px;padding:5px 8px;font-size:11px;border:1px solid rgba(0,0,0,0.12);border-radius:6px;background:#F5F2EC;color:#1C1A18;font-weight:600;cursor:pointer">🎯 בינוני</button>' +
+        '<button type="button" class="diff-pill" data-diff="hard" style="flex:1;min-width:60px;padding:5px 8px;font-size:11px;border:1px solid rgba(0,0,0,0.12);border-radius:6px;background:#F5F2EC;color:#1C1A18;font-weight:600;cursor:pointer">🔥 קשה</button>' +
+        '<button type="button" class="diff-pill" data-diff="insane" style="flex:1;min-width:60px;padding:5px 8px;font-size:11px;border:1px solid rgba(0,0,0,0.12);border-radius:6px;background:#F5F2EC;color:#1C1A18;font-weight:600;cursor:pointer">💀 גהינום</button>' +
+      '</div>' +
       '<div style="font-size:11px;font-weight:600;margin-bottom:4px">הימור (אופציונלי)</div>' +
       '<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">' +
         '<input type="number" id="duel-amount" value="0" min="0" style="width:80px;padding:6px;border:1px solid rgba(0,0,0,0.12);border-radius:8px;font-family:inherit;font-size:14px;text-align:center;font-weight:700">' +
@@ -324,6 +332,22 @@
     // Load my duels
     loadMyDuels();
 
+    // Difficulty pill picker (challenger picks one — both players get it)
+    var selectedDuelDifficulty = 'default';
+    modal.querySelectorAll('.diff-pill').forEach(function(pill) {
+      pill.onclick = function() {
+        modal.querySelectorAll('.diff-pill').forEach(function(p) {
+          p.classList.remove('selected');
+          p.style.background = '#F5F2EC';
+          p.style.color = '#1C1A18';
+        });
+        pill.classList.add('selected');
+        pill.style.background = '#1C1A18';
+        pill.style.color = '#FAC775';
+        selectedDuelDifficulty = pill.getAttribute('data-diff') || 'default';
+      };
+    });
+
     // Send challenge
     document.getElementById('duel-send').onclick = async function() {
       var opp = (document.getElementById('duel-opponent').value || '').trim().toUpperCase();
@@ -336,15 +360,32 @@
       try {
         var r = await fetch(API_BASE + '/api/duels', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ deviceId: deviceId, opponentCode: opp, amount: amt })
+          body: JSON.stringify({ deviceId: deviceId, opponentCode: opp, amount: amt, difficulty: selectedDuelDifficulty })
         });
         var d = await r.json();
         this.disabled = false; this.textContent = 'שלח אתגר ⚔️';
         if (d && d.ok) {
           if (amt > 0) { playerBalance -= amt; updateBalanceDisplay(); }
           errEl.style.color = '#2E8B6F';
-          errEl.textContent = '✅ אתגר נשלח! ממתין ליריב...';
-          loadMyDuels();
+          errEl.textContent = '✅ אתגר נשלח! מתחיל את המשחק שלך…';
+          // Auto-start the challenger's game IMMEDIATELY. Without this the
+          // challenger has to refresh and click "Play" manually — the bug
+          // the user reported ("המשחק לא מצליח עד שעושה רענון"). The server
+          // now accepts score submissions while the duel is still 'pending',
+          // and settlement waits for both sides to submit.
+          var duelRow = d.duel || {
+            id: d.duelId,
+            board_seed: d.seed,
+            difficulty_label: d.difficulty,
+            difficulty_weights: null,
+            difficulty_speed_pct: null
+          };
+          activeDuelOpponentName = duelRow.opponent_name || opp;
+          setTimeout(function() {
+            var m = document.getElementById('duel-modal');
+            if (m) m.remove();
+            startDuelGame(duelRow.id, duelRow.board_seed, duelRow);
+          }, 600); // brief confirmation flash before transitioning
         } else {
           var msgs = { self_duel: 'לא ניתן לאתגר את עצמך', opponent_not_found: 'שחקן לא נמצא', insufficient_balance: 'אין מספיק 💎', duels_disabled: 'דו-קרבות מושבתים' };
           errEl.textContent = msgs[d.reason] || 'שגיאה';
@@ -400,7 +441,7 @@
       fetchPlayerCode();
       loadMyDuels();
       activeDuelOpponentName = d.duel ? (d.duel.challenger_name || d.duel.challenger_code || 'יריב') : 'יריב';
-      startDuelGame(id, d.duel.board_seed);
+      startDuelGame(id, d.duel.board_seed, d.duel);
     } else {
       var msgs = { not_opponent: 'אתה לא היריב', not_pending: 'כבר קיבלת', expired: 'פג תוקף', insufficient_balance: 'אין מספיק 💎' };
       alert(msgs[d && d.reason] || 'שגיאה');
@@ -416,7 +457,7 @@
       if (!duel || duel.status !== 'accepted') { alert('הדו-קרב לא פעיל'); return; }
       var isChallenger = duel.challenger_device === deviceId;
       activeDuelOpponentName = isChallenger ? (duel.opponent_name || duel.opponent_code || 'יריב') : (duel.challenger_name || duel.challenger_code || 'יריב');
-      startDuelGame(id, duel.board_seed);
+      startDuelGame(id, duel.board_seed, duel);
     } catch(e) { alert('שגיאת רשת'); }
   };
 
@@ -424,7 +465,7 @@
   var activeDuelId = null;
   var activeDuelOpponentName = 'יריב';
 
-  function startDuelGame(duelId, seed) {
+  function startDuelGame(duelId, seed, duelRow) {
     activeDuelId = duelId;
     // Close the duel modal
     var modal = document.getElementById('duel-modal');
@@ -436,6 +477,18 @@
     window._duelMode = true; // flag for UI
     window._duelOpponentName = activeDuelOpponentName || 'יריב';
     dailyDate = todayInIsrael();
+    // Apply the challenger-chosen difficulty (both sides get the same one).
+    // Falls back to admin globals if the duel row predates the difficulty
+    // columns or the challenger picked 'default'.
+    if (duelRow && duelRow.difficulty_weights) {
+      sessionDifficulty = {
+        label: duelRow.difficulty_label || 'custom',
+        weights: duelRow.difficulty_weights,
+        speed_pct: duelRow.difficulty_speed_pct || null
+      };
+    } else {
+      sessionDifficulty = null;
+    }
     grid = Array.from({length: getBoardRows()}, function() { return Array(getBoardCols()).fill(0); });
     score = 0; highestTier = 1; busy = false; dropsCount = 0;
     currentGameMaxChain = 0;
@@ -471,9 +524,193 @@
       showDuelResultOverlay(d, finalScore, oppName);
       if (d && (d.result === 'tie' || (d.result === 'settled' && d.winner === 'you'))) fetchPlayerCode();
       trackEvent('duel_score', { duelId: duelId, result: d && d.result });
+      // If we're still 'waiting' for the opponent, poll the duel state so we
+      // can flip the overlay from "..." to the real result the moment the
+      // opponent finishes. Bug 4: previously the overlay stayed stuck on
+      // "ממתין ליריב..." forever, even after opponent had submitted.
+      // ALSO: attach a live spectator view of the opponent's actual game so
+      // the player can watch instead of staring at a "..." spinner.
+      if (d && d.result === 'waiting') {
+        pollDuelUntilSettled(duelId, finalScore, oppName);
+        attachDuelLiveSpectator(duelId, finalScore, oppName);
+      }
     }).catch(function() {
       showDuelResultOverlay({ result: 'error' }, finalScore, oppName);
     });
+  }
+
+  // Poll a duel after we submitted but the opponent hasn't yet. Stops as soon
+  // as the duel becomes 'settled' or 'tie', or after 5 minutes (whichever
+  // comes first). Updates the in-flight result overlay in place.
+  function pollDuelUntilSettled(duelId, myScore, oppName) {
+    var attempts = 0;
+    var maxAttempts = 150; // 150 × 2s = 5 minutes
+    var poller = setInterval(function() {
+      attempts++;
+      if (attempts > maxAttempts) { clearInterval(poller); return; }
+      fetch(API_BASE + '/api/duels/' + duelId, { method: 'GET' })
+        .then(function(r) { return r.ok ? r.json() : null; })
+        .then(function(resp) {
+          if (!resp || !resp.duel) return;
+          var u = resp.duel;
+          if (u.status === 'settled' || u.status === 'tie') {
+            clearInterval(poller);
+            // Tear down the live-spectator poller too, if any.
+            stopDuelLiveSpectator();
+            var isChallenger = u.challenger_device === deviceId;
+            var oppScore = isChallenger ? u.opponent_score : u.challenger_score;
+            var winner = null;
+            if (u.status === 'settled') {
+              winner = u.winner_device === deviceId ? 'you' : 'opponent';
+            }
+            // Compute prize from amount * 2 minus 5% rake (mirrors server)
+            var prize = u.amount ? Math.round((u.amount | 0) * 2 * 0.95) : 0;
+            replaceDuelResultOverlay({
+              result: u.status === 'tie' ? 'tie' : 'settled',
+              winner: winner,
+              opponentScore: oppScore,
+              prize: prize
+            }, myScore, oppName);
+            if (winner === 'you' || u.status === 'tie') fetchPlayerCode();
+          }
+        })
+        .catch(function() {});
+    }, 2000);
+  }
+
+  // ============================================================
+  // DUEL LIVE SPECTATOR — embed an actual live view of the opponent
+  // inside the "waiting" overlay so the player watches them play
+  // in real time, not a mirror, not a spinner. Polls the universal
+  // /api/live-state/:deviceId endpoint (fed by 5s heartbeats).
+  // ============================================================
+  var _duelSpectatorPoller = null;
+  var _duelSpectatorTargetId = null;
+
+  function stopDuelLiveSpectator() {
+    if (_duelSpectatorPoller) { clearInterval(_duelSpectatorPoller); _duelSpectatorPoller = null; }
+    _duelSpectatorTargetId = null;
+  }
+
+  function attachDuelLiveSpectator(duelId, myScore, oppName) {
+    // Fetch the duel row once to learn the opponent's deviceId, then start
+    // the live-state poller and inject a mini-board into the waiting overlay.
+    fetch(API_BASE + '/api/duels/' + duelId, { method: 'GET' })
+      .then(function(r) { return r.ok ? r.json() : null; })
+      .then(function(resp) {
+        if (!resp || !resp.duel) return;
+        var u = resp.duel;
+        var oppDeviceId = (u.challenger_device === deviceId) ? u.opponent_device : u.challenger_device;
+        if (!oppDeviceId) return;
+        _duelSpectatorTargetId = oppDeviceId;
+        injectDuelSpectatorWidget(myScore, oppName);
+        // First poll immediately, then every 1.5s. Cheap: opponent's
+        // heartbeat refreshes server-side every 5s, so we get a fresh
+        // snapshot ≈3× per heartbeat — feels live without spamming.
+        pollDuelLiveState();
+        _duelSpectatorPoller = setInterval(pollDuelLiveState, 1500);
+      })
+      .catch(function() {});
+  }
+
+  function injectDuelSpectatorWidget(myScore, oppName) {
+    var overlay = document.querySelector('[data-duel-result-overlay]');
+    if (!overlay) return;
+    // Find the inner card (the dark rounded box). It's the only direct child div.
+    var card = overlay.querySelector('div');
+    if (!card) return;
+    // Don't inject twice
+    if (overlay.querySelector('[data-duel-spec-widget]')) return;
+    var ROWS = getBoardRows(), COLS = getBoardCols();
+    var cellsHtml = '';
+    for (var i = 0; i < ROWS * COLS; i++) cellsHtml += '<div class="dspec-cell" data-i="' + i + '"></div>';
+    var widget = document.createElement('div');
+    widget.setAttribute('data-duel-spec-widget', '1');
+    widget.style.cssText = 'margin-top:14px;padding:12px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:14px;direction:rtl';
+    widget.innerHTML =
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;gap:10px">' +
+        '<div style="display:flex;align-items:center;gap:6px;font-size:12px;color:#9FE1CB">' +
+          '<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#2E8B6F;animation:dspecPulse 1.2s ease-in-out infinite"></span>' +
+          '<span>צופה ב-' + escapeHtml(oppName) + ' חי</span>' +
+        '</div>' +
+        '<div style="font-size:11px;color:#A8A6A0" data-dspec-status>מתחבר…</div>' +
+      '</div>' +
+      '<div style="display:flex;justify-content:center;gap:18px;margin-bottom:10px;font-size:11px">' +
+        '<div style="text-align:center"><div style="color:#A8A6A0">ניקוד שלו</div><div data-dspec-score style="font-size:20px;font-weight:900;color:#FAC775">—</div></div>' +
+        '<div style="text-align:center"><div style="color:#A8A6A0">הניקוד שלך</div><div style="font-size:20px;font-weight:900;color:#9FE1CB">' + myScore.toLocaleString() + '</div></div>' +
+      '</div>' +
+      '<div class="dspec-grid" style="display:grid;grid-template-columns:repeat(' + COLS + ',1fr);gap:3px;background:#0E0D0C;padding:6px;border-radius:8px;max-width:200px;margin:0 auto">' + cellsHtml + '</div>' +
+      '<style>' +
+        '.dspec-cell{aspect-ratio:1;background:#2A2724;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:14px}' +
+        '@keyframes dspecPulse{0%,100%{opacity:1}50%{opacity:0.3}}' +
+      '</style>';
+    // Insert before the "Play Again" button — last child of card.
+    var btn = card.querySelector('button');
+    if (btn && btn.parentNode === card) card.insertBefore(widget, btn);
+    else card.appendChild(widget);
+  }
+
+  function pollDuelLiveState() {
+    if (!_duelSpectatorTargetId) return;
+    // If the player dismissed the waiting overlay (e.g. clicked "play again"),
+    // the widget is gone — tear down the poller so we don't keep hammering
+    // the live-state endpoint in the background.
+    if (!document.querySelector('[data-duel-spec-widget]')) {
+      stopDuelLiveSpectator();
+      return;
+    }
+    fetch(API_BASE + '/api/live-state/' + encodeURIComponent(_duelSpectatorTargetId))
+      .then(function(r) { return r.ok ? r.json() : null; })
+      .then(function(d) {
+        var statusEl = document.querySelector('[data-dspec-status]');
+        var scoreEl = document.querySelector('[data-dspec-score]');
+        var gridHost = document.querySelector('[data-duel-spec-widget] .dspec-grid');
+        if (!gridHost) return; // widget gone (overlay closed)
+        if (!d) {
+          if (statusEl) statusEl.textContent = '🔴 לא מחובר';
+          return;
+        }
+        if (statusEl) statusEl.textContent = '🟢 מתעדכן';
+        if (scoreEl) scoreEl.textContent = (d.score | 0).toLocaleString();
+        if (!Array.isArray(d.grid)) return;
+        var tiers = getActiveTiers();
+        var cells = gridHost.children;
+        var idx = 0;
+        for (var r = 0; r < d.grid.length; r++) {
+          var row = d.grid[r] || [];
+          for (var c = 0; c < row.length; c++) {
+            var cell = cells[idx];
+            if (cell) {
+              var t = row[c] | 0;
+              if (t > 0 && tiers[t]) {
+                cell.style.background = tiers[t].bg;
+                cell.style.color = tiers[t].fg;
+                cell.innerHTML = tiers[t].svg || '';
+              } else {
+                cell.style.background = '#2A2724';
+                cell.style.color = '';
+                cell.innerHTML = '';
+              }
+            }
+            idx++;
+          }
+        }
+      })
+      .catch(function() {
+        var statusEl = document.querySelector('[data-dspec-status]');
+        if (statusEl) statusEl.textContent = '⚠️ שגיאת רשת';
+      });
+  }
+
+  // Swap the existing "waiting" overlay for a fresh result overlay. Called
+  // by the poller above when the opponent's score lands.
+  function replaceDuelResultOverlay(d, myScore, oppName) {
+    // Remove any open duel-result overlay (created by showDuelResultOverlay
+    // — identified by the dark backdrop with the inline border style).
+    document.querySelectorAll('[data-duel-result-overlay]').forEach(function(el) {
+      el.remove();
+    });
+    showDuelResultOverlay(d, myScore, oppName);
   }
 
   function showDuelResultOverlay(d, myScore, oppName) {
@@ -504,6 +741,7 @@
     '</div>';
 
     var overlay = document.createElement('div');
+    overlay.setAttribute('data-duel-result-overlay', '1');
     overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;display:flex;align-items:center;justify-content:center;direction:rtl';
     overlay.innerHTML =
       '<div style="background:#1C1A18;border-radius:20px;padding:28px 24px;max-width:320px;width:90%;text-align:center;border:2px solid ' + color + ';box-shadow:0 0 40px ' + color + '33">' +
@@ -532,6 +770,143 @@
     setTimeout(function() { t.classList.add('show'); }, 10);
     setTimeout(function() { t.classList.remove('show'); setTimeout(function() { t.remove(); }, 400); }, 4000);
   }
+
+  // ============================================================
+  // INCOMING-DUEL NOTIFICATIONS (Bug 2 fix)
+  // ============================================================
+  // Polls /api/duels/mine on boot and every 60s while the app is visible.
+  // Shows a top-right toast for:
+  //  - pending duels I haven't accepted yet (someone challenged me)
+  //  - settled duels I haven't seen the result of (notify of win/loss)
+  // Tracks already-seen duel IDs in sessionStorage so we don't spam on
+  // every poll. sessionStorage is per-tab and clears on close, so a player
+  // who closes and re-opens the app DOES see the badge again — that's the
+  // desired re-notification behavior.
+  var SEEN_DUELS_KEY = 'bloom_seen_duel_notifications';
+  function loadSeenDuels() {
+    try { return JSON.parse(sessionStorage.getItem(SEEN_DUELS_KEY) || '{}') || {}; }
+    catch (e) { return {}; }
+  }
+  function markDuelSeen(duelId, status) {
+    try {
+      var seen = loadSeenDuels();
+      seen[String(duelId)] = status;
+      sessionStorage.setItem(SEEN_DUELS_KEY, JSON.stringify(seen));
+    } catch (e) {}
+  }
+  function showDuelNotificationBanner(opts) {
+    // opts: { kind: 'invite'|'won'|'lost'|'tie', name, score?, onTap }
+    var existing = document.querySelector('[data-duel-notif="' + opts.id + '"]');
+    if (existing) return; // already showing
+    var b = document.createElement('div');
+    b.setAttribute('data-duel-notif', opts.id);
+    var bg = '#1C1A18', border = '#6B5CE7', emoji = '⚔️', title = 'אתגר חדש', sub = '';
+    if (opts.kind === 'invite') {
+      emoji = '⚔️'; title = (opts.name || 'מישהו') + ' אתגר/ה אותך!'; sub = 'לחץ לקבל'; border = '#6B5CE7';
+    } else if (opts.kind === 'won') {
+      emoji = '🏆'; title = 'ניצחת בדו-קרב!'; sub = 'מול ' + (opts.name || 'יריב'); border = '#2E8B6F';
+    } else if (opts.kind === 'lost') {
+      emoji = '😔'; title = 'הפסדת בדו-קרב'; sub = 'מול ' + (opts.name || 'יריב'); border = '#C8472F';
+    } else if (opts.kind === 'tie') {
+      emoji = '🤝'; title = 'תיקו בדו-קרב'; sub = 'מול ' + (opts.name || 'יריב'); border = '#BA7517';
+    }
+    b.style.cssText = 'position:fixed;top:14px;left:50%;transform:translateX(-50%) translateY(-20px);' +
+      'opacity:0;transition:opacity 240ms ease-out,transform 240ms ease-out;' +
+      'z-index:9999;background:' + bg + ';color:#FAC775;border:2px solid ' + border + ';' +
+      'border-radius:14px;padding:10px 16px;direction:rtl;font-family:inherit;font-size:13px;' +
+      'box-shadow:0 8px 24px rgba(0,0,0,0.35);cursor:pointer;max-width:320px;width:calc(100vw - 32px);';
+    b.innerHTML =
+      '<div style="display:flex;align-items:center;gap:10px">' +
+        '<div style="font-size:22px">' + emoji + '</div>' +
+        '<div style="flex:1;min-width:0">' +
+          '<div style="font-weight:800;color:#FFFFFF;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escDuelHtml(title) + '</div>' +
+          (sub ? '<div style="font-size:11px;color:#A8A6A0;margin-top:2px">' + escDuelHtml(sub) + '</div>' : '') +
+        '</div>' +
+        '<div style="font-size:11px;color:#A8A6A0">✕</div>' +
+      '</div>';
+    document.body.appendChild(b);
+    requestAnimationFrame(function() {
+      b.style.opacity = '1';
+      b.style.transform = 'translateX(-50%) translateY(0)';
+    });
+    var dismiss = function() {
+      b.style.opacity = '0';
+      b.style.transform = 'translateX(-50%) translateY(-20px)';
+      setTimeout(function() { b.remove(); }, 250);
+    };
+    b.onclick = function() {
+      if (opts.onTap) try { opts.onTap(); } catch (e) {}
+      dismiss();
+    };
+    setTimeout(dismiss, 7000);
+  }
+  function escDuelHtml(s) {
+    return String(s).replace(/[&<>"']/g, function(c) {
+      return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c];
+    });
+  }
+
+  async function checkIncomingDuels() {
+    if (!deviceId) return;
+    if (document.visibilityState === 'hidden') return;
+    try {
+      var r = await fetch(API_BASE + '/api/duels/mine?deviceId=' + encodeURIComponent(deviceId));
+      if (!r.ok) return;
+      var d = await r.json();
+      if (!d || !d.duels) return;
+      var seen = loadSeenDuels();
+      var myCode = '';
+      try { myCode = localStorage.getItem('bloom_player_code') || ''; } catch (e) {}
+      d.duels.forEach(function(duel) {
+        var prevSeen = seen[String(duel.id)];
+        // Skip duels currently being played (mid-game) — they'll get a result overlay.
+        if (activeDuelId && duel.id === activeDuelId) return;
+
+        if (duel.status === 'pending') {
+          // Pending where I'm the opponent → I was challenged. Notify once.
+          var iAmOpponent = duel.opponent_device === deviceId ||
+            (myCode && duel.opponent_code === myCode);
+          var iAmChallenger = duel.challenger_device === deviceId;
+          if (iAmOpponent && prevSeen !== 'pending') {
+            showDuelNotificationBanner({
+              id: duel.id,
+              kind: 'invite',
+              name: duel.challenger_name || duel.challenger_code,
+              onTap: function() { showDuelModal(); }
+            });
+            markDuelSeen(duel.id, 'pending');
+          } else if (iAmChallenger && duel.challenger_score == null && prevSeen !== 'pending-c') {
+            // I sent it and haven't played yet. Don't notify — just track.
+            markDuelSeen(duel.id, 'pending-c');
+          }
+        } else if ((duel.status === 'settled' || duel.status === 'tie') && prevSeen !== duel.status) {
+          // Result available, haven't seen it yet — but only notify if we
+          // actually played this duel (have a score). The overlay shown
+          // by submitDuelScore handles the same-session case; this banner
+          // covers the cross-session case (closed app, opponent finished).
+          var iPlayed = (duel.challenger_device === deviceId && duel.challenger_score != null) ||
+                        (duel.opponent_device === deviceId && duel.opponent_score != null);
+          if (iPlayed) {
+            var iAmChall = duel.challenger_device === deviceId;
+            var opponentName = iAmChall ? (duel.opponent_name || duel.opponent_code) : (duel.challenger_name || duel.challenger_code);
+            var kind = 'tie';
+            if (duel.status === 'settled') {
+              kind = (duel.winner_device === deviceId) ? 'won' : 'lost';
+            }
+            showDuelNotificationBanner({
+              id: duel.id,
+              kind: kind,
+              name: opponentName,
+              onTap: function() { showDuelModal(); }
+            });
+          }
+          markDuelSeen(duel.id, duel.status);
+        }
+      });
+    } catch (e) {}
+  }
+  // Expose for boot.
+  window.__bloomCheckIncomingDuels = checkIncomingDuels;
 
   // ============ IN-GAME TILE SHOP ============
   var tilePrices = null; // fetched once from server
@@ -941,6 +1316,35 @@
       .catch(function() {});
   })();
 
+  // Per-game difficulty override. Populated by init() from the active
+  // contest/duel row, or by practice mode from localStorage. When null,
+  // getDropWeights() and gameSpeedScale() fall back to gameConfig (admin).
+  // Shape: { label: 'hard', weights: '5,15,30,30,15,5,0,0', speed_pct: 100 }
+  var sessionDifficulty = null;
+  // Mirror of server's DIFFICULTY_PRESETS — kept in sync at the source.
+  var DIFFICULTY_PRESETS = {
+    default: { label: 'default', weights: null,                    speed_pct: null, name: 'ברירת מחדל', emoji: '📦' },
+    easy:    { label: 'easy',    weights: '70,25,5,0,0,0,0,0',     speed_pct: 100,  name: 'קל',         emoji: '😊' },
+    medium:  { label: 'medium',  weights: '30,35,25,10,0,0,0,0',   speed_pct: 100,  name: 'בינוני',     emoji: '🎯' },
+    hard:    { label: 'hard',    weights: '5,15,30,30,15,5,0,0',   speed_pct: 100,  name: 'קשה',        emoji: '🔥' },
+    insane:  { label: 'insane',  weights: '0,0,10,30,35,20,5,0',   speed_pct: 100,  name: 'גהינום',     emoji: '💀' }
+  };
+  var PRACTICE_DIFF_KEY = 'bloom_practice_difficulty';
+  function readPracticeDifficulty() {
+    try {
+      var raw = localStorage.getItem(PRACTICE_DIFF_KEY);
+      if (!raw) return null;
+      var p = DIFFICULTY_PRESETS[raw];
+      return p || null;
+    } catch (e) { return null; }
+  }
+  function writePracticeDifficulty(label) {
+    try {
+      if (!label || label === 'default') localStorage.removeItem(PRACTICE_DIFF_KEY);
+      else localStorage.setItem(PRACTICE_DIFF_KEY, label);
+    } catch (e) {}
+  }
+
   /* ============ AUDIO ============ */
   let audioCtx = null;
   // Channel volumes (0–1). Music drives the mp3 cross-fade target; sfx
@@ -954,21 +1358,32 @@
   const VOL_MUTE_THRESHOLD = 0.005;
   function readVolumeKey(key, fallback) {
     const raw = localStorage.getItem(key);
-    if (raw === null || raw === '') {
-      // Migration: read the legacy boolean keys
-      const oldKey = (key === MUSIC_VOL_KEY) ? MUSIC_MUTE_KEY : SFX_MUTE_KEY;
-      const oldRaw = localStorage.getItem(oldKey);
-      if (oldRaw === '1') return 0;
-      if (oldRaw === '0' || localStorage.getItem(MUTE_KEY) === '0') return fallback;
-      if (localStorage.getItem(MUTE_KEY) === '1') return 0;
-      return fallback;
+    if (raw !== null && raw !== '') {
+      const v = parseFloat(raw);
+      if (!Number.isFinite(v)) return fallback;
+      return Math.max(0, Math.min(1, v));
     }
-    const v = parseFloat(raw);
-    if (!Number.isFinite(v)) return fallback;
-    return Math.max(0, Math.min(1, v));
+    // One-time migration from the old boolean mute keys. Only per-channel
+    // mutes are honored — the legacy *unified* `bloom_muted` is intentionally
+    // ignored, because users who tapped it once on an old version got stuck
+    // permanently silent after the per-channel split (no UI affordance to
+    // recover). Defaulting to audible is recoverable; defaulting to mute isn't.
+    const oldKey = (key === 'bloom_music_volume') ? 'bloom_muted_music' : 'bloom_muted_sfx';
+    const oldRaw = localStorage.getItem(oldKey);
+    if (oldRaw === '1') return 0;
+    return fallback;
   }
   let musicVolume = readVolumeKey(MUSIC_VOL_KEY, DEFAULT_MUSIC_VOLUME);
   let sfxVolume = readVolumeKey(SFX_VOL_KEY, DEFAULT_SFX_VOLUME);
+  // Persist the resolved values immediately so the migration only runs once,
+  // then clear the legacy keys so they can never re-mute on future loads.
+  try {
+    localStorage.setItem(MUSIC_VOL_KEY, String(musicVolume));
+    localStorage.setItem(SFX_VOL_KEY, String(sfxVolume));
+    localStorage.removeItem('bloom_muted');
+    localStorage.removeItem('bloom_muted_music');
+    localStorage.removeItem('bloom_muted_sfx');
+  } catch (e) {}
   function isMusicMuted() { return musicVolume < VOL_MUTE_THRESHOLD; }
   function isSfxMuted() { return sfxVolume < VOL_MUTE_THRESHOLD; }
   function isAnyMuted() { return isMusicMuted() || isSfxMuted(); }
@@ -981,9 +1396,40 @@
 
   function ensureAudio() {
     if (!audioCtx) try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) {}
-    if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume().catch(function() {});
+    if (audioCtx && audioCtx.state === 'suspended') {
+      audioCtx.resume().then(function() {
+        // Browser autoplay policy: any playMusic() called before the first
+        // user gesture left its BufferSource scheduled on a suspended ctx —
+        // on Safari that source never recovers. Re-arm the current track
+        // here, on the first successful resume, so music actually starts.
+        if (currentTrack && !isMusicMuted()) {
+          var t = MUSIC_TRACKS[currentTrack];
+          if (!t || !t.source || currentTrackLevel(currentTrack) < 0.001) {
+            fadeInTrack(currentTrack, MUSIC_FADE_MS, musicVolume);
+          }
+        }
+      }).catch(function() {});
+    }
     return audioCtx;
   }
+
+  // Belt-and-suspenders: register a one-shot first-interaction listener so
+  // audio unlocks even if no code path through ensureAudio() runs inside the
+  // first click handler. Removes itself after the first successful resume.
+  (function attachFirstGestureUnlock() {
+    var unlocked = false;
+    function tryUnlock() {
+      if (unlocked) return;
+      unlocked = true;
+      ensureAudio();
+      document.removeEventListener('pointerdown', tryUnlock, true);
+      document.removeEventListener('touchstart', tryUnlock, true);
+      document.removeEventListener('keydown', tryUnlock, true);
+    }
+    document.addEventListener('pointerdown', tryUnlock, true);
+    document.addEventListener('touchstart', tryUnlock, true);
+    document.addEventListener('keydown', tryUnlock, true);
+  })();
 
   /* Music manager: 3 tracks (lobby/game/fail) with 0.5s cross-fade */
   const MUSIC_FADE_MS = 500;
@@ -2160,6 +2606,15 @@
           '<div class="contest-duration-pill" data-board="free">חופשי</div>' +
         '</div>' +
         '<div class="contest-form-hint" id="ctf-board-hint">כולם מקבלים את אותו לוח — השוואה הוגנת</div>' +
+        '<div class="contest-form-label">💪 רמת קושי <span style="color:#A8A6A0;font-weight:400">(לכל המשתתפים)</span></div>' +
+        '<div class="contest-duration-row" id="ctf-difficulty" style="flex-wrap:wrap">' +
+          '<div class="contest-duration-pill selected" data-diff="default">📦 רגיל</div>' +
+          '<div class="contest-duration-pill" data-diff="easy">😊 קל</div>' +
+          '<div class="contest-duration-pill" data-diff="medium">🎯 בינוני</div>' +
+          '<div class="contest-duration-pill" data-diff="hard">🔥 קשה</div>' +
+          '<div class="contest-duration-pill" data-diff="insane">💀 גהינום</div>' +
+        '</div>' +
+        '<div class="contest-form-hint" id="ctf-difficulty-hint">המארגן בוחר רמה אחת לכולם — כך התחרות הוגנת</div>' +
         '<div class="contest-form-label">🎰 הימור (אופציונלי)</div>' +
         '<div style="display:flex;align-items:center;gap:8px;direction:rtl;margin-bottom:4px">' +
           '<input type="number" class="contest-input" id="ctf-wager" placeholder="0" min="0" max="500" value="0" style="width:80px;text-align:center;font-weight:700" />' +
@@ -2172,6 +2627,14 @@
 
     let selectedDays = 7;
     let selectedBoardType = 'shared';
+    let selectedDifficulty = 'default';
+    const DIFF_HINTS = {
+      default: 'המארגן בוחר רמה אחת לכולם — כך התחרות הוגנת',
+      easy:    '😊 קל · אריחים נמוכים שולטים — נעים לחימום',
+      medium:  '🎯 בינוני · יותר אריחים גבוהים, פחות מקום לטעויות',
+      hard:    '🔥 קשה · בעיקר tier 3-5 נופלים — ניקוד גבוה אבל game-over מהיר',
+      insane:  '💀 גהינום · אבן/עלה לא נופלים בכלל — לרוצחים סדרתיים בלבד'
+    };
     document.querySelectorAll('#ctf-duration .contest-duration-pill').forEach(function(pill) {
       pill.onclick = function() {
         document.querySelectorAll('#ctf-duration .contest-duration-pill').forEach(function(p) { p.classList.remove('selected'); });
@@ -2188,6 +2651,15 @@
         if (hint) hint.textContent = selectedBoardType === 'free'
           ? 'לוח אקראי לכל שחקן — תחרות ניקוד טהורה'
           : 'כולם מקבלים את אותו לוח — השוואה הוגנת';
+      };
+    });
+    document.querySelectorAll('#ctf-difficulty .contest-duration-pill').forEach(function(pill) {
+      pill.onclick = function() {
+        document.querySelectorAll('#ctf-difficulty .contest-duration-pill').forEach(function(p) { p.classList.remove('selected'); });
+        pill.classList.add('selected');
+        selectedDifficulty = pill.dataset.diff;
+        const hint = document.getElementById('ctf-difficulty-hint');
+        if (hint) hint.textContent = DIFF_HINTS[selectedDifficulty] || DIFF_HINTS.default;
       };
     });
 
@@ -2220,7 +2692,8 @@
             deviceId: deviceId,
             durationDays: selectedDays,
             boardType: selectedBoardType,
-            wagerAmount: wagerVal
+            wagerAmount: wagerVal,
+            difficulty: selectedDifficulty
           })
         });
         if (res.status === 429) {
@@ -2993,6 +3466,25 @@
     const cell = Math.max(1, Math.min(cellByW, cellByH));
     grid.style.width  = (cell * cols + (cols - 1) * gap) + 'px';
     grid.style.height = (cell * rows + (rows - 1) * gap) + 'px';
+    // Layout diagnostics — captured on every render so a single screenshot
+    // of the console reveals whether cells are being squeezed by a tall
+    // mode-bar or by a small viewport. Bounded by the W/H constraint that
+    // actually fired (cellByW < cellByH = width-bound; otherwise height-bound).
+    if (window.__bloomLayoutLog !== false) {
+      var bound = cellByW < cellByH ? 'WIDTH-bound' : 'HEIGHT-bound';
+      var mb = document.getElementById('mode-bar');
+      var tb = document.getElementById('tier-bar');
+      var mbH = mb ? mb.getBoundingClientRect().height : 0;
+      var tbH = tb ? tb.getBoundingClientRect().height : 0;
+      console.log('[fitGrid]',
+        'cell=' + cell + 'px',
+        '(' + bound + ')',
+        'wrap=' + wrap.clientWidth + 'x' + wrap.clientHeight,
+        'mode-bar=' + Math.round(mbH) + 'px',
+        'tier-bar=' + Math.round(tbH) + 'px',
+        'viewport=' + window.innerWidth + 'x' + window.innerHeight
+      );
+    }
   }
   // Re-fit on resize/orientation/dpr changes — phones rotate, browser
   // address bar shows/hides, etc.
@@ -5040,6 +5532,11 @@
     if (typeof clearTransientBanners === 'function') clearTransientBanners();
     if (nextMode) mode = nextMode;
     dailyDate = todayInIsrael();
+    // Resolve per-game difficulty BEFORE the first board paint. Daily stays
+    // admin-only so its leaderboard is comparable. Practice reads from
+    // localStorage. Contest/duel pull from their fetched row (set later).
+    sessionDifficulty = null;
+    if (mode === 'practice') sessionDifficulty = readPracticeDifficulty();
     grid = Array.from({length: getBoardRows()}, function() { return Array(getBoardCols()).fill(0); });
     score = 0; highestTier = 1; busy = false; dropsCount = 0;
     currentGameMaxChain = 0;
@@ -5124,6 +5621,16 @@
       rng = activeContestData && activeContestData.board_seed != null
         ? mulberry32(activeContestData.board_seed)
         : Math.random;
+      // Apply the host-chosen difficulty to this contest game. Stored on
+      // the contest row at creation time so changing the preset table
+      // later never re-balances live contests.
+      if (activeContestData && activeContestData.difficulty_weights) {
+        sessionDifficulty = {
+          label: activeContestData.difficulty_label || 'custom',
+          weights: activeContestData.difficulty_weights,
+          speed_pct: activeContestData.difficulty_speed_pct || null
+        };
+      }
       if (fresh) {
         clearContestGameState();
       } else if (activeContestCode) {
@@ -5209,7 +5716,11 @@
     } else if (mode === 'contest') {
       bar.classList.remove('practice');
       title.textContent = 'תחרות חברים';
-      sub.textContent = activeContestData ? activeContestData.name : 'תחרות פעילה';
+      var contestDiffPreset = sessionDifficulty && DIFFICULTY_PRESETS[sessionDifficulty.label];
+      var contestDiffStr = contestDiffPreset && sessionDifficulty.label !== 'default'
+        ? ' · ' + contestDiffPreset.emoji + ' ' + contestDiffPreset.name
+        : '';
+      sub.textContent = (activeContestData ? activeContestData.name : 'תחרות פעילה') + contestDiffStr;
     } else if (mode === 'challenge' && activeChallenge) {
       bar.classList.remove('practice');
       title.textContent = '🎁 אתגר פרס';
@@ -5222,11 +5733,35 @@
     } else if (window._duelMode && activeDuelId) {
       bar.classList.remove('practice');
       title.textContent = '⚔️ דו-קרב 1v1';
-      sub.textContent = 'vs ' + (window._duelOpponentName || 'יריב') + ' — מי ישיג יותר?';
+      var duelDiffPreset = sessionDifficulty && DIFFICULTY_PRESETS[sessionDifficulty.label];
+      var duelDiffStr = duelDiffPreset && sessionDifficulty.label !== 'default'
+        ? ' · ' + duelDiffPreset.emoji + ' ' + duelDiffPreset.name
+        : '';
+      sub.textContent = 'vs ' + (window._duelOpponentName || 'יריב') + duelDiffStr;
     } else {
       bar.classList.add('practice');
       title.textContent = 'משחק חופשי';
-      sub.textContent = 'שחק ותתחרה על לוח המובילים 🏆';
+      var pdiff = sessionDifficulty && DIFFICULTY_PRESETS[sessionDifficulty.label]
+        ? DIFFICULTY_PRESETS[sessionDifficulty.label]
+        : DIFFICULTY_PRESETS.default;
+      // Compact single-line subtitle. Previously this was "<chip> · תתחרה על
+      // לוח המובילים 🏆" which wrapped to a second line on narrow phones,
+      // stealing pixels from grid-wrap → fitGrid shrank every cell. Now: chip
+      // + small trophy icon for "counts toward leaderboard" (or muted "off"
+      // when difficulty != default). Tooltip on hover gives the full meaning.
+      var lbBadge = sessionDifficulty
+        ? '<span title="לא נספר ללוח המובילים" style="color:#A8A6A0;font-size:11px;margin-right:6px">⊘</span>'
+        : '<span title="נספר ללוח המובילים" style="margin-right:6px;font-size:12px">🏆</span>';
+      sub.innerHTML = '<button class="practice-diff-chip" id="practice-diff-chip" type="button" aria-label="החלף רמת קושי">' +
+        pdiff.emoji + ' ' + pdiff.name + ' <span style="opacity:0.6">⌄</span></button>' + lbBadge;
+    }
+    // Wire the practice difficulty chip (added in practice branch above).
+    var pdBtn = document.getElementById('practice-diff-chip');
+    if (pdBtn) {
+      pdBtn.onclick = function(e) {
+        e.stopPropagation();
+        showPracticeDifficultyPicker();
+      };
     }
 
     // In contest mode, the mode-info area becomes a tap target that opens
@@ -5281,6 +5816,54 @@
           return;
         }
         init(target);
+      };
+    });
+  }
+
+  // Picker modal for practice difficulty. Player chooses, we save to
+  // localStorage and restart the practice game so the new weights take
+  // effect cleanly on a fresh board. Daily/contest/duel use other paths.
+  function showPracticeDifficultyPicker() {
+    var existing = document.getElementById('pdp-modal');
+    if (existing) existing.remove();
+    var current = (sessionDifficulty && sessionDifficulty.label) || 'default';
+    var modal = document.createElement('div');
+    modal.id = 'pdp-modal';
+    modal.className = 'info-modal';
+    modal.onclick = function(e) { if (e.target === modal) modal.remove(); };
+    var optionsHtml = '';
+    var order = ['default', 'easy', 'medium', 'hard', 'insane'];
+    var hints = {
+      default: 'משקלי האדמין (ברירת מחדל). הניקוד נספר ללוח המובילים היומי.',
+      easy:    'אריחים נמוכים שולטים — נעים לחימום. הניקוד לא נספר ללוח.',
+      medium:  'בעיקר tier 2-4 — יותר אתגר. הניקוד לא נספר ללוח.',
+      hard:    'בעיקר tier 3-5 — לוח מתמלא מהר, ניקוד גבוה למיזוגים. הניקוד לא נספר ללוח.',
+      insane:  'אבן ועלה לא נופלים בכלל. רק לרוצחים סדרתיים. הניקוד לא נספר ללוח.'
+    };
+    for (var k = 0; k < order.length; k++) {
+      var key = order[k];
+      var p = DIFFICULTY_PRESETS[key];
+      var isCur = key === current;
+      optionsHtml += '<button class="pdp-opt" data-diff="' + key + '" style="display:block;width:100%;text-align:right;direction:rtl;margin-bottom:8px;padding:10px 12px;border-radius:10px;border:2px solid ' + (isCur ? '#BA7517' : 'rgba(0,0,0,0.08)') + ';background:' + (isCur ? '#FFF6E6' : '#FFFFFF') + ';cursor:pointer;font-family:inherit">' +
+        '<div style="font-size:14px;font-weight:700;color:#1C1A18">' + p.emoji + ' ' + p.name + (isCur ? '  <span style="color:#BA7517;font-size:11px">✓ נבחר</span>' : '') + '</div>' +
+        '<div style="font-size:11px;color:#6F6E68;margin-top:2px">' + hints[key] + '</div>' +
+      '</button>';
+    }
+    modal.innerHTML = '<div class="info-card" style="max-width:340px;direction:rtl">' +
+      '<div style="font-size:16px;font-weight:700;margin-bottom:6px">💪 רמת קושי · אימון חופשי</div>' +
+      '<div style="font-size:11px;color:#6F6E68;margin-bottom:12px">בחירת רמה תפתח משחק חדש. רק "רגיל" נספר בלוח המובילים היומי.</div>' +
+      optionsHtml +
+      '<button class="btn secondary" id="pdp-cancel" style="width:100%;margin-top:6px">בטל</button>' +
+    '</div>';
+    document.body.appendChild(modal);
+    document.getElementById('pdp-cancel').onclick = function() { modal.remove(); };
+    modal.querySelectorAll('.pdp-opt').forEach(function(btn) {
+      btn.onclick = function() {
+        var label = btn.getAttribute('data-diff') || 'default';
+        writePracticeDifficulty(label === 'default' ? null : label);
+        modal.remove();
+        // Fresh game with the new weights — never carry old grid into new difficulty.
+        init('practice', { fresh: true });
       };
     });
   }
@@ -5626,15 +6209,57 @@
     input.onkeydown = function(e) { if (e.key === 'Enter') save(); };
   }
 
+  // Drop pool resolution order:
+  //   1) sessionDifficulty (per-game override: contest host / duel challenger / practice picker)
+  //   2) gameConfig.drop_weights (admin global)
+  //   3) WEIGHTS (the original 55/28/12/5 fallback)
+  // Empty/malformed/all-zero at any layer falls through to the next.
+  function getDropWeights() {
+    var raw = '';
+    if (sessionDifficulty && sessionDifficulty.weights) {
+      raw = sessionDifficulty.weights;
+    } else if (typeof gameConfig === 'object' && gameConfig && gameConfig.drop_weights) {
+      raw = gameConfig.drop_weights;
+    }
+    if (!raw) return WEIGHTS;
+    var parts = String(raw).split(',').map(function(x) { return parseInt(x, 10) || 0; });
+    while (parts.length < 8) parts.push(0);
+    parts.length = 8;
+    var total = parts.reduce(function(a,b) { return a + Math.max(0, b); }, 0);
+    if (total <= 0) return WEIGHTS;
+    // Prepend the always-zero tier-0 slot so indices line up with the rest
+    // of the engine (grid uses 1..MAX_TIER, 0 = empty).
+    return [0, parts[0], parts[1], parts[2], parts[3], parts[4], parts[5], parts[6], parts[7]];
+  }
+
   function pickPiece() {
-    const total = WEIGHTS.reduce(function(a,b) { return a+b; }, 0);
-    let r = rng() * total;
-    for (let i = 1; i < WEIGHTS.length; i++) {
-      r -= WEIGHTS[i];
+    var weights = getDropWeights();
+    var total = 0;
+    for (var k = 1; k < weights.length; k++) total += Math.max(0, weights[k]);
+    if (total <= 0) return 1;
+    var r = rng() * total;
+    for (var i = 1; i < weights.length; i++) {
+      r -= Math.max(0, weights[i]);
       if (r <= 0) return i;
     }
     return 1;
   }
+
+  // Speed resolution mirrors getDropWeights: session override → admin global
+  // → default 100%. 50 = 2× faster, 100 = default, 200 = half-speed. Clamped
+  // to [25, 400] so misconfig can't make the engine instant or unplayably slow.
+  function gameSpeedScale() {
+    var pct = 100;
+    if (sessionDifficulty && sessionDifficulty.speed_pct) {
+      pct = parseInt(sessionDifficulty.speed_pct, 10) || 100;
+    } else {
+      pct = parseInt((gameConfig && gameConfig.game_speed_pct) || '100', 10) || 100;
+    }
+    if (pct < 25) pct = 25;
+    if (pct > 400) pct = 400;
+    return pct / 100;
+  }
+  function gsleep(ms) { return sleep(Math.round(ms * gameSpeedScale())); }
 
   function findGroup(sr, sc, tier) {
     const visited = new Set();
@@ -5655,16 +6280,45 @@
   }
 
   function applyGravity() {
+    var moves = 0;
     for (let c = 0; c < getBoardCols(); c++) {
       let w = getBoardRows() - 1;
       for (let r = getBoardRows() - 1; r >= 0; r--) {
         if (grid[r][c] !== 0) {
-          if (r !== w) { grid[w][c] = grid[r][c]; grid[r][c] = 0; }
+          if (r !== w) { grid[w][c] = grid[r][c]; grid[r][c] = 0; moves++; }
           w--;
         }
       }
     }
+    if (window.__bloomEngineLog) console.log('[gravity]', 'moves=' + moves, 'grid=' + serializeGrid());
   }
+  // Compact one-line grid serialization for engine logs. Each row is printed
+  // bottom-up as 4 digits (0 = empty, 1-8 = tier). Lets the user paste a
+  // console line and instantly see the board state at that moment.
+  function serializeGrid() {
+    var s = '';
+    for (var r = getBoardRows() - 1; r >= 0; r--) {
+      var row = '';
+      for (var c = 0; c < getBoardCols(); c++) row += (grid[r][c] | 0);
+      s += row + (r === 0 ? '' : '|');
+    }
+    return s;
+  }
+  // Expose to window so the user can call from devtools console to dump
+  // state at any moment ("why is this tile floating?").
+  window.__bloomDumpGrid = function() {
+    var lines = [];
+    for (var r = 0; r < getBoardRows(); r++) {
+      var row = '';
+      for (var c = 0; c < getBoardCols(); c++) {
+        var v = grid[r][c] | 0;
+        row += v === 0 ? '·' : v;
+      }
+      lines.push('r' + r + ' ' + row);
+    }
+    console.log('[grid dump]\n' + lines.join('\n'));
+    return grid.map(function(r) { return r.slice(); });
+  };
 
   function sleep(ms) { return new Promise(function(r) { setTimeout(r, ms); }); }
 
@@ -5711,7 +6365,8 @@
 
   // Crown Merge explosion — gold wave across the row
   function showCrownExplosion(row) {
-    // Full-screen gold flash — tagged so init()'s sweep catches it too.
+    // Full-screen gold flash — uses the same data-bloom-banner sweep so a
+    // stuck flash from the previous round can't linger.
     var flash = document.createElement('div');
     flash.setAttribute('data-bloom-banner', 'crown-flash');
     flash.style.cssText = 'position:fixed;inset:0;background:rgba(250,199,117,0.25);z-index:9998;pointer-events:none';
@@ -5721,8 +6376,8 @@
     setTimeout(function() { flash.style.transition = 'opacity 0.3s'; flash.style.opacity = '0'; }, 200);
     setTimeout(killFlash, 500);
     setTimeout(killFlash, 2000); // safety net for tab-throttling
-    // Banner via showTransientBanner — gets click-to-dismiss + auto-cleanup.
-    showTransientBanner({
+    // Banner — click-to-dismiss + auto-cleanup via showTransientBanner
+    var banner = showTransientBanner({
       tag: 'crown',
       holdMs: 1500, fadeMs: 500,
       exitTransform: 'translate(-50%,-60%) scale(0.9)',
@@ -5975,11 +6630,12 @@
         }
       }
       if (!merged) break;
+      if (window.__bloomEngineLog) console.log('[merge]', 'chain=' + chainCount, 'tier=t' + mergedTier, 'size=' + mergeSize, 'at=' + merged[0] + ',' + merged[1]);
       render({ merging: merged });
-      await sleep(150);
+      await gsleep(150);
       applyGravity();
       render();
-      await sleep(80);
+      await gsleep(80);
     }
     if (highestTier > prevHighestTier) {
       soundMilestone(highestTier);
@@ -6034,8 +6690,14 @@
           })();
           return;
         }
-        // Daily + Practice: submit to leaderboard
-        if ((mode === 'practice' || mode === 'daily') && !dailySubmitted) {
+        // Daily + Practice: submit to leaderboard.
+        // PRACTICE EXCLUSION: if the player chose a non-default difficulty in
+        // practice, the score is incomparable to the global daily leaderboard
+        // and must NOT be submitted (fairness). Personal-best in localStorage
+        // is still tracked above. Duels also run inside the practice mode
+        // engine — never submit those to the daily leaderboard either.
+        var practiceFairForLeaderboard = (mode === 'practice') && !sessionDifficulty && !window._duelMode;
+        if (((mode === 'daily') || practiceFairForLeaderboard) && !dailySubmitted) {
           if (mode === 'daily') {
             dailySubmitted = true;
             localStorage.setItem(DAILY_PLAYED_PREFIX + dailyDate, JSON.stringify({ score: score, tier: highestTier, ts: Date.now() }));
@@ -6094,19 +6756,23 @@
     }
     grid[row][col] = nextPiece;
     if (nextPiece > highestTier) highestTier = nextPiece;
+    if (window.__bloomEngineLog) console.log('[drop]', 'col=' + col, '→ row=' + row, 'piece=t' + nextPiece, 'grid(after)=' + serializeGrid());
     var pendingEvent = (activeEvent && activeEvent.col === col) ? activeEvent : null;
     dismissCoach();
     render({ appearing: [row, col] });
     try {
-    await sleep(80);
-    await processChains(row, col);
+    await gsleep(80);
+    // Trigger the event FIRST when the player drops in the event column —
+    // otherwise long chain reactions push the explosion off by 1-2s, which
+    // feels like an unrelated event ("delay" bug the user reported). The
+    // event itself handles its own gravity+render before chains continue.
     if (pendingEvent && activeEvent === pendingEvent) {
       triggerEvent(pendingEvent, row);
-      // After bomb/freeze: tiles cleared + gravity, but new merges may exist
-      applyGravity();
-      render();
-      await processChains(row, col);
+      // Brief pause so the explosion is visible before chain merges start
+      // shifting the board around it.
+      await gsleep(120);
     }
+    await processChains(row, col);
     rollNextPiece();
     render();
     var isNewBest = score > best && !skinTrialMode;
@@ -6150,8 +6816,12 @@
         }
       } else if (mode === 'practice') {
         render({ over: true, isNewBest: isNewBest });
-        // Practice scores also go to daily leaderboard — every game counts!
-        if (!window.__bloomBotActive && !skinTrialMode) {
+        // Practice scores go to the daily leaderboard, but ONLY when the
+        // player is on the default difficulty — non-default would inflate
+        // (or deflate) the score relative to other players. Duel games
+        // also reuse the practice engine; never submit those to daily.
+        var fair = !sessionDifficulty && !window._duelMode;
+        if (fair && !window.__bloomBotActive && !skinTrialMode) {
           if (!playerName) {
             promptForName(function() { submitAndShowLeaderboard(); });
           } else {
@@ -6604,38 +7274,79 @@
   // Token bumps with each new roll so a stale animation (still cycling from
   // the previous drop) bails out the moment a new pick arrives.
   let revealToken = 0;
+
+  // Dramatic slot-machine animation. Three full passes through tiers 1..N
+  // (admin-controlled), decelerating like a real slot, then a landing bounce
+  // on the chosen tier. Cost-aware: bails out the moment a newer roll fires.
   async function revealNextTier(finalTier) {
     const bar = document.getElementById('tier-bar');
     if (!bar) return;
+
+    // Admin kill-switch: if disabled, just snap and skip the animation.
+    if ((gameConfig && gameConfig.slot_enabled) === 'false') {
+      highlightNextTier(finalTier);
+      return;
+    }
+
     const myToken = ++revealToken;
     const cells = bar.querySelectorAll('.tier-cell');
-    // Keep the 'active' highlight on the chosen tier throughout the cycle —
-    // a fast player needs to know what they're about to drop, even mid-anim.
     cells.forEach(function(c) {
       const tier = parseInt(c.getAttribute('data-tier'), 10);
       if (tier !== finalTier) c.classList.remove('active');
       c.classList.remove('cycling');
+      c.classList.remove('slot-landed');
     });
-    const sweep = [1, 2, 3, 4, 1, 2, 3, 4, 1, 2, 3, 4];
+
+    // Admin-tunable spin parameters
+    var maxSpinTier = parseInt((gameConfig && gameConfig.slot_intensity) || '8', 10) || 8;
+    if (maxSpinTier < 1) maxSpinTier = 1;
+    if (maxSpinTier > MAX_TIER) maxSpinTier = MAX_TIER;
+    var totalDur = parseInt((gameConfig && gameConfig.slot_duration_ms) || '650', 10) || 650;
+    if (totalDur < 150) totalDur = 150;
+    if (totalDur > 2500) totalDur = 2500;
+    // Speed scale also affects the slot — a faster game gets a faster slot.
+    totalDur = Math.round(totalDur * (typeof gameSpeedScale === 'function' ? gameSpeedScale() : 1));
+
+    // Build the spin: 3 full passes through 1..maxSpinTier, then land on finalTier.
+    const sweep = [];
+    const passes = 3;
+    for (let p = 0; p < passes; p++) {
+      for (let t = 1; t <= maxSpinTier; t++) sweep.push(t);
+    }
     sweep.push(finalTier);
-    const startMs = 28;
-    const endMs = 95;
+
+    // Per-frame durations: ease-in-quad (fast → slow), then normalize so
+    // the sum lands exactly on totalDur.
+    const n = sweep.length;
+    const startMs = 22;
+    const endMs = Math.max(70, totalDur / 8);
+    const rawDurs = [];
+    for (let i = 0; i < n; i++) {
+      const prog = n > 1 ? i / (n - 1) : 1;
+      rawDurs.push(startMs + (endMs - startMs) * (prog * prog));
+    }
+    const sumRaw = rawDurs.reduce(function(a,b) { return a+b; }, 0);
+    const scale = sumRaw > 0 ? totalDur / sumRaw : 1;
+
     for (let i = 0; i < sweep.length; i++) {
-      // If a newer roll started, abandon this cycle — highlightNextTier
-      // (called synchronously by rollNextPiece) has already snapped the bar
-      // to the new chosen tier.
       if (myToken !== revealToken) return;
       cells.forEach(function(c) { c.classList.remove('cycling'); });
       const cell = bar.querySelector('.tier-cell[data-tier="' + sweep[i] + '"]');
       if (cell) cell.classList.add('cycling');
-      const t = sweep.length > 1 ? i / (sweep.length - 1) : 1;
-      const dur = Math.round(startMs + (endMs - startMs) * (t * t));
-      await sleep(dur);
+      await sleep(Math.round(rawDurs[i] * scale));
     }
+
     if (myToken !== revealToken) return;
     cells.forEach(function(c) { c.classList.remove('cycling'); });
     const finalCell = bar.querySelector('.tier-cell[data-tier="' + finalTier + '"]');
-    if (finalCell) finalCell.classList.add('active');
+    if (finalCell) {
+      finalCell.classList.add('active');
+      // Landing bounce — short bouncy scale-up so the slot feels like it "clicks" home.
+      finalCell.classList.add('slot-landed');
+      setTimeout(function() {
+        if (finalCell) finalCell.classList.remove('slot-landed');
+      }, 380);
+    }
   }
 
   // Pick the next piece IMMEDIATELY so a fast tapper can drop again the
@@ -7138,6 +7849,25 @@
   updateMuteUI();
   renderStreakBadge();
 
+  // Duel notifications: scan for pending challenges / unread results on boot,
+  // then re-check every 60s while the tab is visible. The scan is cheap (one
+  // GET) and de-duped via sessionStorage so it can't spam toasts.
+  if (typeof window.__bloomCheckIncomingDuels === 'function') {
+    setTimeout(window.__bloomCheckIncomingDuels, 1500); // delay so deviceId is ready
+    setInterval(function() {
+      if (typeof window.__bloomCheckIncomingDuels === 'function') {
+        window.__bloomCheckIncomingDuels();
+      }
+    }, 60000);
+    // Also re-check when the tab regains focus — covers the case where a
+    // duel result lands while the player is in another app.
+    document.addEventListener('visibilitychange', function() {
+      if (document.visibilityState === 'visible' && typeof window.__bloomCheckIncomingDuels === 'function') {
+        window.__bloomCheckIncomingDuels();
+      }
+    });
+  }
+
   // Restore last active mode on refresh so players don't lose context.
   // Default to 'daily' for first-time visitors.
   var LAST_MODE_KEY = 'bloom_last_mode';
@@ -7270,6 +8000,18 @@
     }
     poll();
     _uniSpecTimer = setInterval(poll, 2000);
+  }
+
+  // ============================================================
+  // ENGINE LOG SWITCH — `?debug=1` (or BloomDebug.toggleLog()) enables verbose
+  // per-drop/per-merge/per-gravity tracing. Off by default to keep console
+  // clean for normal players. Layout logs (`[fitGrid]`) are on by default;
+  // set `window.__bloomLayoutLog = false` from console to silence them.
+  // ============================================================
+  if (_dbgParams.has('debug')) {
+    window.__bloomEngineLog = true;
+    console.log('[BLOOM] engine logging ON · drop/merge/gravity events will be printed');
+    console.log('[BLOOM] type __bloomDumpGrid() to see the current board state');
   }
 
   // ============================================================
@@ -7610,33 +8352,69 @@
     else if (type === 'freeze') triggerFreeze(evt);
   }
 
+  // Spawn an explosion overlay (position:fixed) over a cell's rect. Lives in
+  // <body> so render() rebuilding <#grid> can't wipe it. Cleans itself up.
+  // CSS classes: 'fx-explode' (orange bomb), 'fx-freeze' (blue freeze).
+  function spawnFxOverlay(cellRect, klass, delayMs) {
+    var el = document.createElement('div');
+    el.className = 'fx-overlay ' + klass;
+    var size = Math.max(cellRect.width, cellRect.height) * 1.6;
+    el.style.cssText =
+      'position:fixed;left:' + (cellRect.left + cellRect.width / 2 - size / 2) + 'px;' +
+      'top:' + (cellRect.top + cellRect.height / 2 - size / 2) + 'px;' +
+      'width:' + size + 'px;height:' + size + 'px;' +
+      'pointer-events:none;z-index:9500;border-radius:50%';
+    if (delayMs > 0) {
+      setTimeout(function() {
+        document.body.appendChild(el);
+        setTimeout(function() { el.remove(); }, 720);
+      }, delayMs);
+    } else {
+      document.body.appendChild(el);
+      setTimeout(function() { el.remove(); }, 720);
+    }
+  }
+  function fxAtCell(r, c, klass, delayMs) {
+    var gridEl = document.getElementById('grid');
+    if (!gridEl) return;
+    var idx = r * getBoardCols() + c;
+    var cell = gridEl.children[idx];
+    if (!cell) return;
+    var rect = cell.getBoundingClientRect();
+    if (rect.width === 0) return;
+    spawnFxOverlay(rect, klass, delayMs || 0);
+  }
+
   // ── 💣 BOMB ──
   function triggerBomb(evt) {
     var radius = getEventNum('event_bomb_radius', 1);
     var ptsPerTile = getEventNum('event_bomb_points_per_tile', 2000);
     var destroyed = 0;
 
+    // Stage 1: capture cell rects BEFORE clearing the grid (so we know
+    // where to spawn explosion overlays, independent of render()).
+    var hitCells = [];
     for (var dr = -radius; dr <= radius; dr++) {
       for (var dc = -radius; dc <= radius; dc++) {
-        if (dr === 0 && dc === 0) continue; // skip center (the placed tile stays)
         var r = evt.row + dr, c = evt.col + dc;
         if (r < 0 || r >= getBoardRows() || c < 0 || c >= getBoardCols()) continue;
-        if (grid[r][c] !== 0) {
+        var dist = Math.max(Math.abs(dr), Math.abs(dc));
+        hitCells.push({ r: r, c: c, dist: dist, hadTile: grid[r][c] !== 0 });
+        // Always show the explosion (even on empty cells inside the radius) —
+        // the SHAPE of the blast is what tells the player what got hit.
+        // But only destroy tiles that actually exist (don't bomb the center).
+        if (grid[r][c] !== 0 && !(dr === 0 && dc === 0)) {
           grid[r][c] = 0;
           destroyed++;
-          // Flash cell
-          var gridEl = document.getElementById('grid');
-          if (gridEl) {
-            var idx = r * getBoardCols() + c;
-            var cell = gridEl.children[idx];
-            if (cell) {
-              cell.style.transition = 'background 0.15s';
-              cell.style.background = '#C8472F';
-              (function(ce) { setTimeout(function() { ce.style.background = ''; ce.style.transition = ''; }, 400); })(cell);
-            }
-          }
         }
       }
+    }
+
+    // Stage 2: spawn explosion overlays staggered by distance (center → out).
+    // These live in <body> so render() can't destroy them, fixing the
+    // "explosion never visible" bug where cell.style.background was wiped.
+    for (var i = 0; i < hitCells.length; i++) {
+      fxAtCell(hitCells[i].r, hitCells[i].c, 'fx-explode', hitCells[i].dist * 55);
     }
 
     var bonus = destroyed * ptsPerTile;
@@ -7747,25 +8525,13 @@
   function triggerFreeze(evt) {
     var clearRows = getEventNum('event_freeze_clear_rows', 1);
     var pts = getEventNum('event_freeze_points', 1000);
-    var cleared = 0;
 
-    // Clear from top
+    // Same fix as bomb: spawn overlays before render() wipes the grid.
+    // Walk top rows left→right with staggered delays so the freeze "sweeps".
     for (var r = 0; r < clearRows && r < getBoardRows(); r++) {
       for (var c = 0; c < getBoardCols(); c++) {
-        if (grid[r][c] !== 0) { grid[r][c] = 0; cleared++; }
-      }
-      // Flash row blue
-      var gridEl = document.getElementById('grid');
-      if (gridEl) {
-        for (var cc = 0; cc < getBoardCols(); cc++) {
-          var idx = r * getBoardCols() + cc;
-          var cell = gridEl.children[idx];
-          if (cell) {
-            cell.style.transition = 'background 0.15s';
-            cell.style.background = '#4ECDC4';
-            (function(ce) { setTimeout(function() { ce.style.background = ''; ce.style.transition = ''; }, 500); })(cell);
-          }
-        }
+        fxAtCell(r, c, 'fx-freeze', c * 45);
+        if (grid[r][c] !== 0) grid[r][c] = 0;
       }
     }
 

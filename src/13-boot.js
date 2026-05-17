@@ -41,6 +41,25 @@
   updateMuteUI();
   renderStreakBadge();
 
+  // Duel notifications: scan for pending challenges / unread results on boot,
+  // then re-check every 60s while the tab is visible. The scan is cheap (one
+  // GET) and de-duped via sessionStorage so it can't spam toasts.
+  if (typeof window.__bloomCheckIncomingDuels === 'function') {
+    setTimeout(window.__bloomCheckIncomingDuels, 1500); // delay so deviceId is ready
+    setInterval(function() {
+      if (typeof window.__bloomCheckIncomingDuels === 'function') {
+        window.__bloomCheckIncomingDuels();
+      }
+    }, 60000);
+    // Also re-check when the tab regains focus — covers the case where a
+    // duel result lands while the player is in another app.
+    document.addEventListener('visibilitychange', function() {
+      if (document.visibilityState === 'visible' && typeof window.__bloomCheckIncomingDuels === 'function') {
+        window.__bloomCheckIncomingDuels();
+      }
+    });
+  }
+
   // Restore last active mode on refresh so players don't lose context.
   // Default to 'daily' for first-time visitors.
   var LAST_MODE_KEY = 'bloom_last_mode';
@@ -173,6 +192,18 @@
     }
     poll();
     _uniSpecTimer = setInterval(poll, 2000);
+  }
+
+  // ============================================================
+  // ENGINE LOG SWITCH — `?debug=1` (or BloomDebug.toggleLog()) enables verbose
+  // per-drop/per-merge/per-gravity tracing. Off by default to keep console
+  // clean for normal players. Layout logs (`[fitGrid]`) are on by default;
+  // set `window.__bloomLayoutLog = false` from console to silence them.
+  // ============================================================
+  if (_dbgParams.has('debug')) {
+    window.__bloomEngineLog = true;
+    console.log('[BLOOM] engine logging ON · drop/merge/gravity events will be printed');
+    console.log('[BLOOM] type __bloomDumpGrid() to see the current board state');
   }
 
   // ============================================================

@@ -33,6 +33,15 @@ export async function initDb() {
     `ALTER TABLE contests ADD COLUMN IF NOT EXISTS wager_settled BOOLEAN DEFAULT false`,
     `ALTER TABLE player_profiles ADD COLUMN IF NOT EXISTS xp INT DEFAULT 0`,
     `ALTER TABLE player_profiles ADD COLUMN IF NOT EXISTS level INT DEFAULT 1`,
+    // Player-chosen difficulty per contest/duel. NULL or 'default' = use admin
+    // globals. Stored as a label + the resolved weights/speed so the server's
+    // preset table is authoritative at creation time even if presets change later.
+    `ALTER TABLE contests ADD COLUMN IF NOT EXISTS difficulty_label VARCHAR(20)`,
+    `ALTER TABLE contests ADD COLUMN IF NOT EXISTS difficulty_weights VARCHAR(64)`,
+    `ALTER TABLE contests ADD COLUMN IF NOT EXISTS difficulty_speed_pct INT`,
+    `ALTER TABLE duels ADD COLUMN IF NOT EXISTS difficulty_label VARCHAR(20)`,
+    `ALTER TABLE duels ADD COLUMN IF NOT EXISTS difficulty_weights VARCHAR(64)`,
+    `ALTER TABLE duels ADD COLUMN IF NOT EXISTS difficulty_speed_pct INT`,
   ];
   for (const sql of migrations) {
     try { await pool.query(sql); } catch (e) {

@@ -286,33 +286,69 @@
     else if (type === 'freeze') triggerFreeze(evt);
   }
 
+  // Spawn an explosion overlay (position:fixed) over a cell's rect. Lives in
+  // <body> so render() rebuilding <#grid> can't wipe it. Cleans itself up.
+  // CSS classes: 'fx-explode' (orange bomb), 'fx-freeze' (blue freeze).
+  function spawnFxOverlay(cellRect, klass, delayMs) {
+    var el = document.createElement('div');
+    el.className = 'fx-overlay ' + klass;
+    var size = Math.max(cellRect.width, cellRect.height) * 1.6;
+    el.style.cssText =
+      'position:fixed;left:' + (cellRect.left + cellRect.width / 2 - size / 2) + 'px;' +
+      'top:' + (cellRect.top + cellRect.height / 2 - size / 2) + 'px;' +
+      'width:' + size + 'px;height:' + size + 'px;' +
+      'pointer-events:none;z-index:9500;border-radius:50%';
+    if (delayMs > 0) {
+      setTimeout(function() {
+        document.body.appendChild(el);
+        setTimeout(function() { el.remove(); }, 720);
+      }, delayMs);
+    } else {
+      document.body.appendChild(el);
+      setTimeout(function() { el.remove(); }, 720);
+    }
+  }
+  function fxAtCell(r, c, klass, delayMs) {
+    var gridEl = document.getElementById('grid');
+    if (!gridEl) return;
+    var idx = r * getBoardCols() + c;
+    var cell = gridEl.children[idx];
+    if (!cell) return;
+    var rect = cell.getBoundingClientRect();
+    if (rect.width === 0) return;
+    spawnFxOverlay(rect, klass, delayMs || 0);
+  }
+
   // ── 💣 BOMB ──
   function triggerBomb(evt) {
     var radius = getEventNum('event_bomb_radius', 1);
     var ptsPerTile = getEventNum('event_bomb_points_per_tile', 2000);
     var destroyed = 0;
 
+    // Stage 1: capture cell rects BEFORE clearing the grid (so we know
+    // where to spawn explosion overlays, independent of render()).
+    var hitCells = [];
     for (var dr = -radius; dr <= radius; dr++) {
       for (var dc = -radius; dc <= radius; dc++) {
-        if (dr === 0 && dc === 0) continue; // skip center (the placed tile stays)
         var r = evt.row + dr, c = evt.col + dc;
         if (r < 0 || r >= getBoardRows() || c < 0 || c >= getBoardCols()) continue;
-        if (grid[r][c] !== 0) {
+        var dist = Math.max(Math.abs(dr), Math.abs(dc));
+        hitCells.push({ r: r, c: c, dist: dist, hadTile: grid[r][c] !== 0 });
+        // Always show the explosion (even on empty cells inside the radius) —
+        // the SHAPE of the blast is what tells the player what got hit.
+        // But only destroy tiles that actually exist (don't bomb the center).
+        if (grid[r][c] !== 0 && !(dr === 0 && dc === 0)) {
           grid[r][c] = 0;
           destroyed++;
-          // Flash cell
-          var gridEl = document.getElementById('grid');
-          if (gridEl) {
-            var idx = r * getBoardCols() + c;
-            var cell = gridEl.children[idx];
-            if (cell) {
-              cell.style.transition = 'background 0.15s';
-              cell.style.background = '#C8472F';
-              (function(ce) { setTimeout(function() { ce.style.background = ''; ce.style.transition = ''; }, 400); })(cell);
-            }
-          }
         }
       }
+    }
+
+    // Stage 2: spawn explosion overlays staggered by distance (center → out).
+    // These live in <body> so render() can't destroy them, fixing the
+    // "explosion never visible" bug where cell.style.background was wiped.
+    for (var i = 0; i < hitCells.length; i++) {
+      fxAtCell(hitCells[i].r, hitCells[i].c, 'fx-explode', hitCells[i].dist * 55);
     }
 
     var bonus = destroyed * ptsPerTile;
@@ -423,25 +459,13 @@
   function triggerFreeze(evt) {
     var clearRows = getEventNum('event_freeze_clear_rows', 1);
     var pts = getEventNum('event_freeze_points', 1000);
-    var cleared = 0;
 
-    // Clear from top
+    // Same fix as bomb: spawn overlays before render() wipes the grid.
+    // Walk top rows left→right with staggered delays so the freeze "sweeps".
     for (var r = 0; r < clearRows && r < getBoardRows(); r++) {
       for (var c = 0; c < getBoardCols(); c++) {
-        if (grid[r][c] !== 0) { grid[r][c] = 0; cleared++; }
-      }
-      // Flash row blue
-      var gridEl = document.getElementById('grid');
-      if (gridEl) {
-        for (var cc = 0; cc < getBoardCols(); cc++) {
-          var idx = r * getBoardCols() + cc;
-          var cell = gridEl.children[idx];
-          if (cell) {
-            cell.style.transition = 'background 0.15s';
-            cell.style.background = '#4ECDC4';
-            (function(ce) { setTimeout(function() { ce.style.background = ''; ce.style.transition = ''; }, 500); })(cell);
-          }
-        }
+        fxAtCell(r, c, 'fx-freeze', c * 45);
+        if (grid[r][c] !== 0) grid[r][c] = 0;
       }
     }
 

@@ -179,8 +179,10 @@
   .mode-icon svg { width: 14px; height: 14px; }
   .mode-bar.practice .mode-icon { background: #D3D1C7; color: #2C2C2A; }
   .mode-text { min-width: 0; }
-  .mode-title { font-size: 12px; font-weight: 600; color: #1C1A18; line-height: 1.15; }
-  .mode-sub { font-size: 10px; color: #6F6E68; line-height: 1.15; margin-top: 1px; }
+  .mode-title { font-size: 12px; font-weight: 600; color: #1C1A18; line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* Single-line subtitle. Wrapping here previously stole vertical pixels
+     from grid-wrap and triggered fitGrid to shrink every cell. */
+  .mode-sub { font-size: 10px; color: #6F6E68; line-height: 1.15; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .mode-tabs {
     display: flex; gap: 2px;
     background: rgba(0,0,0,0.05);

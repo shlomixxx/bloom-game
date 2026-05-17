@@ -316,6 +316,26 @@ function normalizeGridJson(raw) {
 const LIVE_FRESH_SECONDS = 10;
 
 // ============================================================
+// DIFFICULTY PRESETS — canonical mapping used by /api/contests and /api/duels
+// ============================================================
+// Players pick a label; the server resolves to weights+speed and stores those
+// on the row so the snapshot is immutable even if the preset table changes
+// later. 'default' (or null/unknown) means "use admin globals" — both columns
+// stay NULL and the frontend falls back to its admin-tunable config.
+const DIFFICULTY_PRESETS = {
+  default: { weights: null,                   speed_pct: null },
+  easy:    { weights: '70,25,5,0,0,0,0,0',    speed_pct: 100 },
+  medium:  { weights: '30,35,25,10,0,0,0,0', speed_pct: 100 },
+  hard:    { weights: '5,15,30,30,15,5,0,0', speed_pct: 100 },
+  insane:  { weights: '0,0,10,30,35,20,5,0', speed_pct: 100 }
+};
+function resolveDifficulty(label) {
+  const key = (typeof label === 'string' ? label.toLowerCase().trim() : '') || 'default';
+  const preset = DIFFICULTY_PRESETS[key] || DIFFICULTY_PRESETS.default;
+  return { label: preset === DIFFICULTY_PRESETS.default ? 'default' : key, weights: preset.weights, speed_pct: preset.speed_pct };
+}
+
+// ============================================================
 // DEVICE TOKEN AUTH (HMAC-based anti-spoofing)
 // ============================================================
 // Each device registers once → gets an HMAC token tied to its deviceId.
@@ -641,7 +661,7 @@ app.get('/api/contests/mine', async (req, res) => {
 // POST /api/contests — יצירת תחרות חדשה
 app.post('/api/contests', async (req, res) => {
   try {
-    const { name, hostName, deviceId, durationDays, boardType, wagerAmount } = req.body || {};
+    const { name, hostName, deviceId, durationDays, boardType, wagerAmount, difficulty } = req.body || {};
 
     const cleanedName = cleanContestName(name);
     if (!cleanedName) return res.status(400).json({ error: 'bad_name' });
@@ -683,10 +703,12 @@ app.post('/api/contests', async (req, res) => {
 
     const code = await generateUniqueContestCode();
 
+    const diff = resolveDifficulty(difficulty);
+
     const result = await pool.query(
-      `INSERT INTO contests (code, name, host_name, host_device_id, board_seed, board_type, duration_days, ends_at, wager_amount, wager_pool)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
-      [code, cleanedName, cleanedHost, deviceId, seed, type, dur, endsAt, wager, wager]
+      `INSERT INTO contests (code, name, host_name, host_device_id, board_seed, board_type, duration_days, ends_at, wager_amount, wager_pool, difficulty_label, difficulty_weights, difficulty_speed_pct)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING *`,
+      [code, cleanedName, cleanedHost, deviceId, seed, type, dur, endsAt, wager, wager, diff.label, diff.weights, diff.speed_pct]
     );
 
     // Record settlement entry for host
@@ -2474,6 +2496,92 @@ if (ADMIN_PATH && ADMIN_PASSWORD) {
     res.json({ ok: true });
   });
 
+  // ---------- VERSION INFO ----------
+  // Reports the cache-buster version embedded in /index.html (the same string
+  // clients see as `?v=...` on /app.js) plus the git SHA Railway injects, so
+  // the admin always knows EXACTLY which build is live in production.
+  const SERVER_START_TIME = Date.now();
+  adminRouter.get('/api/version', async (_req, res) => {
+    let appVersion = 'unknown';
+    try {
+      const fs = await import('fs');
+      const path = await import('path');
+      const html = fs.readFileSync(path.resolve('public/index.html'), 'utf8');
+      const m = html.match(/\/app\.js\?v=([\w-]+)/);
+      if (m) appVersion = m[1];
+    } catch (e) { /* silent — leave as unknown */ }
+    res.json({
+      ok: true,
+      appVersion,
+      gitSha: (process.env.RAILWAY_GIT_COMMIT_SHA || process.env.GIT_COMMIT || '').slice(0, 7),
+      gitBranch: process.env.RAILWAY_GIT_BRANCH || process.env.GIT_BRANCH || '',
+      nodeVersion: process.version,
+      uptimeSec: Math.round((Date.now() - SERVER_START_TIME) / 1000),
+      startedAt: new Date(SERVER_START_TIME).toISOString()
+    });
+  });
+
+  // ---------- LEADERBOARD ENTRY DELETION ----------
+  // Per-row delete for daily scores. Affects every leaderboard window
+  // (day/week/month) since they all read from daily_scores.
+  adminRouter.delete('/api/score/:date/:deviceId', async (req, res) => {
+    try {
+      const date = String(req.params.date || '');
+      const did = String(req.params.deviceId || '').slice(0, 64);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return res.status(400).json({ error: 'bad_date' });
+      if (!did) return res.status(400).json({ error: 'missing_device' });
+      const r = await pool.query(
+        `DELETE FROM daily_scores WHERE date = $1 AND device_id = $2 RETURNING name, score`,
+        [date, did]
+      );
+      if (!r.rows.length) return res.status(404).json({ error: 'not_found' });
+      await logAdminAction('score.delete', 'daily_scores', `${date}/${did.slice(0,12)}`, {
+        name: r.rows[0].name, score: r.rows[0].score, date
+      });
+      res.json({ ok: true, deleted: r.rows[0] });
+    } catch (e) {
+      console.error('admin DELETE /score', e);
+      res.status(500).json({ error: 'server' });
+    }
+  });
+  // Per-row delete for contest scores. Also clears live-state to avoid the
+  // ghost reappearing while the player still has a live heartbeat in flight.
+  adminRouter.delete('/api/contest-score/:code/:deviceId', async (req, res) => {
+    try {
+      const code = String(req.params.code || '').toUpperCase().slice(0, 8);
+      const did = String(req.params.deviceId || '').slice(0, 64);
+      if (!code) return res.status(400).json({ error: 'missing_code' });
+      if (!did) return res.status(400).json({ error: 'missing_device' });
+      const r = await pool.query(
+        `DELETE FROM contest_scores WHERE contest_code = $1 AND device_id = $2 RETURNING display_name, score`,
+        [code, did]
+      );
+      await pool.query(`DELETE FROM contest_live_state WHERE contest_code = $1 AND device_id = $2`, [code, did]);
+      if (!r.rows.length) return res.status(404).json({ error: 'not_found' });
+      await logAdminAction('contest_score.delete', 'contest_scores', `${code}/${did.slice(0,12)}`, {
+        name: r.rows[0].display_name, score: r.rows[0].score, contest: code
+      });
+      res.json({ ok: true, deleted: r.rows[0] });
+    } catch (e) {
+      console.error('admin DELETE /contest-score', e);
+      res.status(500).json({ error: 'server' });
+    }
+  });
+  // Per-row delete for contest entries (full member list) — alias used by the
+  // contest-leaderboard view in admin.
+  adminRouter.get('/api/contest/:code/scores', async (req, res) => {
+    try {
+      const code = String(req.params.code || '').toUpperCase().slice(0, 8);
+      const r = await pool.query(
+        `SELECT device_id, display_name, score, highest_tier, games_played, joined_at, last_played_at
+         FROM contest_scores WHERE contest_code = $1 ORDER BY score DESC LIMIT 200`, [code]);
+      res.json({ ok: true, code, scores: r.rows });
+    } catch (e) {
+      console.error('admin GET /contest/:code/scores', e);
+      res.status(500).json({ error: 'server' });
+    }
+  });
+
   // ---------- PLAYER MANAGEMENT ----------
 
   // Settle contest wager — distribute pool to top 3
@@ -3218,7 +3326,7 @@ app.post('/api/referral', async (req, res) => {
 
 // Create a duel challenge
 app.post('/api/duels', async (req, res) => {
-  const { deviceId, opponentCode, amount } = req.body || {};
+  const { deviceId, opponentCode, amount, difficulty } = req.body || {};
   if (!deviceId || !opponentCode) return res.status(400).json({ error: 'missing_params' });
   try {
     const duelEnabled = await pool.query(`SELECT value FROM game_config WHERE key = 'duel_enabled'`);
@@ -3245,12 +3353,17 @@ app.post('/api/duels', async (req, res) => {
       await pool.query(`UPDATE player_profiles SET balance = balance - $1, total_spent = total_spent + $1 WHERE device_id = $2`, [bet, deviceId]);
     }
 
-    const r = await pool.query(
-      `INSERT INTO duels (challenger_device, challenger_name, challenger_code, opponent_code, opponent_device, opponent_name, amount, board_seed, expires_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
-      [deviceId, challenger.rows[0].display_name, challenger.rows[0].player_code, opponentCode, opponent.rows[0].device_id, opponent.rows[0].display_name, bet, seed, expiresAt]);
+    const diff = resolveDifficulty(difficulty);
 
-    res.json({ ok: true, duelId: r.rows[0].id, seed, amount: bet, expiresAt });
+    const r = await pool.query(
+      `INSERT INTO duels (challenger_device, challenger_name, challenger_code, opponent_code, opponent_device, opponent_name, amount, board_seed, expires_at, difficulty_label, difficulty_weights, difficulty_speed_pct)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING *`,
+      [deviceId, challenger.rows[0].display_name, challenger.rows[0].player_code, opponentCode, opponent.rows[0].device_id, opponent.rows[0].display_name, bet, seed, expiresAt, diff.label, diff.weights, diff.speed_pct]);
+
+    // Return the FULL row so the challenger can start their game immediately
+    // (Bug 3 fix). The frontend needs difficulty_weights, opponent_name, and
+    // board_seed to kick off startDuelGame without waiting for opponent accept.
+    res.json({ ok: true, duel: r.rows[0], duelId: r.rows[0].id, seed, amount: bet, expiresAt, difficulty: diff.label });
   } catch (e) {
     console.error('duels/create', e.message);
     res.status(500).json({ error: 'server' });
@@ -3295,13 +3408,38 @@ app.post('/api/duels/:id/accept', async (req, res) => {
       await pool.query(`UPDATE player_profiles SET balance = balance - $1, total_spent = total_spent + $1 WHERE device_id = $2`, [bet, deviceId]);
     }
     await pool.query(`UPDATE duels SET status = 'accepted', opponent_device = $1 WHERE id = $2`, [deviceId, duelId]);
-    res.json({ ok: true, duel: { ...duel, status: 'accepted' } });
+    // If the challenger already submitted a score while the duel was pending
+    // (the new "challenger plays immediately" flow), we don't auto-settle here
+    // because the opponent hasn't played yet. They'll submit, and the score
+    // endpoint will detect both scores present and settle. The reload below
+    // returns the freshly accepted duel including any pre-existing
+    // challenger_score so the client can show it as the live target.
+    const reloaded = await pool.query('SELECT * FROM duels WHERE id = $1', [duelId]);
+    res.json({ ok: true, duel: reloaded.rows[0] });
   } catch (e) {
     res.status(500).json({ error: 'server' });
   }
 });
 
-// Submit duel score
+// GET single duel by id (used for polling after submitting a duel score —
+// the player's UI watches this for the opponent's score to come in).
+app.get('/api/duels/:id', async (req, res) => {
+  const duelId = parseInt(req.params.id, 10);
+  if (!duelId) return res.status(400).json({ error: 'bad_id' });
+  try {
+    const r = await pool.query('SELECT * FROM duels WHERE id = $1', [duelId]);
+    if (!r.rows.length) return res.status(404).json({ error: 'not_found' });
+    res.json({ ok: true, duel: r.rows[0] });
+  } catch (e) {
+    res.status(500).json({ error: 'server' });
+  }
+});
+
+// Submit duel score. We accept submissions for both 'pending' (challenger
+// already playing before opponent accepts) and 'accepted'. Settlement runs
+// when both scores are present, regardless of status — see also
+// /api/duels/:id/accept which calls the same settlement path if the
+// challenger had already submitted.
 app.post('/api/duels/:id/score', async (req, res) => {
   const { deviceId, score } = req.body || {};
   const duelId = parseInt(req.params.id, 10);
@@ -3309,11 +3447,20 @@ app.post('/api/duels/:id/score', async (req, res) => {
     const d = await pool.query('SELECT * FROM duels WHERE id = $1', [duelId]);
     if (!d.rows.length) return res.json({ ok: false, reason: 'not_found' });
     const duel = d.rows[0];
-    if (duel.status !== 'accepted') return res.json({ ok: false, reason: 'not_accepted' });
+    if (duel.status !== 'accepted' && duel.status !== 'pending') {
+      return res.json({ ok: false, reason: 'duel_closed', status: duel.status });
+    }
 
     const s = Math.max(0, parseInt(score, 10) || 0);
     const isChallenger = duel.challenger_device === deviceId;
-    const isOpponent = duel.opponent_device === deviceId;
+    // Opponent can submit by device_id (after accepting) OR by player_code (if
+    // they're the named opponent but haven't accepted yet — rare but possible
+    // when challenger plays and opponent is matched by player code).
+    let isOpponent = duel.opponent_device === deviceId;
+    if (!isOpponent && duel.opponent_code) {
+      const codeCheck = await pool.query('SELECT player_code FROM player_profiles WHERE device_id = $1', [deviceId]);
+      if (codeCheck.rows.length && codeCheck.rows[0].player_code === duel.opponent_code) isOpponent = true;
+    }
     if (!isChallenger && !isOpponent) return res.json({ ok: false, reason: 'not_participant' });
 
     if (isChallenger) await pool.query(`UPDATE duels SET challenger_score = $1 WHERE id = $2`, [s, duelId]);

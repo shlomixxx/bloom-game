@@ -11,6 +11,14 @@
       '<div style="font-size:12px;color:#6F6E68;margin-bottom:12px">אתגר שחקן ספציפי! שניכם משחקים על אותו לוח — מי שמשיג יותר נקודות מנצח.</div>' +
       '<div style="font-size:11px;font-weight:600;margin-bottom:4px">קוד היריב</div>' +
       '<input id="duel-opponent" placeholder="BLOOM-XXXX" maxlength="10" style="width:100%;padding:8px;border:1px solid rgba(0,0,0,0.12);border-radius:8px;font-family:inherit;font-size:14px;text-transform:uppercase;letter-spacing:0.1em;font-weight:700;text-align:center;box-sizing:border-box;margin-bottom:8px">' +
+      '<div style="font-size:11px;font-weight:600;margin-bottom:4px">💪 רמת קושי (לשניכם)</div>' +
+      '<div id="duel-difficulty" style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:10px">' +
+        '<button type="button" class="diff-pill selected" data-diff="default" style="flex:1;min-width:60px;padding:5px 8px;font-size:11px;border:1px solid rgba(0,0,0,0.12);border-radius:6px;background:#1C1A18;color:#FAC775;font-weight:600;cursor:pointer">📦 רגיל</button>' +
+        '<button type="button" class="diff-pill" data-diff="easy" style="flex:1;min-width:60px;padding:5px 8px;font-size:11px;border:1px solid rgba(0,0,0,0.12);border-radius:6px;background:#F5F2EC;color:#1C1A18;font-weight:600;cursor:pointer">😊 קל</button>' +
+        '<button type="button" class="diff-pill" data-diff="medium" style="flex:1;min-width:60px;padding:5px 8px;font-size:11px;border:1px solid rgba(0,0,0,0.12);border-radius:6px;background:#F5F2EC;color:#1C1A18;font-weight:600;cursor:pointer">🎯 בינוני</button>' +
+        '<button type="button" class="diff-pill" data-diff="hard" style="flex:1;min-width:60px;padding:5px 8px;font-size:11px;border:1px solid rgba(0,0,0,0.12);border-radius:6px;background:#F5F2EC;color:#1C1A18;font-weight:600;cursor:pointer">🔥 קשה</button>' +
+        '<button type="button" class="diff-pill" data-diff="insane" style="flex:1;min-width:60px;padding:5px 8px;font-size:11px;border:1px solid rgba(0,0,0,0.12);border-radius:6px;background:#F5F2EC;color:#1C1A18;font-weight:600;cursor:pointer">💀 גהינום</button>' +
+      '</div>' +
       '<div style="font-size:11px;font-weight:600;margin-bottom:4px">הימור (אופציונלי)</div>' +
       '<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">' +
         '<input type="number" id="duel-amount" value="0" min="0" style="width:80px;padding:6px;border:1px solid rgba(0,0,0,0.12);border-radius:8px;font-family:inherit;font-size:14px;text-align:center;font-weight:700">' +
@@ -29,6 +37,22 @@
     // Load my duels
     loadMyDuels();
 
+    // Difficulty pill picker (challenger picks one — both players get it)
+    var selectedDuelDifficulty = 'default';
+    modal.querySelectorAll('.diff-pill').forEach(function(pill) {
+      pill.onclick = function() {
+        modal.querySelectorAll('.diff-pill').forEach(function(p) {
+          p.classList.remove('selected');
+          p.style.background = '#F5F2EC';
+          p.style.color = '#1C1A18';
+        });
+        pill.classList.add('selected');
+        pill.style.background = '#1C1A18';
+        pill.style.color = '#FAC775';
+        selectedDuelDifficulty = pill.getAttribute('data-diff') || 'default';
+      };
+    });
+
     // Send challenge
     document.getElementById('duel-send').onclick = async function() {
       var opp = (document.getElementById('duel-opponent').value || '').trim().toUpperCase();
@@ -41,15 +65,32 @@
       try {
         var r = await fetch(API_BASE + '/api/duels', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ deviceId: deviceId, opponentCode: opp, amount: amt })
+          body: JSON.stringify({ deviceId: deviceId, opponentCode: opp, amount: amt, difficulty: selectedDuelDifficulty })
         });
         var d = await r.json();
         this.disabled = false; this.textContent = 'שלח אתגר ⚔️';
         if (d && d.ok) {
           if (amt > 0) { playerBalance -= amt; updateBalanceDisplay(); }
           errEl.style.color = '#2E8B6F';
-          errEl.textContent = '✅ אתגר נשלח! ממתין ליריב...';
-          loadMyDuels();
+          errEl.textContent = '✅ אתגר נשלח! מתחיל את המשחק שלך…';
+          // Auto-start the challenger's game IMMEDIATELY. Without this the
+          // challenger has to refresh and click "Play" manually — the bug
+          // the user reported ("המשחק לא מצליח עד שעושה רענון"). The server
+          // now accepts score submissions while the duel is still 'pending',
+          // and settlement waits for both sides to submit.
+          var duelRow = d.duel || {
+            id: d.duelId,
+            board_seed: d.seed,
+            difficulty_label: d.difficulty,
+            difficulty_weights: null,
+            difficulty_speed_pct: null
+          };
+          activeDuelOpponentName = duelRow.opponent_name || opp;
+          setTimeout(function() {
+            var m = document.getElementById('duel-modal');
+            if (m) m.remove();
+            startDuelGame(duelRow.id, duelRow.board_seed, duelRow);
+          }, 600); // brief confirmation flash before transitioning
         } else {
           var msgs = { self_duel: 'לא ניתן לאתגר את עצמך', opponent_not_found: 'שחקן לא נמצא', insufficient_balance: 'אין מספיק 💎', duels_disabled: 'דו-קרבות מושבתים' };
           errEl.textContent = msgs[d.reason] || 'שגיאה';
@@ -105,7 +146,7 @@
       fetchPlayerCode();
       loadMyDuels();
       activeDuelOpponentName = d.duel ? (d.duel.challenger_name || d.duel.challenger_code || 'יריב') : 'יריב';
-      startDuelGame(id, d.duel.board_seed);
+      startDuelGame(id, d.duel.board_seed, d.duel);
     } else {
       var msgs = { not_opponent: 'אתה לא היריב', not_pending: 'כבר קיבלת', expired: 'פג תוקף', insufficient_balance: 'אין מספיק 💎' };
       alert(msgs[d && d.reason] || 'שגיאה');
@@ -121,7 +162,7 @@
       if (!duel || duel.status !== 'accepted') { alert('הדו-קרב לא פעיל'); return; }
       var isChallenger = duel.challenger_device === deviceId;
       activeDuelOpponentName = isChallenger ? (duel.opponent_name || duel.opponent_code || 'יריב') : (duel.challenger_name || duel.challenger_code || 'יריב');
-      startDuelGame(id, duel.board_seed);
+      startDuelGame(id, duel.board_seed, duel);
     } catch(e) { alert('שגיאת רשת'); }
   };
 
@@ -129,7 +170,7 @@
   var activeDuelId = null;
   var activeDuelOpponentName = 'יריב';
 
-  function startDuelGame(duelId, seed) {
+  function startDuelGame(duelId, seed, duelRow) {
     activeDuelId = duelId;
     // Close the duel modal
     var modal = document.getElementById('duel-modal');
@@ -141,6 +182,18 @@
     window._duelMode = true; // flag for UI
     window._duelOpponentName = activeDuelOpponentName || 'יריב';
     dailyDate = todayInIsrael();
+    // Apply the challenger-chosen difficulty (both sides get the same one).
+    // Falls back to admin globals if the duel row predates the difficulty
+    // columns or the challenger picked 'default'.
+    if (duelRow && duelRow.difficulty_weights) {
+      sessionDifficulty = {
+        label: duelRow.difficulty_label || 'custom',
+        weights: duelRow.difficulty_weights,
+        speed_pct: duelRow.difficulty_speed_pct || null
+      };
+    } else {
+      sessionDifficulty = null;
+    }
     grid = Array.from({length: getBoardRows()}, function() { return Array(getBoardCols()).fill(0); });
     score = 0; highestTier = 1; busy = false; dropsCount = 0;
     currentGameMaxChain = 0;
@@ -176,9 +229,193 @@
       showDuelResultOverlay(d, finalScore, oppName);
       if (d && (d.result === 'tie' || (d.result === 'settled' && d.winner === 'you'))) fetchPlayerCode();
       trackEvent('duel_score', { duelId: duelId, result: d && d.result });
+      // If we're still 'waiting' for the opponent, poll the duel state so we
+      // can flip the overlay from "..." to the real result the moment the
+      // opponent finishes. Bug 4: previously the overlay stayed stuck on
+      // "ממתין ליריב..." forever, even after opponent had submitted.
+      // ALSO: attach a live spectator view of the opponent's actual game so
+      // the player can watch instead of staring at a "..." spinner.
+      if (d && d.result === 'waiting') {
+        pollDuelUntilSettled(duelId, finalScore, oppName);
+        attachDuelLiveSpectator(duelId, finalScore, oppName);
+      }
     }).catch(function() {
       showDuelResultOverlay({ result: 'error' }, finalScore, oppName);
     });
+  }
+
+  // Poll a duel after we submitted but the opponent hasn't yet. Stops as soon
+  // as the duel becomes 'settled' or 'tie', or after 5 minutes (whichever
+  // comes first). Updates the in-flight result overlay in place.
+  function pollDuelUntilSettled(duelId, myScore, oppName) {
+    var attempts = 0;
+    var maxAttempts = 150; // 150 × 2s = 5 minutes
+    var poller = setInterval(function() {
+      attempts++;
+      if (attempts > maxAttempts) { clearInterval(poller); return; }
+      fetch(API_BASE + '/api/duels/' + duelId, { method: 'GET' })
+        .then(function(r) { return r.ok ? r.json() : null; })
+        .then(function(resp) {
+          if (!resp || !resp.duel) return;
+          var u = resp.duel;
+          if (u.status === 'settled' || u.status === 'tie') {
+            clearInterval(poller);
+            // Tear down the live-spectator poller too, if any.
+            stopDuelLiveSpectator();
+            var isChallenger = u.challenger_device === deviceId;
+            var oppScore = isChallenger ? u.opponent_score : u.challenger_score;
+            var winner = null;
+            if (u.status === 'settled') {
+              winner = u.winner_device === deviceId ? 'you' : 'opponent';
+            }
+            // Compute prize from amount * 2 minus 5% rake (mirrors server)
+            var prize = u.amount ? Math.round((u.amount | 0) * 2 * 0.95) : 0;
+            replaceDuelResultOverlay({
+              result: u.status === 'tie' ? 'tie' : 'settled',
+              winner: winner,
+              opponentScore: oppScore,
+              prize: prize
+            }, myScore, oppName);
+            if (winner === 'you' || u.status === 'tie') fetchPlayerCode();
+          }
+        })
+        .catch(function() {});
+    }, 2000);
+  }
+
+  // ============================================================
+  // DUEL LIVE SPECTATOR — embed an actual live view of the opponent
+  // inside the "waiting" overlay so the player watches them play
+  // in real time, not a mirror, not a spinner. Polls the universal
+  // /api/live-state/:deviceId endpoint (fed by 5s heartbeats).
+  // ============================================================
+  var _duelSpectatorPoller = null;
+  var _duelSpectatorTargetId = null;
+
+  function stopDuelLiveSpectator() {
+    if (_duelSpectatorPoller) { clearInterval(_duelSpectatorPoller); _duelSpectatorPoller = null; }
+    _duelSpectatorTargetId = null;
+  }
+
+  function attachDuelLiveSpectator(duelId, myScore, oppName) {
+    // Fetch the duel row once to learn the opponent's deviceId, then start
+    // the live-state poller and inject a mini-board into the waiting overlay.
+    fetch(API_BASE + '/api/duels/' + duelId, { method: 'GET' })
+      .then(function(r) { return r.ok ? r.json() : null; })
+      .then(function(resp) {
+        if (!resp || !resp.duel) return;
+        var u = resp.duel;
+        var oppDeviceId = (u.challenger_device === deviceId) ? u.opponent_device : u.challenger_device;
+        if (!oppDeviceId) return;
+        _duelSpectatorTargetId = oppDeviceId;
+        injectDuelSpectatorWidget(myScore, oppName);
+        // First poll immediately, then every 1.5s. Cheap: opponent's
+        // heartbeat refreshes server-side every 5s, so we get a fresh
+        // snapshot ≈3× per heartbeat — feels live without spamming.
+        pollDuelLiveState();
+        _duelSpectatorPoller = setInterval(pollDuelLiveState, 1500);
+      })
+      .catch(function() {});
+  }
+
+  function injectDuelSpectatorWidget(myScore, oppName) {
+    var overlay = document.querySelector('[data-duel-result-overlay]');
+    if (!overlay) return;
+    // Find the inner card (the dark rounded box). It's the only direct child div.
+    var card = overlay.querySelector('div');
+    if (!card) return;
+    // Don't inject twice
+    if (overlay.querySelector('[data-duel-spec-widget]')) return;
+    var ROWS = getBoardRows(), COLS = getBoardCols();
+    var cellsHtml = '';
+    for (var i = 0; i < ROWS * COLS; i++) cellsHtml += '<div class="dspec-cell" data-i="' + i + '"></div>';
+    var widget = document.createElement('div');
+    widget.setAttribute('data-duel-spec-widget', '1');
+    widget.style.cssText = 'margin-top:14px;padding:12px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:14px;direction:rtl';
+    widget.innerHTML =
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;gap:10px">' +
+        '<div style="display:flex;align-items:center;gap:6px;font-size:12px;color:#9FE1CB">' +
+          '<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#2E8B6F;animation:dspecPulse 1.2s ease-in-out infinite"></span>' +
+          '<span>צופה ב-' + escapeHtml(oppName) + ' חי</span>' +
+        '</div>' +
+        '<div style="font-size:11px;color:#A8A6A0" data-dspec-status>מתחבר…</div>' +
+      '</div>' +
+      '<div style="display:flex;justify-content:center;gap:18px;margin-bottom:10px;font-size:11px">' +
+        '<div style="text-align:center"><div style="color:#A8A6A0">ניקוד שלו</div><div data-dspec-score style="font-size:20px;font-weight:900;color:#FAC775">—</div></div>' +
+        '<div style="text-align:center"><div style="color:#A8A6A0">הניקוד שלך</div><div style="font-size:20px;font-weight:900;color:#9FE1CB">' + myScore.toLocaleString() + '</div></div>' +
+      '</div>' +
+      '<div class="dspec-grid" style="display:grid;grid-template-columns:repeat(' + COLS + ',1fr);gap:3px;background:#0E0D0C;padding:6px;border-radius:8px;max-width:200px;margin:0 auto">' + cellsHtml + '</div>' +
+      '<style>' +
+        '.dspec-cell{aspect-ratio:1;background:#2A2724;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:14px}' +
+        '@keyframes dspecPulse{0%,100%{opacity:1}50%{opacity:0.3}}' +
+      '</style>';
+    // Insert before the "Play Again" button — last child of card.
+    var btn = card.querySelector('button');
+    if (btn && btn.parentNode === card) card.insertBefore(widget, btn);
+    else card.appendChild(widget);
+  }
+
+  function pollDuelLiveState() {
+    if (!_duelSpectatorTargetId) return;
+    // If the player dismissed the waiting overlay (e.g. clicked "play again"),
+    // the widget is gone — tear down the poller so we don't keep hammering
+    // the live-state endpoint in the background.
+    if (!document.querySelector('[data-duel-spec-widget]')) {
+      stopDuelLiveSpectator();
+      return;
+    }
+    fetch(API_BASE + '/api/live-state/' + encodeURIComponent(_duelSpectatorTargetId))
+      .then(function(r) { return r.ok ? r.json() : null; })
+      .then(function(d) {
+        var statusEl = document.querySelector('[data-dspec-status]');
+        var scoreEl = document.querySelector('[data-dspec-score]');
+        var gridHost = document.querySelector('[data-duel-spec-widget] .dspec-grid');
+        if (!gridHost) return; // widget gone (overlay closed)
+        if (!d) {
+          if (statusEl) statusEl.textContent = '🔴 לא מחובר';
+          return;
+        }
+        if (statusEl) statusEl.textContent = '🟢 מתעדכן';
+        if (scoreEl) scoreEl.textContent = (d.score | 0).toLocaleString();
+        if (!Array.isArray(d.grid)) return;
+        var tiers = getActiveTiers();
+        var cells = gridHost.children;
+        var idx = 0;
+        for (var r = 0; r < d.grid.length; r++) {
+          var row = d.grid[r] || [];
+          for (var c = 0; c < row.length; c++) {
+            var cell = cells[idx];
+            if (cell) {
+              var t = row[c] | 0;
+              if (t > 0 && tiers[t]) {
+                cell.style.background = tiers[t].bg;
+                cell.style.color = tiers[t].fg;
+                cell.innerHTML = tiers[t].svg || '';
+              } else {
+                cell.style.background = '#2A2724';
+                cell.style.color = '';
+                cell.innerHTML = '';
+              }
+            }
+            idx++;
+          }
+        }
+      })
+      .catch(function() {
+        var statusEl = document.querySelector('[data-dspec-status]');
+        if (statusEl) statusEl.textContent = '⚠️ שגיאת רשת';
+      });
+  }
+
+  // Swap the existing "waiting" overlay for a fresh result overlay. Called
+  // by the poller above when the opponent's score lands.
+  function replaceDuelResultOverlay(d, myScore, oppName) {
+    // Remove any open duel-result overlay (created by showDuelResultOverlay
+    // — identified by the dark backdrop with the inline border style).
+    document.querySelectorAll('[data-duel-result-overlay]').forEach(function(el) {
+      el.remove();
+    });
+    showDuelResultOverlay(d, myScore, oppName);
   }
 
   function showDuelResultOverlay(d, myScore, oppName) {
@@ -209,6 +446,7 @@
     '</div>';
 
     var overlay = document.createElement('div');
+    overlay.setAttribute('data-duel-result-overlay', '1');
     overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;display:flex;align-items:center;justify-content:center;direction:rtl';
     overlay.innerHTML =
       '<div style="background:#1C1A18;border-radius:20px;padding:28px 24px;max-width:320px;width:90%;text-align:center;border:2px solid ' + color + ';box-shadow:0 0 40px ' + color + '33">' +
@@ -237,6 +475,143 @@
     setTimeout(function() { t.classList.add('show'); }, 10);
     setTimeout(function() { t.classList.remove('show'); setTimeout(function() { t.remove(); }, 400); }, 4000);
   }
+
+  // ============================================================
+  // INCOMING-DUEL NOTIFICATIONS (Bug 2 fix)
+  // ============================================================
+  // Polls /api/duels/mine on boot and every 60s while the app is visible.
+  // Shows a top-right toast for:
+  //  - pending duels I haven't accepted yet (someone challenged me)
+  //  - settled duels I haven't seen the result of (notify of win/loss)
+  // Tracks already-seen duel IDs in sessionStorage so we don't spam on
+  // every poll. sessionStorage is per-tab and clears on close, so a player
+  // who closes and re-opens the app DOES see the badge again — that's the
+  // desired re-notification behavior.
+  var SEEN_DUELS_KEY = 'bloom_seen_duel_notifications';
+  function loadSeenDuels() {
+    try { return JSON.parse(sessionStorage.getItem(SEEN_DUELS_KEY) || '{}') || {}; }
+    catch (e) { return {}; }
+  }
+  function markDuelSeen(duelId, status) {
+    try {
+      var seen = loadSeenDuels();
+      seen[String(duelId)] = status;
+      sessionStorage.setItem(SEEN_DUELS_KEY, JSON.stringify(seen));
+    } catch (e) {}
+  }
+  function showDuelNotificationBanner(opts) {
+    // opts: { kind: 'invite'|'won'|'lost'|'tie', name, score?, onTap }
+    var existing = document.querySelector('[data-duel-notif="' + opts.id + '"]');
+    if (existing) return; // already showing
+    var b = document.createElement('div');
+    b.setAttribute('data-duel-notif', opts.id);
+    var bg = '#1C1A18', border = '#6B5CE7', emoji = '⚔️', title = 'אתגר חדש', sub = '';
+    if (opts.kind === 'invite') {
+      emoji = '⚔️'; title = (opts.name || 'מישהו') + ' אתגר/ה אותך!'; sub = 'לחץ לקבל'; border = '#6B5CE7';
+    } else if (opts.kind === 'won') {
+      emoji = '🏆'; title = 'ניצחת בדו-קרב!'; sub = 'מול ' + (opts.name || 'יריב'); border = '#2E8B6F';
+    } else if (opts.kind === 'lost') {
+      emoji = '😔'; title = 'הפסדת בדו-קרב'; sub = 'מול ' + (opts.name || 'יריב'); border = '#C8472F';
+    } else if (opts.kind === 'tie') {
+      emoji = '🤝'; title = 'תיקו בדו-קרב'; sub = 'מול ' + (opts.name || 'יריב'); border = '#BA7517';
+    }
+    b.style.cssText = 'position:fixed;top:14px;left:50%;transform:translateX(-50%) translateY(-20px);' +
+      'opacity:0;transition:opacity 240ms ease-out,transform 240ms ease-out;' +
+      'z-index:9999;background:' + bg + ';color:#FAC775;border:2px solid ' + border + ';' +
+      'border-radius:14px;padding:10px 16px;direction:rtl;font-family:inherit;font-size:13px;' +
+      'box-shadow:0 8px 24px rgba(0,0,0,0.35);cursor:pointer;max-width:320px;width:calc(100vw - 32px);';
+    b.innerHTML =
+      '<div style="display:flex;align-items:center;gap:10px">' +
+        '<div style="font-size:22px">' + emoji + '</div>' +
+        '<div style="flex:1;min-width:0">' +
+          '<div style="font-weight:800;color:#FFFFFF;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escDuelHtml(title) + '</div>' +
+          (sub ? '<div style="font-size:11px;color:#A8A6A0;margin-top:2px">' + escDuelHtml(sub) + '</div>' : '') +
+        '</div>' +
+        '<div style="font-size:11px;color:#A8A6A0">✕</div>' +
+      '</div>';
+    document.body.appendChild(b);
+    requestAnimationFrame(function() {
+      b.style.opacity = '1';
+      b.style.transform = 'translateX(-50%) translateY(0)';
+    });
+    var dismiss = function() {
+      b.style.opacity = '0';
+      b.style.transform = 'translateX(-50%) translateY(-20px)';
+      setTimeout(function() { b.remove(); }, 250);
+    };
+    b.onclick = function() {
+      if (opts.onTap) try { opts.onTap(); } catch (e) {}
+      dismiss();
+    };
+    setTimeout(dismiss, 7000);
+  }
+  function escDuelHtml(s) {
+    return String(s).replace(/[&<>"']/g, function(c) {
+      return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c];
+    });
+  }
+
+  async function checkIncomingDuels() {
+    if (!deviceId) return;
+    if (document.visibilityState === 'hidden') return;
+    try {
+      var r = await fetch(API_BASE + '/api/duels/mine?deviceId=' + encodeURIComponent(deviceId));
+      if (!r.ok) return;
+      var d = await r.json();
+      if (!d || !d.duels) return;
+      var seen = loadSeenDuels();
+      var myCode = '';
+      try { myCode = localStorage.getItem('bloom_player_code') || ''; } catch (e) {}
+      d.duels.forEach(function(duel) {
+        var prevSeen = seen[String(duel.id)];
+        // Skip duels currently being played (mid-game) — they'll get a result overlay.
+        if (activeDuelId && duel.id === activeDuelId) return;
+
+        if (duel.status === 'pending') {
+          // Pending where I'm the opponent → I was challenged. Notify once.
+          var iAmOpponent = duel.opponent_device === deviceId ||
+            (myCode && duel.opponent_code === myCode);
+          var iAmChallenger = duel.challenger_device === deviceId;
+          if (iAmOpponent && prevSeen !== 'pending') {
+            showDuelNotificationBanner({
+              id: duel.id,
+              kind: 'invite',
+              name: duel.challenger_name || duel.challenger_code,
+              onTap: function() { showDuelModal(); }
+            });
+            markDuelSeen(duel.id, 'pending');
+          } else if (iAmChallenger && duel.challenger_score == null && prevSeen !== 'pending-c') {
+            // I sent it and haven't played yet. Don't notify — just track.
+            markDuelSeen(duel.id, 'pending-c');
+          }
+        } else if ((duel.status === 'settled' || duel.status === 'tie') && prevSeen !== duel.status) {
+          // Result available, haven't seen it yet — but only notify if we
+          // actually played this duel (have a score). The overlay shown
+          // by submitDuelScore handles the same-session case; this banner
+          // covers the cross-session case (closed app, opponent finished).
+          var iPlayed = (duel.challenger_device === deviceId && duel.challenger_score != null) ||
+                        (duel.opponent_device === deviceId && duel.opponent_score != null);
+          if (iPlayed) {
+            var iAmChall = duel.challenger_device === deviceId;
+            var opponentName = iAmChall ? (duel.opponent_name || duel.opponent_code) : (duel.challenger_name || duel.challenger_code);
+            var kind = 'tie';
+            if (duel.status === 'settled') {
+              kind = (duel.winner_device === deviceId) ? 'won' : 'lost';
+            }
+            showDuelNotificationBanner({
+              id: duel.id,
+              kind: kind,
+              name: opponentName,
+              onTap: function() { showDuelModal(); }
+            });
+          }
+          markDuelSeen(duel.id, duel.status);
+        }
+      });
+    } catch (e) {}
+  }
+  // Expose for boot.
+  window.__bloomCheckIncomingDuels = checkIncomingDuels;
 
   // ============ IN-GAME TILE SHOP ============
   var tilePrices = null; // fetched once from server
