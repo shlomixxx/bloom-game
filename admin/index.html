@@ -2643,7 +2643,11 @@
     try {
       var d = await api('/config');
       if (!d || !d.config) return;
-      var cfg = d.config;
+      // Server returns array of {key, value, updated_at} — convert to object
+      var rows = Array.isArray(d.config) ? d.config : [];
+      var cfg = {};
+      rows.forEach(function(r) { cfg[r.key] = r.value; });
+
       $('adsense-input').value = cfg.adsense_client_id || '';
       $('stripe-input').value = cfg.stripe_publishable_key || '';
       $('adsense-status').textContent = cfg.adsense_client_id ? '✅ מוגדר' : '⚠️ לא מוגדר — פרסומות לא פעילות';
@@ -2655,7 +2659,9 @@
       for (var i = 1; i <= 4; i++) {
         var amt = cfg['diamond_pack_' + i + '_amount'] || '—';
         var price = cfg['diamond_pack_' + i + '_price'] || '—';
-        packs += '💎 ' + Number(amt).toLocaleString() + ' = ₪' + price + '  ';
+        if (amt !== '—' && price !== '—') {
+          packs += '💎 ' + Number(amt).toLocaleString() + ' = ₪' + price + '  ';
+        }
       }
       $('diamond-packs-preview').innerHTML = packs || 'לא מוגדר';
       // Economy
