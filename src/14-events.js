@@ -325,6 +325,9 @@
     var ptsPerTile = getEventNum('event_bomb_points_per_tile', 2000);
     var destroyed = 0;
     var destroyedCells = []; // (r,c,tier) of every tile actually destroyed
+    var blastZoneCells = []; // EVERY cell in the (2*radius+1)² blast area,
+                             // including empty ones — so the user sees the
+                             // full footprint even when some cells were empty.
 
     // Stage 1: capture cell rects BEFORE clearing the grid (so we know
     // where to spawn explosion overlays, independent of render()).
@@ -335,6 +338,7 @@
         if (r < 0 || r >= getBoardRows() || c < 0 || c >= getBoardCols()) continue;
         var dist = Math.max(Math.abs(dr), Math.abs(dc));
         hitCells.push({ r: r, c: c, dist: dist, hadTile: grid[r][c] !== 0 });
+        blastZoneCells.push({ r: r, c: c }); // ALL cells in the radius
         // Always show the explosion (even on empty cells inside the radius) —
         // the SHAPE of the blast is what tells the player what got hit.
         // But only destroy tiles that actually exist (don't bomb the center).
@@ -355,18 +359,21 @@
 
     var bonus = destroyed * ptsPerTile;
     score += bonus;
-    // BONUS VERIFICATION — exactly which cells the bomb destroyed vs the
-    // visual explosion (which scales to ~2.1× cell size and visually overflows).
+    // BONUS VERIFICATION — log the full blast footprint (3×3 for radius=1) so
+    // the user can see EXACTLY which cells the bomb scanned and which actually
+    // contained tiles. Visual FX overlays scale to ~2.1× cell size and
+    // visually overflow, but the destruction footprint is exact.
     if (window.__bloomEngineLog) {
       console.log('[bomb] center=' + evt.row + ',' + evt.col,
         'radius=' + radius,
-        'scanned=' + hitCells.length + 'cells',
+        'blast_zone=' + blastZoneCells.length + 'cells (' + (2*radius+1) + '×' + (2*radius+1) + ' max)',
         'destroyed=' + destroyed + 'tiles',
         '+' + bonus + 'pts',
-        'cells=' + destroyedCells.map(function(d) { return d.r + ',' + d.c + '(t' + d.tier + ')'; }).join(' | ')
+        'destroyed_at=[' + destroyedCells.map(function(d) { return d.r + ',' + d.c + '(t' + d.tier + ')'; }).join(' | ') + ']',
+        'blast_at=[' + blastZoneCells.map(function(b) { return b.r + ',' + b.c; }).join(' | ') + ']'
       );
     }
-    showEventBanner('💣 BOOM!', '+' + bonus.toLocaleString(), 'bomb');
+    showEventBanner('💣 BOOM! ' + (2*radius+1) + '×' + (2*radius+1), '+' + bonus.toLocaleString() + ' · ' + destroyed + ' אריחים', 'bomb');
     var shakeInt = getEventNum('event_bomb_shake', 6);
     buzz([100, 60, 100, 60, 100]);
     if (shakeInt > 0) shakeGrid(shakeInt);
@@ -375,10 +382,12 @@
     // Apply gravity so tiles don't float after explosion
     applyGravity();
     render();
-    // AFTER render() rebuilds the grid DOM — re-mark the cells that got hit
-    // so the user sees exactly which squares were destroyed (separate signal
-    // from the explosion visual). Lingers for 800ms.
-    markBonusHitCells(destroyedCells, 'bonus-hit', 800);
+    // AFTER render() — mark the FULL blast zone (light orange) so the user
+    // sees the 3×3 footprint even when some cells were empty, then layer the
+    // destroyed cells with a stronger orange + tier label fade-out. Two-tier
+    // visual makes the bomb's actual reach unmistakable.
+    markBonusHitCells(blastZoneCells, 'bonus-blast', 900);
+    markBonusHitCells(destroyedCells, 'bonus-hit', 900);
   }
 
   // Mark a list of cells with a CSS class that lingers visually. Cleared by
@@ -521,13 +530,15 @@
   function triggerFreeze(evt) {
     var clearRows = getEventNum('event_freeze_clear_rows', 1);
     var pts = getEventNum('event_freeze_points', 1000);
-    var clearedCells = []; // for verification + lingering marker
+    var clearedCells = []; // tiles that actually got destroyed
+    var rowZoneCells = []; // ALL cells in the cleared rows, including empties
 
     // Same fix as bomb: spawn overlays before render() wipes the grid.
     // Walk top rows left→right with staggered delays so the freeze "sweeps".
     for (var r = 0; r < clearRows && r < getBoardRows(); r++) {
       for (var c = 0; c < getBoardCols(); c++) {
         fxAtCell(r, c, 'fx-freeze', c * 45);
+        rowZoneCells.push({ r: r, c: c });
         if (grid[r][c] !== 0) {
           clearedCells.push({ r: r, c: c, tier: grid[r][c] });
           grid[r][c] = 0;
@@ -538,12 +549,13 @@
     score += pts;
     if (window.__bloomEngineLog) {
       console.log('[freeze] rows_cleared=' + clearRows,
+        'zone_cells=' + rowZoneCells.length,
         'tiles_removed=' + clearedCells.length,
         '+' + pts + 'pts',
-        'cells=' + clearedCells.map(function(d) { return d.r + ',' + d.c + '(t' + d.tier + ')'; }).join(' | '));
+        'cleared_at=[' + clearedCells.map(function(d) { return d.r + ',' + d.c + '(t' + d.tier + ')'; }).join(' | ') + ']');
     }
     var shakeInt = getEventNum('event_freeze_shake', 4);
-    showEventBanner('❄️ הצלה!', 'שורה נמחקה! +' + pts.toLocaleString(), 'freeze');
+    showEventBanner('❄️ הצלה!', clearRows + ' שורות · ' + clearedCells.length + ' אריחים · +' + pts.toLocaleString(), 'freeze');
     buzz([60, 40, 60]);
     if (shakeInt > 0) shakeGrid(shakeInt);
     bumpScore();
@@ -551,6 +563,10 @@
     // Apply gravity so tiles above fall down
     applyGravity();
     render();
+    // Show the full row(s) cleared with the freeze tint, then mark the
+    // specific destroyed tiles more strongly so the user sees both
+    // "row swept" and "X tiles removed".
+    markBonusHitCells(rowZoneCells, 'bonus-freeze-zone', 900);
     markBonusHitCells(clearedCells, 'bonus-freeze', 900);
   }
 

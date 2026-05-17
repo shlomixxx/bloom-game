@@ -378,9 +378,30 @@
     box-shadow: inset 0 0 0 3px #FF6B35, 0 0 12px rgba(255,107,53,0.6) !important;
     animation: bonusHitPulse 0.6s ease-out 2;
   }
+  /* The FULL bomb blast zone — every cell within (2*radius+1)², including
+     cells that were empty. Lighter than bonus-hit so destroyed cells stand
+     out, but visible so the user sees the bomb's actual reach. */
+  .cell.bonus-blast {
+    box-shadow: inset 0 0 0 2px rgba(255,107,53,0.55), 0 0 8px rgba(255,107,53,0.3) !important;
+    background-color: rgba(255,107,53,0.10) !important;
+  }
+  /* bonus-hit takes precedence visually for destroyed cells, even though
+     blast-zone might also be applied. We use box-shadow specificity. */
+  .cell.bonus-hit.bonus-blast {
+    box-shadow: inset 0 0 0 3px #FF6B35, 0 0 12px rgba(255,107,53,0.6) !important;
+  }
   .cell.bonus-freeze {
     box-shadow: inset 0 0 0 3px #4ECDC4, 0 0 12px rgba(78,205,196,0.6) !important;
     animation: bonusHitPulse 0.6s ease-out 2;
+  }
+  /* Light tint over the entire row(s) the freeze swept, so the user sees
+     "this row got cleared" even where it was already empty. */
+  .cell.bonus-freeze-zone {
+    background-color: rgba(78,205,196,0.10) !important;
+    box-shadow: inset 0 0 0 2px rgba(78,205,196,0.50) !important;
+  }
+  .cell.bonus-freeze.bonus-freeze-zone {
+    box-shadow: inset 0 0 0 3px #4ECDC4, 0 0 12px rgba(78,205,196,0.6) !important;
   }
   .cell.bonus-star {
     box-shadow: inset 0 0 0 3px #FAC775, 0 0 14px rgba(250,199,117,0.8) !important;
