@@ -731,7 +731,8 @@
     document.body.appendChild(banner);
     bumpScore();
     buzz([40, 60]);
-    shakeGrid(2);
+    var msShake = parseInt(getEventConfig('shake_milestone', '2'), 10) || 0;
+    if (msShake > 0) shakeGrid(msShake);
     setTimeout(function() { banner.style.transition = 'opacity 0.3s'; banner.style.opacity = '0'; }, 1000);
     setTimeout(function() { banner.remove(); }, 1300);
   }
@@ -745,7 +746,8 @@
     badge.textContent = label;
     document.body.appendChild(badge);
     buzz([60, 40]);
-    shakeGrid(count >= 4 ? 6 : 3);
+    var mmShake = parseInt(getEventConfig('shake_multi_merge', count >= 4 ? '6' : '3'), 10) || 0;
+    if (mmShake > 0) shakeGrid(mmShake);
     setTimeout(function() { badge.remove(); }, 900);
   }
 
@@ -833,7 +835,8 @@
               bumpScore();
               checkScoreMilestones();
               buzz([100, 60, 120, 60, 100]);
-              shakeGrid(8);
+              var crownShake = parseInt(getEventConfig('shake_crown_merge', '8'), 10) || 0;
+              if (crownShake > 0) shakeGrid(crownShake);
               merged = [clearRow, 1];
               mergedTier = MAX_TIER;
               mergeSize = group.length;
@@ -892,7 +895,8 @@
               soundMilestone(nt);
               bumpScore();
               buzz([60, 40, 80]);
-              shakeGrid(nt >= 7 ? 5 : 3);
+              var tierShake = parseInt(getEventConfig('shake_tier_up', nt >= 7 ? '5' : '3'), 10) || 0;
+              if (tierShake > 0) shakeGrid(tierShake);
             }
             merged = [kr, kc];
             mergedTier = nt;

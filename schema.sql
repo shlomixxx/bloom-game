@@ -437,3 +437,12 @@ INSERT INTO game_config (key, value) VALUES ('event_target_enabled', 'true') ON 
 INSERT INTO game_config (key, value) VALUES ('event_target_weight', '10') ON CONFLICT (key) DO NOTHING;
 INSERT INTO game_config (key, value) VALUES ('event_target_timer', '12') ON CONFLICT (key) DO NOTHING;
 INSERT INTO game_config (key, value) VALUES ('event_target_multiplier', '5') ON CONFLICT (key) DO NOTHING;
+
+-- Shake intensity config (0 = disabled)
+INSERT INTO game_config (key, value) VALUES ('shake_tier_up', '4') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('shake_crown_merge', '8') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('shake_milestone', '2') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('shake_multi_merge', '4') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('shake_new_best', '4') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('event_bomb_shake', '6') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('event_freeze_shake', '4') ON CONFLICT (key) DO NOTHING;

@@ -1425,7 +1425,8 @@
     banner.innerHTML = '<div style="font-size:22px;font-weight:800;color:#1C1A18">🎉 שיא חדש!</div><div style="font-size:28px;font-weight:900;color:#412402;margin-top:4px">' + score.toLocaleString() + '</div>';
     document.body.appendChild(banner);
     buzz([80, 40, 80, 40, 80]);
-    shakeGrid(4);
+    var bestShake = parseInt(getEventConfig('shake_new_best', '4'), 10) || 0;
+    if (bestShake > 0) shakeGrid(bestShake);
     setTimeout(function() { banner.style.transition = 'opacity 0.3s'; banner.style.opacity = '0'; }, 1500);
     setTimeout(function() { banner.remove(); }, 1800);
   }
@@ -5559,7 +5560,8 @@
     document.body.appendChild(banner);
     bumpScore();
     buzz([40, 60]);
-    shakeGrid(2);
+    var msShake = parseInt(getEventConfig('shake_milestone', '2'), 10) || 0;
+    if (msShake > 0) shakeGrid(msShake);
     setTimeout(function() { banner.style.transition = 'opacity 0.3s'; banner.style.opacity = '0'; }, 1000);
     setTimeout(function() { banner.remove(); }, 1300);
   }
@@ -5573,7 +5575,8 @@
     badge.textContent = label;
     document.body.appendChild(badge);
     buzz([60, 40]);
-    shakeGrid(count >= 4 ? 6 : 3);
+    var mmShake = parseInt(getEventConfig('shake_multi_merge', count >= 4 ? '6' : '3'), 10) || 0;
+    if (mmShake > 0) shakeGrid(mmShake);
     setTimeout(function() { badge.remove(); }, 900);
   }
 
@@ -5661,7 +5664,8 @@
               bumpScore();
               checkScoreMilestones();
               buzz([100, 60, 120, 60, 100]);
-              shakeGrid(8);
+              var crownShake = parseInt(getEventConfig('shake_crown_merge', '8'), 10) || 0;
+              if (crownShake > 0) shakeGrid(crownShake);
               merged = [clearRow, 1];
               mergedTier = MAX_TIER;
               mergeSize = group.length;
@@ -5720,7 +5724,8 @@
               soundMilestone(nt);
               bumpScore();
               buzz([60, 40, 80]);
-              shakeGrid(nt >= 7 ? 5 : 3);
+              var tierShake = parseInt(getEventConfig('shake_tier_up', nt >= 7 ? '5' : '3'), 10) || 0;
+              if (tierShake > 0) shakeGrid(tierShake);
             }
             merged = [kr, kc];
             mergedTier = nt;
@@ -7150,14 +7155,20 @@
       return;
     }
 
-    // Find random empty cell
-    var emptyCells = [];
-    for (var r = 0; r < getBoardRows(); r++)
-      for (var c = 0; c < getBoardCols(); c++)
-        if (grid[r][c] === 0) emptyCells.push([r, c]);
-    if (emptyCells.length === 0) return;
+    // Find columns with empty cells — pick the BOTTOM-MOST empty cell
+    // (where the next tile would actually land)
+    var candidates = [];
+    for (var c = 0; c < getBoardCols(); c++) {
+      for (var r = getBoardRows() - 1; r >= 0; r--) {
+        if (grid[r][c] === 0) {
+          candidates.push([r, c]);
+          break; // only bottom-most empty per column
+        }
+      }
+    }
+    if (candidates.length === 0) return;
 
-    var cell = emptyCells[Math.floor(Math.random() * emptyCells.length)];
+    var cell = candidates[Math.floor(Math.random() * candidates.length)];
     var timerSec = getEventNum('event_' + chosen.id + '_timer', 8);
 
     activeEvent = {
@@ -7289,11 +7300,14 @@
     var bonus = destroyed * ptsPerTile;
     score += bonus;
     showEventBanner('💣 BOOM!', '+' + bonus.toLocaleString(), 'bomb');
+    var shakeInt = getEventNum('event_bomb_shake', 6);
     buzz([100, 60, 100, 60, 100]);
-    shakeGrid(6);
+    if (shakeInt > 0) shakeGrid(shakeInt);
     bumpScore();
     checkScoreMilestones();
-    // Gravity will be applied by the merge loop
+    // Apply gravity so tiles don't float after explosion
+    applyGravity();
+    render();
   }
 
   // ── ⭐ STAR ──
@@ -7305,11 +7319,13 @@
     if (tile > 0 && tile < MAX_TIER) {
       grid[tRow][evt.col] = Math.min(tile + upgrade, MAX_TIER);
       var newTier = grid[tRow][evt.col];
+      if (newTier > highestTier) highestTier = newTier;
       var tierInfo = getActiveTiers()[newTier];
       score += pts;
       showEventBanner('⭐ Level Up!', tierInfo.name + '! +' + pts, 'star');
       bumpScore();
       checkScoreMilestones();
+      render();
     } else if (tile === MAX_TIER) {
       score += pts * 5;
       showEventBanner('⭐ כתר מוזהב!', '+' + (pts * 5).toLocaleString(), 'star');
@@ -7411,10 +7427,15 @@
     }
 
     score += pts;
+    var shakeInt = getEventNum('event_freeze_shake', 4);
     showEventBanner('❄️ הצלה!', 'שורה נמחקה! +' + pts.toLocaleString(), 'freeze');
     buzz([60, 40, 60]);
+    if (shakeInt > 0) shakeGrid(shakeInt);
     bumpScore();
     checkScoreMilestones();
+    // Apply gravity so tiles above fall down
+    applyGravity();
+    render();
   }
 
   // ── 🎯 TARGET ──

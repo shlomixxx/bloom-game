@@ -160,7 +160,8 @@
     banner.innerHTML = '<div style="font-size:22px;font-weight:800;color:#1C1A18">🎉 שיא חדש!</div><div style="font-size:28px;font-weight:900;color:#412402;margin-top:4px">' + score.toLocaleString() + '</div>';
     document.body.appendChild(banner);
     buzz([80, 40, 80, 40, 80]);
-    shakeGrid(4);
+    var bestShake = parseInt(getEventConfig('shake_new_best', '4'), 10) || 0;
+    if (bestShake > 0) shakeGrid(bestShake);
     setTimeout(function() { banner.style.transition = 'opacity 0.3s'; banner.style.opacity = '0'; }, 1500);
     setTimeout(function() { banner.remove(); }, 1800);
   }
