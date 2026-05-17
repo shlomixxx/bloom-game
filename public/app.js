@@ -3474,24 +3474,27 @@
     const cell = Math.max(1, Math.min(cellByW, cellByH));
     grid.style.width  = (cell * cols + (cols - 1) * gap) + 'px';
     grid.style.height = (cell * rows + (rows - 1) * gap) + 'px';
-    // Layout diagnostics — captured on every render so a single screenshot
-    // of the console reveals whether cells are being squeezed by a tall
-    // mode-bar or by a small viewport. Bounded by the W/H constraint that
-    // actually fired (cellByW < cellByH = width-bound; otherwise height-bound).
+    // Layout diagnostics — only log when the cell size or wrap dimensions
+    // CHANGE. Logging on every render flooded the console with 90+ identical
+    // lines per game. The viewport-bound state is the interesting signal.
     if (window.__bloomLayoutLog !== false) {
-      var bound = cellByW < cellByH ? 'WIDTH-bound' : 'HEIGHT-bound';
-      var mb = document.getElementById('mode-bar');
-      var tb = document.getElementById('tier-bar');
-      var mbH = mb ? mb.getBoundingClientRect().height : 0;
-      var tbH = tb ? tb.getBoundingClientRect().height : 0;
-      console.log('[fitGrid]',
-        'cell=' + cell + 'px',
-        '(' + bound + ')',
-        'wrap=' + wrap.clientWidth + 'x' + wrap.clientHeight,
-        'mode-bar=' + Math.round(mbH) + 'px',
-        'tier-bar=' + Math.round(tbH) + 'px',
-        'viewport=' + window.innerWidth + 'x' + window.innerHeight
-      );
+      var sig = cell + '|' + wrap.clientWidth + 'x' + wrap.clientHeight + '|' + window.innerWidth + 'x' + window.innerHeight;
+      if (window.__bloomLayoutSig !== sig) {
+        window.__bloomLayoutSig = sig;
+        var bound = cellByW < cellByH ? 'WIDTH-bound' : 'HEIGHT-bound';
+        var mb = document.getElementById('mode-bar');
+        var tb = document.getElementById('tier-bar');
+        var mbH = mb ? mb.getBoundingClientRect().height : 0;
+        var tbH = tb ? tb.getBoundingClientRect().height : 0;
+        console.log('[fitGrid]',
+          'cell=' + cell + 'px',
+          '(' + bound + ')',
+          'wrap=' + wrap.clientWidth + 'x' + wrap.clientHeight,
+          'mode-bar=' + Math.round(mbH) + 'px',
+          'tier-bar=' + Math.round(tbH) + 'px',
+          'viewport=' + window.innerWidth + 'x' + window.innerHeight
+        );
+      }
     }
   }
   // Re-fit on resize/orientation/dpr changes — phones rotate, browser
@@ -6639,9 +6642,16 @@
       }
       if (!merged) break;
       if (window.__bloomEngineLog) console.log('[merge]', 'chain=' + chainCount, 'tier=t' + mergedTier, 'size=' + mergeSize, 'at=' + merged[0] + ',' + merged[1]);
+      // Run gravity BEFORE the merge-highlight render so the player never
+      // sees a "floating tile" sitting above a hole. Previously gravity ran
+      // AFTER a 150ms pause — that window let a screenshot catch a tile
+      // hanging in row 3 with row 4 empty. The merge cell (kr, kc) is the
+      // bottom-most of the group, so gravity never moves IT — only the
+      // tiles above the destroyed cells, which now slot in seamlessly
+      // during the highlight pulse.
+      applyGravity();
       render({ merging: merged });
       await gsleep(150);
-      applyGravity();
       render();
       await gsleep(80);
     }
@@ -7698,11 +7708,45 @@
     // Size the grid to fit the available area on BOTH axes (CSS aspect-ratio
     // alone can't constrain by both width and height cross-browser).
     fitGrid();
+    // `?debug=1` (or window.__bloomEngineLog) draws a tiny "r,c · tN" tag
+    // on every cell so the user can verify exactly which square got which
+    // tile — and which cells a bomb actually destroyed vs the visual blast.
+    var debugCells = !!window.__bloomEngineLog;
+    // RENDER-TIME INVARIANT CHECK — catches the "floating tile" class of
+    // bug exactly when it manifests on screen, not via offline simulation.
+    // If a column has an empty cell BELOW a filled cell, it's a bug — the
+    // grid must always be gravity-stable when render() runs. We auto-heal
+    // (apply gravity) and loudly log so the next session captures the
+    // state that triggered the violation.
+    if (!opts.over) {
+      var violated = false;
+      var violationDetail = '';
+      for (var cc = 0; cc < getBoardCols(); cc++) {
+        var seenFilled = false;
+        for (var rr = 0; rr < getBoardRows(); rr++) {
+          if (grid[rr][cc] !== 0) seenFilled = true;
+          else if (seenFilled) {
+            violated = true;
+            violationDetail = 'col=' + cc + ' row=' + rr + ' is EMPTY below a filled tile';
+            break;
+          }
+        }
+        if (violated) break;
+      }
+      if (violated) {
+        console.warn('[render] ❌ GRAVITY VIOLATION detected — auto-healing', violationDetail,
+          'grid=' + (typeof serializeGrid === 'function' ? serializeGrid() : '?'));
+        applyGravity();
+        console.warn('[render] ✓ gravity applied, new state grid=' + (typeof serializeGrid === 'function' ? serializeGrid() : '?'));
+      }
+    }
     for (let r = 0; r < getBoardRows(); r++) {
       for (let c = 0; c < getBoardCols(); c++) {
         const t = grid[r][c];
         const cell = document.createElement('div');
         cell.className = 'cell';
+        cell.dataset.r = r;
+        cell.dataset.c = c;
         if (t > 0) {
           cell.classList.add('filled');
           if (t >= 5 && t < MAX_TIER) cell.classList.add('tier-high');
@@ -7713,6 +7757,12 @@
           cell.innerHTML = ti.svg;
           if (opts.appearing && opts.appearing[0] === r && opts.appearing[1] === c) cell.classList.add('appearing');
           if (opts.merging && opts.merging[0] === r && opts.merging[1] === c) cell.classList.add('merging');
+        }
+        if (debugCells) {
+          var tag = document.createElement('span');
+          tag.className = 'cell-debug-tag';
+          tag.textContent = r + ',' + c + (t > 0 ? '·t' + t : '');
+          cell.appendChild(tag);
         }
         (function(rowIdx, colIdx) {
           cell.onclick = function() {
@@ -8017,22 +8067,22 @@
   }
 
   // ============================================================
-  // ENGINE LOG SWITCH — `?debug=1` (or BloomDebug.toggleLog()) enables verbose
-  // per-drop/per-merge/per-gravity tracing. Off by default to keep console
-  // clean for normal players. Layout logs (`[fitGrid]`) are on by default;
-  // set `window.__bloomLayoutLog = false` from console to silence them.
+  // BloomDebug — internal API exposed for the auto-play bot.
+  // Only used when ?bot=1 (or ?botui) is in the URL.
   // ============================================================
+  const _dbgParams = new URLSearchParams(window.location.search);
+
+  // Engine log switch — `?debug=1` enables verbose per-drop/per-merge/
+  // per-gravity tracing. Off by default. Layout logs (`[fitGrid]`) are on
+  // by default; set `window.__bloomLayoutLog = false` from console to silence.
+  // NOTE: this MUST come after _dbgParams is declared, otherwise it lives
+  // in the TDZ and throws "Cannot access uninitialized variable" on Safari.
   if (_dbgParams.has('debug')) {
     window.__bloomEngineLog = true;
     console.log('[BLOOM] engine logging ON · drop/merge/gravity events will be printed');
     console.log('[BLOOM] type __bloomDumpGrid() to see the current board state');
   }
 
-  // ============================================================
-  // BloomDebug — internal API exposed for the auto-play bot.
-  // Only used when ?bot=1 (or ?botui) is in the URL.
-  // ============================================================
-  const _dbgParams = new URLSearchParams(window.location.search);
   if (_dbgParams.has('bot') || _dbgParams.has('botui')) {
     window.BloomDebug = {
       ready: function() {
@@ -8404,6 +8454,7 @@
     var radius = getEventNum('event_bomb_radius', 1);
     var ptsPerTile = getEventNum('event_bomb_points_per_tile', 2000);
     var destroyed = 0;
+    var destroyedCells = []; // (r,c,tier) of every tile actually destroyed
 
     // Stage 1: capture cell rects BEFORE clearing the grid (so we know
     // where to spawn explosion overlays, independent of render()).
@@ -8418,6 +8469,7 @@
         // the SHAPE of the blast is what tells the player what got hit.
         // But only destroy tiles that actually exist (don't bomb the center).
         if (grid[r][c] !== 0 && !(dr === 0 && dc === 0)) {
+          destroyedCells.push({ r: r, c: c, tier: grid[r][c] });
           grid[r][c] = 0;
           destroyed++;
         }
@@ -8433,6 +8485,17 @@
 
     var bonus = destroyed * ptsPerTile;
     score += bonus;
+    // BONUS VERIFICATION — exactly which cells the bomb destroyed vs the
+    // visual explosion (which scales to ~2.1× cell size and visually overflows).
+    if (window.__bloomEngineLog) {
+      console.log('[bomb] center=' + evt.row + ',' + evt.col,
+        'radius=' + radius,
+        'scanned=' + hitCells.length + 'cells',
+        'destroyed=' + destroyed + 'tiles',
+        '+' + bonus + 'pts',
+        'cells=' + destroyedCells.map(function(d) { return d.r + ',' + d.c + '(t' + d.tier + ')'; }).join(' | ')
+      );
+    }
     showEventBanner('💣 BOOM!', '+' + bonus.toLocaleString(), 'bomb');
     var shakeInt = getEventNum('event_bomb_shake', 6);
     buzz([100, 60, 100, 60, 100]);
@@ -8442,6 +8505,34 @@
     // Apply gravity so tiles don't float after explosion
     applyGravity();
     render();
+    // AFTER render() rebuilds the grid DOM — re-mark the cells that got hit
+    // so the user sees exactly which squares were destroyed (separate signal
+    // from the explosion visual). Lingers for 800ms.
+    markBonusHitCells(destroyedCells, 'bonus-hit', 800);
+  }
+
+  // Mark a list of cells with a CSS class that lingers visually. Cleared by
+  // a setTimeout, and self-resilient to render() rebuilds (we re-query the
+  // grid's current children, not cached refs from before render).
+  function markBonusHitCells(cells, klass, durationMs) {
+    if (!cells || !cells.length) return;
+    var gridEl = document.getElementById('grid');
+    if (!gridEl) return;
+    var COLS = getBoardCols();
+    cells.forEach(function(c) {
+      var idx = c.r * COLS + c.c;
+      var cell = gridEl.children[idx];
+      if (cell) cell.classList.add(klass);
+    });
+    setTimeout(function() {
+      var g = document.getElementById('grid');
+      if (!g) return;
+      cells.forEach(function(c) {
+        var idx = c.r * COLS + c.c;
+        var cell = g.children[idx];
+        if (cell) cell.classList.remove(klass);
+      });
+    }, durationMs || 800);
   }
 
   // ── ⭐ STAR ──
@@ -8451,17 +8542,29 @@
     var tRow = (landingRow != null) ? landingRow : evt.row;
     var tile = grid[tRow][evt.col];
     if (tile > 0 && tile < MAX_TIER) {
+      var oldTier = tile;
       grid[tRow][evt.col] = Math.min(tile + upgrade, MAX_TIER);
       var newTier = grid[tRow][evt.col];
       if (newTier > highestTier) highestTier = newTier;
       var tierInfo = getActiveTiers()[newTier];
       score += pts;
+      if (window.__bloomEngineLog) {
+        console.log('[star] cell=' + tRow + ',' + evt.col,
+          't' + oldTier + ' → t' + newTier,
+          '(' + tierInfo.name + ')',
+          '+' + pts + 'pts');
+      }
       showEventBanner('⭐ Level Up!', tierInfo.name + '! +' + pts, 'star');
       bumpScore();
       checkScoreMilestones();
       render();
+      markBonusHitCells([{ r: tRow, c: evt.col }], 'bonus-star', 900);
     } else if (tile === MAX_TIER) {
       score += pts * 5;
+      if (window.__bloomEngineLog) {
+        console.log('[star] cell=' + tRow + ',' + evt.col,
+          'CROWN ×5', '+' + (pts * 5) + 'pts');
+      }
       showEventBanner('⭐ כתר מוזהב!', '+' + (pts * 5).toLocaleString(), 'star');
       bumpScore();
       checkScoreMilestones();
@@ -8486,6 +8589,12 @@
       amount = minC + Math.floor(Math.random() * (maxC - minC + 1));
       showEventBanner('🎁 מתנה!', '+' + amount + ' 💎', 'gift');
     }
+    if (window.__bloomEngineLog) {
+      console.log('[gift] cell=' + evt.row + ',' + evt.col,
+        (isJackpot ? 'JACKPOT' : 'normal'),
+        '+' + amount + '💎',
+        'roll=' + jpChance + '% chance');
+    }
     // Send actual amount to server (not fixed config value)
     if (!window.__bloomBotActive && !skinTrialMode) {
       earnCredits('event_gift', { amount: amount });
@@ -8500,6 +8609,9 @@
     feverMultiplier = mult;
     feverEndTime = Date.now() + duration * 1000;
 
+    if (window.__bloomEngineLog) {
+      console.log('[fever] activated', 'multiplier=×' + mult, 'duration=' + duration + 's', 'ends_at=' + new Date(feverEndTime).toLocaleTimeString());
+    }
     showEventBanner('🔥 FEVER MODE!', '×' + mult + ' ניקוד למשך ' + duration + 's', 'fever');
     buzz([80, 40, 80]);
 
@@ -8539,17 +8651,27 @@
   function triggerFreeze(evt) {
     var clearRows = getEventNum('event_freeze_clear_rows', 1);
     var pts = getEventNum('event_freeze_points', 1000);
+    var clearedCells = []; // for verification + lingering marker
 
     // Same fix as bomb: spawn overlays before render() wipes the grid.
     // Walk top rows left→right with staggered delays so the freeze "sweeps".
     for (var r = 0; r < clearRows && r < getBoardRows(); r++) {
       for (var c = 0; c < getBoardCols(); c++) {
         fxAtCell(r, c, 'fx-freeze', c * 45);
-        if (grid[r][c] !== 0) grid[r][c] = 0;
+        if (grid[r][c] !== 0) {
+          clearedCells.push({ r: r, c: c, tier: grid[r][c] });
+          grid[r][c] = 0;
+        }
       }
     }
 
     score += pts;
+    if (window.__bloomEngineLog) {
+      console.log('[freeze] rows_cleared=' + clearRows,
+        'tiles_removed=' + clearedCells.length,
+        '+' + pts + 'pts',
+        'cells=' + clearedCells.map(function(d) { return d.r + ',' + d.c + '(t' + d.tier + ')'; }).join(' | '));
+    }
     var shakeInt = getEventNum('event_freeze_shake', 4);
     showEventBanner('❄️ הצלה!', 'שורה נמחקה! +' + pts.toLocaleString(), 'freeze');
     buzz([60, 40, 60]);
@@ -8559,6 +8681,7 @@
     // Apply gravity so tiles above fall down
     applyGravity();
     render();
+    markBonusHitCells(clearedCells, 'bonus-freeze', 900);
   }
 
   // ── 🎯 TARGET ──
@@ -8577,6 +8700,9 @@
       }
     }
 
+    if (window.__bloomEngineLog) {
+      console.log('[target] activated', 'target_tier=t' + targetTier, '(' + getActiveTiers()[targetTier].name + ')', 'duration=' + timerSec + 's');
+    }
     showEventBanner('🎯 מטרה!', 'מזג ' + getActiveTiers()[targetTier].name + ' תוך ' + timerSec + 's!', 'target');
     lastEventTime = Date.now();
 
@@ -8599,6 +8725,9 @@
     var mult = getEventNum('event_target_multiplier', 5);
     var items = document.querySelectorAll('.tier-target-highlight');
     items.forEach(function(el) { el.classList.remove('tier-target-highlight'); });
+    if (window.__bloomEngineLog) {
+      console.log('[target] HIT', 'tier=t' + newTier, 'multiplier=×' + mult);
+    }
     showEventBanner('🎯 פגיעה!', '×' + mult + ' בונוס!', 'target');
     buzz([60, 40, 60, 40, 60]);
     targetTier = 0;

@@ -1073,24 +1073,27 @@
     const cell = Math.max(1, Math.min(cellByW, cellByH));
     grid.style.width  = (cell * cols + (cols - 1) * gap) + 'px';
     grid.style.height = (cell * rows + (rows - 1) * gap) + 'px';
-    // Layout diagnostics — captured on every render so a single screenshot
-    // of the console reveals whether cells are being squeezed by a tall
-    // mode-bar or by a small viewport. Bounded by the W/H constraint that
-    // actually fired (cellByW < cellByH = width-bound; otherwise height-bound).
+    // Layout diagnostics — only log when the cell size or wrap dimensions
+    // CHANGE. Logging on every render flooded the console with 90+ identical
+    // lines per game. The viewport-bound state is the interesting signal.
     if (window.__bloomLayoutLog !== false) {
-      var bound = cellByW < cellByH ? 'WIDTH-bound' : 'HEIGHT-bound';
-      var mb = document.getElementById('mode-bar');
-      var tb = document.getElementById('tier-bar');
-      var mbH = mb ? mb.getBoundingClientRect().height : 0;
-      var tbH = tb ? tb.getBoundingClientRect().height : 0;
-      console.log('[fitGrid]',
-        'cell=' + cell + 'px',
-        '(' + bound + ')',
-        'wrap=' + wrap.clientWidth + 'x' + wrap.clientHeight,
-        'mode-bar=' + Math.round(mbH) + 'px',
-        'tier-bar=' + Math.round(tbH) + 'px',
-        'viewport=' + window.innerWidth + 'x' + window.innerHeight
-      );
+      var sig = cell + '|' + wrap.clientWidth + 'x' + wrap.clientHeight + '|' + window.innerWidth + 'x' + window.innerHeight;
+      if (window.__bloomLayoutSig !== sig) {
+        window.__bloomLayoutSig = sig;
+        var bound = cellByW < cellByH ? 'WIDTH-bound' : 'HEIGHT-bound';
+        var mb = document.getElementById('mode-bar');
+        var tb = document.getElementById('tier-bar');
+        var mbH = mb ? mb.getBoundingClientRect().height : 0;
+        var tbH = tb ? tb.getBoundingClientRect().height : 0;
+        console.log('[fitGrid]',
+          'cell=' + cell + 'px',
+          '(' + bound + ')',
+          'wrap=' + wrap.clientWidth + 'x' + wrap.clientHeight,
+          'mode-bar=' + Math.round(mbH) + 'px',
+          'tier-bar=' + Math.round(tbH) + 'px',
+          'viewport=' + window.innerWidth + 'x' + window.innerHeight
+        );
+      }
     }
   }
   // Re-fit on resize/orientation/dpr changes — phones rotate, browser

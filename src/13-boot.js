@@ -195,22 +195,22 @@
   }
 
   // ============================================================
-  // ENGINE LOG SWITCH — `?debug=1` (or BloomDebug.toggleLog()) enables verbose
-  // per-drop/per-merge/per-gravity tracing. Off by default to keep console
-  // clean for normal players. Layout logs (`[fitGrid]`) are on by default;
-  // set `window.__bloomLayoutLog = false` from console to silence them.
+  // BloomDebug — internal API exposed for the auto-play bot.
+  // Only used when ?bot=1 (or ?botui) is in the URL.
   // ============================================================
+  const _dbgParams = new URLSearchParams(window.location.search);
+
+  // Engine log switch — `?debug=1` enables verbose per-drop/per-merge/
+  // per-gravity tracing. Off by default. Layout logs (`[fitGrid]`) are on
+  // by default; set `window.__bloomLayoutLog = false` from console to silence.
+  // NOTE: this MUST come after _dbgParams is declared, otherwise it lives
+  // in the TDZ and throws "Cannot access uninitialized variable" on Safari.
   if (_dbgParams.has('debug')) {
     window.__bloomEngineLog = true;
     console.log('[BLOOM] engine logging ON · drop/merge/gravity events will be printed');
     console.log('[BLOOM] type __bloomDumpGrid() to see the current board state');
   }
 
-  // ============================================================
-  // BloomDebug — internal API exposed for the auto-play bot.
-  // Only used when ?bot=1 (or ?botui) is in the URL.
-  // ============================================================
-  const _dbgParams = new URLSearchParams(window.location.search);
   if (_dbgParams.has('bot') || _dbgParams.has('botui')) {
     window.BloomDebug = {
       ready: function() {

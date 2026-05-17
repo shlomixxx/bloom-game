@@ -1106,9 +1106,16 @@
       }
       if (!merged) break;
       if (window.__bloomEngineLog) console.log('[merge]', 'chain=' + chainCount, 'tier=t' + mergedTier, 'size=' + mergeSize, 'at=' + merged[0] + ',' + merged[1]);
+      // Run gravity BEFORE the merge-highlight render so the player never
+      // sees a "floating tile" sitting above a hole. Previously gravity ran
+      // AFTER a 150ms pause — that window let a screenshot catch a tile
+      // hanging in row 3 with row 4 empty. The merge cell (kr, kc) is the
+      // bottom-most of the group, so gravity never moves IT — only the
+      // tiles above the destroyed cells, which now slot in seamlessly
+      // during the highlight pulse.
+      applyGravity();
       render({ merging: merged });
       await gsleep(150);
-      applyGravity();
       render();
       await gsleep(80);
     }

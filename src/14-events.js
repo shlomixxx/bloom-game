@@ -324,6 +324,7 @@
     var radius = getEventNum('event_bomb_radius', 1);
     var ptsPerTile = getEventNum('event_bomb_points_per_tile', 2000);
     var destroyed = 0;
+    var destroyedCells = []; // (r,c,tier) of every tile actually destroyed
 
     // Stage 1: capture cell rects BEFORE clearing the grid (so we know
     // where to spawn explosion overlays, independent of render()).
@@ -338,6 +339,7 @@
         // the SHAPE of the blast is what tells the player what got hit.
         // But only destroy tiles that actually exist (don't bomb the center).
         if (grid[r][c] !== 0 && !(dr === 0 && dc === 0)) {
+          destroyedCells.push({ r: r, c: c, tier: grid[r][c] });
           grid[r][c] = 0;
           destroyed++;
         }
@@ -353,6 +355,17 @@
 
     var bonus = destroyed * ptsPerTile;
     score += bonus;
+    // BONUS VERIFICATION — exactly which cells the bomb destroyed vs the
+    // visual explosion (which scales to ~2.1× cell size and visually overflows).
+    if (window.__bloomEngineLog) {
+      console.log('[bomb] center=' + evt.row + ',' + evt.col,
+        'radius=' + radius,
+        'scanned=' + hitCells.length + 'cells',
+        'destroyed=' + destroyed + 'tiles',
+        '+' + bonus + 'pts',
+        'cells=' + destroyedCells.map(function(d) { return d.r + ',' + d.c + '(t' + d.tier + ')'; }).join(' | ')
+      );
+    }
     showEventBanner('💣 BOOM!', '+' + bonus.toLocaleString(), 'bomb');
     var shakeInt = getEventNum('event_bomb_shake', 6);
     buzz([100, 60, 100, 60, 100]);
@@ -362,6 +375,34 @@
     // Apply gravity so tiles don't float after explosion
     applyGravity();
     render();
+    // AFTER render() rebuilds the grid DOM — re-mark the cells that got hit
+    // so the user sees exactly which squares were destroyed (separate signal
+    // from the explosion visual). Lingers for 800ms.
+    markBonusHitCells(destroyedCells, 'bonus-hit', 800);
+  }
+
+  // Mark a list of cells with a CSS class that lingers visually. Cleared by
+  // a setTimeout, and self-resilient to render() rebuilds (we re-query the
+  // grid's current children, not cached refs from before render).
+  function markBonusHitCells(cells, klass, durationMs) {
+    if (!cells || !cells.length) return;
+    var gridEl = document.getElementById('grid');
+    if (!gridEl) return;
+    var COLS = getBoardCols();
+    cells.forEach(function(c) {
+      var idx = c.r * COLS + c.c;
+      var cell = gridEl.children[idx];
+      if (cell) cell.classList.add(klass);
+    });
+    setTimeout(function() {
+      var g = document.getElementById('grid');
+      if (!g) return;
+      cells.forEach(function(c) {
+        var idx = c.r * COLS + c.c;
+        var cell = g.children[idx];
+        if (cell) cell.classList.remove(klass);
+      });
+    }, durationMs || 800);
   }
 
   // ── ⭐ STAR ──
@@ -371,17 +412,29 @@
     var tRow = (landingRow != null) ? landingRow : evt.row;
     var tile = grid[tRow][evt.col];
     if (tile > 0 && tile < MAX_TIER) {
+      var oldTier = tile;
       grid[tRow][evt.col] = Math.min(tile + upgrade, MAX_TIER);
       var newTier = grid[tRow][evt.col];
       if (newTier > highestTier) highestTier = newTier;
       var tierInfo = getActiveTiers()[newTier];
       score += pts;
+      if (window.__bloomEngineLog) {
+        console.log('[star] cell=' + tRow + ',' + evt.col,
+          't' + oldTier + ' → t' + newTier,
+          '(' + tierInfo.name + ')',
+          '+' + pts + 'pts');
+      }
       showEventBanner('⭐ Level Up!', tierInfo.name + '! +' + pts, 'star');
       bumpScore();
       checkScoreMilestones();
       render();
+      markBonusHitCells([{ r: tRow, c: evt.col }], 'bonus-star', 900);
     } else if (tile === MAX_TIER) {
       score += pts * 5;
+      if (window.__bloomEngineLog) {
+        console.log('[star] cell=' + tRow + ',' + evt.col,
+          'CROWN ×5', '+' + (pts * 5) + 'pts');
+      }
       showEventBanner('⭐ כתר מוזהב!', '+' + (pts * 5).toLocaleString(), 'star');
       bumpScore();
       checkScoreMilestones();
@@ -406,6 +459,12 @@
       amount = minC + Math.floor(Math.random() * (maxC - minC + 1));
       showEventBanner('🎁 מתנה!', '+' + amount + ' 💎', 'gift');
     }
+    if (window.__bloomEngineLog) {
+      console.log('[gift] cell=' + evt.row + ',' + evt.col,
+        (isJackpot ? 'JACKPOT' : 'normal'),
+        '+' + amount + '💎',
+        'roll=' + jpChance + '% chance');
+    }
     // Send actual amount to server (not fixed config value)
     if (!window.__bloomBotActive && !skinTrialMode) {
       earnCredits('event_gift', { amount: amount });
@@ -420,6 +479,9 @@
     feverMultiplier = mult;
     feverEndTime = Date.now() + duration * 1000;
 
+    if (window.__bloomEngineLog) {
+      console.log('[fever] activated', 'multiplier=×' + mult, 'duration=' + duration + 's', 'ends_at=' + new Date(feverEndTime).toLocaleTimeString());
+    }
     showEventBanner('🔥 FEVER MODE!', '×' + mult + ' ניקוד למשך ' + duration + 's', 'fever');
     buzz([80, 40, 80]);
 
@@ -459,17 +521,27 @@
   function triggerFreeze(evt) {
     var clearRows = getEventNum('event_freeze_clear_rows', 1);
     var pts = getEventNum('event_freeze_points', 1000);
+    var clearedCells = []; // for verification + lingering marker
 
     // Same fix as bomb: spawn overlays before render() wipes the grid.
     // Walk top rows left→right with staggered delays so the freeze "sweeps".
     for (var r = 0; r < clearRows && r < getBoardRows(); r++) {
       for (var c = 0; c < getBoardCols(); c++) {
         fxAtCell(r, c, 'fx-freeze', c * 45);
-        if (grid[r][c] !== 0) grid[r][c] = 0;
+        if (grid[r][c] !== 0) {
+          clearedCells.push({ r: r, c: c, tier: grid[r][c] });
+          grid[r][c] = 0;
+        }
       }
     }
 
     score += pts;
+    if (window.__bloomEngineLog) {
+      console.log('[freeze] rows_cleared=' + clearRows,
+        'tiles_removed=' + clearedCells.length,
+        '+' + pts + 'pts',
+        'cells=' + clearedCells.map(function(d) { return d.r + ',' + d.c + '(t' + d.tier + ')'; }).join(' | '));
+    }
     var shakeInt = getEventNum('event_freeze_shake', 4);
     showEventBanner('❄️ הצלה!', 'שורה נמחקה! +' + pts.toLocaleString(), 'freeze');
     buzz([60, 40, 60]);
@@ -479,6 +551,7 @@
     // Apply gravity so tiles above fall down
     applyGravity();
     render();
+    markBonusHitCells(clearedCells, 'bonus-freeze', 900);
   }
 
   // ── 🎯 TARGET ──
@@ -497,6 +570,9 @@
       }
     }
 
+    if (window.__bloomEngineLog) {
+      console.log('[target] activated', 'target_tier=t' + targetTier, '(' + getActiveTiers()[targetTier].name + ')', 'duration=' + timerSec + 's');
+    }
     showEventBanner('🎯 מטרה!', 'מזג ' + getActiveTiers()[targetTier].name + ' תוך ' + timerSec + 's!', 'target');
     lastEventTime = Date.now();
 
@@ -519,6 +595,9 @@
     var mult = getEventNum('event_target_multiplier', 5);
     var items = document.querySelectorAll('.tier-target-highlight');
     items.forEach(function(el) { el.classList.remove('tier-target-highlight'); });
+    if (window.__bloomEngineLog) {
+      console.log('[target] HIT', 'tier=t' + newTier, 'multiplier=×' + mult);
+    }
     showEventBanner('🎯 פגיעה!', '×' + mult + ' בונוס!', 'target');
     buzz([60, 40, 60, 40, 60]);
     targetTier = 0;

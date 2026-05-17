@@ -712,11 +712,45 @@
     // Size the grid to fit the available area on BOTH axes (CSS aspect-ratio
     // alone can't constrain by both width and height cross-browser).
     fitGrid();
+    // `?debug=1` (or window.__bloomEngineLog) draws a tiny "r,c · tN" tag
+    // on every cell so the user can verify exactly which square got which
+    // tile — and which cells a bomb actually destroyed vs the visual blast.
+    var debugCells = !!window.__bloomEngineLog;
+    // RENDER-TIME INVARIANT CHECK — catches the "floating tile" class of
+    // bug exactly when it manifests on screen, not via offline simulation.
+    // If a column has an empty cell BELOW a filled cell, it's a bug — the
+    // grid must always be gravity-stable when render() runs. We auto-heal
+    // (apply gravity) and loudly log so the next session captures the
+    // state that triggered the violation.
+    if (!opts.over) {
+      var violated = false;
+      var violationDetail = '';
+      for (var cc = 0; cc < getBoardCols(); cc++) {
+        var seenFilled = false;
+        for (var rr = 0; rr < getBoardRows(); rr++) {
+          if (grid[rr][cc] !== 0) seenFilled = true;
+          else if (seenFilled) {
+            violated = true;
+            violationDetail = 'col=' + cc + ' row=' + rr + ' is EMPTY below a filled tile';
+            break;
+          }
+        }
+        if (violated) break;
+      }
+      if (violated) {
+        console.warn('[render] ❌ GRAVITY VIOLATION detected — auto-healing', violationDetail,
+          'grid=' + (typeof serializeGrid === 'function' ? serializeGrid() : '?'));
+        applyGravity();
+        console.warn('[render] ✓ gravity applied, new state grid=' + (typeof serializeGrid === 'function' ? serializeGrid() : '?'));
+      }
+    }
     for (let r = 0; r < getBoardRows(); r++) {
       for (let c = 0; c < getBoardCols(); c++) {
         const t = grid[r][c];
         const cell = document.createElement('div');
         cell.className = 'cell';
+        cell.dataset.r = r;
+        cell.dataset.c = c;
         if (t > 0) {
           cell.classList.add('filled');
           if (t >= 5 && t < MAX_TIER) cell.classList.add('tier-high');
@@ -727,6 +761,12 @@
           cell.innerHTML = ti.svg;
           if (opts.appearing && opts.appearing[0] === r && opts.appearing[1] === c) cell.classList.add('appearing');
           if (opts.merging && opts.merging[0] === r && opts.merging[1] === c) cell.classList.add('merging');
+        }
+        if (debugCells) {
+          var tag = document.createElement('span');
+          tag.className = 'cell-debug-tag';
+          tag.textContent = r + ',' + c + (t > 0 ? '·t' + t : '');
+          cell.appendChild(tag);
         }
         (function(rowIdx, colIdx) {
           cell.onclick = function() {
