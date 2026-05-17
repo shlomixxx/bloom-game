@@ -785,22 +785,22 @@
     50% { box-shadow: inset 0 0 24px rgba(200,71,47,0.4); }
   }
 
-  /* ── Drop Preview: ghost piece + column highlight ── */
-  .cell.ghost-piece {
-    position: relative;
-  }
-  .cell.ghost-piece::after {
+  /* ── Drop target: tiny dot showing where tile will land ── */
+  .cell.drop-target::after {
     content: '';
-    position: absolute; inset: 3px;
-    border-radius: 8px;
-    background: var(--ghost-bg, rgba(250,199,117,0.3));
-    opacity: 0.3;
-    animation: ghostPulse 1.2s ease-in-out infinite;
+    position: absolute;
+    width: 8px; height: 8px;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+    background: var(--target-color, rgba(250,199,117,0.5));
+    opacity: 0.4;
+    animation: targetDot 1.5s ease-in-out infinite;
     pointer-events: none;
   }
-  @keyframes ghostPulse {
-    0%,100% { opacity: 0.2; transform: scale(0.9); }
-    50% { opacity: 0.38; transform: scale(1); }
+  @keyframes targetDot {
+    0%,100% { opacity: 0.25; transform: translate(-50%,-50%) scale(0.8); }
+    50% { opacity: 0.45; transform: translate(-50%,-50%) scale(1.1); }
   }
   /* ============ TOUR / TUTORIAL ("סייר") ============ */
   .tour-card {

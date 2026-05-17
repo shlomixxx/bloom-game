@@ -5974,40 +5974,38 @@
       return;
     }
     busy = true;
+    var _busyTimer = setTimeout(function() {
+      // Safety valve: if busy stuck for 5 seconds, force-recover
+      if (busy) { busy = false; try { render(); } catch(e) {} }
+    }, 5000);
     queuedCol = -1;
     dropsCount++;
     ensureAudio();
     playMusic('game');
     soundDrop();
-    if (!isSfxMuted()) buzz([8]); // subtle haptic on every drop
+    if (!isSfxMuted()) buzz([8]);
     if (!streakBumpedThisSession) {
       bumpStreak();
       streakBumpedThisSession = true;
     }
     grid[row][col] = nextPiece;
     if (nextPiece > highestTier) highestTier = nextPiece;
-    // Save event trigger info BEFORE processChains (check column match)
     var pendingEvent = (activeEvent && activeEvent.col === col) ? activeEvent : null;
-    // Dismiss the step-1 coach toast the moment a player actually drops —
-    // they've understood the input; no need to keep the arrow up.
     dismissCoach();
     render({ appearing: [row, col] });
     try {
     await sleep(80);
     await processChains(row, col);
-    // Apply event AFTER merge chains are done (prevents grid corruption)
     if (pendingEvent && activeEvent === pendingEvent) {
       triggerEvent(pendingEvent, row);
       render();
     }
-    // Pick the next piece NOW — this is synchronous, so the player can drop
-    // again the instant we set busy=false below. The cycling animation runs
-    // in the background as a visual indicator only, never gating input.
     rollNextPiece();
     render();
     var isNewBest = score > best && !skinTrialMode;
     if (isNewBest) { best = score; localStorage.setItem(BEST_KEY, String(best)); }
     if (isGameOver()) {
+      clearTimeout(_busyTimer);
       stopEventSystem();
       soundGameOver();
       buzz([60, 80, 100]);
@@ -6085,6 +6083,7 @@
       }
     }
     else {
+      clearTimeout(_busyTimer);
       busy = false;
       render();
       // Save state after every move (prevents loss on refresh)
@@ -6109,6 +6108,7 @@
     }
     } catch(e) {
       // Error during drop/merge — recover so board doesn't freeze
+      clearTimeout(_busyTimer);
       busy = false;
       try { render(); } catch(e2) {}
     }
@@ -6897,12 +6897,11 @@
       // Music tempo: speed up as board fills (Tetris style)
       updateMusicTempo(filledRows);
     }
-    // Ghost piece: show where next tile will land (on every column)
+    // Ghost piece: subtle dot at landing position (not full tile — that's confusing)
     if (!opts.over && typeof nextPiece !== 'undefined' && nextPiece > 0 && !busy) {
       var ti = getActiveTiers()[nextPiece];
       if (ti) {
         for (var gc = 0; gc < getBoardCols(); gc++) {
-          // Find bottom-most empty cell in this column
           var ghostRow = -1;
           for (var gr = getBoardRows() - 1; gr >= 0; gr--) {
             if (grid[gr][gc] === 0) { ghostRow = gr; break; }
@@ -6911,8 +6910,8 @@
             var gIdx = ghostRow * getBoardCols() + gc;
             var gCell = gridEl.children[gIdx];
             if (gCell && !gCell.classList.contains('filled')) {
-              gCell.classList.add('ghost-piece');
-              gCell.style.setProperty('--ghost-bg', ti.bg);
+              gCell.classList.add('drop-target');
+              gCell.style.setProperty('--target-color', ti.bg);
             }
           }
         }
@@ -7289,6 +7288,7 @@
   function stopEventSystem() {
     if (eventSpawnTimer) { clearInterval(eventSpawnTimer); eventSpawnTimer = null; }
     clearActiveEvent();
+    clearComboCounter();
     feverActive = false;
     feverMultiplier = 1;
     targetActive = false;
@@ -7836,18 +7836,24 @@
     }
     comboEl.innerHTML = '🔥 ×' + chainCount + '<span class="combo-mult">×' + multiplier.toFixed(1) + '</span>';
     comboEl.style.animation = 'none';
+    comboEl.style.opacity = '1';
     void comboEl.offsetWidth;
     comboEl.style.animation = 'comboPop 0.2s ease-out';
-    // Scale up for bigger chains
     comboEl.style.fontSize = Math.min(20 + chainCount * 3, 36) + 'px';
 
     comboTimeout = setTimeout(function() {
       if (comboEl && comboEl.parentNode) {
         comboEl.style.transition = 'opacity 0.3s';
         comboEl.style.opacity = '0';
-        setTimeout(function() { if (comboEl) { comboEl.remove(); comboEl = null; } }, 300);
+        setTimeout(function() { clearComboCounter(); }, 300);
       }
       comboTimeout = null;
     }, 3000);
+  }
+
+  function clearComboCounter() {
+    if (comboTimeout) { clearTimeout(comboTimeout); comboTimeout = null; }
+    if (comboEl && comboEl.parentNode) comboEl.remove();
+    comboEl = null;
   }
 })();

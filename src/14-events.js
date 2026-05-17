@@ -53,6 +53,7 @@
   function stopEventSystem() {
     if (eventSpawnTimer) { clearInterval(eventSpawnTimer); eventSpawnTimer = null; }
     clearActiveEvent();
+    clearComboCounter();
     feverActive = false;
     feverMultiplier = 1;
     targetActive = false;
@@ -600,17 +601,23 @@
     }
     comboEl.innerHTML = '🔥 ×' + chainCount + '<span class="combo-mult">×' + multiplier.toFixed(1) + '</span>';
     comboEl.style.animation = 'none';
+    comboEl.style.opacity = '1';
     void comboEl.offsetWidth;
     comboEl.style.animation = 'comboPop 0.2s ease-out';
-    // Scale up for bigger chains
     comboEl.style.fontSize = Math.min(20 + chainCount * 3, 36) + 'px';
 
     comboTimeout = setTimeout(function() {
       if (comboEl && comboEl.parentNode) {
         comboEl.style.transition = 'opacity 0.3s';
         comboEl.style.opacity = '0';
-        setTimeout(function() { if (comboEl) { comboEl.remove(); comboEl = null; } }, 300);
+        setTimeout(function() { clearComboCounter(); }, 300);
       }
       comboTimeout = null;
     }, 3000);
+  }
+
+  function clearComboCounter() {
+    if (comboTimeout) { clearTimeout(comboTimeout); comboTimeout = null; }
+    if (comboEl && comboEl.parentNode) comboEl.remove();
+    comboEl = null;
   }
