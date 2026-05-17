@@ -1357,6 +1357,12 @@
         writeChallengeDrops(activeChallenge.slug, activeChallenge.drops);
         pushChallengeScore();
       }
+      // In a 1v1 duel, push a heartbeat immediately after every drop so the
+      // opponent's live spectator widget updates within ~1.5s (poll cadence)
+      // instead of waiting up to 5s for the next periodic heartbeat.
+      if (window._duelMode && typeof sendHeartbeat === 'function') {
+        try { sendHeartbeat(); } catch (e) {}
+      }
     }
     } catch(e) {
       // Error during drop/merge — recover so board doesn't freeze

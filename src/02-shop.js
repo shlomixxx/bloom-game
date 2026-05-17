@@ -344,7 +344,10 @@
         '<div style="text-align:center"><div style="color:#A8A6A0">ניקוד שלו</div><div data-dspec-score style="font-size:20px;font-weight:900;color:#FAC775">—</div></div>' +
         '<div style="text-align:center"><div style="color:#A8A6A0">הניקוד שלך</div><div style="font-size:20px;font-weight:900;color:#9FE1CB">' + myScore.toLocaleString() + '</div></div>' +
       '</div>' +
-      '<div class="dspec-grid" style="display:grid;grid-template-columns:repeat(' + COLS + ',1fr);gap:3px;background:#0E0D0C;padding:6px;border-radius:8px;max-width:200px;margin:0 auto">' + cellsHtml + '</div>' +
+      // direction:ltr matches the main game's .grid-wrap (also ltr); without
+      // this the cells flow right-to-left from the rtl widget parent and the
+      // board reads as a horizontal mirror of what the opponent actually sees.
+      '<div class="dspec-grid" style="direction:ltr;display:grid;grid-template-columns:repeat(' + COLS + ',1fr);gap:3px;background:#0E0D0C;padding:6px;border-radius:8px;max-width:200px;margin:0 auto">' + cellsHtml + '</div>' +
       '<style>' +
         '.dspec-cell{aspect-ratio:1;background:#2A2724;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:14px}' +
         '@keyframes dspecPulse{0%,100%{opacity:1}50%{opacity:0.3}}' +
