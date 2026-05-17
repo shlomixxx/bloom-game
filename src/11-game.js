@@ -1041,14 +1041,20 @@
     }
     grid[row][col] = nextPiece;
     if (nextPiece > highestTier) highestTier = nextPiece;
-    // Check if tile landed on an event cell
-    checkEventTrigger(row, col);
+    // Save event trigger info BEFORE processChains (check column match)
+    var pendingEvent = (activeEvent && activeEvent.col === col) ? activeEvent : null;
     // Dismiss the step-1 coach toast the moment a player actually drops —
     // they've understood the input; no need to keep the arrow up.
     dismissCoach();
     render({ appearing: [row, col] });
+    try {
     await sleep(80);
     await processChains(row, col);
+    // Apply event AFTER merge chains are done (prevents grid corruption)
+    if (pendingEvent && activeEvent === pendingEvent) {
+      triggerEvent(pendingEvent, row);
+      render();
+    }
     // Pick the next piece NOW — this is synchronous, so the player can drop
     // again the instant we set busy=false below. The cycling animation runs
     // in the background as a visual indicator only, never gating input.
@@ -1155,6 +1161,11 @@
         writeChallengeDrops(activeChallenge.slug, activeChallenge.drops);
         pushChallengeScore();
       }
+    }
+    } catch(e) {
+      // Error during drop/merge — recover so board doesn't freeze
+      busy = false;
+      try { render(); } catch(e2) {}
     }
   }
 
