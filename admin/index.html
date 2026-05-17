@@ -307,6 +307,139 @@
 
   <div id="anomaly-host"></div>
 
+  <!-- ═══════════ ADMIN GUIDE ═══════════ -->
+  <details id="admin-guide" style="margin-bottom:16px;background:var(--card);border-radius:12px;border:1px solid rgba(250,199,117,0.2)">
+    <summary style="cursor:pointer;padding:14px 16px;font-weight:700;font-size:15px;color:var(--gold);display:flex;align-items:center;gap:8px">
+      📖 מדריך מנהל מלא — לחץ לפתיחה
+    </summary>
+    <div style="padding:0 16px 16px;font-size:12px;line-height:1.7;color:var(--text);direction:rtl" id="guide-content">
+
+      <!-- ── 1. סקירה כללית ── -->
+      <h3 style="color:var(--gold);margin-top:16px;font-size:14px;border-bottom:1px solid rgba(255,255,255,0.06);padding-bottom:6px">🎮 1. מה זה BLOOM?</h3>
+      <p>BLOOM הוא משחק מיזוג (Merge/Suika) בעברית למובייל. השחקן מפיל אריחים על לוח 6×4 — אריחים זהים מתמזגים לדרגה גבוהה יותר. <strong>המטרה: להגיע לכתר (דרגה 8) ולצבור כמה שיותר נקודות.</strong></p>
+      <p>כל סשן משחק נמשך 3-10 דקות. המשחק תוכנן ליצור <strong>לולאת התמכרות</strong>: drop → merge → reward → drop שוב.</p>
+
+      <!-- ── 2. דרגות ── -->
+      <h3 style="color:var(--gold);margin-top:16px;font-size:14px;border-bottom:1px solid rgba(255,255,255,0.06);padding-bottom:6px">🏆 2. מערכת הדרגות (8 דרגות)</h3>
+      <table style="width:100%;font-size:11px;border-collapse:collapse">
+        <tr style="background:rgba(0,0,0,0.1)"><th style="padding:4px 6px;text-align:right">#</th><th>שם</th><th>נקודות</th><th>בונוס ראשון</th><th>הערה</th></tr>
+        <tr><td>1</td><td>⬜ אבן</td><td>20</td><td>—</td><td>55% סיכוי לנפילה</td></tr>
+        <tr><td>2</td><td>🟩 עלה</td><td>52</td><td>—</td><td>28% סיכוי</td></tr>
+        <tr><td>3</td><td>🟧 פרח</td><td>96</td><td>—</td><td>12% סיכוי</td></tr>
+        <tr><td>4</td><td>🟥 אש</td><td>152</td><td>—</td><td>5% סיכוי</td></tr>
+        <tr><td>5</td><td>⚡ ברק</td><td>220</td><td>+500</td><td>רק מיזוג</td></tr>
+        <tr><td>6</td><td>⭐ כוכב</td><td>300</td><td>+1,500</td><td>רק מיזוג</td></tr>
+        <tr><td>7</td><td>💎 יהלום</td><td>392</td><td>+5,000</td><td>רק מיזוג</td></tr>
+        <tr><td>8</td><td>👑 כתר</td><td>496</td><td>+15,000</td><td>רק מיזוג</td></tr>
+      </table>
+      <p><strong>Crown Merge:</strong> שני כתרים 👑+👑 = 💥 פיצוץ שורה + 50,000 נקודות! ניתן לשליטה: <code>crown_merge_enabled</code> ו-<code>crown_merge_bonus</code>.</p>
+
+      <!-- ── 3. מצבי משחק ── -->
+      <h3 style="color:var(--gold);margin-top:16px;font-size:14px;border-bottom:1px solid rgba(255,255,255,0.06);padding-bottom:6px">🎯 3. מצבי משחק</h3>
+      <p><strong>יומי</strong> — אותו seed לכל השחקנים. כולם מתחרים על אותו לוח. מופיע בלוח מובילים יומי.</p>
+      <p><strong>חופשי</strong> — seed רנדומלי. כל משחק נספר ונשלח ללוח מובילים. תמיד ניתן לשחק.</p>
+      <p><strong>תחרות חברים</strong> — שחקן יוצר קוד, מזמין חברים. כולם מתחרים על הניקוד הגבוה ביותר. אפשרי עם/בלי הימורים (💎).</p>
+      <p><strong>אתגר פרס</strong> — האדמין יוצר אתגר עם פרס אמיתי. 3 סוגים: <code>race</code> (ראשון שמגיע), <code>top_n</code> (N מובילים), <code>beat</code> (כולם מעל הרף).</p>
+      <p><strong>אתגר שבועי</strong> — נוצר אוטומטית כל 7 ימים. פרס 500💎 (ניתן לשינוי: <code>weekly_prize</code>).</p>
+      <p><strong>דו-קרב 1v1</strong> — שחקן מאתגר חבר. שניהם מקבלים אותו seed. הזוכה לוקח הכל.</p>
+
+      <!-- ── 4. Events (אירועים מיוחדים) ── -->
+      <h3 style="color:var(--gold);margin-top:16px;font-size:14px;border-bottom:1px solid rgba(255,255,255,0.06);padding-bottom:6px">🎯 4. מערכת Events</h3>
+      <p>כל <strong>15-35 שניות</strong> מופיע אלמנט מיוחד על תא ריק בלוח עם טיימר. השחקן צריך להפיל אריח לעמודה לפני שהזמן נגמר.</p>
+      <table style="width:100%;font-size:11px;border-collapse:collapse">
+        <tr style="background:rgba(0,0,0,0.1)"><th style="padding:4px 6px;text-align:right">Event</th><th>טיימר</th><th>אפקט</th><th>מפתח הפעלה</th></tr>
+        <tr><td>💣 פצצה</td><td>8s</td><td>מפוצץ 4-8 אריחים + 2,000/אריח</td><td><code>event_bomb_enabled</code></td></tr>
+        <tr><td>⭐ כוכב</td><td>6s</td><td>מקפיץ אריח דרגה +1</td><td><code>event_star_enabled</code></td></tr>
+        <tr><td>🎁 מתנה</td><td>10s</td><td>5-50💎 (5% JACKPOT 500💎)</td><td><code>event_gift_enabled</code></td></tr>
+        <tr><td>🔥 Fever</td><td>5s</td><td>×3 ניקוד למשך 10 שניות</td><td><code>event_fever_enabled</code></td></tr>
+        <tr><td>❄️ הקפאה</td><td>4s</td><td>מנקה שורה (הצלה!)</td><td><code>event_freeze_enabled</code></td></tr>
+        <tr><td>🎯 מטרה</td><td>12s</td><td>×5 על מיזוג דרגה ספציפית</td><td><code>event_target_enabled</code></td></tr>
+      </table>
+      <p><strong>תזמון:</strong> <code>events_start_delay</code> = שניות עד event ראשון. <code>events_min_gap</code> / <code>events_max_gap</code> = מרווח בין events.</p>
+      <p><strong>הסתברויות:</strong> כל event יש <code>weight</code>. הסתברות = weight / סכום כל ה-weights. לדוגמה: bomb=25, star=20, gift=25, fever=12, freeze=8, target=10 → סה"כ 100 → bomb = 25%.</p>
+      <p><strong>לכבות event ספציפי:</strong> שנה <code>event_X_enabled</code> ל-<code>false</code> או <code>event_X_weight</code> ל-<code>0</code>.</p>
+      <p><strong>❄️ Freeze מיוחד:</strong> מופיע רק כשיש ≥3 שורות מלאות (<code>event_freeze_min_filled_rows</code>).</p>
+
+      <!-- ── 5. מערכת קרדיטים ── -->
+      <h3 style="color:var(--gold);margin-top:16px;font-size:14px;border-bottom:1px solid rgba(255,255,255,0.06);padding-bottom:6px">💎 5. קרדיטים (מטבע פנימי)</h3>
+      <table style="width:100%;font-size:11px;border-collapse:collapse">
+        <tr style="background:rgba(0,0,0,0.1)"><th style="padding:4px 6px;text-align:right">מקור</th><th>סכום</th><th>מפתח</th><th>תדירות</th></tr>
+        <tr><td>שחקן חדש</td><td>100💎</td><td><code>welcome_bonus</code></td><td>פעם אחת</td></tr>
+        <tr><td>כניסה יומית</td><td>25💎</td><td><code>daily_login_reward</code></td><td>פעם ביום</td></tr>
+        <tr><td>סיום אתגר יומי</td><td>10💎</td><td><code>daily_reward</code></td><td>פעם ביום</td></tr>
+        <tr><td>רצף 3 ימים</td><td>15💎</td><td><code>streak_3_reward</code></td><td>פעם ביום</td></tr>
+        <tr><td>רצף 7 ימים</td><td>50💎</td><td><code>streak_7_reward</code></td><td>פעם ביום</td></tr>
+        <tr><td>רצף 30 יום</td><td>200💎</td><td><code>streak_30_reward</code></td><td>פעם ביום</td></tr>
+        <tr><td>מקום 1 בתחרות</td><td>100💎</td><td><code>contest_1st_reward</code></td><td>פעם ביום</td></tr>
+        <tr><td>🎁 Gift event</td><td>5-50💎</td><td><code>event_gift_credits_min/max</code></td><td>כל event</td></tr>
+        <tr><td>🎁 JACKPOT</td><td>500💎</td><td><code>event_gift_jackpot_amount</code></td><td>5% סיכוי</td></tr>
+        <tr><td>Milestone 10K</td><td>5💎</td><td>—</td><td>פעם למשחק</td></tr>
+        <tr><td>Milestone 100K</td><td>50💎</td><td>—</td><td>פעם למשחק</td></tr>
+        <tr><td>Milestone 200K</td><td>100💎</td><td>—</td><td>פעם למשחק</td></tr>
+        <tr><td>הפניית חבר</td><td>50💎</td><td><code>referral_reward</code></td><td>לכל הפניה</td></tr>
+      </table>
+      <p><strong>שימוש בקרדיטים:</strong> חנות אריחים (קנה אריח בדרגה גבוהה), power-ups (מחק אריח/שורה), הימורים בתחרויות, סקינים.</p>
+
+      <!-- ── 6. מה השחקן מרגיש ── -->
+      <h3 style="color:var(--gold);margin-top:16px;font-size:14px;border-bottom:1px solid rgba(255,255,255,0.06);padding-bottom:6px">🧠 6. פסיכולוגיית השחקן</h3>
+      <p><strong>0-30 שניות:</strong> שחקן לומד. מפיל אריחים ראשונים. מיזוגים קטנים. רואה ניקוד עולה.</p>
+      <p><strong>30s-2 דקות:</strong> מגיע לדרגות 4-5. <strong>בונוס ראשון +500 → "WOW!"</strong>. Events מתחילים להופיע. <strong>מתח</strong> — הטיימר על הEvent.</p>
+      <p><strong>2-5 דקות:</strong> מגיע לדרגות 6-7. <strong>+5,000 בונוס, screen shake, milestone 50K!</strong> Fever mode ×3. <strong>השחקן מרגיש חזק.</strong></p>
+      <p><strong>5-10 דקות:</strong> כתר ראשון! <strong>+15,000!</strong> Crown merge אם מגיע ל-2 כתרים → <strong>💥 פיצוץ שורה + 50,000 + רעידת אדמה!</strong> השחקן צועק.</p>
+      <p><strong>Game Over:</strong> כותרת דינמית (משחק אדיר! / כמעט שיא!). <strong>"עוד 3,200 נקודות לנצח את דני"</strong> → לוחץ "שחק שוב" מיד. <strong>בונוס מחר</strong> → סיבה לחזור.</p>
+
+      <!-- ── 7. Screen Shake ── -->
+      <h3 style="color:var(--gold);margin-top:16px;font-size:14px;border-bottom:1px solid rgba(255,255,255,0.06);padding-bottom:6px">📳 7. רעידות מסך (Shake)</h3>
+      <table style="width:100%;font-size:11px;border-collapse:collapse">
+        <tr style="background:rgba(0,0,0,0.1)"><th style="padding:4px 6px;text-align:right">אירוע</th><th>עוצמה</th><th>מפתח</th></tr>
+        <tr><td>מיזוג דרגה 5-6</td><td>3-4</td><td><code>shake_tier_up</code></td></tr>
+        <tr><td>מיזוג דרגה 7-8</td><td>5</td><td><code>shake_tier_up</code></td></tr>
+        <tr><td>Crown Merge</td><td>8</td><td><code>shake_crown_merge</code></td></tr>
+        <tr><td>Score milestone</td><td>2</td><td><code>shake_milestone</code></td></tr>
+        <tr><td>Triple/Quad merge</td><td>3-6</td><td><code>shake_multi_merge</code></td></tr>
+        <tr><td>שיא חדש</td><td>4</td><td><code>shake_new_best</code></td></tr>
+        <tr><td>💣 פיצוץ</td><td>6</td><td><code>event_bomb_shake</code></td></tr>
+        <tr><td>❄️ הקפאה</td><td>4</td><td><code>event_freeze_shake</code></td></tr>
+      </table>
+      <p><strong>ערך 0 = כבוי.</strong> ערכים מומלצים: 2-4 = עדין, 6-8 = דרמטי, 10+ = מוגזם.</p>
+
+      <!-- ── 8. מצבי Retention ── -->
+      <h3 style="color:var(--gold);margin-top:16px;font-size:14px;border-bottom:1px solid rgba(255,255,255,0.06);padding-bottom:6px">🔄 8. מנגנוני שימור</h3>
+      <p><strong>רצף יומי:</strong> שחקן שחוזר כל יום מקבל streak עולה (🔥). בונוס גדל: 25💎 → 50💎 → 200💎 (30 ימים).</p>
+      <p><strong>אתגר שבועי:</strong> תחרות שבועית אוטומטית עם 500💎 פרס. שחקנים מתחרים על מקום ראשון.</p>
+      <p><strong>לוח מובילים:</strong> כל משחק (כולל חופשי) מופיע בלוח. שחקן רואה "עוד X נקודות למקום Y" → מוטיבציה.</p>
+      <p><strong>XP ורמות:</strong> 11 רמות (מתחיל → אלמוותי). XP נצבר ממשחקים, streaks, תחרויות.</p>
+      <p><strong>הישגים:</strong> 15 achievements (10K/50K/100K, שרשרת ×3/×5, 3/7/30 ימים ברצף).</p>
+      <p><strong>Daily login:</strong> מודל reward בכניסה הראשונה ליום.</p>
+      <p><strong>הזמנת חברים:</strong> WhatsApp invite עם לינק. מזמין + מוזמן מקבלים 💎.</p>
+
+      <!-- ── 9. תזמון מומלץ ── -->
+      <h3 style="color:var(--gold);margin-top:16px;font-size:14px;border-bottom:1px solid rgba(255,255,255,0.06);padding-bottom:6px">⏰ 9. תזמון מומלץ</h3>
+      <p><strong>Events:</strong> event ראשון אחרי ~15 שניות. event חדש כל 15-35 שניות. לשנות: <code>events_start_delay</code>, <code>events_min_gap</code>, <code>events_max_gap</code>.</p>
+      <p><strong>Milestones:</strong> 10K (~1 דקה), 25K (~2 דקות), 50K (~3 דקות), 100K (~5 דקות). אלה "WOW moments" שמעודדים להמשיך.</p>
+      <p><strong>אתגר שבועי:</strong> מתחדש אוטומטית כל 7 ימים (בדיקה כל שעה). לשנות: <code>weekly_prize</code>, <code>weekly_name</code>.</p>
+      <p><strong>Fever mode:</strong> ×3 ניקוד למשך 10 שניות (<code>event_fever_duration</code>). מספיק ל-3-5 מיזוגים במהירות.</p>
+
+      <!-- ── 10. הגדרות אדמין ── -->
+      <h3 style="color:var(--gold);margin-top:16px;font-size:14px;border-bottom:1px solid rgba(255,255,255,0.06);padding-bottom:6px">⚙️ 10. מפתח הגדרות מלא</h3>
+      <p>כל ההגדרות נמצאות ב<strong>"הגדרות משחק → כל ההגדרות"</strong> למטה. שינויים נכנסים לתוקף מיידית.</p>
+      <p><strong>קבוצות הגדרות:</strong></p>
+      <ul style="font-size:11px;padding-right:16px">
+        <li><strong>merge_mode</strong> — כיוון מיזוג (anchor/classic)</li>
+        <li><strong>crown_merge_*</strong> — Crown Merge on/off + בונוס</li>
+        <li><strong>events_*</strong> — מערכת Events (6 מפתחות כלליים)</li>
+        <li><strong>event_bomb/star/gift/fever/freeze/target_*</strong> — הגדרות לכל event (4-7 מפתחות כל אחד)</li>
+        <li><strong>shake_*</strong> — עוצמת רעידות (7 מפתחות)</li>
+        <li><strong>daily/streak/contest_*_reward</strong> — תגמולי 💎</li>
+        <li><strong>wager_*</strong> — הימורים</li>
+        <li><strong>referral_*</strong> — הפניות</li>
+        <li><strong>tile_price_*</strong> — מחירי חנות</li>
+        <li><strong>weekly_*</strong> — אתגר שבועי</li>
+      </ul>
+
+    </div>
+  </details>
+
   <!-- Game Config (Admin-controlled) -->
   <section id="config-section" style="margin-bottom:12px">
     <h2>הגדרות משחק <button class="tip-btn" data-tip="config">?</button></h2>
@@ -630,7 +763,7 @@
 
   // Help content per section
   var TIPS = {
-    config: '<strong>הגדרות משחק</strong><br>שליטה על התנהגות המשחק לכל השחקנים.<br><div class="tip-example">🎯 <strong>anchor</strong> = כשאריח מתמזג, התוצאה נשארת ליד המקום שהשחקן זרק<br>⬅ <strong>classic</strong> = התוצאה תמיד זזה שמאלה (ההתנהגות המקורית)</div>',
+    config: '<strong>הגדרות משחק</strong><br>שליטה על כל התנהגות המשחק.<br><div class="tip-example">🎯 <strong>merge_mode</strong>: anchor (תוצאה ליד הזריקה) / classic (תוצאה שמאלה)<br>👑 <strong>crown_merge_enabled</strong>: true/false — מיזוג 2 כתרים = פיצוץ<br>👑 <strong>crown_merge_bonus</strong>: נקודות בונוס (ברירת מחדל: 50,000)<br><br>🎯 <strong>Events:</strong><br>events_enabled: true/false — מתג ראשי<br>events_start_delay: שניות עד event ראשון (15)<br>events_min/max_gap: מרווח בין events (15-35)<br>event_X_enabled: true/false לכל event<br>event_X_weight: הסתברות (גבוה = תכוף)<br>event_X_timer: שניות לפני שנעלם<br><br>📳 <strong>Shake:</strong><br>shake_tier_up/crown_merge/milestone...: 0=כבוי, 4=רגיל, 8+=דרמטי<br><br>💡 שינויים נכנסים לתוקף מיידית לכל השחקנים</div>',
     kpi: '<strong>מטריקות-על</strong><br>המספרים הכי חשובים של המשחק.<br><div class="tip-example">📊 <strong>DAU</strong> = שחקנים ייחודיים שנכנסו היום<br>📊 <strong>D1</strong> = כמה % חזרו יום אחרי ההתקנה<br>📊 <strong>D7/D30</strong> = אחוז שחזר אחרי שבוע/חודש<br>🎯 יעדים: D1 ≥ 40% · D7 ≥ 20% · D30 ≥ 7%<br>ירוק = מעל היעד · אדום = מתחת</div>',
     dau: '<strong>DAU · 30 ימים</strong><br>גרף של כמה שחקנים ייחודיים נכנסו כל יום.<br><div class="tip-example">📈 עלייה = המשחק גדל<br>📉 ירידה = שחקנים נושרים<br>🔍 חפש דפוסים: סופ"ש בד"כ גבוה יותר</div>',
     funnel: '<strong>משפך שחקנים</strong><br>מראה את ההמרה — כמה מתוך מי שנכנס באמת משחק.<br><div class="tip-example">ביקור → שחק משחק → השיג 50+ → הגיע tier 3+<br>⚠️ <strong>ירידה מעל 50%</strong> בין שלבים = בעיה. משמעות: שחקנים נוטשים בנקודה הזו.</div>',
