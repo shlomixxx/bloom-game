@@ -605,7 +605,7 @@
       };
       if (continuePayBtn) continuePayBtn.onclick = function() {
         var price = getEventNum('continue_price', 200);
-        if ((parseInt(document.getElementById('tile-shop-stat').textContent.replace(/[^\d]/g,''),10)||0) < price) {
+        if (playerBalance < price) {
           this.textContent = 'אין מספיק 💎';
           this.disabled = true;
           return;

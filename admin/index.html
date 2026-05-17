@@ -478,6 +478,53 @@
     </details>
   </section>
 
+  <!-- Monetization -->
+  <section id="monetization-section" style="margin-bottom:12px">
+    <h2>💰 מונטיזציה <button class="tip-btn" data-tip="monetization">?</button></h2>
+    <div style="padding:12px 16px;background:var(--card);border-radius:10px;margin-top:8px">
+
+      <!-- AdSense -->
+      <div style="margin-bottom:14px">
+        <div style="font-size:13px;font-weight:700;color:var(--gold);margin-bottom:6px">📺 Google AdSense</div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:8px">הדבק את ה-Client ID מ-AdSense. פורמט: ca-pub-XXXXXXXXXXXXXXXX</div>
+        <div style="display:flex;gap:6px">
+          <input id="adsense-input" placeholder="ca-pub-..." style="flex:1;padding:8px 10px;border:1px solid rgba(255,255,255,0.1);border-radius:8px;background:rgba(0,0,0,0.15);color:var(--text);font-family:monospace;font-size:12px;direction:ltr">
+          <button class="btn sm" id="btn-save-adsense" style="white-space:nowrap">שמור</button>
+        </div>
+        <div id="adsense-status" style="font-size:11px;color:var(--muted);margin-top:4px"></div>
+      </div>
+
+      <!-- Stripe -->
+      <div style="margin-bottom:14px">
+        <div style="font-size:13px;font-weight:700;color:var(--gold);margin-bottom:6px">💳 Stripe (תשלומים)</div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:8px">הדבק את ה-Publishable Key מ-Stripe Dashboard. פורמט: pk_live_...</div>
+        <div style="display:flex;gap:6px">
+          <input id="stripe-input" placeholder="pk_live_..." style="flex:1;padding:8px 10px;border:1px solid rgba(255,255,255,0.1);border-radius:8px;background:rgba(0,0,0,0.15);color:var(--text);font-family:monospace;font-size:12px;direction:ltr">
+          <button class="btn sm" id="btn-save-stripe" style="white-space:nowrap">שמור</button>
+        </div>
+        <div id="stripe-status" style="font-size:11px;color:var(--muted);margin-top:4px"></div>
+      </div>
+
+      <!-- Diamond Packs -->
+      <div style="margin-bottom:8px">
+        <div style="font-size:13px;font-weight:700;color:var(--gold);margin-bottom:6px">💎 חבילות יהלומים</div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:6px">ערוך את החבילות דרך "הגדרות משחק → כל ההגדרות" (diamond_pack_1-4_amount/price)</div>
+        <div id="diamond-packs-preview" style="font-size:11px;color:var(--muted)">טוען...</div>
+      </div>
+
+      <!-- Economy status -->
+      <div style="padding-top:10px;border-top:1px solid rgba(255,255,255,0.06)">
+        <div style="font-size:13px;font-weight:700;color:var(--gold);margin-bottom:6px">📊 סטטוס כלכלה</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;font-size:11px">
+          <span style="background:rgba(0,0,0,0.15);padding:4px 8px;border-radius:6px">Continue: <strong id="eco-continue">—</strong>💎</span>
+          <span style="background:rgba(0,0,0,0.15);padding:4px 8px;border-radius:6px">Ad reward: <strong id="eco-ad">—</strong>💎</span>
+          <span style="background:rgba(0,0,0,0.15);padding:4px 8px;border-radius:6px">Login: <strong id="eco-login">—</strong>💎</span>
+          <span style="background:rgba(0,0,0,0.15);padding:4px 8px;border-radius:6px">Crown: <strong id="eco-crown">—</strong>💎</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <!-- Player Management -->
   <section id="wager-section" style="margin-bottom:12px">
     <h2>🎰 הימורים וג'קפוט <button class="tip-btn" data-tip="wager">?</button></h2>
@@ -796,6 +843,7 @@
     live: '<strong>קורה עכשיו</strong><br>מי משחק ברגע זה + מי צופה במישהו.<br><div class="tip-example">🟢 שחקנים פעילים: ניקוד חי, tier, תחרות<br>👁️ צופים: מי צופה במי<br>🔄 מתעדכן רק בלחיצה על "רענון"</div>',
     audit: '<strong>יומן פעולות אדמין</strong><br>כל פעולה שנעשתה מפאנל הניהול.<br><div class="tip-example">📋 מציג: מחיקת שחקן, שינוי הגדרה, סגירת תחרות<br>💡 מאפשר לעקוב אחרי כל שינוי שנעשה</div>',
     csv: '<strong>הורדת CSV</strong><br>ייצוא נתונים לאקסל.<br><div class="tip-example">📥 לחץ על טבלה → הורדה אוטומטית<br>📊 תומך בעברית (BOM) + עד 10,000 שורות<br>💡 שימושי לניתוח חיצוני או גיבוי</div>',
+    monetization: '<strong>💰 מונטיזציה</strong><br>ניהול פרסומות ורכישות.<br><div class="tip-example"><strong>📺 AdSense:</strong><br>1. הרשם ב-google.com/adsense<br>2. קבל Client ID (ca-pub-XXX)<br>3. הדבק כאן → שמור<br>4. חכה לאישור גוגל (1-14 ימים)<br>5. פרסומות מתחילות להציג!<br><br><strong>💳 Stripe (רכישות):</strong><br>1. הרשם ב-stripe.com<br>2. קבל Publishable Key (pk_live_XXX)<br>3. הדבק כאן → שמור<br>4. שחקנים יכולים לקנות 💎<br><br><strong>📊 כלכלה:</strong><br>שחקן מרוויח ~295💎/יום חינם<br>כתר עולה 300💎 (=יום שלם)<br>פרסומת = 30💎 (=10 פרסומות לכתר)<br>→ שחקנים יצפו בפרסומות או יקנו!</div>',
     bots: '<strong>🤖 שחקני דמו</strong><br>שחקנים מדומים שרצים על השרת. נראים כמו אנשים אמיתיים.<br><div class="tip-example"><strong>איך זה עובד:</strong><br>1. בחר כמה בוטים (למשל 10)<br>2. בחר מצב: אימון / יומי / תחרות<br>3. לחץ הפעל — 10 "שחקנים" מתחילים לשחק<br><br><strong>החלפת שמות:</strong><br>כשבוט מפסיד (הלוח מלא) → הוא "יוצא".<br>אחרי 30-90 שניות שחקן חדש עם שם אחר מתחיל.<br>ב-24 שעות עוברים 200+ שמות שונים!<br><br><strong>מצבים:</strong><br>🏋️ אימון = משחקים חופשי, מופיעים בלייב<br>📊 יומי = מגישים ניקוד ללידרבורד היומי<br>🏆 תחרות = מצטרפים לתחרות עם קוד<br><br><strong>מהירויות:</strong><br>🐌 איטי = נראה ריאליסטי · 🏃 רגיל = ברירת מחדל<br>⚡ מהיר = מילוי לידרבורד · 🚀 מקסימום = stress test<br><br>💰 עלות: $0 עד 50 בוטים · ~$2/חודש ל-200</div>',
     players: '<strong>👤 ניהול שחקנים וקרדיטים</strong><br>כל שחקן מקבל קוד ייחודי (BLOOM-XXXX) וארנק קרדיטים (💎).<br><div class="tip-example"><strong>מה אפשר לעשות:</strong><br>📋 טען רשימה — רואה כל שחקן עם הקוד, יתרה, הפניות<br>🎁 שלח מתנה — הזן קוד שחקן + כמות → קרדיטים מועברים מיד<br>🔗 הפניות — מי הזמין את מי וכמה קרדיטים חולקו<br><br><strong>הגדרות הפניות (בהגדרות משחק):</strong><br>referral_enabled = true/false (הפעל/כבה)<br>referral_reward = כמה 💎 למזמין<br>referred_bonus = כמה 💎 למוזמן<br>welcome_bonus = כמה 💎 לשחקן חדש<br><br>💡 ערוך דרך "הגדרות משחק" למטה</div>',
     wager: '<strong>🎰 מערכת הימורים</strong><br>שחקנים מהמרים 💎 על תחרויות. הזוכים מחלקים את הקופה.<br><div class="tip-example"><strong>איך עובד:</strong><br>1. שחקן יוצר תחרות עם הימור (למשל 50💎)<br>2. כל מצטרף משלם 50💎 → נכנס לקופה<br>3. בסיום → אדמין לוחץ "סלק" → הקופה מחולקת:<br>🥇 60% · 🥈 25% · 🥉 10% · 🏠 5% עמלה<br><br><strong>הגדרות (בהגדרות משחק):</strong><br>wager_enabled, wager_min, wager_max<br>wager_rake, wager_1st/2nd/3rd_pct</div>'
@@ -1618,6 +1666,71 @@
 
   initPrefs(); // restore saved preferences before refreshAll
   refreshAll();
+
+  // ====== MONETIZATION PANEL ======
+  // Load current values
+  (async function loadMonetization() {
+    try {
+      var d = await api('/config');
+      if (!d || !d.config) return;
+      var cfg = d.config;
+      $('adsense-input').value = cfg.adsense_client_id || '';
+      $('stripe-input').value = cfg.stripe_publishable_key || '';
+      $('adsense-status').textContent = cfg.adsense_client_id ? '✅ מוגדר' : '⚠️ לא מוגדר — פרסומות לא פעילות';
+      $('adsense-status').style.color = cfg.adsense_client_id ? '#2E8B6F' : '#C8472F';
+      $('stripe-status').textContent = cfg.stripe_publishable_key ? '✅ מוגדר' : '⚠️ לא מוגדר — רכישות לא פעילות';
+      $('stripe-status').style.color = cfg.stripe_publishable_key ? '#2E8B6F' : '#C8472F';
+      // Diamond packs
+      var packs = '';
+      for (var i = 1; i <= 4; i++) {
+        var amt = cfg['diamond_pack_' + i + '_amount'] || '—';
+        var price = cfg['diamond_pack_' + i + '_price'] || '—';
+        packs += '💎 ' + Number(amt).toLocaleString() + ' = ₪' + price + '  ';
+      }
+      $('diamond-packs-preview').innerHTML = packs || 'לא מוגדר';
+      // Economy
+      $('eco-continue').textContent = cfg.continue_price || '200';
+      $('eco-ad').textContent = cfg.ad_watch_reward || '30';
+      $('eco-login').textContent = cfg.daily_login_reward || '15';
+      $('eco-crown').textContent = cfg.tile_price_8 || '300';
+    } catch(e) {}
+  })();
+
+  // Save AdSense
+  $('btn-save-adsense').onclick = async function() {
+    var val = $('adsense-input').value.trim();
+    this.disabled = true; this.textContent = '...';
+    try {
+      var r = await api('/config/' + encodeURIComponent('adsense_client_id'), {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ value: val })
+      });
+      if (r && r.ok) {
+        $('adsense-status').textContent = val ? '✅ נשמר! יופעל ב-deploy הבא' : '⚠️ ריק — פרסומות כבויות';
+        $('adsense-status').style.color = val ? '#2E8B6F' : '#C8472F';
+        toast('AdSense → ' + (val || '(ריק)'));
+      }
+    } catch(e) { toast('שגיאה'); }
+    this.disabled = false; this.textContent = 'שמור';
+  };
+
+  // Save Stripe
+  $('btn-save-stripe').onclick = async function() {
+    var val = $('stripe-input').value.trim();
+    this.disabled = true; this.textContent = '...';
+    try {
+      var r = await api('/config/' + encodeURIComponent('stripe_publishable_key'), {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ value: val })
+      });
+      if (r && r.ok) {
+        $('stripe-status').textContent = val ? '✅ נשמר! יופעל ב-deploy הבא' : '⚠️ ריק — רכישות כבויות';
+        $('stripe-status').style.color = val ? '#2E8B6F' : '#C8472F';
+        toast('Stripe → ' + (val ? val.slice(0, 12) + '...' : '(ריק)'));
+      }
+    } catch(e) { toast('שגיאה'); }
+    this.disabled = false; this.textContent = 'שמור';
+  };
 
   // Live section: dedicated refresh + auto-refresh every 10s
   $('btn-live-refresh').onclick = function() { loadLive(); toast('לייב עודכן'); };
