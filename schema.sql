@@ -475,3 +475,15 @@ UPDATE game_config SET value = '200' WHERE key = 'powerup_price_choose_row' AND 
 UPDATE game_config SET value = '120' WHERE key = 'powerup_price_random_row' AND value = '60';
 UPDATE game_config SET value = '80' WHERE key = 'powerup_price_choose_tile' AND value = '40';
 UPDATE game_config SET value = '30' WHERE key = 'powerup_price_random_tile' AND value = '15';
+
+-- AdSense + Stripe config
+INSERT INTO game_config (key, value) VALUES ('adsense_client_id', '') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('stripe_publishable_key', '') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('diamond_pack_1_amount', '300') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('diamond_pack_1_price', '9.90') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('diamond_pack_2_amount', '1200') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('diamond_pack_2_price', '24.90') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('diamond_pack_3_amount', '4000') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('diamond_pack_3_price', '59.90') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('diamond_pack_4_amount', '15000') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('diamond_pack_4_price', '149.90') ON CONFLICT (key) DO NOTHING;
