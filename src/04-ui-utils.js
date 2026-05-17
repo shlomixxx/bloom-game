@@ -155,17 +155,64 @@
   let usedContinue = false;       // second chance (once per game)
   const TOTAL_PLAY_TIME_KEY = 'bloom_total_play_ms';
 
-  function showNewBestBanner() {
+  // ──────────────────────────────────────────────────────────────────────
+  // Transient banner helper — all celebratory overlays (Crown Merge, score
+  // milestones, new-best, etc.) go through this. Guarantees:
+  //  - Always tagged `data-bloom-banner` so init() can sweep stuck ones on
+  //    a new game (the original bug: setTimeout never firing on tab-blur or
+  //    page-restore left modals stuck on the board).
+  //  - Click-to-dismiss (pointer-events:auto on the banner itself), with a
+  //    safety-net force-remove at hold + fade + 1500ms.
+  //  - Idempotent — calling dispose twice is a no-op.
+  function showTransientBanner(opts) {
+    opts = opts || {};
+    var holdMs = opts.holdMs != null ? opts.holdMs : 1500;
+    var fadeMs = opts.fadeMs != null ? opts.fadeMs : 300;
     var banner = document.createElement('div');
-    banner.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:9999;background:linear-gradient(135deg,#FAC775,#BA7517);border-radius:20px;padding:18px 30px;pointer-events:none;text-align:center;box-shadow:0 0 30px rgba(250,199,117,0.5);min-width:180px';
-    banner.innerHTML = '<div style="font-size:22px;font-weight:800;color:#1C1A18">🎉 שיא חדש!</div><div style="font-size:28px;font-weight:900;color:#412402;margin-top:4px">' + score.toLocaleString() + '</div>';
+    banner.setAttribute('data-bloom-banner', opts.tag || '1');
+    banner.style.cssText = (opts.style || '') + ';cursor:pointer';
+    banner.innerHTML = opts.html || '';
+    var removed = false;
+    function dispose() {
+      if (removed) return;
+      removed = true;
+      try { banner.remove(); } catch (e) {}
+    }
+    function startFade() {
+      if (removed) return;
+      banner.style.transition = 'opacity ' + (fadeMs / 1000) + 's, transform ' + (fadeMs / 1000) + 's';
+      banner.style.opacity = '0';
+      if (opts.exitTransform) banner.style.transform = opts.exitTransform;
+    }
+    banner.addEventListener('click', dispose);
     document.body.appendChild(banner);
+    if (opts.afterAppend) try { opts.afterAppend(banner); } catch (e) {}
+    setTimeout(startFade, holdMs);
+    setTimeout(dispose, holdMs + fadeMs);
+    // Safety net: tab-throttling or page-hide can pause setTimeout. A delayed
+    // force-cleanup catches any straggler when the user comes back.
+    setTimeout(dispose, holdMs + fadeMs + 1500);
+    return banner;
+  }
+
+  // Sweep any leftover banners — called by init() when a new game starts so
+  // a celebration from the previous round can't carry over to a fresh board.
+  function clearTransientBanners() {
+    var els = document.querySelectorAll('[data-bloom-banner]');
+    for (var i = 0; i < els.length; i++) els[i].remove();
+  }
+
+  function showNewBestBanner() {
+    showTransientBanner({
+      tag: 'new-best',
+      holdMs: 1500, fadeMs: 300,
+      style: 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:9999;background:linear-gradient(135deg,#FAC775,#BA7517);border-radius:20px;padding:18px 30px;pointer-events:auto;text-align:center;box-shadow:0 0 30px rgba(250,199,117,0.5);min-width:180px',
+      html: '<div style="font-size:22px;font-weight:800;color:#1C1A18">🎉 שיא חדש!</div><div style="font-size:28px;font-weight:900;color:#412402;margin-top:4px">' + score.toLocaleString() + '</div>',
+    });
     buzz([80, 40, 80, 40, 80]);
     showConfetti(25);
     var bestShake = parseInt(getEventConfig('shake_new_best', '4'), 10) || 0;
     if (bestShake > 0) shakeGrid(bestShake);
-    setTimeout(function() { banner.style.transition = 'opacity 0.3s'; banner.style.opacity = '0'; }, 1500);
-    setTimeout(function() { banner.remove(); }, 1800);
   }
 
   // Per-game tracking: which milestone tiers have already paid their bonus.

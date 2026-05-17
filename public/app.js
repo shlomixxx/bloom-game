@@ -1470,17 +1470,64 @@
   let usedContinue = false;       // second chance (once per game)
   const TOTAL_PLAY_TIME_KEY = 'bloom_total_play_ms';
 
-  function showNewBestBanner() {
+  // ──────────────────────────────────────────────────────────────────────
+  // Transient banner helper — all celebratory overlays (Crown Merge, score
+  // milestones, new-best, etc.) go through this. Guarantees:
+  //  - Always tagged `data-bloom-banner` so init() can sweep stuck ones on
+  //    a new game (the original bug: setTimeout never firing on tab-blur or
+  //    page-restore left modals stuck on the board).
+  //  - Click-to-dismiss (pointer-events:auto on the banner itself), with a
+  //    safety-net force-remove at hold + fade + 1500ms.
+  //  - Idempotent — calling dispose twice is a no-op.
+  function showTransientBanner(opts) {
+    opts = opts || {};
+    var holdMs = opts.holdMs != null ? opts.holdMs : 1500;
+    var fadeMs = opts.fadeMs != null ? opts.fadeMs : 300;
     var banner = document.createElement('div');
-    banner.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:9999;background:linear-gradient(135deg,#FAC775,#BA7517);border-radius:20px;padding:18px 30px;pointer-events:none;text-align:center;box-shadow:0 0 30px rgba(250,199,117,0.5);min-width:180px';
-    banner.innerHTML = '<div style="font-size:22px;font-weight:800;color:#1C1A18">🎉 שיא חדש!</div><div style="font-size:28px;font-weight:900;color:#412402;margin-top:4px">' + score.toLocaleString() + '</div>';
+    banner.setAttribute('data-bloom-banner', opts.tag || '1');
+    banner.style.cssText = (opts.style || '') + ';cursor:pointer';
+    banner.innerHTML = opts.html || '';
+    var removed = false;
+    function dispose() {
+      if (removed) return;
+      removed = true;
+      try { banner.remove(); } catch (e) {}
+    }
+    function startFade() {
+      if (removed) return;
+      banner.style.transition = 'opacity ' + (fadeMs / 1000) + 's, transform ' + (fadeMs / 1000) + 's';
+      banner.style.opacity = '0';
+      if (opts.exitTransform) banner.style.transform = opts.exitTransform;
+    }
+    banner.addEventListener('click', dispose);
     document.body.appendChild(banner);
+    if (opts.afterAppend) try { opts.afterAppend(banner); } catch (e) {}
+    setTimeout(startFade, holdMs);
+    setTimeout(dispose, holdMs + fadeMs);
+    // Safety net: tab-throttling or page-hide can pause setTimeout. A delayed
+    // force-cleanup catches any straggler when the user comes back.
+    setTimeout(dispose, holdMs + fadeMs + 1500);
+    return banner;
+  }
+
+  // Sweep any leftover banners — called by init() when a new game starts so
+  // a celebration from the previous round can't carry over to a fresh board.
+  function clearTransientBanners() {
+    var els = document.querySelectorAll('[data-bloom-banner]');
+    for (var i = 0; i < els.length; i++) els[i].remove();
+  }
+
+  function showNewBestBanner() {
+    showTransientBanner({
+      tag: 'new-best',
+      holdMs: 1500, fadeMs: 300,
+      style: 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:9999;background:linear-gradient(135deg,#FAC775,#BA7517);border-radius:20px;padding:18px 30px;pointer-events:auto;text-align:center;box-shadow:0 0 30px rgba(250,199,117,0.5);min-width:180px',
+      html: '<div style="font-size:22px;font-weight:800;color:#1C1A18">🎉 שיא חדש!</div><div style="font-size:28px;font-weight:900;color:#412402;margin-top:4px">' + score.toLocaleString() + '</div>',
+    });
     buzz([80, 40, 80, 40, 80]);
     showConfetti(25);
     var bestShake = parseInt(getEventConfig('shake_new_best', '4'), 10) || 0;
     if (bestShake > 0) shakeGrid(bestShake);
-    setTimeout(function() { banner.style.transition = 'opacity 0.3s'; banner.style.opacity = '0'; }, 1500);
-    setTimeout(function() { banner.remove(); }, 1800);
   }
 
   // Per-game tracking: which milestone tiers have already paid their bonus.
@@ -4987,6 +5034,10 @@
   async function init(nextMode, opts) {
     opts = opts || {};
     const fresh = !!opts.fresh;
+    // Sweep any celebration banners left over from the previous round —
+    // setTimeout can be paused by tab-blur or skipped on page-hide, leaving
+    // a stuck modal over the board. clearTransientBanners is idempotent.
+    if (typeof clearTransientBanners === 'function') clearTransientBanners();
     if (nextMode) mode = nextMode;
     dailyDate = todayInIsrael();
     grid = Array.from({length: getBoardRows()}, function() { return Array(getBoardCols()).fill(0); });
@@ -5648,34 +5699,40 @@
   // Fires at most once per (tier, game) — checked at the call site.
   function showMilestoneBanner(tier, bonusPts) {
     const t = (getActiveTiers() && getActiveTiers()[tier]) || { name: 'דרגה ' + tier, emoji: '⭐' };
-    var banner = document.createElement('div');
-    banner.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:9999;background:linear-gradient(135deg,#1C1A18,#412402);color:#FAC775;border:2px solid #FAC775;border-radius:18px;padding:16px 26px;pointer-events:none;text-align:center;direction:rtl;box-shadow:0 12px 36px rgba(0,0,0,0.35);min-width:180px';
-    banner.innerHTML =
-      '<div style="font-size:16px;font-weight:700;color:#FFD37A;margin-bottom:4px">' + t.emoji + ' ' + escapeHtml(t.name) + '</div>' +
-      '<div style="font-size:32px;font-weight:900">+' + bonusPts.toLocaleString() + '</div>' +
-      '<div style="font-size:10px;color:#BA7517;margin-top:4px">בונוס פעם-ראשונה!</div>';
-    document.body.appendChild(banner);
-    setTimeout(function() { banner.style.transition = 'opacity 0.3s'; banner.style.opacity = '0'; }, 1200);
-    setTimeout(function() { banner.remove(); }, 1500);
+    showTransientBanner({
+      tag: 'tier-up',
+      holdMs: 1200, fadeMs: 300,
+      style: 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:9999;background:linear-gradient(135deg,#1C1A18,#412402);color:#FAC775;border:2px solid #FAC775;border-radius:18px;padding:16px 26px;pointer-events:auto;text-align:center;direction:rtl;box-shadow:0 12px 36px rgba(0,0,0,0.35);min-width:180px',
+      html: '<div style="font-size:16px;font-weight:700;color:#FFD37A;margin-bottom:4px">' + t.emoji + ' ' + escapeHtml(t.name) + '</div>' +
+        '<div style="font-size:32px;font-weight:900">+' + bonusPts.toLocaleString() + '</div>' +
+        '<div style="font-size:10px;color:#BA7517;margin-top:4px">בונוס פעם-ראשונה!</div>',
+    });
   }
 
   // Crown Merge explosion — gold wave across the row
   function showCrownExplosion(row) {
-    // Full-screen gold flash
+    // Full-screen gold flash — tagged so init()'s sweep catches it too.
     var flash = document.createElement('div');
+    flash.setAttribute('data-bloom-banner', 'crown-flash');
     flash.style.cssText = 'position:fixed;inset:0;background:rgba(250,199,117,0.25);z-index:9998;pointer-events:none';
     document.body.appendChild(flash);
+    var flashGone = false;
+    function killFlash() { if (flashGone) return; flashGone = true; try { flash.remove(); } catch (e) {} }
     setTimeout(function() { flash.style.transition = 'opacity 0.3s'; flash.style.opacity = '0'; }, 200);
-    setTimeout(function() { flash.remove(); }, 500);
-    // Banner
-    var banner = document.createElement('div');
-    banner.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%) scale(0.5);opacity:0;z-index:9999;background:linear-gradient(135deg,#1C1A18,#412402);color:#FAC775;border:3px solid #FAC775;border-radius:20px;padding:20px 32px;pointer-events:none;text-align:center;box-shadow:0 0 40px rgba(250,199,117,0.5);min-width:200px;transition:transform 0.3s,opacity 0.2s';
-    banner.innerHTML = '<div style="font-size:22px;font-weight:800">💥 Crown Merge! 👑</div><div style="font-size:32px;font-weight:900;margin-top:4px">+50,000</div><div style="font-size:12px;color:#BA7517;margin-top:4px">שורה נמחקה!</div>';
-    document.body.appendChild(banner);
-    requestAnimationFrame(function() { banner.style.transform = 'translate(-50%,-50%) scale(1)'; banner.style.opacity = '1'; });
+    setTimeout(killFlash, 500);
+    setTimeout(killFlash, 2000); // safety net for tab-throttling
+    // Banner via showTransientBanner — gets click-to-dismiss + auto-cleanup.
+    showTransientBanner({
+      tag: 'crown',
+      holdMs: 1500, fadeMs: 500,
+      exitTransform: 'translate(-50%,-60%) scale(0.9)',
+      style: 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%) scale(0.5);opacity:0;z-index:9999;background:linear-gradient(135deg,#1C1A18,#412402);color:#FAC775;border:3px solid #FAC775;border-radius:20px;padding:20px 32px;pointer-events:auto;text-align:center;box-shadow:0 0 40px rgba(250,199,117,0.5);min-width:200px;transition:transform 0.3s,opacity 0.2s',
+      html: '<div style="font-size:22px;font-weight:800">💥 Crown Merge! 👑</div><div style="font-size:32px;font-weight:900;margin-top:4px">+50,000</div><div style="font-size:12px;color:#BA7517;margin-top:4px">שורה נמחקה!</div>',
+      afterAppend: function(el) {
+        requestAnimationFrame(function() { el.style.transform = 'translate(-50%,-50%) scale(1)'; el.style.opacity = '1'; });
+      },
+    });
     showConfetti(40);
-    setTimeout(function() { banner.style.opacity = '0'; banner.style.transform = 'translate(-50%,-60%) scale(0.9)'; }, 1500);
-    setTimeout(function() { banner.remove(); }, 2000);
     // Flash grid row gold + scale
     var gridEl = document.getElementById('grid');
     if (gridEl) {
@@ -5718,18 +5775,17 @@
   }
 
   function showScoreMilestoneBanner(label, reward) {
-    var banner = document.createElement('div');
-    banner.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:9999;background:linear-gradient(135deg,#0F0D0B,#1C1A18);color:#FAC775;border:1px solid rgba(250,199,117,0.3);border-radius:18px;padding:14px 24px;pointer-events:none;text-align:center;box-shadow:0 8px 24px rgba(0,0,0,0.3);min-width:160px';
-    banner.innerHTML =
-      '<div style="font-size:24px;font-weight:900;letter-spacing:0.05em">' + label + '</div>' +
-      (reward > 0 ? '<div style="font-size:16px;font-weight:700;color:#BA7517;margin-top:4px">+' + reward + ' 💎</div>' : '');
-    document.body.appendChild(banner);
+    showTransientBanner({
+      tag: 'milestone',
+      holdMs: 1000, fadeMs: 300,
+      style: 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:9999;background:linear-gradient(135deg,#0F0D0B,#1C1A18);color:#FAC775;border:1px solid rgba(250,199,117,0.3);border-radius:18px;padding:14px 24px;pointer-events:auto;text-align:center;box-shadow:0 8px 24px rgba(0,0,0,0.3);min-width:160px',
+      html: '<div style="font-size:24px;font-weight:900;letter-spacing:0.05em">' + label + '</div>' +
+        (reward > 0 ? '<div style="font-size:16px;font-weight:700;color:#BA7517;margin-top:4px">+' + reward + ' 💎</div>' : ''),
+    });
     bumpScore();
     buzz([40, 60]);
     var msShake = parseInt(getEventConfig('shake_milestone', '2'), 10) || 0;
     if (msShake > 0) shakeGrid(msShake);
-    setTimeout(function() { banner.style.transition = 'opacity 0.3s'; banner.style.opacity = '0'; }, 1000);
-    setTimeout(function() { banner.remove(); }, 1300);
   }
 
   // Triple/Quad merge celebration
@@ -7778,13 +7834,12 @@
 
   // Show event banner — exact same approach as the green diagnostic (which works!)
   function showEventBanner(title, sub, cssClass) {
-    var d = document.createElement('div');
-    d.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:9999;padding:20px 30px;border-radius:18px;text-align:center;direction:rtl;min-width:200px;pointer-events:none;background:#1C1A18;color:#FAC775;border:2px solid #FAC775;box-shadow:0 12px 36px rgba(0,0,0,0.5)';
-    d.innerHTML = '<div style="font-size:18px;font-weight:700;margin-bottom:6px">' + title + '</div><div style="font-size:28px;font-weight:900">' + sub + '</div>';
-    document.body.appendChild(d);
-    // Fade out after 1.2s
-    setTimeout(function() { d.style.transition = 'opacity 0.3s'; d.style.opacity = '0'; }, 1200);
-    setTimeout(function() { d.remove(); }, 1600);
+    showTransientBanner({
+      tag: 'event-' + (cssClass || 'generic'),
+      holdMs: 1200, fadeMs: 400,
+      style: 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:9999;padding:20px 30px;border-radius:18px;text-align:center;direction:rtl;min-width:200px;pointer-events:auto;background:#1C1A18;color:#FAC775;border:2px solid #FAC775;box-shadow:0 12px 36px rgba(0,0,0,0.5)',
+      html: '<div style="font-size:18px;font-weight:700;margin-bottom:6px">' + title + '</div><div style="font-size:28px;font-weight:900">' + sub + '</div>',
+    });
   }
 
   // ============================================================

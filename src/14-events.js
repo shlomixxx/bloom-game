@@ -510,13 +510,12 @@
 
   // Show event banner — exact same approach as the green diagnostic (which works!)
   function showEventBanner(title, sub, cssClass) {
-    var d = document.createElement('div');
-    d.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:9999;padding:20px 30px;border-radius:18px;text-align:center;direction:rtl;min-width:200px;pointer-events:none;background:#1C1A18;color:#FAC775;border:2px solid #FAC775;box-shadow:0 12px 36px rgba(0,0,0,0.5)';
-    d.innerHTML = '<div style="font-size:18px;font-weight:700;margin-bottom:6px">' + title + '</div><div style="font-size:28px;font-weight:900">' + sub + '</div>';
-    document.body.appendChild(d);
-    // Fade out after 1.2s
-    setTimeout(function() { d.style.transition = 'opacity 0.3s'; d.style.opacity = '0'; }, 1200);
-    setTimeout(function() { d.remove(); }, 1600);
+    showTransientBanner({
+      tag: 'event-' + (cssClass || 'generic'),
+      holdMs: 1200, fadeMs: 400,
+      style: 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:9999;padding:20px 30px;border-radius:18px;text-align:center;direction:rtl;min-width:200px;pointer-events:auto;background:#1C1A18;color:#FAC775;border:2px solid #FAC775;box-shadow:0 12px 36px rgba(0,0,0,0.5)',
+      html: '<div style="font-size:18px;font-weight:700;margin-bottom:6px">' + title + '</div><div style="font-size:28px;font-weight:900">' + sub + '</div>',
+    });
   }
 
   // ============================================================

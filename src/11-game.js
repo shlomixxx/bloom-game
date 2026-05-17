@@ -1,6 +1,10 @@
   async function init(nextMode, opts) {
     opts = opts || {};
     const fresh = !!opts.fresh;
+    // Sweep any celebration banners left over from the previous round —
+    // setTimeout can be paused by tab-blur or skipped on page-hide, leaving
+    // a stuck modal over the board. clearTransientBanners is idempotent.
+    if (typeof clearTransientBanners === 'function') clearTransientBanners();
     if (nextMode) mode = nextMode;
     dailyDate = todayInIsrael();
     grid = Array.from({length: getBoardRows()}, function() { return Array(getBoardCols()).fill(0); });
@@ -662,34 +666,40 @@
   // Fires at most once per (tier, game) — checked at the call site.
   function showMilestoneBanner(tier, bonusPts) {
     const t = (getActiveTiers() && getActiveTiers()[tier]) || { name: 'דרגה ' + tier, emoji: '⭐' };
-    var banner = document.createElement('div');
-    banner.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:9999;background:linear-gradient(135deg,#1C1A18,#412402);color:#FAC775;border:2px solid #FAC775;border-radius:18px;padding:16px 26px;pointer-events:none;text-align:center;direction:rtl;box-shadow:0 12px 36px rgba(0,0,0,0.35);min-width:180px';
-    banner.innerHTML =
-      '<div style="font-size:16px;font-weight:700;color:#FFD37A;margin-bottom:4px">' + t.emoji + ' ' + escapeHtml(t.name) + '</div>' +
-      '<div style="font-size:32px;font-weight:900">+' + bonusPts.toLocaleString() + '</div>' +
-      '<div style="font-size:10px;color:#BA7517;margin-top:4px">בונוס פעם-ראשונה!</div>';
-    document.body.appendChild(banner);
-    setTimeout(function() { banner.style.transition = 'opacity 0.3s'; banner.style.opacity = '0'; }, 1200);
-    setTimeout(function() { banner.remove(); }, 1500);
+    showTransientBanner({
+      tag: 'tier-up',
+      holdMs: 1200, fadeMs: 300,
+      style: 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:9999;background:linear-gradient(135deg,#1C1A18,#412402);color:#FAC775;border:2px solid #FAC775;border-radius:18px;padding:16px 26px;pointer-events:auto;text-align:center;direction:rtl;box-shadow:0 12px 36px rgba(0,0,0,0.35);min-width:180px',
+      html: '<div style="font-size:16px;font-weight:700;color:#FFD37A;margin-bottom:4px">' + t.emoji + ' ' + escapeHtml(t.name) + '</div>' +
+        '<div style="font-size:32px;font-weight:900">+' + bonusPts.toLocaleString() + '</div>' +
+        '<div style="font-size:10px;color:#BA7517;margin-top:4px">בונוס פעם-ראשונה!</div>',
+    });
   }
 
   // Crown Merge explosion — gold wave across the row
   function showCrownExplosion(row) {
-    // Full-screen gold flash
+    // Full-screen gold flash — tagged so init()'s sweep catches it too.
     var flash = document.createElement('div');
+    flash.setAttribute('data-bloom-banner', 'crown-flash');
     flash.style.cssText = 'position:fixed;inset:0;background:rgba(250,199,117,0.25);z-index:9998;pointer-events:none';
     document.body.appendChild(flash);
+    var flashGone = false;
+    function killFlash() { if (flashGone) return; flashGone = true; try { flash.remove(); } catch (e) {} }
     setTimeout(function() { flash.style.transition = 'opacity 0.3s'; flash.style.opacity = '0'; }, 200);
-    setTimeout(function() { flash.remove(); }, 500);
-    // Banner
-    var banner = document.createElement('div');
-    banner.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%) scale(0.5);opacity:0;z-index:9999;background:linear-gradient(135deg,#1C1A18,#412402);color:#FAC775;border:3px solid #FAC775;border-radius:20px;padding:20px 32px;pointer-events:none;text-align:center;box-shadow:0 0 40px rgba(250,199,117,0.5);min-width:200px;transition:transform 0.3s,opacity 0.2s';
-    banner.innerHTML = '<div style="font-size:22px;font-weight:800">💥 Crown Merge! 👑</div><div style="font-size:32px;font-weight:900;margin-top:4px">+50,000</div><div style="font-size:12px;color:#BA7517;margin-top:4px">שורה נמחקה!</div>';
-    document.body.appendChild(banner);
-    requestAnimationFrame(function() { banner.style.transform = 'translate(-50%,-50%) scale(1)'; banner.style.opacity = '1'; });
+    setTimeout(killFlash, 500);
+    setTimeout(killFlash, 2000); // safety net for tab-throttling
+    // Banner via showTransientBanner — gets click-to-dismiss + auto-cleanup.
+    showTransientBanner({
+      tag: 'crown',
+      holdMs: 1500, fadeMs: 500,
+      exitTransform: 'translate(-50%,-60%) scale(0.9)',
+      style: 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%) scale(0.5);opacity:0;z-index:9999;background:linear-gradient(135deg,#1C1A18,#412402);color:#FAC775;border:3px solid #FAC775;border-radius:20px;padding:20px 32px;pointer-events:auto;text-align:center;box-shadow:0 0 40px rgba(250,199,117,0.5);min-width:200px;transition:transform 0.3s,opacity 0.2s',
+      html: '<div style="font-size:22px;font-weight:800">💥 Crown Merge! 👑</div><div style="font-size:32px;font-weight:900;margin-top:4px">+50,000</div><div style="font-size:12px;color:#BA7517;margin-top:4px">שורה נמחקה!</div>',
+      afterAppend: function(el) {
+        requestAnimationFrame(function() { el.style.transform = 'translate(-50%,-50%) scale(1)'; el.style.opacity = '1'; });
+      },
+    });
     showConfetti(40);
-    setTimeout(function() { banner.style.opacity = '0'; banner.style.transform = 'translate(-50%,-60%) scale(0.9)'; }, 1500);
-    setTimeout(function() { banner.remove(); }, 2000);
     // Flash grid row gold + scale
     var gridEl = document.getElementById('grid');
     if (gridEl) {
@@ -732,18 +742,17 @@
   }
 
   function showScoreMilestoneBanner(label, reward) {
-    var banner = document.createElement('div');
-    banner.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:9999;background:linear-gradient(135deg,#0F0D0B,#1C1A18);color:#FAC775;border:1px solid rgba(250,199,117,0.3);border-radius:18px;padding:14px 24px;pointer-events:none;text-align:center;box-shadow:0 8px 24px rgba(0,0,0,0.3);min-width:160px';
-    banner.innerHTML =
-      '<div style="font-size:24px;font-weight:900;letter-spacing:0.05em">' + label + '</div>' +
-      (reward > 0 ? '<div style="font-size:16px;font-weight:700;color:#BA7517;margin-top:4px">+' + reward + ' 💎</div>' : '');
-    document.body.appendChild(banner);
+    showTransientBanner({
+      tag: 'milestone',
+      holdMs: 1000, fadeMs: 300,
+      style: 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:9999;background:linear-gradient(135deg,#0F0D0B,#1C1A18);color:#FAC775;border:1px solid rgba(250,199,117,0.3);border-radius:18px;padding:14px 24px;pointer-events:auto;text-align:center;box-shadow:0 8px 24px rgba(0,0,0,0.3);min-width:160px',
+      html: '<div style="font-size:24px;font-weight:900;letter-spacing:0.05em">' + label + '</div>' +
+        (reward > 0 ? '<div style="font-size:16px;font-weight:700;color:#BA7517;margin-top:4px">+' + reward + ' 💎</div>' : ''),
+    });
     bumpScore();
     buzz([40, 60]);
     var msShake = parseInt(getEventConfig('shake_milestone', '2'), 10) || 0;
     if (msShake > 0) shakeGrid(msShake);
-    setTimeout(function() { banner.style.transition = 'opacity 0.3s'; banner.style.opacity = '0'; }, 1000);
-    setTimeout(function() { banner.remove(); }, 1300);
   }
 
   // Triple/Quad merge celebration
