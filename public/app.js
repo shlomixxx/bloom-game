@@ -6591,6 +6591,14 @@
             const nt = Math.min(t + 1, MAX_TIER);
             grid[kr][kc] = nt;
             chainCount++;
+            // DIAGNOSTIC: log the merge BEFORE any potentially-throwing side
+            // effects (showMilestoneBanner / showFloatingScore / etc) so even
+            // if those break, we still see the merge in the console. Catches
+            // the case where chain merges silently mutate grid without the
+            // [merge] log firing (user reported floating tile after a chain).
+            if (window.__bloomEngineLog) console.log('[merge-early]',
+              'chain=' + chainCount, 'tier=t' + nt, 'size=' + group.length,
+              'at=' + kr + ',' + kc, 'grid=' + serializeGrid());
             const multiplier = 1 + (chainCount - 1) * 0.5;
             var eventMult = getFeverMultiplier() * checkTargetMerge(nt);
             const points = Math.round(pointsFor(nt, group.length, multiplier) * eventMult);
