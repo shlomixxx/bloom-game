@@ -587,10 +587,12 @@ function getBotStatus() {
     exiting: exiting.length,
     config: { ...botConfig },
     bots: active.slice(0, 20).map(b => ({
+      deviceId: b.deviceId,
       name: b.name,
       score: b.score,
       tier: b.highestTier,
-      games: b.gamesPlayed
+      games: b.gamesPlayed,
+      mode: b.mode
     }))
   };
 }
