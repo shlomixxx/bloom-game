@@ -223,9 +223,10 @@ let botInterval = null;
 let botPool = null;
 let botConfig = {
   mode: 'practice', speed: 'normal', contestCode: null, challengeSlug: null,
-  targetCount: 10,  // how many bots should be active at any time
-  restartMin: 30,   // seconds to wait before new player replaces finished one
-  restartMax: 90    // max random delay
+  targetCount: 10,    // how many bots should be active at any time
+  restartMin: 30,     // seconds to wait before new player replaces finished one
+  restartMax: 90,     // max random delay
+  maxGamesPerBot: 1   // how many games a bot plays before being replaced (1 = retire after 1 game)
 };
 let usedNames = new Set(); // track recently used names to avoid repeats
 let pendingSpawns = []; // { spawnAt: timestamp }
@@ -308,9 +309,19 @@ function tickBot(bot) {
   if (isGameOver(bot.grid)) {
     submitBotScore(bot);
     bot.gamesPlayed++;
-    bot.exiting = true; // mark as done — will be removed and replaced
+
+    // Should this bot continue playing more games?
+    if (bot.gamesPlayed < (botConfig.maxGamesPerBot || 1)) {
+      // Reset for a new game — keep the same bot/name (multiple games in a row)
+      bot.grid = Array.from({ length: ROWS }, () => new Array(COLS).fill(0));
+      bot.score = 0;
+      bot.highestTier = 1;
+      return; // will play again next tick
+    }
+
+    // Reached max games — retire this bot
+    bot.exiting = true;
     scheduleReplacement();
-    // Remove from live view after a short delay (simulates "leaving")
     setTimeout(() => removeBot(bot), 3000);
     return;
   }
@@ -530,6 +541,7 @@ function startBots(count, pool, config) {
     botConfig.targetCount = count;
     if (config.restartMin != null) botConfig.restartMin = config.restartMin;
     if (config.restartMax != null) botConfig.restartMax = config.restartMax;
+    if (config.maxGamesPerBot != null) botConfig.maxGamesPerBot = Math.max(1, config.maxGamesPerBot | 0);
   }
   
   usedNames.clear();

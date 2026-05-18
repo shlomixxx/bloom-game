@@ -930,6 +930,10 @@
             <input type="number" id="bot-delay-max" min="10" max="600" value="90" style="width:50px;padding:5px;border:1px solid rgba(0,0,0,0.12);border-radius:6px;font-family:inherit;font-size:12px;text-align:center">
           </div>
         </div>
+        <div>
+          <div style="font-size:10px;color:#6F6E68;margin-bottom:3px">משחקים לכל בוט <button class="tip-btn" data-tip-text="<strong>כמה משחקים כל בוט יעשה ברצף</strong><br>אחרי game-over, הבוט יתחיל משחק חדש (עם אותו שם) אם לא הגיע למספר המקסימלי.<div class=&quot;tip-example&quot;>🎮 <strong>איך זה עובד</strong>: עם 1 (ברירת מחדל) — אחרי game-over הבוט פורש ושחקן חדש מחליף.<br><br>📊 <strong>עם 3-5</strong>: הבוט משחק 3-5 משחקים ברצף לפני שמחליפים אותו — מדמה שחקן אמיתי שמשחק כמה פעמים ברציפות.<br><br>🎯 <strong>אפקט בלוח מובילים</strong>: כל משחק שולח ניקוד נפרד. בוט עם 5 משחקים = 5 כניסות בלוח, אבל מאותו שחקן.<br><br>💡 <strong>טווח מומלץ</strong>: 1 = בוט אחד-אחד-אחד · 3-5 = יותר ריאליסטי</div>">?</button></div>
+          <input type="number" id="bot-max-games" min="1" max="50" value="1" style="width:60px;padding:5px;border:1px solid rgba(0,0,0,0.12);border-radius:6px;font-family:inherit;font-size:12px;text-align:center">
+        </div>
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn sm" id="btn-bots-start" style="background:#2E8B6F;flex:1">▶ הפעל</button>
@@ -1189,7 +1193,7 @@
   }
   // Restore + watch all admin prefs
   function initPrefs() {
-    var ids = ['live-auto', 'bot-count', 'bot-mode', 'bot-speed', 'bot-delay-min', 'bot-delay-max', 'bot-contest-code', 'bot-challenge-slug', 'bots-auto-refresh'];
+    var ids = ['live-auto', 'bot-count', 'bot-mode', 'bot-speed', 'bot-delay-min', 'bot-delay-max', 'bot-max-games', 'bot-contest-code', 'bot-challenge-slug', 'bots-auto-refresh'];
     ids.forEach(function(id) { restorePref(id); watchPref(id); });
     // Trigger mode change to show/hide contest field
     if ($('bot-mode')) $('bot-mode').dispatchEvent(new Event('change'));
@@ -3125,10 +3129,17 @@
     var fullEl = $('bots-status-full');
     var listEl = $('bots-status-list');
     if (!summaryEl) return;
-    if (!d || !d.running) {
-      summaryEl.textContent = '⚪ לא פעיל';
-      if (fullEl) fullEl.style.display = 'none';
-      if (listEl) listEl.innerHTML = '';
+    // Always show the full section so user gets diagnostic info
+    if (fullEl) fullEl.style.display = '';
+
+    if (!d) {
+      summaryEl.innerHTML = '⚠️ שגיאת חיבור לשרת — נסה שוב';
+      if (listEl) listEl.innerHTML = '<div style="color:#C8472F;font-size:12px;padding:12px;text-align:center">⚠️ אין תשובה מהשרת. בדוק אם השרת ב-Railway רץ.</div>';
+      return;
+    }
+    if (!d.running) {
+      summaryEl.innerHTML = '⚪ <strong>בוטים לא פעילים</strong><br><span style="font-size:10px;color:#A8A6A0">לחץ "▶ הפעל" כדי להתחיל</span>';
+      if (listEl) listEl.innerHTML = '<div style="color:#A8A6A0;font-size:11px;padding:12px;text-align:center">⚪ אין בוטים פעילים. הפעל אותם לראות אותם כאן.</div>';
       return;
     }
     var speedLabel = d.config.speed === 'slow' ? '🐌 איטי' : d.config.speed === 'fast' ? '⚡ מהיר' : d.config.speed === 'instant' ? '🚀 מקס' : '🏃 רגיל';
@@ -3136,18 +3147,25 @@
     if (d.config.contestCode) extra += ' · קוד: <strong>' + escHtml(d.config.contestCode) + '</strong>';
     if (d.config.challengeSlug) extra += ' · אתגר: <strong>' + escHtml(d.config.challengeSlug) + '</strong>';
     summaryEl.innerHTML = '🟢 <strong>' + d.count + ' משחקים פעילים</strong> · ' + botModeLabel(d.config.mode) + ' ' + speedLabel +
-      (d.pending > 0 ? ' · ⏳ ' + d.pending + ' ממתינים להחלפה' : '') + extra +
+      (d.pending > 0 ? ' · ⏳ ' + d.pending + ' ממתינים להחלפה' : '') +
+      (d.exiting > 0 ? ' · 🚪 ' + d.exiting + ' מסיימים' : '') + extra +
       '<br><span style="font-size:10px;color:#A8A6A0">💡 לחץ "👁 צפה" כדי לצפות במשחק של בוט ספציפי</span>';
-    if (fullEl) fullEl.style.display = '';
     if (!listEl) return;
-    if (!d.bots.length) { listEl.innerHTML = '<div style="color:#A8A6A0;font-size:11px;padding:8px;text-align:center">אין בוטים פעילים</div>'; return; }
-    // Render every bot, not just 8. Compact row with name/score/tier/games + watch button.
+    if (!d.bots || !d.bots.length) {
+      listEl.innerHTML =
+        '<div style="color:#A8A6A0;font-size:11px;padding:12px;text-align:center">' +
+        '⏳ כל הבוטים סיימו את המשחק האחרון<br>' +
+        '<span style="font-size:10px">מחכים ' + (d.config.restartMin || 30) + '-' + (d.config.restartMax || 90) + ' שניות לפני שמופיעים חדשים</span>' +
+        '</div>';
+      return;
+    }
+    // Render every bot with watch button
     var rows = d.bots.map(function(b) {
       var scoreFmt = (b.score | 0).toLocaleString();
       var watchUrl = location.origin + '/?watch=' + encodeURIComponent(b.deviceId || '');
       var watchBtn = b.deviceId
         ? '<a href="' + watchUrl + '" target="_blank" rel="noopener" style="background:#FAC775;color:#1C1A18;padding:5px 10px;border-radius:6px;font-size:11px;font-weight:700;text-decoration:none;white-space:nowrap;display:inline-block">👁 צפה</a>'
-        : '<span style="font-size:10px;color:#C8472F">⚠️ אין deviceId — רענן דף</span>';
+        : '<span style="font-size:10px;color:#C8472F">⚠️ רענן דף</span>';
       return '<div style="display:flex;align-items:center;gap:8px;padding:8px;border-bottom:1px solid rgba(0,0,0,0.05);font-size:12px">' +
         '<span style="font-size:14px">🤖</span>' +
         '<span style="flex:1;font-weight:600">' + escHtml(b.name) + '</span>' +
@@ -3173,13 +3191,14 @@
     var challengeSlug = mode === 'challenge' ? (($('bot-challenge-slug') && $('bot-challenge-slug').value) || '').trim() : null;
     var restartMin = parseInt($('bot-delay-min').value, 10) || 30;
     var restartMax = parseInt($('bot-delay-max').value, 10) || 90;
+    var maxGamesPerBot = parseInt($('bot-max-games').value, 10) || 1;
     if (mode === 'contest' && !contestCode) { toast('נא להזין קוד תחרות'); return; }
     if (mode === 'challenge' && !challengeSlug) { toast('נא להזין slug של אתגר'); return; }
     this.disabled = true; this.textContent = '...';
     var r = await api('/bots/start', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ count: count, mode: mode, speed: speed, contestCode: contestCode, challengeSlug: challengeSlug, restartMin: restartMin, restartMax: restartMax })
+      body: JSON.stringify({ count: count, mode: mode, speed: speed, contestCode: contestCode, challengeSlug: challengeSlug, restartMin: restartMin, restartMax: restartMax, maxGamesPerBot: maxGamesPerBot })
     });
     this.disabled = false; this.textContent = '▶ הפעל';
     if (r && r.ok) {

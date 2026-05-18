@@ -2817,7 +2817,8 @@ if (ADMIN_PATH && ADMIN_PASSWORD) {
       contestCode: req.body.contestCode || null,
       challengeSlug: req.body.challengeSlug || null,
       restartMin: Math.max(5, Math.min(300, parseInt(req.body.restartMin, 10) || 30)),
-      restartMax: Math.max(10, Math.min(600, parseInt(req.body.restartMax, 10) || 90))
+      restartMax: Math.max(10, Math.min(600, parseInt(req.body.restartMax, 10) || 90)),
+      maxGamesPerBot: Math.max(1, Math.min(50, parseInt(req.body.maxGamesPerBot, 10) || 1))
     };
     const started = startBots(count, pool, config);
     logAdminAction('bots.start', 'bots', String(count), { ...config, started });
