@@ -2809,6 +2809,30 @@ if (ADMIN_PATH && ADMIN_PASSWORD) {
   adminRouter.get('/api/bots', (_req, res) => {
     res.json({ ok: true, ...getBotStatus() });
   });
+  // Debug: raw bot engine state
+  adminRouter.get('/api/bots/debug', async (_req, res) => {
+    try {
+      const status = getBotStatus();
+      // Also query heartbeat table for bot rows
+      const bots = await pool.query(
+        `SELECT device_id, display_name, mode, score, highest_tier, updated_at,
+                EXTRACT(EPOCH FROM (NOW() - updated_at)) AS age_sec
+         FROM player_heartbeat
+         WHERE device_id LIKE 'bot-%'
+         ORDER BY updated_at DESC
+         LIMIT 20`
+      );
+      res.json({
+        ok: true,
+        engineStatus: status,
+        heartbeatBots: bots.rows,
+        serverTime: new Date().toISOString(),
+        uptime: Math.round(process.uptime()) + 's'
+      });
+    } catch (e) {
+      res.status(500).json({ error: 'server', detail: e.message });
+    }
+  });
   adminRouter.post('/api/bots/start', (req, res) => {
     const count = Math.max(1, Math.min(200, parseInt(req.body.count, 10) || 10));
     const config = {

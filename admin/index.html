@@ -938,6 +938,7 @@
       <div style="display:flex;gap:6px">
         <button class="btn sm" id="btn-bots-start" style="background:#2E8B6F;flex:1">▶ הפעל</button>
         <button class="btn sm" id="btn-bots-stop" style="background:#C8472F;flex:1">⏹ עצור</button>
+        <button class="btn sm" id="btn-bots-debug" style="background:#6F6E68;flex:0.4">🔍</button>
       </div>
     </div>
     <div id="bots-status-summary" style="margin-top:10px;font-size:12px;color:#6F6E68;padding:0 16px"></div>
@@ -3223,6 +3224,21 @@
     var r = await api('/bots/stop', { method: 'POST' });
     this.disabled = false; this.textContent = '⏹ עצור';
     if (r && r.ok) { toast('בוטים נעצרו'); refreshBotStatus(); }
+  };
+  $('btn-bots-debug').onclick = async function() {
+    var summaryEl = $('bots-status-summary');
+    var listEl = $('bots-status-list');
+    if (summaryEl) summaryEl.innerHTML = '🔍 <strong>מבצע בדיקה...</strong>';
+    try {
+      var r = await fetch(API + '/bots/debug');
+      var d = await r.json();
+      var html = '<div style="background:#1C1A18;color:#FAC775;padding:12px;border-radius:8px;font-family:monospace;font-size:10px;line-height:1.5;direction:ltr;text-align:left;white-space:pre-wrap;overflow-x:auto">' +
+        escHtml(JSON.stringify(d, null, 2)) + '</div>';
+      if (listEl) listEl.innerHTML = html;
+      if (summaryEl) summaryEl.innerHTML = '🔍 <strong>בדיקה הושלמה</strong> · running: ' + (d.engineStatus && d.engineStatus.running ? '✅' : '❌') + ' · count: ' + (d.engineStatus && d.engineStatus.count || 0) + ' · DB heartbeats: ' + (d.heartbeatBots ? d.heartbeatBots.length : 0);
+    } catch (e) {
+      if (summaryEl) summaryEl.innerHTML = '❌ <strong>שגיאת בדיקה</strong>: ' + escHtml(e.message);
+    }
   };
   refreshBotStatus();
   // Auto-refresh every 3 seconds for a live feel. Stops polling if the
