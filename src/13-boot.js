@@ -150,41 +150,59 @@
       '<div style="text-align:center;margin-top:14px">' +
         '<div style="font-size:10px;color:#A8A6A0;margin-bottom:8px" id="uspec-status">polling…</div>' +
         '<div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">' +
-          (document.referrer && document.referrer.indexOf('/api/') === -1
-            ? '<button class="btn" id="uspec-back" style="background:#1C1A18;color:#FAC775;font-weight:700">← חזרה לאדמין</button>'
-            : '') +
+          '<button class="btn" id="uspec-back" style="background:#1C1A18;color:#FAC775;font-weight:700">← חזרה לאדמין</button>' +
           '<button class="btn secondary" id="uspec-close">סגור</button>' +
         '</div>' +
       '</div>';
-    var backBtn = document.getElementById('uspec-back');
-    if (backBtn) backBtn.onclick = function() {
+    // Both buttons: try multiple navigation strategies for max compatibility
+    function closeSpectator() {
       if (_uniSpecTimer) { clearInterval(_uniSpecTimer); _uniSpecTimer = null; }
-      // Try to close this tab if opened by admin (target=_blank), else navigate back
-      if (window.opener && !window.opener.closed) {
-        window.close();
-      } else {
-        window.history.back();
+      // Strategy 1: close tab if opened by admin (target=_blank with rel=noopener)
+      try { window.close(); } catch(e) {}
+      // Strategy 2: navigate back via referrer (set on open)
+      var ref = document.referrer;
+      if (ref && ref.indexOf(location.origin) === 0 && ref.indexOf('?watch=') === -1) {
+        location.href = ref;
+        return;
       }
-    };
-    document.getElementById('uspec-close').onclick = function() {
-      if (_uniSpecTimer) { clearInterval(_uniSpecTimer); _uniSpecTimer = null; }
-      // Spectator was likely opened by admin in a new tab — try to close
-      if (window.opener && !window.opener.closed) {
-        window.close();
-      } else {
-        window.location.href = window.location.origin;
+      // Strategy 3: history.back if there's actually history
+      if (history.length > 1) {
+        history.back();
+        return;
       }
-    };
+      // Strategy 4: navigate to admin root if known via referrer indicator
+      if (ref && ref.indexOf('/admin') !== -1) {
+        location.href = ref.split('?')[0];
+        return;
+      }
+      // Last resort: clear ?watch param
+      location.href = location.origin + '/';
+    }
+    document.getElementById('uspec-back').onclick = closeSpectator;
+    document.getElementById('uspec-close').onclick = closeSpectator;
     var pollCount = 0;
     var foundOnce = false;
     function poll() {
       pollCount++;
       var statusEl = document.getElementById('uspec-status');
       fetch(API_BASE + '/api/live-state/' + encodeURIComponent(targetId))
-        .then(function(r) { return r.ok ? r.json() : null; })
+        .then(function(r) {
+          if (r.status === 404) return { _notFound: true };
+          return r.ok ? r.json() : null;
+        })
         .then(function(d) {
           if (!d) {
-            if (statusEl) statusEl.textContent = foundOnce ? '🔴 השחקן הפסיק לשחק' : 'ממתין לשחקן… (ניסיון ' + pollCount + ')';
+            if (statusEl) statusEl.textContent = foundOnce ? '🔴 השחקן הפסיק לשחק' : 'ממתין לשחקן... (ניסיון ' + pollCount + ')';
+            return;
+          }
+          if (d._notFound) {
+            if (statusEl) {
+              if (foundOnce) {
+                statusEl.innerHTML = '🔴 השחקן סיים את המשחק';
+              } else {
+                statusEl.innerHTML = '⚠️ שחקן לא נמצא · ID: <span style="direction:ltr">' + targetId.slice(0, 16) + '...</span><br><span style="font-size:10px">ייתכן שהבוט כבר סיים. חזור לאדמין ובחר אחר.</span>';
+              }
+            }
             return;
           }
           foundOnce = true;
