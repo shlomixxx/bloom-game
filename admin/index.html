@@ -3141,9 +3141,22 @@
     var summaryEl = $('bots-status-summary');
     var fullEl = $('bots-status-full');
     var listEl = $('bots-status-list');
-    if (!summaryEl) return;
+    if (!summaryEl) {
+      console.error('[admin] bots-status-summary element missing!');
+      return;
+    }
     // Always show the full section so user gets diagnostic info
-    if (fullEl) fullEl.style.display = '';
+    if (fullEl) fullEl.style.display = 'block';
+    if (listEl) listEl.style.display = 'block';
+    if (!listEl) console.error('[admin] bots-status-list element missing!');
+    // Make summary clickable to force refresh + always log to console
+    summaryEl.style.cursor = 'pointer';
+    summaryEl.title = 'לחץ לרענון מיידי';
+    if (!summaryEl.__hasClick) {
+      summaryEl.__hasClick = true;
+      summaryEl.onclick = function() { refreshBotStatus(); toast('🔄 מרענן...'); };
+    }
+    console.log('[admin] refreshBotStatus:', d);
 
     if (!d) {
       summaryEl.innerHTML = '⚠️ שגיאת חיבור לשרת — נסה שוב';
@@ -3229,9 +3242,16 @@
       if (r && r.ok) {
         toast('🤖 ' + r.count + ' בוטים · ' + botModeLabel(mode));
         if (summaryEl) summaryEl.innerHTML = '🟢 <strong>' + r.count + ' בוטים פעילים</strong> · ' + botModeLabel(mode);
-        // Refresh the normal bot list (with watch buttons) — not the debug JSON
-        setTimeout(refreshBotStatus, 500);
-        setTimeout(refreshBotStatus, 2000);
+        // Show loading state immediately in list
+        if ($('bots-status-list')) {
+          $('bots-status-list').innerHTML = '<div style="color:#A8A6A0;font-size:11px;padding:12px;text-align:center">⏳ טוען בוטים... (אם זה ממשיך, רענן את הדף)</div>';
+        }
+        if ($('bots-status-full')) $('bots-status-full').style.display = 'block';
+        // Multiple aggressive refreshes — server might need a moment to spawn bots
+        setTimeout(refreshBotStatus, 300);
+        setTimeout(refreshBotStatus, 1000);
+        setTimeout(refreshBotStatus, 2500);
+        setTimeout(refreshBotStatus, 5000);
       } else {
         if (summaryEl) summaryEl.innerHTML = '❌ <strong>השרת החזיר שגיאה</strong><br><span style="font-size:10px;color:#C8472F">תגובה: ' + JSON.stringify(r) + '</span>';
       }

@@ -2819,8 +2819,53 @@ if (ADMIN_PATH && ADMIN_PASSWORD) {
   // ---------- GAME CONFIG ----------
 
   // ---------- SERVER BOTS ----------
-  adminRouter.get('/api/bots', (_req, res) => {
-    res.json({ ok: true, ...getBotStatus() });
+  adminRouter.get('/api/bots', async (_req, res) => {
+    // Get our local in-memory state
+    const localStatus = getBotStatus();
+    // Also fetch from DB to handle multi-instance Railway setup —
+    // if WE'RE not the leader, the leader's bots show up in player_heartbeat
+    if (!localStatus.running) {
+      try {
+        const r = await pool.query(
+          `SELECT device_id, display_name, mode, score, highest_tier
+           FROM player_heartbeat
+           WHERE device_id LIKE 'bot-%' AND updated_at > NOW() - INTERVAL '15 seconds'
+           ORDER BY score DESC LIMIT 20`
+        );
+        if (r.rows.length > 0) {
+          // Bots are running on another instance — show their data
+          const cfgRow = await pool.query(`SELECT value FROM game_config WHERE key = '__bot_engine_state'`);
+          const cfg = cfgRow.rows.length ? JSON.parse(cfgRow.rows[0].value) : {};
+          return res.json({
+            ok: true,
+            running: true, // leader is running them
+            count: r.rows.length,
+            pending: 0,
+            exiting: 0,
+            config: {
+              mode: cfg.mode || 'practice',
+              speed: cfg.speed || 'normal',
+              contestCode: cfg.contestCode || null,
+              challengeSlug: cfg.challengeSlug || null,
+              targetCount: cfg.count || 0,
+              restartMin: cfg.restartMin || 30,
+              restartMax: cfg.restartMax || 90,
+              maxGamesPerBot: cfg.maxGamesPerBot || 1
+            },
+            bots: r.rows.map(b => ({
+              deviceId: b.device_id,
+              name: b.display_name,
+              score: b.score | 0,
+              tier: b.highest_tier | 0,
+              games: 0,
+              mode: b.mode
+            })),
+            _source: 'db' // hint that we got this from DB (we're a follower)
+          });
+        }
+      } catch (e) { /* fall through to local status */ }
+    }
+    res.json({ ok: true, ...localStatus, _source: 'local' });
   });
   // Debug: raw bot engine state
   adminRouter.get('/api/bots/debug', async (_req, res) => {
