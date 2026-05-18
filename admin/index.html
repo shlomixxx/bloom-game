@@ -3150,8 +3150,17 @@
       if (listEl) listEl.innerHTML = '<div style="color:#C8472F;font-size:12px;padding:12px;text-align:center">⚠️ אין תשובה מהשרת. בדוק אם השרת ב-Railway רץ.</div>';
       return;
     }
+
+    // Diagnostic line — always visible to admin so they know what's happening
+    var diagLine = '<div style="font-size:9px;color:#888;font-family:monospace;direction:ltr;text-align:left;padding:2px 6px;background:rgba(0,0,0,0.04);border-radius:4px;margin-top:4px">' +
+      'running:' + (d.running ? '✓' : '✗') +
+      ' count:' + (d.count || 0) +
+      ' bots[0]:' + (d.bots && d.bots[0] ? d.bots[0].deviceId.slice(0, 12) + '...' : 'none') +
+      ' refreshed:' + new Date().toLocaleTimeString('he-IL') +
+      '</div>';
+
     if (!d.running) {
-      summaryEl.innerHTML = '⚪ <strong>בוטים לא פעילים</strong><br><span style="font-size:10px;color:#A8A6A0">לחץ "▶ הפעל" כדי להתחיל</span>';
+      summaryEl.innerHTML = '⚪ <strong>בוטים לא פעילים</strong><br><span style="font-size:10px;color:#A8A6A0">לחץ "▶ הפעל" כדי להתחיל</span>' + diagLine;
       if (listEl) listEl.innerHTML = '<div style="color:#A8A6A0;font-size:11px;padding:12px;text-align:center">⚪ אין בוטים פעילים. הפעל אותם לראות אותם כאן.</div>';
       return;
     }
@@ -3162,7 +3171,8 @@
     summaryEl.innerHTML = '🟢 <strong>' + d.count + ' משחקים פעילים</strong> · ' + botModeLabel(d.config.mode) + ' ' + speedLabel +
       (d.pending > 0 ? ' · ⏳ ' + d.pending + ' ממתינים להחלפה' : '') +
       (d.exiting > 0 ? ' · 🚪 ' + d.exiting + ' מסיימים' : '') + extra +
-      '<br><span style="font-size:10px;color:#A8A6A0">💡 לחץ "👁 צפה" כדי לצפות במשחק של בוט ספציפי</span>';
+      '<br><span style="font-size:10px;color:#A8A6A0">💡 לחץ "👁 צפה" כדי לצפות במשחק של בוט ספציפי</span>' +
+      diagLine;
     if (!listEl) return;
     if (!d.bots || !d.bots.length) {
       listEl.innerHTML =
