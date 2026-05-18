@@ -5,6 +5,19 @@ import { readFileSync } from 'node:fs';
 import { pool, initDb } from './db.js';
 import { startBots, stopBots, getBotStatus } from './bot-engine.js';
 
+// ============================================================
+// GLOBAL ERROR HANDLERS — prevent crashes from killing the server
+// Node.js default: unhandled promise rejection KILLS the process.
+// We log and continue. Bot system depends on this — async errors
+// shouldn't restart the server and wipe in-memory bot state.
+// ============================================================
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('[unhandled rejection]', reason);
+});
+process.on('uncaughtException', (err) => {
+  console.error('[uncaught exception]', err);
+});
+
 const app = express();
 app.disable('x-powered-by');
 

@@ -298,7 +298,7 @@ function processPendingSpawns() {
     
     const bot = createBot();
     bots.set(bot.deviceId, bot);
-    if (bot.mode === 'contest' && bot.contestCode) joinContest(bot);
+    if (bot.mode === 'contest' && bot.contestCode) joinContest(bot).catch(e => console.error("[bots] joinContest:", e.message));
     spawned++;
   }
 }
@@ -307,7 +307,7 @@ function tickBot(bot) {
   if (!bot.active || bot.exiting) return;
   
   if (isGameOver(bot.grid)) {
-    submitBotScore(bot);
+    submitBotScore(bot).catch(e => console.error('[bots] submitBotScore:', e.message));
     bot.gamesPlayed++;
 
     // Should this bot continue playing more games?
@@ -550,7 +550,7 @@ function startBots(count, pool, config) {
   for (let i = 0; i < count; i++) {
     const bot = createBot();
     bots.set(bot.deviceId, bot);
-    if (bot.mode === 'contest' && bot.contestCode) joinContest(bot);
+    if (bot.mode === 'contest' && bot.contestCode) joinContest(bot).catch(e => console.error("[bots] joinContest:", e.message));
   }
   
   const tickMs = TICK_SPEEDS[botConfig.speed] || 5000;
