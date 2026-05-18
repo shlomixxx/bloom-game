@@ -231,8 +231,8 @@ let botConfig = {
 let usedNames = new Set(); // track recently used names to avoid repeats
 let pendingSpawns = []; // { spawnAt: timestamp }
 
-const TICK_SPEEDS = { slow: 8000, normal: 5000, fast: 2500, instant: 1000 };
-const MOVES_PER_TICK = { slow: 1, normal: 2, fast: 3, instant: 5 };
+const TICK_SPEEDS = { slow: 8000, normal: 3000, fast: 1500, instant: 800 };
+const MOVES_PER_TICK = { slow: 2, normal: 4, fast: 6, instant: 10 };
 
 function pickNewName() {
   // Find a name not recently used

@@ -8369,6 +8369,21 @@
   // Challenge can't be resumed, contest needs fresh fetch — safe to restore daily/practice.
   if (savedMode !== 'daily' && savedMode !== 'practice') savedMode = 'daily';
 
+  // ============================================================
+  // EARLY: Admin spectator check — must happen BEFORE init/home/contest
+  // so the spectator doesn't accidentally trigger user's game state,
+  // contest preview, or home screen render.
+  // ============================================================
+  const urlParams = new URLSearchParams(window.location.search);
+  var watchTarget = urlParams.get('watch');
+  if (watchTarget) {
+    // Bypass everything. Don't init game, don't show home, don't fire contest preview.
+    document.title = '👁 צפייה — BLOOM';
+    // Make sure the grid container exists; we re-render it ourselves
+    startUniversalSpectator(watchTarget);
+    return; // ← stop the rest of boot
+  }
+
   init(savedMode);
 
   // Show home only for genuine first-timers or if the player was idle.
@@ -8393,23 +8408,11 @@
   } catch (e) {}
 
   // Check for contest link
-  const urlParams = new URLSearchParams(window.location.search);
   const contestCodeFromURL = urlParams.get('c');
   if (contestCodeFromURL) {
     setTimeout(function() {
       showContestPreview(contestCodeFromURL.toUpperCase());
     }, 100);
-  }
-
-  // Admin spectator: ?watch=DEVICE_ID — universal spectator for ANY player
-  var watchTarget = urlParams.get('watch');
-  if (watchTarget) {
-    // Skip normal game — go straight to spectator mode.
-    // Don't show home screen, don't start own heartbeat.
-    if (_heartbeatTimer) { clearInterval(_heartbeatTimer); _heartbeatTimer = null; }
-    var homeEl = document.getElementById('home-screen');
-    if (homeEl) homeEl.remove();
-    startUniversalSpectator(watchTarget);
   }
 
   // Universal spectator — works for ALL modes (practice, daily, contest, challenge)
