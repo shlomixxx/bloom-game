@@ -3136,7 +3136,8 @@
     if (d.config.contestCode) extra += ' · קוד: <strong>' + escHtml(d.config.contestCode) + '</strong>';
     if (d.config.challengeSlug) extra += ' · אתגר: <strong>' + escHtml(d.config.challengeSlug) + '</strong>';
     summaryEl.innerHTML = '🟢 <strong>' + d.count + ' משחקים פעילים</strong> · ' + botModeLabel(d.config.mode) + ' ' + speedLabel +
-      (d.pending > 0 ? ' · ⏳ ' + d.pending + ' ממתינים להחלפה' : '') + extra;
+      (d.pending > 0 ? ' · ⏳ ' + d.pending + ' ממתינים להחלפה' : '') + extra +
+      '<br><span style="font-size:10px;color:#A8A6A0">💡 לחץ "👁 צפה" כדי לצפות במשחק של בוט ספציפי</span>';
     if (fullEl) fullEl.style.display = '';
     if (!listEl) return;
     if (!d.bots.length) { listEl.innerHTML = '<div style="color:#A8A6A0;font-size:11px;padding:8px;text-align:center">אין בוטים פעילים</div>'; return; }
@@ -3144,14 +3145,16 @@
     var rows = d.bots.map(function(b) {
       var scoreFmt = (b.score | 0).toLocaleString();
       var watchUrl = location.origin + '/?watch=' + encodeURIComponent(b.deviceId || '');
-      return '<div style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-bottom:1px solid rgba(0,0,0,0.05);font-size:12px">' +
+      var watchBtn = b.deviceId
+        ? '<a href="' + watchUrl + '" target="_blank" rel="noopener" style="background:#FAC775;color:#1C1A18;padding:5px 10px;border-radius:6px;font-size:11px;font-weight:700;text-decoration:none;white-space:nowrap;display:inline-block">👁 צפה</a>'
+        : '<span style="font-size:10px;color:#C8472F">⚠️ אין deviceId — רענן דף</span>';
+      return '<div style="display:flex;align-items:center;gap:8px;padding:8px;border-bottom:1px solid rgba(0,0,0,0.05);font-size:12px">' +
         '<span style="font-size:14px">🤖</span>' +
         '<span style="flex:1;font-weight:600">' + escHtml(b.name) + '</span>' +
-        '<span style="font-family:ui-monospace,Menlo,monospace;color:#A8A6A0">tier ' + (b.tier | 0) + '</span>' +
-        '<span style="color:#6F6E68">·</span>' +
-        '<span style="font-family:ui-monospace,Menlo,monospace;color:#6F6E68">' + (b.games | 0) + ' משחקים</span>' +
-        '<span style="font-weight:800;color:#BA7517;min-width:80px;text-align:left">' + scoreFmt + '</span>' +
-        (b.deviceId ? '<a href="' + watchUrl + '" target="_blank" style="background:#FAC775;color:#1C1A18;padding:3px 8px;border-radius:6px;font-size:10px;font-weight:700;text-decoration:none">👁 צפה</a>' : '') +
+        '<span style="font-family:ui-monospace,Menlo,monospace;color:#A8A6A0;font-size:11px">T' + (b.tier | 0) + '</span>' +
+        '<span style="font-family:ui-monospace,Menlo,monospace;color:#6F6E68;font-size:11px">' + (b.games | 0) + 'g</span>' +
+        '<span style="font-weight:800;color:#BA7517;min-width:70px;text-align:left">' + scoreFmt + '</span>' +
+        watchBtn +
       '</div>';
     }).join('');
     listEl.innerHTML = rows;
