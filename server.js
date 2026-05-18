@@ -2826,43 +2826,49 @@ if (ADMIN_PATH && ADMIN_PASSWORD) {
     // if WE'RE not the leader, the leader's bots show up in player_heartbeat
     if (!localStatus.running) {
       try {
+        // First check if there's a saved bot config — if not, no bots should be running
+        const cfgRow = await pool.query(`SELECT value FROM game_config WHERE key = '__bot_engine_state'`);
+        if (!cfgRow.rows.length) {
+          // No saved config = admin pressed stop or never started → return not running
+          return res.json({ ok: true, ...localStatus, _source: 'local-no-config' });
+        }
+        const cfg = JSON.parse(cfgRow.rows[0].value);
+        if (!cfg.enabled) {
+          return res.json({ ok: true, ...localStatus, _source: 'local-disabled' });
+        }
+        // Check for fresh bot heartbeats (5s window — bots flush every 1.5-3s)
         const r = await pool.query(
           `SELECT device_id, display_name, mode, score, highest_tier
            FROM player_heartbeat
-           WHERE device_id LIKE 'bot-%' AND updated_at > NOW() - INTERVAL '15 seconds'
+           WHERE device_id LIKE 'bot-%' AND updated_at > NOW() - INTERVAL '6 seconds'
            ORDER BY score DESC LIMIT 20`
         );
-        if (r.rows.length > 0) {
-          // Bots are running on another instance — show their data
-          const cfgRow = await pool.query(`SELECT value FROM game_config WHERE key = '__bot_engine_state'`);
-          const cfg = cfgRow.rows.length ? JSON.parse(cfgRow.rows[0].value) : {};
-          return res.json({
-            ok: true,
-            running: true, // leader is running them
-            count: r.rows.length,
-            pending: 0,
-            exiting: 0,
-            config: {
-              mode: cfg.mode || 'practice',
-              speed: cfg.speed || 'normal',
-              contestCode: cfg.contestCode || null,
-              challengeSlug: cfg.challengeSlug || null,
-              targetCount: cfg.count || 0,
-              restartMin: cfg.restartMin || 30,
-              restartMax: cfg.restartMax || 90,
-              maxGamesPerBot: cfg.maxGamesPerBot || 1
-            },
-            bots: r.rows.map(b => ({
-              deviceId: b.device_id,
-              name: b.display_name,
-              score: b.score | 0,
-              tier: b.highest_tier | 0,
-              games: 0,
-              mode: b.mode
-            })),
-            _source: 'db' // hint that we got this from DB (we're a follower)
-          });
-        }
+        return res.json({
+          ok: true,
+          running: r.rows.length > 0, // only truly running if we see fresh heartbeats
+          count: r.rows.length,
+          pending: 0,
+          exiting: 0,
+          config: {
+            mode: cfg.mode || 'practice',
+            speed: cfg.speed || 'normal',
+            contestCode: cfg.contestCode || null,
+            challengeSlug: cfg.challengeSlug || null,
+            targetCount: cfg.count || 0,
+            restartMin: cfg.restartMin || 30,
+            restartMax: cfg.restartMax || 90,
+            maxGamesPerBot: cfg.maxGamesPerBot || 1
+          },
+          bots: r.rows.map(b => ({
+            deviceId: b.device_id,
+            name: b.display_name,
+            score: b.score | 0,
+            tier: b.highest_tier | 0,
+            games: 0,
+            mode: b.mode
+          })),
+          _source: 'db'
+        });
       } catch (e) { /* fall through to local status */ }
     }
     res.json({ ok: true, ...localStatus, _source: 'local' });
@@ -2912,11 +2918,14 @@ if (ADMIN_PATH && ADMIN_PASSWORD) {
     ).catch(() => {});
     res.json({ ok: true, count: started });
   });
-  adminRouter.post('/api/bots/stop', (_req, res) => {
-    stopBots();
+  adminRouter.post('/api/bots/stop', async (_req, res) => {
+    stopBots(); // stops on THIS instance only
     logAdminAction('bots.stop', 'bots', '0', {});
-    // Clear persisted state so bots don't auto-restart
+    // Clear persisted state so bots don't auto-restart on other instances
     pool.query(`DELETE FROM game_config WHERE key = '__bot_engine_state'`).catch(() => {});
+    pool.query(`DELETE FROM game_config WHERE key = '__bot_engine_leader'`).catch(() => {});
+    // Clear ALL bot heartbeats so followers report 'not running' immediately
+    pool.query(`DELETE FROM player_heartbeat WHERE device_id LIKE 'bot-%'`).catch(() => {});
     res.json({ ok: true });
   });
 
@@ -4151,12 +4160,22 @@ initDb()
         isBotLeader = false;
         console.log(`[bots] no longer the leader — stopping`);
         stopBots();
+      } else if (acquired && isBotLeader) {
+        // Still the leader — check if admin pressed stop (state row was deleted)
+        try {
+          const r = await pool.query(`SELECT value FROM game_config WHERE key = '__bot_engine_state' LIMIT 1`);
+          if (!r.rows.length && getBotStatus().running) {
+            // State was deleted but we're still running bots — stop them
+            console.log(`[bots] state row deleted — stopping bots`);
+            stopBots();
+          }
+        } catch (e) {}
       }
     }
 
-    // First attempt 2s after startup, then renew/check every 30s
+    // First attempt 2s after startup, then renew/check every 5s for fast response
     setTimeout(startBotsIfLeader, 2000);
-    setInterval(startBotsIfLeader, 30000);
+    setInterval(startBotsIfLeader, 5000);
 
     const server = app.listen(port, () => console.log(`[bloom] listening on ${port}`));
 
