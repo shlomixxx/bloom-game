@@ -3194,17 +3194,29 @@
     var maxGamesPerBot = parseInt($('bot-max-games').value, 10) || 1;
     if (mode === 'contest' && !contestCode) { toast('נא להזין קוד תחרות'); return; }
     if (mode === 'challenge' && !challengeSlug) { toast('נא להזין slug של אתגר'); return; }
+    var summaryEl = $('bots-status-summary');
+    if (summaryEl) summaryEl.innerHTML = '⏳ <strong>שולח בקשה לשרת...</strong>';
     this.disabled = true; this.textContent = '...';
-    var r = await api('/bots/start', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ count: count, mode: mode, speed: speed, contestCode: contestCode, challengeSlug: challengeSlug, restartMin: restartMin, restartMax: restartMax, maxGamesPerBot: maxGamesPerBot })
-    });
-    this.disabled = false; this.textContent = '▶ הפעל';
-    if (r && r.ok) {
-      toast('🤖 ' + r.count + ' בוטים · ' + botModeLabel(mode));
-      refreshBotStatus();
+    try {
+      var r = await api('/bots/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ count: count, mode: mode, speed: speed, contestCode: contestCode, challengeSlug: challengeSlug, restartMin: restartMin, restartMax: restartMax, maxGamesPerBot: maxGamesPerBot })
+      });
+      if (r && r.ok) {
+        toast('🤖 ' + r.count + ' בוטים · ' + botModeLabel(mode));
+        if (summaryEl) summaryEl.innerHTML = '🟢 <strong>השרת אישר: ' + r.count + ' בוטים</strong><br><span style="font-size:10px;color:#A8A6A0">⏳ מחכה לרענון סטטוס...</span>';
+        // Multiple refreshes to catch the first tick
+        setTimeout(refreshBotStatus, 200);
+        setTimeout(refreshBotStatus, 1500);
+        setTimeout(refreshBotStatus, 3500);
+      } else {
+        if (summaryEl) summaryEl.innerHTML = '❌ <strong>השרת החזיר שגיאה</strong><br><span style="font-size:10px;color:#C8472F">תגובה: ' + JSON.stringify(r) + '</span>';
+      }
+    } catch (e) {
+      if (summaryEl) summaryEl.innerHTML = '❌ <strong>שגיאת רשת</strong><br><span style="font-size:10px;color:#C8472F">' + (e && e.message || e) + '</span>';
     }
+    this.disabled = false; this.textContent = '▶ הפעל';
   };
   $('btn-bots-stop').onclick = async function() {
     this.disabled = true; this.textContent = '...';

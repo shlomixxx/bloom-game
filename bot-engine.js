@@ -555,19 +555,27 @@ function startBots(count, pool, config) {
   
   const tickMs = TICK_SPEEDS[botConfig.speed] || 5000;
   botInterval = setInterval(() => {
-    // Tick all active bots
-    for (const bot of bots.values()) tickBot(bot);
-    // Spawn replacements for finished bots
-    processPendingSpawns();
-    // Flush to DB
-    flushBots();
+    try {
+      // Tick all active bots
+      for (const bot of bots.values()) {
+        try { tickBot(bot); } catch (e) { console.error('[bots] tick error:', e.message); }
+      }
+      // Spawn replacements for finished bots
+      try { processPendingSpawns(); } catch (e) { console.error('[bots] spawn error:', e.message); }
+      // Flush to DB
+      flushBots().catch(e => console.error('[bots] flush error:', e.message));
+    } catch (e) {
+      console.error('[bots] interval error:', e.message);
+    }
   }, tickMs);
   
   // Immediate first tick
-  for (const bot of bots.values()) tickBot(bot);
-  flushBots();
+  for (const bot of bots.values()) {
+    try { tickBot(bot); } catch (e) { console.error('[bots] initial tick:', e.message); }
+  }
+  flushBots().catch(e => console.error('[bots] initial flush:', e.message));
   
-  console.log(`[bots] started ${bots.size} bots — mode: ${botConfig.mode}, speed: ${botConfig.speed}, rotation: ${botConfig.restartMin}-${botConfig.restartMax}s`);
+  console.log(`[bots] started ${bots.size} bots — mode: ${botConfig.mode}, speed: ${botConfig.speed}, max games: ${botConfig.maxGamesPerBot}, rotation: ${botConfig.restartMin}-${botConfig.restartMax}s`);
   return bots.size;
 }
 
