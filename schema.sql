@@ -313,12 +313,14 @@ INSERT INTO game_config (key, value) VALUES ('weekly_name', 'אתגר שבועי
 -- Wager settlements (tracks every credit movement from bets)
 CREATE TABLE IF NOT EXISTS wager_settlements (
   id           SERIAL PRIMARY KEY,
-  contest_code VARCHAR(8),
+  contest_code VARCHAR(32),
   device_id    VARCHAR(64) NOT NULL,
   amount       INT NOT NULL,
-  type         VARCHAR(20) NOT NULL,
+  type         VARCHAR(32) NOT NULL,
   created_at   TIMESTAMP NOT NULL DEFAULT NOW()
 );
+ALTER TABLE wager_settlements ALTER COLUMN contest_code TYPE VARCHAR(32);
+ALTER TABLE wager_settlements ALTER COLUMN type TYPE VARCHAR(32);
 
 CREATE INDEX IF NOT EXISTS idx_wager_settlements_contest
   ON wager_settlements (contest_code);

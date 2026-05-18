@@ -4046,16 +4046,49 @@ initDb()
       .catch(() => {});
 
     // Auto-restart bots if admin had them running before this server instance
-    // started (crash recovery / deploy resilience). Only fires if admin
-    // explicitly enabled bots — never auto-starts on a fresh install.
-    setTimeout(() => {
-      pool.query(`SELECT value FROM game_config WHERE key = '__bot_engine_state' LIMIT 1`)
-        .then(r => {
-          if (!r.rows.length) return;
-          try {
+    // started (crash recovery / deploy resilience).
+    //
+    // CRITICAL: When Railway runs multiple instances (horizontal scaling),
+    // we use a DB-based leader lock so only ONE instance runs the bot engine.
+    // Otherwise N instances all start/stop bots in a loop, killing each other.
+    //
+    // The lock is a row in game_config with our instance's ID. We check
+    // every 30s — if we're still the leader, run bots. If not, stay idle.
+    const INSTANCE_ID = `${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const LOCK_TTL_SEC = 90; // lock expires if not renewed
+    let isBotLeader = false;
+
+    async function tryAcquireBotLock() {
+      try {
+        // Attempt to grab the lock atomically. INSERT...ON CONFLICT DO UPDATE
+        // only succeeds if the existing row is stale (older than LOCK_TTL_SEC).
+        const r = await pool.query(
+          `INSERT INTO game_config (key, value, updated_at) VALUES ($1, $2, NOW())
+           ON CONFLICT (key) DO UPDATE
+             SET value = EXCLUDED.value, updated_at = NOW()
+             WHERE game_config.value = $2
+                OR game_config.updated_at < NOW() - INTERVAL '${LOCK_TTL_SEC} seconds'
+           RETURNING value`,
+          ['__bot_engine_leader', INSTANCE_ID]
+        );
+        return r.rows.length > 0 && r.rows[0].value === INSTANCE_ID;
+      } catch (e) {
+        return false;
+      }
+    }
+
+    async function startBotsIfLeader() {
+      const acquired = await tryAcquireBotLock();
+      if (acquired && !isBotLeader) {
+        isBotLeader = true;
+        console.log(`[bots] this instance is the leader (${INSTANCE_ID})`);
+        // Load saved state and start bots
+        try {
+          const r = await pool.query(`SELECT value FROM game_config WHERE key = '__bot_engine_state' LIMIT 1`);
+          if (r.rows.length) {
             const state = JSON.parse(r.rows[0].value);
             if (state && state.enabled && state.count > 0) {
-              console.log(`[startup] auto-restarting ${state.count} bots from persisted config`);
+              console.log(`[bots] auto-restarting ${state.count} bots from persisted config`);
               startBots(state.count, pool, {
                 mode: state.mode || 'practice',
                 speed: state.speed || 'normal',
@@ -4066,10 +4099,19 @@ initDb()
                 maxGamesPerBot: state.maxGamesPerBot || 1
               });
             }
-          } catch (e) { console.error('[startup] failed to restore bot state:', e.message); }
-        })
-        .catch(() => {});
-    }, 2000); // wait 2s for DB pool to be ready
+          }
+        } catch (e) { console.error('[bots] failed to restore state:', e.message); }
+      } else if (!acquired && isBotLeader) {
+        // We were the leader but lost the lock — stop bots
+        isBotLeader = false;
+        console.log(`[bots] no longer the leader — stopping`);
+        stopBots();
+      }
+    }
+
+    // First attempt 2s after startup, then renew/check every 30s
+    setTimeout(startBotsIfLeader, 2000);
+    setInterval(startBotsIfLeader, 30000);
 
     const server = app.listen(port, () => console.log(`[bloom] listening on ${port}`));
 
@@ -4216,6 +4258,12 @@ initDb()
     // ============================================================
     function shutdown(signal) {
       console.log(`[bloom] ${signal} received, shutting down gracefully`);
+      // Release leader lock so other instance can take over instantly
+      if (isBotLeader) {
+        pool.query(`DELETE FROM game_config WHERE key = '__bot_engine_leader' AND value = $1`, [INSTANCE_ID])
+          .catch(() => {});
+        stopBots();
+      }
       server.close(() => {
         pool.end(() => {
           console.log('[bloom] shut down complete');
