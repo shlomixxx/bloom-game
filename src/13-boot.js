@@ -7,10 +7,11 @@
     if (document.visibilityState === 'hidden') return;
     if (document.getElementById('home-screen')) return;
     if (window.__bloomBotActive) return; // bot games don't appear in admin stats
-    var gridData = null;
-    if (Array.isArray(grid) && grid.length > 0) {
-      gridData = grid.map(function(row) { return row.slice(); });
-    }
+    // Don't send heartbeat if game is over (admin shouldn't see finished players as "active")
+    if (window.__bloomGameOver) return;
+    // Don't send heartbeat if no game is active (no grid initialized)
+    if (!Array.isArray(grid) || grid.length === 0) return;
+    var gridData = grid.map(function(row) { return row.slice(); });
     fetch(API_BASE + '/api/heartbeat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -27,6 +28,17 @@
   _heartbeatTimer = setInterval(sendHeartbeat, 5000);
   // Send first heartbeat immediately on interaction
   sendHeartbeat();
+
+  // Called from game-over to immediately remove player from admin live view
+  window.endHeartbeat = function() {
+    try {
+      fetch(API_BASE + '/api/heartbeat/end', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deviceId: deviceId })
+      }).catch(function() {});
+    } catch(e) {}
+  };
 
   // Register the service worker for offline play. Silent if unsupported
   // (older Safari) — the game still works fine without it.

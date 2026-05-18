@@ -14,6 +14,7 @@
     if (mode === 'practice') sessionDifficulty = readPracticeDifficulty();
     grid = Array.from({length: getBoardRows()}, function() { return Array(getBoardCols()).fill(0); });
     score = 0; highestTier = 1; busy = false; dropsCount = 0;
+    window.__bloomGameOver = false; // new game = active again
     currentGameMaxChain = 0;
     tierUpHit = {};   // reset milestone-bonus tracker for this fresh game
     scoreMilestonesHit = {}; // reset score milestones
@@ -1424,6 +1425,8 @@
       // Column is full — check if the whole board is game-over
       if (isGameOver()) {
         busy = true; // prevent further taps
+        window.__bloomGameOver = true; // stop heartbeat
+        if (window.endHeartbeat) window.endHeartbeat(); // remove from admin live view
         stopEventSystem();
         // Save best score BEFORE rendering game-over
         var isNewBest = score > best && !skinTrialMode;
@@ -1542,6 +1545,8 @@
     if (isNewBest) { best = score; localStorage.setItem(BEST_KEY, String(best)); }
     if (isGameOver()) {
       clearTimeout(_busyTimer);
+      window.__bloomGameOver = true; // stop heartbeat
+      if (window.endHeartbeat) window.endHeartbeat(); // remove from admin live view
       stopEventSystem();
       soundGameOver();
       buzz([60, 80, 100]);

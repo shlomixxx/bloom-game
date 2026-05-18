@@ -2519,7 +2519,7 @@ if (ADMIN_PATH && ADMIN_PASSWORD) {
       const heartbeat = await pool.query(
         `SELECT device_id, display_name, mode, score, highest_tier, updated_at
          FROM player_heartbeat
-         WHERE updated_at > NOW() - INTERVAL '45 seconds'
+         WHERE updated_at > NOW() - INTERVAL '20 seconds'
          ORDER BY score DESC`
       );
       const watchers = await pool.query(
@@ -3855,6 +3855,18 @@ app.post('/api/heartbeat', async (req, res) => {
     res.json({ ok: true });
   } catch (e) {
     console.error('heartbeat', e.message);
+    res.status(500).json({ error: 'server' });
+  }
+});
+
+// DELETE heartbeat — called when game ends so player disappears from admin live view
+app.post('/api/heartbeat/end', async (req, res) => {
+  try {
+    const { deviceId } = req.body || {};
+    if (!deviceId) return res.status(400).json({ error: 'missing_device' });
+    await pool.query('DELETE FROM player_heartbeat WHERE device_id = $1', [String(deviceId).slice(0, 64)]);
+    res.json({ ok: true });
+  } catch (e) {
     res.status(500).json({ error: 'server' });
   }
 });

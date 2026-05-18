@@ -542,6 +542,7 @@
     }
     grid = Array.from({length: getBoardRows()}, function() { return Array(getBoardCols()).fill(0); });
     score = 0; highestTier = 1; busy = false; dropsCount = 0;
+    window.__bloomGameOver = false; // duel = active game
     currentGameMaxChain = 0;
     tierUpHit = {};
     gameMergesPerTier = {};
@@ -5678,6 +5679,7 @@
     if (mode === 'practice') sessionDifficulty = readPracticeDifficulty();
     grid = Array.from({length: getBoardRows()}, function() { return Array(getBoardCols()).fill(0); });
     score = 0; highestTier = 1; busy = false; dropsCount = 0;
+    window.__bloomGameOver = false; // new game = active again
     currentGameMaxChain = 0;
     tierUpHit = {};   // reset milestone-bonus tracker for this fresh game
     scoreMilestonesHit = {}; // reset score milestones
@@ -7088,6 +7090,8 @@
       // Column is full — check if the whole board is game-over
       if (isGameOver()) {
         busy = true; // prevent further taps
+        window.__bloomGameOver = true; // stop heartbeat
+        if (window.endHeartbeat) window.endHeartbeat(); // remove from admin live view
         stopEventSystem();
         // Save best score BEFORE rendering game-over
         var isNewBest = score > best && !skinTrialMode;
@@ -7206,6 +7210,8 @@
     if (isNewBest) { best = score; localStorage.setItem(BEST_KEY, String(best)); }
     if (isGameOver()) {
       clearTimeout(_busyTimer);
+      window.__bloomGameOver = true; // stop heartbeat
+      if (window.endHeartbeat) window.endHeartbeat(); // remove from admin live view
       stopEventSystem();
       soundGameOver();
       buzz([60, 80, 100]);
@@ -8291,10 +8297,11 @@
     if (document.visibilityState === 'hidden') return;
     if (document.getElementById('home-screen')) return;
     if (window.__bloomBotActive) return; // bot games don't appear in admin stats
-    var gridData = null;
-    if (Array.isArray(grid) && grid.length > 0) {
-      gridData = grid.map(function(row) { return row.slice(); });
-    }
+    // Don't send heartbeat if game is over (admin shouldn't see finished players as "active")
+    if (window.__bloomGameOver) return;
+    // Don't send heartbeat if no game is active (no grid initialized)
+    if (!Array.isArray(grid) || grid.length === 0) return;
+    var gridData = grid.map(function(row) { return row.slice(); });
     fetch(API_BASE + '/api/heartbeat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -8311,6 +8318,17 @@
   _heartbeatTimer = setInterval(sendHeartbeat, 5000);
   // Send first heartbeat immediately on interaction
   sendHeartbeat();
+
+  // Called from game-over to immediately remove player from admin live view
+  window.endHeartbeat = function() {
+    try {
+      fetch(API_BASE + '/api/heartbeat/end', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deviceId: deviceId })
+      }).catch(function() {});
+    } catch(e) {}
+  };
 
   // Register the service worker for offline play. Silent if unsupported
   // (older Safari) — the game still works fine without it.

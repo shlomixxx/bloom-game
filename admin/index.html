@@ -1091,7 +1091,7 @@
     <div id="live-host">
       <div class="loading">טוען…</div>
     </div>
-    <div class="help">מי משחק כרגע + מי צופה — מתעדכן בכל לחיצה על "רענון".</div>
+    <div class="help">מי משחק כרגע + מי צופה — מתעדכן אוטומטית כל 5 שניות.</div>
   </section>
 
   <!-- Audit log -->
@@ -3082,11 +3082,11 @@
     this.disabled = false; this.textContent = 'שמור';
   };
 
-  // Live section: dedicated refresh + auto-refresh every 10s
+  // Live section: dedicated refresh + auto-refresh every 5s
   $('btn-live-refresh').onclick = function() { loadLive(); toast('לייב עודכן'); };
   var _liveAutoTimer = setInterval(function() {
     if ($('live-auto') && $('live-auto').checked) loadLive();
-  }, 10000);
+  }, 5000);
 
   // ============ VERSION INFO ============
   async function loadVersion() {

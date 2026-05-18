@@ -247,6 +247,7 @@
     }
     grid = Array.from({length: getBoardRows()}, function() { return Array(getBoardCols()).fill(0); });
     score = 0; highestTier = 1; busy = false; dropsCount = 0;
+    window.__bloomGameOver = false; // duel = active game
     currentGameMaxChain = 0;
     tierUpHit = {};
     gameMergesPerTier = {};
