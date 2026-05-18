@@ -352,6 +352,7 @@
     grid-template-columns: repeat(4, 1fr);
     grid-template-rows: repeat(6, 1fr);
     gap: 5px;
+    position: relative;
     /* Width + height are set by fitGrid() in JS to keep cells SQUARE.
        The grid centers inside .grid-wrap when narrower than the container. */
   }
@@ -899,12 +900,41 @@
 
   /* ── Near-death warning (red edges when board almost full) ── */
   #grid.near-death {
-    box-shadow: inset 0 0 18px rgba(200,71,47,0.25) !important;
-    animation: dangerPulse 1.2s ease-in-out infinite !important;
+    box-shadow: inset 0 0 30px rgba(200,71,47,0.55), 0 0 24px rgba(200,71,47,0.45) !important;
+    animation: dangerPulse 0.9s ease-in-out infinite !important;
+    border-radius: 16px;
+    transition: box-shadow 200ms ease;
+  }
+  #grid.near-death::before {
+    content: "⚠️ הלוח כמעט מלא!";
+    position: absolute;
+    top: -28px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 11px;
+    font-weight: 800;
+    color: #C8472F;
+    background: rgba(255,255,255,0.95);
+    padding: 4px 12px;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(200,71,47,0.35);
+    direction: rtl;
+    white-space: nowrap;
+    animation: warnFloat 1.2s ease-in-out infinite;
+    z-index: 5;
+    pointer-events: none;
   }
   @keyframes dangerPulse {
-    0%,100% { box-shadow: inset 0 0 14px rgba(200,71,47,0.2); }
-    50% { box-shadow: inset 0 0 24px rgba(200,71,47,0.4); }
+    0%,100% {
+      box-shadow: inset 0 0 20px rgba(200,71,47,0.4), 0 0 16px rgba(200,71,47,0.3);
+    }
+    50% {
+      box-shadow: inset 0 0 36px rgba(200,71,47,0.65), 0 0 32px rgba(200,71,47,0.55);
+    }
+  }
+  @keyframes warnFloat {
+    0%,100% { transform: translateX(-50%) translateY(0); }
+    50% { transform: translateX(-50%) translateY(-3px); }
   }
 
   /* (drop-target removed — clean board is better on 4-column grid) */

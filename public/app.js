@@ -8844,14 +8844,19 @@
 
     var overlay = document.createElement('div');
     overlay.id = 'event-drop-overlay';
-    overlay.style.cssText = 'position:fixed;top:' + rect.top + 'px;left:' + rect.left + 'px;width:' + rect.width + 'px;height:' + rect.height + 'px;z-index:100;pointer-events:none;display:flex;flex-direction:column;align-items:center;justify-content:center;border-radius:12px;border:3px solid #FAC775;background:rgba(0,0,0,0.8);animation:eventAppear 0.3s ease-out';
+    overlay.style.cssText = 'position:fixed;top:' + rect.top + 'px;left:' + rect.left + 'px;width:' + rect.width + 'px;height:' + rect.height + 'px;z-index:100;pointer-events:none;border-radius:12px;border:3px solid #FAC775;background:radial-gradient(circle,rgba(28,26,24,0.95) 0%,rgba(28,26,24,0.75) 100%);box-shadow:0 0 20px rgba(250,199,117,0.6),inset 0 0 12px rgba(250,199,117,0.3);animation:eventAppear 0.3s ease-out';
+    // Layered structure: ring (SVG) absolutely positioned around the emoji+timer column.
+    // Emoji shrunk slightly to leave room for the timer below it, and emoji+timer are stacked
+    // in a flex column at the center, so the SVG ring never overlaps the digits.
     overlay.innerHTML =
-      '<span style="font-size:28px;animation:eventBob 1s ease-in-out infinite">' + evt.emoji + '</span>' +
-      '<svg width="40" height="40" viewBox="0 0 36 36" style="position:absolute">' +
-        '<circle cx="18" cy="18" r="16" fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="2.5"/>' +
-        '<circle id="event-ring-fg" cx="18" cy="18" r="16" fill="none" stroke="#2E8B6F" stroke-width="2.5" stroke-dasharray="100.5" stroke-dashoffset="0" stroke-linecap="round" transform="rotate(-90 18 18)"/>' +
+      '<svg width="' + (rect.width - 8) + '" height="' + (rect.height - 8) + '" viewBox="0 0 36 36" style="position:absolute;top:4px;left:4px;pointer-events:none">' +
+        '<circle cx="18" cy="18" r="16" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="2"/>' +
+        '<circle id="event-ring-fg" cx="18" cy="18" r="16" fill="none" stroke="#2E8B6F" stroke-width="2.5" stroke-dasharray="100.5" stroke-dashoffset="0" stroke-linecap="round" transform="rotate(-90 18 18)" style="filter:drop-shadow(0 0 4px currentColor);transition:stroke 200ms ease"/>' +
       '</svg>' +
-      '<span id="event-timer-text" style="font-size:12px;font-weight:800;color:#FFF;margin-top:2px;text-shadow:0 1px 3px rgba(0,0,0,0.8)">' + evt.maxTimer + 's</span>';
+      '<div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px">' +
+        '<span style="font-size:24px;line-height:1;animation:eventBob 1s ease-in-out infinite;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.5))">' + evt.emoji + '</span>' +
+        '<span id="event-timer-text" style="font-size:11px;font-weight:900;color:#FFF;line-height:1;letter-spacing:0.5px;text-shadow:0 1px 4px rgba(0,0,0,0.95),0 0 8px rgba(250,199,117,0.4);font-variant-numeric:tabular-nums">' + evt.maxTimer.toFixed(1) + 's</span>' +
+      '</div>';
     document.body.appendChild(overlay);
   }
 
@@ -8865,6 +8870,10 @@
     if (pct > 0.5) ring.style.stroke = '#2E8B6F';
     else if (pct > 0.25) ring.style.stroke = '#FAC775';
     else ring.style.stroke = '#C8472F';
+    // Timer text changes color too, matching urgency
+    if (pct > 0.5) text.style.color = '#FFF';
+    else if (pct > 0.25) text.style.color = '#FAC775';
+    else text.style.color = '#FF6B5B';
     text.textContent = evt.timer.toFixed(1) + 's';
     var overlay = document.getElementById('event-drop-overlay');
     if (overlay) {
