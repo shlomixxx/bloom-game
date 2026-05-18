@@ -2859,11 +2859,19 @@ if (ADMIN_PATH && ADMIN_PASSWORD) {
     };
     const started = startBots(count, pool, config);
     logAdminAction('bots.start', 'bots', String(count), { ...config, started });
+    // Persist config so bots auto-restart after server restart (Railway deploys etc)
+    pool.query(
+      `INSERT INTO game_config (key, value, updated_at) VALUES ($1, $2, NOW())
+       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
+      ['__bot_engine_state', JSON.stringify({ enabled: true, count, ...config })]
+    ).catch(() => {});
     res.json({ ok: true, count: started });
   });
   adminRouter.post('/api/bots/stop', (_req, res) => {
     stopBots();
     logAdminAction('bots.stop', 'bots', '0', {});
+    // Clear persisted state so bots don't auto-restart
+    pool.query(`DELETE FROM game_config WHERE key = '__bot_engine_state'`).catch(() => {});
     res.json({ ok: true });
   });
 
@@ -4036,6 +4044,32 @@ initDb()
     pool.query(`DELETE FROM player_heartbeat WHERE device_id LIKE 'bot-%'`)
       .then(r => { if (r.rowCount > 0) console.log(`[startup] cleared ${r.rowCount} orphan bot heartbeats`); })
       .catch(() => {});
+
+    // Auto-restart bots if admin had them running before this server instance
+    // started (crash recovery / deploy resilience). Only fires if admin
+    // explicitly enabled bots — never auto-starts on a fresh install.
+    setTimeout(() => {
+      pool.query(`SELECT value FROM game_config WHERE key = '__bot_engine_state' LIMIT 1`)
+        .then(r => {
+          if (!r.rows.length) return;
+          try {
+            const state = JSON.parse(r.rows[0].value);
+            if (state && state.enabled && state.count > 0) {
+              console.log(`[startup] auto-restarting ${state.count} bots from persisted config`);
+              startBots(state.count, pool, {
+                mode: state.mode || 'practice',
+                speed: state.speed || 'normal',
+                contestCode: state.contestCode || null,
+                challengeSlug: state.challengeSlug || null,
+                restartMin: state.restartMin || 30,
+                restartMax: state.restartMax || 90,
+                maxGamesPerBot: state.maxGamesPerBot || 1
+              });
+            }
+          } catch (e) { console.error('[startup] failed to restore bot state:', e.message); }
+        })
+        .catch(() => {});
+    }, 2000); // wait 2s for DB pool to be ready
 
     const server = app.listen(port, () => console.log(`[bloom] listening on ${port}`));
 
