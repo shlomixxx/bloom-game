@@ -56,7 +56,9 @@
   // Duel notifications: scan for pending challenges / unread results on boot,
   // then re-check every 60s while the tab is visible. The scan is cheap (one
   // GET) and de-duped via sessionStorage so it can't spam toasts.
-  if (typeof window.__bloomCheckIncomingDuels === 'function') {
+  // SKIP entirely in spectator mode (?watch=...) — admin shouldn't see duel banners.
+  var isSpectator = new URLSearchParams(window.location.search).has('watch');
+  if (!isSpectator && typeof window.__bloomCheckIncomingDuels === 'function') {
     setTimeout(window.__bloomCheckIncomingDuels, 1500); // delay so deviceId is ready
     setInterval(function() {
       if (typeof window.__bloomCheckIncomingDuels === 'function') {
@@ -147,11 +149,31 @@
       '<div class="spectator-grid"><div class="grid" id="uspec-grid">' + cellsHtml + '</div></div>' +
       '<div style="text-align:center;margin-top:14px">' +
         '<div style="font-size:10px;color:#A8A6A0;margin-bottom:8px" id="uspec-status">polling…</div>' +
-        '<button class="btn secondary" id="uspec-close">חזרה למשחק שלי</button>' +
+        '<div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">' +
+          (document.referrer && document.referrer.indexOf('/api/') === -1
+            ? '<button class="btn" id="uspec-back" style="background:#1C1A18;color:#FAC775;font-weight:700">← חזרה לאדמין</button>'
+            : '') +
+          '<button class="btn secondary" id="uspec-close">סגור</button>' +
+        '</div>' +
       '</div>';
+    var backBtn = document.getElementById('uspec-back');
+    if (backBtn) backBtn.onclick = function() {
+      if (_uniSpecTimer) { clearInterval(_uniSpecTimer); _uniSpecTimer = null; }
+      // Try to close this tab if opened by admin (target=_blank), else navigate back
+      if (window.opener && !window.opener.closed) {
+        window.close();
+      } else {
+        window.history.back();
+      }
+    };
     document.getElementById('uspec-close').onclick = function() {
       if (_uniSpecTimer) { clearInterval(_uniSpecTimer); _uniSpecTimer = null; }
-      window.location.href = window.location.origin; // reload without ?watch param
+      // Spectator was likely opened by admin in a new tab — try to close
+      if (window.opener && !window.opener.closed) {
+        window.close();
+      } else {
+        window.location.href = window.location.origin;
+      }
     };
     var pollCount = 0;
     var foundOnce = false;
