@@ -489,8 +489,12 @@
       }
 
       // Second chance: continue playing (once per game)
+      // Note: alreadyPlayed only blocks continue in DAILY mode (where each player
+      // gets ONE attempt per day). In practice/contest/duel modes, you can always
+      // continue as long as usedContinue is false.
       var continuePrice = getEventNum('continue_price', 200);
-      var canContinue = !opts.alreadyPlayed && !usedContinue && score > 5000 && mode !== 'challenge';
+      var continueBlockedByMode = (mode === 'daily' && opts.alreadyPlayed) || mode === 'challenge';
+      var canContinue = !continueBlockedByMode && !usedContinue && score > 5000;
       var continueHtml = '';
       if (canContinue) {
         continueHtml =
