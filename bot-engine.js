@@ -322,7 +322,8 @@ function tickBot(bot) {
     // Reached max games — retire this bot
     bot.exiting = true;
     scheduleReplacement();
-    setTimeout(() => removeBot(bot), 3000);
+    // Remove immediately from DB so admin doesn't see ghost entries
+    removeBot(bot);
     return;
   }
 
@@ -584,17 +585,16 @@ function stopBots() {
     clearInterval(botInterval);
     botInterval = null;
   }
-  if (botPool && bots.size > 0) {
-    const ids = [...bots.keys()];
-    botPool.query(`DELETE FROM player_heartbeat WHERE device_id = ANY($1)`, [ids]).catch(() => {});
-    if (botConfig.contestCode) {
-      botPool.query(`DELETE FROM contest_live_state WHERE device_id = ANY($1)`, [ids]).catch(() => {});
-    }
+  if (botPool) {
+    // Aggressively clean ALL bot rows — not just current in-memory bots.
+    // Covers orphans from crashed instances and dead bots not yet GC'd.
+    botPool.query(`DELETE FROM player_heartbeat WHERE device_id LIKE 'bot-%'`).catch(() => {});
+    botPool.query(`DELETE FROM contest_live_state WHERE device_id LIKE 'bot-%'`).catch(() => {});
   }
   bots.clear();
   pendingSpawns = [];
   usedNames.clear();
-  console.log('[bots] stopped all bots');
+  console.log('[bots] stopped all bots — cleared in-memory state + all DB bot rows');
 }
 
 function getBotStatus() {

@@ -1151,6 +1151,12 @@
   }
 
   async function api(path, opts) {
+    opts = opts || {};
+    // Ensure Content-Type for body-carrying methods so the server parses JSON.
+    // Without this, POST/PATCH bodies arrive empty.
+    if (opts.method && opts.method !== 'GET' && !opts.headers) {
+      opts.headers = { 'Content-Type': 'application/json' };
+    }
     const res = await fetch(API + path, opts);
     if (res.status === 401 || res.status === 403) { location.reload(); return null; }
     if (!res.ok) { toast('שגיאת שרת: ' + res.status); return null; }
@@ -3225,10 +3231,32 @@
     this.disabled = false; this.textContent = '▶ הפעל';
   };
   $('btn-bots-stop').onclick = async function() {
-    this.disabled = true; this.textContent = '...';
-    var r = await api('/bots/stop', { method: 'POST' });
+    var summaryEl = $('bots-status-summary');
+    var listEl = $('bots-status-list');
+    this.disabled = true; this.textContent = '⏳ עוצר...';
+    if (summaryEl) summaryEl.innerHTML = '⏳ <strong>עוצר את כל הבוטים...</strong>';
+    try {
+      var r = await fetch(API + '/bots/stop', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({})
+      });
+      var d = await r.json();
+      if (r.ok && d && d.ok) {
+        toast('🛑 כל הבוטים נעצרו');
+        if (summaryEl) summaryEl.innerHTML = '⚪ <strong>בוטים נעצרו</strong>';
+        if (listEl) listEl.innerHTML = '<div style="color:#A8A6A0;font-size:11px;padding:12px;text-align:center">⚪ אין בוטים פעילים. לחץ ▶ הפעל להתחיל.</div>';
+        // Refresh after a moment to confirm
+        setTimeout(refreshBotStatus, 500);
+      } else {
+        toast('❌ שגיאה בעצירה');
+        if (summaryEl) summaryEl.innerHTML = '❌ <strong>שגיאה בעצירה</strong> · ' + (r.status || 'unknown');
+      }
+    } catch (e) {
+      toast('❌ שגיאת רשת');
+      if (summaryEl) summaryEl.innerHTML = '❌ <strong>שגיאת רשת</strong>: ' + (e.message || e);
+    }
     this.disabled = false; this.textContent = '⏹ עצור';
-    if (r && r.ok) { toast('בוטים נעצרו'); refreshBotStatus(); }
   };
   $('btn-bots-debug').onclick = async function() {
     var summaryEl = $('bots-status-summary');
