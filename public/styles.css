@@ -92,6 +92,9 @@
   html[data-theme="dark"] .stats > .stat.stat-primary .stat-label { color: #412402; }
   .stat-label { font-size: 9px; color: #A8A6A0; letter-spacing: 0.08em; text-transform: uppercase; }
   .stat-val { font-size: 16px; font-weight: 700; color: #1C1A18; margin-top: 2px; display: block; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  /* Auto-shrink for large numbers so they don't get cut off */
+  .stat-val.val-lg { font-size: 13px; }   /* 100K+ */
+  .stat-val.val-xl { font-size: 11px; }   /* 1M+ */
   .stat-val.bump { animation: bump 0.32s ease-out; }
   /* "Near best" — when current score is within 90% of personal best,
      the שיא value gently pulses to nudge a record attempt. */

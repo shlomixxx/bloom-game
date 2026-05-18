@@ -401,7 +401,11 @@
       if (score >= 1000000) scoreEl.classList.add('score-xl');
       else if (score >= 100000) scoreEl.classList.add('score-lg');
     }
-    document.getElementById('best').textContent = best.toLocaleString();
+    var bestStatEl = document.getElementById('best');
+    bestStatEl.textContent = best.toLocaleString();
+    bestStatEl.classList.remove('val-lg', 'val-xl');
+    if (best >= 1000000) bestStatEl.classList.add('val-xl');
+    else if (best >= 100000) bestStatEl.classList.add('val-lg');
     updateBalanceDisplay();
     // Live best update — when score passes best during gameplay, update immediately
     if (score > best && best > 0 && !skinTrialMode && !opts.over) {
