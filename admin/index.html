@@ -3093,6 +3093,16 @@
     if ($('live-auto') && $('live-auto').checked) loadLive();
   }, 5000);
 
+  // Bots section: auto-refresh every 3s (matches the help text)
+  // Skip if status is showing debug output (don't overwrite manual debug)
+  var _botsAutoTimer = setInterval(function() {
+    if (!$('bots-auto-refresh') || !$('bots-auto-refresh').checked) return;
+    // Don't auto-refresh if user is looking at debug output
+    var listEl = $('bots-status-list');
+    if (listEl && listEl.innerHTML.indexOf('"engineStatus"') !== -1) return;
+    refreshBotStatus();
+  }, 3000);
+
   // ============ VERSION INFO ============
   async function loadVersion() {
     try {
@@ -3206,11 +3216,30 @@
       });
       if (r && r.ok) {
         toast('🤖 ' + r.count + ' בוטים · ' + botModeLabel(mode));
-        if (summaryEl) summaryEl.innerHTML = '🟢 <strong>השרת אישר: ' + r.count + ' בוטים</strong><br><span style="font-size:10px;color:#A8A6A0">⏳ מחכה לרענון סטטוס...</span>';
-        // Multiple refreshes to catch the first tick
-        setTimeout(refreshBotStatus, 200);
-        setTimeout(refreshBotStatus, 1500);
-        setTimeout(refreshBotStatus, 3500);
+        if (summaryEl) summaryEl.innerHTML = '🟢 <strong>השרת אישר: ' + r.count + ' בוטים</strong><br><span style="font-size:10px;color:#A8A6A0">⏳ מבצע אבחון אוטומטי...</span>';
+        // Auto-debug: show full state 1.5s after activation
+        setTimeout(async function() {
+          try {
+            var dbg = await fetch(API + '/bots/debug').then(function(x) { return x.json(); });
+            var listEl = $('bots-status-list');
+            if (listEl) {
+              var html = '<div style="background:#1C1A18;color:#FAC775;padding:12px;border-radius:8px;font-family:monospace;font-size:10px;line-height:1.5;direction:ltr;text-align:left;white-space:pre-wrap;overflow-x:auto;max-height:400px;overflow-y:auto">' +
+                escHtml(JSON.stringify(dbg, null, 2)) + '</div>';
+              listEl.innerHTML = html;
+            }
+            if (summaryEl) {
+              var es = dbg.engineStatus || {};
+              var msg = '🔍 <strong>אבחון אוטומטי</strong><br>' +
+                '<span style="font-size:11px">running: ' + (es.running ? '✅' : '❌') +
+                ' · count: ' + (es.count || 0) +
+                ' · DB rows: ' + ((dbg.heartbeatBots || []).length) +
+                ' · uptime: ' + (dbg.uptime || '?') + '</span>';
+              summaryEl.innerHTML = msg;
+            }
+          } catch(e) {
+            if (summaryEl) summaryEl.innerHTML = '❌ <strong>שגיאת אבחון</strong>: ' + escHtml(e.message);
+          }
+        }, 1500);
       } else {
         if (summaryEl) summaryEl.innerHTML = '❌ <strong>השרת החזיר שגיאה</strong><br><span style="font-size:10px;color:#C8472F">תגובה: ' + JSON.stringify(r) + '</span>';
       }
