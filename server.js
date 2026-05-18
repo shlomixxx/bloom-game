@@ -3942,12 +3942,13 @@ app.get('/api/live-state/:deviceId', async (req, res) => {
   }
 });
 
-// Cleanup old heartbeats every hour
+// Cleanup stale heartbeats: every 30s, anything older than 60s
+// Aggressive cleanup helps when server restarts orphan bot rows in DB
 setInterval(async () => {
   try {
-    await pool.query(`DELETE FROM player_heartbeat WHERE updated_at < NOW() - INTERVAL '2 minutes'`);
+    await pool.query(`DELETE FROM player_heartbeat WHERE updated_at < NOW() - INTERVAL '60 seconds'`);
   } catch (e) {}
-}, 60 * 1000);
+}, 30 * 1000);
 
 // ============================================================
 // GAME CONFIG (admin-controlled runtime settings)
@@ -4030,6 +4031,12 @@ const port = process.env.PORT || 3000;
 initDb()
   .catch((e) => console.error('[db] init failed:', e))
   .finally(() => {
+    // On startup, kill any leftover bot heartbeats from previous instances.
+    // Real bots will re-register through startBots if admin re-activates them.
+    pool.query(`DELETE FROM player_heartbeat WHERE device_id LIKE 'bot-%'`)
+      .then(r => { if (r.rowCount > 0) console.log(`[startup] cleared ${r.rowCount} orphan bot heartbeats`); })
+      .catch(() => {});
+
     const server = app.listen(port, () => console.log(`[bloom] listening on ${port}`));
 
     // ============================================================
