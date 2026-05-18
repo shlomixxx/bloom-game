@@ -71,9 +71,13 @@
     background: #FAFAF6;
     border-radius: 12px;
     padding: 6px 12px;
-    text-align: right;
+    text-align: center;
     direction: rtl;
     overflow: hidden;
+  }
+  .stats > .stat .stat-val {
+    direction: ltr;
+    unicode-bidi: isolate;
   }
   /* The "primary" stat — the current score — is the dopamine center.
      Larger, bolder, and visually distinct so it commands the top bar. */
