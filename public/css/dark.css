@@ -282,3 +282,155 @@
   html[data-theme="dark"] .challenge-card-prize { color: #FAC775; }
   html[data-theme="dark"] .challenge-card-meta { color: #8E8A82; }
   html[data-theme="dark"] .countdown { background: #2C2A28; color: #8E8A82; }
+
+  /* ============================================================
+     DARK MODE — ROUND 3 GAP FIXES
+     ============================================================
+     Surgical overrides discovered in a contrast/readability audit.
+     Each block is annotated with the class chain and the reason. */
+
+  /* ── (1) LEADERBOARD: TOP-2 / TOP-3 SCORE TEXT ──
+     The lb-row.lb-top2/3 background was darkened in dark.css line 59-60,
+     but the .lb-score color inherits from screens.css/home.css (#666 for
+     top2, #8B5E3C for top3) — both very close to the dark background.
+     Bump to lighter neutrals so the numbers are readable.
+     Top-1 already handled with #FFD700; we match the metal hierarchy. */
+  html[data-theme="dark"] .lb-row.lb-top2 .lb-score { color: #D4D4D4; }
+  html[data-theme="dark"] .lb-row.lb-top2 .lb-name  { color: #E8E8E8; }
+  html[data-theme="dark"] .lb-row.lb-top3 .lb-score { color: #D4A37A; }
+  html[data-theme="dark"] .lb-row.lb-top3 .lb-name  { color: #E8C9A8; }
+
+  /* ── (2) TILE SHOP: PRICES + LABELS ──
+     ts-price / ts-power-price use #BA7517 (dark gold) which is fine on the
+     light cream tile background, but the dark override changes the tile bg
+     to #2C2A28 — dark gold on dark gray is unreadable. Lift to the bright
+     gold accent that we use elsewhere for credits. */
+  html[data-theme="dark"] .ts-price       { color: #FAC775; }
+  html[data-theme="dark"] .ts-power-price { color: #FAC775; }
+  /* Powerup tile name was correct (#F2EFE9) but the secondary label and
+     hint on the modal (which always has a dark backdrop) was using
+     rgba(255,255,255,0.5) — readable, but barely. Confirm explicit values. */
+  html[data-theme="dark"] .ts-hint          { color: rgba(242,239,233,0.6); }
+  html[data-theme="dark"] .ts-section-label { color: rgba(242,239,233,0.85); }
+
+  /* ── (3) HOME ACTION BADGES (challenge / contest pills) ──
+     .home-action-badge default state has background #E8E6E0 (light gray) and
+     color #6F6E68 — that's a light pill on a dark button. Active and prize
+     variants are OK (green / gold), but the default and inactive states need
+     dark-mode treatment. */
+  html[data-theme="dark"] .home-action-badge {
+    background: rgba(255,255,255,0.08);
+    color: #B5B1A8;
+  }
+  /* .home-action-badge.active stays #25D366/#FFF — green is high-contrast on
+     both themes. .home-action-badge.prize stays #FAC775/#412402 — same. */
+
+  /* ── (4) HOME ACTION CONTEST / CHALLENGE CARDS — text color of card titles ──
+     .home-action-btn already has color: #F2EFE9 in dark, but the contest /
+     challenge variants override the background and the inherited color can
+     get lost on the warm-dark amber background of .home-action-challenge.
+     This is just to make sure the text stays light no matter what. */
+  html[data-theme="dark"] .home-action-challenge { color: #F2EFE9; }
+  html[data-theme="dark"] .home-action-contest   { color: #F2EFE9; }
+  html[data-theme="dark"] .home-action-contest.active { color: #DCF8C6; }
+
+  /* ── (5) SPECTATOR HEADER SCORE ──
+     #1B5E20 (dark green) on the spectator-header dark background (#2C2A28)
+     is sub-3:1 contrast. Use the bright mint we already use for live scores. */
+  html[data-theme="dark"] .spectator-header-score { color: #9FE1CB; }
+
+  /* ── (6) CONTEST SHARE BUTTONS ──
+     .contest-share-wa keeps the WhatsApp green palette (already light enough
+     to read in dark). But .contest-share-copy is #F1EFE8 (light gray) bg
+     with #444441 text — fine on light, INVISIBLE on dark surfaces. Flip it. */
+  html[data-theme="dark"] .contest-share-copy {
+    background: #2C2A28;
+    color: #F2EFE9;
+    border: 1px solid rgba(255,255,255,0.08);
+  }
+  html[data-theme="dark"] .contest-share-wa {
+    background: #1B3A2C;
+    color: #9FE1CB;
+  }
+
+  /* ── (7) CONTEST INFO ROWS (key/value rows in info card) ──
+     The card itself is themed (.contest-info-card → bg #2C2A28), but the
+     row's text color stays the light-mode #1C1A18 — black on dark gray.
+     dark.css line 250-251 already has these — keep them as the source of
+     truth, but be explicit for the first-child label too. */
+  html[data-theme="dark"] .contest-info-row { color: #F2EFE9; }
+  html[data-theme="dark"] .contest-info-row span:first-child { color: #8E8A82; }
+
+  /* ── (8) LIFETIME STATS GRID (achievements modal) ──
+     .stat-card already has dark.css override at line 175-177. Re-assert
+     for clarity in case order shifts; also covers .stats-grid wrapper. */
+  html[data-theme="dark"] .stats-grid .stat-card-label { color: #8E8A82; }
+  html[data-theme="dark"] .stats-grid .stat-card-value { color: #F2EFE9; }
+
+  /* ── (9) PLAYER ID PIPE (bloom code · name · balance) ──
+     Mostly themed already. The "·" separator and the wrapper text inherit
+     from .home-player-id which has color #A8A6A0 — light-gray-on-cream OK,
+     but on the dark BG it reads almost-black-on-dark. Lift it up. */
+  html[data-theme="dark"] .home-player-id { color: #8E8A82; }
+  html[data-theme="dark"] .pid-balance    { color: #FAC775; }
+
+  /* ── (10) HOME MINI LEADERBOARD: "ME" ROW ──
+     .mini-lb-row.mini-lb-me uses #BA7517 (dark amber on cream — fine).
+     On dark surfaces it's hard to read. Switch the highlight to the
+     warm gold we already use for "you" indicators in dark mode. */
+  html[data-theme="dark"] .mini-lb-row.mini-lb-me { color: #FAC775; }
+  /* mini-lb-name / mini-lb-score already covered in home.css L608-609,
+     don't duplicate. */
+
+  /* ── (11) NAME-MODAL INPUT (when user picks display name) ──
+     viral.css L152-158 defines a cream input with dark text. dark.css L101
+     covers .name-input — but make sure the placeholder text is readable
+     too (default placeholder color inherits a low-alpha version). */
+  html[data-theme="dark"] .name-input::placeholder { color: #6F6E68; }
+  html[data-theme="dark"] .contest-input::placeholder { color: #6F6E68; }
+
+  /* ── (12) STREAK INDICATORS (home + game) ──
+     .streak-val is #D95A1B (warm orange) — readable on both themes, OK.
+     But .streak-label and .streak-num inherit from home parent.
+     Confirm explicit dark colors. */
+  html[data-theme="dark"] .streak-label { color: #8E8A82; }
+  html[data-theme="dark"] .streak-num   { color: #FAC775; }
+
+  /* ── (13) SCORE-MILESTONE BANNER (in-game) ──
+     base.css L731 forces .score-milestone background with !important
+     (#0F0D0B → #1C1A18). That's near-black in both themes — fine in dark,
+     but the bonus text uses color: #FAC775 (light gold) which is OK.
+     No fix needed, just documenting. */
+
+  /* ── (14) AUDIENCE-LIST ROWS (spectator picker, contest watch) ──
+     audience-list-row is covered (line 139). audience-list-score has dark
+     override (line 194) using #8E8A82 — readable but bland. Lift to mint
+     to match the "live now" semantic in dark spectator. */
+  html[data-theme="dark"] .audience-list-score { color: #9FE1CB; }
+
+  /* ── (15) JACKPOT POOL DISPLAY ──
+     home.css L597 .home-jackpot .jp-pool uses #412402 (very dark brown)
+     for the pool number on the light gold pill — fine on light. dark.css
+     L599 already overrides .jp-pool to #FFD37A. Re-asserting in case the
+     class chain shifts. */
+  html[data-theme="dark"] .home-jackpot .jp-pool { color: #FFD37A; }
+
+  /* ── (16) TIER-BAR / TIER ICON COLORS ──
+     Tier colors themselves stay vivid — they're brand identity. But
+     .tier-icon-sm (the small empty next-tile indicator) on the tier ladder
+     strip needs a dark surface. base.css inherits a cream fill. */
+  html[data-theme="dark"] .tier-icon-sm { background: #1F1D1B; }
+
+  /* ── (17) MODAL CLOSE BUTTONS ──
+     .info-close has SVG override at dark.css L39. .dr-close handled at L226.
+     But .ts-close (in-game tile shop close) uses rgba(255,255,255,0.15) bg
+     and white text — already correct for the dark modal it lives in. */
+
+  /* ── (18) FOCUS RINGS — input focus visibility ──
+     dark.css L103 sets contest-input:focus border to #FAC775. Same for
+     name-input:focus (L211). Add explicit box-shadow for accessibility
+     (some users rely on focus rings). */
+  html[data-theme="dark"] .contest-input:focus,
+  html[data-theme="dark"] .name-input:focus {
+    box-shadow: 0 0 0 3px rgba(250, 199, 117, 0.18);
+  }
