@@ -201,7 +201,7 @@
       try {
         const res = await fetch(API_BASE + '/api/challenges/' + encodeURIComponent(c.slug) + '/enter', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ deviceId: deviceId, displayName: name })
+          body: JSON.stringify({ deviceId: deviceId, token: deviceToken, displayName: name })
         });
         const data = await res.json().catch(function() { return {}; });
         if (!res.ok) {
@@ -259,7 +259,7 @@
       try {
         const res = await fetch(API_BASE + '/api/challenges/' + encodeURIComponent(c.slug) + '/claim', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ deviceId: deviceId, contactName: name, contactPhone: phone, contactEmail: email })
+          body: JSON.stringify({ deviceId: deviceId, token: deviceToken, contactName: name, contactPhone: phone, contactEmail: email })
         });
         const data = await res.json().catch(function() { return {}; });
         if (!res.ok) {
@@ -441,7 +441,7 @@
       try {
         const res = await fetch(API_BASE + '/api/challenges/' + encodeURIComponent(slug) + '/claim', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ deviceId: deviceId, contactName: nm, contactPhone: ph, contactEmail: em })
+          body: JSON.stringify({ deviceId: deviceId, token: deviceToken, contactName: nm, contactPhone: ph, contactEmail: em })
         });
         const data = await res.json().catch(function() { return {}; });
         if (!res.ok) {
@@ -488,6 +488,7 @@
   function liveSnapshot() {
     return {
       deviceId: deviceId,
+      token: deviceToken,
       displayName: getContestDisplayName(activeContestCode) || 'אנונימי',
       liveScore: score | 0,
       tier: highestTier | 0

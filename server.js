@@ -518,7 +518,7 @@ function isCodeBlacklisted(code) {
 // DAILY CHALLENGE ENDPOINTS (קיימים — לא נגענו)
 // ============================================================
 
-app.post('/api/score', softDeviceAuth, async (req, res) => {
+app.post('/api/score', requireDeviceAuth, async (req, res) => {
   try {
     const { date, deviceId, name, score, tier, drops, token, country } = req.body || {};
     if (!isValidDate(date)) return res.status(400).json({ error: 'bad_date' });
@@ -678,7 +678,7 @@ app.get('/api/leaderboard/:date', async (req, res, next) => {
 // POST /api/profile/country — one-time flag picker. Idempotent. Stores the
 // country on player_profiles (auto-creates a stub row if absent) so future
 // score submissions can default to it server-side when the client forgets.
-app.post('/api/profile/country', softDeviceAuth, async (req, res) => {
+app.post('/api/profile/country', requireDeviceAuth, async (req, res) => {
   try {
     const { deviceId, country } = req.body || {};
     if (typeof deviceId !== 'string' || deviceId.length < 8 || deviceId.length > 64) {
@@ -708,7 +708,7 @@ app.post('/api/profile/country', softDeviceAuth, async (req, res) => {
 // Writes the new name to player_profiles.display_name. The daily-score upsert
 // (POST /api/score) will re-sync on the next submission, so this gives an
 // immediate effect even before they play another game.
-app.post('/api/profile/name', softDeviceAuth, async (req, res) => {
+app.post('/api/profile/name', requireDeviceAuth, async (req, res) => {
   try {
     const { deviceId, name } = req.body || {};
     if (typeof deviceId !== 'string' || deviceId.length < 8 || deviceId.length > 64) {
@@ -736,7 +736,7 @@ app.post('/api/profile/name', softDeviceAuth, async (req, res) => {
 // Practice and duel modes both flow through here. Daily scores DO NOT call
 // this (admin-controlled fairness); duel writes one row per participant.
 // Body: { date, deviceId, name, score, tier, difficulty, country, source, drops, token }
-app.post('/api/score/practice', softDeviceAuth, async (req, res) => {
+app.post('/api/score/practice', requireDeviceAuth, async (req, res) => {
   try {
     const { date, deviceId, name, score, tier, drops, token, country, difficulty, source } = req.body || {};
     if (!isValidDate(date)) return res.status(400).json({ error: 'bad_date' });
@@ -1056,7 +1056,7 @@ app.get('/api/contests/mine', async (req, res) => {
 });
 
 // POST /api/contests — יצירת תחרות חדשה
-app.post('/api/contests', softDeviceAuth, async (req, res) => {
+app.post('/api/contests', requireDeviceAuth, async (req, res) => {
   try {
     const { name, hostName, deviceId, durationDays, boardType, wagerAmount, difficulty } = req.body || {};
 
@@ -1226,7 +1226,7 @@ app.get('/api/contests/:code', async (req, res) => {
 });
 
 // POST /api/contests/:code/join — הצטרפות לתחרות
-app.post('/api/contests/:code/join', softDeviceAuth, async (req, res) => {
+app.post('/api/contests/:code/join', requireDeviceAuth, async (req, res) => {
   try {
     const code = String(req.params.code || '').toUpperCase().slice(0, 8);
     const { deviceId, displayName } = req.body || {};
@@ -1302,7 +1302,7 @@ app.post('/api/contests/:code/join', softDeviceAuth, async (req, res) => {
 });
 
 // POST /api/contests/:code/score — שליחת תוצאת משחק לתחרות
-app.post('/api/contests/:code/score', softDeviceAuth, async (req, res) => {
+app.post('/api/contests/:code/score', requireDeviceAuth, async (req, res) => {
   try {
     const code = String(req.params.code || '').toUpperCase().slice(0, 8);
     const { deviceId, displayName, score, tier } = req.body || {};
@@ -1848,7 +1848,7 @@ app.get('/api/challenges/:slug', async (req, res) => {
 });
 
 // POST /api/challenges/:slug/enter — create the single attempt row.
-app.post('/api/challenges/:slug/enter', softDeviceAuth, async (req, res) => {
+app.post('/api/challenges/:slug/enter', requireDeviceAuth, async (req, res) => {
   try {
     const slug = cleanSlug(req.params.slug);
     if (!slug) return res.status(400).json({ error: 'bad_slug' });
@@ -1923,7 +1923,7 @@ async function maybeGrabWinnerSlot(client, challengeId, deviceId, eventColumn) {
 }
 
 // POST /api/challenges/:slug/score — heartbeat per drop. score-only-grows.
-app.post('/api/challenges/:slug/score', softDeviceAuth, async (req, res) => {
+app.post('/api/challenges/:slug/score', requireDeviceAuth, async (req, res) => {
   const client = await pool.connect();
   try {
     const slug = cleanSlug(req.params.slug);
@@ -2007,7 +2007,7 @@ app.post('/api/challenges/:slug/score', softDeviceAuth, async (req, res) => {
 });
 
 // POST /api/challenges/:slug/complete — final submit. Locks the entry.
-app.post('/api/challenges/:slug/complete', softDeviceAuth, async (req, res) => {
+app.post('/api/challenges/:slug/complete', requireDeviceAuth, async (req, res) => {
   const client = await pool.connect();
   try {
     const slug = cleanSlug(req.params.slug);
@@ -2110,7 +2110,7 @@ app.post('/api/challenges/:slug/complete', softDeviceAuth, async (req, res) => {
 });
 
 // POST /api/challenges/:slug/claim — winner submits contact info.
-app.post('/api/challenges/:slug/claim', softDeviceAuth, async (req, res) => {
+app.post('/api/challenges/:slug/claim', requireDeviceAuth, async (req, res) => {
   try {
     const slug = cleanSlug(req.params.slug);
     if (!slug) return res.status(400).json({ error: 'bad_slug' });
@@ -3616,7 +3616,7 @@ function calcLevel(xp) {
 }
 
 // POST /api/player/earn — award credits + XP for gameplay actions
-app.post('/api/player/earn', softDeviceAuth, async (req, res) => {
+app.post('/api/player/earn', requireDeviceAuth, async (req, res) => {
   const { deviceId, action, meta } = req.body || {};
   if (!deviceId || !action) return res.status(400).json({ error: 'missing_params' });
   try {
@@ -3695,7 +3695,7 @@ app.post('/api/player/earn', softDeviceAuth, async (req, res) => {
 });
 
 // POST /api/player/spend — deduct credits (for continue, premium items)
-app.post('/api/player/spend', softDeviceAuth, async (req, res) => {
+app.post('/api/player/spend', requireDeviceAuth, async (req, res) => {
   const { deviceId, amount } = req.body || {};
   if (!deviceId || !amount || amount <= 0) return res.json({ ok: false, reason: 'invalid' });
   try {
@@ -3740,7 +3740,7 @@ app.get('/api/tile-prices', async (_req, res) => {
 // `refundAmount` (capped at 1000) without any proof of prior purchase.
 // That let anyone inflate their balance up to 1000 💎 per call. Removed.
 // Cancel UX is now local-only on the client.
-app.post('/api/player/buy-powerup', softDeviceAuth, async (req, res) => {
+app.post('/api/player/buy-powerup', requireDeviceAuth, async (req, res) => {
   const { deviceId, powerup } = req.body || {};
   if (!deviceId) return res.status(400).json({ error: 'missing_params' });
   if (!powerup) return res.status(400).json({ error: 'missing_params' });
@@ -3770,7 +3770,7 @@ app.post('/api/player/buy-powerup', softDeviceAuth, async (req, res) => {
 });
 
 // POST /api/player/buy-tile — buy a specific tile during gameplay
-app.post('/api/player/buy-tile', softDeviceAuth, async (req, res) => {
+app.post('/api/player/buy-tile', requireDeviceAuth, async (req, res) => {
   const { deviceId, tier } = req.body || {};
   if (!deviceId || !tier) return res.status(400).json({ error: 'missing_params' });
   try {
@@ -3806,7 +3806,7 @@ app.post('/api/player/buy-tile', softDeviceAuth, async (req, res) => {
 // POST /api/player/buy-skin — purchase a skin with credits
 // Price comes from SKIN_PRICES (server-authoritative). Client-supplied `price`
 // is ignored — historically it was trusted, which let anyone buy any skin for 0.
-app.post('/api/player/buy-skin', softDeviceAuth, async (req, res) => {
+app.post('/api/player/buy-skin', requireDeviceAuth, async (req, res) => {
   const { deviceId, skinId } = req.body || {};
   if (!deviceId || !skinId) return res.status(400).json({ error: 'missing_params' });
   if (!Object.prototype.hasOwnProperty.call(SKIN_PRICES, skinId)) {
@@ -3834,7 +3834,7 @@ app.post('/api/player/buy-skin', softDeviceAuth, async (req, res) => {
   }
 });
 
-app.post('/api/referral', softDeviceAuth, async (req, res) => {
+app.post('/api/referral', requireDeviceAuth, async (req, res) => {
   const { deviceId, refCode } = req.body || {};
   if (!deviceId || !refCode) return res.status(400).json({ error: 'missing_params' });
   // Rate-limit referrals at 3/day/device on top of the ping requirement below,
@@ -3900,7 +3900,7 @@ app.post('/api/referral', softDeviceAuth, async (req, res) => {
 // ============================================================
 
 // Create a duel challenge
-app.post('/api/duels', softDeviceAuth, async (req, res) => {
+app.post('/api/duels', requireDeviceAuth, async (req, res) => {
   const { deviceId, opponentCode, amount, difficulty } = req.body || {};
   if (!deviceId || !opponentCode) return res.status(400).json({ error: 'missing_params' });
   try {
@@ -3967,7 +3967,7 @@ app.get('/api/duels/mine', async (req, res) => {
 });
 
 // Accept a duel
-app.post('/api/duels/:id/accept', softDeviceAuth, async (req, res) => {
+app.post('/api/duels/:id/accept', requireDeviceAuth, async (req, res) => {
   const { deviceId } = req.body || {};
   const duelId = parseInt(req.params.id, 10);
   try {
@@ -4039,7 +4039,7 @@ app.get('/api/duels/:id', async (req, res) => {
 // when both scores are present, regardless of status — see also
 // /api/duels/:id/accept which calls the same settlement path if the
 // challenger had already submitted.
-app.post('/api/duels/:id/score', softDeviceAuth, async (req, res) => {
+app.post('/api/duels/:id/score', requireDeviceAuth, async (req, res) => {
   const { deviceId, score, drops, token } = req.body || {};
   const duelId = parseInt(req.params.id, 10);
   if (!duelId) return res.status(400).json({ error: 'bad_id' });

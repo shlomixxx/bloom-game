@@ -116,7 +116,7 @@
       try {
         var r = await fetch(API_BASE + '/api/duels', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ deviceId: deviceId, opponentCode: opp, amount: amt, difficulty: selectedDuelDifficulty })
+          body: JSON.stringify({ deviceId: deviceId, token: deviceToken, opponentCode: opp, amount: amt, difficulty: selectedDuelDifficulty })
         });
         var d = await r.json();
         this.disabled = false; this.textContent = 'שלח אתגר ⚔️';
@@ -190,7 +190,7 @@
   window.acceptDuel = async function(id) {
     var r = await fetch(API_BASE + '/api/duels/' + id + '/accept', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ deviceId: deviceId })
+      body: JSON.stringify({ deviceId: deviceId, token: deviceToken })
     });
     var d = await r.json();
     if (d && d.ok) {
@@ -772,7 +772,7 @@
         fetch(API_BASE + '/api/player/buy-tile', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ deviceId: deviceId, tier: tier })
+          body: JSON.stringify({ deviceId: deviceId, token: deviceToken, tier: tier })
         }).then(function(r) { return r.json(); }).then(function(d) {
           if (d && d.ok) {
             playerBalance = d.newBalance;
@@ -806,7 +806,7 @@
         fetch(API_BASE + '/api/player/buy-powerup', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ deviceId: deviceId, powerup: configKey })
+          body: JSON.stringify({ deviceId: deviceId, token: deviceToken, powerup: configKey })
         }).then(function(r) { return r.json(); }).then(function(d) {
           if (d && d.ok) {
             playerBalance = d.newBalance;

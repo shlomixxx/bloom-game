@@ -921,7 +921,7 @@
         fetch(API_BASE + '/api/profile/name', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ deviceId: deviceId, name: name })
+          body: JSON.stringify({ deviceId: deviceId, token: deviceToken, name: name })
         }).catch(function() {});
       } catch (e) {}
     }

@@ -87,6 +87,7 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           deviceId: deviceId,
+          token: deviceToken,
           displayName: getContestDisplayName(code) || 'אנונימי',
           score: scoreValue,
           tier: tierValue

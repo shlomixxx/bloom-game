@@ -411,7 +411,7 @@
       try {
         var r = await fetch(API_BASE + '/api/duels', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ deviceId: deviceId, opponentCode: opp, amount: amt, difficulty: selectedDuelDifficulty })
+          body: JSON.stringify({ deviceId: deviceId, token: deviceToken, opponentCode: opp, amount: amt, difficulty: selectedDuelDifficulty })
         });
         var d = await r.json();
         this.disabled = false; this.textContent = 'שלח אתגר ⚔️';
@@ -485,7 +485,7 @@
   window.acceptDuel = async function(id) {
     var r = await fetch(API_BASE + '/api/duels/' + id + '/accept', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ deviceId: deviceId })
+      body: JSON.stringify({ deviceId: deviceId, token: deviceToken })
     });
     var d = await r.json();
     if (d && d.ok) {
@@ -1067,7 +1067,7 @@
         fetch(API_BASE + '/api/player/buy-tile', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ deviceId: deviceId, tier: tier })
+          body: JSON.stringify({ deviceId: deviceId, token: deviceToken, tier: tier })
         }).then(function(r) { return r.json(); }).then(function(d) {
           if (d && d.ok) {
             playerBalance = d.newBalance;
@@ -1101,7 +1101,7 @@
         fetch(API_BASE + '/api/player/buy-powerup', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ deviceId: deviceId, powerup: configKey })
+          body: JSON.stringify({ deviceId: deviceId, token: deviceToken, powerup: configKey })
         }).then(function(r) { return r.json(); }).then(function(d) {
           if (d && d.ok) {
             playerBalance = d.newBalance;
@@ -2765,6 +2765,7 @@
             name: nameVal,
             hostName: hostVal,
             deviceId: deviceId,
+            token: deviceToken,
             durationDays: selectedDays,
             boardType: selectedBoardType,
             wagerAmount: wagerVal,
@@ -2961,7 +2962,7 @@
           const res = await fetch(API_BASE + '/api/contests/' + encodeURIComponent(code) + '/join', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ deviceId: deviceId, displayName: nameVal })
+            body: JSON.stringify({ deviceId: deviceId, token: deviceToken, displayName: nameVal })
           });
           if (res.status === 429) {
             document.getElementById('cjp-error').textContent = 'יותר מדי ניסיונות. נסה שוב בעוד שעה.';
@@ -3799,7 +3800,7 @@
       fetch(API_BASE + '/api/profile/country', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ deviceId: deviceId, country: v || null })
+        body: JSON.stringify({ deviceId: deviceId, token: deviceToken, country: v || null })
       }).catch(function() {});
     } catch (e) {}
   }
@@ -3892,7 +3893,7 @@
     fetch(API_BASE + '/api/referral', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ deviceId: deviceId, refCode: refCode })
+      body: JSON.stringify({ deviceId: deviceId, token: deviceToken, refCode: refCode })
     }).then(function(r) { return r.json(); }).then(function(d) {
       if (d && d.ok) {
         localStorage.setItem('bloom_ref_done', '1');
@@ -3916,7 +3917,7 @@
     fetch(API_BASE + '/api/player/earn', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ deviceId: deviceId, action: action, meta: meta || null })
+      body: JSON.stringify({ deviceId: deviceId, token: deviceToken, action: action, meta: meta || null })
     }).then(function(r) { return r.json(); }).then(function(d) {
       if (d && d.ok && d.reward > 0) {
         playerBalance = d.newBalance;
@@ -4051,6 +4052,7 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           deviceId: deviceId,
+          token: deviceToken,
           displayName: getContestDisplayName(code) || 'אנונימי',
           score: scoreValue,
           tier: tierValue
@@ -4941,7 +4943,7 @@
       try {
         const res = await fetch(API_BASE + '/api/challenges/' + encodeURIComponent(c.slug) + '/enter', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ deviceId: deviceId, displayName: name })
+          body: JSON.stringify({ deviceId: deviceId, token: deviceToken, displayName: name })
         });
         const data = await res.json().catch(function() { return {}; });
         if (!res.ok) {
@@ -4999,7 +5001,7 @@
       try {
         const res = await fetch(API_BASE + '/api/challenges/' + encodeURIComponent(c.slug) + '/claim', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ deviceId: deviceId, contactName: name, contactPhone: phone, contactEmail: email })
+          body: JSON.stringify({ deviceId: deviceId, token: deviceToken, contactName: name, contactPhone: phone, contactEmail: email })
         });
         const data = await res.json().catch(function() { return {}; });
         if (!res.ok) {
@@ -5181,7 +5183,7 @@
       try {
         const res = await fetch(API_BASE + '/api/challenges/' + encodeURIComponent(slug) + '/claim', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ deviceId: deviceId, contactName: nm, contactPhone: ph, contactEmail: em })
+          body: JSON.stringify({ deviceId: deviceId, token: deviceToken, contactName: nm, contactPhone: ph, contactEmail: em })
         });
         const data = await res.json().catch(function() { return {}; });
         if (!res.ok) {
@@ -5228,6 +5230,7 @@
   function liveSnapshot() {
     return {
       deviceId: deviceId,
+      token: deviceToken,
       displayName: getContestDisplayName(activeContestCode) || 'אנונימי',
       liveScore: score | 0,
       tier: highestTier | 0
@@ -6608,7 +6611,7 @@
         fetch(API_BASE + '/api/profile/name', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ deviceId: deviceId, name: name })
+          body: JSON.stringify({ deviceId: deviceId, token: deviceToken, name: name })
         }).catch(function() {});
       } catch (e) {}
     }
@@ -8098,8 +8101,8 @@
         }
         this.disabled = true; this.textContent = '⏳...';
         fetch(API_BASE + '/api/player/spend', {
-          method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Device-Id': deviceId },
-          body: JSON.stringify({ deviceId: deviceId, amount: price, reason: 'continue' })
+          method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Device-Id': deviceId, 'X-Device-Token': deviceToken },
+          body: JSON.stringify({ deviceId: deviceId, token: deviceToken, amount: price, reason: 'continue' })
         }).then(function(r) { return r.json(); }).then(function(d) {
           if (d && d.ok) {
             usedContinue = true;
@@ -8337,6 +8340,7 @@
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         deviceId: deviceId,
+        token: deviceToken,
         displayName: getPlayerName() || 'אנונימי',
         mode: mode,
         score: score | 0,
@@ -8355,7 +8359,7 @@
       fetch(API_BASE + '/api/heartbeat/end', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ deviceId: deviceId })
+        body: JSON.stringify({ deviceId: deviceId, token: deviceToken })
       }).catch(function() {});
     } catch(e) {}
   };
@@ -8435,7 +8439,7 @@
     fetch(API_BASE + '/api/ping', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ deviceId: deviceId })
+      body: JSON.stringify({ deviceId: deviceId, token: deviceToken })
     }).catch(function() {});
   } catch (e) {}
 

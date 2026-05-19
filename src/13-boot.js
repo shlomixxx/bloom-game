@@ -17,6 +17,7 @@
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         deviceId: deviceId,
+        token: deviceToken,
         displayName: getPlayerName() || 'אנונימי',
         mode: mode,
         score: score | 0,
@@ -35,7 +36,7 @@
       fetch(API_BASE + '/api/heartbeat/end', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ deviceId: deviceId })
+        body: JSON.stringify({ deviceId: deviceId, token: deviceToken })
       }).catch(function() {});
     } catch(e) {}
   };
@@ -115,7 +116,7 @@
     fetch(API_BASE + '/api/ping', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ deviceId: deviceId })
+      body: JSON.stringify({ deviceId: deviceId, token: deviceToken })
     }).catch(function() {});
   } catch (e) {}
 

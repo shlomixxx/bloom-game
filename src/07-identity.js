@@ -215,7 +215,7 @@
       fetch(API_BASE + '/api/profile/country', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ deviceId: deviceId, country: v || null })
+        body: JSON.stringify({ deviceId: deviceId, token: deviceToken, country: v || null })
       }).catch(function() {});
     } catch (e) {}
   }
@@ -308,7 +308,7 @@
     fetch(API_BASE + '/api/referral', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ deviceId: deviceId, refCode: refCode })
+      body: JSON.stringify({ deviceId: deviceId, token: deviceToken, refCode: refCode })
     }).then(function(r) { return r.json(); }).then(function(d) {
       if (d && d.ok) {
         localStorage.setItem('bloom_ref_done', '1');
@@ -332,7 +332,7 @@
     fetch(API_BASE + '/api/player/earn', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ deviceId: deviceId, action: action, meta: meta || null })
+      body: JSON.stringify({ deviceId: deviceId, token: deviceToken, action: action, meta: meta || null })
     }).then(function(r) { return r.json(); }).then(function(d) {
       if (d && d.ok && d.reward > 0) {
         playerBalance = d.newBalance;

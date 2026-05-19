@@ -297,6 +297,7 @@
             name: nameVal,
             hostName: hostVal,
             deviceId: deviceId,
+            token: deviceToken,
             durationDays: selectedDays,
             boardType: selectedBoardType,
             wagerAmount: wagerVal,
@@ -493,7 +494,7 @@
           const res = await fetch(API_BASE + '/api/contests/' + encodeURIComponent(code) + '/join', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ deviceId: deviceId, displayName: nameVal })
+            body: JSON.stringify({ deviceId: deviceId, token: deviceToken, displayName: nameVal })
           });
           if (res.status === 429) {
             document.getElementById('cjp-error').textContent = 'יותר מדי ניסיונות. נסה שוב בעוד שעה.';

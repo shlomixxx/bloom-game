@@ -662,8 +662,8 @@
         }
         this.disabled = true; this.textContent = '⏳...';
         fetch(API_BASE + '/api/player/spend', {
-          method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Device-Id': deviceId },
-          body: JSON.stringify({ deviceId: deviceId, amount: price, reason: 'continue' })
+          method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Device-Id': deviceId, 'X-Device-Token': deviceToken },
+          body: JSON.stringify({ deviceId: deviceId, token: deviceToken, amount: price, reason: 'continue' })
         }).then(function(r) { return r.json(); }).then(function(d) {
           if (d && d.ok) {
             usedContinue = true;
