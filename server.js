@@ -3640,16 +3640,21 @@ app.post('/api/player/earn', requireDeviceAuth, async (req, res) => {
 
     const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' });
 
-    // Event gifts: no daily dedup, but rate-limit to 1 per 10 seconds
+    // Event gifts: two layers of rate limit.
+    //   (a) 30s minimum between gifts (was 10s, too loose at server-clamped cap)
+    //   (b) hourly cap so a tab left open all afternoon can't drip into 5K credits
     if (action === 'event_gift') {
+      if (!checkRateLimit('gift:hourly', deviceId, 20, 60 * 60 * 1000)) {
+        return res.json({ ok: false, reason: 'rate_limited_hour' });
+      }
       const rateKey = '_gift_rate:' + deviceId;
       const rateCheck = await pool.query('SELECT value FROM game_config WHERE key = $1', [rateKey]);
       if (rateCheck.rows.length) {
         const lastTs = parseInt(rateCheck.rows[0].value, 10) || 0;
-        if (Date.now() - lastTs < 10000) return res.json({ ok: false, reason: 'rate_limited' });
+        if (Date.now() - lastTs < 30_000) return res.json({ ok: false, reason: 'rate_limited' });
       }
       await pool.query(
-        `INSERT INTO game_config (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2`,
+        `INSERT INTO game_config (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2, updated_at = NOW()`,
         [rateKey, String(Date.now())]).catch(() => {});
     } else {
       // All other actions: dedup per device per day (with meta for uniqueness)
@@ -3666,8 +3671,16 @@ app.post('/api/player/earn', requireDeviceAuth, async (req, res) => {
     // Calculate reward
     let reward;
     if (action === 'event_gift') {
-      // Custom amount from client, capped at 500 to prevent abuse
-      reward = Math.min(Math.max(parseInt((meta && meta.amount) || 0, 10), 1), 500);
+      // The client suggests an amount in meta.amount (it rolled the dice locally
+      // for UX), but the SERVER clamps to [event_gift_credits_min,
+      // event_gift_credits_max]. This is the legacy path — new code should use
+      // POST /api/player/gift where the server rolls the dice itself.
+      const minRow = await pool.query(`SELECT value FROM game_config WHERE key = 'event_gift_credits_min'`);
+      const maxRow = await pool.query(`SELECT value FROM game_config WHERE key = 'event_gift_credits_max'`);
+      const minC = parseInt((minRow.rows[0] || {}).value, 10) || 5;
+      const maxC = parseInt((maxRow.rows[0] || {}).value, 10) || 50;
+      const requested = parseInt((meta && meta.amount) || 0, 10) || 0;
+      reward = Math.min(Math.max(requested, minC), maxC);
     } else {
       const cfgRow = await pool.query('SELECT value FROM game_config WHERE key = $1', [configKey]);
       reward = parseInt((cfgRow.rows[0] || {}).value, 10) || 0;
@@ -3690,6 +3703,58 @@ app.post('/api/player/earn', requireDeviceAuth, async (req, res) => {
     res.json({ ok: true, action, reward, xpGain, newBalance: newBal, level: newLevel, leveledUp });
   } catch (e) {
     console.error('player/earn', e.message);
+    res.status(500).json({ error: 'server' });
+  }
+});
+
+// POST /api/player/gift — server-decided gift event.
+// Replaces the legacy earnCredits('event_gift', {amount}) path where the
+// client controlled the amount. Here the SERVER rolls the jackpot dice and
+// pays out, so a DevTools loop cannot inflate credits. Same rate-limit
+// pattern as the legacy path (30s gate + 20/hr cap) shared via the
+// 'gift:hourly' bucket and '_gift_rate:<device>' game_config row.
+app.post('/api/player/gift', requireDeviceAuth, async (req, res) => {
+  const deviceId = req.deviceId;
+  try {
+    const player = await pool.query('SELECT balance FROM player_profiles WHERE device_id = $1', [deviceId]);
+    if (!player.rows.length) return res.json({ ok: false, reason: 'no_profile' });
+    if (!checkRateLimit('gift:hourly', deviceId, 20, 60 * 60 * 1000)) {
+      return res.json({ ok: false, reason: 'rate_limited_hour' });
+    }
+    const rateKey = '_gift_rate:' + deviceId;
+    const rateCheck = await pool.query('SELECT value FROM game_config WHERE key = $1', [rateKey]);
+    if (rateCheck.rows.length) {
+      const lastTs = parseInt(rateCheck.rows[0].value, 10) || 0;
+      if (Date.now() - lastTs < 30_000) return res.json({ ok: false, reason: 'rate_limited' });
+    }
+    await pool.query(
+      `INSERT INTO game_config (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2, updated_at = NOW()`,
+      [rateKey, String(Date.now())]).catch(() => {});
+
+    const cfgRows = await pool.query(`SELECT key, value FROM game_config WHERE key LIKE 'event_gift_%'`);
+    const cfg = {};
+    for (const r of cfgRows.rows) cfg[r.key] = r.value;
+    const minC = parseInt(cfg.event_gift_credits_min, 10) || 5;
+    const maxC = parseInt(cfg.event_gift_credits_max, 10) || 50;
+    const jpChance = parseInt(cfg.event_gift_jackpot_chance, 10) || 5;
+    const jpAmount = parseInt(cfg.event_gift_jackpot_amount, 10) || 200;
+    const isJackpot = Math.random() * 100 < jpChance;
+    const reward = isJackpot
+      ? jpAmount
+      : (minC + Math.floor(Math.random() * (maxC - minC + 1)));
+
+    const upd = await pool.query(
+      `UPDATE player_profiles SET balance = balance + $1, total_earned = total_earned + $1
+       WHERE device_id = $2 RETURNING balance`,
+      [reward, deviceId]);
+    res.json({
+      ok: true,
+      reward,
+      isJackpot,
+      newBalance: upd.rows.length ? upd.rows[0].balance : (player.rows[0].balance + reward)
+    });
+  } catch (e) {
+    console.error('player/gift', e.message);
     res.status(500).json({ error: 'server' });
   }
 });

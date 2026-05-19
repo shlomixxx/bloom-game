@@ -473,33 +473,39 @@
   }
 
   // ── 🎁 GIFT ──
+  // Server-decided. The client used to roll the jackpot dice and POST the
+  // resulting amount to /api/player/earn (action='event_gift'), but that let
+  // a DevTools loop pump credits — the server's cap was 500 and there was no
+  // proof the event actually happened in-game. Now we call /api/player/gift
+  // which rolls the dice and pays the reward server-side, capped by config.
   function triggerGift(evt) {
-    var minC = getEventNum('event_gift_credits_min', 5);
-    var maxC = getEventNum('event_gift_credits_max', 50);
-    var jpChance = getEventNum('event_gift_jackpot_chance', 5);
-    var jpAmount = getEventNum('event_gift_jackpot_amount', 500);
-
-    var isJackpot = Math.random() * 100 < jpChance;
-    var amount;
-    if (isJackpot) {
-      amount = jpAmount;
-      showEventBanner('🎁 JACKPOT!!!', '+' + amount + ' 💎', 'gift-jackpot');
-      buzz([80, 40, 80, 40, 80, 40, 80]);
-      showConfetti(35);
-    } else {
-      amount = minC + Math.floor(Math.random() * (maxC - minC + 1));
-      showEventBanner('🎁 מתנה!', '+' + amount + ' 💎', 'gift');
-    }
-    if (window.__bloomEngineLog) {
-      console.log('[gift] cell=' + evt.row + ',' + evt.col,
-        (isJackpot ? 'JACKPOT' : 'normal'),
-        '+' + amount + '💎',
-        'roll=' + jpChance + '% chance');
-    }
-    // Send actual amount to server (not fixed config value)
-    if (!window.__bloomBotActive && !skinTrialMode) {
-      earnCredits('event_gift', { amount: amount });
-    }
+    if (window.__bloomBotActive || skinTrialMode) return;
+    apiPost('/api/player/gift', {})
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        if (!d || !d.ok) return;
+        var amount = d.reward | 0;
+        if (d.isJackpot) {
+          showEventBanner('🎁 JACKPOT!!!', '+' + amount + ' 💎', 'gift-jackpot');
+          buzz([80, 40, 80, 40, 80, 40, 80]);
+          showConfetti(35);
+        } else {
+          showEventBanner('🎁 מתנה!', '+' + amount + ' 💎', 'gift');
+        }
+        if (window.__bloomEngineLog) {
+          console.log('[gift] cell=' + evt.row + ',' + evt.col,
+            (d.isJackpot ? 'JACKPOT' : 'normal'),
+            '+' + amount + '💎');
+        }
+        if (typeof d.newBalance === 'number') {
+          playerBalance = d.newBalance | 0;
+        } else {
+          playerBalance = (playerBalance | 0) + amount;
+        }
+        try { localStorage.setItem(PLAYER_BALANCE_KEY, String(playerBalance)); } catch (e) {}
+        if (typeof updateBalanceDisplay === 'function') updateBalanceDisplay();
+      })
+      .catch(function() {});
   }
 
   // ── 🔥 FEVER ──
