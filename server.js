@@ -542,11 +542,16 @@ app.post('/api/score', requireDeviceAuth, async (req, res) => {
     if (typeof tier !== 'number' || tier < 1 || tier > 8) {
       return res.status(400).json({ error: 'bad_tier' });
     }
-    // Anti-cheat: reject scores that are implausible given the number of drops.
-    // Old clients that don't send drops are allowed through (drops will be undefined).
+    // Anti-cheat: drops is now REQUIRED. A missing drops field used to bypass
+    // challengeDropsImplausible entirely — the heuristic only fired when the
+    // client volunteered the field. A cheater could just omit it. Now we 400.
     const dropsN = typeof drops === 'number' && Number.isFinite(drops) && drops >= 0 ? Math.floor(drops) : null;
-    if (dropsN !== null && challengeDropsImplausible(score, dropsN)) {
-      console.warn(`[anti-cheat] daily score rejected: device=${deviceId} score=${score} drops=${dropsN}`);
+    if (dropsN === null) {
+      console.warn(`[anti-cheat] daily score rejected (no drops): device=${deviceId} score=${score}`);
+      return res.status(400).json({ error: 'missing_drops' });
+    }
+    if (challengeDropsImplausible(score, dropsN)) {
+      console.warn(`[anti-cheat] daily score rejected (implausible): device=${deviceId} score=${score} drops=${dropsN}`);
       return res.status(400).json({ error: 'implausible_score' });
     }
     const safeName = cleanName(name);
@@ -560,16 +565,17 @@ app.post('/api/score', requireDeviceAuth, async (req, res) => {
       } catch (e) { /* table may not have the column on legacy DBs */ }
     }
     await pool.query(
-      `INSERT INTO daily_scores (date, device_id, name, score, tier, country)
-       VALUES ($1, $2, $3, $4, $5, $6)
+      `INSERT INTO daily_scores (date, device_id, name, score, tier, country, drops)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
        ON CONFLICT (date, device_id) DO UPDATE
          SET name = EXCLUDED.name,
              score = EXCLUDED.score,
              tier = EXCLUDED.tier,
              country = COALESCE(EXCLUDED.country, daily_scores.country),
+             drops = EXCLUDED.drops,
              updated_at = NOW()
          WHERE daily_scores.score < EXCLUDED.score`,
-      [date, deviceId, safeName, Math.floor(score), Math.floor(tier), safeCountry]
+      [date, deviceId, safeName, Math.floor(score), Math.floor(tier), safeCountry, dropsN]
     );
     // Keep player_profiles.display_name in sync so admin/duel/profile always
     // shows the same name the player picked on the daily leaderboard.
@@ -756,8 +762,12 @@ app.post('/api/score/practice', requireDeviceAuth, async (req, res) => {
       return res.status(400).json({ error: 'bad_tier' });
     }
     const dropsN = typeof drops === 'number' && Number.isFinite(drops) && drops >= 0 ? Math.floor(drops) : null;
-    if (dropsN !== null && challengeDropsImplausible(score, dropsN)) {
-      console.warn(`[anti-cheat] practice score rejected: device=${deviceId} score=${score} drops=${dropsN}`);
+    if (dropsN === null) {
+      console.warn(`[anti-cheat] practice score rejected (no drops): device=${deviceId} score=${score}`);
+      return res.status(400).json({ error: 'missing_drops' });
+    }
+    if (challengeDropsImplausible(score, dropsN)) {
+      console.warn(`[anti-cheat] practice score rejected (implausible): device=${deviceId} score=${score} drops=${dropsN}`);
       return res.status(400).json({ error: 'implausible_score' });
     }
     const safeName = cleanName(name);
@@ -773,17 +783,18 @@ app.post('/api/score/practice', requireDeviceAuth, async (req, res) => {
       } catch (e) {}
     }
     await pool.query(
-      `INSERT INTO difficulty_scores (date, device_id, difficulty_label, name, score, tier, country, source)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      `INSERT INTO difficulty_scores (date, device_id, difficulty_label, name, score, tier, country, source, drops)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
        ON CONFLICT (date, device_id, difficulty_label) DO UPDATE
          SET name = EXCLUDED.name,
              score = EXCLUDED.score,
              tier = EXCLUDED.tier,
              country = COALESCE(EXCLUDED.country, difficulty_scores.country),
              source = EXCLUDED.source,
+             drops = EXCLUDED.drops,
              updated_at = NOW()
          WHERE difficulty_scores.score < EXCLUDED.score`,
-      [date, deviceId, safeDiff, safeName, Math.floor(score), Math.floor(tier), safeCountry, safeSource]
+      [date, deviceId, safeDiff, safeName, Math.floor(score), Math.floor(tier), safeCountry, safeSource, dropsN]
     );
     res.json({ ok: true });
   } catch (e) {
@@ -1944,7 +1955,13 @@ app.post('/api/challenges/:slug/score', requireDeviceAuth, async (req, res) => {
     if (typeof tier !== 'number' || tier < 0 || tier > 8) {
       return res.status(400).json({ error: 'bad_tier' });
     }
-    const dropsN = typeof drops === 'number' && Number.isFinite(drops) && drops >= 0 ? Math.floor(drops) : 0;
+    // drops becomes required here so the partial-state heartbeats can be
+    // sanity-checked too. Pre-existing /score paths that omitted drops are
+    // refused — clients must send it (the frontend already does).
+    if (typeof drops !== 'number' || !Number.isFinite(drops) || drops < 0) {
+      return res.status(400).json({ error: 'missing_drops' });
+    }
+    const dropsN = Math.floor(drops);
 
     const cr = await client.query(`SELECT * FROM challenges WHERE slug = $1`, [slug]);
     if (!cr.rows.length) return res.status(404).json({ error: 'not_found' });
@@ -2025,7 +2042,10 @@ app.post('/api/challenges/:slug/complete', requireDeviceAuth, async (req, res) =
     if (typeof tier !== 'number' || tier < 0 || tier > 8) {
       return res.status(400).json({ error: 'bad_tier' });
     }
-    const dropsN = typeof drops === 'number' && Number.isFinite(drops) && drops >= 0 ? Math.floor(drops) : 0;
+    if (typeof drops !== 'number' || !Number.isFinite(drops) || drops < 0) {
+      return res.status(400).json({ error: 'missing_drops' });
+    }
+    const dropsN = Math.floor(drops);
 
     const cr = await client.query(`SELECT * FROM challenges WHERE slug = $1`, [slug]);
     if (!cr.rows.length) return res.status(404).json({ error: 'not_found' });
@@ -4120,8 +4140,12 @@ app.post('/api/duels/:id/score', requireDeviceAuth, async (req, res) => {
     return res.status(400).json({ error: 'bad_score' });
   }
   const dropsN = typeof drops === 'number' && Number.isFinite(drops) && drops >= 0 ? Math.floor(drops) : null;
-  if (dropsN !== null && challengeDropsImplausible(Math.floor(score), dropsN)) {
-    console.warn(`[anti-cheat] duel score rejected: device=${deviceId} score=${score} drops=${dropsN}`);
+  if (dropsN === null) {
+    console.warn(`[anti-cheat] duel score rejected (no drops): device=${deviceId} score=${score}`);
+    return res.status(400).json({ error: 'missing_drops' });
+  }
+  if (challengeDropsImplausible(Math.floor(score), dropsN)) {
+    console.warn(`[anti-cheat] duel score rejected (implausible): device=${deviceId} score=${score} drops=${dropsN}`);
     return res.status(400).json({ error: 'implausible_score' });
   }
   try {

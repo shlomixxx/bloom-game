@@ -26,6 +26,12 @@ ALTER TABLE daily_scores ADD COLUMN IF NOT EXISTS country VARCHAR(2);
 CREATE INDEX IF NOT EXISTS idx_daily_scores_country
   ON daily_scores (country, date, score DESC) WHERE country IS NOT NULL;
 
+-- drops: number of pieces the player dropped during this game. Required by
+-- /api/score going forward — the challengeDropsImplausible() heuristic uses
+-- it to retroactively flag impossible scores. Pre-existing rows are NULL;
+-- admin queries should filter where drops IS NOT NULL when joining on it.
+ALTER TABLE daily_scores ADD COLUMN IF NOT EXISTS drops INTEGER;
+
 -- Migration: legacy DBs created `date` as TEXT; admin queries compare it to
 -- CURRENT_DATE. Postgres rejects `text = date` without an explicit cast.
 -- Idempotent: only ALTERs if the column is still text.
@@ -433,6 +439,9 @@ CREATE INDEX IF NOT EXISTS idx_difficulty_scores_lookup
   ON difficulty_scores (difficulty_label, date, score DESC);
 CREATE INDEX IF NOT EXISTS idx_difficulty_scores_country
   ON difficulty_scores (difficulty_label, country, date, score DESC) WHERE country IS NOT NULL;
+
+-- Same as daily_scores: drops becomes required server-side for anti-cheat.
+ALTER TABLE difficulty_scores ADD COLUMN IF NOT EXISTS drops INTEGER;
 
 -- Leaderboard tabs admin config (which scope-tabs the modal exposes).
 -- Stored as a CSV of: world / country / difficulty (order matters → tab order).
