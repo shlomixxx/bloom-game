@@ -1842,9 +1842,12 @@ app.post('/api/challenges/:slug/score', async (req, res) => {
   try {
     const slug = cleanSlug(req.params.slug);
     if (!slug) return res.status(400).json({ error: 'bad_slug' });
-    const { deviceId, score, tier, drops } = req.body || {};
+    const { deviceId, score, tier, drops, token } = req.body || {};
     if (typeof deviceId !== 'string' || deviceId.length < 8 || deviceId.length > 64) {
       return res.status(400).json({ error: 'bad_device' });
+    }
+    if (token && !verifyDeviceToken(deviceId, token)) {
+      return res.status(403).json({ error: 'bad_token' });
     }
     if (!checkRateLimit('challenge:score', deviceId, 600, 60 * 60 * 1000)) {
       return res.status(429).json({ error: 'rate_limited' });
@@ -1923,9 +1926,12 @@ app.post('/api/challenges/:slug/complete', async (req, res) => {
   try {
     const slug = cleanSlug(req.params.slug);
     if (!slug) return res.status(400).json({ error: 'bad_slug' });
-    const { deviceId, score, tier, drops } = req.body || {};
+    const { deviceId, score, tier, drops, token } = req.body || {};
     if (typeof deviceId !== 'string' || deviceId.length < 8 || deviceId.length > 64) {
       return res.status(400).json({ error: 'bad_device' });
+    }
+    if (token && !verifyDeviceToken(deviceId, token)) {
+      return res.status(403).json({ error: 'bad_token' });
     }
     if (typeof score !== 'number' || !Number.isFinite(score) || score < 0 || score > 10_000_000) {
       return res.status(400).json({ error: 'bad_score' });
@@ -3469,6 +3475,17 @@ const XP_MAP = {
   contest_1st: 100, contest_2nd: 50, contest_3rd: 30,
   score_milestone: 10, event_gift: 5
 };
+
+// Server-authoritative skin prices. Must match SKIN_PACKS in src/01-constants.js.
+// Client cannot influence the cost; buy-skin reads from this map only.
+const SKIN_PRICES = {
+  classic: 0,
+  ocean:   200,
+  candy:   200,
+  space:   300,
+  fire:    300,
+  gold:    500
+};
 const LEVELS = [
   { level: 1,  xp: 0,      title: 'מתחיל' },
   { level: 2,  xp: 50,     title: 'מתחיל+' },
@@ -3604,19 +3621,13 @@ app.get('/api/tile-prices', async (_req, res) => {
 });
 
 // POST /api/player/buy-powerup — buy a delete power-up
+// NOTE: there used to be a `refund` branch here that credited arbitrary
+// `refundAmount` (capped at 1000) without any proof of prior purchase.
+// That let anyone inflate their balance up to 1000 💎 per call. Removed.
+// Cancel UX is now local-only on the client.
 app.post('/api/player/buy-powerup', async (req, res) => {
-  const { deviceId, powerup, refundAmount } = req.body || {};
+  const { deviceId, powerup } = req.body || {};
   if (!deviceId) return res.status(400).json({ error: 'missing_params' });
-
-  // Handle refund (cancel)
-  if (powerup === 'refund' && refundAmount > 0) {
-    try {
-      await pool.query(`UPDATE player_profiles SET balance = balance + $1, total_spent = total_spent - $1 WHERE device_id = $2`,
-        [Math.min(refundAmount, 1000), deviceId]); // cap refund at 1000 for safety
-      return res.json({ ok: true, refunded: refundAmount });
-    } catch (e) { return res.status(500).json({ error: 'server' }); }
-  }
-
   if (!powerup) return res.status(400).json({ error: 'missing_params' });
   const validPowerups = ['powerup_random_tile', 'powerup_choose_tile', 'powerup_random_row', 'powerup_choose_row'];
   if (!validPowerups.includes(powerup)) return res.json({ ok: false, reason: 'invalid_powerup' });
@@ -3669,20 +3680,30 @@ app.post('/api/player/buy-tile', async (req, res) => {
 });
 
 // POST /api/player/buy-skin — purchase a skin with credits
+// Price comes from SKIN_PRICES (server-authoritative). Client-supplied `price`
+// is ignored — historically it was trusted, which let anyone buy any skin for 0.
 app.post('/api/player/buy-skin', async (req, res) => {
-  const { deviceId, skinId, price } = req.body || {};
+  const { deviceId, skinId } = req.body || {};
   if (!deviceId || !skinId) return res.status(400).json({ error: 'missing_params' });
+  if (!Object.prototype.hasOwnProperty.call(SKIN_PRICES, skinId)) {
+    return res.json({ ok: false, reason: 'invalid_skin' });
+  }
+  const cost = SKIN_PRICES[skinId] | 0;
   try {
-    const player = await pool.query('SELECT balance FROM player_profiles WHERE device_id = $1', [deviceId]);
-    if (!player.rows.length) return res.json({ ok: false, reason: 'no_profile' });
-    const balance = player.rows[0].balance;
-    const cost = Math.max(0, parseInt(price, 10) || 0);
-    if (balance < cost) return res.json({ ok: false, reason: 'insufficient_balance' });
-    const newBalance = balance - cost;
-    await pool.query(
-      `UPDATE player_profiles SET balance = $1, total_spent = total_spent + $2 WHERE device_id = $3`,
-      [newBalance, cost, deviceId]);
-    res.json({ ok: true, skinId, newBalance });
+    // Atomic deduct: succeeds only if balance is sufficient. No SELECT→check→UPDATE race.
+    const r = await pool.query(
+      `UPDATE player_profiles
+          SET balance = balance - $1, total_spent = total_spent + $1
+        WHERE device_id = $2 AND balance >= $1
+        RETURNING balance`,
+      [cost, deviceId]
+    );
+    if (!r.rows.length) {
+      const p = await pool.query('SELECT 1 FROM player_profiles WHERE device_id = $1', [deviceId]);
+      if (!p.rows.length) return res.json({ ok: false, reason: 'no_profile' });
+      return res.json({ ok: false, reason: 'insufficient_balance' });
+    }
+    res.json({ ok: true, skinId, cost, newBalance: r.rows[0].balance });
   } catch (e) {
     console.error('buy-skin', e.message);
     res.status(500).json({ error: 'server' });
@@ -3842,13 +3863,27 @@ app.post('/api/duels/:id/accept', async (req, res) => {
 
 // GET single duel by id (used for polling after submitting a duel score —
 // the player's UI watches this for the opponent's score to come in).
+// We hide the opponent's score from a viewer who has not yet submitted their
+// own, so a cheater can't peek at the target before playing.
 app.get('/api/duels/:id', async (req, res) => {
   const duelId = parseInt(req.params.id, 10);
   if (!duelId) return res.status(400).json({ error: 'bad_id' });
+  const viewerDeviceId = String(req.query.deviceId || '').slice(0, 64);
   try {
     const r = await pool.query('SELECT * FROM duels WHERE id = $1', [duelId]);
     if (!r.rows.length) return res.status(404).json({ error: 'not_found' });
-    res.json({ ok: true, duel: r.rows[0] });
+    const d = r.rows[0];
+    if (d.status !== 'settled' && d.status !== 'tie') {
+      const iAmChallenger = viewerDeviceId === d.challenger_device;
+      const iAmOpponent   = viewerDeviceId === d.opponent_device;
+      if (iAmChallenger && d.challenger_score == null) d.opponent_score = null;
+      if (iAmOpponent   && d.opponent_score == null)   d.challenger_score = null;
+      if (!iAmChallenger && !iAmOpponent) {
+        d.challenger_score = null;
+        d.opponent_score = null;
+      }
+    }
+    res.json({ ok: true, duel: d });
   } catch (e) {
     res.status(500).json({ error: 'server' });
   }
@@ -3860,8 +3895,25 @@ app.get('/api/duels/:id', async (req, res) => {
 // /api/duels/:id/accept which calls the same settlement path if the
 // challenger had already submitted.
 app.post('/api/duels/:id/score', async (req, res) => {
-  const { deviceId, score } = req.body || {};
+  const { deviceId, score, drops, token } = req.body || {};
   const duelId = parseInt(req.params.id, 10);
+  if (!duelId) return res.status(400).json({ error: 'bad_id' });
+  if (typeof deviceId !== 'string' || deviceId.length < 8 || deviceId.length > 64) {
+    return res.status(400).json({ error: 'bad_device' });
+  }
+  // Soft token check: only reject if token is provided and invalid. Once
+  // every client is reliably sending tokens we can switch to hard-require.
+  if (token && !verifyDeviceToken(deviceId, token)) {
+    return res.status(403).json({ error: 'bad_token' });
+  }
+  if (typeof score !== 'number' || !Number.isFinite(score) || score < 0 || score > 10_000_000) {
+    return res.status(400).json({ error: 'bad_score' });
+  }
+  const dropsN = typeof drops === 'number' && Number.isFinite(drops) && drops >= 0 ? Math.floor(drops) : null;
+  if (dropsN !== null && challengeDropsImplausible(Math.floor(score), dropsN)) {
+    console.warn(`[anti-cheat] duel score rejected: device=${deviceId} score=${score} drops=${dropsN}`);
+    return res.status(400).json({ error: 'implausible_score' });
+  }
   try {
     const d = await pool.query('SELECT * FROM duels WHERE id = $1', [duelId]);
     if (!d.rows.length) return res.json({ ok: false, reason: 'not_found' });
@@ -3870,7 +3922,7 @@ app.post('/api/duels/:id/score', async (req, res) => {
       return res.json({ ok: false, reason: 'duel_closed', status: duel.status });
     }
 
-    const s = Math.max(0, parseInt(score, 10) || 0);
+    const s = Math.floor(score);
     const isChallenger = duel.challenger_device === deviceId;
     // Opponent can submit by device_id (after accepting) OR by player_code (if
     // they're the named opponent but haven't accepted yet — rare but possible
@@ -3888,29 +3940,40 @@ app.post('/api/duels/:id/score', async (req, res) => {
     // Check if both scored → settle
     const updated = await pool.query('SELECT * FROM duels WHERE id = $1', [duelId]);
     const u = updated.rows[0];
-    if (u.challenger_score != null && u.opponent_score != null) {
-      // Settle!
-      const rake = 5; // use config if needed
-      const totalPool = (u.amount | 0) * 2;
-      const rakeAmt = Math.round(totalPool * rake / 100);
-      const prize = totalPool - rakeAmt;
-      let winner = null;
-      if (u.challenger_score > u.opponent_score) winner = u.challenger_device;
-      else if (u.opponent_score > u.challenger_score) winner = u.opponent_device;
-      // Tie → refund both
-      if (!winner) {
-        if ((u.amount | 0) > 0) {
-          await pool.query(`UPDATE player_profiles SET balance = balance + $1 WHERE device_id = $2`, [u.amount, u.challenger_device]);
-          await pool.query(`UPDATE player_profiles SET balance = balance + $1 WHERE device_id = $2`, [u.amount, u.opponent_device]);
+    if (u.challenger_score != null && u.opponent_score != null && (u.status === 'pending' || u.status === 'accepted')) {
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        const rake = 5;
+        const totalPool = (u.amount | 0) * 2;
+        const rakeAmt = Math.round(totalPool * rake / 100);
+        const prize = totalPool - rakeAmt;
+        let winner = null;
+        if (u.challenger_score > u.opponent_score) winner = u.challenger_device;
+        else if (u.opponent_score > u.challenger_score) winner = u.opponent_device;
+
+        if (!winner) {
+          if ((u.amount | 0) > 0) {
+            await client.query(`UPDATE player_profiles SET balance = balance + $1 WHERE device_id = $2`, [u.amount, u.challenger_device]);
+            await client.query(`UPDATE player_profiles SET balance = balance + $1 WHERE device_id = $2`, [u.amount, u.opponent_device]);
+          }
+          // status-guard prevents a double-settle if two requests race here.
+          await client.query(`UPDATE duels SET status = 'tie', winner_device = NULL WHERE id = $1 AND status IN ('pending','accepted')`, [duelId]);
+          await client.query('COMMIT');
+          return res.json({ ok: true, result: 'tie', refunded: true });
         }
-        await pool.query(`UPDATE duels SET status = 'tie', winner_device = NULL WHERE id = $1`, [duelId]);
-        return res.json({ ok: true, result: 'tie', refunded: true });
+        if (prize > 0) {
+          await client.query(`UPDATE player_profiles SET balance = balance + $1, total_earned = total_earned + $1 WHERE device_id = $2`, [prize, winner]);
+        }
+        await client.query(`UPDATE duels SET status = 'settled', winner_device = $1 WHERE id = $2 AND status IN ('pending','accepted')`, [winner, duelId]);
+        await client.query('COMMIT');
+        res.json({ ok: true, result: 'settled', winner: winner === deviceId ? 'you' : 'opponent', prize });
+      } catch (err) {
+        await client.query('ROLLBACK');
+        throw err;
+      } finally {
+        client.release();
       }
-      if (prize > 0) {
-        await pool.query(`UPDATE player_profiles SET balance = balance + $1, total_earned = total_earned + $1 WHERE device_id = $2`, [prize, winner]);
-      }
-      await pool.query(`UPDATE duels SET status = 'settled', winner_device = $1 WHERE id = $2`, [winner, duelId]);
-      res.json({ ok: true, result: 'settled', winner: winner === deviceId ? 'you' : 'opponent', prize });
     } else {
       res.json({ ok: true, result: 'waiting', yourScore: s });
     }

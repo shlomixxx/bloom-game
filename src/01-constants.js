@@ -176,7 +176,7 @@
         fetch(API_BASE + '/api/player/buy-skin', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ deviceId: deviceId, skinId: skinId, price: pack.price })
+          body: JSON.stringify({ deviceId: deviceId, skinId: skinId, token: deviceToken })
         }).then(function(r) { return r.json(); }).then(function(d) {
           if (d && d.ok) {
             playerBalance = d.newBalance;
@@ -190,7 +190,7 @@
             showSkinShop();
             buildTierBar(true);
             render();
-            trackEvent('purchase', { item: 'skin', skin: skinId, cost: pack.price });
+            trackEvent('purchase', { item: 'skin', skin: skinId, cost: d.cost | 0 });
           } else {
             self.textContent = d.reason || 'שגיאה';
           }
@@ -251,7 +251,7 @@
       fetch(API_BASE + '/api/player/buy-skin', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ deviceId: deviceId, skinId: skinId, price: pack.price })
+        body: JSON.stringify({ deviceId: deviceId, skinId: skinId, token: deviceToken })
       }).then(function(r) { return r.json(); }).then(function(d) {
         if (d && d.ok) {
           playerBalance = d.newBalance;

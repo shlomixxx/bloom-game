@@ -314,7 +314,8 @@
           deviceId: deviceId,
           score: score | 0,
           tier: highestTier | 0,
-          drops: activeChallenge.drops | 0
+          drops: activeChallenge.drops | 0,
+          token: deviceToken
         })
       });
       if (res.ok) {
@@ -349,7 +350,8 @@
           deviceId: deviceId,
           score: score | 0,
           tier: highestTier | 0,
-          drops: activeChallenge.drops | 0
+          drops: activeChallenge.drops | 0,
+          token: deviceToken
         })
       });
       if (!res.ok) return null;

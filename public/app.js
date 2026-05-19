@@ -176,7 +176,7 @@
         fetch(API_BASE + '/api/player/buy-skin', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ deviceId: deviceId, skinId: skinId, price: pack.price })
+          body: JSON.stringify({ deviceId: deviceId, skinId: skinId, token: deviceToken })
         }).then(function(r) { return r.json(); }).then(function(d) {
           if (d && d.ok) {
             playerBalance = d.newBalance;
@@ -190,7 +190,7 @@
             showSkinShop();
             buildTierBar(true);
             render();
-            trackEvent('purchase', { item: 'skin', skin: skinId, cost: pack.price });
+            trackEvent('purchase', { item: 'skin', skin: skinId, cost: d.cost | 0 });
           } else {
             self.textContent = d.reason || 'שגיאה';
           }
@@ -251,7 +251,7 @@
       fetch(API_BASE + '/api/player/buy-skin', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ deviceId: deviceId, skinId: skinId, price: pack.price })
+        body: JSON.stringify({ deviceId: deviceId, skinId: skinId, token: deviceToken })
       }).then(function(r) { return r.json(); }).then(function(d) {
         if (d && d.ok) {
           playerBalance = d.newBalance;
@@ -571,7 +571,12 @@
     window._duelMode = false;
     fetch(API_BASE + '/api/duels/' + duelId + '/score', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ deviceId: deviceId, score: finalScore })
+      body: JSON.stringify({
+        deviceId: deviceId,
+        score: finalScore,
+        drops: (typeof dropsCount === 'number' ? dropsCount : 0) | 0,
+        token: deviceToken
+      })
     }).then(function(r) { return r.json(); }).then(function(d) {
       showDuelResultOverlay(d, finalScore, oppName);
       if (d && (d.result === 'tie' || (d.result === 'settled' && d.winner === 'you'))) fetchPlayerCode();
@@ -600,7 +605,7 @@
     var poller = setInterval(function() {
       attempts++;
       if (attempts > maxAttempts) { clearInterval(poller); return; }
-      fetch(API_BASE + '/api/duels/' + duelId, { method: 'GET' })
+      fetch(API_BASE + '/api/duels/' + duelId + '?deviceId=' + encodeURIComponent(deviceId), { method: 'GET' })
         .then(function(r) { return r.ok ? r.json() : null; })
         .then(function(resp) {
           if (!resp || !resp.duel) return;
@@ -647,7 +652,7 @@
   function attachDuelLiveSpectator(duelId, myScore, oppName) {
     // Fetch the duel row once to learn the opponent's deviceId, then start
     // the live-state poller and inject a mini-board into the waiting overlay.
-    fetch(API_BASE + '/api/duels/' + duelId, { method: 'GET' })
+    fetch(API_BASE + '/api/duels/' + duelId + '?deviceId=' + encodeURIComponent(deviceId), { method: 'GET' })
       .then(function(r) { return r.ok ? r.json() : null; })
       .then(function(resp) {
         if (!resp || !resp.duel) return;
@@ -1270,18 +1275,15 @@
 
   function cancelPowerup() {
     if (!activePowerup) return;
-    // Refund credits
+    // Cancellation is now a local-only optimistic refund — the server's `refund`
+    // branch was removed because it could be called without a prior charge.
+    // The visible balance reflects the refund until the next server sync, after
+    // which it returns to the deducted value. Accepted UX cost to close the hole.
     if (activePowerupCost > 0) {
       playerBalance += activePowerupCost;
       try { localStorage.setItem(PLAYER_BALANCE_KEY, String(playerBalance)); } catch(e) {}
       updateBalanceDisplay();
       showCreditToast(activePowerupCost, 'ביטול — החזר 💎');
-      // Server refund
-      fetch(API_BASE + '/api/player/buy-powerup', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ deviceId: deviceId, powerup: 'refund', refundAmount: activePowerupCost })
-      }).catch(function() {});
     }
     activePowerup = null;
     activePowerupCost = 0;
@@ -5034,7 +5036,8 @@
           deviceId: deviceId,
           score: score | 0,
           tier: highestTier | 0,
-          drops: activeChallenge.drops | 0
+          drops: activeChallenge.drops | 0,
+          token: deviceToken
         })
       });
       if (res.ok) {
@@ -5069,7 +5072,8 @@
           deviceId: deviceId,
           score: score | 0,
           tier: highestTier | 0,
-          drops: activeChallenge.drops | 0
+          drops: activeChallenge.drops | 0,
+          token: deviceToken
         })
       });
       if (!res.ok) return null;
