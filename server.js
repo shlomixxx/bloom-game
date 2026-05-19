@@ -11,22 +11,65 @@ import { startBots, stopBots, getBotStatus } from './bot-engine.js';
 // We log and continue. Bot system depends on this — async errors
 // shouldn't restart the server and wipe in-memory bot state.
 // ============================================================
-process.on('unhandledRejection', (reason, promise) => {
+// Optional error webhook — set ERROR_WEBHOOK env var (Discord/Slack/etc URL)
+// to forward unhandled errors. Failures to deliver are themselves swallowed
+// so the webhook can never crash us recursively.
+function reportToWebhook(payload) {
+  const url = process.env.ERROR_WEBHOOK;
+  if (!url) return;
+  try {
+    fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    }).catch(() => {});
+  } catch (_) { /* swallow */ }
+}
+process.on('unhandledRejection', (reason) => {
   console.error('[unhandled rejection]', reason);
+  reportToWebhook({
+    type: 'unhandled_rejection',
+    message: String(reason && reason.message || reason),
+    stack: reason && reason.stack || null,
+    ts: new Date().toISOString()
+  });
 });
 process.on('uncaughtException', (err) => {
   console.error('[uncaught exception]', err);
+  reportToWebhook({
+    type: 'uncaught_exception',
+    message: err && err.message,
+    stack: err && err.stack,
+    ts: new Date().toISOString()
+  });
 });
 
 const app = express();
 app.disable('x-powered-by');
 
-// Security headers
+// Security headers. HSTS forces HTTPS for a year — safe on Railway since
+// it always serves HTTPS. CSP locks every fetch source down to 'self'
+// except the GA tag (which is the only third-party script in the shell)
+// and 'unsafe-inline' for scripts/styles (the game's IIFE is inline). If
+// CSP breaks something at deploy, comment the Content-Security-Policy
+// line out — every other header is independently useful.
 app.use((_req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'DENY');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  res.setHeader('Content-Security-Policy',
+    "default-src 'self'; " +
+    "script-src 'self' 'unsafe-inline' https://www.googletagmanager.com https://www.google-analytics.com; " +
+    "style-src 'self' 'unsafe-inline'; " +
+    "img-src 'self' data: https:; " +
+    "font-src 'self' data:; " +
+    "connect-src 'self' https://www.google-analytics.com; " +
+    "frame-ancestors 'none'; " +
+    "base-uri 'self'; " +
+    "form-action 'self'"
+  );
   next();
 });
 
@@ -4443,6 +4486,31 @@ setInterval(async () => {
     console.warn('[privacy] auto-purge failed', e.message);
   }
 }, 24 * 60 * 60 * 1000);
+
+// Periodic cleanup of throwaway game_config rows.
+// _earn:* (per-day dedup keys) and _gift_rate:* (last-gift timestamps) grow
+// unbounded otherwise. _earn keys are needed for cohort dedup so keep 30 days;
+// _gift_rate is only needed for the 30s gate so 1 day is plenty.
+setInterval(async () => {
+  try {
+    await pool.query(`DELETE FROM game_config WHERE key LIKE '_earn:%' AND updated_at < NOW() - INTERVAL '30 days'`);
+    await pool.query(`DELETE FROM game_config WHERE key LIKE '_gift_rate:%' AND updated_at < NOW() - INTERVAL '1 day'`);
+  } catch (e) {
+    console.warn('[cleanup] game_config purge failed', e.message);
+  }
+}, 60 * 60 * 1000); // hourly
+
+// Periodic cleanup of stale contest_live_state + contest_watchers rows.
+// Reads filter by LIVE_FRESH_SECONDS already, but DB rows accumulate forever
+// without a sweep. Run every 5 min, drop anything older than 1 hour.
+setInterval(async () => {
+  try {
+    await pool.query(`DELETE FROM contest_live_state WHERE updated_at < NOW() - INTERVAL '1 hour'`);
+    await pool.query(`DELETE FROM contest_watchers WHERE updated_at < NOW() - INTERVAL '1 hour'`);
+  } catch (e) {
+    console.warn('[cleanup] live state purge failed', e.message);
+  }
+}, 5 * 60 * 1000);
 
 // ============================================================
 // GAME CONFIG (admin-controlled runtime settings)
