@@ -1,7 +1,8 @@
   const API_BASE = '';
 
   // Game config fetched from server (admin-controlled).
-  // merge_mode: 'anchor' (result near drop) or 'classic' (leftmost wins).
+  // merge_mode: 'anchor' (result near drop) | 'classic' (leftmost wins) |
+  //             'smart' (engine picks the cell that gives the best follow-up).
   var gameConfig = { merge_mode: 'anchor' };
   (function loadGameConfig() {
     fetch(API_BASE + '/api/config').then(function(r) { return r.json(); })

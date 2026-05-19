@@ -697,7 +697,7 @@
       <p>כל ההגדרות נמצאות ב<strong>"הגדרות משחק → כל ההגדרות"</strong> למטה. שינויים נכנסים לתוקף מיידית.</p>
       <p><strong>קבוצות הגדרות:</strong></p>
       <ul style="font-size:11px;padding-right:16px">
-        <li><strong>merge_mode</strong> — כיוון מיזוג (anchor/classic)</li>
+        <li><strong>merge_mode</strong> — כיוון מיזוג (anchor/classic/smart)</li>
         <li><strong>crown_merge_*</strong> — Crown Merge on/off + בונוס</li>
         <li><strong>events_*</strong> — מערכת Events (6 מפתחות כלליים)</li>
         <li><strong>event_bomb/star/gift/fever/freeze/target_*</strong> — הגדרות לכל event (4-7 מפתחות כל אחד)</li>
@@ -737,8 +737,8 @@
     <h2>הגדרות משחק <button class="tip-btn" data-tip="config">?</button></h2>
     <div class="config-row" style="display:flex;align-items:center;gap:12px;padding:12px 16px;background:var(--card);border-radius:10px;margin-top:8px">
       <div style="flex:1">
-        <strong style="font-size:13px">כיוון מיזוג <button class="tip-btn" data-tip-text="<strong>כיוון מיזוג</strong><br>איפה נשאר האריח אחרי שלוש (או יותר) אריחים זהים מתמזגים.<br><div class=&quot;tip-example&quot;>🎯 <code>anchor</code> (מומלץ): התוצאה נשארת ליד מקום הזריקה. השחקן יכול לכוון בדיוק לאן ייפול האריח החדש.<br>⬅ <code>classic</code>: התוצאה תמיד נופלת שמאלה (סטייל Suika המקורי). פחות אינטואיטיבי לעין ישראלית RTL.<br><br>שינוי לוקח אפקט מיידי לשחקנים חדשים; פעילים יראו אחרי refresh.</div>">?</button></strong>
-        <div style="font-size:11px;color:var(--muted);margin-top:2px">anchor = תוצאה נשארת ליד מקום הזריקה · classic = תוצאה תמיד שמאלה</div>
+        <strong style="font-size:13px">כיוון מיזוג <button class="tip-btn" data-tip-text="<strong>כיוון מיזוג</strong><br>איפה נשאר האריח אחרי שלוש (או יותר) אריחים זהים מתמזגים.<br><div class=&quot;tip-example&quot;>🎯 <code>anchor</code>: התוצאה נשארת ליד מקום הזריקה. השחקן יכול לכוון בדיוק לאן ייפול האריח החדש.<br>⬅ <code>classic</code>: התוצאה תמיד נופלת שמאלה (סטייל Suika המקורי). פחות אינטואיטיבי לעין ישראלית RTL.<br>🧠 <code>smart</code>: המערכת מסמלצת את כל המועמדים בקבוצה (כולל gravity), בוחנת איזה מקום ייצור שרשרת מיידית או מכין סולם דרגות לאריח הבא — ובוחרת את הטוב ביותר לשחקן. עוזר לשחקנים מתחילים, ומגדיל ניקוד ממוצע ב-15-30%.<br><br>שינוי לוקח אפקט מיידי לשחקנים חדשים; פעילים יראו אחרי refresh.</div>">?</button></strong>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px">anchor = ליד הזריקה · classic = תמיד שמאלה · smart = המערכת בוחרת הכי טוב לשחקן</div>
       </div>
       <button class="btn sm" id="btn-merge-mode" style="min-width:90px">טוען…</button>
     </div>
@@ -1364,7 +1364,7 @@
   // Help content per section
   var TIPS = {
     difficulty: '<strong>קושי, מהירות וסלוט</strong><br>שלוש שליטות שמשנות את הרגשת המשחק בלי לשבור את הניקוד או ה-leaderboards.<br><div class="tip-example">📊 <strong>בריכת אריחים</strong>: משקל לכל דרגה 1-8. אם אבן/עלה הם 0 → המשחק נהיה הרבה יותר קשה (כי הקלים לא נופלים). הוצא משקל גבוה מהדרגות הגבוהות כדי לגרום לשחקנים לעבוד קשה. כל הערכים 0 → ברירת מחדל אוטומטית.<br><br>⚡ <strong>מהירות (50-200%)</strong>: 50% = פי-2 מהיר מהרגיל (drop+merge+gravity). 200% = איטי יותר. מומלץ 80-90% לחווייה חדה יותר.<br><br>🎰 <strong>סלוט מכונה</strong>: אנימציה דרמטית של 3 סיבובים שעוצרת על האריח הבא. אפשר לכבות לגמרי (snap מיידי), לקצר (200ms), או להאריך (2000ms). דרגות בסיבוב = כמה דרגות שונות מופיעות בספין.<br><br>💡 שינויים נכנסים לתוקף מיידית — שחקנים פעילים יראו אותם ב-page reload (או אחרי טעינת /api/config הבאה).</div>',
-    config: '<strong>הגדרות משחק</strong><br>שליטה על כל התנהגות המשחק.<br><div class="tip-example">🎯 <strong>merge_mode</strong>: anchor (תוצאה ליד הזריקה) / classic (תוצאה שמאלה)<br>👑 <strong>crown_merge_enabled</strong>: true/false — מיזוג 2 כתרים = פיצוץ<br>👑 <strong>crown_merge_bonus</strong>: נקודות בונוס (ברירת מחדל: 50,000)<br><br>🎯 <strong>Events:</strong><br>events_enabled: true/false — מתג ראשי<br>events_start_delay: שניות עד event ראשון (15)<br>events_min/max_gap: מרווח בין events (15-35)<br>event_X_enabled: true/false לכל event<br>event_X_weight: הסתברות (גבוה = תכוף)<br>event_X_timer: שניות לפני שנעלם<br><br>📳 <strong>Shake:</strong><br>shake_tier_up/crown_merge/milestone...: 0=כבוי, 4=רגיל, 8+=דרמטי<br><br>💡 שינויים נכנסים לתוקף מיידית לכל השחקנים</div>',
+    config: '<strong>הגדרות משחק</strong><br>שליטה על כל התנהגות המשחק.<br><div class="tip-example">🎯 <strong>merge_mode</strong>: anchor (ליד הזריקה) / classic (שמאלה) / 🧠 smart (המערכת בוחרת הכי טוב לשחקן)<br>👑 <strong>crown_merge_enabled</strong>: true/false — מיזוג 2 כתרים = פיצוץ<br>👑 <strong>crown_merge_bonus</strong>: נקודות בונוס (ברירת מחדל: 50,000)<br><br>🎯 <strong>Events:</strong><br>events_enabled: true/false — מתג ראשי<br>events_start_delay: שניות עד event ראשון (15)<br>events_min/max_gap: מרווח בין events (15-35)<br>event_X_enabled: true/false לכל event<br>event_X_weight: הסתברות (גבוה = תכוף)<br>event_X_timer: שניות לפני שנעלם<br><br>📳 <strong>Shake:</strong><br>shake_tier_up/crown_merge/milestone...: 0=כבוי, 4=רגיל, 8+=דרמטי<br><br>💡 שינויים נכנסים לתוקף מיידית לכל השחקנים</div>',
     kpi: '<strong>מטריקות-על</strong><br>המספרים הכי חשובים של המשחק.<br><div class="tip-example">📊 <strong>DAU</strong> = שחקנים ייחודיים שנכנסו היום<br>📊 <strong>D1</strong> = כמה % חזרו יום אחרי ההתקנה<br>📊 <strong>D7/D30</strong> = אחוז שחזר אחרי שבוע/חודש<br>🎯 יעדים: D1 ≥ 40% · D7 ≥ 20% · D30 ≥ 7%<br>ירוק = מעל היעד · אדום = מתחת</div>',
     dau: '<strong>DAU · 30 ימים</strong><br>גרף של כמה שחקנים ייחודיים נכנסו כל יום.<br><div class="tip-example">📈 עלייה = המשחק גדל<br>📉 ירידה = שחקנים נושרים<br>🔍 חפש דפוסים: סופ"ש בד"כ גבוה יותר</div>',
     funnel: '<strong>משפך שחקנים</strong><br>מראה את ההמרה — כמה מתוך מי שנכנס באמת משחק.<br><div class="tip-example">ביקור → שחק משחק → השיג 50+ → הגיע tier 3+<br>⚠️ <strong>ירידה מעל 50%</strong> בין שלבים = בעיה. משמעות: שחקנים נוטשים בנקודה הזו.</div>',
@@ -1391,7 +1391,7 @@
     // look. Less hand-holding inside, more "what is this whole tab for".
     tab_dashboard: '<strong>📊 דשבורד — סקירת מצב המשחק</strong><br>הלשונית הראשית. כאן רואים את הבריאות של המשחק במבט אחד — כמה שחקנים, retention, funnel, וגרף DAU של 30 ימים. <br><div class="tip-example"><strong>מה יש כאן:</strong><br>📊 <strong>4 KPI חכמים</strong> — DAU/WAU/MAU/D1 עם השוואה ליעדי 2026 hybrid-casual: <code>D1≥40%</code> · <code>D7≥20%</code> · <code>D30≥7%</code>. ירוק = מעל היעד, אדום = מתחת. <em>זה הציון של המשחק.</em><br>📈 <strong>גרף DAU 30 ימים</strong> — אם רואים ירידה של 30%+ ביום אחד → התראת "anomaly" אוטומטית.<br>🔻 <strong>משפך 7 ימים</strong> — ביקור → משחק → סיום → חזרה ביום הבא. ירידה גדולה בין שני שלבים = איפה לתקן.<br>📅 <strong>Cohort Retention</strong> — 8 קבוצות שבועיות (מתי התחילו), D1/D7/D30 לכל אחת. אם השבוע האחרון פחות טוב מהקודמים → משהו השתבש לאחרונה.<br>🔥 <strong>Heatmap</strong> — שעה × יום בשבוע, ב-30 הימים האחרונים. צבע כהה = יותר משחקים. <em>שימושי לתזמון תזכורות וtrickle של תחרויות.</em><br><br><strong>דוגמה לקריאה:</strong><br>📈 DAU עולה אבל D1 יורד → onboarding או tutorial לא טוב.<br>🔻 funnel חזק עד "סיום משחק" אבל "חזרה למחרת" חלש → אין סיבת חזרה (תוסיף streak bonuses, תחרות שבועית).<br>🔥 heatmap מראה peak ב-20:00-22:00 → שלח push reminder ב-19:30.<br><br>💡 <strong>טיפ</strong>: התחל יום עם לחיצה על "🔄 רענן הכל" שמסונכרן עם השרת.</div>',
 
-    tab_game: '<strong>🎮 משחק — שליטה על מנגנון המשחק</strong><br>כל מה שמשפיע על איך המשחק <em>מרגיש</em> — מצב מיזוג, קושי, מהירות, אירועים, סלוט מכונה. שינויים פה משפיעים מיידית לכל השחקנים אחרי טעינת /api/config הבאה. <br><div class="tip-example"><strong>החלקים:</strong><br>🎯 <strong>הגדרות משחק</strong> — merge_mode (anchor vs classic), crown_merge_bonus, ועוד 42+ מפתחות ב"כל ההגדרות".<br>📊 <strong>קושי, מהירות וסלוט</strong> — בריכת אריחים (משקלי דרגות 1-8), מהירות 50-200%, אנימציית סלוט בתצוגת "הבא".<br>🏆 <strong>טבלאות מובילים</strong> — בחר אילו טאבים (עולמי/מדינתי/קושי) מופיעים לשחקן + סדר + ברירת מחדל.<br>🎁 <strong>סימולטור בונוסים</strong> — תצוגה מקדימה ויזואלית של כל ה-events (bomb, star, gift, fever, freeze, target) על לוח דמה. אין השפעה על שחקנים — רק להבנה ויזואלית.<br><br><strong>דוגמאות לתרחישים:</strong><br>1. <strong>משחק נראה קל מדי?</strong> → בריכת אריחים → הורד משקל דרגה 1 מ-55 ל-30, העלה דרגה 3 ל-25. שחקנים יעבדו קשה יותר.<br>2. <strong>שחקנים נושרים בדקה הראשונה?</strong> → events_start_delay נמוך יותר (10 במקום 15) — אירוע מוקדם → התמכרות מהירה.<br>3. <strong>אנימציית הסלוט מציקה?</strong> → slot_enabled=false (snap מיידי), או slot_duration_ms=200 (קצר מאוד).<br>4. <strong>פיצוץ כתרים יותר מתגמל?</strong> → crown_merge_bonus מ-50000 ל-80000.<br><br>💡 <strong>טיפ</strong>: כל שינוי כאן — בדוק קודם בסימולטור הבונוסים אם הוא event-related.</div>',
+    tab_game: '<strong>🎮 משחק — שליטה על מנגנון המשחק</strong><br>כל מה שמשפיע על איך המשחק <em>מרגיש</em> — מצב מיזוג, קושי, מהירות, אירועים, סלוט מכונה. שינויים פה משפיעים מיידית לכל השחקנים אחרי טעינת /api/config הבאה. <br><div class="tip-example"><strong>החלקים:</strong><br>🎯 <strong>הגדרות משחק</strong> — merge_mode (anchor / classic / smart), crown_merge_bonus, ועוד 42+ מפתחות ב"כל ההגדרות".<br>📊 <strong>קושי, מהירות וסלוט</strong> — בריכת אריחים (משקלי דרגות 1-8), מהירות 50-200%, אנימציית סלוט בתצוגת "הבא".<br>🏆 <strong>טבלאות מובילים</strong> — בחר אילו טאבים (עולמי/מדינתי/קושי) מופיעים לשחקן + סדר + ברירת מחדל.<br>🎁 <strong>סימולטור בונוסים</strong> — תצוגה מקדימה ויזואלית של כל ה-events (bomb, star, gift, fever, freeze, target) על לוח דמה. אין השפעה על שחקנים — רק להבנה ויזואלית.<br><br><strong>דוגמאות לתרחישים:</strong><br>1. <strong>משחק נראה קל מדי?</strong> → בריכת אריחים → הורד משקל דרגה 1 מ-55 ל-30, העלה דרגה 3 ל-25. שחקנים יעבדו קשה יותר.<br>2. <strong>שחקנים נושרים בדקה הראשונה?</strong> → events_start_delay נמוך יותר (10 במקום 15) — אירוע מוקדם → התמכרות מהירה.<br>3. <strong>אנימציית הסלוט מציקה?</strong> → slot_enabled=false (snap מיידי), או slot_duration_ms=200 (קצר מאוד).<br>4. <strong>פיצוץ כתרים יותר מתגמל?</strong> → crown_merge_bonus מ-50000 ל-80000.<br><br>💡 <strong>טיפ</strong>: כל שינוי כאן — בדוק קודם בסימולטור הבונוסים אם הוא event-related.</div>',
 
     tab_economy: '<strong>💰 כלכלה — קרדיטים, פרסומות, רכישות</strong><br>כל מה שקשור ב-💎 — מהיכן באים, לאן הולכים, וכמה כל פעולה שווה. הלשונית החשובה ביותר ל-monetization. <br><div class="tip-example"><strong>החלקים בסדר חשיבות:</strong><br>1. 💎 <strong>ניהול תגמולי קרדיטים (חדש!)</strong> — כל ה-rewards במקום אחד: התחברות יומית, רצף, אירועי gift, פרסומות (כולל <code>ad_daily_cap</code>), הפניות, הוצאות.<br>2. 💰 <strong>מונטיזציה</strong> — AdSense Client ID + Stripe Publishable Key + חבילות יהלומים. בלי המפתחות פה — אין הכנסה!<br>3. 🎰 <strong>הימורים וג\'קפוט</strong> — תחרויות עם wager, חלוקת קופה (60/25/10/5%), קופה מערכתית.<br><br><strong>איזון כלכלי נכון:</strong><br>📐 שחקן מרוויח ~295💎/יום בלי פרסומות (login 25 + daily 10 + streak + milestones).<br>📐 פריט premium (כתר 300💎) ≈ יום שלם של משחק חינמי. גבול נכון.<br>📐 ad watch = 30💎 × 5/יום = 150💎/יום (מעל זה — בלי AdSense אמיתי = הפסד).<br><br><strong>תרחישים נפוצים:</strong><br>🪙 <strong>שחקנים צוברים יותר מדי 💎?</strong> → הורד <code>daily_login_reward</code> מ-25 ל-15 או <code>event_gift_credits_max</code> מ-50 ל-30.<br>📺 <strong>הפעלת AdSense?</strong> → ברגע שמקבלים אישור (1-14 ימים), העלה <code>ad_daily_cap</code> מ-5 ל-15 (כל צפייה = הכנסה אמיתית).<br>💳 <strong>Stripe?</strong> → רק Publishable Key פה. ה-Secret Key (sk_live) צריך להיות ב-env <strong>של Railway</strong> בלבד.<br>🎰 <strong>תחרות תקועה?</strong> → לחץ "🏆 תחרויות" → "סלק" → הקופה מחולקת אוטומטית.<br><br>💡 <strong>טיפ</strong>: כל שינוי בפאנל "ניהול תגמולי קרדיטים" שומר מיידית. אין צורך לחץ "save all".</div>',
 
@@ -1407,7 +1407,7 @@
   // Keys without an entry simply hide the ? button (no harm done).
   var TIPS_PER_KEY = {
     // ---- Core gameplay ----
-    merge_mode: 'כיוון מיזוג. <code>anchor</code> = התוצאה נשארת ליד מקום הזריקה (מומלץ). <code>classic</code> = התוצאה תמיד נופלת שמאלה.',
+    merge_mode: 'כיוון מיזוג. <code>anchor</code> = ליד הזריקה (מומלץ ברירת מחדל). <code>classic</code> = תמיד שמאלה (סגנון Suika). <code>smart</code> = המערכת מסמלצת כל מועמד ובוחרת את המקום הכי טוב לשחקן (שרשרת מיידית > סולם דרגות > עומק בלוח).',
     crown_merge_enabled: 'מתג ראשי לפיצוץ Crown. כאשר <code>true</code> — שני 👑 + 👑 = פיצוץ שורה שלמה + בונוס.',
     crown_merge_bonus: 'כמה נקודות בונוס מתווספות מעבר לניקוד המיזוג הרגיל כאשר 2 כתרים מתאחדים. ברירת מחדל: <code>50000</code>.',
     // ---- Events: global ----
@@ -2319,23 +2319,30 @@
   function setMergeBtnUI(val) {
     var btn = $('btn-merge-mode');
     if (!btn) return;
-    btn.textContent = val === 'anchor' ? '🎯 anchor' : '⬅ classic';
-    btn.style.background = val === 'anchor' ? '#9FE1CB' : '#F4C0D1';
+    // Cycle: anchor → classic → smart → anchor
+    var label, bg, nextVal;
+    if (val === 'smart') {
+      label = '🧠 smart'; bg = '#FAC775'; nextVal = 'anchor';
+    } else if (val === 'classic') {
+      label = '⬅ classic'; bg = '#F4C0D1'; nextVal = 'smart';
+    } else {
+      label = '🎯 anchor'; bg = '#9FE1CB'; nextVal = 'classic';
+    }
+    btn.textContent = label;
+    btn.style.background = bg;
     btn.style.color = '#1C1A18';
     btn.disabled = false;
     btn.onclick = async function() {
-      var next = val === 'anchor' ? 'classic' : 'anchor';
       btn.disabled = true; btn.textContent = 'שומר...';
       try {
         var r = await api('/config/merge_mode', {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ value: next })
+          body: JSON.stringify({ value: nextVal })
         });
         if (r && r.ok) {
-          toast('כיוון מיזוג → ' + next);
-          // Update button immediately — don't wait for server refetch
-          setMergeBtnUI(next);
+          toast('כיוון מיזוג → ' + nextVal);
+          setMergeBtnUI(nextVal);
         } else {
           toast('שגיאה בשמירה');
           setMergeBtnUI(val); // revert

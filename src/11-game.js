@@ -1243,6 +1243,66 @@
     requestAnimationFrame(tick);
   }
 
+  // Smart survivor picker: for each cell in the merge group, simulate placing
+  // the merged-up tile there, run gravity on a clone, then score the resulting
+  // position. Picks the cell whose outcome is best for the player.
+  // Scoring (highest wins):
+  //   sameAdj  × 1,000,000  → an immediate chain (post-gravity neighbor of same tier)
+  //   upAdj    ×     1,000  → ladder setup (neighbor of the next-up tier)
+  //   landRow  ×       100  → prefer landing lower on the board (more headroom)
+  //   surviveR ×        10  → among ties, prefer the bottommost original survivor (visual)
+  //   anchor bonus          → small penalty for landing column far from drop column
+  function pickSmartSurvivor(group, anchorC, newTier) {
+    var rows = getBoardRows(), cols = getBoardCols();
+    var bestScore = -Infinity, bestR = -1, bestC = -1;
+    var SENTINEL = -1;
+    for (var i = 0; i < group.length; i++) {
+      var sr = group[i][0], sc = group[i][1];
+      // Clone grid
+      var sim = new Array(rows);
+      for (var rr = 0; rr < rows; rr++) sim[rr] = grid[rr].slice();
+      // Apply merge: clear all group cells, place sentinel at candidate survivor
+      for (var j = 0; j < group.length; j++) {
+        sim[group[j][0]][group[j][1]] = 0;
+      }
+      sim[sr][sc] = SENTINEL;
+      // Apply gravity in-place on the clone (same algorithm as applyGravity)
+      for (var c = 0; c < cols; c++) {
+        var w = rows - 1;
+        for (var r = rows - 1; r >= 0; r--) {
+          if (sim[r][c] !== 0) {
+            if (r !== w) { sim[w][c] = sim[r][c]; sim[r][c] = 0; }
+            w--;
+          }
+        }
+      }
+      // Find the sentinel post-gravity
+      var landR = -1, landC = -1;
+      for (var rr2 = 0; rr2 < rows && landR < 0; rr2++) {
+        for (var cc = 0; cc < cols; cc++) {
+          if (sim[rr2][cc] === SENTINEL) { landR = rr2; landC = cc; sim[rr2][cc] = newTier; break; }
+        }
+      }
+      if (landR < 0) continue;
+      // Score adjacency
+      var sameAdj = 0, upAdj = 0;
+      var dirs = [[1,0],[-1,0],[0,1],[0,-1]];
+      for (var d = 0; d < 4; d++) {
+        var nr = landR + dirs[d][0], nc = landC + dirs[d][1];
+        if (nr < 0 || nr >= rows || nc < 0 || nc >= cols) continue;
+        var v = sim[nr][nc];
+        if (v === newTier) sameAdj++;
+        else if (v === newTier + 1) upAdj++;
+      }
+      var ac = (anchorC != null ? anchorC : sc);
+      var anchorBonus = -Math.abs(landC - ac);
+      var score = sameAdj * 1000000 + upAdj * 1000 + landR * 100 + sr * 10 + anchorBonus;
+      if (score > bestScore) { bestScore = score; bestR = sr; bestC = sc; }
+    }
+    if (bestR < 0) return null;
+    return [bestR, bestC];
+  }
+
   async function processChains(anchorRow, anchorCol) {
     // anchorRow/anchorCol: where the piece was dropped (first merge prefers
     // this cell as the survivor). For chain reactions after gravity, the
@@ -1295,22 +1355,35 @@
             // If crown merge disabled, skip crown tiles entirely (old behavior)
             if (t === MAX_TIER) continue;
             // ── REGULAR MERGE ──
-            // Choose survivor cell: bottommost (gravity-friendly).
-            // Horizontal tie-breaker depends on admin-controlled merge_mode:
-            // 'anchor' = closest to drop column (natural), 'classic' = leftmost.
+            // Choose survivor cell. Modes (admin-controlled via gameConfig.merge_mode):
+            //   'anchor'  → bottommost row; tie → closest to drop column (default)
+            //   'classic' → bottommost row; tie → leftmost (Suika-style)
+            //   'smart'   → simulate each candidate after gravity and pick the
+            //               one that yields the best follow-up for the player
+            //               (adjacent same-tier = chain potential, adjacent next-
+            //               tier = ladder setup), tie-break by board depth then
+            //               anchor proximity.
             let kr = -1, kc = -1;
-            var useAnchor = gameConfig.merge_mode !== 'classic';
-            for (let i = 0; i < group.length; i++) {
-              const gr = group[i][0], gc = group[i][1];
-              if (gr > kr) {
-                kr = gr; kc = gc;
-              } else if (gr === kr) {
-                if (useAnchor) {
-                  var distNew = Math.abs(gc - (anchorCol != null ? anchorCol : 0));
-                  var distOld = Math.abs(kc - (anchorCol != null ? anchorCol : 0));
-                  if (distNew < distOld) { kc = gc; }
-                } else {
-                  if (gc < kc) { kc = gc; } // classic: leftmost wins
+            var mergeMode = gameConfig.merge_mode || 'anchor';
+            var nextTierForPick = Math.min(t + 1, MAX_TIER);
+            if (mergeMode === 'smart') {
+              var smartPick = pickSmartSurvivor(group, anchorCol, nextTierForPick);
+              if (smartPick) { kr = smartPick[0]; kc = smartPick[1]; }
+            }
+            if (kr < 0) {
+              var useAnchor = mergeMode !== 'classic';
+              for (let i = 0; i < group.length; i++) {
+                const gr = group[i][0], gc = group[i][1];
+                if (gr > kr) {
+                  kr = gr; kc = gc;
+                } else if (gr === kr) {
+                  if (useAnchor) {
+                    var distNew = Math.abs(gc - (anchorCol != null ? anchorCol : 0));
+                    var distOld = Math.abs(kc - (anchorCol != null ? anchorCol : 0));
+                    if (distNew < distOld) { kc = gc; }
+                  } else {
+                    if (gc < kc) { kc = gc; } // classic: leftmost wins
+                  }
                 }
               }
             }

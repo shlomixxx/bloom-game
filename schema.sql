@@ -239,7 +239,9 @@ CREATE TABLE IF NOT EXISTS game_config (
 -- like a first call. Bug surfaced during phase 4 testing.
 ALTER TABLE game_config ALTER COLUMN key TYPE VARCHAR(255);
 
--- Default merge mode: 'anchor' (new, result stays at drop) or 'classic' (old, leftmost wins)
+-- Default merge mode: 'anchor' (result stays at drop) | 'classic' (leftmost wins) |
+-- 'smart' (engine simulates each candidate and picks the cell whose post-gravity
+-- outcome is best for the player — adjacent same-tier neighbor = immediate chain).
 INSERT INTO game_config (key, value) VALUES ('merge_mode', 'anchor')
   ON CONFLICT (key) DO NOTHING;
 INSERT INTO game_config (key, value) VALUES ('referral_enabled', 'true')
