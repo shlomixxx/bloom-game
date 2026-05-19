@@ -3677,8 +3677,25 @@ app.post('/api/player/earn', requireDeviceAuth, async (req, res) => {
         `INSERT INTO game_config (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2, updated_at = NOW()`,
         [rateKey, String(Date.now())]).catch(() => {});
     } else {
-      // All other actions: dedup per device per day (with meta for uniqueness)
-      const dedupKey = action + ':' + today + (meta ? ':' + JSON.stringify(meta) : '');
+      // All other actions: dedup per device per day. The OLD logic baked the
+      // raw JSON(meta) into the key, which let a cheater bypass dedup by
+      // sending meta:{x:Math.random()} — unlimited daily rewards. New logic:
+      //   - Only the score_milestone action legitimately differentiates by
+      //     meta (one row per milestone tier the player crossed). Allowlist.
+      //   - That meta is validated against a fixed ALLOWED_MILESTONES list,
+      //     so a cheater can't invent fake milestones to fan out the keyspace.
+      //   - Everything else dedups purely on action+date.
+      const META_DEDUP_ACTIONS = new Set(['score_milestone']);
+      let validatedMeta = null;
+      if (action === 'score_milestone' && meta && typeof meta === 'object') {
+        const m = parseInt(meta.milestone, 10);
+        const ALLOWED_MILESTONES = [10000, 25000, 50000, 100000, 250000, 500000, 1000000];
+        if (ALLOWED_MILESTONES.includes(m)) validatedMeta = { milestone: m };
+      }
+      const metaKey = META_DEDUP_ACTIONS.has(action) && validatedMeta
+        ? ':' + JSON.stringify(validatedMeta)
+        : '';
+      const dedupKey = action + ':' + today + metaKey;
       const dup = await pool.query(
         `SELECT 1 FROM game_config WHERE key = $1`, ['_earn:' + deviceId + ':' + dedupKey]);
       if (dup.rows.length) return res.json({ ok: false, reason: 'already_earned' });
