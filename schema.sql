@@ -232,6 +232,12 @@ CREATE TABLE IF NOT EXISTS game_config (
   value  TEXT NOT NULL,
   updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
+-- Grow the key column. The original 60-char cap was fine for hand-written
+-- admin keys, but throwaway dedup rows (`_earn:<deviceId>:<action>:<date>:<meta>`)
+-- routinely blow past 60 chars — when the INSERT silently exceeds the limit,
+-- the dedup row never lands and the next call to /api/player/earn looks
+-- like a first call. Bug surfaced during phase 4 testing.
+ALTER TABLE game_config ALTER COLUMN key TYPE VARCHAR(255);
 
 -- Default merge mode: 'anchor' (new, result stays at drop) or 'classic' (old, leftmost wins)
 INSERT INTO game_config (key, value) VALUES ('merge_mode', 'anchor')

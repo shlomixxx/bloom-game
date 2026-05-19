@@ -3742,10 +3742,14 @@ app.post('/api/player/earn', requireDeviceAuth, async (req, res) => {
       const dup = await pool.query(
         `SELECT 1 FROM game_config WHERE key = $1`, ['_earn:' + deviceId + ':' + dedupKey]);
       if (dup.rows.length) return res.json({ ok: false, reason: 'already_earned' });
-      // Save dedup key
+      // Save dedup key. Log (don't swallow) failures — a silent failure here
+      // would let the next call to /earn look like a first call, undoing dedup.
       await pool.query(
         `INSERT INTO game_config (key, value) VALUES ($1, $2) ON CONFLICT (key) DO NOTHING`,
-        ['_earn:' + deviceId + ':' + dedupKey, '1']).catch(() => {});
+        ['_earn:' + deviceId + ':' + dedupKey, '1']
+      ).catch((err) => {
+        console.error('[earn] dedup-key insert failed', err.message, 'key=', '_earn:' + deviceId + ':' + dedupKey);
+      });
     }
 
     // Calculate reward
