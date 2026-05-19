@@ -84,6 +84,7 @@ The daily run is gated by `localStorage`; on a second visit the same day, the pl
 - **Dark mode** — full (253 CSS rules), auto-detects system preference
 - **PWA** — installable, service worker, offline shell
 - **Viral features (v1.2)** — streak hero badge, addiction badge with share, WhatsApp invite flow, mini-leaderboard, enhanced share card with game time + chain + addiction
+- **Security**: HMAC device-token (`/api/register`) required on all credit/state-mutating endpoints, atomic balance updates everywhere, strict CORS allowlist, `Strict-Transport-Security` + `Content-Security-Policy` headers, `drops`-mandatory anti-cheat, server-decided gift jackpots (no client-supplied amounts), single-submission guard on duel scores, server-authoritative skin ownership (`player_skins` table), strict per-day dedup on `/api/player/earn`, periodic DB cleanup of dedup keys and stale live-state rows
 
 ## NOT currently in the build
 
