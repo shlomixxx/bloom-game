@@ -588,14 +588,20 @@ app.post('/api/score', softDeviceAuth, async (req, res) => {
         const jpEntry = await pool.query(`SELECT value FROM game_config WHERE key = 'jackpot_entry'`);
         const entryFee = parseInt((jpEntry.rows[0] || {}).value, 10) || 5;
         if (entryFee > 0) {
-          // Check player has balance + hasn't contributed today
-          const player = await pool.query('SELECT balance FROM player_profiles WHERE device_id = $1', [deviceId]);
-          if (player.rows.length && player.rows[0].balance >= entryFee) {
-            const alreadyIn = await pool.query(
-              `SELECT 1 FROM wager_settlements WHERE contest_code = $1 AND device_id = $2 AND type = 'jackpot_entry'`,
-              ['JP:' + date, deviceId]);
-            if (!alreadyIn.rows.length) {
-              await pool.query(`UPDATE player_profiles SET balance = balance - $1, total_spent = total_spent + $1 WHERE device_id = $2`, [entryFee, deviceId]);
+          // Skip if already contributed today.
+          const alreadyIn = await pool.query(
+            `SELECT 1 FROM wager_settlements WHERE contest_code = $1 AND device_id = $2 AND type = 'jackpot_entry'`,
+            ['JP:' + date, deviceId]);
+          if (!alreadyIn.rows.length) {
+            // Atomic deduct: returns no rows if the player can't afford the entry,
+            // in which case we silently skip — the player still keeps their score.
+            const deduct = await pool.query(
+              `UPDATE player_profiles
+                  SET balance = balance - $1, total_spent = total_spent + $1
+                WHERE device_id = $2 AND balance >= $1
+                RETURNING balance`,
+              [entryFee, deviceId]);
+            if (deduct.rows.length) {
               await pool.query(
                 `INSERT INTO daily_jackpot (date, pool, entries) VALUES ($1, $2, 1)
                  ON CONFLICT (date) DO UPDATE SET pool = daily_jackpot.pool + $2, entries = daily_jackpot.entries + 1`,
@@ -1073,12 +1079,16 @@ app.post('/api/contests', softDeviceAuth, async (req, res) => {
         const max = parseInt(cfg.wager_max, 10) || 500;
         if (wager < min) return res.status(400).json({ error: 'wager_too_low', min });
         if (wager > max) wager = max;
-        // Deduct from host
-        const host = await pool.query('SELECT balance FROM player_profiles WHERE device_id = $1', [deviceId]);
-        if (!host.rows.length || host.rows[0].balance < wager) {
+        // Atomic deduct from host: passes only if balance is sufficient.
+        const deduct = await pool.query(
+          `UPDATE player_profiles
+              SET balance = balance - $1, total_spent = total_spent + $1
+            WHERE device_id = $2 AND balance >= $1
+            RETURNING balance`,
+          [wager, deviceId]);
+        if (!deduct.rows.length) {
           return res.status(400).json({ error: 'insufficient_balance' });
         }
-        await pool.query(`UPDATE player_profiles SET balance = balance - $1, total_spent = total_spent + $1 WHERE device_id = $2`, [wager, deviceId]);
       }
     }
 
@@ -1259,11 +1269,16 @@ app.post('/api/contests/:code/join', softDeviceAuth, async (req, res) => {
       const alreadyPaid = await pool.query(
         `SELECT 1 FROM wager_settlements WHERE contest_code = $1 AND device_id = $2 AND type = 'entry'`, [code, deviceId]);
       if (!alreadyPaid.rows.length) {
-        const player = await pool.query('SELECT balance FROM player_profiles WHERE device_id = $1', [deviceId]);
-        if (!player.rows.length || player.rows[0].balance < wagerAmt) {
+        // Atomic deduct: passes only if balance is sufficient.
+        const deduct = await pool.query(
+          `UPDATE player_profiles
+              SET balance = balance - $1, total_spent = total_spent + $1
+            WHERE device_id = $2 AND balance >= $1
+            RETURNING balance`,
+          [wagerAmt, deviceId]);
+        if (!deduct.rows.length) {
           return res.status(400).json({ error: 'insufficient_balance', wagerRequired: wagerAmt });
         }
-        await pool.query(`UPDATE player_profiles SET balance = balance - $1, total_spent = total_spent + $1 WHERE device_id = $2`, [wagerAmt, deviceId]);
         await pool.query(`UPDATE contests SET wager_pool = wager_pool + $1 WHERE code = $2`, [wagerAmt, code]);
         await pool.query(`INSERT INTO wager_settlements (contest_code, device_id, amount, type) VALUES ($1, $2, $3, 'entry')`, [code, deviceId, -wagerAmt]);
       }
@@ -3632,14 +3647,22 @@ app.post('/api/player/earn', softDeviceAuth, async (req, res) => {
 
 // POST /api/player/spend — deduct credits (for continue, premium items)
 app.post('/api/player/spend', softDeviceAuth, async (req, res) => {
-  const { deviceId, amount, reason } = req.body || {};
+  const { deviceId, amount } = req.body || {};
   if (!deviceId || !amount || amount <= 0) return res.json({ ok: false, reason: 'invalid' });
   try {
-    const player = await pool.query('SELECT balance FROM player_profiles WHERE device_id = $1', [deviceId]);
-    if (!player.rows.length) return res.json({ ok: false, reason: 'not_found' });
-    if (player.rows[0].balance < amount) return res.json({ ok: false, reason: 'insufficient' });
-    await pool.query('UPDATE player_profiles SET balance = balance - $1 WHERE device_id = $2', [amount, deviceId]);
-    res.json({ ok: true, newBalance: player.rows[0].balance - amount });
+    // Atomic deduct: only succeeds if balance is sufficient. Same WHERE/RETURNING
+    // pattern as buy-skin so two concurrent /spend requests can't double-deduct.
+    const r = await pool.query(
+      `UPDATE player_profiles
+          SET balance = balance - $1
+        WHERE device_id = $2 AND balance >= $1
+        RETURNING balance`,
+      [amount, deviceId]);
+    if (!r.rows.length) {
+      const exists = await pool.query('SELECT 1 FROM player_profiles WHERE device_id = $1', [deviceId]);
+      return res.json({ ok: false, reason: exists.rows.length ? 'insufficient' : 'not_found' });
+    }
+    res.json({ ok: true, newBalance: r.rows[0].balance });
   } catch (e) {
     res.status(500).json({ ok: false, error: 'server' });
   }
@@ -3678,13 +3701,19 @@ app.post('/api/player/buy-powerup', softDeviceAuth, async (req, res) => {
     const priceRow = await pool.query(`SELECT value FROM game_config WHERE key = $1`, [powerup]);
     const cost = parseInt((priceRow.rows[0] || {}).value, 10) || 0;
     if (cost <= 0) return res.json({ ok: false, reason: 'powerup_disabled' });
-    const player = await pool.query('SELECT balance FROM player_profiles WHERE device_id = $1', [deviceId]);
-    if (!player.rows.length) return res.json({ ok: false, reason: 'no_profile' });
-    if (player.rows[0].balance < cost) return res.json({ ok: false, reason: 'insufficient_balance' });
-    const newBalance = player.rows[0].balance - cost;
-    await pool.query(`UPDATE player_profiles SET balance = $1, total_spent = total_spent + $2 WHERE device_id = $3`,
-      [newBalance, cost, deviceId]);
-    res.json({ ok: true, powerup, cost, newBalance });
+    // Atomic deduct prevents two concurrent buy-powerup requests from each
+    // passing a stale SELECT check and double-deducting.
+    const r = await pool.query(
+      `UPDATE player_profiles
+          SET balance = balance - $1, total_spent = total_spent + $1
+        WHERE device_id = $2 AND balance >= $1
+        RETURNING balance`,
+      [cost, deviceId]);
+    if (!r.rows.length) {
+      const exists = await pool.query('SELECT 1 FROM player_profiles WHERE device_id = $1', [deviceId]);
+      return res.json({ ok: false, reason: exists.rows.length ? 'insufficient_balance' : 'no_profile' });
+    }
+    res.json({ ok: true, powerup, cost, newBalance: r.rows[0].balance });
   } catch (e) {
     console.error('buy-powerup', e.message);
     res.status(500).json({ error: 'server' });
@@ -3707,15 +3736,18 @@ app.post('/api/player/buy-tile', softDeviceAuth, async (req, res) => {
     const basePrice = parseInt((priceRow.rows[0] || {}).value, 10) || (t * 10);
     const mult = parseFloat((multRow.rows[0] || {}).value) || 1.0;
     const cost = Math.round(basePrice * mult);
-    // Check balance
-    const player = await pool.query('SELECT balance FROM player_profiles WHERE device_id = $1', [deviceId]);
-    if (!player.rows.length) return res.json({ ok: false, reason: 'no_profile' });
-    if (player.rows[0].balance < cost) return res.json({ ok: false, reason: 'insufficient_balance' });
-    // Deduct
-    const newBalance = player.rows[0].balance - cost;
-    await pool.query(`UPDATE player_profiles SET balance = $1, total_spent = total_spent + $2 WHERE device_id = $3`,
-      [newBalance, cost, deviceId]);
-    res.json({ ok: true, tier: t, cost, newBalance });
+    // Atomic deduct: passes only if balance is sufficient.
+    const r = await pool.query(
+      `UPDATE player_profiles
+          SET balance = balance - $1, total_spent = total_spent + $1
+        WHERE device_id = $2 AND balance >= $1
+        RETURNING balance`,
+      [cost, deviceId]);
+    if (!r.rows.length) {
+      const exists = await pool.query('SELECT 1 FROM player_profiles WHERE device_id = $1', [deviceId]);
+      return res.json({ ok: false, reason: exists.rows.length ? 'insufficient_balance' : 'no_profile' });
+    }
+    res.json({ ok: true, tier: t, cost, newBalance: r.rows[0].balance });
   } catch (e) {
     console.error('buy-tile', e.message);
     res.status(500).json({ error: 'server' });
@@ -3815,12 +3847,11 @@ app.post('/api/duels', softDeviceAuth, async (req, res) => {
     const duelEnabled = await pool.query(`SELECT value FROM game_config WHERE key = 'duel_enabled'`);
     if (duelEnabled.rows.length && duelEnabled.rows[0].value === 'false') return res.json({ ok: false, reason: 'duels_disabled' });
 
-    const challenger = await pool.query('SELECT player_code, display_name, balance FROM player_profiles WHERE device_id = $1', [deviceId]);
+    const challenger = await pool.query('SELECT player_code, display_name FROM player_profiles WHERE device_id = $1', [deviceId]);
     if (!challenger.rows.length) return res.json({ ok: false, reason: 'no_profile' });
     if (challenger.rows[0].player_code === opponentCode) return res.json({ ok: false, reason: 'self_duel' });
 
     const bet = Math.max(0, parseInt(amount, 10) || 0);
-    if (bet > 0 && challenger.rows[0].balance < bet) return res.json({ ok: false, reason: 'insufficient_balance' });
 
     // Check opponent exists
     const opponent = await pool.query('SELECT device_id, display_name FROM player_profiles WHERE player_code = $1', [opponentCode]);
@@ -3831,9 +3862,15 @@ app.post('/api/duels', softDeviceAuth, async (req, res) => {
     const seed = Math.floor(Math.random() * 2147483647);
     const expiresAt = new Date(Date.now() + hours * 3600000);
 
-    // Deduct from challenger
+    // Atomic deduct from challenger — only if balance is sufficient. No SELECT race.
     if (bet > 0) {
-      await pool.query(`UPDATE player_profiles SET balance = balance - $1, total_spent = total_spent + $1 WHERE device_id = $2`, [bet, deviceId]);
+      const deduct = await pool.query(
+        `UPDATE player_profiles
+            SET balance = balance - $1, total_spent = total_spent + $1
+          WHERE device_id = $2 AND balance >= $1
+          RETURNING balance`,
+        [bet, deviceId]);
+      if (!deduct.rows.length) return res.json({ ok: false, reason: 'insufficient_balance' });
     }
 
     const diff = resolveDifficulty(difficulty);
@@ -3881,14 +3918,19 @@ app.post('/api/duels/:id/accept', softDeviceAuth, async (req, res) => {
     if (new Date(duel.expires_at) < new Date()) return res.json({ ok: false, reason: 'expired' });
 
     // Verify this is the opponent
-    const player = await pool.query('SELECT player_code, balance FROM player_profiles WHERE device_id = $1', [deviceId]);
+    const player = await pool.query('SELECT player_code FROM player_profiles WHERE device_id = $1', [deviceId]);
     if (!player.rows.length || player.rows[0].player_code !== duel.opponent_code) return res.json({ ok: false, reason: 'not_opponent' });
 
     const bet = duel.amount | 0;
-    if (bet > 0 && player.rows[0].balance < bet) return res.json({ ok: false, reason: 'insufficient_balance' });
-
     if (bet > 0) {
-      await pool.query(`UPDATE player_profiles SET balance = balance - $1, total_spent = total_spent + $1 WHERE device_id = $2`, [bet, deviceId]);
+      // Atomic deduct — no SELECT race.
+      const deduct = await pool.query(
+        `UPDATE player_profiles
+            SET balance = balance - $1, total_spent = total_spent + $1
+          WHERE device_id = $2 AND balance >= $1
+          RETURNING balance`,
+        [bet, deviceId]);
+      if (!deduct.rows.length) return res.json({ ok: false, reason: 'insufficient_balance' });
     }
     await pool.query(`UPDATE duels SET status = 'accepted', opponent_device = $1 WHERE id = $2`, [deviceId, duelId]);
     // If the challenger already submitted a score while the duel was pending
