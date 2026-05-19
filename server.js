@@ -30,12 +30,18 @@ app.use((_req, res, next) => {
   next();
 });
 
-// CORS — only allow same-origin API requests (block external sites)
+// CORS — strict same-origin allowlist. The previous `origin.includes(host)`
+// check was a substring match — origin `https://evil.example.com.attacker.com`
+// would pass against host `attacker.com`. Now we require an exact set match.
 app.use('/api', (req, res, next) => {
-  const origin = req.headers.origin || '';
+  const origin = req.headers.origin;
+  if (!origin) return next(); // direct/curl/no-Origin
   const host = req.headers.host || '';
-  // Allow same-origin and no-origin (direct/curl). Block cross-origin.
-  if (origin && !origin.includes(host)) {
+  const allowed = new Set([`https://${host}`, `http://${host}`]);
+  // Production canonical host stays explicit so reverse-proxy host rewrites
+  // don't break the allowlist. Add new domains here.
+  allowed.add('https://bloom-web-production-f3bd.up.railway.app');
+  if (!allowed.has(origin)) {
     return res.status(403).json({ error: 'cross_origin_blocked' });
   }
   next();
@@ -1308,6 +1314,12 @@ app.post('/api/contests/:code/score', softDeviceAuth, async (req, res) => {
     if (typeof score !== 'number' || !Number.isFinite(score) || score < 0 || score > 10_000_000) {
       return res.status(400).json({ error: 'bad_score' });
     }
+    // Tighter per-game ceiling on top of the 10M sanity check. Real games top
+    // out far below this — anything higher is a sign of accumulation abuse.
+    const MAX_SCORE_PER_GAME = 1_500_000;
+    if (Math.floor(score) > MAX_SCORE_PER_GAME) {
+      return res.status(400).json({ error: 'score_too_high', max: MAX_SCORE_PER_GAME });
+    }
     if (typeof tier !== 'number' || tier < 1 || tier > 8) {
       return res.status(400).json({ error: 'bad_tier' });
     }
@@ -1319,6 +1331,18 @@ app.post('/api/contests/:code/score', softDeviceAuth, async (req, res) => {
     }
     if (new Date(contestResult.rows[0].ends_at) < new Date()) {
       return res.status(403).json({ error: 'ended' });
+    }
+
+    // Per-contest cool-down: a single device must wait at least 30s between
+    // game submissions, so the cumulative score can't be inflated by spamming.
+    const lastPlay = await pool.query(
+      `SELECT last_played_at FROM contest_scores WHERE contest_code = $1 AND device_id = $2`,
+      [code, deviceId]);
+    if (lastPlay.rows.length && lastPlay.rows[0].last_played_at) {
+      const sinceMs = Date.now() - new Date(lastPlay.rows[0].last_played_at).getTime();
+      if (sinceMs < 30_000) {
+        return res.status(429).json({ error: 'too_soon', waitMs: 30_000 - sinceMs });
+      }
     }
 
     // If the submitter is trying to RENAME themselves to a name another
@@ -3788,7 +3812,18 @@ app.post('/api/player/buy-skin', softDeviceAuth, async (req, res) => {
 app.post('/api/referral', softDeviceAuth, async (req, res) => {
   const { deviceId, refCode } = req.body || {};
   if (!deviceId || !refCode) return res.status(400).json({ error: 'missing_params' });
+  // Rate-limit referrals at 3/day/device on top of the ping requirement below,
+  // so a single device can't burn through codes even if /api/ping has been hit.
+  if (!checkRateLimit('referral', deviceId, 3, 24 * 60 * 60 * 1000)) {
+    return res.status(429).json({ error: 'rate_limited' });
+  }
   try {
+    // Refuse referrals from devices that haven't actually visited the site yet.
+    // /api/ping fires on every page boot, so a real visitor will always have a
+    // row. A fresh fake UUID + direct /referral hit will fail here.
+    const visited = await pool.query(
+      `SELECT 1 FROM device_visits WHERE device_id = $1 LIMIT 1`, [deviceId]);
+    if (!visited.rows.length) return res.json({ ok: false, reason: 'device_not_seen' });
     // Check: can't refer yourself
     const self = await pool.query(
       'SELECT player_code FROM player_profiles WHERE device_id = $1', [deviceId]);
