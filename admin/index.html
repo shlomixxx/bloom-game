@@ -803,6 +803,49 @@
   </div><!-- /admin-tab-panel game:config+difficulty+lb-tabs -->
 
   <div class="admin-tab-panel" data-tab="economy">
+  <!-- Credit Rewards Control — one panel to edit every 💎-earning rule -->
+  <section id="rewards-section" style="margin-bottom:12px">
+    <h2>💎 ניהול תגמולי קרדיטים <button class="tip-btn" data-tip-text="<strong>💎 ניהול תגמולי קרדיטים</strong><br>כאן נמצאים כל המקומות שבהם שחקן מרוויח 💎 — בקבוצות לפי מקור.<div class=&quot;tip-example&quot;>📐 <strong>השלם וערוך</strong>:<br>• הזן ערך חדש בשדה ← לחץ <strong>שמור</strong> או Enter<br>• השינוי נכנס לתוקף מיידית לכל השחקנים<br>• מקור האמת היחיד הוא טבלת <code>game_config</code> בDB — כל הצד-שרת קורא משם<br><br>💡 <strong>תקרת ה-ads</strong>: <code>ad_daily_cap × ad_watch_reward</code>. אם תרצה לפתוח: העלה את ה-cap (כל צפייה היא הכנסה אמיתית כש-AdSense מותקן).<br><br>🔒 כל מפתח כאן מאומת ב-server-side לפני שהוא משולם. אין סיכון להזין ערך גבוה מדי בטעות — אבל בדוק את ה-impact ב<strong>📊 סטטוס כלכלה</strong> למטה.</div>">?</button></h2>
+    <div style="padding:12px 16px;background:var(--card);border-radius:10px;margin-top:8px">
+
+      <div style="font-size:11px;color:var(--muted);margin-bottom:10px">כל שדה ניתן לעריכה ישירה. שמירה אוטומטית ב-Enter או בלחיצה על ✓. שינויים נכנסים לתוקף מיד.</div>
+
+      <!-- Group: Daily / streak / first-time -->
+      <div data-rewards-group="daily" style="margin-bottom:14px">
+        <div style="font-size:13px;font-weight:700;color:var(--gold);margin-bottom:6px">🔁 התחברות + רצף + תחרות יומית</div>
+        <div class="rewards-grid" data-keys="welcome_bonus,daily_login_reward,daily_reward,streak_3_reward,streak_7_reward,streak_30_reward,contest_1st_reward,contest_2nd_reward,contest_3rd_reward,score_milestone_reward"></div>
+      </div>
+
+      <!-- Group: Ads -->
+      <div data-rewards-group="ads" style="margin-bottom:14px">
+        <div style="font-size:13px;font-weight:700;color:var(--gold);margin-bottom:6px">📺 פרסומות (Watch-to-Earn)</div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:6px">תקרה יומית = <code>ad_daily_cap × ad_watch_reward</code>. כל gameId יכול לתבוע רק פעם אחת.</div>
+        <div class="rewards-grid" data-keys="ad_watch_reward,ad_daily_cap,ad_cooldown_seconds"></div>
+      </div>
+
+      <!-- Group: In-game gift events -->
+      <div data-rewards-group="gift" style="margin-bottom:14px">
+        <div style="font-size:13px;font-weight:700;color:var(--gold);margin-bottom:6px">🎁 מתנות בתוך משחק (gift event)</div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:6px">השרת מגריל ערך אקראי בטווח [min, max]. ב-<code>jackpot_chance</code> אחוז המקרים מוגרל הסכום של <code>jackpot_amount</code>. שני אלה <strong>נקבעים בשרת</strong> — הלקוח לא יכול להחליט.</div>
+        <div class="rewards-grid" data-keys="event_gift_credits_min,event_gift_credits_max,event_gift_jackpot_chance,event_gift_jackpot_amount"></div>
+      </div>
+
+      <!-- Group: Referral -->
+      <div data-rewards-group="referral" style="margin-bottom:14px">
+        <div style="font-size:13px;font-weight:700;color:var(--gold);margin-bottom:6px">🔗 הפניות (הזמן חבר)</div>
+        <div class="rewards-grid" data-keys="referral_enabled,referral_reward,referred_bonus"></div>
+      </div>
+
+      <!-- Group: Spend (negative direction — costs in 💎) -->
+      <div data-rewards-group="spend" style="margin-bottom:8px">
+        <div style="font-size:13px;font-weight:700;color:var(--gold);margin-bottom:6px">💸 הוצאות (מחירים ב-💎)</div>
+        <div class="rewards-grid" data-keys="continue_price,tile_price_5,tile_price_6,tile_price_7,tile_price_8"></div>
+      </div>
+
+      <div id="rewards-status" style="font-size:11px;color:var(--muted);text-align:center;margin-top:8px"></div>
+    </div>
+  </section>
+
   <!-- Monetization -->
   <section id="monetization-section" style="margin-bottom:12px">
     <h2>💰 מונטיזציה <button class="tip-btn" data-tip="monetization">?</button></h2>
@@ -1336,8 +1379,13 @@
     streak_7_reward: 'בונוס 💎 ברצף של 7 ימי כניסה.',
     streak_30_reward: 'בונוס 💎 ברצף של 30 ימי כניסה.',
     contest_1st_reward: 'בונוס 💎 על מקום ראשון בתחרות יומית.',
+    contest_2nd_reward: 'בונוס 💎 על מקום שני בתחרות יומית.',
+    contest_3rd_reward: 'בונוס 💎 על מקום שלישי בתחרות יומית.',
+    score_milestone_reward: 'בונוס 💎 בכל פעם שעוברים אבן-דרך ניקוד במשחק (10K/25K/50K/100K/250K/500K/1M).',
+    streak_30_reward: 'בונוס 💎 ברצף של 30 ימי כניסה.',
     ad_watch_reward: '💎 שהשחקן מקבל בעבור צפייה בפרסומת. ברירת מחדל: <code>30</code>.',
     ad_cooldown_seconds: 'שניות מינימום בין צפיות מתוגמלות. מונע ניצול. ברירת מחדל: <code>30</code>.',
+    ad_daily_cap: 'מקסימום צפיות מתוגמלות לכל מכשיר ביום (איפוס בחצות ירושלים). חוסם farming דרך רענון. ברירת מחדל: <code>5</code> (= 150💎/יום).',
     continue_price: 'מחיר ב-💎 להמשך משחק אחרי game-over (חיים נוספים). ברירת מחדל: <code>200</code>.',
     // ---- Wager ----
     wager_enabled: 'מתג ראשי להימורים בתחרויות חברים.',
@@ -2303,7 +2351,113 @@
 
   renderExports();
   loadGameConfig();
+  loadRewardsPanel();
   wireTips();
+
+  // ============ REWARDS PANEL — credit-earning config ============
+  // Renders every key listed in the data-keys CSV of each .rewards-grid in
+  // section#rewards-section. Pulls current values from /admin/api/config,
+  // shows them in an editable input, saves via PATCH /admin/api/config/:key.
+  // After every save the panel refreshes so admins always see the live value.
+  async function loadRewardsPanel() {
+    var host = document.getElementById('rewards-section');
+    if (!host) return;
+    var statusEl = document.getElementById('rewards-status');
+    var grids = host.querySelectorAll('.rewards-grid[data-keys]');
+    if (!grids.length) return;
+    try {
+      var d = await api('/config');
+      var rows = (d && Array.isArray(d.config)) ? d.config : [];
+      var cfg = {};
+      for (var i = 0; i < rows.length; i++) cfg[rows[i].key] = rows[i].value;
+      grids.forEach(function(grid) {
+        var keys = (grid.getAttribute('data-keys') || '').split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+        grid.style.display = 'grid';
+        grid.style.gridTemplateColumns = 'repeat(auto-fill, minmax(180px, 1fr))';
+        grid.style.gap = '8px';
+        grid.innerHTML = keys.map(function(key) {
+          var raw = (key in cfg) ? cfg[key] : '';
+          var tip = (typeof TIPS_PER_KEY === 'object' && TIPS_PER_KEY[key]) || '';
+          var tipBtn = tip ? '<button class="tip-btn" data-tip-text="' + escHtml(tip) + '">?</button>' : '';
+          // Boolean keys render a checkbox; everything else a number/text input.
+          var isBool = (raw === 'true' || raw === 'false');
+          var input = isBool
+            ? '<label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">' +
+                '<input type="checkbox" class="rewards-bool" data-key="' + escHtml(key) + '" ' + (raw === 'true' ? 'checked' : '') + ' style="width:18px;height:18px;cursor:pointer">' +
+                '<span style="font-size:12px;color:var(--muted)">' + (raw === 'true' ? 'מופעל' : 'כבוי') + '</span>' +
+              '</label>'
+            : '<div style="display:flex;gap:4px">' +
+                '<input class="rewards-input" data-key="' + escHtml(key) + '" value="' + escHtml(raw) + '" inputmode="decimal" style="flex:1;padding:6px 8px;border:1px solid rgba(0,0,0,0.12);border-radius:6px;font-family:inherit;font-size:13px;font-weight:600;text-align:center;background:rgba(0,0,0,0.06);color:var(--text)">' +
+                '<button class="btn sm rewards-save" data-key="' + escHtml(key) + '" style="min-width:34px;font-size:13px;padding:4px 10px">✓</button>' +
+              '</div>';
+          return '<div style="background:rgba(0,0,0,0.04);padding:8px 10px;border-radius:8px;border:1px solid rgba(0,0,0,0.06)">' +
+            '<div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--gold);font-family:monospace;direction:ltr;margin-bottom:4px">' + escHtml(key) + tipBtn + '</div>' +
+            input +
+          '</div>';
+        }).join('');
+      });
+      // Re-wire tooltip buttons for the freshly rendered ?-buttons.
+      if (typeof wireTips === 'function') wireTips();
+      // Wire save handlers (numeric / text inputs).
+      host.querySelectorAll('.rewards-save').forEach(function(btn) {
+        btn.onclick = function() { saveRewardsKey(btn.getAttribute('data-key')); };
+      });
+      host.querySelectorAll('.rewards-input').forEach(function(inp) {
+        inp.addEventListener('keydown', function(e) {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            saveRewardsKey(inp.getAttribute('data-key'));
+          }
+        });
+      });
+      host.querySelectorAll('.rewards-bool').forEach(function(cb) {
+        cb.onchange = function() {
+          var k = cb.getAttribute('data-key');
+          var v = cb.checked ? 'true' : 'false';
+          patchAndRefresh(k, v);
+        };
+      });
+      if (statusEl) statusEl.textContent = '';
+    } catch (e) {
+      if (statusEl) statusEl.textContent = '⚠️ שגיאת טעינה';
+    }
+  }
+  async function saveRewardsKey(key) {
+    var host = document.getElementById('rewards-section');
+    if (!host) return;
+    var inp = host.querySelector('.rewards-input[data-key="' + key + '"]');
+    if (!inp) return;
+    var val = String(inp.value || '').trim();
+    if (val === '') { toast('ערך ריק'); return; }
+    await patchAndRefresh(key, val);
+  }
+  async function patchAndRefresh(key, value) {
+    var statusEl = document.getElementById('rewards-status');
+    if (statusEl) statusEl.textContent = 'שומר ' + key + '…';
+    try {
+      var r = await api('/config/' + encodeURIComponent(key), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ value: value })
+      });
+      if (r && r.ok) {
+        toast(key + ' → ' + value);
+        if (statusEl) statusEl.textContent = '✓ ' + key + ' נשמר';
+        // Refetch so the panel is always in sync with the DB (in case admin
+        // edits the same key elsewhere, e.g. in "כל ההגדרות").
+        loadRewardsPanel();
+        // Also refresh the economy KPIs at the top of the page if visible.
+        if (typeof refreshEconomyStatus === 'function') refreshEconomyStatus();
+        setTimeout(function() { if (statusEl) statusEl.textContent = ''; }, 2500);
+      } else {
+        if (statusEl) statusEl.textContent = '⚠️ שגיאה בשמירה';
+        toast('שגיאה');
+      }
+    } catch (e) {
+      if (statusEl) statusEl.textContent = '⚠️ שגיאת רשת';
+      toast('שגיאת רשת');
+    }
+  }
 
   // Privacy: manual PII purge button.
   var purgeBtn = $('btn-privacy-purge');

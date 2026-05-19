@@ -3396,13 +3396,20 @@ if (ADMIN_PATH && ADMIN_PASSWORD) {
   });
   adminRouter.patch('/api/config/:key', async (req, res) => {
     try {
-      const key = String(req.params.key || '').slice(0, 60);
+      // game_config.key is VARCHAR(255) since the round-2 dedup-key widening,
+      // but we still cap admin-editable keys conservatively. Refuse the
+      // throwaway dedup namespaces so a typo here can't wipe a player's
+      // earn-history or ad-watch state.
+      const key = String(req.params.key || '').slice(0, 120);
       const { value } = req.body || {};
       if (!key || typeof value !== 'string') return res.status(400).json({ error: 'bad_input' });
+      if (/^_(earn|gift_rate|ad|ad_rate|ad_count):/.test(key)) {
+        return res.status(400).json({ error: 'reserved_key' });
+      }
       await pool.query(
         `INSERT INTO game_config (key, value, updated_at) VALUES ($1, $2, NOW())
          ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
-        [key, value.slice(0, 200)]
+        [key, value.slice(0, 500)]
       );
       _configCache = {}; _configCacheTs = 0; // bust cache
       await logAdminAction('config.update', 'game_config', key, { value });
