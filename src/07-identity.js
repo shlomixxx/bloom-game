@@ -318,6 +318,66 @@
     }).catch(function() {});
   }
   fetchPlayerCode();
+
+  // ============ SKINS — server-authoritative ownership ============
+  // Server is now source of truth (player_skins table). localStorage is a
+  // cache. On boot we do a one-time legacy migration: declare any skins
+  // currently in localStorage (so legitimate buyers don't lose their
+  // cosmetics), then sync down the server list. After the migration flag
+  // is set, declare is never called again from this device.
+  var SKINS_MIGRATED_KEY = 'bloom_skins_grace_done';
+  function syncOwnedSkinsFromServer() {
+    fetch(API_BASE + '/api/player/skins?deviceId=' + encodeURIComponent(deviceId))
+      .then(function(r) { return r.ok ? r.json() : null; })
+      .then(function(data) {
+        if (!data || !data.ok) return;
+        // classic is free for everyone — always present.
+        var serverOwned = (data.skins || []).concat(['classic']);
+        var merged = [];
+        var seen = {};
+        for (var i = 0; i < serverOwned.length; i++) {
+          if (!seen[serverOwned[i]]) { merged.push(serverOwned[i]); seen[serverOwned[i]] = true; }
+        }
+        if (typeof ownedSkins !== 'undefined') {
+          ownedSkins.length = 0;
+          for (var j = 0; j < merged.length; j++) ownedSkins.push(merged[j]);
+          try { localStorage.setItem('bloom_owned_skins', JSON.stringify(ownedSkins)); } catch (e) {}
+          // If the currently-active skin isn't actually owned, fall back to classic.
+          if (typeof activeSkinId !== 'undefined' && ownedSkins.indexOf(activeSkinId) === -1) {
+            activeSkinId = 'classic';
+            try { localStorage.setItem('bloom_active_skin', 'classic'); } catch (e) {}
+            if (typeof buildTierBar === 'function') buildTierBar(true);
+          }
+        }
+      })
+      .catch(function() {});
+  }
+  function migrateOwnedSkinsOnce() {
+    if (localStorage.getItem(SKINS_MIGRATED_KEY)) {
+      syncOwnedSkinsFromServer();
+      return;
+    }
+    var localOwned = [];
+    try { localOwned = JSON.parse(localStorage.getItem('bloom_owned_skins') || '[]'); } catch (e) {}
+    // Only the non-default ones are worth declaring — classic is free.
+    var nonDefault = localOwned.filter(function(s) { return s && s !== 'classic'; });
+    if (!nonDefault.length) {
+      try { localStorage.setItem(SKINS_MIGRATED_KEY, '1'); } catch (e) {}
+      syncOwnedSkinsFromServer();
+      return;
+    }
+    apiPost('/api/player/skins/declare', { skins: nonDefault })
+      .then(function(r) { return r.ok ? r.json() : null; })
+      .then(function(d) {
+        if (d && d.ok) {
+          try { localStorage.setItem(SKINS_MIGRATED_KEY, '1'); } catch (e) {}
+        }
+        syncOwnedSkinsFromServer();
+      })
+      .catch(function() { syncOwnedSkinsFromServer(); });
+  }
+  setTimeout(migrateOwnedSkinsOnce, 800);
+
   function getShareLink() {
     return window.location.origin + (playerCode ? '/?ref=' + playerCode : '');
   }

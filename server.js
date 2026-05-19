@@ -3905,9 +3905,12 @@ app.post('/api/player/buy-tile', requireDeviceAuth, async (req, res) => {
   }
 });
 
-// POST /api/player/buy-skin — purchase a skin with credits
-// Price comes from SKIN_PRICES (server-authoritative). Client-supplied `price`
-// is ignored — historically it was trusted, which let anyone buy any skin for 0.
+// POST /api/player/buy-skin — purchase a skin with credits.
+// Price comes from SKIN_PRICES (server-authoritative). Records ownership in
+// player_skins in the SAME transaction as the balance deduction, so a player
+// can never end up debited without the skin (or with the skin but not debited).
+// If the player already owns the skin, returns ok:true cost:0 alreadyOwned:true
+// without re-charging.
 app.post('/api/player/buy-skin', requireDeviceAuth, async (req, res) => {
   const { deviceId, skinId } = req.body || {};
   if (!deviceId || !skinId) return res.status(400).json({ error: 'missing_params' });
@@ -3916,22 +3919,99 @@ app.post('/api/player/buy-skin', requireDeviceAuth, async (req, res) => {
   }
   const cost = SKIN_PRICES[skinId] | 0;
   try {
-    // Atomic deduct: succeeds only if balance is sufficient. No SELECT→check→UPDATE race.
-    const r = await pool.query(
-      `UPDATE player_profiles
-          SET balance = balance - $1, total_spent = total_spent + $1
-        WHERE device_id = $2 AND balance >= $1
-        RETURNING balance`,
-      [cost, deviceId]
-    );
-    if (!r.rows.length) {
-      const p = await pool.query('SELECT 1 FROM player_profiles WHERE device_id = $1', [deviceId]);
-      if (!p.rows.length) return res.json({ ok: false, reason: 'no_profile' });
-      return res.json({ ok: false, reason: 'insufficient_balance' });
+    // Already owns? Free no-op.
+    const owned = await pool.query(
+      `SELECT 1 FROM player_skins WHERE device_id = $1 AND skin_id = $2`,
+      [deviceId, skinId]);
+    if (owned.rows.length) {
+      const bal = await pool.query('SELECT balance FROM player_profiles WHERE device_id = $1', [deviceId]);
+      return res.json({
+        ok: true, skinId, cost: 0, alreadyOwned: true,
+        newBalance: bal.rows.length ? bal.rows[0].balance : 0
+      });
     }
-    res.json({ ok: true, skinId, cost, newBalance: r.rows[0].balance });
+    // Atomic deduct + ownership insert in a single transaction. If the deduct
+    // fails (insufficient balance), the ownership row never lands either.
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const r = await client.query(
+        `UPDATE player_profiles
+            SET balance = balance - $1, total_spent = total_spent + $1
+          WHERE device_id = $2 AND balance >= $1
+          RETURNING balance`,
+        [cost, deviceId]);
+      if (!r.rows.length) {
+        await client.query('ROLLBACK');
+        const p = await pool.query('SELECT 1 FROM player_profiles WHERE device_id = $1', [deviceId]);
+        return res.json({ ok: false, reason: p.rows.length ? 'insufficient_balance' : 'no_profile' });
+      }
+      await client.query(
+        `INSERT INTO player_skins (device_id, skin_id) VALUES ($1, $2)
+         ON CONFLICT (device_id, skin_id) DO NOTHING`,
+        [deviceId, skinId]);
+      await client.query('COMMIT');
+      res.json({ ok: true, skinId, cost, newBalance: r.rows[0].balance });
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
   } catch (e) {
     console.error('buy-skin', e.message);
+    res.status(500).json({ error: 'server' });
+  }
+});
+
+// GET /api/player/skins — list owned skin IDs for a device.
+// No auth needed: just exposes what the player already paid for, keyed by
+// their own deviceId. Client calls on boot to sync OWNED_SKINS_KEY in
+// localStorage from the authoritative server list.
+app.get('/api/player/skins', async (req, res) => {
+  const deviceId = String(req.query.deviceId || '').slice(0, 64);
+  if (!deviceId || deviceId.length < 8) return res.status(400).json({ error: 'bad_device' });
+  try {
+    const r = await pool.query(
+      `SELECT skin_id FROM player_skins WHERE device_id = $1 ORDER BY purchased_at ASC`,
+      [deviceId]);
+    res.json({ ok: true, skins: r.rows.map(row => row.skin_id) });
+  } catch (e) {
+    console.error('GET /api/player/skins', e.message);
+    res.status(500).json({ error: 'server' });
+  }
+});
+
+// POST /api/player/skins/declare — one-time legacy migration.
+// Before this phase, ownership was localStorage-only; legitimate buyers have
+// skins on their device that the server doesn't know about. On first boot
+// after deploy, the client posts its localStorage list once; the server
+// records only valid SKIN_IDs. After the first call, GET /api/player/skins
+// is authoritative and this endpoint becomes a no-op for that device.
+// (We accept it idempotently — the ON CONFLICT DO NOTHING means a replay
+// can't *remove* skins, only add. Worst case: a DevTools user gives
+// themselves skins they didn't pay for, but that exploit existed before
+// this phase too. The point now is that the DB becomes the source of truth
+// going forward.)
+app.post('/api/player/skins/declare', requireDeviceAuth, async (req, res) => {
+  const deviceId = req.deviceId;
+  const skins = Array.isArray(req.body && req.body.skins) ? req.body.skins : [];
+  // Rate-limit just in case — one player declaring 1000 random strings is bounded.
+  if (!checkRateLimit('skins:declare', deviceId, 3, 24 * 60 * 60 * 1000)) {
+    return res.status(429).json({ error: 'rate_limited' });
+  }
+  const valid = skins.filter(s =>
+    typeof s === 'string' && Object.prototype.hasOwnProperty.call(SKIN_PRICES, s));
+  try {
+    for (const s of valid) {
+      await pool.query(
+        `INSERT INTO player_skins (device_id, skin_id) VALUES ($1, $2)
+         ON CONFLICT (device_id, skin_id) DO NOTHING`,
+        [deviceId, s]);
+    }
+    res.json({ ok: true, declared: valid.length });
+  } catch (e) {
+    console.error('POST /api/player/skins/declare', e.message);
     res.status(500).json({ error: 'server' });
   }
 });

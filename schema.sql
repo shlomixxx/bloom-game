@@ -443,6 +443,22 @@ CREATE INDEX IF NOT EXISTS idx_difficulty_scores_country
 -- Same as daily_scores: drops becomes required server-side for anti-cheat.
 ALTER TABLE difficulty_scores ADD COLUMN IF NOT EXISTS drops INTEGER;
 
+-- ============================================================
+-- Per-player skin ownership (server-authoritative)
+-- ============================================================
+-- One row per (device, skin) the player has purchased. POST /api/player/buy-skin
+-- writes here in the same transaction as the balance deduction; GET
+-- /api/player/skins reads it on boot to populate ownedSkins. localStorage
+-- becomes a cache, not source of truth — a player who clears their browser
+-- still keeps their cosmetics. Also closes the localStorage-edit exploit.
+CREATE TABLE IF NOT EXISTS player_skins (
+  device_id    VARCHAR(64) NOT NULL,
+  skin_id      VARCHAR(40) NOT NULL,
+  purchased_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (device_id, skin_id)
+);
+CREATE INDEX IF NOT EXISTS idx_player_skins_device ON player_skins (device_id);
+
 -- Leaderboard tabs admin config (which scope-tabs the modal exposes).
 -- Stored as a CSV of: world / country / difficulty (order matters → tab order).
 INSERT INTO game_config (key, value) VALUES ('leaderboard_tabs_enabled', 'world,country,difficulty')
