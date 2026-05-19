@@ -4185,12 +4185,32 @@ app.post('/api/duels/:id/score', requireDeviceAuth, async (req, res) => {
     }
     if (!isChallenger && !isOpponent) return res.json({ ok: false, reason: 'not_participant' });
 
-    if (isChallenger) await pool.query(`UPDATE duels SET challenger_score = $1 WHERE id = $2`, [s, duelId]);
-    else await pool.query(`UPDATE duels SET opponent_score = $1 WHERE id = $2`, [s, duelId]);
+    // Each side may submit at most ONCE. The WHERE guard makes the UPDATE a
+    // no-op if a score is already present, so a player can't replay a higher
+    // score after seeing they were going to lose.
+    let updated;
+    if (isChallenger) {
+      updated = await pool.query(
+        `UPDATE duels SET challenger_score = $1
+           WHERE id = $2 AND challenger_score IS NULL
+             AND status IN ('pending','accepted')
+           RETURNING 1`,
+        [s, duelId]);
+    } else {
+      updated = await pool.query(
+        `UPDATE duels SET opponent_score = $1
+           WHERE id = $2 AND opponent_score IS NULL
+             AND status IN ('pending','accepted')
+           RETURNING 1`,
+        [s, duelId]);
+    }
+    if (!updated.rows.length) {
+      return res.json({ ok: false, reason: 'already_submitted' });
+    }
 
     // Check if both scored → settle
-    const updated = await pool.query('SELECT * FROM duels WHERE id = $1', [duelId]);
-    const u = updated.rows[0];
+    const reloaded = await pool.query('SELECT * FROM duels WHERE id = $1', [duelId]);
+    const u = reloaded.rows[0];
     if (u.challenger_score != null && u.opponent_score != null && (u.status === 'pending' || u.status === 'accepted')) {
       const client = await pool.connect();
       try {
