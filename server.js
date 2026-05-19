@@ -3843,6 +3843,97 @@ app.post('/api/player/gift', requireDeviceAuth, async (req, res) => {
   }
 });
 
+// POST /api/player/ad-watch — claim a "watch ad" reward, tied to a single
+// game (gameId). The old flow paid via /api/player/earn action='event_gift',
+// which (a) used the wrong cap (event_gift_credits_max=10 by admin config
+// instead of ad_watch_reward=30), and (b) had only a 30s cooldown so a
+// player who finishes a game and refreshes can farm 200💎/hour indefinitely.
+// New flow: each game can claim at most one ad reward, plus a per-day cap
+// (ad_daily_cap, default 5) and 30s cooldown. Refreshing the page does not
+// create new gameIds — sessionStorage on the client preserves the same id.
+app.post('/api/player/ad-watch', requireDeviceAuth, async (req, res) => {
+  const deviceId = req.deviceId;
+  const gameId = String((req.body && req.body.gameId) || '').slice(0, 64);
+  if (!gameId || !/^[A-Za-z0-9_-]{8,64}$/.test(gameId)) {
+    return res.status(400).json({ error: 'bad_game_id' });
+  }
+  try {
+    const player = await pool.query('SELECT balance FROM player_profiles WHERE device_id = $1', [deviceId]);
+    if (!player.rows.length) return res.json({ ok: false, reason: 'no_profile' });
+
+    // Per-game dedup. One claim per (device, gameId), forever.
+    const dedupKey = '_ad:' + deviceId + ':' + gameId;
+    const dup = await pool.query(`SELECT 1 FROM game_config WHERE key = $1`, [dedupKey]);
+    if (dup.rows.length) return res.json({ ok: false, reason: 'already_claimed' });
+
+    // Read all relevant config in one round-trip.
+    const cfgRows = await pool.query(
+      `SELECT key, value FROM game_config WHERE key IN
+       ('ad_watch_reward','ad_cooldown_seconds','ad_daily_cap')`);
+    const cfg = {};
+    for (const r of cfgRows.rows) cfg[r.key] = r.value;
+    const reward    = Math.max(1, parseInt(cfg.ad_watch_reward, 10) || 30);
+    const cooldownS = Math.max(0, parseInt(cfg.ad_cooldown_seconds, 10) || 30);
+    const dailyCap  = Math.max(1, parseInt(cfg.ad_daily_cap, 10) || 5);
+
+    // Cooldown gate (separate from event_gift's gate so they don't interfere).
+    const rateKey = '_ad_rate:' + deviceId;
+    const rateRow = await pool.query(`SELECT value FROM game_config WHERE key = $1`, [rateKey]);
+    if (rateRow.rows.length && cooldownS > 0) {
+      const lastTs = parseInt(rateRow.rows[0].value, 10) || 0;
+      const waitMs = cooldownS * 1000 - (Date.now() - lastTs);
+      if (waitMs > 0) return res.json({ ok: false, reason: 'rate_limited', cooldownMs: waitMs });
+    }
+
+    // Per-day cap. Key is `_ad_count:<device>:<YYYY-MM-DD>` storing the count.
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' });
+    const countKey = '_ad_count:' + deviceId + ':' + today;
+    const countRow = await pool.query(`SELECT value FROM game_config WHERE key = $1`, [countKey]);
+    const usedToday = countRow.rows.length ? (parseInt(countRow.rows[0].value, 10) || 0) : 0;
+    if (usedToday >= dailyCap) {
+      return res.json({ ok: false, reason: 'daily_cap', dailyCap, usedToday });
+    }
+
+    // Atomic-ish claim sequence. game_config is keyed so duplicate writes are
+    // safe via ON CONFLICT DO UPDATE. The dedup key insert serializes the
+    // claim — two concurrent requests for the same gameId race here, and
+    // exactly one will land the row (PK on key), the other returns
+    // already_claimed on the next pass.
+    const dedupInsert = await pool.query(
+      `INSERT INTO game_config (key, value) VALUES ($1, $2)
+       ON CONFLICT (key) DO NOTHING
+       RETURNING 1`,
+      [dedupKey, '1']);
+    if (!dedupInsert.rows.length) {
+      return res.json({ ok: false, reason: 'already_claimed' });
+    }
+
+    // Mark cooldown + bump per-day counter + pay reward.
+    await pool.query(
+      `INSERT INTO game_config (key, value) VALUES ($1, $2)
+       ON CONFLICT (key) DO UPDATE SET value = $2, updated_at = NOW()`,
+      [rateKey, String(Date.now())]);
+    await pool.query(
+      `INSERT INTO game_config (key, value) VALUES ($1, $2)
+       ON CONFLICT (key) DO UPDATE SET value = (game_config.value::int + 1)::text, updated_at = NOW()`,
+      [countKey, String(usedToday + 1)]);
+    const upd = await pool.query(
+      `UPDATE player_profiles SET balance = balance + $1, total_earned = total_earned + $1
+         WHERE device_id = $2 RETURNING balance`,
+      [reward, deviceId]);
+    res.json({
+      ok: true,
+      reward,
+      newBalance: upd.rows.length ? upd.rows[0].balance : (player.rows[0].balance + reward),
+      dailyRemaining: Math.max(0, dailyCap - usedToday - 1),
+      dailyCap
+    });
+  } catch (e) {
+    console.error('player/ad-watch', e.message);
+    res.status(500).json({ error: 'server' });
+  }
+});
+
 // POST /api/player/spend — deduct credits (for continue, premium items)
 app.post('/api/player/spend', requireDeviceAuth, async (req, res) => {
   const { deviceId, amount } = req.body || {};

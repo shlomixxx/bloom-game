@@ -48,6 +48,44 @@
     return String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0');
   }
 
+  // ============ PER-GAME ID (used for ad-watch dedup) ============
+  // Stable across refresh in the same tab (sessionStorage), regenerated when
+  // a new game actually starts (init() with opts.fresh=true). The watch-ad
+  // claim is tied to this id server-side, so a player who finishes a game and
+  // F5-spams cannot claim multiple ad rewards for the same game. Server also
+  // enforces a daily cap + 30s cooldown as a second line of defense.
+  var GAME_ID_KEY = 'bloom_active_game_id';
+  function _newGameIdString() {
+    // 16 random bytes → base36 ~= 25 chars. Cheap, no crypto API dep.
+    var s = 'g';
+    for (var i = 0; i < 4; i++) {
+      s += Math.floor(Math.random() * 0xFFFFFFFF).toString(36);
+    }
+    return s + Date.now().toString(36);
+  }
+  function getCurrentGameId() {
+    try {
+      var existing = sessionStorage.getItem(GAME_ID_KEY);
+      if (existing && /^[A-Za-z0-9_-]{8,64}$/.test(existing)) return existing;
+    } catch (e) {}
+    return regenerateGameId();
+  }
+  function regenerateGameId() {
+    var id = _newGameIdString();
+    try { sessionStorage.setItem(GAME_ID_KEY, id); } catch (e) {}
+    return id;
+  }
+  // Did the current game already claim its ad reward? Persists across refresh
+  // in the same tab so the button stays hidden until a new game starts.
+  function adClaimedForCurrentGame() {
+    try { return !!sessionStorage.getItem('bloom_ad_claimed_' + getCurrentGameId()); }
+    catch (e) { return false; }
+  }
+  function markAdClaimedForCurrentGame() {
+    try { sessionStorage.setItem('bloom_ad_claimed_' + getCurrentGameId(), '1'); }
+    catch (e) {}
+  }
+
   let grid, score, nextPiece, busy, highestTier, dropsCount;
   let mode = 'daily';
   let dailyDate = todayInIsrael();

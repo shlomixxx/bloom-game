@@ -3633,6 +3633,44 @@
     return String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0');
   }
 
+  // ============ PER-GAME ID (used for ad-watch dedup) ============
+  // Stable across refresh in the same tab (sessionStorage), regenerated when
+  // a new game actually starts (init() with opts.fresh=true). The watch-ad
+  // claim is tied to this id server-side, so a player who finishes a game and
+  // F5-spams cannot claim multiple ad rewards for the same game. Server also
+  // enforces a daily cap + 30s cooldown as a second line of defense.
+  var GAME_ID_KEY = 'bloom_active_game_id';
+  function _newGameIdString() {
+    // 16 random bytes → base36 ~= 25 chars. Cheap, no crypto API dep.
+    var s = 'g';
+    for (var i = 0; i < 4; i++) {
+      s += Math.floor(Math.random() * 0xFFFFFFFF).toString(36);
+    }
+    return s + Date.now().toString(36);
+  }
+  function getCurrentGameId() {
+    try {
+      var existing = sessionStorage.getItem(GAME_ID_KEY);
+      if (existing && /^[A-Za-z0-9_-]{8,64}$/.test(existing)) return existing;
+    } catch (e) {}
+    return regenerateGameId();
+  }
+  function regenerateGameId() {
+    var id = _newGameIdString();
+    try { sessionStorage.setItem(GAME_ID_KEY, id); } catch (e) {}
+    return id;
+  }
+  // Did the current game already claim its ad reward? Persists across refresh
+  // in the same tab so the button stays hidden until a new game starts.
+  function adClaimedForCurrentGame() {
+    try { return !!sessionStorage.getItem('bloom_ad_claimed_' + getCurrentGameId()); }
+    catch (e) { return false; }
+  }
+  function markAdClaimedForCurrentGame() {
+    try { sessionStorage.setItem('bloom_ad_claimed_' + getCurrentGameId(), '1'); }
+    catch (e) {}
+  }
+
   let grid, score, nextPiece, busy, highestTier, dropsCount;
   let mode = 'daily';
   let dailyDate = todayInIsrael();
@@ -5751,6 +5789,11 @@
   async function init(nextMode, opts) {
     opts = opts || {};
     const fresh = !!opts.fresh;
+    // A FRESH game gets a new gameId — the ad-watch flow uses this id for
+    // server-side per-game dedup (one ad reward per finished game). Non-fresh
+    // re-inits (e.g., daily-already-played replay screen, contest mode
+    // restore) keep the existing id so refreshing doesn't issue a new one.
+    if (fresh && typeof regenerateGameId === 'function') regenerateGameId();
     // Sweep any celebration banners left over from the previous round —
     // setTimeout can be paused by tab-blur or skipped on page-hide, leaving
     // a stuck modal over the board. clearTransientBanners is idempotent.
@@ -8006,9 +8049,15 @@
             '<button class="btn" id="continue-pay" style="background:transparent;border:1px solid #BA7517;color:#BA7517;padding:10px 14px;font-size:12px;border-radius:12px;font-weight:600">' + continuePrice + '💎 המשך</button>' +
           '</div>';
       }
-      // Watch ad for credits (always available)
+      // Watch ad for credits. ONE claim per gameId — refreshing the page
+      // doesn't bring back the offer for the same finished game, and the
+      // server enforces both per-game dedup and a per-day cap so even
+      // sessionStorage-clearing attacks can't farm credits.
       var adCredits = getEventNum('ad_watch_reward', 30);
-      var watchAdHtml = '<button class="btn" id="watch-ad-btn" style="background:transparent;border:1px solid #2E8B6F;color:#2E8B6F;padding:8px 16px;font-size:12px;border-radius:10px;margin-top:6px;font-weight:600">▶️ צפה בפרסומת וקבל ' + adCredits + '💎</button>';
+      var alreadyClaimedAd = (typeof adClaimedForCurrentGame === 'function') && adClaimedForCurrentGame();
+      var watchAdHtml = alreadyClaimedAd
+        ? '<div style="margin-top:6px;font-size:11px;color:#6F6E68">✓ קיבלת ' + adCredits + '💎 על המשחק הזה</div>'
+        : '<button class="btn" id="watch-ad-btn" style="background:transparent;border:1px solid #2E8B6F;color:#2E8B6F;padding:8px 16px;font-size:12px;border-radius:10px;margin-top:6px;font-weight:600">▶️ צפה בפרסומת וקבל ' + adCredits + '💎</button>';
 
       wrap.innerHTML =
         '<div class="overlay">' +
@@ -8183,17 +8232,55 @@
         }).catch(function() { continuePayBtn.textContent = 'שגיאה'; });
       };
 
-      // Watch ad for free credits
+      // Watch ad for free credits.
+      // Goes through POST /api/player/ad-watch with the current gameId.
+      // Server enforces per-game dedup + daily cap + 30s cooldown, so the
+      // F5-spam exploit (refresh resets local state, button reappears,
+      // event_gift cooldown only 30s = ~200💎/hr forever) is now bounded
+      // to a fixed daily ceiling.
       var watchAdBtn = document.getElementById('watch-ad-btn');
       if (watchAdBtn) watchAdBtn.onclick = function() {
         this.disabled = true; this.textContent = '⏳ טוען פרסומת...';
         var self = this;
         simulateAdWatch(function() {
-          var reward = getEventNum('ad_watch_reward', 30);
-          earnCredits('event_gift', { amount: reward });
-          self.textContent = '✓ קיבלת ' + reward + '💎';
-          self.style.background = '#2E8B6F'; self.style.color = '#FFF';
-          fetchPlayerCode();
+          var gameId = (typeof getCurrentGameId === 'function') ? getCurrentGameId() : null;
+          if (!gameId) { self.textContent = 'שגיאה'; return; }
+          apiPost('/api/player/ad-watch', { gameId: gameId })
+            .then(function(r) { return r.json(); })
+            .then(function(d) {
+              if (d && d.ok) {
+                if (typeof markAdClaimedForCurrentGame === 'function') markAdClaimedForCurrentGame();
+                self.textContent = '✓ קיבלת ' + (d.reward | 0) + '💎';
+                self.style.background = '#2E8B6F';
+                self.style.color = '#FFF';
+                if (typeof d.newBalance === 'number') {
+                  playerBalance = d.newBalance | 0;
+                  try { localStorage.setItem(PLAYER_BALANCE_KEY, String(playerBalance)); } catch (e) {}
+                  if (typeof updateBalanceDisplay === 'function') updateBalanceDisplay();
+                }
+              } else if (d && d.reason === 'already_claimed') {
+                if (typeof markAdClaimedForCurrentGame === 'function') markAdClaimedForCurrentGame();
+                self.textContent = '✓ כבר נדרש';
+                self.disabled = true;
+              } else if (d && d.reason === 'daily_cap') {
+                self.textContent = 'הגעת למקסימום היומי (' + (d.dailyCap | 0) + ')';
+                self.disabled = true;
+              } else if (d && d.reason === 'rate_limited') {
+                var secs = Math.ceil((d.cooldownMs | 0) / 1000) || 30;
+                self.textContent = 'נסה שוב בעוד ' + secs + 'ש\'';
+                setTimeout(function() {
+                  self.textContent = '▶️ צפה בפרסומת וקבל ' + getEventNum('ad_watch_reward', 30) + '💎';
+                  self.disabled = false;
+                }, secs * 1000);
+              } else {
+                self.textContent = 'שגיאה';
+                setTimeout(function() {
+                  self.textContent = '▶️ צפה בפרסומת וקבל ' + getEventNum('ad_watch_reward', 30) + '💎';
+                  self.disabled = false;
+                }, 3000);
+              }
+            })
+            .catch(function() { self.textContent = 'שגיאת רשת'; });
         });
       };
 

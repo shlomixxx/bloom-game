@@ -1,6 +1,11 @@
   async function init(nextMode, opts) {
     opts = opts || {};
     const fresh = !!opts.fresh;
+    // A FRESH game gets a new gameId — the ad-watch flow uses this id for
+    // server-side per-game dedup (one ad reward per finished game). Non-fresh
+    // re-inits (e.g., daily-already-played replay screen, contest mode
+    // restore) keep the existing id so refreshing doesn't issue a new one.
+    if (fresh && typeof regenerateGameId === 'function') regenerateGameId();
     // Sweep any celebration banners left over from the previous round —
     // setTimeout can be paused by tab-blur or skipped on page-hide, leaving
     // a stuck modal over the board. clearTransientBanners is idempotent.

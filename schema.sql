@@ -544,6 +544,13 @@ INSERT INTO game_config (key, value) VALUES ('contest_alert_gap_max', '5000') ON
 INSERT INTO game_config (key, value) VALUES ('continue_price', '200') ON CONFLICT (key) DO NOTHING;
 INSERT INTO game_config (key, value) VALUES ('ad_watch_reward', '30') ON CONFLICT (key) DO NOTHING;
 INSERT INTO game_config (key, value) VALUES ('ad_cooldown_seconds', '30') ON CONFLICT (key) DO NOTHING;
+-- ad_daily_cap: maximum number of ad-watch claims per device per day. The
+-- old design relied on a 30s per-watch cooldown, but a player who finishes
+-- a game and refreshes can reset client state and farm ads indefinitely
+-- (clipped only by the cooldown). Capping per-day puts a real ceiling on
+-- this exploit. 5 watches/day × 30💎 = 150💎/day from ads — meaningful but
+-- not game-breaking.
+INSERT INTO game_config (key, value) VALUES ('ad_daily_cap', '5') ON CONFLICT (key) DO NOTHING;
 
 -- Economy rebalance: applied once during 2026-05-17 migration.
 -- These UPDATEs are commented out to prevent overwriting admin changes
