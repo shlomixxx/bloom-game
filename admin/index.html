@@ -151,6 +151,38 @@
   }
   .tip-popup.show { display: block; }
 
+  /* CONFIG-TABLE CONTROLS — toggle for booleans, chips for numeric/enum presets.
+     Lets the admin click instead of typing. Falls back to a plain <input>
+     for free-form keys (CSVs, names, API keys). */
+  .cfg-cell { display: flex; flex-direction: column; gap: 4px; }
+  .cfg-input { width: 100%; padding: 4px 6px; border: 1px solid rgba(0,0,0,0.1); border-radius: 6px; font-family: inherit; font-size: 12px; box-sizing: border-box; direction: ltr; background: #FFF; color: #1C1A18; }
+  .cfg-input.bool-hidden { display: none; }
+  .cfg-toggle-row { display: flex; gap: 4px; }
+  .cfg-toggle-btn {
+    flex: 1; padding: 5px 8px; border-radius: 7px; cursor: pointer;
+    font-family: inherit; font-size: 11px; font-weight: 700;
+    border: 1px solid rgba(0,0,0,0.12); background: #F5F2EC; color: #6F6E68;
+    transition: all 0.12s;
+  }
+  .cfg-toggle-btn.on-true  { background: #9FE1CB; color: #1B5E20; border-color: #79CCB3; box-shadow: 0 0 0 2px rgba(159,225,203,0.35); }
+  .cfg-toggle-btn.on-false { background: #F4C0D1; color: #6A1A33; border-color: #E89BB3; box-shadow: 0 0 0 2px rgba(244,192,209,0.35); }
+  .cfg-toggle-btn:hover { background: #FAEFD0; }
+  .cfg-preset-row { display: flex; flex-wrap: wrap; gap: 4px; }
+  .cfg-preset-btn {
+    padding: 3px 9px; border-radius: 999px;
+    border: 1px solid rgba(0,0,0,0.1); background: #F5F2EC; color: #6F6E68;
+    font-family: inherit; font-size: 10px; font-weight: 600; cursor: pointer;
+    direction: ltr; transition: all 0.12s;
+  }
+  .cfg-preset-btn.on { background: #FAC775; color: #412402; border-color: #E5A845; box-shadow: 0 0 0 2px rgba(250,199,117,0.35); }
+  .cfg-preset-btn:hover { background: #FAEFD0; }
+  html[data-theme="dark"] .cfg-input { background: #2C2A28; color: #F2EFE9; border-color: rgba(255,255,255,0.1); }
+  html[data-theme="dark"] .cfg-toggle-btn { background: #1F1D1B; color: #B5B1A8; border-color: rgba(255,255,255,0.08); }
+  html[data-theme="dark"] .cfg-toggle-btn.on-true { background: #1B3A2C; color: #9FE1CB; border-color: #2D5A47; }
+  html[data-theme="dark"] .cfg-toggle-btn.on-false { background: #3A1B2C; color: #F4C0D1; border-color: #5A2D47; }
+  html[data-theme="dark"] .cfg-preset-btn { background: #1F1D1B; color: #B5B1A8; border-color: rgba(255,255,255,0.08); }
+  html[data-theme="dark"] .cfg-preset-btn.on { background: #4A3819; color: #FAC775; border-color: #6B5530; }
+
   /* TAB HEADER — appears at the top of every admin tab panel.
      Gives the admin a one-glance "where am I + what can I do here" before
      they dig into individual sections. The ? button reuses the existing
@@ -1402,131 +1434,288 @@
     tab_monitor: '<strong>🔧 ניטור — מדריך, audit, live, CSV, פרטיות</strong><br>הכל-בכל של הלשונית: מדריך מלא, "מה קורה עכשיו", יומן פעולות אדמין, CSV exports, וניקוי PII ידני. <br><div class="tip-example"><strong>החלקים:</strong><br>📖 <strong>מדריך מנהל מלא</strong> — תיעוד של כל המנגנונים. פתח כאן בכל פעם שיש "איך X עובד?"<br>👁 <strong>קורה עכשיו</strong> — heartbeat-based: מי משחק ברגע זה (filtered to 30 sec), מי צופה, באיזה מצב. עוזר לראות שהמשחק "חי".<br>📋 <strong>יומן פעולות אדמין</strong> — כל PATCH/DELETE/POST של אדמין מתועד ב-<code>admin_actions</code>. אם משהו השתבש — חפש מה השתנה ומתי.<br>📥 <strong>CSV exports</strong> — UTF-8 BOM (Excel תומך בעברית). טבלאות: daily_scores, contests, contest_scores, device_visits, admin_actions, challenges, challenge_entries.<br>🧹 <strong>ניקוי PII ידני</strong> — מריץ DELETE על contact_name/phone/email של זוכי אתגרים שעברו 90 יום מ-prize_claimed_at. <em>גם רץ אוטומטית כל 24 שעות.</em><br><br><strong>תרחישים:</strong><br>1. <strong>שינוי לא צפוי</strong> → audit log → חפש לפי action/target_id → תראה מי-מתי-מה.<br>2. <strong>סטטיסטיקה לאקסל</strong> → CSV → daily_scores → קובץ נפתח עם תמיכת UTF-8 (אין שאלות).<br>3. <strong>בקשת מחיקה מ-GDPR</strong> → מחק שחקן ידנית מ"שחקנים" → cascade delete + audit log אוטומטי.<br>4. <strong>בדיקה אחרי deploy</strong> → "קורה עכשיו" → אם מספר הפעילים נראה נורמלי → הכל בסדר.<br><br>💡 <strong>טיפ</strong>: ה-audit log הוא ההגנה האדמיניסטרטיבית שלך. אם אתה לא היחיד עם גישה לפאנל — בדוק אותו אחת לשבוע.</div>'
   };
 
-  // Per-key explanations for the giant 42-key config table.
+  // Numeric / enum presets per key — rendered as chips below the input. Click
+  // = auto-save. Admin can still type a custom value into the input field.
+  var PRESETS_PER_KEY = {
+    // String enums
+    merge_mode: ['anchor', 'classic', 'smart'],
+    leaderboard_default_tab: ['world', 'country', 'difficulty'],
+    leaderboard_default_difficulty: ['default', 'easy', 'medium', 'hard', 'insane'],
+    leaderboard_tabs_enabled: ['world,country,difficulty', 'world,country', 'world,difficulty', 'world'],
+    // Game speed
+    game_speed_pct: [50, 75, 100, 125, 150, 200],
+    // Crown
+    crown_merge_bonus: [10000, 25000, 50000, 100000, 200000],
+    // Events: timing
+    events_start_delay: [10, 15, 20, 30, 45, 60],
+    events_min_gap: [10, 15, 20, 25, 30],
+    events_max_gap: [25, 35, 45, 60, 90],
+    events_min_empty_cells: [2, 3, 4, 5, 6],
+    // Bomb
+    event_bomb_weight: [0, 10, 25, 50, 75],
+    event_bomb_timer: [5, 8, 10, 15, 20],
+    event_bomb_radius: [1, 2, 3],
+    event_bomb_points_per_tile: [500, 1000, 2000, 5000, 10000],
+    event_bomb_shake: [0, 4, 6, 8, 10],
+    // Star
+    event_star_weight: [0, 10, 20, 35, 50],
+    event_star_timer: [4, 6, 8, 10, 15],
+    event_star_points: [200, 500, 1000, 2000],
+    event_star_upgrade: [1, 2, 3],
+    // Gift
+    event_gift_weight: [0, 10, 25, 40, 60],
+    event_gift_timer: [5, 8, 10, 15],
+    event_gift_credits_min: [3, 5, 10, 20],
+    event_gift_credits_max: [20, 30, 50, 100, 200],
+    event_gift_jackpot_chance: [1, 3, 5, 10, 20],
+    event_gift_jackpot_amount: [100, 250, 500, 1000, 2500],
+    // Fever
+    event_fever_weight: [0, 8, 12, 20, 35],
+    event_fever_timer: [3, 5, 8, 10],
+    event_fever_duration: [5, 10, 15, 20, 30],
+    event_fever_multiplier: [2, 3, 5, 10],
+    // Freeze
+    event_freeze_weight: [0, 8, 15, 25, 40],
+    event_freeze_timer: [3, 4, 6, 8],
+    event_freeze_min_filled_rows: [2, 3, 4],
+    event_freeze_clear_rows: [1, 2, 3],
+    event_freeze_points: [500, 1000, 2000, 5000],
+    event_freeze_shake: [0, 4, 6, 8],
+    // Target
+    event_target_weight: [0, 5, 10, 20, 35],
+    event_target_timer: [6, 10, 12, 18],
+    event_target_multiplier: [2, 3, 5, 8, 10],
+    // Shake
+    shake_tier_up: [0, 2, 3, 4, 5, 8],
+    shake_crown_merge: [0, 5, 8, 10, 12],
+    shake_milestone: [0, 2, 3, 5],
+    shake_multi_merge: [0, 3, 4, 6, 8],
+    shake_new_best: [0, 3, 4, 6, 8],
+    contest_alert_shake_overtake: [0, 2, 3, 4, 5],
+    contest_alert_shake_first: [0, 3, 4, 6, 8],
+    contest_alert_shake_leader: [0, 2, 3, 4],
+    // Rewards
+    welcome_bonus: [0, 50, 100, 200, 500],
+    daily_login_reward: [10, 25, 50, 100],
+    daily_reward: [5, 10, 25, 50],
+    streak_3_reward: [10, 15, 25, 50],
+    streak_7_reward: [25, 50, 100, 200],
+    streak_30_reward: [100, 200, 500, 1000],
+    contest_1st_reward: [50, 100, 250, 500, 1000],
+    contest_2nd_reward: [25, 40, 100, 250],
+    contest_3rd_reward: [10, 20, 50, 100],
+    score_milestone_reward: [3, 5, 10, 25, 50],
+    ad_watch_reward: [10, 20, 30, 50, 100],
+    ad_cooldown_seconds: [15, 30, 60, 120, 300],
+    ad_daily_cap: [3, 5, 10, 20, 50],
+    continue_price: [100, 200, 500, 1000],
+    // Wager (stored as integer percents: 5 = 5%)
+    wager_min: [10, 25, 50, 100],
+    wager_max: [250, 500, 1000, 2500, 5000],
+    wager_rake: [0, 3, 5, 10, 15],
+    wager_1st_pct: [50, 60, 70, 80],
+    wager_2nd_pct: [10, 20, 25, 30],
+    wager_3rd_pct: [0, 5, 10, 15],
+    // Jackpot
+    jackpot_entry: [1, 3, 5, 10],
+    jackpot_min_players: [3, 5, 10, 20],
+    // Duel
+    duel_timeout_hours: [6, 12, 24, 48, 72],
+    // Referral
+    referral_reward: [25, 50, 100, 200],
+    referred_bonus: [25, 50, 100],
+    // Tile prices (in 💎)
+    tile_price_2: [3, 5, 10, 15],
+    tile_price_3: [5, 10, 20, 30],
+    tile_price_4: [10, 20, 40, 60],
+    tile_price_5: [20, 35, 50, 100],
+    tile_price_6: [30, 50, 100, 200],
+    tile_price_7: [50, 80, 150, 300],
+    tile_price_8: [100, 150, 300, 500],
+    tile_price_multiplier: [0.5, 0.75, 1.0, 1.25, 1.5, 2.0],
+    // Powerups (in 💎)
+    powerup_random_tile: [5, 10, 15, 25],
+    powerup_choose_tile: [20, 30, 40, 60],
+    powerup_random_row: [30, 50, 60, 100],
+    powerup_choose_row: [60, 100, 150, 250],
+    // Weekly
+    weekly_prize: [200, 500, 1000, 2000, 5000],
+    // Contest alerts
+    contest_alert_interval: [6, 10, 12, 15, 30],
+    contest_alert_duration: [2000, 3000, 3500, 5000],
+    contest_alert_gap_pct: [0.05, 0.1, 0.15, 0.2],
+    contest_alert_gap_max: [500, 1000, 2500, 5000, 10000],
+    // Diamond packs
+    diamond_pack_1_amount: [100, 200, 300, 500],
+    diamond_pack_1_price: [4.90, 7.90, 9.90, 14.90],
+    diamond_pack_2_amount: [500, 1000, 1200, 2000],
+    diamond_pack_2_price: [14.90, 19.90, 24.90, 39.90],
+    diamond_pack_3_amount: [2500, 4000, 5000, 7500],
+    diamond_pack_3_price: [49.90, 59.90, 79.90, 99.90],
+    diamond_pack_4_amount: [10000, 15000, 25000, 50000],
+    diamond_pack_4_price: [99.90, 149.90, 199.90, 299.90],
+    // Slot
+    slot_duration_ms: [200, 400, 650, 1000, 1500, 2000],
+    slot_intensity: [1, 2, 3, 4, 5, 6, 7, 8]
+  };
+
+  // Boolean keys — render as a 2-button toggle (פעיל / כבוי) instead of an input.
+  // Detection is also automatic when value === 'true' || value === 'false', but
+  // this set lets us force the toggle even when the stored value drifted.
+  var BOOL_KEYS = {
+    crown_merge_enabled: 1, events_enabled: 1,
+    event_bomb_enabled: 1, event_star_enabled: 1, event_gift_enabled: 1,
+    event_fever_enabled: 1, event_freeze_enabled: 1, event_target_enabled: 1,
+    wager_enabled: 1, weekly_enabled: 1, contest_alerts_enabled: 1,
+    referral_enabled: 1, slot_enabled: 1, tile_shop_enabled: 1,
+    jackpot_enabled: 1, jackpot_auto_settle: 1, duel_enabled: 1
+  };
+
+  // Per-key explanations for the giant config table.
   // Each entry is shown when the admin clicks the small ? next to the key row.
   // Keys without an entry simply hide the ? button (no harm done).
   var TIPS_PER_KEY = {
     // ---- Core gameplay ----
-    merge_mode: 'כיוון מיזוג. <code>anchor</code> = ליד הזריקה (מומלץ ברירת מחדל). <code>classic</code> = תמיד שמאלה (סגנון Suika). <code>smart</code> = המערכת מסמלצת כל מועמד ובוחרת את המקום הכי טוב לשחקן (שרשרת מיידית > סולם דרגות > עומק בלוח).',
-    crown_merge_enabled: 'מתג ראשי לפיצוץ Crown. כאשר <code>true</code> — שני 👑 + 👑 = פיצוץ שורה שלמה + בונוס.',
-    crown_merge_bonus: 'כמה נקודות בונוס מתווספות מעבר לניקוד המיזוג הרגיל כאשר 2 כתרים מתאחדים. ברירת מחדל: <code>50000</code>.',
+    merge_mode: 'כיוון מיזוג — איפה נשאר האריח אחרי שלוש אריחים זהים מתמזגים.<div class="tip-example">🎯 <code>anchor</code> (ברירת מחדל): ליד מקום הזריקה. השחקן יכול לכוון בדיוק לאן ייפול האריח החדש.<br>⬅ <code>classic</code>: תמיד שמאלה (סגנון Suika המקורי). פחות אינטואיטיבי לעין RTL ישראלית.<br>🧠 <code>smart</code>: המערכת מסמלצת כל מועמד (כולל gravity) ובוחרת את המקום הכי טוב — מעדיפה שרשרת מיידית, סולם דרגות, ועומק בלוח. מגדיל ניקוד ב-15-30% לשחקנים מתחילים.<br><br>שינוי נכנס מיד לשחקנים חדשים, ולפעילים אחרי refresh.</div>',
+    crown_merge_enabled: 'פיצוץ כשני 👑 כתרים מתחברים — מנקה שורה שלמה ונותן בונוס ענק.<div class="tip-example">✅ <code>true</code> (ברירת מחדל): שני כתרים → פיצוץ דרמטי + רעידה + 50,000 נקודות בונוס.<br>❌ <code>false</code>: כתרים פשוט לא מתמזגים. סגנון Suika קלאסי.<br><br>💡 ההמלצה החזקה ביותר: השאר on. שחקנים מתחננים ל"crown explosion" אחרי שראו פעם.</div>',
+    crown_merge_bonus: 'נקודות בונוס כשני כתרים מתחברים. בנוסף לניקוד המיזוג הרגיל.<div class="tip-example">📊 <strong>ערכים מומלצים</strong>:<br>• <code>10000</code> — בונוס סמלי, לא משנה את האסטרטגיה<br>• <code>50000</code> (ברירת מחדל) — מעודד לבנות לעבר crown merge<br>• <code>100000</code> — הופך את crown merge ל"מהלך המנצח" של המשחק<br>• <code>200000+</code> — שחקנים יוותרו על שרשראות לטובת זה<br><br>💡 השפעה ויראלית: בונוס 50K+ הופך screenshot של game-over עם crown merge לתוכן שיתוף.</div>',
     // ---- Events: global ----
-    events_enabled: 'מתג ראשי לכל ה-events. <code>false</code> → אף event לא מופיע במשחק.',
-    events_start_delay: 'שניות מתחילת המשחק עד שה-event הראשון מופיע. ברירת מחדל: <code>15</code>.',
-    events_min_gap: 'מינימום שניות בין event ל-event. ברירת מחדל: <code>15</code>.',
-    events_max_gap: 'מקסימום שניות בין event ל-event. ברירת מחדל: <code>35</code>.',
+    events_enabled: 'מתג ראשי לכל ה-events במשחק (פצצה, כוכב, מתנה, טירוף, הקפאה, מטרה).<div class="tip-example">✅ <code>true</code>: events מופיעים אקראית במהלך משחק.<br>❌ <code>false</code>: משחק "טהור" — רק merge ואין הפרעות.<br><br>💡 לשחקנים חדשים מומלץ לכבות בדקה הראשונה (פחות בלבול). השאר on אחרי טוטוריאל.</div>',
+    events_start_delay: 'שניות מתחילת המשחק עד שה-event הראשון מופיע.<div class="tip-example">📊 <strong>ערכים</strong>:<br>• <code>10</code> — events מהר מאוד, מתאים לקצב מהיר<br>• <code>30</code> (ברירת מחדל) — נותן לשחקן להיכנס לקצב לפני event<br>• <code>60</code> — events רק אחרי שיש 4-5 שורות מלאות<br><br>💡 שחקנים חדשים נושרים בדקה הראשונה? תוריד ל-15-20.</div>',
+    events_min_gap: 'מינימום שניות בין event ל-event הבא.<div class="tip-example">📊 <strong>טווח מומלץ</strong>: 15-30. ערך נמוך מדי (פחות מ-10) הופך את המשחק לכאוטי. ערך גבוה מאוד (60+) משמעמם.<br>📌 חייב להיות &lt; events_max_gap.</div>',
+    events_max_gap: 'מקסימום שניות בין event ל-event הבא.<div class="tip-example">📊 <strong>טווח מומלץ</strong>: 30-60. השילוב min/max יוצר אקראיות. ככל שהפער קטן יותר — הקצב צפוי יותר.<br>📌 דוגמה: min=20 + max=45 = event ממוצע כל 32 שניות, אבל אקראי.</div>',
+    events_min_empty_cells: 'מינימום תאים ריקים בלוח כדי ש-event חדש יכול להופיע.<div class="tip-example">📊 <strong>למה זה קיים</strong>: אם הלוח כמעט מלא, event שדורש מקום (כמו פצצה) עלול לא להתאים. מונע באג.<br>• <code>3</code> = מאפשר events גם בלוח עמוס<br>• <code>5</code> (ברירת מחדל) = יותר מקום, פחות תקלות<br>• <code>8</code> = events נדירים בלוח עמוס</div>',
     // ---- Bomb ----
-    event_bomb_enabled: 'מתג ל-event פצצה.',
-    event_bomb_weight: 'הסתברות יחסית של פצצה. (weight של פצצה ÷ סכום כל ה-weights). 25 ≈ 25% אם הסכום הכולל הוא 100.',
-    event_bomb_timer: 'שניות עד שהפצצה נעלמת מהלוח אם השחקן לא פעל. ברירת מחדל: <code>8</code>.',
-    event_bomb_radius: 'רדיוס הפיצוץ. <code>1</code> = 3×3 (8 שכנים מסביב). ערכים גבוהים מעלים את ההרס משמעותית.',
-    event_bomb_points_per_tile: 'נקודות שמתווספות לכל אריח שמתפוצץ. ברירת מחדל: <code>2000</code>.',
-    event_bomb_shake: 'עוצמת רעידת המסך בעת פיצוץ. <code>0</code> = כבוי. מומלץ 4–8.',
+    event_bomb_enabled: 'מתג ל-event 💣 פצצה. כשפעיל ולחיצה: מתפוצץ ומנקה תאים סביבו.<div class="tip-example">💡 פצצה היא ה-event הכי "אגרסיבי" — מסיר אריחים אבל גם מאבד את הסידור. שחקנים אוהבים אותה ב-game-over כמעט.</div>',
+    event_bomb_weight: 'הסתברות יחסית של פצצה. (weight ÷ סכום כל ה-weights של events פעילים).<div class="tip-example">📊 <strong>איך לחשב</strong>: אם bomb=25, star=20, gift=25, fever=12, freeze=8, target=10 → סה"כ=100. פצצה תופיע ב-25% מה-events.<br>• <code>0</code> = פצצה לא תופיע (כיבוי רך)<br>• <code>50</code> = פצצה תופיע בחצי מה-events<br>• <code>100</code> = פצצה תופיע כמעט תמיד<br><br>💡 דרך נקייה לכבות פצצה: weight=0. שומר את כל שאר ההגדרות במקום.</div>',
+    event_bomb_timer: 'שניות עד שהפצצה נעלמת מהלוח אם השחקן לא לחץ.<div class="tip-example">⏱ <strong>ערכים</strong>: <code>5</code> = לחץ ולא הספקתם, <code>8</code> (ברירת מחדל) = זמן הוגן, <code>15</code> = רגוע מאוד.<br>💡 אורך טיימר ארוך מדי מבזבז event — שחקן מתעלם, וה-event הזה "אבד".</div>',
+    event_bomb_radius: 'רדיוס הפיצוץ סביב הפצצה — כמה תאים מסביבה נמחקים.<div class="tip-example">💥 <strong>ערכים</strong>:<br>• <code>1</code> (ברירת מחדל) = 3×3 (8 שכנים) — פיצוץ ממוקד<br>• <code>2</code> = 5×5 (24 שכנים) — פיצוץ ענק<br>• <code>3</code> = 7×7 = כמעט כל הלוח<br><br>⚠️ <strong>אזהרה</strong>: radius=2+ עם points_per_tile=2000 = +48,000 נקודות לכל פצצה. מערער את האיזון.</div>',
+    event_bomb_points_per_tile: 'נקודות שמתווספות לכל אריח שמתפוצץ.<div class="tip-example">💎 <strong>חישוב</strong>: radius=1, מלא 9 תאים = <code>9 × points</code>.<br>• <code>500</code> = פצצה נמוכת ערך<br>• <code>2000</code> (ברירת מחדל) = ~18K נקודות לפצצה רגילה<br>• <code>10000</code> = פצצה משנה את ה-leaderboard לבד</div>',
+    event_bomb_shake: 'עוצמת רעידת המסך בעת פיצוץ (0=כבוי).<div class="tip-example">📳 <strong>ערכים</strong>: <code>0</code> כבוי, <code>4</code> רגיל, <code>6-8</code> (ברירת מחדל) דרמטי, <code>10+</code> מוגזם.<br>💡 רעידה חזקה משפרת תחושת "פיצוץ" אבל יכול להפריע ל-vibe רגוע. תאם לקהל.</div>',
     // ---- Star ----
-    event_star_enabled: 'מתג ל-event כוכב — מקפיץ אריח שדרגה +1.',
-    event_star_weight: 'הסתברות יחסית של כוכב.',
-    event_star_timer: 'שניות עד שהכוכב נעלם מהלוח.',
-    event_star_bonus_points: 'נקודות בונוס כשמפעילים את הכוכב.',
+    event_star_enabled: 'מתג ל-event ⭐ כוכב — שדרוג אריח קיים בדרגה אחת.<div class="tip-example">💡 הכוכב מקפיץ אריח בלי מיזוג — מאיץ הגעה לדרגות גבוהות. הכי שימושי בדרגות 4-6.</div>',
+    event_star_weight: 'הסתברות יחסית של כוכב. ראה event_bomb_weight להסבר.',
+    event_star_timer: 'שניות עד שהכוכב נעלם אם השחקן לא לחץ.<div class="tip-example">⏱ ברירת מחדל: <code>6</code>. כוכב פחות "דחוף" מפצצה — אפשר זמן ארוך יותר. אבל גם לא רוצים שיתקע.</div>',
+    event_star_points: 'נקודות בונוס שמתווספות כשמפעילים את הכוכב.<div class="tip-example">💎 <strong>ערכים</strong>: <code>200</code> סמלי, <code>500</code> (ברירת מחדל) הוגן, <code>2000</code> חזק. הניקוד תלוי בדרגת היעד — כוכב שמשדרג ל-תיר 6 נותן יותר.</div>',
+    event_star_upgrade: 'בכמה דרגות הכוכב משדרג את האריח שעליו לוחצים.<div class="tip-example">⬆️ <strong>ערכים</strong>:<br>• <code>1</code> (ברירת מחדל) — מאוזן<br>• <code>2</code> — שדרוג כפול, מהיר מאוד לדרגות גבוהות<br>• <code>3</code> — קיצוני, כמעט "מנצח אוטומטית"<br><br>⚠️ <strong>אזהרה</strong>: ערך 2+ + weight גבוה = משחקים קצרים מאוד עם הרבה crown.</div>',
     // ---- Gift ----
-    event_gift_enabled: 'מתג ל-event מתנה — מעניק 5–50 💎 (5% סיכוי לג׳קפוט גדול).',
-    event_gift_weight: 'הסתברות יחסית של מתנה.',
-    event_gift_timer: 'שניות עד שהמתנה נעלמת.',
-    event_gift_credits_min: 'מינימום 💎 שמתנה רגילה מעניקה.',
-    event_gift_credits_max: 'מקסימום 💎 שמתנה רגילה מעניקה.',
-    event_gift_jackpot_chance: 'הסתברות לג׳קפוט (0–1). ברירת מחדל: <code>0.05</code> (5%).',
-    event_gift_jackpot_amount: 'סכום הג׳קפוט ב-💎. ברירת מחדל: <code>500</code>.',
+    event_gift_enabled: 'מתג ל-event 🎁 מתנה — נותן 💎 לשחקן.<div class="tip-example">💡 ה-event הכי "טוב" מבחינת השחקן — אין סיכון, רק שכר. מעודד engagement.</div>',
+    event_gift_weight: 'הסתברות יחסית של מתנה. ראה event_bomb_weight להסבר.',
+    event_gift_timer: 'שניות עד שהמתנה נעלמת.<div class="tip-example">⏱ ברירת מחדל: <code>10</code>. מתנה לא דחופה — שחקנים יכולים לחכות לרגע נוח.</div>',
+    event_gift_credits_min: 'מינימום 💎 שמתנה רגילה מעניקה (לא ג׳קפוט).<div class="tip-example">💎 <strong>טווח</strong>: <code>3-10</code> פותחים את הסקלה הנמוכה. ערך נמוך מדי (1) מרגיש מבזה; ערך גבוה (20+) הופך מתנות רגילות לתחושת ג׳קפוט.</div>',
+    event_gift_credits_max: 'מקסימום 💎 שמתנה רגילה מעניקה (לא ג׳קפוט).<div class="tip-example">💎 <strong>טווח</strong>: <code>30-100</code>. הפער בין min ל-max יוצר רנדומיות נחמדה. דוגמה: min=5, max=50 = ממוצע ~27💎 למתנה.<br><br>📊 <strong>השפעה כלכלית</strong>: ב-100 משחקים עם 5 מתנות, max=50 = ~13,500💎. תכנן בהתאם.</div>',
+    event_gift_jackpot_chance: 'הסתברות לג׳קפוט במתנה. <strong>מאוחסן כאחוז שלם</strong> (5 = 5%).<div class="tip-example">📊 <strong>ערכים</strong>:<br>• <code>1</code> = 1% — ג׳קפוט נדיר ומרגש<br>• <code>5</code> (ברירת מחדל) = 5% — מאוזן<br>• <code>10</code> = 10% — ג׳קפוטים מורגשים<br>• <code>20+</code> = הג׳קפוט הופך לרגיל<br><br>⚠️ ערך &gt; 50 לא הגיוני (כל מתנה היא ג׳קפוט).</div>',
+    event_gift_jackpot_amount: 'סכום הג׳קפוט הגדול ב-💎.<div class="tip-example">💎 <strong>ערכים</strong>: <code>250</code> נחמד, <code>500</code> (ברירת מחדל) מרשים, <code>1000+</code> ויראלי (screenshot worthy).<br><br>📊 <strong>חישוב כלכלי</strong>: chance=5%, amount=500 → ממוצע 25💎 מבוזבזים פר-מתנה רגילה. אם אתה משחק 100 פעם, 5 ג׳קפוטים = 2,500💎.</div>',
     // ---- Fever ----
-    event_fever_enabled: 'מתג ל-event טירוף — מכפיל ניקוד ×3 לזמן מוגבל.',
-    event_fever_weight: 'הסתברות יחסית של טירוף.',
-    event_fever_timer: 'שניות עד שה-event נעלם אם השחקן לא הגיב.',
-    event_fever_duration: 'משך הטירוף עצמו במילישניות. ברירת מחדל: <code>10000</code> (10 שניות).',
-    event_fever_multiplier: 'מכפיל הניקוד בזמן טירוף. ברירת מחדל: <code>3</code>.',
+    event_fever_enabled: 'מתג ל-event 🔥 טירוף — מכפיל ניקוד לזמן מוגבל.<div class="tip-example">💡 ה-event הכי "אסטרטגי" — אם שחקן מטעין אותה ברגע הנכון (לפני שרשרת ארוכה), יכול להרוויח 30K+ נקודות בכמה שניות.</div>',
+    event_fever_weight: 'הסתברות יחסית של טירוף. ראה event_bomb_weight להסבר.',
+    event_fever_timer: 'שניות עד שה-event נעלם אם השחקן לא הפעיל.<div class="tip-example">⏱ ברירת מחדל: <code>5</code>. קצר — כי אם שחקן לא לוחץ מיד, הוא מאבד אסטרטגיה. אורך הטירוף עצמו נקבע על-ידי <code>event_fever_duration</code>.</div>',
+    event_fever_duration: 'משך הטירוף עצמו (אחרי שלחצו) — <strong>בשניות</strong>.<div class="tip-example">⏱ <strong>ערכים</strong>:<br>• <code>5</code> שניות = פרץ קצר, חייב לתכנן<br>• <code>10</code> (ברירת מחדל) = הזמן הזהוב<br>• <code>20+</code> = הופך כל משחק ל"חכה לטירוף ואז שרשרת"<br><br>📌 שים לב: למרות שב-CLAUDE.md כתוב "ms", השרת כיום מאחסן בשניות.</div>',
+    event_fever_multiplier: 'מכפיל הניקוד בזמן טירוף.<div class="tip-example">⚡ <strong>ערכים</strong>:<br>• <code>2</code> = הקלה קלה, פחות מורגש<br>• <code>3</code> (ברירת מחדל) = מאוזן<br>• <code>5</code> = יוצר רגעי "WTF" מרגשים<br>• <code>10</code> = שחקנים בונים את כל המשחק סביב טירוף<br><br>💡 משולב עם chain ×3 = ×9 נקודות לאריח אחד. דרמטי!</div>',
     // ---- Freeze ----
-    event_freeze_enabled: 'מתג ל-event הקפאה — מנקה שורה תחתונה (הצלה).',
-    event_freeze_weight: 'הסתברות יחסית של הקפאה.',
-    event_freeze_timer: 'שניות עד שהקפאה נעלמת.',
-    event_freeze_min_filled_rows: 'מינימום שורות מלאות בלוח לפני שהקפאה יכולה להופיע. ברירת מחדל: <code>3</code>.',
-    event_freeze_bonus_points: 'נקודות בונוס שמתווספות בעת הקפאה.',
-    event_freeze_shake: 'עוצמת רעידת המסך בעת הקפאה.',
+    event_freeze_enabled: 'מתג ל-event ❄️ הקפאה — מנקה שורה תחתונה (מציל מ-game-over).<div class="tip-example">💡 "כפתור הצלה" כשהלוח מלא. בלי זה, שחקנים מתבאסים — עם זה, יש נשימה שנייה.</div>',
+    event_freeze_weight: 'הסתברות יחסית של הקפאה. ראה event_bomb_weight להסבר.',
+    event_freeze_timer: 'שניות עד שהקפאה נעלמת אם השחקן לא הפעיל.<div class="tip-example">⏱ ברירת מחדל: <code>4</code>. קצר — כי בלוח עמוס שחקן צריך לפעול מיד.</div>',
+    event_freeze_min_filled_rows: 'מינימום שורות מלאות בלוח כדי שהקפאה תופיע (בכלל).<div class="tip-example">📊 <strong>למה</strong>: הקפאה בלוח ריק = בזבוז event. עדיף שתופיע כשהשחקן באמת בצרה.<br>• <code>2</code> = הקפאה גם כשלא דחוף<br>• <code>3</code> (ברירת מחדל) = איזון טוב<br>• <code>4</code> = רק כשהשחקן באמת על סף game-over</div>',
+    event_freeze_clear_rows: 'כמה שורות הקפאה מנקה.<div class="tip-example">🧊 <strong>ערכים</strong>:<br>• <code>1</code> (ברירת מחדל) = שורה אחת, "הצלה" סמלית<br>• <code>2</code> = פתח לוח משמעותי<br>• <code>3</code> = כמעט reset של חצי הלוח<br><br>💡 ערך גבוה הופך הקפאה ל-event הכי מבוקש. עלול לערער איזון.</div>',
+    event_freeze_points: 'נקודות בונוס בעת הקפאה (לא נקודות לכל אריח — סה"כ).<div class="tip-example">💎 <strong>ערכים</strong>: <code>500</code> סמלי, <code>1000</code> (ברירת מחדל) הוגן, <code>5000</code> חזק. הניקוד מתווסף בנוסף ל"שווי הצלה" המעשי.</div>',
+    event_freeze_shake: 'עוצמת רעידת המסך בעת הקפאה (0=כבוי).<div class="tip-example">📳 <strong>ערכים</strong>: <code>0</code> כבוי, <code>4</code> (ברירת מחדל) רגיל, <code>8+</code> דרמטי. הקפאה היא event "רגוע" — לא מומלץ shake חזק.</div>',
     // ---- Target ----
-    event_target_enabled: 'מתג ל-event מטרה — מכפיל ×5 על מיזוג של דרגה ספציפית.',
-    event_target_weight: 'הסתברות יחסית של מטרה.',
-    event_target_timer: 'שניות לפני שהמטרה נעלמת אם לא הופעלה.',
-    event_target_multiplier: 'מכפיל הניקוד למיזוג של הדרגה המסומנת. ברירת מחדל: <code>5</code>.',
-    // ---- Shake ----
-    shake_tier_up: 'עוצמת רעידת המסך כשמגיעים לדרגה חדשה (5+). מומלץ 3–5.',
-    shake_crown_merge: 'עוצמת רעידה ב-Crown Merge. מומלץ 6–10 (אירוע דרמטי).',
-    shake_milestone: 'עוצמת רעידה במעבר milestone של ניקוד (10K, 50K, 100K).',
-    shake_multi_merge: 'עוצמת רעידה במיזוג של 3+ אריחים בו-זמנית.',
-    shake_new_best: 'עוצמת רעידה כשנשבר שיא אישי.',
-    contest_alert_shake_overtake: 'עוצמת רעידה כשמישהו עובר את הניקוד שלך בתחרות חברים.',
-    contest_alert_shake_first: 'עוצמת רעידה כשחזרת למקום ראשון.',
-    contest_alert_shake_leader: 'עוצמת רעידה כשמישהו אחר הגיע למקום הראשון.',
+    event_target_enabled: 'מתג ל-event 🎯 מטרה — מסמן דרגה ספציפית, ומיזוג שלה נותן מכפיל ניקוד.<div class="tip-example">💡 ה-event הכי "tactical" — שחקן מקבל הזמנה לבנות מיזוג ספציפי כדי להרוויח בונוס.</div>',
+    event_target_weight: 'הסתברות יחסית של מטרה. ראה event_bomb_weight להסבר.',
+    event_target_timer: 'שניות לפני שהמטרה נעלמת אם לא הופעלה.<div class="tip-example">⏱ ברירת מחדל: <code>12</code>. ארוך — כי בנייה של מיזוג ספציפי דורשת תכנון. ערך נמוך מדי הופך אותה לבלתי-אפשרית.</div>',
+    event_target_multiplier: 'מכפיל הניקוד למיזוג של הדרגה המסומנת.<div class="tip-example">⚡ <strong>ערכים</strong>: <code>3</code> סביר, <code>5</code> (ברירת מחדל) חזק, <code>10</code> דרמטי. משולב עם chain ×3 + fever ×3 = ×90 פר-אריח. תיאורטית.</div>',
+    // ---- Shake (in-game vibration intensity) ----
+    shake_tier_up: 'עוצמת רעידת המסך כשמגיעים לדרגה חדשה (5+) לראשונה במשחק.<div class="tip-example">📳 <strong>ערכים</strong>:<br>• <code>0</code> = כבוי לגמרי<br>• <code>3</code> = רגוע<br>• <code>4</code> (ברירת מחדל) = רגיל<br>• <code>8+</code> = דרמטי, מוגזם<br><br>💡 רעידה חזקה מעבירה תחושת "milestone" — מומלץ לא לכבות לגמרי.</div>',
+    shake_crown_merge: 'עוצמת רעידה בפיצוץ Crown (2× 👑).<div class="tip-example">📳 <strong>ערכים</strong>: <code>5</code> רגיל, <code>8</code> (ברירת מחדל) דרמטי, <code>12</code> מוגזם. אירוע ענק — שווה רעידה חזקה.</div>',
+    shake_milestone: 'עוצמת רעידה כשעוברים מילסטון של ניקוד (10K, 50K, 100K, 250K, 500K, 1M).<div class="tip-example">📳 <strong>ערכים</strong>: <code>2</code> (ברירת מחדל) רגוע, <code>5</code> מורגש. רעידה חזקה מאוד הופכת milestones תכופים למעצבן.</div>',
+    shake_multi_merge: 'עוצמת רעידה במיזוג של 3+ אריחים בו-זמנית.<div class="tip-example">📳 <strong>ערכים</strong>: <code>3</code> חלש, <code>4</code> (ברירת מחדל) רגיל, <code>6+</code> דרמטי. מיזוגים של 4-5 אריחים הם הרגעים הכי "smooth" — שווה רעידה.</div>',
+    shake_new_best: 'עוצמת רעידה כשנשבר שיא אישי (best score).<div class="tip-example">📳 <strong>ערכים</strong>: <code>4</code> (ברירת מחדל), עד <code>8</code>. רגע נדיר — שווה לציין.</div>',
+    contest_alert_shake_overtake: 'עוצמת רעידה כשמישהו עובר את הניקוד שלך בתחרות חברים.<div class="tip-example">📳 רגע "מאיים" — לא מציין הצלחה. <code>3</code> (ברירת מחדל) רגיל. גבוה יותר עלול להיות מבאס.</div>',
+    contest_alert_shake_first: 'עוצמת רעידה כשחזרת למקום ראשון.<div class="tip-example">📳 רגע חיובי — שווה רעידה חזקה יותר. <code>4</code> (ברירת מחדל), עד <code>6-8</code> חוגגים.</div>',
+    contest_alert_shake_leader: 'עוצמת רעידה כשמישהו אחר הגיע למקום הראשון בתחרות.<div class="tip-example">📳 רגע "אזעקה" — חזק מספיק להראות תשומת לב. <code>2</code> (ברירת מחדל) רגוע. אל תפריז.</div>',
     // ---- Rewards / credits ----
-    welcome_bonus: 'כמות 💎 שמקבל שחקן חדש פעם אחת בהרשמה.',
-    daily_login_reward: 'בונוס 💎 לכניסה יומית. מתחדש בכל יום בחצות שעון ירושלים.',
-    daily_reward: 'בונוס 💎 לסיום אתגר יומי.',
-    streak_3_reward: 'בונוס 💎 ברצף של 3 ימי כניסה.',
-    streak_7_reward: 'בונוס 💎 ברצף של 7 ימי כניסה.',
-    streak_30_reward: 'בונוס 💎 ברצף של 30 ימי כניסה.',
-    contest_1st_reward: 'בונוס 💎 על מקום ראשון בתחרות יומית.',
-    contest_2nd_reward: 'בונוס 💎 על מקום שני בתחרות יומית.',
-    contest_3rd_reward: 'בונוס 💎 על מקום שלישי בתחרות יומית.',
-    score_milestone_reward: 'בונוס 💎 בכל פעם שעוברים אבן-דרך ניקוד במשחק (10K/25K/50K/100K/250K/500K/1M).',
-    streak_30_reward: 'בונוס 💎 ברצף של 30 ימי כניסה.',
-    ad_watch_reward: '💎 שהשחקן מקבל בעבור צפייה בפרסומת. ברירת מחדל: <code>30</code>.',
-    ad_cooldown_seconds: 'שניות מינימום בין צפיות מתוגמלות. מונע ניצול. ברירת מחדל: <code>30</code>.',
-    ad_daily_cap: 'מקסימום צפיות מתוגמלות לכל מכשיר ביום (איפוס בחצות ירושלים). חוסם farming דרך רענון. ברירת מחדל: <code>5</code> (= 150💎/יום).',
-    continue_price: 'מחיר ב-💎 להמשך משחק אחרי game-over (חיים נוספים). ברירת מחדל: <code>200</code>.',
-    // ---- Wager ----
-    wager_enabled: 'מתג ראשי להימורים בתחרויות חברים.',
-    wager_min: 'מינימום 💎 להימור בתחרות.',
-    wager_max: 'מקסימום 💎 להימור בתחרות.',
-    wager_rake: 'אחוז עמלה למערכת מהקופה. ברירת מחדל: <code>0.05</code> (5%).',
-    wager_1st_pct: 'אחוז הקופה למקום ראשון. ברירת מחדל: <code>0.60</code> (60%).',
-    wager_2nd_pct: 'אחוז הקופה למקום שני. ברירת מחדל: <code>0.25</code> (25%).',
-    wager_3rd_pct: 'אחוז הקופה למקום שלישי. ברירת מחדל: <code>0.10</code> (10%).',
+    welcome_bonus: 'כמות 💎 שמקבל שחקן חדש פעם אחת בהרשמה.<div class="tip-example">💎 <strong>ערכים</strong>:<br>• <code>50</code> צנוע<br>• <code>100</code> (ברירת מחדל) — שחקן יכול לקנות סקין בסיסי<br>• <code>500</code> נדיב — מאיץ first-time engagement<br>• <code>0</code> מבטל את הבונוס לגמרי<br><br>💡 מאוחסן עם first_time flag. שחקנים קיימים לא יקבלו רטרואקטיבית גם אם תעלה.</div>',
+    daily_login_reward: 'בונוס 💎 לכניסה יומית. מתחדש בכל יום בחצות שעון ירושלים.<div class="tip-example">💎 <strong>ערכים</strong>: <code>10</code> חלש, <code>25</code> (ברירת מחדל) מאוזן, <code>50+</code> נדיב.<br><br>📊 <strong>חישוב</strong>: 25💎/יום × 30 ימים = 750💎/חודש לשחקן שמתחבר כל יום. תכנן לפי הכלכלה.</div>',
+    daily_reward: 'בונוס 💎 לסיום אתגר יומי (משחק daily challenge).<div class="tip-example">💎 ברירת מחדל: <code>10</code>. נמוך — כי מתווסף ל-login bonus. השחקן מקבל 25+10=35💎 אם משלים את ה-daily.</div>',
+    streak_3_reward: 'בונוס 💎 ברצף של 3 ימי כניסה רצופים.<div class="tip-example">💎 ברירת מחדל: <code>15</code>. הגיוני להעלות הדרגתית: 3→7→30 יום, כל אחד גדול מהקודם משמעותית.</div>',
+    streak_7_reward: 'בונוס 💎 ברצף של 7 ימי כניסה.<div class="tip-example">💎 ברירת מחדל: <code>50</code>. שבועיי = רגע ראוי לציון. שווה בונוס משמעותי כדי לעודד streak.</div>',
+    streak_30_reward: 'בונוס 💎 ברצף של 30 ימי כניסה רצופים.<div class="tip-example">💎 ברירת מחדל: <code>200</code>. אבן-דרך גדולה — שחקנים שהגיעו לכאן הם ה"hardcore". שווה גם 500-1000.</div>',
+    contest_1st_reward: 'בונוס 💎 על מקום ראשון בתחרות יומית.<div class="tip-example">💎 ברירת מחדל: <code>100</code>. שווה לתחרות עם 5-10 משתתפים. ערך גבוה יותר עלול לעודד cheating.</div>',
+    contest_2nd_reward: 'בונוס 💎 על מקום שני בתחרות יומית. ברירת מחדל: <code>40</code>.',
+    contest_3rd_reward: 'בונוס 💎 על מקום שלישי בתחרות יומית. ברירת מחדל: <code>20</code>.',
+    score_milestone_reward: 'בונוס 💎 בכל פעם שעוברים milestone ניקוד במשחק (10K/25K/50K/100K/250K/500K/1M).<div class="tip-example">💎 ברירת מחדל: <code>5</code>. נמוך — כי 7 milestones לפי משחק × 100 משחקים = 3,500💎. תזרים גדול.<br><br>📊 העלאה ל-10 = double the inflation. שקול בזהירות.</div>',
+    ad_watch_reward: '💎 שהשחקן מקבל בעבור צפייה בפרסומת.<div class="tip-example">💎 <strong>ערכים</strong>:<br>• <code>10</code> נמוך — שחקנים יוותרו<br>• <code>30</code> (ברירת מחדל) — מאוזן, AdSense ROI חיובי<br>• <code>50</code> נדיב — מעלה watch rate<br>• <code>100+</code> = adblock culture, רוב שווא<br><br>📊 בשילוב עם ad_daily_cap=5 → max 150💎/יום מצפיות.</div>',
+    ad_cooldown_seconds: 'שניות מינימום בין צפיות מתוגמלות. מונע ניצול.<div class="tip-example">⏱ <strong>ערכים</strong>:<br>• <code>15</code> מהיר מאוד, מסוכן<br>• <code>30</code> (ברירת מחדל) סביר<br>• <code>60-120</code> אם רוצים rate limit חזק<br><br>💡 משולב עם 30s server-side cooldown ב-_ad_rate. ערך נמוך כאן לא יעקוף.</div>',
+    ad_daily_cap: 'מקסימום צפיות מתוגמלות לכל מכשיר ביום (איפוס בחצות ירושלים).<div class="tip-example">📊 <strong>ערכים</strong>: <code>3</code> נוקשה, <code>5</code> (ברירת מחדל), <code>10+</code> נדיב.<br><br>💡 <strong>מתי להעלות</strong>: כשאתה משלם בפועל לכל ad impression (AdSense ROI חיובי). עד אז, 5 מספיק.</div>',
+    continue_price: 'מחיר ב-💎 להמשך משחק אחרי game-over (חיים נוספים).<div class="tip-example">💎 <strong>ערכים</strong>: <code>100</code> זול, <code>200</code> (ברירת מחדל) מאוזן, <code>500+</code> רק לשחקנים עם מלאי.<br>💡 ערך נמוך מעודד שימוש (engagement). ערך גבוה הופך לפעולה נדירה ויראלית.</div>',
+    // ---- Wager (stored as integer percent, e.g. 5 = 5%, 60 = 60%) ----
+    wager_enabled: 'מתג ראשי להימורים בתחרויות חברים.<div class="tip-example">💡 כשפעיל, יוצר תחרות יכול להציע "הימור כניסה" שכולם משלמים, והקופה מתחלקת לזוכים.</div>',
+    wager_min: 'מינימום 💎 להימור בתחרות.<div class="tip-example">💎 ברירת מחדל: <code>10</code>. נמוך מספיק שכל שחקן יכול להשתתף; גבוה מספיק לתחושת "שווה".</div>',
+    wager_max: 'מקסימום 💎 להימור בתחרות. <div class="tip-example">💎 ברירת מחדל: <code>500</code>. חוסם הימורים גבוהים שעלולים להרגיש סיכון יתר.</div>',
+    wager_rake: 'אחוז עמלה למערכת מהקופה. <strong>מאוחסן כאחוז שלם</strong> (5 = 5%).<div class="tip-example">📊 <strong>ערכים</strong>:<br>• <code>0</code> = אין עמלה, כל הקופה לזוכים<br>• <code>5</code> (ברירת מחדל) = 5% — סטנדרט תעשייתי<br>• <code>10</code> = 10% — יעיל אבל מורגש<br>• <code>15+</code> = עלול להבריח שחקנים<br><br>💡 השווה למשחקי קלפים אונליין (5-15%).</div>',
+    wager_1st_pct: 'אחוז הקופה למקום ראשון. <strong>מאוחסן כאחוז שלם</strong> (60 = 60%).<div class="tip-example">📊 <strong>חישוב</strong>: 1st + 2nd + 3rd + rake = 100%. אם rake=5, 1st=60, 2nd=25, 3rd=10 → סה"כ 100%.<br>⚠️ אם הסיכום != 100% ה-server עלול לזרוק שגיאה. בדוק תמיד.</div>',
+    wager_2nd_pct: 'אחוז הקופה למקום שני. ברירת מחדל: <code>25</code> (25%).',
+    wager_3rd_pct: 'אחוז הקופה למקום שלישי. ברירת מחדל: <code>10</code> (10%).',
+    // ---- Jackpot ----
+    jackpot_enabled: 'מתג ראשי לג׳קפוט היומי — קופה מצטברת שהזוכה היומי לוקח.<div class="tip-example">💡 כל שחקן ששולח ציון יומי תורם <code>jackpot_entry</code> 💎 לקופה. בסוף היום, הזוכה לוקח הכל.</div>',
+    jackpot_entry: '💎 שמופחתים מכל שחקן ששולח ציון יומי, ומתווספים לקופת הג׳קפוט.<div class="tip-example">💎 <strong>ערכים</strong>: <code>1</code> סמלי, <code>5</code> (ברירת מחדל) מאוזן, <code>10+</code> יוצר קופות גדולות מהר.<br><br>📊 100 שחקנים × 5💎 = קופה של 500💎. בנוי לשחקן אקטיבי שמשתתף יומי.</div>',
+    jackpot_min_players: 'מינימום שחקנים שצריך לפני שג׳קפוט מתבצע (כדי שלא יהיה ג׳קפוט קטן).<div class="tip-example">📊 <strong>ערכים</strong>: <code>3</code> נמוך, <code>5</code> (ברירת מחדל) הוגן, <code>20</code> מחייב פעילות גדולה.<br><br>💡 אם לא הגיעו למינימום — הקופה ממשיכה ליום הבא (גלגול).</div>',
+    jackpot_auto_settle: 'האם הג׳קפוט מתבצע אוטומטית בחצות, או רק כשהאדמין לוחץ.<div class="tip-example">⚙️ <code>true</code> (ברירת מחדל) = אוטומטי, נוח. <code>false</code> = רק ידני, יותר שליטה.</div>',
+    // ---- Duel ----
+    duel_enabled: 'מתג ראשי ל-1v1 duels (אתגרים).<div class="tip-example">💡 שחקן מזמין שחקן אחר עם BLOOM code. שניהם משחקים אותו seed, מי שמנצח מקבל את הקופה.</div>',
+    duel_timeout_hours: 'שעות עד שאתגר 1v1 שלא נענה נחשב פג-תוקף.<div class="tip-example">⏱ <strong>ערכים</strong>: <code>6</code> דחוף, <code>24</code> (ברירת מחדל) מאוזן, <code>72</code> רגוע.<br>💡 אחרי timeout, ההימור של המזמין מוחזר.</div>',
     // ---- Referral ----
     referral_enabled: 'מתג ראשי למערכת הפניות (הזמן חבר → שניכם מקבלים 💎).',
-    referral_reward: 'כמות 💎 שהמזמין מקבל לכל חבר שהצטרף דרך הלינק שלו.',
-    referred_bonus: 'כמות 💎 שהמוזמן מקבל בעת ההצטרפות הראשונה.',
+    referral_reward: 'כמות 💎 שהמזמין מקבל לכל חבר שהצטרף דרך הלינק שלו.<div class="tip-example">💎 ברירת מחדל: <code>50</code>. מאוזן — לא יוצר התנהגות "הזמן 100 פעמים" אבל מעודד שיתוף.</div>',
+    referred_bonus: 'כמות 💎 שהמוזמן מקבל בעת ההצטרפות הראשונה דרך לינק הפניה.<div class="tip-example">💎 ברירת מחדל: <code>25</code>. בנוסף ל-welcome_bonus. מוזמן מקבל סה"כ 100+25=125💎.</div>',
     // ---- Shop / tile prices ----
-    tile_price_5: 'מחיר ב-💎 לקניית אריח דרגה 5 (⚡ ברק) בחנות.',
-    tile_price_6: 'מחיר ב-💎 לקניית אריח דרגה 6 (⭐ כוכב).',
-    tile_price_7: 'מחיר ב-💎 לקניית אריח דרגה 7 (💎 יהלום).',
-    tile_price_8: 'מחיר ב-💎 לקניית אריח דרגה 8 (👑 כתר).',
-    // ---- Weekly auto-contest ----
+    tile_shop_enabled: 'מתג ראשי לחנות אריחים במשחק.<div class="tip-example">💡 כשפעיל, השחקן יכול לקנות אריח ספציפי במהלך משחק (פותח חנות באמצע משחק).</div>',
+    tile_price_2: 'מחיר ב-💎 לקניית אריח דרגה 2 (חוט).<div class="tip-example">💎 ברירת מחדל: <code>5</code>. דרגות נמוכות בזיל הזול — להחליק את הקצב.</div>',
+    tile_price_3: 'מחיר ב-💎 לקניית אריח דרגה 3 (זרע).<div class="tip-example">💎 ברירת מחדל: <code>10</code>.</div>',
+    tile_price_4: 'מחיר ב-💎 לקניית אריח דרגה 4 (פרח קטן).<div class="tip-example">💎 ברירת מחדל: <code>20</code>. אריח שלא נופל טבעית — קנייתו מאיצה משחק.</div>',
+    tile_price_5: 'מחיר ב-💎 לקניית אריח דרגה 5 (⚡ ברק) בחנות.<div class="tip-example">💎 ברירת מחדל: <code>35</code>. דרגות 5+ הן "חלום השחקן" — קנייה ישירה היא קיצור דרך.</div>',
+    tile_price_6: 'מחיר ב-💎 לקניית אריח דרגה 6 (⭐ כוכב). ברירת מחדל: <code>50</code>.',
+    tile_price_7: 'מחיר ב-💎 לקניית אריח דרגה 7 (💎 יהלום). ברירת מחדל: <code>80</code>.',
+    tile_price_8: 'מחיר ב-💎 לקניית אריח דרגה 8 (👑 כתר). ברירת מחדל: <code>150</code>.<div class="tip-example">💎 הקנייה היחידה שמובילה ל-crown explosion ישיר. שווה היחיד הוא הצמדה ל-tier_up_bonus.</div>',
+    tile_price_multiplier: 'מכפיל גלובלי על כל מחירי האריחים בחנות.<div class="tip-example">📊 <strong>ערכים</strong>:<br>• <code>0.5</code> = מבצע, כל המחירים ב-50%<br>• <code>1.0</code> (ברירת מחדל) = מחירים רגילים<br>• <code>2.0</code> = הכל ב-200% — אינפלציה<br><br>💡 שימושי ל-flash sale או על מנת לבחון תגובת השוק.</div>',
+    // ---- Powerups ----
+    powerup_random_tile: 'מחיר ב-💎 לפאוור-אפ "הסר אריח אקראי".<div class="tip-example">💎 ברירת מחדל: <code>15</code>. הזול ביותר — שימושי בלוח עמוס.</div>',
+    powerup_choose_tile: 'מחיר ב-💎 לפאוור-אפ "בחר אריח להסיר".<div class="tip-example">💎 ברירת מחדל: <code>40</code>. הרבה יותר יקר מ-random — כי בחירה היא יתרון אסטרטגי.</div>',
+    powerup_random_row: 'מחיר ב-💎 לפאוור-אפ "הסר שורה אקראית".<div class="tip-example">💎 ברירת מחדל: <code>60</code>. פעולה דרמטית — מסיר 4 אריחים בבת-אחת.</div>',
+    powerup_choose_row: 'מחיר ב-💎 לפאוור-אפ "בחר שורה להסיר".<div class="tip-example">💎 ברירת מחדל: <code>100</code>. היקר ביותר — קיצור דרך מ-game-over.</div>',
+    // ---- Weekly ----
     weekly_enabled: 'מתג להפעלת תחרות שבועית אוטומטית. נוצרת כל 7 ימים.',
-    weekly_prize: 'פרס ב-💎 לזוכה הראשון בתחרות השבועית.',
-    weekly_name: 'שם התחרות השבועית כפי שמופיע לשחקנים.',
+    weekly_prize: 'פרס ב-💎 לזוכה הראשון בתחרות השבועית.<div class="tip-example">💎 ברירת מחדל: <code>500</code>. גדול מספיק להמריץ; לא גדול מדי לאינפלציה.<br><br>📊 4 שבועות = 2,000💎/חודש מבזבזים אם תמיד יש זוכה.</div>',
+    weekly_name: 'שם התחרות השבועית כפי שמופיע לשחקנים.<div class="tip-example">📝 ברירת מחדל: <code>אתגר שבועי</code>. אפשר להחליף ל"אתגר עידן-1" / "ליגת אלופים" / כל מה שמתאים ל-branding.</div>',
     // ---- Contest alerts ----
-    contest_alerts_enabled: 'מתג להתראות חיות בתחרויות חברים (״עברו אותך״, ״חזרת למקום 1״).',
-    contest_alert_interval: 'שניות בין בדיקות התראה. ברירת מחדל: <code>12</code>.',
-    contest_alert_duration: 'מילישניות שההתראה מוצגת על המסך.',
-    contest_alert_gap_pct: 'פער יחסי בין השחקנים שמפעיל התראה ״עוד נקודות״. ברירת מחדל: <code>0.1</code> (10%).',
-    contest_alert_gap_max: 'פער מקסימלי בנקודות מוחלטות שמפעיל את ההתראה.',
+    contest_alerts_enabled: 'מתג להתראות חיות בתחרויות חברים (״עברו אותך״, ״חזרת למקום 1״, ״מישהו ראשון״).',
+    contest_alert_interval: 'שניות בין בדיקות התראה.<div class="tip-example">⏱ <strong>ערכים</strong>: <code>6</code> מהיר (יותר תעבורה), <code>12</code> (ברירת מחדל), <code>30</code> חסכוני.<br><br>💡 ערך נמוך = התראות יותר מיידיות אבל יותר API calls.</div>',
+    contest_alert_duration: 'מילישניות שההתראה מוצגת על המסך.<div class="tip-example">⏱ <strong>ערכים</strong>: <code>2000</code> מהיר, <code>3500</code> (ברירת מחדל), <code>5000</code> ארוך.</div>',
+    contest_alert_gap_pct: 'פער יחסי בין השחקנים שמפעיל התראה "עוד נקודות". (0.1 = 10%).<div class="tip-example">📊 <strong>ערכים</strong>: <code>0.05</code> רגיש, <code>0.1</code> (ברירת מחדל), <code>0.2</code> רק לפערים גדולים.</div>',
+    contest_alert_gap_max: 'פער מקסימלי בנקודות מוחלטות שמפעיל את ההתראה.<div class="tip-example">📊 ברירת מחדל: <code>5000</code>. למעלה מ-5K נקודות פער זה כבר "השני בליגה" — אין טעם להתריע.</div>',
     // ---- Diamond packs (premium IAP) ----
-    diamond_pack_1_amount: 'כמות 💎 בחבילה 1.',
-    diamond_pack_1_price: 'מחיר חבילה 1 ב-₪.',
-    diamond_pack_2_amount: 'כמות 💎 בחבילה 2.',
-    diamond_pack_2_price: 'מחיר חבילה 2 ב-₪.',
-    diamond_pack_3_amount: 'כמות 💎 בחבילה 3.',
-    diamond_pack_3_price: 'מחיר חבילה 3 ב-₪.',
-    diamond_pack_4_amount: 'כמות 💎 בחבילה 4.',
-    diamond_pack_4_price: 'מחיר חבילה 4 ב-₪.',
+    diamond_pack_1_amount: 'כמות 💎 בחבילה 1 (החבילה הזולה). ברירת מחדל: <code>300</code>.',
+    diamond_pack_1_price: 'מחיר חבילה 1 ב-₪. ברירת מחדל: <code>9.90</code>.',
+    diamond_pack_2_amount: 'כמות 💎 בחבילה 2. ברירת מחדל: <code>1200</code>.<div class="tip-example">📊 שווי-תמורה: pack1=30💎/₪, pack2=48💎/₪. שחקנים שרואים את ה"value" יקנו pack2.</div>',
+    diamond_pack_2_price: 'מחיר חבילה 2 ב-₪. ברירת מחדל: <code>24.90</code>.',
+    diamond_pack_3_amount: 'כמות 💎 בחבילה 3. ברירת מחדל: <code>4000</code>.',
+    diamond_pack_3_price: 'מחיר חבילה 3 ב-₪. ברירת מחדל: <code>59.90</code>.',
+    diamond_pack_4_amount: 'כמות 💎 בחבילה 4 (הגדולה — "whale pack"). ברירת מחדל: <code>15000</code>.',
+    diamond_pack_4_price: 'מחיר חבילה 4 ב-₪. ברירת מחדל: <code>149.90</code>.',
     // ---- API keys ----
-    adsense_client_id: 'מזהה לקוח AdSense בפורמט ca-pub-XXXXXXXXXXXXXXXX. נדרש כדי שפרסומות יעבדו.',
-    stripe_publishable_key: 'מפתח ציבורי של Stripe (pk_live_...). הסוד נשמר ב-env. נדרש להפעלת רכישות.',
-    // ---- Difficulty / speed / slot (already covered in UI but mapped for table) ----
-    drop_weights: 'משקלים של נפילות טבעיות לכל 8 הדרגות, מופרדים בפסיקים. אם כולם 0 → נטען ברירת המחדל אוטומטית.',
-    game_speed_pct: 'אחוז מהירות (50–200). 50% = פי-2 מהיר, 200% = איטי כפול. ברירת מחדל: <code>100</code>.',
-    slot_enabled: 'הפעלת אנימציית הסלוט בתצוגת ״הבא״. <code>false</code> = snap מיידי לדרגה.',
-    slot_duration_ms: 'משך כל הסיבוב במילישניות. 200 = מהיר, 2000 = איטי דרמטי.',
-    slot_intensity: 'כמה דרגות שונות מופיעות במהלך הסיבוב (1–8).',
-    // ---- Leaderboard tabs (UI mirrors) ----
-    leaderboard_tabs_enabled: 'CSV שמגדיר אילו טאבים זמינים ובאיזה סדר (world,country,difficulty).',
-    leaderboard_default_tab: 'הטאב שמוצג כברירת מחדל כאשר השחקן פותח את הלידרבורד.',
-    leaderboard_default_difficulty: 'דרגת הקושי שנבחרת מראש בכניסה לטאב ״קושי״.'
+    adsense_client_id: 'מזהה לקוח AdSense בפורמט <code>ca-pub-XXXXXXXXXXXXXXXX</code>.<div class="tip-example">💡 נדרש כדי שפרסומות יעבדו. ריק = פרסומות מושבתות. נשמר ב-DB ולא ב-env כדי לאפשר swap בלי deploy.</div>',
+    stripe_publishable_key: 'מפתח ציבורי של Stripe (<code>pk_live_...</code>).<div class="tip-example">🔒 רק המפתח הציבורי — הסוד נשמר ב-env (<code>STRIPE_SECRET_KEY</code>). נדרש להפעלת רכישות diamond packs.</div>',
+    // ---- Difficulty / speed / slot (also covered in UI but mapped for the table) ----
+    drop_weights: 'משקלים של נפילות טבעיות לכל 8 הדרגות, מופרדים בפסיקים.<div class="tip-example">📊 <strong>פורמט</strong>: 8 מספרים, פסיקים בלבד. דוגמה: <code>55,28,12,5,0,0,0,0</code> (ברירת מחדל).<br>💡 רק דרגות שהמשקל שלהן > 0 ייפלו טבעית. דרגות גבוהות יותר רק ממיזוגים.<br>⚠️ כל הערכים 0 → המערכת חוזרת ל-default אוטומטית (פיירואכים).</div>',
+    game_speed_pct: 'אחוז מהירות גלובלי (50-200). מכפיל על כל ה-sleeps בלולאת המשחק.<div class="tip-example">⚡ <strong>ערכים</strong>:<br>• <code>50</code>% = פי-2 מהיר. אנימציות חדות<br>• <code>100</code> (ברירת מחדל) = איזון<br>• <code>200</code>% = פי-2 איטי. מתאים לטוטוריאל<br><br>💡 משפיע על drop, merge, gravity, chain-pause — כל ה-<code>await sleep()</code> במנוע.</div>',
+    slot_enabled: 'הפעלת אנימציית הסלוט בתצוגת ״הבא״.<div class="tip-example">✅ <code>true</code> (ברירת מחדל): אנימציית סיבוב דרמטית.<br>❌ <code>false</code>: snap מיידי לדרגה (תצוגת ״הבא״ מתעדכנת ב-0ms).</div>',
+    slot_duration_ms: 'משך כל הסיבוב במילישניות (לפני אנימציית bounce-up).<div class="tip-example">⏱ <strong>ערכים</strong>: <code>200</code> מהיר, <code>650</code> (ברירת מחדל) מאוזן, <code>2000</code> דרמטי-איטי.<br>💡 ארוך מדי = שחקנים יחכו ויסתבכו.</div>',
+    slot_intensity: 'כמה דרגות שונות מופיעות במהלך הסיבוב (1-8).<div class="tip-example">🎚 <strong>ערכים</strong>:<br>• <code>1</code> = כמעט snap, רק הדרגה הסופית<br>• <code>4</code> = רק דרגות 1-4 (מציאותי כי רק הן נופלות)<br>• <code>8</code> (ברירת מחדל) = כל הדרגות, מרגיש כמו קזינו</div>',
+    // ---- Leaderboard tabs ----
+    leaderboard_tabs_enabled: 'CSV שמגדיר אילו טאבים זמינים ובאיזה סדר.<div class="tip-example">📊 <strong>אפשרויות</strong>: <code>world</code>, <code>country</code>, <code>difficulty</code>.<br>דוגמאות:<br>• <code>world,country,difficulty</code> (ברירת מחדל) — כל הטאבים<br>• <code>world</code> — רק עולמי<br>• <code>country,world</code> — מדינה ראשון<br><br>💡 הסדר ב-CSV = הסדר על המסך.</div>',
+    leaderboard_default_tab: 'הטאב שמוצג כברירת מחדל כשהשחקן פותח את הלידרבורד.<div class="tip-example">🌍 <code>world</code> — הכי כללי<br>🇮🇱 <code>country</code> — פטריוטי<br>🎚️ <code>difficulty</code> — מתאים אם רוב משחקים practice עם קושי</div>',
+    leaderboard_default_difficulty: 'דרגת הקושי שנבחרת מראש בכניסה לטאב "קושי".<div class="tip-example">📦 <code>default</code>, 😊 <code>easy</code>, 🎯 <code>medium</code>, 🔥 <code>hard</code>, 💀 <code>insane</code><br>💡 default = הציון של רוב השחקנים, הכי מאוכלס.</div>'
   };
 
   // Wire all .tip-btn elements after DOM load. Two modes:
@@ -3211,6 +3400,75 @@
   loadDifficultyConfig();
 
   // ====== FULL CONFIG TABLE ======
+  // Render the value cell as a smart control:
+  //   - Boolean (value === 'true'/'false' OR key in BOOL_KEYS) → 2-button toggle
+  //   - Has presets in PRESETS_PER_KEY → input + clickable chips
+  //   - Otherwise → plain input
+  // The hidden boolean input + auto-save on toggle/chip click means the admin
+  // rarely needs the "שמור" button — but it stays available for free-form keys.
+  function renderConfigValueCell(key, value) {
+    var v = String(value == null ? '' : value);
+    var isBool = (v === 'true' || v === 'false') || !!BOOL_KEYS[key];
+    if (isBool) {
+      var on = (v === 'true');
+      return '<div class="cfg-cell">' +
+        '<div class="cfg-toggle-row">' +
+          '<button type="button" class="cfg-toggle-btn ' + (on ? 'on-true' : '') + '" data-key="' + escHtml(key) + '" data-val="true">✓ פעיל</button>' +
+          '<button type="button" class="cfg-toggle-btn ' + (!on ? 'on-false' : '') + '" data-key="' + escHtml(key) + '" data-val="false">✗ כבוי</button>' +
+        '</div>' +
+        '<input class="cfg-input cfg-val bool-hidden" data-key="' + escHtml(key) + '" value="' + escHtml(v) + '">' +
+      '</div>';
+    }
+    var presets = PRESETS_PER_KEY[key];
+    if (presets && presets.length) {
+      var chips = presets.map(function(p) {
+        var ps = String(p);
+        var active = (ps === v);
+        return '<button type="button" class="cfg-preset-btn ' + (active ? 'on' : '') + '" data-key="' + escHtml(key) + '" data-val="' + escHtml(ps) + '">' + escHtml(ps) + '</button>';
+      }).join('');
+      return '<div class="cfg-cell">' +
+        '<input class="cfg-input cfg-val" data-key="' + escHtml(key) + '" value="' + escHtml(v) + '">' +
+        '<div class="cfg-preset-row">' + chips + '</div>' +
+      '</div>';
+    }
+    return '<input class="cfg-input cfg-val" data-key="' + escHtml(key) + '" value="' + escHtml(v) + '">';
+  }
+
+  // Shared PATCH /config/:key + visual feedback. Used by toggle, chips, and the
+  // manual "שמור" button. Updates the row's input value + reflects "on" state.
+  async function persistConfigValue(host, key, val) {
+    var input = host.querySelector('input.cfg-val[data-key="' + key + '"]');
+    if (input) input.value = val;
+    try {
+      var r = await api('/config/' + encodeURIComponent(key), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ value: val })
+      });
+      if (r && r.ok) {
+        toast(key + ' → ' + val);
+        // Refresh active states for this row only
+        var row = host.querySelector('tr[data-config-key="' + key + '"]');
+        if (row) {
+          row.querySelectorAll('.cfg-toggle-btn').forEach(function(b) {
+            var bv = b.getAttribute('data-val');
+            b.classList.remove('on-true', 'on-false');
+            if (bv === val) b.classList.add(val === 'true' ? 'on-true' : 'on-false');
+          });
+          row.querySelectorAll('.cfg-preset-btn').forEach(function(b) {
+            b.classList.toggle('on', b.getAttribute('data-val') === val);
+          });
+        }
+        return true;
+      }
+      toast('שגיאה בשמירה');
+      return false;
+    } catch (e) {
+      toast('שגיאת רשת');
+      return false;
+    }
+  }
+
   $('btn-load-all-config').onclick = async function() {
     var host = $('config-table-host');
     host.innerHTML = '<div style="text-align:center;padding:10px;color:var(--muted)">טוען...</div>';
@@ -3218,58 +3476,55 @@
       var d = await api('/config');
       if (!d || !d.config) { host.innerHTML = 'שגיאה'; return; }
       var rows = d.config;
-      // Group by prefix
-      var groups = {};
-      rows.forEach(function(r) {
-        var prefix = r.key.split('_')[0];
-        if (!groups[prefix]) groups[prefix] = [];
-        groups[prefix].push(r);
-      });
-      var html = '<div style="font-size:11px;color:var(--muted);margin-bottom:8px">לחץ על ערך לעריכה. שינויים נשמרים מיד. לחץ על <strong>?</strong> להסבר על כל מפתח.</div>';
+      var html = '<div style="font-size:11px;color:var(--muted);margin-bottom:8px">' +
+        '🖱️ <strong>true/false</strong> — לחץ על כפתורי פעיל/כבוי. <strong>מספרים</strong> — לחץ על אחת מהאפשרויות המהירות או ערוך ידנית ושמור. <strong>?</strong> ליד כל שורה מסביר עם דוגמאות.' +
+        '</div>';
       html += '<table style="width:100%;border-collapse:collapse;font-size:12px">';
       html += '<tr style="background:rgba(0,0,0,0.04)"><th style="text-align:right;padding:6px 8px">מפתח</th><th style="text-align:right;padding:6px 8px">ערך</th><th style="width:30px"></th><th style="width:60px"></th></tr>';
       rows.forEach(function(r) {
-        if (r.key.startsWith('_earn:')) return; // skip dedup keys
+        if (r.key.startsWith('_')) return; // skip all internal dedup keys (_earn, _ad, _gift_rate, ...)
         var hint = TIPS_PER_KEY[r.key];
         var hintCell = hint
-          ? '<td style="padding:6px 2px;text-align:center"><button class="tip-btn" data-tip-text="' + escHtml(hint) + '">?</button></td>'
+          ? '<td style="padding:6px 2px;text-align:center;vertical-align:top"><button class="tip-btn" data-tip-text="' + escHtml(hint) + '">?</button></td>'
           : '<td style="padding:6px 2px"></td>';
         html += '<tr data-config-key="' + escHtml(r.key) + '" style="border-top:1px solid rgba(0,0,0,0.04)">' +
-          '<td style="padding:6px 8px;font-weight:600;font-family:monospace;font-size:11px;direction:ltr;color:var(--gold)">' + escHtml(r.key) + '</td>' +
-          '<td style="padding:6px 8px"><input class="cfg-val" data-key="' + escHtml(r.key) + '" value="' + escHtml(r.value) + '" style="width:100%;padding:4px 6px;border:1px solid rgba(0,0,0,0.1);border-radius:6px;font-family:inherit;font-size:12px;box-sizing:border-box;direction:ltr"></td>' +
+          '<td style="padding:6px 8px;font-weight:600;font-family:monospace;font-size:11px;direction:ltr;color:var(--gold);vertical-align:top">' + escHtml(r.key) + '</td>' +
+          '<td style="padding:6px 8px">' + renderConfigValueCell(r.key, r.value) + '</td>' +
           hintCell +
-          '<td style="padding:6px 4px"><button class="btn sm cfg-save" data-key="' + escHtml(r.key) + '" style="font-size:10px;padding:2px 8px">שמור</button></td>' +
+          '<td style="padding:6px 4px;vertical-align:top"><button class="btn sm cfg-save" data-key="' + escHtml(r.key) + '" style="font-size:10px;padding:2px 8px">שמור</button></td>' +
         '</tr>';
       });
       html += '</table>';
       host.innerHTML = html;
       // Re-wire tooltips for the freshly-rendered ? buttons inside the table.
       wireTips();
-      // Wire save buttons
+      // Wire toggle clicks (auto-save)
+      host.querySelectorAll('.cfg-toggle-btn').forEach(function(btn) {
+        btn.onclick = async function() {
+          var key = btn.getAttribute('data-key');
+          var val = btn.getAttribute('data-val');
+          await persistConfigValue(host, key, val);
+        };
+      });
+      // Wire preset chip clicks (auto-save)
+      host.querySelectorAll('.cfg-preset-btn').forEach(function(btn) {
+        btn.onclick = async function() {
+          var key = btn.getAttribute('data-key');
+          var val = btn.getAttribute('data-val');
+          await persistConfigValue(host, key, val);
+        };
+      });
+      // Wire manual save buttons (for free-form inputs)
       host.querySelectorAll('.cfg-save').forEach(function(btn) {
         btn.onclick = async function() {
           var key = this.getAttribute('data-key');
-          var input = host.querySelector('input[data-key="' + key + '"]');
+          var input = host.querySelector('input.cfg-val[data-key="' + key + '"]');
           if (!input) return;
           btn.disabled = true; btn.textContent = '...';
-          try {
-            var r = await api('/config/' + encodeURIComponent(key), {
-              method: 'PATCH',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ value: input.value })
-            });
-            if (r && r.ok) {
-              btn.textContent = '✓';
-              btn.style.background = '#9FE1CB';
-              toast(key + ' → ' + input.value);
-              setTimeout(function() { btn.textContent = 'שמור'; btn.style.background = ''; btn.disabled = false; }, 1500);
-            } else {
-              btn.textContent = '✗'; btn.style.background = '#FCE4E0';
-              setTimeout(function() { btn.textContent = 'שמור'; btn.style.background = ''; btn.disabled = false; }, 1500);
-            }
-          } catch(e) {
-            btn.textContent = '✗'; btn.disabled = false;
-          }
+          var ok = await persistConfigValue(host, key, input.value);
+          btn.textContent = ok ? '✓' : '✗';
+          btn.style.background = ok ? '#9FE1CB' : '#FCE4E0';
+          setTimeout(function() { btn.textContent = 'שמור'; btn.style.background = ''; btn.disabled = false; }, 1500);
         };
       });
     } catch(e) { host.innerHTML = 'שגיאת רשת'; }
