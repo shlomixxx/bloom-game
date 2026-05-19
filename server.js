@@ -395,6 +395,49 @@ function verifyDeviceToken(deviceId, token) {
   return timingSafeEqual(a, b);
 }
 
+// ============================================================
+// DEVICE AUTH MIDDLEWARE
+// ============================================================
+// Two flavors:
+//   requireDeviceAuth — hard: 400/401/403 if device or token missing/bad
+//   softDeviceAuth    — rollout: accepts missing token, rejects only bad ones
+// Use softDeviceAuth on every endpoint that mutates credits/scores/state for
+// now. Once client telemetry shows ≥99% of requests carry a token, swap to
+// requireDeviceAuth. Each middleware also sets req.deviceId for downstream
+// handlers, but handlers still validate as before (defense in depth).
+
+function requireDeviceAuth(req, res, next) {
+  const deviceId =
+    (req.body && typeof req.body.deviceId === 'string' && req.body.deviceId) ||
+    req.headers['x-device-id'] ||
+    null;
+  const token =
+    (req.body && typeof req.body.token === 'string' && req.body.token) ||
+    req.headers['x-device-token'] ||
+    null;
+  if (!deviceId || typeof deviceId !== 'string' || deviceId.length < 8 || deviceId.length > 64) {
+    return res.status(400).json({ error: 'bad_device' });
+  }
+  if (!token) return res.status(401).json({ error: 'missing_token' });
+  if (!verifyDeviceToken(deviceId, token)) return res.status(403).json({ error: 'bad_token' });
+  req.deviceId = deviceId;
+  next();
+}
+
+function softDeviceAuth(req, res, next) {
+  const deviceId =
+    (req.body && typeof req.body.deviceId === 'string' && req.body.deviceId) ||
+    req.headers['x-device-id'] || null;
+  const token =
+    (req.body && typeof req.body.token === 'string' && req.body.token) ||
+    req.headers['x-device-token'] || null;
+  if (token && deviceId && !verifyDeviceToken(deviceId, token)) {
+    return res.status(403).json({ error: 'bad_token' });
+  }
+  req.deviceId = deviceId || null;
+  next();
+}
+
 // POST /api/register — issues a token for a deviceId. Idempotent.
 app.post('/api/register', (req, res) => {
   try {
@@ -465,7 +508,7 @@ function isCodeBlacklisted(code) {
 // DAILY CHALLENGE ENDPOINTS (קיימים — לא נגענו)
 // ============================================================
 
-app.post('/api/score', async (req, res) => {
+app.post('/api/score', softDeviceAuth, async (req, res) => {
   try {
     const { date, deviceId, name, score, tier, drops, token, country } = req.body || {};
     if (!isValidDate(date)) return res.status(400).json({ error: 'bad_date' });
@@ -619,7 +662,7 @@ app.get('/api/leaderboard/:date', async (req, res, next) => {
 // POST /api/profile/country — one-time flag picker. Idempotent. Stores the
 // country on player_profiles (auto-creates a stub row if absent) so future
 // score submissions can default to it server-side when the client forgets.
-app.post('/api/profile/country', async (req, res) => {
+app.post('/api/profile/country', softDeviceAuth, async (req, res) => {
   try {
     const { deviceId, country } = req.body || {};
     if (typeof deviceId !== 'string' || deviceId.length < 8 || deviceId.length > 64) {
@@ -649,7 +692,7 @@ app.post('/api/profile/country', async (req, res) => {
 // Writes the new name to player_profiles.display_name. The daily-score upsert
 // (POST /api/score) will re-sync on the next submission, so this gives an
 // immediate effect even before they play another game.
-app.post('/api/profile/name', async (req, res) => {
+app.post('/api/profile/name', softDeviceAuth, async (req, res) => {
   try {
     const { deviceId, name } = req.body || {};
     if (typeof deviceId !== 'string' || deviceId.length < 8 || deviceId.length > 64) {
@@ -677,7 +720,7 @@ app.post('/api/profile/name', async (req, res) => {
 // Practice and duel modes both flow through here. Daily scores DO NOT call
 // this (admin-controlled fairness); duel writes one row per participant.
 // Body: { date, deviceId, name, score, tier, difficulty, country, source, drops, token }
-app.post('/api/score/practice', async (req, res) => {
+app.post('/api/score/practice', softDeviceAuth, async (req, res) => {
   try {
     const { date, deviceId, name, score, tier, drops, token, country, difficulty, source } = req.body || {};
     if (!isValidDate(date)) return res.status(400).json({ error: 'bad_date' });
@@ -997,7 +1040,7 @@ app.get('/api/contests/mine', async (req, res) => {
 });
 
 // POST /api/contests — יצירת תחרות חדשה
-app.post('/api/contests', async (req, res) => {
+app.post('/api/contests', softDeviceAuth, async (req, res) => {
   try {
     const { name, hostName, deviceId, durationDays, boardType, wagerAmount, difficulty } = req.body || {};
 
@@ -1163,7 +1206,7 @@ app.get('/api/contests/:code', async (req, res) => {
 });
 
 // POST /api/contests/:code/join — הצטרפות לתחרות
-app.post('/api/contests/:code/join', async (req, res) => {
+app.post('/api/contests/:code/join', softDeviceAuth, async (req, res) => {
   try {
     const code = String(req.params.code || '').toUpperCase().slice(0, 8);
     const { deviceId, displayName } = req.body || {};
@@ -1234,7 +1277,7 @@ app.post('/api/contests/:code/join', async (req, res) => {
 });
 
 // POST /api/contests/:code/score — שליחת תוצאת משחק לתחרות
-app.post('/api/contests/:code/score', async (req, res) => {
+app.post('/api/contests/:code/score', softDeviceAuth, async (req, res) => {
   try {
     const code = String(req.params.code || '').toUpperCase().slice(0, 8);
     const { deviceId, displayName, score, tier } = req.body || {};
@@ -1348,7 +1391,7 @@ async function purgeStaleLiveRowsBestEffort(code) {
 
 // POST /api/contests/:code/live-score — עדכון ניקוד חי (ללא הגריד).
 // מוחזר hasWatchers כדי שה-client ידע אם לטרוח לשלוח גם /live-state.
-app.post('/api/contests/:code/live-score', async (req, res) => {
+app.post('/api/contests/:code/live-score', softDeviceAuth, async (req, res) => {
   try {
     const code = String(req.params.code || '').toUpperCase().slice(0, 8);
     const { deviceId, displayName, liveScore, tier } = req.body || {};
@@ -1405,7 +1448,7 @@ app.post('/api/contests/:code/live-score', async (req, res) => {
 
 // POST /api/contests/:code/live-state — אותו דבר + גריד JSON. נשלח רק
 // כשהשרת אמר "יש לך צופים" בתשובה הקודמת ל-/live-score.
-app.post('/api/contests/:code/live-state', async (req, res) => {
+app.post('/api/contests/:code/live-state', softDeviceAuth, async (req, res) => {
   try {
     const code = String(req.params.code || '').toUpperCase().slice(0, 8);
     const { deviceId, displayName, liveScore, tier, nextTier, gridJson } = req.body || {};
@@ -1496,7 +1539,7 @@ app.get('/api/contests/:code/live-state/:targetDeviceId', async (req, res) => {
 });
 
 // POST /api/contests/:code/watch — מתחיל/מחדש watch + heartbeat (כל 5s).
-app.post('/api/contests/:code/watch', async (req, res) => {
+app.post('/api/contests/:code/watch', softDeviceAuth, async (req, res) => {
   try {
     const code = String(req.params.code || '').toUpperCase().slice(0, 8);
     const { watcherDeviceId, watcherName, watcherLastScore, targetDeviceId } = req.body || {};
@@ -1536,7 +1579,7 @@ app.post('/api/contests/:code/watch', async (req, res) => {
 });
 
 // POST /api/contests/:code/unwatch — מסלק watch מיידית.
-app.post('/api/contests/:code/unwatch', async (req, res) => {
+app.post('/api/contests/:code/unwatch', softDeviceAuth, async (req, res) => {
   try {
     const code = String(req.params.code || '').toUpperCase().slice(0, 8);
     const { watcherDeviceId, targetDeviceId } = req.body || {};
@@ -1762,7 +1805,7 @@ app.get('/api/challenges/:slug', async (req, res) => {
 });
 
 // POST /api/challenges/:slug/enter — create the single attempt row.
-app.post('/api/challenges/:slug/enter', async (req, res) => {
+app.post('/api/challenges/:slug/enter', softDeviceAuth, async (req, res) => {
   try {
     const slug = cleanSlug(req.params.slug);
     if (!slug) return res.status(400).json({ error: 'bad_slug' });
@@ -1837,7 +1880,7 @@ async function maybeGrabWinnerSlot(client, challengeId, deviceId, eventColumn) {
 }
 
 // POST /api/challenges/:slug/score — heartbeat per drop. score-only-grows.
-app.post('/api/challenges/:slug/score', async (req, res) => {
+app.post('/api/challenges/:slug/score', softDeviceAuth, async (req, res) => {
   const client = await pool.connect();
   try {
     const slug = cleanSlug(req.params.slug);
@@ -1921,7 +1964,7 @@ app.post('/api/challenges/:slug/score', async (req, res) => {
 });
 
 // POST /api/challenges/:slug/complete — final submit. Locks the entry.
-app.post('/api/challenges/:slug/complete', async (req, res) => {
+app.post('/api/challenges/:slug/complete', softDeviceAuth, async (req, res) => {
   const client = await pool.connect();
   try {
     const slug = cleanSlug(req.params.slug);
@@ -2024,7 +2067,7 @@ app.post('/api/challenges/:slug/complete', async (req, res) => {
 });
 
 // POST /api/challenges/:slug/claim — winner submits contact info.
-app.post('/api/challenges/:slug/claim', async (req, res) => {
+app.post('/api/challenges/:slug/claim', softDeviceAuth, async (req, res) => {
   try {
     const slug = cleanSlug(req.params.slug);
     if (!slug) return res.status(400).json({ error: 'bad_slug' });
@@ -2064,7 +2107,7 @@ app.post('/api/challenges/:slug/claim', async (req, res) => {
 // POST /api/ping — שורה אחת לכל (device, date). אם השורה כבר קיימת,
 // מקדם visit_count ו-last_at. שימוש: ה-frontend קורא פעם אחת ב-init().
 
-app.post('/api/ping', async (req, res) => {
+app.post('/api/ping', softDeviceAuth, async (req, res) => {
   try {
     const { deviceId } = req.body || {};
     if (typeof deviceId !== 'string' || deviceId.length < 8 || deviceId.length > 64) {
@@ -3509,7 +3552,7 @@ function calcLevel(xp) {
 }
 
 // POST /api/player/earn — award credits + XP for gameplay actions
-app.post('/api/player/earn', async (req, res) => {
+app.post('/api/player/earn', softDeviceAuth, async (req, res) => {
   const { deviceId, action, meta } = req.body || {};
   if (!deviceId || !action) return res.status(400).json({ error: 'missing_params' });
   try {
@@ -3588,7 +3631,7 @@ app.post('/api/player/earn', async (req, res) => {
 });
 
 // POST /api/player/spend — deduct credits (for continue, premium items)
-app.post('/api/player/spend', async (req, res) => {
+app.post('/api/player/spend', softDeviceAuth, async (req, res) => {
   const { deviceId, amount, reason } = req.body || {};
   if (!deviceId || !amount || amount <= 0) return res.json({ ok: false, reason: 'invalid' });
   try {
@@ -3625,7 +3668,7 @@ app.get('/api/tile-prices', async (_req, res) => {
 // `refundAmount` (capped at 1000) without any proof of prior purchase.
 // That let anyone inflate their balance up to 1000 💎 per call. Removed.
 // Cancel UX is now local-only on the client.
-app.post('/api/player/buy-powerup', async (req, res) => {
+app.post('/api/player/buy-powerup', softDeviceAuth, async (req, res) => {
   const { deviceId, powerup } = req.body || {};
   if (!deviceId) return res.status(400).json({ error: 'missing_params' });
   if (!powerup) return res.status(400).json({ error: 'missing_params' });
@@ -3649,7 +3692,7 @@ app.post('/api/player/buy-powerup', async (req, res) => {
 });
 
 // POST /api/player/buy-tile — buy a specific tile during gameplay
-app.post('/api/player/buy-tile', async (req, res) => {
+app.post('/api/player/buy-tile', softDeviceAuth, async (req, res) => {
   const { deviceId, tier } = req.body || {};
   if (!deviceId || !tier) return res.status(400).json({ error: 'missing_params' });
   try {
@@ -3682,7 +3725,7 @@ app.post('/api/player/buy-tile', async (req, res) => {
 // POST /api/player/buy-skin — purchase a skin with credits
 // Price comes from SKIN_PRICES (server-authoritative). Client-supplied `price`
 // is ignored — historically it was trusted, which let anyone buy any skin for 0.
-app.post('/api/player/buy-skin', async (req, res) => {
+app.post('/api/player/buy-skin', softDeviceAuth, async (req, res) => {
   const { deviceId, skinId } = req.body || {};
   if (!deviceId || !skinId) return res.status(400).json({ error: 'missing_params' });
   if (!Object.prototype.hasOwnProperty.call(SKIN_PRICES, skinId)) {
@@ -3710,7 +3753,7 @@ app.post('/api/player/buy-skin', async (req, res) => {
   }
 });
 
-app.post('/api/referral', async (req, res) => {
+app.post('/api/referral', softDeviceAuth, async (req, res) => {
   const { deviceId, refCode } = req.body || {};
   if (!deviceId || !refCode) return res.status(400).json({ error: 'missing_params' });
   try {
@@ -3765,7 +3808,7 @@ app.post('/api/referral', async (req, res) => {
 // ============================================================
 
 // Create a duel challenge
-app.post('/api/duels', async (req, res) => {
+app.post('/api/duels', softDeviceAuth, async (req, res) => {
   const { deviceId, opponentCode, amount, difficulty } = req.body || {};
   if (!deviceId || !opponentCode) return res.status(400).json({ error: 'missing_params' });
   try {
@@ -3827,7 +3870,7 @@ app.get('/api/duels/mine', async (req, res) => {
 });
 
 // Accept a duel
-app.post('/api/duels/:id/accept', async (req, res) => {
+app.post('/api/duels/:id/accept', softDeviceAuth, async (req, res) => {
   const { deviceId } = req.body || {};
   const duelId = parseInt(req.params.id, 10);
   try {
@@ -3894,7 +3937,7 @@ app.get('/api/duels/:id', async (req, res) => {
 // when both scores are present, regardless of status — see also
 // /api/duels/:id/accept which calls the same settlement path if the
 // challenger had already submitted.
-app.post('/api/duels/:id/score', async (req, res) => {
+app.post('/api/duels/:id/score', softDeviceAuth, async (req, res) => {
   const { deviceId, score, drops, token } = req.body || {};
   const duelId = parseInt(req.params.id, 10);
   if (!duelId) return res.status(400).json({ error: 'bad_id' });
@@ -3983,7 +4026,7 @@ app.post('/api/duels/:id/score', async (req, res) => {
   }
 });
 
-app.post('/api/heartbeat', async (req, res) => {
+app.post('/api/heartbeat', softDeviceAuth, async (req, res) => {
   try {
     const { deviceId, displayName, mode, score, highestTier, grid } = req.body || {};
     if (!deviceId) return res.status(400).json({ error: 'missing_device' });
@@ -4023,7 +4066,7 @@ app.post('/api/heartbeat', async (req, res) => {
 });
 
 // DELETE heartbeat — called when game ends so player disappears from admin live view
-app.post('/api/heartbeat/end', async (req, res) => {
+app.post('/api/heartbeat/end', softDeviceAuth, async (req, res) => {
   try {
     const { deviceId } = req.body || {};
     if (!deviceId) return res.status(400).json({ error: 'missing_device' });

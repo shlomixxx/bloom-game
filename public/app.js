@@ -3824,6 +3824,23 @@
   }
   ensureDeviceToken();
 
+  // apiPost — POST helper that always injects deviceId + token so every
+  // state-mutating request lands at the server with a verifiable identity.
+  // Existing call sites that build their own body remain valid (server's
+  // softDeviceAuth rejects only present-and-invalid tokens), but new code
+  // should prefer this helper. Pass {raw: true} to skip auto-injection.
+  function apiPost(path, body, opts) {
+    const o = opts || {};
+    const fullBody = (o.raw === true)
+      ? (body || {})
+      : Object.assign({}, body || {}, { deviceId: deviceId, token: deviceToken });
+    return fetch(API_BASE + path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(fullBody)
+    });
+  }
+
   // ============ PLAYER CODE (BLOOM-XXXX) + REFERRALS ============
   const PLAYER_CODE_KEY = 'bloom_player_code';
   const PLAYER_BALANCE_KEY = 'bloom_balance';
