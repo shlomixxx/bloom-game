@@ -672,6 +672,17 @@
 
     </div>
   </details>
+
+  <!-- Privacy: manual PII purge for challenge winners (90d) -->
+  <section id="privacy-section" style="margin-top:14px;background:var(--card);border-radius:12px;padding:14px 16px;border:1px solid rgba(250,199,117,0.18)">
+    <h2 style="margin:0 0 6px 0;display:flex;align-items:center;gap:8px">🔒 פרטיות</h2>
+    <div style="font-size:12px;color:var(--muted);line-height:1.6;margin-bottom:10px">
+      פרטי יצירת קשר של זוכים בפרסים (שם, טלפון, אימייל) נמחקים אוטומטית 90 יום לאחר מסירת הפרס.
+      ה-job רץ פעם ב-24 שעות. הכפתור למטה מאפשר להריץ ידנית.
+    </div>
+    <button id="btn-privacy-purge" class="btn" style="background:#7A3030;color:#fff">🧹 הרץ ניקוי PII עכשיו</button>
+    <div id="privacy-purge-result" style="margin-top:8px;font-size:12px"></div>
+  </section>
   </div><!-- /admin-tab-panel monitor:admin-guide -->
 
   <div class="admin-tab-panel" data-tab="game">
@@ -2293,6 +2304,24 @@
   renderExports();
   loadGameConfig();
   wireTips();
+
+  // Privacy: manual PII purge button.
+  var purgeBtn = $('btn-privacy-purge');
+  if (purgeBtn) purgeBtn.onclick = async function() {
+    var out = $('privacy-purge-result');
+    purgeBtn.disabled = true;
+    if (out) out.textContent = '...';
+    var data = await api('/privacy/purge', { method: 'POST' });
+    purgeBtn.disabled = false;
+    if (!out) return;
+    if (data && data.ok) {
+      out.style.color = '#7AC97A';
+      out.textContent = '✓ נמחקו ' + (data.purged || 0) + ' רשומות PII ישנות.';
+    } else {
+      out.style.color = '#C97A7A';
+      out.textContent = 'שגיאה.';
+    }
+  };
 
   // ====== BONUS SIMULATOR ======
   // Self-contained visual demo of every event/bonus in the game.

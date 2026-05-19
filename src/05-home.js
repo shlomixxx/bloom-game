@@ -52,7 +52,8 @@
       // Tour link (bottom)
       (!hasSeenTour()
         ? '<button class="home-skip" id="home-skip">אני יודע לשחק, דלג</button>'
-        : '<button class="home-skip" id="home-tour-btn" style="margin-top:8px;color:#BA7517">📖 איך משחקים?</button>');
+        : '<button class="home-skip" id="home-tour-btn" style="margin-top:8px;color:#BA7517">📖 איך משחקים?</button>') +
+      '<div style="text-align:center;margin-top:14px;font-size:11px;opacity:.6"><a href="/privacy" target="_blank" rel="noopener" style="color:inherit;text-decoration:none">מדיניות פרטיות</a></div>';
     app.appendChild(h);
     syncHomeMuteUI();
     document.getElementById('home-mute').onclick = function(e) {

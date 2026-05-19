@@ -63,8 +63,12 @@ app.get('/sitemap.xml', async (_req, res) => {
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url><loc>${base}/</loc><lastmod>${today}</lastmod><changefreq>daily</changefreq><priority>1.0</priority></url>
   <url><loc>${base}/welcome</loc><lastmod>${today}</lastmod><changefreq>weekly</changefreq><priority>0.9</priority></url>
+  <url><loc>${base}/privacy</loc><lastmod>${today}</lastmod><changefreq>yearly</changefreq><priority>0.3</priority></url>
 </urlset>`);
 });
+
+// Privacy policy — static page, served at /privacy and /privacy.html.
+app.get('/privacy', (_req, res) => res.sendFile('privacy.html', { root: 'public' }));
 
 // ============================================================
 // LANDING PAGE — /welcome (SEO-rich, server-rendered)
@@ -174,7 +178,7 @@ body{font-family:'Heebo',sans-serif;background:var(--bg);color:var(--text);min-h
 </section>
 
 <footer class="footer">
-  BLOOM © 2026 · <a href="/" style="color:var(--gold)">שחק עכשיו</a>
+  BLOOM © 2026 · <a href="/" style="color:var(--gold)">שחק עכשיו</a> · <a href="/privacy" style="color:var(--muted)">פרטיות</a>
 </footer>
 
 </body></html>`);
@@ -2606,6 +2610,27 @@ if (ADMIN_PATH && ADMIN_PASSWORD) {
     }
   });
 
+  // ---------- PRIVACY — manual PII purge for challenge winners ----------
+  // Wipes contact_* on challenge entries whose prize was claimed >90d ago.
+  // The 24h interval below runs the same query automatically; this endpoint
+  // lets admins trigger it on demand and surfaces the row count.
+  adminRouter.post('/api/privacy/purge', async (_req, res) => {
+    try {
+      const r = await pool.query(
+        `UPDATE challenge_entries
+           SET contact_name = NULL, contact_phone = NULL, contact_email = NULL
+         WHERE prize_claimed_at IS NOT NULL
+           AND prize_claimed_at < NOW() - INTERVAL '90 days'
+           AND (contact_name IS NOT NULL OR contact_phone IS NOT NULL OR contact_email IS NOT NULL)`
+      );
+      await logAdminAction('privacy.purge', null, null, { rows: r.rowCount });
+      res.json({ ok: true, purged: r.rowCount });
+    } catch (e) {
+      console.error('admin /privacy/purge', e);
+      res.status(500).json({ error: 'server' });
+    }
+  });
+
   // ---------- LIVE — what's happening right now ----------
   adminRouter.get('/api/live', async (_req, res) => {
     try {
@@ -4194,6 +4219,24 @@ setInterval(async () => {
     await pool.query(`DELETE FROM player_heartbeat WHERE updated_at < NOW() - INTERVAL '60 seconds'`);
   } catch (e) {}
 }, 30 * 1000);
+
+// Privacy: nightly PII auto-purge for challenge winners. Contact details for
+// prize claims are kept for 90 days for fulfilment, then wiped. Israel Privacy
+// Law + GDPR compliance. Backed by idx_challenge_entries_purge in schema.sql.
+setInterval(async () => {
+  try {
+    const r = await pool.query(
+      `UPDATE challenge_entries
+         SET contact_name = NULL, contact_phone = NULL, contact_email = NULL
+       WHERE prize_claimed_at IS NOT NULL
+         AND prize_claimed_at < NOW() - INTERVAL '90 days'
+         AND (contact_name IS NOT NULL OR contact_phone IS NOT NULL OR contact_email IS NOT NULL)`
+    );
+    if (r.rowCount > 0) console.log(`[privacy] auto-purged ${r.rowCount} PII rows`);
+  } catch (e) {
+    console.warn('[privacy] auto-purge failed', e.message);
+  }
+}, 24 * 60 * 60 * 1000);
 
 // ============================================================
 // GAME CONFIG (admin-controlled runtime settings)

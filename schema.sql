@@ -209,6 +209,11 @@ CREATE INDEX IF NOT EXISTS idx_challenge_entries_winners
   ON challenge_entries (challenge_id, is_winner) WHERE is_winner = TRUE;
 CREATE INDEX IF NOT EXISTS idx_challenge_entries_threshold
   ON challenge_entries (challenge_id, reached_threshold_at) WHERE reached_threshold_at IS NOT NULL;
+-- Privacy: index supports the 90-day PII auto-purge in server.js so the
+-- nightly UPDATE doesn't sequential-scan as the table grows.
+CREATE INDEX IF NOT EXISTS idx_challenge_entries_purge
+  ON challenge_entries (prize_claimed_at)
+  WHERE prize_claimed_at IS NOT NULL;
 
 -- ============================================================
 -- הגדרות משחק (Admin-controlled game config)
