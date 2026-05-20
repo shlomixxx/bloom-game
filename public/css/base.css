@@ -1,3 +1,65 @@
+  /* ============================================================
+     Design tokens (UX audit §2.2)
+     ------------------------------------------------------------
+     Centralizes BLOOM's color/typography palette so every screen
+     (game, contest, challenge, profile, marketing) can pull from
+     ONE source of truth and stop feeling like separate apps.
+
+     The values mirror what's already shipped across the codebase
+     (warm neutrals + gold accent + mint green) rather than swapping
+     in a new RGB rainbow — the brand is already established, the
+     audit just asked us to name the colors so they can be reused
+     and themed consistently from here on.
+
+     Adoption is incremental: new components MUST use these tokens;
+     existing hard-coded #hex values get migrated opportunistically.
+     ============================================================ */
+  :root {
+    /* Brand accent (gold) */
+    --color-accent:        #BA7517;
+    --color-accent-soft:   #FAC775;
+    --color-accent-ink:    #412402;
+    --color-accent-glow:   rgba(250,199,117,0.35);
+
+    /* Neutrals — light mode */
+    --color-bg:            #FAFAF6;
+    --color-surface:       #F2EFE9;
+    --color-surface-2:     #F5F2EC;
+    --color-text:          #1C1A18;
+    --color-text-muted:    #6F6E68;
+    --color-text-faint:    #A8A6A0;
+    --color-border:        rgba(28,26,24,0.10);
+
+    /* Semantic */
+    --color-success:       #2E8B6F;
+    --color-success-soft:  #9FE1CB;
+    --color-danger:        #FF8C42;
+    --color-warning:       #FAC775;
+
+    /* Surfaces / radius / shadow */
+    --radius-sm: 8px;
+    --radius-md: 12px;
+    --radius-lg: 18px;
+    --shadow-sm: 0 2px 6px rgba(0,0,0,0.06);
+    --shadow-md: 0 6px 20px rgba(0,0,0,0.10);
+    --shadow-glow: 0 0 0 6px var(--color-accent-glow);
+  }
+
+  html[data-theme="dark"] {
+    --color-bg:            #1A1816;
+    --color-surface:       #2C2A28;
+    --color-surface-2:     #2A2118;
+    --color-text:          #F2EFE9;
+    --color-text-muted:    #8E8A82;
+    --color-text-faint:    #6F6E68;
+    --color-border:        rgba(242,239,233,0.10);
+    --color-accent:        #FAC775;
+    --color-accent-ink:    #1C1A18;
+    --color-accent-glow:   rgba(250,199,117,0.25);
+    --shadow-sm: 0 2px 6px rgba(0,0,0,0.30);
+    --shadow-md: 0 6px 20px rgba(0,0,0,0.40);
+  }
+
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;

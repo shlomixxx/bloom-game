@@ -1,3 +1,65 @@
+  /* ============================================================
+     Design tokens (UX audit §2.2)
+     ------------------------------------------------------------
+     Centralizes BLOOM's color/typography palette so every screen
+     (game, contest, challenge, profile, marketing) can pull from
+     ONE source of truth and stop feeling like separate apps.
+
+     The values mirror what's already shipped across the codebase
+     (warm neutrals + gold accent + mint green) rather than swapping
+     in a new RGB rainbow — the brand is already established, the
+     audit just asked us to name the colors so they can be reused
+     and themed consistently from here on.
+
+     Adoption is incremental: new components MUST use these tokens;
+     existing hard-coded #hex values get migrated opportunistically.
+     ============================================================ */
+  :root {
+    /* Brand accent (gold) */
+    --color-accent:        #BA7517;
+    --color-accent-soft:   #FAC775;
+    --color-accent-ink:    #412402;
+    --color-accent-glow:   rgba(250,199,117,0.35);
+
+    /* Neutrals — light mode */
+    --color-bg:            #FAFAF6;
+    --color-surface:       #F2EFE9;
+    --color-surface-2:     #F5F2EC;
+    --color-text:          #1C1A18;
+    --color-text-muted:    #6F6E68;
+    --color-text-faint:    #A8A6A0;
+    --color-border:        rgba(28,26,24,0.10);
+
+    /* Semantic */
+    --color-success:       #2E8B6F;
+    --color-success-soft:  #9FE1CB;
+    --color-danger:        #FF8C42;
+    --color-warning:       #FAC775;
+
+    /* Surfaces / radius / shadow */
+    --radius-sm: 8px;
+    --radius-md: 12px;
+    --radius-lg: 18px;
+    --shadow-sm: 0 2px 6px rgba(0,0,0,0.06);
+    --shadow-md: 0 6px 20px rgba(0,0,0,0.10);
+    --shadow-glow: 0 0 0 6px var(--color-accent-glow);
+  }
+
+  html[data-theme="dark"] {
+    --color-bg:            #1A1816;
+    --color-surface:       #2C2A28;
+    --color-surface-2:     #2A2118;
+    --color-text:          #F2EFE9;
+    --color-text-muted:    #8E8A82;
+    --color-text-faint:    #6F6E68;
+    --color-border:        rgba(242,239,233,0.10);
+    --color-accent:        #FAC775;
+    --color-accent-ink:    #1C1A18;
+    --color-accent-glow:   rgba(250,199,117,0.25);
+    --shadow-sm: 0 2px 6px rgba(0,0,0,0.30);
+    --shadow-md: 0 6px 20px rgba(0,0,0,0.40);
+  }
+
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
@@ -2449,28 +2511,29 @@
   }
   html[data-theme="dark"] .over-rival { background: rgba(250,199,117,0.05); color: #B0AA9E; }
 
-  /* ── Game-Over: Prominent CTA (1.3 — louder, bigger, more aggressive pull) ── */
+  /* ── Game-Over: Prominent CTA (1.3 — louder, bigger, more aggressive pull) ──
+       Adopts the §2.2 design tokens defined in base.css. */
   .over-again-btn {
     display: block !important; width: 100% !important; max-width: 360px !important;
     margin: 18px auto 10px !important; padding: 18px 32px !important;
     font-size: 19px !important; font-weight: 800 !important;
-    border-radius: 16px !important;
-    background: linear-gradient(135deg, #1C1A18 0%, #2A2724 100%) !important;
+    border-radius: var(--radius-lg) !important;
+    background: linear-gradient(135deg, var(--color-text) 0%, #2A2724 100%) !important;
     color: #FFF !important;
-    box-shadow: 0 6px 20px rgba(0,0,0,0.22), 0 0 0 0 rgba(250,199,117,0.6) !important;
+    box-shadow: var(--shadow-md), 0 0 0 0 var(--color-accent-glow) !important;
     animation: ctaPop 0.45s ease-out, ctaGlow 2.4s ease-in-out infinite 0.6s;
     letter-spacing: 0.02em;
   }
   .over-again-btn:active { transform: scale(0.97) !important; }
   @keyframes ctaPop { 0% { transform: scale(0.92); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
   @keyframes ctaGlow {
-    0%, 100% { box-shadow: 0 6px 20px rgba(0,0,0,0.22), 0 0 0 0 rgba(250,199,117,0.0); }
-    50%      { box-shadow: 0 6px 22px rgba(0,0,0,0.22), 0 0 0 6px rgba(250,199,117,0.18); }
+    0%, 100% { box-shadow: var(--shadow-md), 0 0 0 0 rgba(250,199,117,0.0); }
+    50%      { box-shadow: var(--shadow-md), var(--shadow-glow); }
   }
   html[data-theme="dark"] .over-again-btn {
-    background: linear-gradient(135deg, #FAC775 0%, #F0B85F 100%) !important;
-    color: #1C1A18 !important;
-    box-shadow: 0 6px 20px rgba(250,199,117,0.25), 0 0 0 0 rgba(250,199,117,0.4) !important;
+    background: linear-gradient(135deg, var(--color-accent-soft) 0%, #F0B85F 100%) !important;
+    color: var(--color-accent-ink) !important;
+    box-shadow: var(--shadow-md), 0 0 0 0 var(--color-accent-glow) !important;
   }
 
   /* ── Game-Over: Claim a real name CTA (1.2-mod) ── */
@@ -2480,19 +2543,19 @@
     font-size: 12px !important; font-weight: 600 !important;
     background: transparent !important;
     border: 1px dashed rgba(186,117,23,0.45) !important;
-    color: #BA7517 !important;
-    border-radius: 8px !important;
+    color: var(--color-accent) !important;
+    border-radius: var(--radius-sm) !important;
     letter-spacing: 0.02em;
     transition: all 0.18s ease;
   }
   .over-claim-name:hover { background: rgba(186,117,23,0.05) !important; border-style: solid !important; }
-  html[data-theme="dark"] .over-claim-name { color: #FAC775 !important; border-color: rgba(250,199,117,0.4) !important; }
+  html[data-theme="dark"] .over-claim-name { border-color: rgba(250,199,117,0.4) !important; }
   html[data-theme="dark"] .over-claim-name:hover { background: rgba(250,199,117,0.08) !important; }
 
   /* ── Game-Over: Best-score delta ── */
   .over-best-delta {
     margin: 10px auto; padding: 10px 16px;
-    border-radius: 10px; font-size: 14px;
+    border-radius: var(--radius-md); font-size: 14px;
     text-align: center; direction: rtl;
     max-width: 360px;
     animation: bestDeltaIn 0.5s cubic-bezier(.2,1.2,.4,1);
@@ -2512,7 +2575,7 @@
     0%   { opacity: 0; transform: translateY(-6px) scale(0.96); }
     100% { opacity: 1; transform: translateY(0) scale(1); }
   }
-  html[data-theme="dark"] .over-best-delta-up { color: #FAC775; border-color: rgba(250,199,117,0.4); }
+  html[data-theme="dark"] .over-best-delta-up { color: var(--color-accent-soft); border-color: rgba(250,199,117,0.4); }
   html[data-theme="dark"] .over-best-delta-near { color: #F0A878; border-color: rgba(240,168,120,0.3); }
 
   /* ── Game-Over: Gap to next TOP-N tier ── */
@@ -2520,7 +2583,7 @@
     margin: 8px auto; padding: 8px 14px;
     background: rgba(40,150,255,0.07);
     border: 1px solid rgba(40,150,255,0.18);
-    border-radius: 10px; font-size: 13px; color: #2A5687;
+    border-radius: var(--radius-md); font-size: 13px; color: #2A5687;
     text-align: center; direction: rtl;
     max-width: 360px;
   }
