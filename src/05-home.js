@@ -21,6 +21,8 @@
     stopEventSystem(); // don't run events behind home screen
     const app = document.querySelector('.app');
     if (!app || document.getElementById('home-screen')) return;
+    // Mark the app so CSS can hide the game UI behind the home overlay.
+    app.setAttribute('data-home', 'active');
     const h = document.createElement('div');
     h.id = 'home-screen';
     h.className = 'home-screen';
@@ -272,6 +274,8 @@
     stopHomeLivePulse();
     const h = document.getElementById('home-screen');
     if (h) h.remove();
+    const app = document.querySelector('.app');
+    if (app) app.removeAttribute('data-home');
   }
   function syncHomeMuteUI() { updateMuteUI(); }
 

@@ -2630,6 +2630,8 @@
     stopEventSystem(); // don't run events behind home screen
     const app = document.querySelector('.app');
     if (!app || document.getElementById('home-screen')) return;
+    // Mark the app so CSS can hide the game UI behind the home overlay.
+    app.setAttribute('data-home', 'active');
     const h = document.createElement('div');
     h.id = 'home-screen';
     h.className = 'home-screen';
@@ -2881,6 +2883,8 @@
     stopHomeLivePulse();
     const h = document.getElementById('home-screen');
     if (h) h.remove();
+    const app = document.querySelector('.app');
+    if (app) app.removeAttribute('data-home');
   }
   function syncHomeMuteUI() { updateMuteUI(); }
 
@@ -2938,6 +2942,8 @@
     stopEventSystem();
     const app = document.querySelector('.app');
     if (!app || document.getElementById('home-screen')) return;
+    // Mark the app so CSS can hide the game UI behind the home overlay.
+    app.setAttribute('data-home', 'active');
     const h = document.createElement('div');
     h.id = 'home-screen';
     h.className = 'home-screen home-v2';
@@ -3137,6 +3143,8 @@
     stopHomeV2LivePulse();
     const h = document.getElementById('home-screen');
     if (h) h.remove();
+    const app = document.querySelector('.app');
+    if (app) app.removeAttribute('data-home');
   }
 
   // ── §A1: personal hero banner ──
@@ -3595,6 +3603,9 @@
     stopEventSystem();
     const app = document.querySelector('.app');
     if (!app || document.getElementById('home-screen')) return;
+    // Belt-and-suspenders overlay enforcement: also set a data attribute
+    // so CSS can hide game-UI siblings even when :has() isn't supported.
+    app.setAttribute('data-home', 'active');
     recordWeekStats();
 
     const h = document.createElement('div');
@@ -3856,6 +3867,8 @@
     if (typeof stopHomeV2LivePulse === 'function') stopHomeV2LivePulse();
     const h = document.getElementById('home-screen');
     if (h) h.remove();
+    const app = document.querySelector('.app');
+    if (app) app.removeAttribute('data-home');
   }
 
   function buildWhatsNewBanner() {

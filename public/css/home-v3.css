@@ -7,18 +7,55 @@
      shared class name. v3-only additions get the .home-v3-* prefix.
      ============================================================ */
 
+  /* ============================================================
+     Belt-and-suspenders overlay enforcement
+     ============================================================
+     The home overlay has historically had edge cases where the game
+     UI (`.top`, `.mode-bar`, `.tier-bar`, `.grid-wrap`) peeks through
+     behind the home screen on some Safari versions. We address this
+     in THREE layers:
+
+       1. Modern :has() selector — hides game UI when ANY .home-screen
+          is a child of .app. Works on Safari 15.4+, Chrome 105+.
+       2. Data-attribute fallback — JS sets data-home="active" on .app
+          when a home variant mounts; CSS rule below catches that.
+       3. Explicit position:absolute + !important on the v3 overlay
+          itself (next rule down).
+
+     If any one of these layers works, the user sees a clean home. */
+  .app:has(> .home-screen) > .top,
+  .app:has(> .home-screen) > .mode-bar,
+  .app:has(> .home-screen) > .tier-bar,
+  .app:has(> .home-screen) > .grid-wrap {
+    display: none !important;
+  }
+  .app[data-home="active"] > .top,
+  .app[data-home="active"] > .mode-bar,
+  .app[data-home="active"] > .tier-bar,
+  .app[data-home="active"] > .grid-wrap {
+    display: none !important;
+  }
+
   .home-screen.home-v3 {
-    /* DON'T override `position` here — the base .home-screen rule sets
-       position:absolute + inset:0 + z-index:250, which is exactly what
-       we need to cover the game board fullscreen. A previous version
-       added position:relative here, which silently broke the overlay
-       and made the game board show through behind the home content.
-       The mesh tiles use position:absolute and the .home-screen.home-v3
-       still acts as their containing block because it's position:absolute. */
+    /* Bulletproof fullscreen overlay. Every positioning property is
+       set explicitly with !important to defeat any inherited or
+       cascading override. The base .home-screen rule already does this
+       but Safari has had edge cases where `inset: 0` shorthand was
+       parsed differently than `top/right/bottom/left`, so we set them
+       individually. z-index:1000 sits well above any game-side z-index. */
+    position: absolute !important;
+    top: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    z-index: 1000 !important;
     padding: 12px 18px max(24px, env(safe-area-inset-bottom));
     padding-top: max(14px, env(safe-area-inset-top));
-    background: linear-gradient(180deg, var(--color-bg, #FAFAF6) 0%, var(--color-surface, #F2EFE9) 100%);
+    background: linear-gradient(180deg, var(--color-bg, #FAFAF6) 0%, var(--color-surface, #F2EFE9) 100%) !important;
     overflow-y: auto;
+    overflow-x: hidden;
   }
   html[data-theme="dark"] .home-screen.home-v3 {
     background: linear-gradient(180deg, #1A1816 0%, #232120 100%);
