@@ -378,6 +378,29 @@ CREATE INDEX IF NOT EXISTS idx_duels_opponent ON duels (opponent_code, status);
 CREATE INDEX IF NOT EXISTS idx_duels_challenger ON duels (challenger_device, status);
 
 -- ============================================================
+-- Player-to-player gifts. Sender transfers gems to a recipient
+-- (by BLOOM-XXXX player_code). Used as both the wallet transfer
+-- ledger AND the unseen-notification queue — the recipient polls
+-- this table on app open to surface a "🎁 X sent you Y💎" banner.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS player_gifts (
+  id               SERIAL PRIMARY KEY,
+  sender_device    VARCHAR(64) NOT NULL,
+  sender_code      VARCHAR(10),
+  sender_name      VARCHAR(100),
+  recipient_device VARCHAR(64) NOT NULL,
+  recipient_code   VARCHAR(10) NOT NULL,
+  amount           INT NOT NULL,
+  message          VARCHAR(200),
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  seen_at          TIMESTAMPTZ
+);
+-- Inbox query: unseen gifts for a recipient, newest first.
+CREATE INDEX IF NOT EXISTS idx_player_gifts_inbox
+  ON player_gifts (recipient_device, created_at DESC)
+  WHERE seen_at IS NULL;
+
+-- ============================================================
 -- Player heartbeat — tracks ALL active players (any mode)
 -- ============================================================
 CREATE TABLE IF NOT EXISTS player_heartbeat (

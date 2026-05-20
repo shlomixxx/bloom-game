@@ -33,6 +33,10 @@
     gameTotalMerges = 0;
     gameStartTime = Date.now();
     trackEvent('game_start', { mode: mode });
+    // Touch the "last play date" tracker so the comeback bonus on home
+    // can compute days-since-last-play accurately. Side-effect free
+    // (write-only); never throws.
+    try { if (window.__bloomRecordLastPlay) window.__bloomRecordLastPlay(); } catch (e) {}
     leaderboard = [];
     dailyRank = null;
     dailyTotal = null;

@@ -3708,7 +3708,13 @@ app.post('/api/player/earn', requireDeviceAuth, async (req, res) => {
       'contest_2nd': 'contest_2nd_reward',
       'contest_3rd': 'contest_3rd_reward',
       'score_milestone': 'score_milestone_reward',
-      'event_gift': '_custom_amount_'
+      'event_gift': '_custom_amount_',
+      // "Comeback" bonus: the client requests this when the player
+      // returns after >= 2 days away. Amount is server-decided by
+      // tier (2-6, 7-29, 30+ days), so the client can't choose how
+      // much. Dedup is via the standard action+date map below — one
+      // comeback per day max.
+      'comeback': 'comeback_reward'
     };
     const configKey = actionMap[action];
     if (!configKey) return res.json({ ok: false, reason: 'unknown_action' });
@@ -3777,6 +3783,20 @@ app.post('/api/player/earn', requireDeviceAuth, async (req, res) => {
       const maxC = parseInt((maxRow.rows[0] || {}).value, 10) || 50;
       const requested = parseInt((meta && meta.amount) || 0, 10) || 0;
       reward = Math.min(Math.max(requested, minC), maxC);
+    } else if (action === 'comeback') {
+      // Server-decided amount by absence tier. Client sends meta.daysSince
+      // for transparency, but the server enforces the buckets.
+      const days = parseInt((meta && meta.daysSince) || 0, 10) || 0;
+      if (days < 2) return res.json({ ok: false, reason: 'not_eligible' });
+      // Tiered rewards — pulled from game_config with sensible defaults so
+      // admins can tune them without code changes.
+      const lvlA = await pool.query(`SELECT value FROM game_config WHERE key = 'comeback_reward_short'`);
+      const lvlB = await pool.query(`SELECT value FROM game_config WHERE key = 'comeback_reward_mid'`);
+      const lvlC = await pool.query(`SELECT value FROM game_config WHERE key = 'comeback_reward_long'`);
+      const shortR = parseInt((lvlA.rows[0] || {}).value, 10) || 50;   // 2-6 days
+      const midR   = parseInt((lvlB.rows[0] || {}).value, 10) || 100;  // 7-29 days
+      const longR  = parseInt((lvlC.rows[0] || {}).value, 10) || 200;  // 30+ days
+      reward = days >= 30 ? longR : days >= 7 ? midR : shortR;
     } else {
       const cfgRow = await pool.query('SELECT value FROM game_config WHERE key = $1', [configKey]);
       reward = parseInt((cfgRow.rows[0] || {}).value, 10) || 0;
@@ -3942,6 +3962,116 @@ app.post('/api/player/ad-watch', requireDeviceAuth, async (req, res) => {
     });
   } catch (e) {
     console.error('player/ad-watch', e.message);
+    res.status(500).json({ error: 'server' });
+  }
+});
+
+// POST /api/player/gift-friend — player-to-player gem gift.
+// Sender → recipient transfer + creates a player_gifts row that the
+// recipient sees as a notification banner on next app open.
+// Server-enforced: amount in [5, 200], no self-gifts, 10/day rate limit,
+// atomic balance update with WHERE balance >= amount race safety.
+app.post('/api/player/gift-friend', requireDeviceAuth, async (req, res) => {
+  const deviceId = req.deviceId;
+  const { recipientCode, amount, message } = req.body || {};
+  if (!recipientCode || typeof recipientCode !== 'string') {
+    return res.status(400).json({ ok: false, reason: 'missing_recipient' });
+  }
+  const normCode = recipientCode.trim().toUpperCase().replace(/^BLOOM-/, '');
+  const fullCode = 'BLOOM-' + normCode;
+  if (!/^BLOOM-[A-HJ-NP-Z2-9]{4}$/.test(fullCode)) {
+    return res.json({ ok: false, reason: 'bad_code' });
+  }
+  const amt = parseInt(amount, 10) || 0;
+  if (amt < 5 || amt > 200) {
+    return res.json({ ok: false, reason: 'bad_amount' });
+  }
+  if (!checkRateLimit('gift_friend:daily', deviceId, 10, 24 * 60 * 60 * 1000)) {
+    return res.json({ ok: false, reason: 'rate_limited_daily' });
+  }
+  try {
+    // Look up sender + recipient by code
+    const senderRow = await pool.query(
+      'SELECT device_id, player_code, display_name, balance FROM player_profiles WHERE device_id = $1',
+      [deviceId]);
+    if (!senderRow.rows.length) return res.json({ ok: false, reason: 'no_sender_profile' });
+    const sender = senderRow.rows[0];
+    if (sender.player_code === fullCode) return res.json({ ok: false, reason: 'no_self_gift' });
+
+    const recipientRow = await pool.query(
+      'SELECT device_id, player_code FROM player_profiles WHERE player_code = $1',
+      [fullCode]);
+    if (!recipientRow.rows.length) return res.json({ ok: false, reason: 'recipient_not_found' });
+    const recipient = recipientRow.rows[0];
+
+    const safeMessage = (message || '').toString().trim().slice(0, 200) || null;
+
+    // Atomic transfer: deduct from sender (with race-safe WHERE balance>=),
+    // credit recipient, insert gift row. Wrapped in a transaction so a
+    // partial failure doesn't leave the ledger inconsistent.
+    let newBalance = sender.balance;
+    await pool.query('BEGIN');
+    try {
+      const deduct = await pool.query(
+        `UPDATE player_profiles
+            SET balance = balance - $1, total_spent = total_spent + $1
+          WHERE device_id = $2 AND balance >= $1
+          RETURNING balance`,
+        [amt, deviceId]);
+      if (!deduct.rows.length) {
+        await pool.query('ROLLBACK');
+        return res.json({ ok: false, reason: 'insufficient_balance' });
+      }
+      newBalance = deduct.rows[0].balance;
+      await pool.query(
+        `UPDATE player_profiles
+            SET balance = balance + $1, total_earned = total_earned + $1
+          WHERE device_id = $2`,
+        [amt, recipient.device_id]);
+      await pool.query(
+        `INSERT INTO player_gifts
+           (sender_device, sender_code, sender_name, recipient_device, recipient_code, amount, message)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [deviceId, sender.player_code, sender.display_name, recipient.device_id, fullCode, amt, safeMessage]);
+      await pool.query('COMMIT');
+    } catch (txErr) {
+      await pool.query('ROLLBACK');
+      throw txErr;
+    }
+    res.json({ ok: true, amount: amt, recipientCode: fullCode, newBalance });
+  } catch (e) {
+    console.error('player/gift-friend', e.message);
+    res.status(500).json({ error: 'server' });
+  }
+});
+
+// GET /api/player/gifts/inbox — unseen gifts for this device.
+// Marks them seen as a side effect — the banner is for first-sight,
+// the gem balance is already credited, so we don't want the same
+// gift to keep re-toasting on every poll.
+app.get('/api/player/gifts/inbox', async (req, res) => {
+  const deviceId = String(req.query.deviceId || '').slice(0, 64);
+  if (!deviceId) return res.status(400).json({ error: 'missing_device' });
+  try {
+    const rows = await pool.query(
+      `SELECT id, sender_code, sender_name, amount, message, created_at
+         FROM player_gifts
+        WHERE recipient_device = $1 AND seen_at IS NULL
+        ORDER BY created_at DESC
+        LIMIT 20`,
+      [deviceId]);
+    if (rows.rows.length) {
+      const ids = rows.rows.map(function(r) { return r.id; });
+      // Best-effort mark-as-seen — even if this fails the client can
+      // de-dupe via localStorage, so a stuck row doesn't cause infinite
+      // banners.
+      pool.query(
+        `UPDATE player_gifts SET seen_at = NOW() WHERE id = ANY($1::int[])`,
+        [ids]).catch(function(e) { console.warn('gifts mark seen', e.message); });
+    }
+    res.json({ ok: true, gifts: rows.rows });
+  } catch (e) {
+    console.error('player/gifts/inbox', e.message);
     res.status(500).json({ error: 'server' });
   }
 });

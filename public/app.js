@@ -463,7 +463,11 @@
         '<input type="number" id="duel-amount" value="0" min="0" style="width:80px;padding:6px;border:1px solid rgba(0,0,0,0.12);border-radius:8px;font-family:inherit;font-size:14px;text-align:center;font-weight:700">' +
         '<span style="font-size:12px;color:#6F6E68">💎 · המנצח לוקח הכל (minus 5% עמלה)</span>' +
       '</div>' +
-      '<button class="btn" id="duel-send" style="width:100%;margin-bottom:10px">שלח אתגר ⚔️</button>' +
+      '<button class="btn" id="duel-send" style="width:100%;margin-bottom:6px">שלח אתגר ⚔️</button>' +
+      // Send gift — peaceful counterpart to a duel. Same input (BLOOM-XXXX
+      // suffix), small gem amount, optional message. Recipient sees a
+      // toast banner next time they open the app.
+      '<button class="btn" id="duel-gift" style="width:100%;margin-bottom:10px;background:transparent;color:#BA7517;border:1px solid #FAC775">🎁 שלח מתנה לחבר</button>' +
       '<div id="duel-error" style="color:#C8472F;font-size:12px;text-align:center;min-height:18px"></div>' +
       '<div style="border-top:1px solid rgba(0,0,0,0.06);margin-top:10px;padding-top:10px">' +
         '<div style="font-size:12px;font-weight:600;margin-bottom:6px">הדו-קרבות שלי</div>' +
@@ -475,6 +479,15 @@
 
     // Load my duels
     loadMyDuels();
+
+    // Gift-to-friend opens a dedicated modal — uses the SAME suffix as
+    // the duel form is pre-filled with (if the player typed one) so a
+    // single typed code can be reused for either "challenge" or "gift".
+    var giftBtn = document.getElementById('duel-gift');
+    if (giftBtn) giftBtn.onclick = function() {
+      var prefSuf = ((document.getElementById('duel-opponent-suffix') || {}).value || '').trim().toUpperCase().replace(/[^A-HJ-NP-Z2-9]/g, '');
+      showGiftFriendModal(prefSuf);
+    };
 
     // Difficulty pill picker (challenger picks one — both players get it)
     var selectedDuelDifficulty = 'default';
@@ -1271,6 +1284,131 @@
   }
   // Expose for boot.
   window.__bloomCheckIncomingDuels = checkIncomingDuels;
+
+  // ============================================================
+  // SEND-GIFT MODAL — player-to-player gem transfer
+  // ============================================================
+  // Counterpart to the duel modal: same BLOOM-XXXX input shape, but
+  // it sends gems peacefully instead of starting a wager. Recipient
+  // sees a toast banner the next time they open the app (handled by
+  // pollGiftInbox in src/05a-home-v2.js).
+  function showGiftFriendModal(prefillSuffix) {
+    var existing = document.getElementById('gift-friend-modal');
+    if (existing) existing.remove();
+    var modal = document.createElement('div');
+    modal.id = 'gift-friend-modal';
+    modal.className = 'info-modal';
+    modal.style.cssText =
+      'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:10000;' +
+      'display:flex;align-items:center;justify-content:center;direction:rtl;padding:16px';
+    var preSuf = (prefillSuffix || '').toString().slice(0, 4).toUpperCase();
+    modal.innerHTML =
+      '<div class="info-card" style="background:#FFF;border-radius:18px;padding:22px 22px;max-width:340px;width:100%;direction:rtl;box-shadow:0 20px 60px rgba(0,0,0,0.3);border:1px solid #FAC775">' +
+        '<div style="font-size:17px;font-weight:800;margin-bottom:4px;color:#1C1A18">🎁 שלח מתנה לחבר</div>' +
+        '<div style="font-size:12px;color:#6F6E68;margin-bottom:14px">תן 💎 לחבר/ה במשחק. הם יקבלו הודעה ברגע שיפתחו את BLOOM.</div>' +
+
+        '<div style="font-size:11px;font-weight:600;margin-bottom:4px;color:#1C1A18">קוד הנמען</div>' +
+        '<div dir="ltr" style="display:flex;align-items:stretch;border:1px solid rgba(0,0,0,0.12);border-radius:8px;overflow:hidden;margin-bottom:10px;background:#FFFFFF;direction:ltr">' +
+          '<span style="background:#1C1A18;color:#FAC775;padding:8px 10px;font-weight:700;letter-spacing:0.08em;font-family:ui-monospace,monospace;display:flex;align-items:center">BLOOM-</span>' +
+          '<input id="gift-recipient-suffix" dir="ltr" maxlength="4" inputmode="latin" autocapitalize="characters" autocomplete="off" placeholder="XXXX" value="' + escDuelHtml(preSuf) + '" style="flex:1;padding:8px;border:0;font-family:ui-monospace,monospace;font-size:16px;text-transform:uppercase;letter-spacing:0.2em;font-weight:700;text-align:center;outline:none;background:transparent;direction:ltr">' +
+        '</div>' +
+
+        '<div style="font-size:11px;font-weight:600;margin-bottom:4px;color:#1C1A18">סכום (5-200 💎)</div>' +
+        '<div id="gift-amount-pills" style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:10px">' +
+          '<button type="button" class="gift-pill selected" data-amt="10" style="flex:1;min-width:50px;padding:6px 8px;font-size:12px;border:1px solid rgba(0,0,0,0.12);border-radius:6px;background:#1C1A18;color:#FAC775;font-weight:700;cursor:pointer">10💎</button>' +
+          '<button type="button" class="gift-pill" data-amt="25" style="flex:1;min-width:50px;padding:6px 8px;font-size:12px;border:1px solid rgba(0,0,0,0.12);border-radius:6px;background:#F5F2EC;color:#1C1A18;font-weight:700;cursor:pointer">25💎</button>' +
+          '<button type="button" class="gift-pill" data-amt="50" style="flex:1;min-width:50px;padding:6px 8px;font-size:12px;border:1px solid rgba(0,0,0,0.12);border-radius:6px;background:#F5F2EC;color:#1C1A18;font-weight:700;cursor:pointer">50💎</button>' +
+          '<button type="button" class="gift-pill" data-amt="100" style="flex:1;min-width:50px;padding:6px 8px;font-size:12px;border:1px solid rgba(0,0,0,0.12);border-radius:6px;background:#F5F2EC;color:#1C1A18;font-weight:700;cursor:pointer">100💎</button>' +
+        '</div>' +
+
+        '<div style="font-size:11px;font-weight:600;margin-bottom:4px;color:#1C1A18">הודעה (אופציונלי)</div>' +
+        '<input id="gift-message" maxlength="120" placeholder="שתהנה!" style="width:100%;padding:8px;border:1px solid rgba(0,0,0,0.12);border-radius:8px;font-size:13px;font-family:inherit;margin-bottom:14px;direction:rtl">' +
+
+        '<button class="btn" id="gift-send" style="width:100%;background:linear-gradient(135deg,#FAC775,#BA7517);color:#FFF;font-weight:800">שלח 🎁</button>' +
+        '<div id="gift-error" style="color:#C8472F;font-size:12px;text-align:center;min-height:18px;margin-top:8px"></div>' +
+        '<button class="btn secondary" style="width:100%;margin-top:6px;background:transparent;color:#6F6E68" onclick="document.getElementById(\'gift-friend-modal\').remove()">סגור</button>' +
+      '</div>';
+    document.body.appendChild(modal);
+    modal.onclick = function(e) { if (e.target === modal) modal.remove(); };
+
+    // Amount pill picker
+    var chosenAmt = 10;
+    modal.querySelectorAll('.gift-pill').forEach(function(pill) {
+      pill.onclick = function() {
+        modal.querySelectorAll('.gift-pill').forEach(function(p) {
+          p.classList.remove('selected');
+          p.style.background = '#F5F2EC';
+          p.style.color = '#1C1A18';
+        });
+        pill.classList.add('selected');
+        pill.style.background = '#1C1A18';
+        pill.style.color = '#FAC775';
+        chosenAmt = parseInt(pill.getAttribute('data-amt'), 10) || 10;
+      };
+    });
+
+    // Paste-normalize the recipient field same as the duel modal
+    var sufEl = document.getElementById('gift-recipient-suffix');
+    if (sufEl) sufEl.addEventListener('input', function() {
+      var cleaned = (sufEl.value || '').toUpperCase().replace(/^BLOOM-?/, '').replace(/[^A-HJ-NP-Z2-9]/g, '').slice(0, 4);
+      if (cleaned !== sufEl.value) sufEl.value = cleaned;
+    });
+
+    document.getElementById('gift-send').onclick = async function() {
+      var btn = this;
+      var suf = (sufEl.value || '').trim().toUpperCase().replace(/[^A-HJ-NP-Z2-9]/g, '');
+      var msg = (document.getElementById('gift-message').value || '').trim().slice(0, 120);
+      var errEl = document.getElementById('gift-error');
+      errEl.style.color = '#C8472F';
+      errEl.textContent = '';
+      if (suf.length !== 4) { errEl.textContent = 'הקוד חייב להיות 4 תווים'; return; }
+      if (typeof playerBalance !== 'undefined' && playerBalance < chosenAmt) {
+        errEl.textContent = '💎 אין מספיק קרדיטים (יתרה: ' + playerBalance + ')';
+        return;
+      }
+      btn.disabled = true;
+      btn.textContent = '...';
+      try {
+        var r = await fetch(API_BASE + '/api/player/gift-friend', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            deviceId: deviceId,
+            token: deviceToken,
+            recipientCode: 'BLOOM-' + suf,
+            amount: chosenAmt,
+            message: msg || null
+          })
+        });
+        var d = await r.json();
+        btn.disabled = false;
+        btn.textContent = 'שלח 🎁';
+        if (d && d.ok) {
+          // Local balance update + UI feedback
+          if (typeof playerBalance !== 'undefined') { playerBalance = d.newBalance; }
+          if (typeof updateBalanceDisplay === 'function') updateBalanceDisplay();
+          errEl.style.color = '#2E8B6F';
+          errEl.textContent = '✓ נשלח! ' + (d.recipientCode || ('BLOOM-' + suf)) + ' יקבל/ת הודעה';
+          if (typeof showCreditToast === 'function') showCreditToast(-chosenAmt, 'מתנה ל-' + suf);
+          setTimeout(function() { modal.remove(); }, 1400);
+        } else {
+          var msgs = {
+            recipient_not_found: 'שחקן לא נמצא',
+            no_self_gift: 'אי אפשר לשלוח לעצמך',
+            insufficient_balance: 'אין מספיק 💎',
+            bad_code: 'קוד לא חוקי',
+            bad_amount: 'סכום לא חוקי',
+            rate_limited_daily: 'שלחת היום יותר מדי מתנות. נסה מחר'
+          };
+          errEl.textContent = msgs[d && d.reason] || 'שגיאה';
+        }
+      } catch (e) {
+        btn.disabled = false;
+        btn.textContent = 'שלח 🎁';
+        errEl.textContent = 'שגיאת חיבור';
+      }
+    };
+  }
 
   // ============ IN-GAME TILE SHOP ============
   var tilePrices = null; // fetched once from server
@@ -3294,6 +3432,24 @@
       if (document.getElementById('home-screen')) showDailyLoginReward();
     }, 600);
 
+    // Addiction triggers — checked after the daily login modal has had
+    // a chance to render. Order matters: comeback wins over streak-danger
+    // because comeback fires for absent players (more urgent re-engage).
+    setTimeout(function() {
+      if (!document.getElementById('home-screen')) return;
+      if (typeof maybeShowComebackBonus === 'function') {
+        if (maybeShowComebackBonus()) return; // showed comeback, skip streak-danger
+      }
+      if (typeof maybeShowStreakDangerBanner === 'function') maybeShowStreakDangerBanner();
+    }, 1200);
+
+    // Gift inbox poll — single fetch on home open. Recipient sees a
+    // banner for any unseen player-to-player gifts. The server marks
+    // them seen on read so we never re-toast the same gift.
+    setTimeout(function() {
+      if (typeof pollGiftInbox === 'function') pollGiftInbox();
+    }, 1500);
+
     // Auto-tour for first-time visitors (mirrors v1 behaviour)
     if (!hasSeenTour() && getOnboardStep() === 0) {
       setTimeout(function() {
@@ -3308,6 +3464,246 @@
     if (h) h.remove();
     const app = document.querySelector('.app');
     if (app) app.removeAttribute('data-home');
+  }
+
+  // ============================================================
+  // ADDICTION TRIGGERS — streak danger / comeback / gift inbox
+  // ============================================================
+
+  // §Streak danger — fires once per evening when a player with a real
+  // streak (≥3 days) opens the app late and HASN'T played today yet.
+  // The point isn't to punish, it's to give the player a clear "you
+  // worked for this, don't lose it" reminder when the loss window is
+  // closing. Persists a "dismissed for today" flag so a player who
+  // saw the banner already isn't re-nagged on every navigation.
+  function maybeShowStreakDangerBanner() {
+    try {
+      if (typeof loadStreak !== 'function') return;
+      const s = loadStreak();
+      if (!s || (s.count | 0) < 3) return;
+      const today = (typeof todayInIsrael === 'function') ? todayInIsrael() : null;
+      if (!today) return;
+      const playedToday = !!localStorage.getItem(DAILY_PLAYED_PREFIX + today);
+      if (playedToday) return;
+      // Israel local time check
+      const israelNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Jerusalem' }));
+      const hour = israelNow.getHours();
+      if (hour < 19) return; // only after 19:00 IL
+      // Dismissed-today guard so we don't re-fire on every home re-render
+      const dismissKey = 'bloom_streak_danger_dismissed:' + today;
+      if (localStorage.getItem(dismissKey)) return;
+      const hoursLeft = 24 - hour;
+      const minutesLeft = 60 - israelNow.getMinutes();
+      const timeText = hoursLeft > 1
+        ? hoursLeft + ' שעות'
+        : (minutesLeft + ' דקות');
+      const banner = document.createElement('div');
+      banner.id = 'streak-danger-banner';
+      banner.style.cssText =
+        'position:fixed;top:14px;left:50%;transform:translateX(-50%) translateY(-20px);' +
+        'opacity:0;transition:opacity 240ms ease-out,transform 240ms ease-out;' +
+        'z-index:9999;background:linear-gradient(135deg,#FF6B6B,#FAC775);' +
+        'border-radius:14px;padding:12px 18px;direction:rtl;' +
+        'font-family:inherit;font-size:13px;color:#1C1A18;font-weight:700;' +
+        'box-shadow:0 8px 24px rgba(255,107,107,0.35);cursor:pointer;' +
+        'max-width:340px;width:calc(100vw - 32px);';
+      banner.innerHTML =
+        '<div style="display:flex;align-items:center;gap:12px">' +
+          '<div style="font-size:28px">🔥</div>' +
+          '<div style="flex:1;min-width:0">' +
+            '<div style="font-weight:900;font-size:14px">רצף ' + (s.count | 0) + ' ימים בסכנה!</div>' +
+            '<div style="font-size:11px;opacity:0.85;margin-top:2px">נשארו ' + timeText + ' · לחץ לשחק</div>' +
+          '</div>' +
+          '<div style="font-size:14px;opacity:0.7">✕</div>' +
+        '</div>';
+      document.body.appendChild(banner);
+      requestAnimationFrame(function() {
+        banner.style.opacity = '1';
+        banner.style.transform = 'translateX(-50%) translateY(0)';
+      });
+      const dismiss = function() {
+        banner.style.opacity = '0';
+        banner.style.transform = 'translateX(-50%) translateY(-20px)';
+        setTimeout(function() { banner.remove(); }, 250);
+        try { localStorage.setItem(dismissKey, '1'); } catch (e) {}
+      };
+      banner.onclick = function(e) {
+        if (e.target && e.target.textContent === '✕') { dismiss(); return; }
+        dismiss();
+        // Tap = "I'll play now" — open the daily challenge.
+        hideHomeV2();
+        if (typeof init === 'function') init('daily');
+      };
+      // Auto-hide after 9 seconds so we don't block the home indefinitely
+      setTimeout(dismiss, 9000);
+    } catch (e) { /* never throw from a notification path */ }
+  }
+
+  // §Comeback bonus — fires when the player returns after a ≥2-day
+  // absence. Server enforces the actual reward amount via the new
+  // 'comeback' earn action; the client only requests it. Tracks
+  // last_play_date locally so we know how long they were away.
+  const LAST_PLAY_KEY = 'bloom_last_play_date';
+  function recordLastPlayDate() {
+    try {
+      const today = (typeof todayInIsrael === 'function') ? todayInIsrael() : null;
+      if (today) localStorage.setItem(LAST_PLAY_KEY, today);
+    } catch (e) {}
+  }
+  try { window.__bloomRecordLastPlay = recordLastPlayDate; } catch (e) {}
+
+  function maybeShowComebackBonus() {
+    try {
+      const lastPlay = localStorage.getItem(LAST_PLAY_KEY);
+      if (!lastPlay) {
+        // First time we have this signal — seed it and skip (we don't
+        // know how long they were away). Will trigger correctly next time.
+        recordLastPlayDate();
+        return false;
+      }
+      const today = (typeof todayInIsrael === 'function') ? todayInIsrael() : null;
+      if (!today || today === lastPlay) return false;
+      // Compute day delta. todayInIsrael returns 'YYYY-MM-DD', parseable as UTC.
+      const daysSince = Math.floor((new Date(today) - new Date(lastPlay)) / (24 * 60 * 60 * 1000));
+      if (daysSince < 2) return false;
+      if (daysSince > 365) return false; // sanity — probably a clock skew
+      // Per-day dedup so a player who opens the app 5 times today only
+      // sees the comeback modal once.
+      const claimedKey = 'bloom_comeback_claimed:' + today;
+      if (localStorage.getItem(claimedKey)) return false;
+      // Fire the server reward + show the modal
+      try { localStorage.setItem(claimedKey, '1'); } catch (e) {}
+      const expectedReward = daysSince >= 30 ? 200 : daysSince >= 7 ? 100 : 50;
+      // Show modal immediately with an optimistic amount; server confirms it
+      showComebackModal(daysSince, expectedReward);
+      if (typeof earnCredits === 'function') {
+        earnCredits('comeback', { daysSince: daysSince });
+      }
+      // Update the last-play date so we don't double-fire tomorrow
+      recordLastPlayDate();
+      return true;
+    } catch (e) { return false; }
+  }
+
+  function showComebackModal(daysSince, reward) {
+    if (document.getElementById('comeback-modal-overlay')) return;
+    const overlay = document.createElement('div');
+    overlay.id = 'comeback-modal-overlay';
+    overlay.style.cssText =
+      'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9998;' +
+      'display:flex;align-items:center;justify-content:center;direction:rtl;' +
+      'animation:fadeIn 0.25s ease-out;';
+    const headline = daysSince >= 30 ? 'מזמן לא ראינו אותך!' : daysSince >= 7 ? 'ברוך השב!' : 'נחמד שחזרת';
+    const sub = daysSince >= 30 ? 'חודש שלם בלעדיך' : daysSince + ' ימים בלעדיך';
+    overlay.innerHTML =
+      '<div style="background:linear-gradient(180deg,#FFF,#FFF8E7);border-radius:20px;padding:28px 24px;' +
+        'max-width:320px;width:90%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.3);' +
+        'border:2px solid #FAC775;animation:comebackPop 0.5s cubic-bezier(.2,1.4,.4,1)">' +
+        '<div style="font-size:48px;margin-bottom:8px">🎁</div>' +
+        '<div style="font-size:22px;font-weight:900;color:#1C1A18">' + headline + '</div>' +
+        '<div style="font-size:13px;color:#6F6E68;margin-top:6px">' + sub + '</div>' +
+        '<div style="margin:20px 0;padding:16px;background:linear-gradient(135deg,#FAC775,#BA7517);' +
+          'border-radius:14px;color:#FFF">' +
+          '<div style="font-size:11px;font-weight:600;opacity:0.85">בונוס חזרה</div>' +
+          '<div style="font-size:34px;font-weight:900;line-height:1.1;margin-top:2px">+' + reward + ' 💎</div>' +
+        '</div>' +
+        '<button id="comeback-claim" style="width:100%;padding:14px;border:none;border-radius:12px;' +
+          'background:#1C1A18;color:#FAC775;font-size:16px;font-weight:800;cursor:pointer;font-family:inherit">' +
+          'בוא נשחק! 🎮' +
+        '</button>' +
+      '</div>';
+    document.body.appendChild(overlay);
+    const close = function() {
+      overlay.style.opacity = '0';
+      overlay.style.transition = 'opacity 0.25s ease-in';
+      setTimeout(function() { overlay.remove(); }, 250);
+    };
+    document.getElementById('comeback-claim').onclick = function() {
+      close();
+      hideHomeV2();
+      if (typeof init === 'function') init('practice', { fresh: true });
+    };
+    overlay.onclick = function(e) { if (e.target === overlay) close(); };
+  }
+
+  // §Player gift inbox — fetches unseen player-to-player gifts and
+  // surfaces them as toast banners. Server marks them seen on read.
+  // We also dedup client-side via localStorage to defend against the
+  // rare race where the server's UPDATE failed silently.
+  const GIFT_SEEN_KEY = 'bloom_gift_seen_ids';
+  function loadSeenGifts() {
+    try { return new Set(JSON.parse(localStorage.getItem(GIFT_SEEN_KEY) || '[]')); }
+    catch (e) { return new Set(); }
+  }
+  function markGiftSeen(id) {
+    try {
+      const seen = loadSeenGifts();
+      seen.add(id);
+      const arr = Array.from(seen);
+      // Cap at 500 ids
+      const trimmed = arr.length > 500 ? arr.slice(-500) : arr;
+      localStorage.setItem(GIFT_SEEN_KEY, JSON.stringify(trimmed));
+    } catch (e) {}
+  }
+  function pollGiftInbox() {
+    if (typeof deviceId === 'undefined' || !deviceId) return;
+    fetch(API_BASE + '/api/player/gifts/inbox?deviceId=' + encodeURIComponent(deviceId))
+      .then(function(r) { return r.ok ? r.json() : null; })
+      .then(function(data) {
+        if (!data || !Array.isArray(data.gifts) || !data.gifts.length) return;
+        const seen = loadSeenGifts();
+        let delay = 0;
+        data.gifts.forEach(function(g) {
+          if (seen.has(g.id)) return; // we already surfaced this one
+          // Stagger banners so a player who got 3 gifts at once sees
+          // them sequentially, not stacked on top of each other.
+          setTimeout(function() { showGiftBanner(g); }, delay);
+          markGiftSeen(g.id);
+          delay += 800;
+        });
+        // The server credited the balance already — pull a fresh value
+        // so the home pid balance refreshes immediately.
+        if (data.gifts.length && typeof fetchPlayerCode === 'function') fetchPlayerCode();
+      })
+      .catch(function() { /* silent — best-effort polling */ });
+  }
+  function showGiftBanner(gift) {
+    const senderName = (gift.sender_name || gift.sender_code || 'שחקן').toString().slice(0, 40);
+    const amount = gift.amount | 0;
+    const msg = (gift.message || '').toString().slice(0, 120);
+    const banner = document.createElement('div');
+    banner.style.cssText =
+      'position:fixed;top:14px;left:50%;transform:translateX(-50%) translateY(-20px);' +
+      'opacity:0;transition:opacity 240ms ease-out,transform 240ms ease-out;' +
+      'z-index:9999;background:linear-gradient(135deg,#1C1A18,#2A2724);' +
+      'border:2px solid #FAC775;border-radius:14px;padding:12px 16px;direction:rtl;' +
+      'font-family:inherit;font-size:13px;color:#FAC775;' +
+      'box-shadow:0 8px 24px rgba(186,117,23,0.4);cursor:pointer;' +
+      'max-width:340px;width:calc(100vw - 32px);';
+    banner.innerHTML =
+      '<div style="display:flex;align-items:center;gap:12px">' +
+        '<div style="font-size:30px">🎁</div>' +
+        '<div style="flex:1;min-width:0">' +
+          '<div style="font-weight:900;color:#FFF;font-size:14px">' +
+            (typeof escapeHtml === 'function' ? escapeHtml(senderName) : senderName) +
+            ' שלח/ה לך מתנה!</div>' +
+          '<div style="font-size:16px;font-weight:800;margin-top:4px">+' + amount + ' 💎</div>' +
+          (msg ? '<div style="font-size:11px;color:#A8A6A0;margin-top:4px;font-style:italic">"' +
+            (typeof escapeHtml === 'function' ? escapeHtml(msg) : msg) + '"</div>' : '') +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(banner);
+    requestAnimationFrame(function() {
+      banner.style.opacity = '1';
+      banner.style.transform = 'translateX(-50%) translateY(0)';
+    });
+    const dismiss = function() {
+      banner.style.opacity = '0';
+      banner.style.transform = 'translateX(-50%) translateY(-20px)';
+      setTimeout(function() { banner.remove(); }, 250);
+    };
+    banner.onclick = dismiss;
+    setTimeout(dismiss, 5500);
   }
 
   // ── §A1: personal hero banner ──
@@ -7685,6 +8081,10 @@
     gameTotalMerges = 0;
     gameStartTime = Date.now();
     trackEvent('game_start', { mode: mode });
+    // Touch the "last play date" tracker so the comeback bonus on home
+    // can compute days-since-last-play accurately. Side-effect free
+    // (write-only); never throws.
+    try { if (window.__bloomRecordLastPlay) window.__bloomRecordLastPlay(); } catch (e) {}
     leaderboard = [];
     dailyRank = null;
     dailyTotal = null;
