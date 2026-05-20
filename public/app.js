@@ -123,6 +123,97 @@
     else document.addEventListener('DOMContentLoaded', syncBodySkinClass, { once: true });
   }
 
+  // ─── Aurora-only juice helpers ───
+  // Every function checks auroraIsActive() before running, so they're safe to
+  // call unconditionally from the engine — they no-op when Aurora isn't the
+  // active skin (most players). Saves wrapping every call site in an if.
+  const AURORA_CHAIN_TEXTS = ['', '', 'GREAT!', 'AMAZING!', 'INSANE!', 'GODLIKE!'];
+  const AURORA_CHAIN_CLASSES = ['', '', 'good', 'great', 'amazing', 'godlike'];
+
+  function auroraIsActive() {
+    return !!(document.body && document.body.classList.contains('skin-aurora-active'));
+  }
+
+  // Spawn a "GREAT!" / "AMAZING!" / "INSANE!" / "GODLIKE!" text burst at the
+  // top of the grid. Called on merge with chainCount >= 2.
+  function auroraShowTextBurst(chainNum) {
+    if (!auroraIsActive() || chainNum < 2) return;
+    const gridEl = document.getElementById('grid') || document.querySelector('.grid');
+    if (!gridEl || !gridEl.parentElement) return;
+    let burst = document.getElementById('aurora-text-burst');
+    if (!burst) {
+      burst = document.createElement('div');
+      burst.id = 'aurora-text-burst';
+      gridEl.parentElement.style.position = gridEl.parentElement.style.position || 'relative';
+      gridEl.parentElement.appendChild(burst);
+    }
+    const tier = Math.min(chainNum, 5);
+    burst.textContent = AURORA_CHAIN_TEXTS[tier] || 'GREAT!';
+    burst.className = 'aurora-text-burst aurora-text-burst-' + (AURORA_CHAIN_CLASSES[tier] || 'good');
+    // Restart the animation by toggling the class
+    burst.classList.remove('show');
+    void burst.offsetWidth;
+    burst.classList.add('show');
+  }
+
+  // Quick scale animation on the score counter when points are added.
+  // Call after updating the score number in the DOM.
+  function auroraScoreBump() {
+    if (!auroraIsActive()) return;
+    const scoreEls = document.querySelectorAll('#score, .score, .stat-primary .stat-val');
+    scoreEls.forEach(function(el) {
+      el.classList.remove('bump');
+      void el.offsetWidth;
+      el.classList.add('bump');
+      setTimeout(function() { el.classList.remove('bump'); }, 400);
+    });
+  }
+
+  // Fly a few small gold particles from cell → score counter, simulating
+  // "points entering your pocket" (Vampire Survivors style).
+  function auroraFlyParticlesToScore(cellEl, count) {
+    if (!auroraIsActive() || !cellEl) return;
+    const scoreEl = document.querySelector('#score, .score, .stat-primary .stat-val');
+    if (!scoreEl) return;
+    const sRect = scoreEl.getBoundingClientRect();
+    const cRect = cellEl.getBoundingClientRect();
+    const targetX = sRect.left + sRect.width / 2;
+    const targetY = sRect.top + sRect.height / 2;
+    const n = Math.min(8, Math.max(1, count | 0));
+    for (let i = 0; i < n; i++) {
+      const p = document.createElement('div');
+      p.className = 'aurora-score-particle';
+      const startX = cRect.left + cRect.width / 2 + (Math.random() - 0.5) * 30;
+      const startY = cRect.top + cRect.height / 2 + (Math.random() - 0.5) * 30;
+      p.style.left = startX + 'px';
+      p.style.top = startY + 'px';
+      document.body.appendChild(p);
+      setTimeout(function() {
+        p.style.left = targetX + 'px';
+        p.style.top = targetY + 'px';
+      }, 10 + i * 40);
+      setTimeout(function() { p.remove(); }, 800 + i * 40);
+    }
+  }
+
+  // Apply a random scale-peak to a cell's merge animation, so consecutive
+  // merges don't look identical. Slot-machine variance for the brain.
+  function auroraSetMergeVariance(cellEl) {
+    if (!auroraIsActive() || !cellEl) return;
+    const peak = (1.3 + Math.random() * 0.2).toFixed(2);
+    cellEl.style.setProperty('--merge-peak', peak);
+  }
+
+  // Expose globally so files outside the same IIFE (or curious devs in the
+  // console) can reach them. Within the IIFE the names also work directly.
+  if (typeof window !== 'undefined') {
+    window.auroraIsActive = auroraIsActive;
+    window.auroraShowTextBurst = auroraShowTextBurst;
+    window.auroraScoreBump = auroraScoreBump;
+    window.auroraFlyParticlesToScore = auroraFlyParticlesToScore;
+    window.auroraSetMergeVariance = auroraSetMergeVariance;
+  }
+
   // ============ THEME / SKIN ABSTRACTION ============
   function getActiveTiers() {
     var pack = SKIN_PACKS[activeSkinId];
@@ -7294,7 +7385,18 @@
       // tiles above the destroyed cells, which now slot in seamlessly
       // during the highlight pulse.
       applyGravity();
-      render({ merging: merged });
+      render({ merging: merged, mergeChain: chainCount });
+      // Aurora juice: text burst on chains 2+, score bump on every merge,
+      // particles fly from the merged cell to the score counter. All no-op
+      // for non-Aurora skins.
+      if (typeof auroraShowTextBurst === 'function') auroraShowTextBurst(chainCount);
+      if (typeof auroraScoreBump === 'function') auroraScoreBump();
+      if (typeof auroraFlyParticlesToScore === 'function') {
+        var mergedCellEl = document.querySelector(
+          '#grid .cell[data-r="' + merged[0] + '"][data-c="' + merged[1] + '"]'
+        );
+        if (mergedCellEl) auroraFlyParticlesToScore(mergedCellEl, Math.min(6, 2 + chainCount));
+      }
       await gsleep(150);
       render();
       await gsleep(80);
@@ -8455,6 +8557,9 @@
         cell.dataset.c = c;
         if (t > 0) {
           cell.classList.add('filled');
+          // tier-N (1..8) class — used by Aurora CSS for per-tier shadows,
+          // shimmer (tier-8), breathing (tier-6/7). Other skins ignore it.
+          cell.classList.add('tier-' + t);
           if (t >= 5 && t < MAX_TIER) cell.classList.add('tier-high');
           if (t === MAX_TIER) cell.classList.add('tier-crown');
           const ti = getActiveTiers()[t];
@@ -8462,7 +8567,15 @@
           cell.style.color = ti.fg;
           cell.innerHTML = ti.svg;
           if (opts.appearing && opts.appearing[0] === r && opts.appearing[1] === c) cell.classList.add('appearing');
-          if (opts.merging && opts.merging[0] === r && opts.merging[1] === c) cell.classList.add('merging');
+          if (opts.merging && opts.merging[0] === r && opts.merging[1] === c) {
+            cell.classList.add('merging');
+            // Aurora variance + chain class — controls auroraMergeBig variant
+            // and randomises the scale peak. No-op for non-Aurora skins.
+            if (opts.mergeChain && opts.mergeChain >= 2) {
+              cell.classList.add('chain-' + Math.min(8, opts.mergeChain));
+            }
+            if (typeof auroraSetMergeVariance === 'function') auroraSetMergeVariance(cell);
+          }
         }
         if (debugCells) {
           var tag = document.createElement('span');

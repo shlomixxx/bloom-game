@@ -1471,7 +1471,18 @@
       // tiles above the destroyed cells, which now slot in seamlessly
       // during the highlight pulse.
       applyGravity();
-      render({ merging: merged });
+      render({ merging: merged, mergeChain: chainCount });
+      // Aurora juice: text burst on chains 2+, score bump on every merge,
+      // particles fly from the merged cell to the score counter. All no-op
+      // for non-Aurora skins.
+      if (typeof auroraShowTextBurst === 'function') auroraShowTextBurst(chainCount);
+      if (typeof auroraScoreBump === 'function') auroraScoreBump();
+      if (typeof auroraFlyParticlesToScore === 'function') {
+        var mergedCellEl = document.querySelector(
+          '#grid .cell[data-r="' + merged[0] + '"][data-c="' + merged[1] + '"]'
+        );
+        if (mergedCellEl) auroraFlyParticlesToScore(mergedCellEl, Math.min(6, 2 + chainCount));
+      }
       await gsleep(150);
       render();
       await gsleep(80);

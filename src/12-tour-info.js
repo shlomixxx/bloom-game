@@ -805,6 +805,9 @@
         cell.dataset.c = c;
         if (t > 0) {
           cell.classList.add('filled');
+          // tier-N (1..8) class — used by Aurora CSS for per-tier shadows,
+          // shimmer (tier-8), breathing (tier-6/7). Other skins ignore it.
+          cell.classList.add('tier-' + t);
           if (t >= 5 && t < MAX_TIER) cell.classList.add('tier-high');
           if (t === MAX_TIER) cell.classList.add('tier-crown');
           const ti = getActiveTiers()[t];
@@ -812,7 +815,15 @@
           cell.style.color = ti.fg;
           cell.innerHTML = ti.svg;
           if (opts.appearing && opts.appearing[0] === r && opts.appearing[1] === c) cell.classList.add('appearing');
-          if (opts.merging && opts.merging[0] === r && opts.merging[1] === c) cell.classList.add('merging');
+          if (opts.merging && opts.merging[0] === r && opts.merging[1] === c) {
+            cell.classList.add('merging');
+            // Aurora variance + chain class — controls auroraMergeBig variant
+            // and randomises the scale peak. No-op for non-Aurora skins.
+            if (opts.mergeChain && opts.mergeChain >= 2) {
+              cell.classList.add('chain-' + Math.min(8, opts.mergeChain));
+            }
+            if (typeof auroraSetMergeVariance === 'function') auroraSetMergeVariance(cell);
+          }
         }
         if (debugCells) {
           var tag = document.createElement('span');
