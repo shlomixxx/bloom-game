@@ -537,17 +537,40 @@
     }
   }
 
-  function renderContestBoardRows(players) {
+  // Module-level state for the smart-board UX. Reset whenever the contest
+  // screen is unmounted (via stopContestRefresh -> teardown is implicit).
+  var contestBoardExpanded = false;
+  var contestBoardSearchTerm = '';
+
+  // displayScore: server already ranks by score+liveScore, but the row
+  // numbers should match — so add the live delta into the displayed total.
+  function contestDisplayScore(p) {
+    return (p.score | 0) + (p.liveScore == null ? 0 : (p.liveScore | 0));
+  }
+
+  // Render a (sub)set of player rows. The full ordered list is used for:
+  //   - leader-relative delta (so a slice in the middle still shows
+  //     "−12,420" to the top player, not to the slice-top)
+  //   - "next target" lookup for the player above ME, even when MY row
+  //     happens to be at the slice's top edge
+  // startIdx = rank offset for this slice (1-indexed rank = startIdx + i + 1).
+  function renderContestBoardRows(players, allPlayers, startIdx) {
     if (!players || players.length === 0) {
       return '<div class="contest-board-empty">אין עדיין שחקנים</div>';
     }
-    // Effective rank ordering already accounts for liveScore on the server,
-    // but the displayed score should also include the live delta so the
-    // numbers match the rank visually.
-    function displayScore(p) { return (p.score | 0) + (p.liveScore == null ? 0 : (p.liveScore | 0)); }
-    const topScore = displayScore(players[0]);
-    return players.map(function(p, i) {
-      const cls = i === 0 ? 'contest-board-row first' : p.you ? 'contest-board-row me' : 'contest-board-row';
+    var all = allPlayers || players;
+    var base = startIdx | 0;
+    var topScore = contestDisplayScore(all[0]);
+    return players.map(function(p, sliceI) {
+      var i = base + sliceI;
+      var rank = i + 1;
+      // Top-3 podium tinting (gold/silver/bronze) — visual status for the
+      // top of every contest, regardless of how many players are below.
+      var podiumCls = '';
+      if (i === 0) podiumCls = ' first podium-gold';
+      else if (i === 1) podiumCls = ' podium-silver';
+      else if (i === 2) podiumCls = ' podium-bronze';
+      const cls = 'contest-board-row' + podiumCls + (p.you ? ' me' : '');
       const youBadge = p.you ? ' <small>(אתה)</small>' : '';
       const games = p.games | 0;
       const tierIdx = (p.liveTier != null && p.liveTier > 0) ? (p.liveTier | 0) : (p.tier | 0);
@@ -566,7 +589,7 @@
         if (p.liveScore == null && last) parts.push(last);
         metaLine = '<div class="contest-board-meta">' + parts.join(' · ') + '</div>';
       }
-      const total = displayScore(p);
+      const total = contestDisplayScore(p);
       const delta = (i === 0) ? 0 : topScore - total;
       const deltaLine = delta > 0
         ? '<div class="contest-board-delta">−' + delta.toLocaleString() + '</div>'
@@ -589,9 +612,11 @@
       const spectateHint = spectatable
         ? '<div class="contest-spectate-hint" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>צפה</div>'
         : '';
+      // Rank badge — top-3 get the medal glyph in place of the number.
+      var rankBadge = (rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : rank);
       const avatarHtml = renderAvatarHtml(p.deviceId || p.name, 'sm');
-      return '<div class="' + cls + spectatableCls + '"' + rowAttrs + '>' +
-        '<div class="contest-board-rank">' + (i + 1) + '</div>' +
+      var rowHtml = '<div class="' + cls + spectatableCls + '"' + rowAttrs + '>' +
+        '<div class="contest-board-rank">' + rankBadge + '</div>' +
         tierBadge +
         '<div class="contest-board-name-col">' +
           '<div class="contest-board-name">' + watchBadge + avatarHtml + escapeHtml(p.name || 'אנונימי') + youBadge + '</div>' +
@@ -604,7 +629,169 @@
           deltaLine +
         '</div>' +
       '</div>';
+      // "Next target" pill — attached to MY row when there's someone
+      // directly above me. The single most-addictive contest moment is
+      // "you need just N more to overtake X" — surface it persistently
+      // instead of waiting for the overtake-alert poll to fire.
+      if (p.you && i > 0) {
+        var above = all[i - 1];
+        if (above) {
+          var gap = contestDisplayScore(above) - total;
+          if (gap > 0) {
+            rowHtml += '<div class="contest-next-target">' +
+              '<span class="contest-next-target-arrow">⚔️</span>' +
+              '<span>עוד <strong>' + gap.toLocaleString() + '</strong> כדי לעקוף את <strong>' + escapeHtml(above.name || 'אנונימי') + '</strong></span>' +
+            '</div>';
+          }
+        }
+      }
+      return rowHtml;
     }).join('');
+  }
+
+  // Smart contest board — keeps the flat layout for small contests and
+  // switches to a "top 5 + you ± neighbors" compact view (with optional
+  // expand-all + search) once the participant count makes the flat list
+  // feel like a scroll-wall. Single entry point for showContestLeaderboard
+  // + refreshContestBoardSilently so both stay in sync.
+  function renderContestSmartBoard(players) {
+    if (!players || players.length === 0) {
+      return '<div class="contest-board-empty">אין עדיין שחקנים</div>';
+    }
+    var total = players.length;
+    var SMART_THRESHOLD = 12;   // below this we render flat (no benefit from sectioning)
+    var SEARCH_THRESHOLD = 20;  // search input only kicks in for genuinely long lists
+
+    // Find ME in the list
+    var myIdx = -1;
+    for (var k = 0; k < players.length; k++) {
+      if (players[k].you) { myIdx = k; break; }
+    }
+
+    // Flat list path — small contests OR user explicitly expanded
+    if (total <= SMART_THRESHOLD || contestBoardExpanded) {
+      var controlsHtml = '';
+      var filtered = players;
+      if (contestBoardExpanded && total > SMART_THRESHOLD) {
+        if (total >= SEARCH_THRESHOLD) {
+          controlsHtml +=
+            '<div class="contest-board-search-wrap">' +
+              '<input type="text" class="contest-board-search" id="clb-search" placeholder="חיפוש לפי שם…" value="' + escapeHtml(contestBoardSearchTerm) + '" autocomplete="off">' +
+            '</div>';
+        }
+        controlsHtml +=
+          '<button type="button" class="contest-board-collapse-btn" id="clb-collapse">' +
+            '⌃ חזרה לתצוגה קומפקטית' +
+          '</button>';
+        var q = (contestBoardSearchTerm || '').trim().toLowerCase();
+        if (q) {
+          filtered = players.filter(function(p) {
+            return (p.name || '').toLowerCase().indexOf(q) >= 0;
+          });
+        }
+      }
+      // When filtering, we still want rank numbers to reflect actual
+      // contest position — pass startIdx=0 + the full ordered list so
+      // ranks aren't compressed by the filter.
+      var rowsHtml;
+      if (filtered.length === 0) {
+        rowsHtml = '<div class="contest-board-empty">לא נמצאו שחקנים מתאימים</div>';
+      } else if (filtered === players) {
+        rowsHtml = renderContestBoardRows(players, players, 0);
+      } else {
+        // Filtered list: render each row with its true rank (re-map by indexOf in players).
+        // Cheap because filter is rare and player counts are bounded by contest size.
+        var indexed = filtered.map(function(p) { return { p: p, i: players.indexOf(p) }; });
+        rowsHtml = indexed.map(function(entry) {
+          return renderContestBoardRows([entry.p], players, entry.i);
+        }).join('');
+      }
+      return controlsHtml + rowsHtml;
+    }
+
+    // Smart compact path: top-5 + (optional) my-window + expand button
+    var TOP_N = 5;
+    var WINDOW = 2;
+    var html = '';
+
+    // TOP section — always
+    html += '<div class="contest-board-section-label">🏆 המובילים</div>';
+    html += renderContestBoardRows(players.slice(0, TOP_N), players, 0);
+
+    // MY window — only if I'm beyond top-N
+    if (myIdx >= TOP_N) {
+      var fromIdx = Math.max(TOP_N, myIdx - WINDOW);
+      var toIdx = Math.min(total, myIdx + WINDOW + 1);
+      // Gap indicator if my-window doesn't touch the top section
+      if (fromIdx > TOP_N) {
+        html += '<div class="contest-board-divider"><span>· · ·</span></div>';
+      }
+      html += '<div class="contest-board-section-label">📍 המיקום שלך · #' + (myIdx + 1) + ' מתוך ' + total + '</div>';
+      html += renderContestBoardRows(players.slice(fromIdx, toIdx), players, fromIdx);
+      if (toIdx < total) {
+        html += '<div class="contest-board-divider"><span>· · ·</span></div>';
+      }
+    } else if (myIdx === -1 && total > TOP_N) {
+      // Not playing yet but the contest is big — give a hint
+      html += '<div class="contest-board-divider"><span>· · ·</span></div>';
+      html += '<div class="contest-board-section-label">📍 הצטרף כדי לראות את המיקום שלך</div>';
+    }
+
+    // Expand-all CTA
+    html += '<button type="button" class="contest-board-expand-btn" id="clb-expand">' +
+      'הצג את כל ' + total + ' השחקנים' +
+    '</button>';
+
+    return html;
+  }
+
+  // Wire expand/collapse/search controls inside the contest board. Called
+  // after every board render (initial mount + silent refresh) so handlers
+  // stay attached to the freshly-rebuilt DOM.
+  function wireContestBoardControls(boardEl, players) {
+    if (!boardEl) return;
+    var expandBtn = boardEl.querySelector('#clb-expand');
+    if (expandBtn) expandBtn.onclick = function() {
+      contestBoardExpanded = true;
+      contestBoardSearchTerm = '';
+      boardEl.innerHTML = renderContestSmartBoard(players);
+      wireContestBoardControls(boardEl, players);
+      // Scroll my row into view so the expanded list lands centered on me,
+      // not on row #1 — the whole reason for expanding is "show me the
+      // full picture relative to where I stand."
+      var me = boardEl.querySelector('.contest-board-row.me');
+      if (me && typeof me.scrollIntoView === 'function') {
+        try { me.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch(e) {}
+      }
+    };
+    var collapseBtn = boardEl.querySelector('#clb-collapse');
+    if (collapseBtn) collapseBtn.onclick = function() {
+      contestBoardExpanded = false;
+      contestBoardSearchTerm = '';
+      boardEl.innerHTML = renderContestSmartBoard(players);
+      wireContestBoardControls(boardEl, players);
+    };
+    var searchEl = boardEl.querySelector('#clb-search');
+    if (searchEl) {
+      // Debounce so every keystroke doesn't trigger a full re-render
+      // (which would also drop the focus we just restored).
+      var searchTimer = null;
+      searchEl.oninput = function() {
+        var val = searchEl.value;
+        clearTimeout(searchTimer);
+        searchTimer = setTimeout(function() {
+          contestBoardSearchTerm = val;
+          var caret = searchEl.selectionStart;
+          boardEl.innerHTML = renderContestSmartBoard(players);
+          wireContestBoardControls(boardEl, players);
+          var refocus = boardEl.querySelector('#clb-search');
+          if (refocus) {
+            refocus.focus();
+            if (caret != null) try { refocus.setSelectionRange(caret, caret); } catch(e) {}
+          }
+        }, 140);
+      };
+    }
   }
 
   function stopContestRefresh() {
@@ -621,7 +808,22 @@
     const screen = document.getElementById('contest-screen');
     if (!screen) return;
     const boardEl = screen.querySelector('.contest-board');
-    if (boardEl) boardEl.innerHTML = renderContestBoardRows(data.players || []);
+    if (boardEl) {
+      // Preserve focus + caret position on the search input across silent
+      // refreshes — otherwise typing eats keystrokes every 20s.
+      var oldSearch = boardEl.querySelector('#clb-search');
+      var hadFocus = oldSearch && document.activeElement === oldSearch;
+      var caret = hadFocus ? oldSearch.selectionStart : null;
+      boardEl.innerHTML = renderContestSmartBoard(data.players || []);
+      wireContestBoardControls(boardEl, data.players || []);
+      if (hadFocus) {
+        var newSearch = boardEl.querySelector('#clb-search');
+        if (newSearch) {
+          newSearch.focus();
+          if (caret != null) try { newSearch.setSelectionRange(caret, caret); } catch(e) {}
+        }
+      }
+    }
     const subEl = document.getElementById('clb-sub');
     if (subEl) {
       subEl.innerHTML = '<span class="contest-live-dot"></span>' +
@@ -844,7 +1046,12 @@
       return;
     }
 
-    const playersHtml = renderContestBoardRows(data.players || []);
+    // Reset smart-board state on every fresh mount so the player always
+    // lands on the compact view (and a stale search term from a previous
+    // visit doesn't filter the new list to "no results").
+    contestBoardExpanded = false;
+    contestBoardSearchTerm = '';
+    const playersHtml = renderContestSmartBoard(data.players || []);
     const link = buildContestShareLink(code);
 
     // Back: if player has 2+ contests, go to my-contests list; else home.
@@ -898,6 +1105,12 @@
         }
       }
     });
+
+    // Wire smart-board controls (expand/collapse/search) on first mount.
+    // Silent refreshes re-call this themselves so the handlers stay alive
+    // after every 20s board re-render.
+    var initialBoardEl = document.getElementById('clb-board');
+    if (initialBoardEl) wireContestBoardControls(initialBoardEl, data.players || []);
 
     document.getElementById('clb-play').onclick = function() {
       setActiveContest(code);

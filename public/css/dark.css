@@ -88,8 +88,24 @@
   html[data-theme="dark"] .my-contest-row,
   html[data-theme="dark"] .contest-board-row,
   html[data-theme="dark"] .spectator-header { background: #2C2A28; border-color: rgba(255,255,255,0.06); }
-  html[data-theme="dark"] .contest-board-row.first { background: #3D2E0A; }
-  html[data-theme="dark"] .contest-board-row.me    { background: #1B3A2C; }
+  html[data-theme="dark"] .contest-board-row.first         { background: #3D2E0A; }
+  html[data-theme="dark"] .contest-board-row.podium-silver  { background: #2A2826; }
+  html[data-theme="dark"] .contest-board-row.podium-bronze  { background: #3A2A1A; }
+  html[data-theme="dark"] .contest-board-row.me             { background: #1B3A2C; }
+  /* Smart-board controls — dark variants */
+  html[data-theme="dark"] .contest-board-section-label { color: #8E8A82; border-bottom-color: rgba(255,255,255,0.06); }
+  html[data-theme="dark"] .contest-board-divider { color: #5A5852; }
+  html[data-theme="dark"] .contest-board-divider span { background: #2C2A28; }
+  html[data-theme="dark"] .contest-board-collapse-btn { color: #8E8A82; border-color: rgba(255,255,255,0.1); }
+  html[data-theme="dark"] .contest-board-collapse-btn:hover { background: rgba(255,255,255,0.04); }
+  html[data-theme="dark"] .contest-board-search { background: #1A1816; color: #F2EFE9; border-color: rgba(255,255,255,0.12); }
+  html[data-theme="dark"] .contest-board-search:focus { background: #2C2A28; border-color: #FAC775; }
+  html[data-theme="dark"] .contest-next-target {
+    background: linear-gradient(90deg, #3D2E0A, #5A4314);
+    color: #FAC775;
+    border-color: #BA7517;
+  }
+  html[data-theme="dark"] .contest-next-target strong { color: #F2EFE9; }
   html[data-theme="dark"] .contest-board-rank { background: #1A1816; color: #F2EFE9; border-color: rgba(255,255,255,0.06); }
   html[data-theme="dark"] .contest-board-name { color: #F2EFE9; }
   html[data-theme="dark"] .contest-board-score { color: #F2EFE9; }

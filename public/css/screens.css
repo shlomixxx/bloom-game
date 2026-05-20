@@ -219,6 +219,17 @@
   .contest-board-row.first .contest-board-rank {
     background: #FAC775; color: #412402; border-color: #FAC775;
   }
+  /* Medal emoji rendering in podium ranks — emoji is taller than a digit
+     and the circle clips it without a tighter line-height. Also drop the
+     bordered chip look for medals so they read as a clean glyph. */
+  .contest-board-row.podium-gold .contest-board-rank,
+  .contest-board-row.podium-silver .contest-board-rank,
+  .contest-board-row.podium-bronze .contest-board-rank {
+    background: transparent;
+    border: none;
+    font-size: 22px;
+    line-height: 1;
+  }
   .contest-board-tier {
     width: 28px; height: 28px; border-radius: 7px;
     display: flex; align-items: center; justify-content: center;
@@ -657,6 +668,119 @@
     letter-spacing: 0.03em;
   }
   .contest-spectate-hint svg { width: 10px; height: 10px; }
+
+  /* ============================================================
+     Smart contest board — sectioned layout for large contests
+     ============================================================
+     Activates when player count > 12. Shows top-5 + "you ± 2 neighbors"
+     in a compact view, with expand-all + search affordances. The flat
+     list (small contests OR explicitly expanded) still uses the
+     existing .contest-board-row styles unchanged. */
+  .contest-board-section-label {
+    font-size: 11px; font-weight: 700;
+    color: #6F6E68;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin: 8px 4px 2px;
+    padding-bottom: 2px;
+    border-bottom: 1px solid rgba(0,0,0,0.05);
+  }
+  .contest-board-section-label:first-child { margin-top: 0; }
+  .contest-board-divider {
+    display: flex; align-items: center; justify-content: center;
+    margin: 6px 0;
+    color: #C8C5BE;
+    font-size: 14px; letter-spacing: 0.4em;
+    user-select: none;
+  }
+  .contest-board-divider span {
+    background: #F5F2EC;
+    padding: 4px 14px;
+    border-radius: 999px;
+  }
+  .contest-board-expand-btn {
+    width: 100%;
+    margin-top: 10px;
+    padding: 10px 14px;
+    background: linear-gradient(135deg, #1C1A18, #2C2A28);
+    color: #FAC775;
+    border: 1px solid #FAC775;
+    border-radius: 12px;
+    font-family: inherit;
+    font-size: 13px; font-weight: 700;
+    cursor: pointer;
+    transition: transform 0.12s, box-shadow 0.12s;
+  }
+  .contest-board-expand-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 14px rgba(0,0,0,0.15);
+  }
+  .contest-board-expand-btn:active { transform: scale(0.98); }
+  .contest-board-collapse-btn {
+    width: 100%;
+    margin-bottom: 8px;
+    padding: 7px 12px;
+    background: transparent;
+    color: #6F6E68;
+    border: 1px solid rgba(0,0,0,0.08);
+    border-radius: 10px;
+    font-family: inherit;
+    font-size: 12px; font-weight: 600;
+    cursor: pointer;
+  }
+  .contest-board-collapse-btn:hover { background: rgba(0,0,0,0.03); }
+  .contest-board-search-wrap {
+    margin-bottom: 8px;
+  }
+  .contest-board-search {
+    width: 100%;
+    padding: 9px 12px;
+    border: 1px solid rgba(0,0,0,0.12);
+    border-radius: 10px;
+    background: #FFFFFF;
+    font-family: inherit;
+    font-size: 13px;
+    color: #1C1A18;
+    direction: rtl;
+    text-align: right;
+    outline: none;
+    transition: border-color 0.12s, box-shadow 0.12s;
+  }
+  .contest-board-search:focus {
+    border-color: #FAC775;
+    box-shadow: 0 0 0 3px rgba(250,199,117,0.18);
+  }
+  /* Podium tints — top-3 visual hierarchy. Gold for #1 was already
+     defined as .first; silver/bronze are new. Subtle but unmistakable. */
+  .contest-board-row.podium-silver { background: #F1F0EC; }
+  .contest-board-row.podium-bronze { background: #FBEFE1; }
+  /* "Next target" pill — the single most-addictive contest moment.
+     Renders directly under MY row whenever there's someone above. */
+  .contest-next-target {
+    display: flex; align-items: center; gap: 8px;
+    margin: 2px 0 6px;
+    padding: 8px 12px;
+    background: linear-gradient(90deg, #FFF5E1, #FFE9C2);
+    border: 1px solid #FAC775;
+    border-radius: 10px;
+    font-size: 12px;
+    color: #5A3E0F;
+    box-shadow: 0 2px 6px rgba(250,199,117,0.25);
+    animation: contestTargetPulse 2.4s ease-in-out infinite;
+  }
+  .contest-next-target strong {
+    font-weight: 800;
+    color: #1C1A18;
+    font-variant-numeric: tabular-nums;
+  }
+  .contest-next-target-arrow {
+    font-size: 16px;
+    flex-shrink: 0;
+  }
+  @keyframes contestTargetPulse {
+    0%, 100% { box-shadow: 0 2px 6px rgba(250,199,117,0.25); }
+    50%      { box-shadow: 0 2px 14px rgba(250,199,117,0.55); }
+  }
 
   /* Audience badge — floats over the grid while a contest game is being
      watched by someone else. Click expands the watcher list. */
