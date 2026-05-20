@@ -1965,6 +1965,155 @@
     '</div>';
   }
 
+  // ============ NAV STACK + SHELL (UX audit §2.1 + §3.1) ============
+  // Lightweight navigation primitive: each non-game screen pushes itself
+  // onto NavStack on entry; the shell's back button pops one level.
+  // We deliberately don't lean on browser history — BLOOM screens are a
+  // logical hierarchy (Spectator → Contest Leaderboard → Contest Menu →
+  // Home), not a history of visits, and "back" should follow that tree.
+  //
+  // A "screen descriptor" is { id, title, enter, exit } where enter/exit
+  // are optional callbacks. Enter runs on push (and on re-push after a
+  // pop that returns here); exit runs when the screen is popped/replaced.
+  const NavStack = (function() {
+    const stack = []; // descriptors
+    function current() { return stack.length ? stack[stack.length - 1] : null; }
+    function depth() { return stack.length; }
+    function push(descriptor) {
+      if (!descriptor || !descriptor.id) return;
+      // De-dupe consecutive identical entries so refreshing the same screen
+      // doesn't grow the stack indefinitely.
+      const top = current();
+      if (top && top.id === descriptor.id) return;
+      stack.push(descriptor);
+      if (typeof descriptor.enter === 'function') {
+        try { descriptor.enter(); } catch (e) { console.warn('NavStack.enter', e); }
+      }
+    }
+    function replace(descriptor) {
+      const popped = stack.pop();
+      if (popped && typeof popped.exit === 'function') {
+        try { popped.exit(); } catch (e) { /* swallow */ }
+      }
+      push(descriptor);
+    }
+    function back() {
+      if (!stack.length) return false;
+      const popped = stack.pop();
+      if (popped && typeof popped.exit === 'function') {
+        try { popped.exit(); } catch (e) { /* swallow */ }
+      }
+      const now = current();
+      if (now && typeof now.enter === 'function') {
+        try { now.enter(); } catch (e) { /* swallow */ }
+      } else if (!now) {
+        // Stack empty — route home.
+        if (typeof window.showHome === 'function') window.showHome();
+      }
+      return true;
+    }
+    function reset() {
+      while (stack.length) {
+        const popped = stack.pop();
+        if (popped && typeof popped.exit === 'function') {
+          try { popped.exit(); } catch (e) { /* swallow */ }
+        }
+      }
+    }
+    return { push, replace, back, current, depth, reset };
+  })();
+  // Expose for handlers that live outside the IIFE scope (event delegation,
+  // window.__bloomNav references, etc).
+  try { window.__bloomNav = NavStack; } catch (e) {}
+
+  // mountShell — renders a sticky top bar into a container. Used by every
+  // non-game screen so the contest, challenge, profile, and spectator
+  // surfaces all share one header (UX audit §2.1 — "feels like one app").
+  //
+  // opts = {
+  //   target:    HTMLElement or selector to receive the shell (required)
+  //   title:     screen title (string)
+  //   subtitle:  optional small text under the title
+  //   onBack:    function called when [←] is tapped. Defaults to NavStack.back.
+  //              Pass null to hide the back button (e.g. on Home).
+  //   actions:   array of { id, label, ariaLabel, icon, onClick } to render
+  //              on the right side. Limit ~2 for layout sanity.
+  // }
+  function mountShell(opts) {
+    opts = opts || {};
+    const target = (typeof opts.target === 'string')
+      ? document.querySelector(opts.target)
+      : opts.target;
+    if (!target) return null;
+
+    // Remove any existing shell in this container — re-mounting is fine.
+    const existing = target.querySelector(':scope > .shell');
+    if (existing) existing.remove();
+
+    const shell = document.createElement('div');
+    shell.className = 'shell';
+    shell.setAttribute('role', 'banner');
+
+    let html = '';
+    // Back button (right side in RTL = visually leading)
+    if (opts.onBack !== null) {
+      html += '<button class="shell-back" id="shell-back" aria-label="חזור">' +
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>' +
+      '</button>';
+    } else {
+      html += '<div class="shell-back-spacer" aria-hidden="true"></div>';
+    }
+
+    // Title + optional subtitle
+    html += '<div class="shell-title-wrap">' +
+      '<div class="shell-title">' + escapeShellText(opts.title || 'BLOOM') + '</div>' +
+      (opts.subtitle ? '<div class="shell-subtitle">' + escapeShellText(opts.subtitle) + '</div>' : '') +
+    '</div>';
+
+    // Right-side actions
+    html += '<div class="shell-actions">';
+    if (Array.isArray(opts.actions)) {
+      opts.actions.slice(0, 3).forEach(function(a) {
+        if (!a) return;
+        html += '<button class="shell-action" data-shell-action-id="' + escapeShellText(a.id || '') + '"' +
+          (a.ariaLabel ? ' aria-label="' + escapeShellText(a.ariaLabel) + '"' : '') + '>' +
+          (a.icon || escapeShellText(a.label || '')) +
+        '</button>';
+      });
+    }
+    html += '</div>';
+
+    shell.innerHTML = html;
+    // Insert at the top of the target so it sticks above content.
+    target.insertBefore(shell, target.firstChild);
+
+    // Wire handlers
+    const backBtn = shell.querySelector('#shell-back');
+    if (backBtn) {
+      backBtn.onclick = function() {
+        if (typeof opts.onBack === 'function') { opts.onBack(); return; }
+        NavStack.back();
+      };
+    }
+    if (Array.isArray(opts.actions)) {
+      opts.actions.forEach(function(a) {
+        if (!a || typeof a.onClick !== 'function') return;
+        const el = shell.querySelector('[data-shell-action-id="' + (a.id || '') + '"]');
+        if (el) el.onclick = a.onClick;
+      });
+    }
+    return shell;
+  }
+  function escapeShellText(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+  // Expose for screens implemented outside the IIFE direct-access pattern.
+  try {
+    window.__bloomMountShell = mountShell;
+  } catch (e) {}
+
   // ============ THEME (light/dark/auto) ============
   // Cycle through three states from the mute popover. The actual <html
   // data-theme="…"> swap happens here AND in the early head script (so
@@ -3461,9 +3610,9 @@
 
     // Back: if player has 2+ contests, go to my-contests list; else home.
     const clbBackTarget = myContestsCountSync() >= 2 ? 'contest-menu' : 'home';
+    // §2.1 — render via mountShell (unified header). The old back-button +
+    // <div class="contest-title"> is gone; mountShell injects both.
     screen.innerHTML =
-      createBackButton(clbBackTarget) +
-      '<div class="contest-title">' + escapeHtml(data.contest.name) + '</div>' +
       '<div class="contest-code-row">' +
         '<button class="contest-code-pill" id="clb-code-pill" aria-label="העתק קוד התחרות">' +
           '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>' +
@@ -3492,6 +3641,24 @@
         (myContestsCountSync() >= 2 ? '<button class="contest-secondary-btn" id="clb-switch" style="margin-top:6px">↕ החלפת תחרות (' + myContestsCountSync() + ')</button>' : '') +
         '<button class="contest-ghost-btn" id="clb-leave">נתק ממכשיר זה</button>' +
       '</div>';
+
+    // §2.1 — unified shell at the top of this screen. Back reuses the
+    // legacy back-target logic (home vs contest-menu) so behavior is
+    // unchanged; visually it now matches the rest of the new shell.
+    mountShell({
+      target: screen,
+      title: data.contest.name,
+      subtitle: 'תחרות חברים · ' + (data.players || []).length + ' שחקנים',
+      onBack: function() {
+        if (clbBackTarget === 'contest-menu') {
+          hideContestScreens();
+          showContestMenu();
+        } else {
+          hideContestScreens();
+          if (typeof showHome === 'function') showHome();
+        }
+      }
+    });
 
     document.getElementById('clb-play').onclick = function() {
       setActiveContest(code);

@@ -849,9 +849,9 @@
 
     // Back: if player has 2+ contests, go to my-contests list; else home.
     const clbBackTarget = myContestsCountSync() >= 2 ? 'contest-menu' : 'home';
+    // §2.1 — render via mountShell (unified header). The old back-button +
+    // <div class="contest-title"> is gone; mountShell injects both.
     screen.innerHTML =
-      createBackButton(clbBackTarget) +
-      '<div class="contest-title">' + escapeHtml(data.contest.name) + '</div>' +
       '<div class="contest-code-row">' +
         '<button class="contest-code-pill" id="clb-code-pill" aria-label="העתק קוד התחרות">' +
           '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>' +
@@ -880,6 +880,24 @@
         (myContestsCountSync() >= 2 ? '<button class="contest-secondary-btn" id="clb-switch" style="margin-top:6px">↕ החלפת תחרות (' + myContestsCountSync() + ')</button>' : '') +
         '<button class="contest-ghost-btn" id="clb-leave">נתק ממכשיר זה</button>' +
       '</div>';
+
+    // §2.1 — unified shell at the top of this screen. Back reuses the
+    // legacy back-target logic (home vs contest-menu) so behavior is
+    // unchanged; visually it now matches the rest of the new shell.
+    mountShell({
+      target: screen,
+      title: data.contest.name,
+      subtitle: 'תחרות חברים · ' + (data.players || []).length + ' שחקנים',
+      onBack: function() {
+        if (clbBackTarget === 'contest-menu') {
+          hideContestScreens();
+          showContestMenu();
+        } else {
+          hideContestScreens();
+          if (typeof showHome === 'function') showHome();
+        }
+      }
+    });
 
     document.getElementById('clb-play').onclick = function() {
       setActiveContest(code);

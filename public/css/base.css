@@ -60,6 +60,73 @@
     --shadow-md: 0 6px 20px rgba(0,0,0,0.40);
   }
 
+  /* ============================================================
+     Shell — unified top bar for non-game screens (UX audit §2.1)
+     ============================================================
+     The audit's core finding: contest/challenge/profile/spectator
+     each redraw their own header, which makes BLOOM feel like four
+     separate apps stitched together. .shell is the one header to
+     rule them all. Mounted via mountShell() from src/04-ui-utils.js.
+
+     Position is sticky-to-container (NOT viewport) — each screen
+     keeps its own scroll context, so the shell stays pinned above
+     the screen's content as the player scrolls down a long list.
+     ============================================================ */
+  .shell {
+    position: sticky; top: 0; z-index: 100;
+    display: flex; align-items: center; gap: 8px;
+    direction: rtl;
+    padding: 10px 14px;
+    min-height: 56px;
+    background: rgba(245,245,240,0.78);
+    backdrop-filter: blur(14px) saturate(160%);
+    -webkit-backdrop-filter: blur(14px) saturate(160%);
+    border-bottom: 1px solid var(--color-border);
+    /* keep the shell above whatever was layered before it */
+    box-shadow: var(--shadow-sm);
+  }
+  html[data-theme="dark"] .shell {
+    background: rgba(26,24,22,0.78);
+  }
+  .shell-back, .shell-action {
+    flex: 0 0 auto;
+    width: 38px; height: 38px;
+    display: inline-flex; align-items: center; justify-content: center;
+    background: transparent;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    color: var(--color-text);
+    cursor: pointer;
+    padding: 0;
+    transition: background 0.15s ease, transform 0.1s ease;
+  }
+  .shell-back:active, .shell-action:active { transform: scale(0.94); }
+  .shell-back:hover, .shell-action:hover { background: var(--color-surface); }
+  .shell-back svg { width: 18px; height: 18px; }
+  .shell-back-spacer { width: 38px; flex: 0 0 auto; }
+  .shell-title-wrap {
+    flex: 1 1 auto;
+    text-align: center;
+    overflow: hidden;
+  }
+  .shell-title {
+    font-size: 16px; font-weight: 700;
+    color: var(--color-text);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    letter-spacing: 0.01em;
+  }
+  .shell-subtitle {
+    font-size: 11px; font-weight: 500;
+    color: var(--color-text-muted);
+    margin-top: 1px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .shell-actions {
+    flex: 0 0 auto;
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .shell-actions:empty { width: 38px; }
+
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
