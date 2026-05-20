@@ -714,6 +714,206 @@
   var activeDuelId = null;
   var activeDuelOpponentName = 'יריב';
 
+  // ============================================================
+  // LIVE OPPONENT HUD — visible during the player's active duel game
+  // ============================================================
+  // The user's ask: "players want to see their opponent's score while
+  // playing". Previously you could only see the opponent's score AFTER
+  // you submitted yours. That turned every duel into 2 separate games
+  // stitched at the end. This HUD turns it into an actual race — every
+  // tap of YOUR board is a reaction to the live score next to you.
+  //
+  // Data path:
+  //   - GET /api/duels/:id every 3s gives us the opponent's committed
+  //     state (final score if set, otherwise their assigned device_id)
+  //   - GET /api/live-state/:opponentDeviceId every 3s gives us the
+  //     opponent's IN-PROGRESS score (fed by their 5s heartbeats)
+  //   - We merge the two: final score wins; otherwise live score; else
+  //     "waiting to accept".
+  // ============================================================
+  var _duelHudPoller = null;
+  var _duelHudDuelRow = null;
+  var _duelHudLastOppScore = null;  // for "score jump" flash animation
+  var _duelHudFinalized = false;    // stops polling once opponent finalized
+
+  function startDuelOpponentHud(duelRow) {
+    if (!duelRow) return;
+    stopDuelOpponentHud();
+    _duelHudDuelRow = duelRow;
+    _duelHudLastOppScore = null;
+    _duelHudFinalized = false;
+    renderDuelHud();
+    // First tick fires immediately so the HUD isn't empty for 3s
+    refreshDuelHudData();
+    _duelHudPoller = setInterval(refreshDuelHudData, 3000);
+    // Also update the "my score" side via a fast tick that just reads
+    // the game's score global — no network needed.
+    _duelHudMyScoreTick = setInterval(syncDuelHudMyScore, 500);
+  }
+
+  function stopDuelOpponentHud() {
+    if (_duelHudPoller) { clearInterval(_duelHudPoller); _duelHudPoller = null; }
+    if (_duelHudMyScoreTick) { clearInterval(_duelHudMyScoreTick); _duelHudMyScoreTick = null; }
+    var hud = document.getElementById('duel-hud');
+    if (hud) hud.remove();
+    _duelHudDuelRow = null;
+    _duelHudLastOppScore = null;
+    _duelHudFinalized = false;
+  }
+  var _duelHudMyScoreTick = null;
+
+  function renderDuelHud() {
+    if (document.getElementById('duel-hud')) return;
+    var iAmChallenger = _duelHudDuelRow && _duelHudDuelRow.challenger_device === deviceId;
+    var oppName = iAmChallenger
+      ? (_duelHudDuelRow.opponent_name || _duelHudDuelRow.opponent_code || 'יריב')
+      : (_duelHudDuelRow.challenger_name || _duelHudDuelRow.challenger_code || 'יריב');
+    var hud = document.createElement('div');
+    hud.id = 'duel-hud';
+    hud.className = 'duel-hud';
+    hud.innerHTML =
+      '<div class="duel-hud-side duel-hud-me">' +
+        '<div class="duel-hud-label">אתה</div>' +
+        '<div class="duel-hud-score" id="duel-hud-my-score">0</div>' +
+      '</div>' +
+      '<div class="duel-hud-vs">' +
+        '<div class="duel-hud-vs-icon">⚔️</div>' +
+        '<div class="duel-hud-delta" id="duel-hud-delta">--</div>' +
+        '<div class="duel-hud-status" id="duel-hud-status">טוען...</div>' +
+      '</div>' +
+      '<div class="duel-hud-side duel-hud-opp">' +
+        '<div class="duel-hud-label">' + escDuelHtml(oppName) + '</div>' +
+        '<div class="duel-hud-score" id="duel-hud-opp-score">--</div>' +
+      '</div>';
+    // Mount inside .app so it sits in the game viewport, not the page
+    var app = document.querySelector('.app');
+    if (app) app.appendChild(hud);
+    else document.body.appendChild(hud);
+  }
+
+  function syncDuelHudMyScore() {
+    var el = document.getElementById('duel-hud-my-score');
+    if (!el) return;
+    var myScore = (typeof score === 'number') ? score : 0;
+    el.textContent = myScore.toLocaleString();
+    // Also refresh the delta so it stays in sync with my score growth
+    paintDuelHudDelta(myScore, _duelHudLastOppScore);
+  }
+
+  function refreshDuelHudData() {
+    if (!_duelHudDuelRow || !activeDuelId) return;
+    // Stop polling /api/duels/:id once we have the opponent's final score
+    // (no reason to keep hitting the DB after that). Live-state still
+    // polls below if applicable.
+    fetch(API_BASE + '/api/duels/' + activeDuelId + '?deviceId=' + encodeURIComponent(deviceId))
+      .then(function(r) { return r.ok ? r.json() : null; })
+      .then(function(resp) {
+        if (!resp || !resp.duel) return;
+        var u = resp.duel;
+        _duelHudDuelRow = u; // refresh stored row
+        var iAmChallenger = u.challenger_device === deviceId;
+        var oppFinalScore = iAmChallenger ? u.opponent_score : u.challenger_score;
+        var oppDeviceId   = iAmChallenger ? u.opponent_device : u.challenger_device;
+        if (oppFinalScore != null) {
+          _duelHudFinalized = true;
+          paintDuelHud({
+            oppScore: oppFinalScore,
+            oppStatus: 'finished',
+            oppDeviceId: oppDeviceId
+          });
+          return;
+        }
+        // Opponent hasn't finalized — check if they're playing live.
+        if (oppDeviceId) {
+          fetch(API_BASE + '/api/live-state/' + encodeURIComponent(oppDeviceId))
+            .then(function(r2) { return r2.ok ? r2.json() : null; })
+            .then(function(live) {
+              if (live && typeof live.live_score === 'number') {
+                paintDuelHud({
+                  oppScore: live.live_score,
+                  oppStatus: 'playing',
+                  oppDeviceId: oppDeviceId
+                });
+              } else {
+                paintDuelHud({
+                  oppScore: null,
+                  oppStatus: 'accepted',
+                  oppDeviceId: oppDeviceId
+                });
+              }
+            })
+            .catch(function() {
+              paintDuelHud({ oppScore: null, oppStatus: 'accepted', oppDeviceId: oppDeviceId });
+            });
+        } else {
+          // Pending: opponent hasn't even accepted yet (challenger case)
+          paintDuelHud({ oppScore: null, oppStatus: 'pending', oppDeviceId: null });
+        }
+      })
+      .catch(function() { /* silent */ });
+  }
+
+  function paintDuelHud(state) {
+    var scoreEl  = document.getElementById('duel-hud-opp-score');
+    var statusEl = document.getElementById('duel-hud-status');
+    var hud      = document.getElementById('duel-hud');
+    if (!scoreEl || !statusEl || !hud) return;
+
+    // Status text + visual class
+    hud.classList.remove('duel-hud-status-pending', 'duel-hud-status-accepted',
+                          'duel-hud-status-playing', 'duel-hud-status-finished');
+    if (state.oppStatus === 'pending') {
+      statusEl.textContent = 'עדיין לא קיבל';
+      scoreEl.textContent  = '--';
+      hud.classList.add('duel-hud-status-pending');
+    } else if (state.oppStatus === 'accepted') {
+      statusEl.textContent = 'מקבל אתגר';
+      scoreEl.textContent  = '0';
+      hud.classList.add('duel-hud-status-accepted');
+    } else if (state.oppStatus === 'playing') {
+      statusEl.textContent = '🎮 משחק';
+      hud.classList.add('duel-hud-status-playing');
+      // Flash the score if it just jumped (opponent merged → score went up)
+      var prev = _duelHudLastOppScore;
+      scoreEl.textContent = (state.oppScore | 0).toLocaleString();
+      if (prev != null && state.oppScore > prev) {
+        scoreEl.classList.remove('duel-hud-score-bump');
+        // Force reflow so re-adding the class restarts the animation
+        void scoreEl.offsetWidth;
+        scoreEl.classList.add('duel-hud-score-bump');
+      }
+    } else if (state.oppStatus === 'finished') {
+      statusEl.textContent = '🏁 סיים — תנצח אותו!';
+      scoreEl.textContent  = (state.oppScore | 0).toLocaleString();
+      hud.classList.add('duel-hud-status-finished');
+      // Stop the heavy /api/duels/:id polling once we have the target —
+      // we just need to keep updating MY score, which is the local tick.
+      if (_duelHudPoller) { clearInterval(_duelHudPoller); _duelHudPoller = null; }
+    }
+
+    _duelHudLastOppScore = state.oppScore;
+    var myScore = (typeof score === 'number') ? score : 0;
+    paintDuelHudDelta(myScore, state.oppScore);
+  }
+
+  // Delta pill — "+580 💪" if leading, "-200 😬" if behind, "=" if tied
+  function paintDuelHudDelta(myScore, oppScore) {
+    var el = document.getElementById('duel-hud-delta');
+    if (!el) return;
+    if (oppScore == null) { el.textContent = ''; el.className = 'duel-hud-delta'; return; }
+    var d = (myScore | 0) - (oppScore | 0);
+    if (d > 0) {
+      el.textContent = '+' + d.toLocaleString() + ' 💪';
+      el.className = 'duel-hud-delta duel-hud-delta-ahead';
+    } else if (d < 0) {
+      el.textContent = d.toLocaleString() + ' 😬';
+      el.className = 'duel-hud-delta duel-hud-delta-behind';
+    } else {
+      el.textContent = '= תיקו';
+      el.className = 'duel-hud-delta duel-hud-delta-tied';
+    }
+  }
+
   function startDuelGame(duelId, seed, duelRow) {
     activeDuelId = duelId;
     // Close the duel modal
@@ -758,6 +958,9 @@
     ensureAudio();
     startEventSystem();
     trackEvent('duel_start', { duelId: duelId });
+    // §LIVE OPPONENT HUD — kick off the real-time opponent-score widget
+    // the moment the duel game starts. Self-tears-down via submitDuelScore.
+    try { startDuelOpponentHud(duelRow); } catch (e) { console.warn('[duel-hud]', e); }
   }
 
   // Called from game-over to submit duel score
@@ -766,6 +969,9 @@
     var duelId = activeDuelId;
     var oppName = window._duelOpponentName || 'יריב';
     activeDuelId = null;
+    // Tear down the live opponent HUD — the game-over overlay takes
+    // over from here, so the HUD's job is done.
+    try { stopDuelOpponentHud(); } catch (e) {}
     window._duelMode = false;
     fetch(API_BASE + '/api/duels/' + duelId + '/score', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
