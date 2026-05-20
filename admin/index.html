@@ -1568,7 +1568,8 @@
     event_fever_enabled: 1, event_freeze_enabled: 1, event_target_enabled: 1,
     wager_enabled: 1, weekly_enabled: 1, contest_alerts_enabled: 1,
     referral_enabled: 1, slot_enabled: 1, tile_shop_enabled: 1,
-    jackpot_enabled: 1, jackpot_auto_settle: 1, duel_enabled: 1
+    jackpot_enabled: 1, jackpot_auto_settle: 1, duel_enabled: 1,
+    aurora_skin_enabled: 1
   };
 
   // Per-key explanations for the giant config table.
@@ -1715,7 +1716,9 @@
     // ---- Leaderboard tabs ----
     leaderboard_tabs_enabled: 'CSV שמגדיר אילו טאבים זמינים ובאיזה סדר.<div class="tip-example">📊 <strong>אפשרויות</strong>: <code>world</code>, <code>country</code>, <code>difficulty</code>.<br>דוגמאות:<br>• <code>world,country,difficulty</code> (ברירת מחדל) — כל הטאבים<br>• <code>world</code> — רק עולמי<br>• <code>country,world</code> — מדינה ראשון<br><br>💡 הסדר ב-CSV = הסדר על המסך.</div>',
     leaderboard_default_tab: 'הטאב שמוצג כברירת מחדל כשהשחקן פותח את הלידרבורד.<div class="tip-example">🌍 <code>world</code> — הכי כללי<br>🇮🇱 <code>country</code> — פטריוטי<br>🎚️ <code>difficulty</code> — מתאים אם רוב משחקים practice עם קושי</div>',
-    leaderboard_default_difficulty: 'דרגת הקושי שנבחרת מראש בכניסה לטאב "קושי".<div class="tip-example">📦 <code>default</code>, 😊 <code>easy</code>, 🎯 <code>medium</code>, 🔥 <code>hard</code>, 💀 <code>insane</code><br>💡 default = הציון של רוב השחקנים, הכי מאוכלס.</div>'
+    leaderboard_default_difficulty: 'דרגת הקושי שנבחרת מראש בכניסה לטאב "קושי".<div class="tip-example">📦 <code>default</code>, 😊 <code>easy</code>, 🎯 <code>medium</code>, 🔥 <code>hard</code>, 💀 <code>insane</code><br>💡 default = הציון של רוב השחקנים, הכי מאוכלס.</div>',
+    // ---- Aurora skin ----
+    aurora_skin_enabled: 'הצגת סקין 🌌 Aurora בחנות הסקינים.<div class="tip-example">✅ <code>true</code> (ברירת מחדל) — הסקין זמין לרכישה ב-300💎, מציג gradients/shimmer/text-bursts לשחקנים שבחרו בו.<br>❌ <code>false</code> — הסקין נעלם מהחנות. שחקנים שכבר היה להם פעיל חוזרים אוטומטית ל-Classic בטעינה הבאה (הבעלות עצמה נשמרת ב-DB ולא נמחקת — חוזרת אוטומטית אם תפעיל שוב).<br><br>💡 שינוי תוקף ב-page reload של השחקן. אין צורך ב-deploy.</div>'
   };
 
   // Wire all .tip-btn elements after DOM load. Two modes:

@@ -599,3 +599,7 @@ INSERT INTO game_config (key, value) VALUES ('diamond_pack_3_amount', '4000') ON
 INSERT INTO game_config (key, value) VALUES ('diamond_pack_3_price', '59.90') ON CONFLICT (key) DO NOTHING;
 INSERT INTO game_config (key, value) VALUES ('diamond_pack_4_amount', '15000') ON CONFLICT (key) DO NOTHING;
 INSERT INTO game_config (key, value) VALUES ('diamond_pack_4_price', '149.90') ON CONFLICT (key) DO NOTHING;
+-- Aurora skin admin gate. Default 'true' (skin shows in shop). Set to 'false'
+-- from the admin to hide the skin globally; players who had it active fall
+-- back to 'classic' on next page load.
+INSERT INTO game_config (key, value) VALUES ('aurora_skin_enabled', 'true') ON CONFLICT (key) DO NOTHING;

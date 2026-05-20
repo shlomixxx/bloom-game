@@ -1500,7 +1500,25 @@
   var gameConfig = { merge_mode: 'anchor' };
   (function loadGameConfig() {
     fetch(API_BASE + '/api/config').then(function(r) { return r.json(); })
-      .then(function(d) { if (d && d.config) gameConfig = d.config; })
+      .then(function(d) {
+        if (d && d.config) gameConfig = d.config;
+        // Aurora admin-gate. Default: enabled. Only the explicit string 'false'
+        // disables it. When disabled: hide from shop and, if a player has it
+        // active, revert them to classic so they don't keep showing gradients
+        // that the admin can't see in their own account.
+        try {
+          if (gameConfig.aurora_skin_enabled === 'false') {
+            if (typeof SKIN_PACKS !== 'undefined' && SKIN_PACKS.aurora) delete SKIN_PACKS.aurora;
+            if (typeof activeSkinId !== 'undefined' && activeSkinId === 'aurora') {
+              activeSkinId = 'classic';
+              try { localStorage.setItem(ACTIVE_SKIN_KEY, 'classic'); } catch(e) {}
+              if (typeof syncBodySkinClass === 'function') syncBodySkinClass();
+              if (typeof buildTierBar === 'function') try { buildTierBar(true); } catch(e) {}
+              if (typeof render === 'function') try { render(); } catch(e) {}
+            }
+          }
+        } catch (e) {}
+      })
       .catch(function() {});
   })();
 
