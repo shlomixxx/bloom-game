@@ -22,9 +22,13 @@
       '<div style="font-size:12px;color:#6F6E68;margin-bottom:12px">אתגר שחקן ספציפי! שניכם משחקים על אותו לוח — מי שמשיג יותר נקודות מנצח.</div>' +
       myCodePill +
       '<div style="font-size:11px;font-weight:600;margin-bottom:4px">קוד היריב</div>' +
-      '<div class="duel-code-input" style="display:flex;align-items:stretch;border:1px solid rgba(0,0,0,0.12);border-radius:8px;overflow:hidden;margin-bottom:8px;background:#FFFFFF">' +
+      // direction:ltr — the code "BLOOM-XXXX" is LTR English text, so the
+      // pill must sit on the LEFT and the suffix input on the RIGHT, even
+      // though the surrounding modal is RTL Hebrew. Without this override
+      // the flex children flip and the user reads "XXXX-BLOOM" backwards.
+      '<div class="duel-code-input" dir="ltr" style="display:flex;align-items:stretch;border:1px solid rgba(0,0,0,0.12);border-radius:8px;overflow:hidden;margin-bottom:8px;background:#FFFFFF;direction:ltr">' +
         '<span style="background:#1C1A18;color:#FAC775;padding:8px 10px;font-weight:700;letter-spacing:0.08em;font-family:ui-monospace,monospace;display:flex;align-items:center">BLOOM-</span>' +
-        '<input id="duel-opponent-suffix" maxlength="4" inputmode="latin" autocapitalize="characters" autocomplete="off" placeholder="XXXX" value="' + pre + '" style="flex:1;padding:8px;border:0;font-family:ui-monospace,monospace;font-size:16px;text-transform:uppercase;letter-spacing:0.2em;font-weight:700;text-align:center;outline:none;background:transparent">' +
+        '<input id="duel-opponent-suffix" dir="ltr" maxlength="4" inputmode="latin" autocapitalize="characters" autocomplete="off" placeholder="XXXX" value="' + pre + '" style="flex:1;padding:8px;border:0;font-family:ui-monospace,monospace;font-size:16px;text-transform:uppercase;letter-spacing:0.2em;font-weight:700;text-align:center;outline:none;background:transparent;direction:ltr">' +
       '</div>' +
       '<div style="font-size:11px;font-weight:600;margin-bottom:4px">💪 רמת קושי (לשניכם)</div>' +
       '<div id="duel-difficulty" style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:10px">' +
