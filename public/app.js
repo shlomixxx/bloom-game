@@ -87,12 +87,41 @@
       { svg: SVG.star,   bg: '#A07818', fg: '#FFFFFF', name: 'פלטינה', emoji: '🟦' },
       { svg: SVG.diamond,bg: '#8B6914', fg: '#FFE4A0', name: 'יהלום',  emoji: '💎' },
       { svg: SVG.crown,  bg: '#6B4E0A', fg: '#FFD700', name: 'מלך',    emoji: '👑' }
+    ]},
+    // Aurora — gradient surfaces + addictive CSS animations layered via
+    // body.skin-aurora-active. The existing render path
+    // (cell.style.background = tiers[t].bg in 12-tour-info.js) accepts
+    // string gradients as-is. Other skins are completely unaffected.
+    aurora: { id: 'aurora', name: '🌌 אורורה', price: 300, tiers: [
+      null,
+      { svg: SVG.circle,  bg: 'linear-gradient(140deg,#EBE7DA 0%,#C0BAA8 100%)', fg: '#3D3A33', name: 'אבן',   emoji: '⬜' },
+      { svg: SVG.leaf,    bg: 'linear-gradient(140deg,#D9EDB7 0%,#88B450 100%)', fg: '#1F3A0E', name: 'עלה',   emoji: '🟩' },
+      { svg: SVG.flower,  bg: 'linear-gradient(140deg,#FFD3E2 0%,#E07AA8 100%)', fg: '#5C1A38', name: 'פרח',   emoji: '🟧' },
+      { svg: SVG.flame,   bg: 'linear-gradient(140deg,#FFC4A0 0%,#EE7548 100%)', fg: '#5A1E08', name: 'אש',    emoji: '🟥' },
+      { svg: SVG.bolt,    bg: 'linear-gradient(140deg,#FFDA7A 0%,#E89010 100%)', fg: '#3A1F00', name: 'ברק',   emoji: '🟨' },
+      { svg: SVG.star,    bg: 'linear-gradient(140deg,#A8EBD0 0%,#2DAC85 100%)', fg: '#013024', name: 'כוכב',  emoji: '🟦' },
+      { svg: SVG.diamond, bg: 'linear-gradient(140deg,#B8D5F8 0%,#3F88D8 100%)', fg: '#042C53', name: 'יהלום', emoji: '💎' },
+      { svg: SVG.crown,   bg: 'linear-gradient(110deg,#F0E8FF 0%,#9B8AE8 20%,#F5C8E8 40%,#9B8AE8 60%,#FFD37A 80%,#9B8AE8 100%)', fg: '#26215C', name: 'כתר', emoji: '👑' }
     ]}
   };
   const ACTIVE_SKIN_KEY = 'bloom_active_skin';
   const OWNED_SKINS_KEY = 'bloom_owned_skins';
   var activeSkinId = localStorage.getItem(ACTIVE_SKIN_KEY) || 'classic';
   var ownedSkins = JSON.parse(localStorage.getItem(OWNED_SKINS_KEY) || '["classic"]');
+
+  // Single source of truth for the body.skin-aurora-active class. Called from
+  // every place activeSkinId mutates (boot, purchase, equip, trial, revert).
+  // Aurora's CSS-only effects live exclusively under this class — other skins
+  // remain untouched. No-op if the body isn't ready yet (called again on boot).
+  function syncBodySkinClass() {
+    if (typeof document === 'undefined' || !document.body) return;
+    document.body.classList.toggle('skin-aurora-active', activeSkinId === 'aurora');
+  }
+  // Boot sync — if body already exists, set the class now; otherwise wait.
+  if (typeof document !== 'undefined') {
+    if (document.body) syncBodySkinClass();
+    else document.addEventListener('DOMContentLoaded', syncBodySkinClass, { once: true });
+  }
 
   // ============ THEME / SKIN ABSTRACTION ============
   function getActiveTiers() {
@@ -185,6 +214,7 @@
             try { localStorage.setItem(OWNED_SKINS_KEY, JSON.stringify(ownedSkins)); } catch(e) {}
             activeSkinId = skinId;
             try { localStorage.setItem(ACTIVE_SKIN_KEY, skinId); } catch(e) {}
+            syncBodySkinClass();
             skinTrialMode = false; skinTrialId = null;
             removeSkinTrialBanner();
             showSkinShop();
@@ -204,6 +234,7 @@
         var skinId = this.getAttribute('data-skin');
         activeSkinId = skinId;
         try { localStorage.setItem(ACTIVE_SKIN_KEY, skinId); } catch(e) {}
+        syncBodySkinClass();
         showSkinShop();
         buildTierBar(true);
         render();
@@ -216,6 +247,7 @@
     skinTrialId = skinId;
     skinTrialMode = true;
     activeSkinId = skinId;
+    syncBodySkinClass();
     buildTierBar(true);
     hideHome(); // close home screen → enter game directly
     init('practice', { fresh: true });
@@ -259,6 +291,7 @@
           ownedSkins.push(skinId);
           try { localStorage.setItem(OWNED_SKINS_KEY, JSON.stringify(ownedSkins)); } catch(e) {}
           try { localStorage.setItem(ACTIVE_SKIN_KEY, skinId); } catch(e) {}
+          syncBodySkinClass();
           skinTrialMode = false; skinTrialId = null;
           removeSkinTrialBanner();
           updateModeBar();
@@ -277,6 +310,7 @@
     if (skinTrialOriginal) {
       activeSkinId = skinTrialOriginal;
       try { localStorage.setItem(ACTIVE_SKIN_KEY, skinTrialOriginal); } catch(e) {}
+      syncBodySkinClass();
     }
     skinTrialMode = false;
     skinTrialId = null;

@@ -1,0 +1,266 @@
+<div style="padding: 1rem 0;">
+  <h2 class="sr-only">BLOOM Aurora tile system — 8 tiers preview with light and dark mode toggle and triggerable animations.</h2>
+
+  <div style="display:flex;gap:8px;margin-bottom:14px;align-items:center;flex-wrap:wrap;">
+    <button id="theme-light" class="theme-btn active">Light mode</button>
+    <button id="theme-dark" class="theme-btn">Dark mode</button>
+    <div style="flex:1;min-width:8px;"></div>
+    <button id="demo-drop">Trigger drops</button>
+    <button id="demo-merge">Trigger merges</button>
+    <button id="demo-bloom">Bloom the crown</button>
+  </div>
+
+  <div id="board" class="board theme-light">
+    <div class="cell-wrap"><div class="cell tier-1" data-tier="1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/></svg></div><span class="tier-label">אבן · 1</span></div>
+    <div class="cell-wrap"><div class="cell tier-2" data-tier="2"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21c.5-4.5 2.5-8 7-10"/><path d="M9 18c6.218 0 10.5-3.288 11-12v-2h-4.014c-9 0-11.986 4-12 9c0 1 0 3 2 5h3z"/></svg></div><span class="tier-label">עלה · 2</span></div>
+    <div class="cell-wrap"><div class="cell tier-3" data-tier="3"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="2.5" fill="currentColor"/><circle cx="12" cy="5.5" r="3"/><circle cx="12" cy="18.5" r="3"/><circle cx="5.5" cy="12" r="3"/><circle cx="18.5" cy="12" r="3"/></svg></div><span class="tier-label">פרח · 3</span></div>
+    <div class="cell-wrap"><div class="cell tier-4" data-tier="4"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 12c2-2.96 0-7-1-8 0 3.038-1.773 4.741-3 6-1.226 1.26-2 3.24-2 5a5 5 0 0 0 10 0c0-1.532-1.056-3.94-2-5-1.786 3-2.791 3-2 2z"/></svg></div><span class="tier-label">אש · 4</span></div>
+    <div class="cell-wrap"><div class="cell tier-5" data-tier="5"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 3v7h6l-8 11v-7H5l8-11z"/></svg></div><span class="tier-label">ברק · 5</span></div>
+    <div class="cell-wrap"><div class="cell tier-6 idle-glow" data-tier="6"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17.75l-6.172 3.245 1.179-6.873-4.993-4.867 6.9-1.002L12 1.999l3.086 6.254 6.9 1.002-4.993 4.867 1.179 6.873z"/></svg></div><span class="tier-label">כוכב · 6 (idle glow)</span></div>
+    <div class="cell-wrap"><div class="cell tier-7 idle-glow" data-tier="7"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 5h12l3 5-9 11-9-11z"/><path d="M3 10h18M9 5l3 5-3 5M15 5l-3 5 3 5"/></svg></div><span class="tier-label">יהלום · 7 (idle glow)</span></div>
+    <div class="cell-wrap"><div class="cell tier-8 crown-pulse" data-tier="8" id="crown-tile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l3.5 9h11l3.5-9-5 4-4-7-4 7z"/></svg></div><span class="tier-label">כתר · 8 (shimmer)</span></div>
+  </div>
+
+  <div id="empty-row" class="board" style="grid-template-columns:repeat(4,1fr);margin-top:10px;">
+    <div class="cell-wrap"><div class="cell empty"></div><span class="tier-label">תא ריק</span></div>
+    <div class="cell-wrap"><div class="cell empty"></div><span class="tier-label">+ shimmer</span></div>
+    <div class="cell-wrap"><div class="cell empty"></div><span class="tier-label">hover מותר</span></div>
+    <div class="cell-wrap"><div class="cell empty"></div><span class="tier-label">תא ריק</span></div>
+  </div>
+
+  <p id="status" style="margin-top:14px;font-size:13px;color:var(--color-text-secondary);text-align:center;">לחץ על אריח לבדיקת drop · לחץ על כפתורים למעלה להדגמת merge ו-bloom</p>
+</div>
+
+<style>
+  .theme-btn { font-size:13px; padding:6px 14px; border-radius:8px; border:0.5px solid var(--color-border-tertiary); background:transparent; cursor:pointer; }
+  .theme-btn.active { background:var(--color-background-secondary); border-color:var(--color-border-secondary); }
+  button { font-family:inherit; }
+
+  .board {
+    display:grid; grid-template-columns:repeat(4,1fr); gap:14px 12px;
+    padding:22px 18px; border-radius:16px;
+    transition:background 0.3s;
+  }
+  .board.theme-light { background:#F5F2EC; }
+  .board.theme-dark  { background:#1A1816; }
+  #empty-row.theme-light { background:#F5F2EC; }
+  #empty-row.theme-dark  { background:#1A1816; }
+
+  .cell-wrap { display:flex; flex-direction:column; align-items:center; gap:6px; }
+  .tier-label {
+    font-size:10px; letter-spacing:0.02em;
+    color:var(--color-text-secondary); white-space:nowrap;
+    direction:rtl; font-family:var(--font-sans);
+  }
+
+  .cell {
+    position:relative; width:72px; height:72px;
+    border-radius:14px; cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+    transition:transform 0.15s;
+  }
+  .cell svg { width:34px; height:34px; position:relative; z-index:2; }
+  .cell:hover { transform:translateY(-1px); }
+  .cell:active { transform:scale(0.96); }
+
+  .cell::before {
+    content:''; position:absolute; inset:0; border-radius:14px;
+    background:inherit;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.5), inset 0 -1px 0 rgba(0,0,0,0.06);
+    pointer-events:none; z-index:1;
+  }
+  .cell::after {
+    content:''; position:absolute; inset:0; border-radius:14px;
+    background:linear-gradient(165deg, rgba(255,255,255,0.35) 0%, rgba(255,255,255,0) 35%, rgba(0,0,0,0) 65%, rgba(0,0,0,0.08) 100%);
+    pointer-events:none; z-index:3; mix-blend-mode:overlay;
+  }
+
+  /* ===== TIER COLORS — LIGHT MODE ===== */
+  .theme-light .tier-1 { background:linear-gradient(140deg,#EBE7DA 0%,#C8C2B0 100%); color:#3D3A33; box-shadow:0 2px 4px rgba(0,0,0,0.06); }
+  .theme-light .tier-2 { background:linear-gradient(140deg,#D9EDB7 0%,#9BC265 100%); color:#1F3A0E; box-shadow:0 2px 5px rgba(127,165,67,0.18); }
+  .theme-light .tier-3 { background:linear-gradient(140deg,#FFD3E2 0%,#E891B4 100%); color:#5C1A38; box-shadow:0 2px 6px rgba(212,83,126,0.20); }
+  .theme-light .tier-4 { background:linear-gradient(140deg,#FFCCB0 0%,#F08560 100%); color:#5A1E08; box-shadow:0 3px 8px rgba(216,90,48,0.22); }
+  .theme-light .tier-5 { background:linear-gradient(140deg,#FFDC8C 0%,#EE9D24 100%); color:#3A1F00; box-shadow:0 3px 10px rgba(239,159,39,0.30); }
+  .theme-light .tier-6 { background:linear-gradient(140deg,#B8EED9 0%,#4DBC9A 100%); color:#013024; box-shadow:0 3px 12px rgba(29,158,117,0.28); }
+  .theme-light .tier-7 { background:linear-gradient(140deg,#C8DFFA 0%,#5598DD 100%); color:#042C53; box-shadow:0 4px 14px rgba(55,138,221,0.32); }
+  .theme-light .tier-8 {
+    background:linear-gradient(110deg,#E0D9FF 0%,#9B8AE8 25%,#F0C8F5 50%,#9B8AE8 75%,#E0D9FF 100%);
+    background-size:200% 200%;
+    color:#26215C;
+    box-shadow:0 4px 18px rgba(127,119,221,0.42), 0 0 0 1px rgba(174,159,232,0.6);
+  }
+
+  /* ===== TIER COLORS — DARK MODE ===== */
+  .theme-dark .tier-1 { background:linear-gradient(140deg,#3D3933 0%,#2A2724 100%); color:#A8A39A; box-shadow:0 2px 5px rgba(0,0,0,0.4); }
+  .theme-dark .tier-2 { background:linear-gradient(140deg,#5C7D2E 0%,#3A5018 100%); color:#D9EDB7; box-shadow:0 2px 6px rgba(0,0,0,0.45); }
+  .theme-dark .tier-3 { background:linear-gradient(140deg,#A03968 0%,#5C1F38 100%); color:#FFD3E2; box-shadow:0 2px 7px rgba(0,0,0,0.45); }
+  .theme-dark .tier-4 { background:linear-gradient(140deg,#B85020 0%,#6A2A0E 100%); color:#FFD0B0; box-shadow:0 3px 9px rgba(184,80,32,0.30); }
+  .theme-dark .tier-5 { background:linear-gradient(140deg,#D8901C 0%,#8A5708 100%); color:#FFE9B8; box-shadow:0 3px 12px rgba(216,144,28,0.32); }
+  .theme-dark .tier-6 { background:linear-gradient(140deg,#1D9E75 0%,#0E5A44 100%); color:#C8F0E0; box-shadow:0 3px 14px rgba(29,158,117,0.40); }
+  .theme-dark .tier-7 { background:linear-gradient(140deg,#1B5B9E 0%,#0E3A6B 100%); color:#C8DFFA; box-shadow:0 4px 16px rgba(27,91,158,0.45); }
+  .theme-dark .tier-8 {
+    background:linear-gradient(110deg,#6B5DB8 0%,#3C3489 25%,#8456A0 50%,#3C3489 75%,#6B5DB8 100%);
+    background-size:200% 200%;
+    color:#E0D9FF;
+    box-shadow:0 4px 20px rgba(155,138,232,0.45), 0 0 0 1px rgba(127,119,221,0.5);
+  }
+
+  /* ===== EMPTY CELLS ===== */
+  .theme-light .cell.empty { background:#EBE6D8; box-shadow:inset 0 1px 2px rgba(0,0,0,0.04); }
+  .theme-dark .cell.empty  { background:#2A2724; box-shadow:inset 0 1px 2px rgba(0,0,0,0.3); }
+  .cell.empty::before { display:none; }
+  .cell.empty::after  { display:none; }
+
+  /* shimmer over empty cells */
+  .cell.empty {
+    overflow:hidden;
+  }
+  .cell.empty::before {
+    content:''; display:block; position:absolute; inset:0; border-radius:14px;
+    background:linear-gradient(115deg, transparent 30%, rgba(255,255,255,0.16) 50%, transparent 70%);
+    transform:translateX(-100%);
+    animation:emptyShimmer 3.5s ease-in-out infinite;
+    pointer-events:none;
+  }
+  .theme-dark .cell.empty::before {
+    background:linear-gradient(115deg, transparent 30%, rgba(255,255,255,0.06) 50%, transparent 70%);
+  }
+  @keyframes emptyShimmer {
+    0%, 60% { transform:translateX(-100%); }
+    100%    { transform:translateX(100%); }
+  }
+
+  /* ===== ANIMATIONS ===== */
+  @keyframes auroraDrop {
+    0%   { transform:translateY(-22px) scale(0.82); opacity:0; }
+    55%  { transform:translateY(4px)   scale(1.08); opacity:1; }
+    75%  { transform:translateY(-2px)  scale(0.97); }
+    100% { transform:translateY(0)     scale(1); }
+  }
+  .cell.appearing { animation:auroraDrop 0.32s cubic-bezier(0.34, 1.32, 0.64, 1) both; }
+
+  @keyframes auroraMerge {
+    0%   { transform:scale(1);    box-shadow:0 0 0 0 rgba(250,199,117,0.65); }
+    30%  { transform:scale(1.18); }
+    45%  { transform:scale(1.32); box-shadow:0 0 0 10px rgba(250,199,117,0.30); filter:brightness(1.25); }
+    80%  { transform:scale(0.96); box-shadow:0 0 0 22px rgba(250,199,117,0); filter:brightness(1); }
+    100% { transform:scale(1); }
+  }
+  .cell.merging { animation:auroraMerge 0.42s cubic-bezier(0.22, 0.84, 0.36, 1.06) both; }
+
+  @keyframes idleGlow {
+    0%, 100% { filter:brightness(1)    saturate(1);    }
+    50%      { filter:brightness(1.08) saturate(1.10); }
+  }
+  .cell.idle-glow { animation:idleGlow 2.6s ease-in-out infinite; }
+
+  @keyframes crownShimmer {
+    0%   { background-position:0% 50%; }
+    100% { background-position:200% 50%; }
+  }
+  @keyframes crownPulse {
+    0%, 100% { transform:scale(1);    filter:brightness(1);    }
+    50%      { transform:scale(1.04); filter:brightness(1.12); }
+  }
+  .cell.crown-pulse {
+    animation:crownShimmer 3.5s linear infinite, crownPulse 2s ease-in-out infinite;
+  }
+  .cell.crown-pulse svg {
+    animation:crownIconRotate 8s linear infinite;
+    transform-origin:center;
+  }
+  @keyframes crownIconRotate {
+    0%, 92% { transform:rotate(0deg); }
+    96%     { transform:rotate(-8deg); }
+    100%    { transform:rotate(0deg); }
+  }
+
+  @keyframes bloomExplosion {
+    0%   { transform:scale(1)   rotate(0deg);    opacity:1; filter:brightness(1); }
+    20%  { transform:scale(1.4) rotate(15deg);   opacity:1; filter:brightness(1.6); }
+    100% { transform:scale(2.2) rotate(180deg);  opacity:0; filter:brightness(2); }
+  }
+  .cell.blooming { animation:bloomExplosion 0.7s cubic-bezier(0.16, 0.84, 0.34, 1) both; }
+
+  /* particles for bloom */
+  .bloom-particle {
+    position:absolute; width:6px; height:6px; border-radius:50%;
+    background:#9B8AE8; pointer-events:none;
+    animation:particleFly 0.7s ease-out forwards;
+  }
+  @keyframes particleFly {
+    0%   { transform:translate(0,0) scale(1);    opacity:1; }
+    100% { transform:translate(var(--dx),var(--dy)) scale(0); opacity:0; }
+  }
+</style>
+
+<script>
+  const board = document.getElementById('board');
+  const emptyRow = document.getElementById('empty-row');
+  const status = document.getElementById('status');
+  const lightBtn = document.getElementById('theme-light');
+  const darkBtn  = document.getElementById('theme-dark');
+
+  function setTheme(t) {
+    board.classList.remove('theme-light','theme-dark');
+    emptyRow.classList.remove('theme-light','theme-dark');
+    board.classList.add('theme-'+t);
+    emptyRow.classList.add('theme-'+t);
+    lightBtn.classList.toggle('active', t==='light');
+    darkBtn.classList.toggle('active',  t==='dark');
+  }
+  lightBtn.onclick = () => setTheme('light');
+  darkBtn.onclick  = () => setTheme('dark');
+
+  function retrigger(el, cls, dur) {
+    el.classList.remove(cls);
+    void el.offsetWidth;
+    el.classList.add(cls);
+    if (dur) setTimeout(() => el.classList.remove(cls), dur);
+  }
+
+  document.querySelectorAll('.cell[data-tier]').forEach(c => {
+    c.addEventListener('click', () => {
+      retrigger(c, 'appearing', 320);
+      status.textContent = 'drop · דרגה ' + c.dataset.tier;
+    });
+  });
+
+  document.getElementById('demo-drop').onclick = () => {
+    document.querySelectorAll('.cell[data-tier]').forEach((c, i) => {
+      setTimeout(() => retrigger(c, 'appearing', 320), i*60);
+    });
+    status.textContent = 'דמו: כל האריחים נופלים בזה אחר זה';
+  };
+
+  document.getElementById('demo-merge').onclick = () => {
+    document.querySelectorAll('.cell[data-tier]').forEach((c, i) => {
+      setTimeout(() => retrigger(c, 'merging', 420), i*80);
+    });
+    status.textContent = 'דמו: גל מיזוגים על פני הלוח';
+  };
+
+  document.getElementById('demo-bloom').onclick = () => {
+    const crown = document.getElementById('crown-tile');
+    const rect = crown.getBoundingClientRect();
+    const wrap = crown.parentElement;
+    for (let i = 0; i < 12; i++) {
+      const p = document.createElement('span');
+      p.className = 'bloom-particle';
+      const angle = (Math.PI * 2 * i) / 12;
+      p.style.setProperty('--dx', Math.cos(angle) * 80 + 'px');
+      p.style.setProperty('--dy', Math.sin(angle) * 80 + 'px');
+      p.style.left = (rect.width/2 - 3) + 'px';
+      p.style.top  = (rect.height/2 - 3) + 'px';
+      p.style.background = ['#9B8AE8','#FAC775','#F0C8F5','#5DCAA5'][i%4];
+      wrap.style.position = 'relative';
+      wrap.appendChild(p);
+      setTimeout(() => p.remove(), 700);
+    }
+    crown.classList.add('blooming');
+    setTimeout(() => {
+      crown.classList.remove('blooming');
+    }, 700);
+    status.textContent = 'דמו: הכתר פורח ונעלם';
+  };
+</script>
