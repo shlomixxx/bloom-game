@@ -4830,14 +4830,33 @@ app.post('/api/duels/:id/score', requireDeviceAuth, async (req, res) => {
             tag: 'duel-result-' + duelId,
             data: { url: '/?action=duels', kind: 'duel_tie', duelId }
           });
-          return res.json({ ok: true, result: 'tie', refunded: true });
+          // Echo both scores so the second-to-play client can render
+          // "vs <opponent score>" immediately (no need to wait for the
+          // poller which only fires on the 'waiting' path).
+          return res.json({
+            ok: true,
+            result: 'tie',
+            refunded: true,
+            yourScore: s,
+            opponentScore: isChallenger ? u.opponent_score : u.challenger_score
+          });
         }
         if (prize > 0) {
           await client.query(`UPDATE player_profiles SET balance = balance + $1, total_earned = total_earned + $1 WHERE device_id = $2`, [prize, winner]);
         }
         await client.query(`UPDATE duels SET status = 'settled', winner_device = $1 WHERE id = $2 AND status IN ('pending','accepted')`, [winner, duelId]);
         await client.query('COMMIT');
-        res.json({ ok: true, result: 'settled', winner: winner === deviceId ? 'you' : 'opponent', prize });
+        // Include both scores in the response so the second-to-play
+        // client renders the actual opponent score (instead of "...")
+        // without waiting for the poll path that only fires on 'waiting'.
+        res.json({
+          ok: true,
+          result: 'settled',
+          winner: winner === deviceId ? 'you' : 'opponent',
+          prize,
+          yourScore: s,
+          opponentScore: isChallenger ? u.opponent_score : u.challenger_score
+        });
         // Push both players with personalised win/lose copy.
         const winnerIsChall = (winner === u.challenger_device);
         const challWin = winnerIsChall;

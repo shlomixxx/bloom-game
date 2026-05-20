@@ -623,6 +623,18 @@
         var statusText = statusMap[duel.status] || duel.status;
         var amtText = (duel.amount | 0) > 0 ? ' · ' + duel.amount + '💎' : '';
         var winText = '';
+        // Render the actual score line on every terminal duel — settled
+        // OR tie. Players were leaving the list none the wiser about by
+        // how much they won/lost; the scores are the whole satisfaction
+        // of a duel.
+        var myScoreRow = isChallenger ? duel.challenger_score : duel.opponent_score;
+        var oppScoreRow = isChallenger ? duel.opponent_score : duel.challenger_score;
+        var scoreLine = '';
+        if ((duel.status === 'settled' || duel.status === 'tie') && myScoreRow != null && oppScoreRow != null) {
+          scoreLine = ' · <span style="color:#6F6E68;font-size:11px">' +
+            (myScoreRow | 0).toLocaleString() + ' vs ' + (oppScoreRow | 0).toLocaleString() +
+          '</span>';
+        }
         if (duel.status === 'settled' && duel.winner_device) {
           winText = duel.winner_device === deviceId ? ' · <strong style="color:#2E8B6F">ניצחת!</strong>' : ' · <span style="color:#C8472F">הפסדת</span>';
         }
@@ -648,7 +660,7 @@
           }
         }
         html += '<div style="padding:6px 0;border-top:1px solid rgba(0,0,0,0.04)">' +
-          '<span style="font-weight:600">vs ' + otherName + '</span>' + amtText + ' · ' + statusText + winText + ' ' + actionBtn +
+          '<span style="font-weight:600">vs ' + otherName + '</span>' + amtText + ' · ' + statusText + winText + scoreLine + ' ' + actionBtn +
         '</div>';
       });
       el.innerHTML = html;
@@ -1398,8 +1410,10 @@
 
     // Build scores comparison (skipped for declined / expired / unresolved
     // where the opponent never played — showing "vs ..." would imply they
-    // *did* play, which is misleading).
-    var oppScore = (d && d.opponentScore) ? d.opponentScore : null;
+    // *did* play, which is misleading). Use `!= null` so a legitimate
+    // opponent score of 0 (gave up on first drop) still renders as "0"
+    // instead of dropping to the "..." placeholder.
+    var oppScore = (d && d.opponentScore != null) ? d.opponentScore : null;
     var scoresHtml = '';
     if (!hideScoresVs) {
       scoresHtml = '<div style="display:flex;justify-content:center;gap:20px;margin:14px 0;font-size:13px">' +
@@ -1492,14 +1506,23 @@
     var b = document.createElement('div');
     b.setAttribute('data-duel-notif', opts.id);
     var bg = '#1C1A18', border = '#6B5CE7', emoji = '⚔️', title = 'אתגר חדש', sub = '';
+    // Compact "vs" string when both scores are known — shown on the
+    // result banners (won/lost/tie). The score numbers are the whole
+    // reason a duel feels satisfying; the original banner just said
+    // "ניצחת! מול X" and forced the player to dig into the modal to
+    // see by how much.
+    var vsScores = '';
+    if (typeof opts.myScore === 'number' && typeof opts.oppScore === 'number') {
+      vsScores = ' · ' + (opts.myScore | 0).toLocaleString() + ' vs ' + (opts.oppScore | 0).toLocaleString();
+    }
     if (opts.kind === 'invite') {
       emoji = '⚔️'; title = (opts.name || 'מישהו') + ' אתגר/ה אותך!'; sub = 'לחץ לקבל'; border = '#6B5CE7';
     } else if (opts.kind === 'won') {
-      emoji = '🏆'; title = 'ניצחת בדו-קרב!'; sub = 'מול ' + (opts.name || 'יריב'); border = '#2E8B6F';
+      emoji = '🏆'; title = 'ניצחת בדו-קרב!'; sub = 'מול ' + (opts.name || 'יריב') + vsScores; border = '#2E8B6F';
     } else if (opts.kind === 'lost') {
-      emoji = '😔'; title = 'הפסדת בדו-קרב'; sub = 'מול ' + (opts.name || 'יריב'); border = '#C8472F';
+      emoji = '😔'; title = 'הפסדת בדו-קרב'; sub = 'מול ' + (opts.name || 'יריב') + vsScores; border = '#C8472F';
     } else if (opts.kind === 'tie') {
-      emoji = '🤝'; title = 'תיקו בדו-קרב'; sub = 'מול ' + (opts.name || 'יריב'); border = '#BA7517';
+      emoji = '🤝'; title = 'תיקו בדו-קרב'; sub = 'מול ' + (opts.name || 'יריב') + vsScores; border = '#BA7517';
     } else if (opts.kind === 'declined') {
       // Opponent rejected. Tone is informative + warm — not "you failed".
       emoji = '🤷'; title = (opts.name || 'היריב') + ' סירב/ה לדו-קרב'; sub = 'ההימור הוחזר אליך'; border = '#BA7517';
@@ -1599,6 +1622,8 @@
           if (iPlayed) {
             var iAmChall = duel.challenger_device === deviceId;
             var opponentName = iAmChall ? (duel.opponent_name || duel.opponent_code) : (duel.challenger_name || duel.challenger_code);
+            var myScoreForBanner = iAmChall ? duel.challenger_score : duel.opponent_score;
+            var oppScoreForBanner = iAmChall ? duel.opponent_score : duel.challenger_score;
             var kind = 'tie';
             if (duel.status === 'settled') {
               kind = (duel.winner_device === deviceId) ? 'won' : 'lost';
@@ -1607,6 +1632,8 @@
               id: duel.id,
               kind: kind,
               name: opponentName,
+              myScore: myScoreForBanner,
+              oppScore: oppScoreForBanner,
               onTap: function() { showDuelModal(); }
             });
           }
