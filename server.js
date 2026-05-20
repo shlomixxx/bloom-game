@@ -4669,15 +4669,21 @@ app.get('/api/health', (_req, res) => res.json({ ok: true }));
 app.get('/api/stats/live', async (_req, res) => {
   try {
     const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' });
-    const [active, playing, games] = await Promise.all([
+    // Tiered fallback so the home v2 social-proof bar never disappears:
+    // activeNow → playingNow → gamesToday → activeThisHour → gamesThisWeek.
+    const [active, playing, games, activeHr, gamesWeek] = await Promise.all([
       pool.query(`SELECT COUNT(DISTINCT device_id)::int AS c FROM contest_live_state WHERE updated_at > NOW() - INTERVAL '30 seconds'`),
       pool.query(`SELECT COUNT(DISTINCT device_id)::int AS c FROM device_visits WHERE last_at > NOW() - INTERVAL '3 minutes'`),
-      pool.query(`SELECT COUNT(*)::int AS c FROM daily_scores WHERE date = $1`, [today])
+      pool.query(`SELECT COUNT(*)::int AS c FROM daily_scores WHERE date = $1`, [today]),
+      pool.query(`SELECT COUNT(DISTINCT device_id)::int AS c FROM device_visits WHERE last_at > NOW() - INTERVAL '1 hour'`),
+      pool.query(`SELECT COUNT(*)::int AS c FROM daily_scores WHERE date >= ($1::date - INTERVAL '7 days')::date`, [today])
     ]);
     res.json({
       activeNow: active.rows[0].c,
       playingNow: playing.rows[0].c,
-      gamesToday: games.rows[0].c
+      gamesToday: games.rows[0].c,
+      activeThisHour: activeHr.rows[0].c,
+      gamesThisWeek: gamesWeek.rows[0].c
     });
   } catch (e) {
     console.error('GET /api/stats/live', e);

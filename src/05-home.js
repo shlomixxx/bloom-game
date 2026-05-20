@@ -1,4 +1,11 @@
   function showHome() {
+    // ── Home v2 delegation ──
+    // The new home (HOME_AUDIT.md task plan) is opt-in for now. Once the
+    // user signs off we flip the default; until then v1 stays canonical.
+    if (typeof homeV2Enabled === 'function' && homeV2Enabled()
+        && typeof showHomeV2 === 'function') {
+      return showHomeV2();
+    }
     stopEventSystem(); // don't run events behind home screen
     const app = document.querySelector('.app');
     if (!app || document.getElementById('home-screen')) return;
@@ -59,6 +66,9 @@
       (!hasSeenTour()
         ? '<button class="home-skip" id="home-skip">אני יודע לשחק, דלג</button>'
         : '<button class="home-skip" id="home-tour-btn" style="margin-top:8px;color:#BA7517">📖 איך משחקים?</button>') +
+      // "Try v2" toggle — opt-in path to the new home. Removed once v2
+      // is the default (this block becomes the v2→v1 fallback then).
+      '<button class="home-v1-try-v2" id="home-v1-try-v2">✨ נסה את הגירסה החדשה</button>' +
       '<div style="text-align:center;margin-top:14px;font-size:11px;opacity:.6"><a href="/privacy" target="_blank" rel="noopener" style="color:inherit;text-decoration:none">מדיניות פרטיות</a></div>';
     app.appendChild(h);
     syncHomeMuteUI();
@@ -144,6 +154,13 @@
     // Wire the "איך משחקים?" link
     const tourLink = document.getElementById('home-tour-btn');
     if (tourLink) tourLink.onclick = function() { ensureAudio(); showTour({ onDone: enter }); };
+    // Try-v2 toggle — flips the localStorage flag and re-renders the home
+    const tryV2Btn = document.getElementById('home-v1-try-v2');
+    if (tryV2Btn) tryV2Btn.onclick = function() {
+      if (typeof enableHomeV2 === 'function') enableHomeV2();
+      hideHome();
+      showHome(); // delegation in showHome will route to v2
+    };
     var skinShopBtn = document.getElementById('home-skin-shop');
     if (skinShopBtn) skinShopBtn.onclick = function() { showSkinShop(); };
     var duelBtn = document.getElementById('home-duel-btn');
