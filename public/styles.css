@@ -3863,6 +3863,33 @@
     border-color: rgba(255,140,66,0.55);
   }
 
+  /* Exit-X button — sits as a fourth, narrower column on the HUD.
+     Small but with a generous tap target (24×24 visual, but the
+     parent button is min 28×28 for finger-safety on mobile). */
+  .duel-hud-exit {
+    flex: 0 0 auto;
+    margin-right: 6px;
+    margin-left: -4px;
+    width: 26px; height: 26px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.15);
+    color: #FAC775;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s ease, transform 0.1s ease;
+    padding: 0;
+    line-height: 1;
+    font-family: inherit;
+    align-self: center;
+  }
+  .duel-hud-exit:hover { background: rgba(255,255,255,0.16); }
+  .duel-hud-exit:active { transform: scale(0.9); background: rgba(255,107,107,0.25); }
+
   /* Narrow phones — shrink padding so the pill fits 320px viewports */
   @media (max-width: 360px) {
     .duel-hud { min-width: auto; padding: 6px 8px; }

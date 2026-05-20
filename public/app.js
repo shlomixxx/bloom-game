@@ -784,12 +784,50 @@
       '<div class="duel-hud-side duel-hud-opp">' +
         '<div class="duel-hud-label">' + escDuelHtml(oppName) + '</div>' +
         '<div class="duel-hud-score" id="duel-hud-opp-score">--</div>' +
-      '</div>';
+      '</div>' +
+      // Exit button — taps to confirm + submit current score as final.
+      // Gives the player a graceful way out of a duel they don't want
+      // to finish, without forfeiting their accumulated points.
+      '<button class="duel-hud-exit" id="duel-hud-exit" aria-label="צא מהדו-קרב" type="button">✕</button>';
     // Append to document.body (NOT .app) — .app has overflow:hidden
     // which has clipped fixed children on some Safari versions. Body
     // is the safest containing block for a position:fixed element.
     document.body.appendChild(hud);
+    // Wire the exit handler. Uses native confirm() so a fat-finger tap
+    // can't accidentally end the duel.
+    var exitBtn = document.getElementById('duel-hud-exit');
+    if (exitBtn) exitBtn.onclick = function(e) {
+      e.stopPropagation();
+      exitDuelEarly();
+    };
     try { console.info('[duel-hud] mounted', { iAmChallenger: iAmChallenger, oppName: oppName }); } catch (e) {}
+  }
+
+  // §Bug 2 — graceful exit. Submits the player's current score as the
+  // final value (so the opponent still gets a target to beat), then
+  // tears down the duel game and routes back to home. The native
+  // confirm() shows the actual current score so the player knows
+  // exactly what they're locking in.
+  function exitDuelEarly() {
+    var myScore = (typeof score === 'number') ? score : 0;
+    var msg = myScore > 0
+      ? 'תסיים את הדו-קרב עכשיו? הניקוד שלך (' + myScore.toLocaleString() + ') יוגש כסופי.\n' +
+        'היריב עוד יכול לשחק נגדך.'
+      : 'תסיים את הדו-קרב? תאבד את ההימור והניקוד שלך יהיה 0.';
+    if (!window.confirm(msg)) return;
+    // Pull together the values submitDuelScore needs from the engine.
+    var finalScore = myScore;
+    // Stop the HUD's pollers + remove the DOM immediately so we don't
+    // race against the result overlay.
+    try { stopDuelOpponentHud(); } catch (e) {}
+    // Mark the game as "over" so the engine + heartbeats stop. The
+    // existing submitDuelScore() flow handles the server submission
+    // and result-overlay rendering — we just reuse it.
+    try { window.__bloomGameOver = true; } catch (e) {}
+    try { if (typeof submitDuelScore === 'function') submitDuelScore(finalScore); } catch (e) {
+      console.warn('[duel-hud] exit submit failed', e);
+    }
+    try { trackEvent('duel_early_exit', { finalScore: finalScore }); } catch (e) {}
   }
 
   function syncDuelHudMyScore() {
@@ -827,11 +865,20 @@
         // Opponent hasn't finalized — check if they're playing live.
         if (oppDeviceId) {
           fetch(API_BASE + '/api/live-state/' + encodeURIComponent(oppDeviceId))
-            .then(function(r2) { return r2.ok ? r2.json() : null; })
+            .then(function(r2) {
+              // 404 = no recent heartbeat yet (within 60s window). That's
+              // not an error — it just means the opponent is accepted but
+              // hasn't started playing yet. Treat it as 'accepted'.
+              if (r2.status === 404) return null;
+              return r2.ok ? r2.json() : null;
+            })
             .then(function(live) {
-              if (live && typeof live.live_score === 'number') {
+              // BUG FIX: server returns the field as `score`, NOT `live_score`.
+              // The old guard `typeof live.live_score === 'number'` always
+              // failed → HUD never showed the opponent's actual live score.
+              if (live && typeof live.score === 'number') {
                 paintDuelHud({
-                  oppScore: live.live_score,
+                  oppScore: live.score,
                   oppStatus: 'playing',
                   oppDeviceId: oppDeviceId
                 });
@@ -843,7 +890,10 @@
                 });
               }
             })
-            .catch(function() {
+            .catch(function(err) {
+              // Surface fetch failures so we can see them in DevTools
+              // instead of silently downgrading to "accepted" state.
+              console.warn('[duel-hud] live-state fetch failed', err);
               paintDuelHud({ oppScore: null, oppStatus: 'accepted', oppDeviceId: oppDeviceId });
             });
         } else {
@@ -851,7 +901,10 @@
           paintDuelHud({ oppScore: null, oppStatus: 'pending', oppDeviceId: null });
         }
       })
-      .catch(function() { /* silent */ });
+      .catch(function(err) {
+        // Surface duel-state fetch failures too — same reasoning as above.
+        console.warn('[duel-hud] duel-state fetch failed', err);
+      });
   }
 
   function paintDuelHud(state) {
