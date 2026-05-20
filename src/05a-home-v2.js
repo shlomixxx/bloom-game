@@ -22,23 +22,28 @@
   //   C3 ✅  safe-area-inset-bottom on the bottom padding
   // ============================================================
 
-  const HOME_V2_KEY = 'bloom_home_v2';
+  // v2 is now the canonical home. v1 stays available as opt-out via
+  // ?home=v1 or the toggle inside v2 — useful for screenshot diffs +
+  // a quick rollback if something visual regresses on a player's setup.
+  const HOME_V1_FORCE_KEY = 'bloom_home_v1_force';
+  const HOME_V2_KEY = 'bloom_home_v2'; // legacy — read-only for migration
 
   function homeV2Enabled() {
     try {
       const params = new URLSearchParams(window.location.search);
       const v = params.get('home');
-      if (v === 'v2') { localStorage.setItem(HOME_V2_KEY, '1'); return true; }
-      if (v === 'v1') { localStorage.removeItem(HOME_V2_KEY); return false; }
-      return localStorage.getItem(HOME_V2_KEY) === '1';
-    } catch (e) { return false; }
+      if (v === 'v1') { localStorage.setItem(HOME_V1_FORCE_KEY, '1'); return false; }
+      if (v === 'v2') { localStorage.removeItem(HOME_V1_FORCE_KEY); return true; }
+      // No URL param: v2 is default unless v1 was explicitly forced.
+      return localStorage.getItem(HOME_V1_FORCE_KEY) !== '1';
+    } catch (e) { return true; }
   }
 
   function enableHomeV2() {
-    try { localStorage.setItem(HOME_V2_KEY, '1'); } catch (e) {}
+    try { localStorage.removeItem(HOME_V1_FORCE_KEY); } catch (e) {}
   }
   function disableHomeV2() {
-    try { localStorage.removeItem(HOME_V2_KEY); } catch (e) {}
+    try { localStorage.setItem(HOME_V1_FORCE_KEY, '1'); } catch (e) {}
   }
 
   function showHomeV2() {
@@ -124,7 +129,7 @@
           ? '<button class="home-v2-link" id="home-v2-tour">📖 איך משחקים?</button>'
           : '<button class="home-v2-link home-v2-link-skip" id="home-v2-skip">דלג על הסיור</button>') +
         '<button class="home-v2-link" id="home-v2-invite">📱 הזמן חבר</button>' +
-        '<button class="home-v2-link home-v2-switch" id="home-v2-switch">↩ חזור לגירסה הקודמת</button>' +
+        '<button class="home-v2-link home-v2-switch" id="home-v2-switch">↩ הגירסה הישנה</button>' +
         '<a class="home-v2-link" href="/privacy" target="_blank" rel="noopener">מדיניות פרטיות</a>' +
       '</div>';
 

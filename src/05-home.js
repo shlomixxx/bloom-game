@@ -66,9 +66,10 @@
       (!hasSeenTour()
         ? '<button class="home-skip" id="home-skip">אני יודע לשחק, דלג</button>'
         : '<button class="home-skip" id="home-tour-btn" style="margin-top:8px;color:#BA7517">📖 איך משחקים?</button>') +
-      // "Try v2" toggle — opt-in path to the new home. Removed once v2
-      // is the default (this block becomes the v2→v1 fallback then).
-      '<button class="home-v1-try-v2" id="home-v1-try-v2">✨ נסה את הגירסה החדשה</button>' +
+      // v2 is now the default. Anyone landing on v1 explicitly asked
+      // for it (via ?home=v1 or the v2 toggle button) so we surface a
+      // "back to recommended" hint instead of the old "try v2" CTA.
+      '<button class="home-v1-try-v2" id="home-v1-back-to-v2">↩ חזור לגירסה החדשה (מומלץ)</button>' +
       '<div style="text-align:center;margin-top:14px;font-size:11px;opacity:.6"><a href="/privacy" target="_blank" rel="noopener" style="color:inherit;text-decoration:none">מדיניות פרטיות</a></div>';
     app.appendChild(h);
     syncHomeMuteUI();
@@ -154,9 +155,10 @@
     // Wire the "איך משחקים?" link
     const tourLink = document.getElementById('home-tour-btn');
     if (tourLink) tourLink.onclick = function() { ensureAudio(); showTour({ onDone: enter }); };
-    // Try-v2 toggle — flips the localStorage flag and re-renders the home
-    const tryV2Btn = document.getElementById('home-v1-try-v2');
-    if (tryV2Btn) tryV2Btn.onclick = function() {
+    // "Back to v2" toggle — clears the v1-force flag and re-renders.
+    // (Renamed from the old "try v2" CTA since v2 is now the default.)
+    const backToV2Btn = document.getElementById('home-v1-back-to-v2');
+    if (backToV2Btn) backToV2Btn.onclick = function() {
       if (typeof enableHomeV2 === 'function') enableHomeV2();
       hideHome();
       showHome(); // delegation in showHome will route to v2

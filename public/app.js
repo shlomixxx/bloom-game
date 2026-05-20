@@ -2675,9 +2675,10 @@
       (!hasSeenTour()
         ? '<button class="home-skip" id="home-skip">אני יודע לשחק, דלג</button>'
         : '<button class="home-skip" id="home-tour-btn" style="margin-top:8px;color:#BA7517">📖 איך משחקים?</button>') +
-      // "Try v2" toggle — opt-in path to the new home. Removed once v2
-      // is the default (this block becomes the v2→v1 fallback then).
-      '<button class="home-v1-try-v2" id="home-v1-try-v2">✨ נסה את הגירסה החדשה</button>' +
+      // v2 is now the default. Anyone landing on v1 explicitly asked
+      // for it (via ?home=v1 or the v2 toggle button) so we surface a
+      // "back to recommended" hint instead of the old "try v2" CTA.
+      '<button class="home-v1-try-v2" id="home-v1-back-to-v2">↩ חזור לגירסה החדשה (מומלץ)</button>' +
       '<div style="text-align:center;margin-top:14px;font-size:11px;opacity:.6"><a href="/privacy" target="_blank" rel="noopener" style="color:inherit;text-decoration:none">מדיניות פרטיות</a></div>';
     app.appendChild(h);
     syncHomeMuteUI();
@@ -2763,9 +2764,10 @@
     // Wire the "איך משחקים?" link
     const tourLink = document.getElementById('home-tour-btn');
     if (tourLink) tourLink.onclick = function() { ensureAudio(); showTour({ onDone: enter }); };
-    // Try-v2 toggle — flips the localStorage flag and re-renders the home
-    const tryV2Btn = document.getElementById('home-v1-try-v2');
-    if (tryV2Btn) tryV2Btn.onclick = function() {
+    // "Back to v2" toggle — clears the v1-force flag and re-renders.
+    // (Renamed from the old "try v2" CTA since v2 is now the default.)
+    const backToV2Btn = document.getElementById('home-v1-back-to-v2');
+    if (backToV2Btn) backToV2Btn.onclick = function() {
       if (typeof enableHomeV2 === 'function') enableHomeV2();
       hideHome();
       showHome(); // delegation in showHome will route to v2
@@ -2896,23 +2898,28 @@
   //   C3 ✅  safe-area-inset-bottom on the bottom padding
   // ============================================================
 
-  const HOME_V2_KEY = 'bloom_home_v2';
+  // v2 is now the canonical home. v1 stays available as opt-out via
+  // ?home=v1 or the toggle inside v2 — useful for screenshot diffs +
+  // a quick rollback if something visual regresses on a player's setup.
+  const HOME_V1_FORCE_KEY = 'bloom_home_v1_force';
+  const HOME_V2_KEY = 'bloom_home_v2'; // legacy — read-only for migration
 
   function homeV2Enabled() {
     try {
       const params = new URLSearchParams(window.location.search);
       const v = params.get('home');
-      if (v === 'v2') { localStorage.setItem(HOME_V2_KEY, '1'); return true; }
-      if (v === 'v1') { localStorage.removeItem(HOME_V2_KEY); return false; }
-      return localStorage.getItem(HOME_V2_KEY) === '1';
-    } catch (e) { return false; }
+      if (v === 'v1') { localStorage.setItem(HOME_V1_FORCE_KEY, '1'); return false; }
+      if (v === 'v2') { localStorage.removeItem(HOME_V1_FORCE_KEY); return true; }
+      // No URL param: v2 is default unless v1 was explicitly forced.
+      return localStorage.getItem(HOME_V1_FORCE_KEY) !== '1';
+    } catch (e) { return true; }
   }
 
   function enableHomeV2() {
-    try { localStorage.setItem(HOME_V2_KEY, '1'); } catch (e) {}
+    try { localStorage.removeItem(HOME_V1_FORCE_KEY); } catch (e) {}
   }
   function disableHomeV2() {
-    try { localStorage.removeItem(HOME_V2_KEY); } catch (e) {}
+    try { localStorage.setItem(HOME_V1_FORCE_KEY, '1'); } catch (e) {}
   }
 
   function showHomeV2() {
@@ -2998,7 +3005,7 @@
           ? '<button class="home-v2-link" id="home-v2-tour">📖 איך משחקים?</button>'
           : '<button class="home-v2-link home-v2-link-skip" id="home-v2-skip">דלג על הסיור</button>') +
         '<button class="home-v2-link" id="home-v2-invite">📱 הזמן חבר</button>' +
-        '<button class="home-v2-link home-v2-switch" id="home-v2-switch">↩ חזור לגירסה הקודמת</button>' +
+        '<button class="home-v2-link home-v2-switch" id="home-v2-switch">↩ הגירסה הישנה</button>' +
         '<a class="home-v2-link" href="/privacy" target="_blank" rel="noopener">מדיניות פרטיות</a>' +
       '</div>';
 
