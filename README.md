@@ -61,44 +61,51 @@ The daily run is gated by `localStorage`; on a second visit the same day, the pl
 - Full merge engine with BFS group detection, gravity, and chained scoring
 - Floating `+points` and "שרשרת ×N" feedback
 - Personal best score in `localStorage`
-- Game-over screen with full tier table, stats summary, and share card
+- **Emotional game-over screen** (UX audit §1.3) — rank pill ("#23 מתוך 847"), best-score delta ("+2,300 שיא חדש" / "החמצת ב-180"), gap-to-next-tier ("עוד 200 נקודות והיית ב-TOP 20"), prominent breathing "שחק שוב" CTA, plus the legacy tier table + stats summary + share card
 - Wordle-style emoji share (uses `navigator.share` with clipboard fallback)
 - **WhatsApp share** — direct share button in game-over + home screen
-- One-time anonymous player-name prompt (persisted)
+- **First-Time User Experience (FTUE)** — 3-step interactive tutorial (drop → first merge → first chain with "WOW!" + confetti) shown once to brand-new players; demos the core mechanics in <30s before the first real game
+- **Default player name** — every device boots with "שחקן XXXX" derived from the deviceId, so there's no pre-game prompt; players opt into a real name via the ✏️ on home or the inline CTA on game-over
 - Anonymous `deviceId` (UUID, persisted) — one row per device per day
-- **Daily leaderboard** — top 50 with player highlight + absolute rank
-- **Public leaderboard modal** with `day / week / month` tabs
-- **Friends contest** with live in-game score updates + real-time spectator mode
+- **Daily leaderboard** — top 50 with player highlight + absolute rank + total players today
+- **Public leaderboard modal** with `day / week / month` tabs and `world / country / difficulty` scopes
+- **Friends contest** with live in-game score updates + real-time spectator mode + unified shell header
 - **BLOOM Challenges** — public single-shot prize contests (4 types)
-- **Interactive tutorial** — 8-step tour with animated illustrations
 - **Onboarding coach** — gentle in-game toasts for new players
 - **Achievements system** — tier, chain, score, streak, and general achievements
-- **6 skin packs** — classic, neon, ocean, galaxy, candy, zen (with try-before-buy trial mode)
+- **7 skin packs** — classic, neon, ocean, galaxy, candy, zen, Aurora (animated CSS effects, try-before-buy trial mode)
 - **Tile shop** — buy power-ups with BLOOM credits (💎)
-- **Credits/wallet system** — BLOOM-XXXX codes, referral credits, daily bonuses
+- **Credits/wallet system** — BLOOM-XXXX codes, referral credits, daily bonuses with slot-machine reel animation
 - **1v1 duels** — head-to-head matches with wagers. Challenge by typing only the 4-char BLOOM suffix (the `BLOOM-` prefix is built in), pasting a full code, or tapping the ⚔️ button on any leaderboard row. Your own code is one tap away to copy at the top of the duel modal.
 - **Daily jackpot** — auto-settled at midnight Israel time
 - **XP leveling** — 11 levels with progression
 - **Server-side bots** — 200 Israeli names, 3 modes, 4 speeds, admin-controlled
-- **Admin dashboard** — DAU/WAU/MAU, retention cohorts, funnel, heatmap, live view, bot controls, audit log
-- **Dark mode** — full (253 CSS rules), auto-detects system preference
+- **Admin dashboard** — DAU/WAU/MAU, retention cohorts, funnel, heatmap, live view, bot controls, audit log, bonus simulator, scope×time leaderboard config
+- **Dark mode** — full, auto-detects system preference; driven by `:root` design tokens
 - **PWA** — installable, service worker, offline shell
 - **Viral features (v1.2)** — streak hero badge, addiction badge with share, WhatsApp invite flow, mini-leaderboard, enhanced share card with game time + chain + addiction
+- **Streak FOMO** (UX audit §1.5) — game-over streak hint has four tones (cold / low / mid border-pulse / hot pulsing-gradient at ≥7 days)
+- **"Already played today" funnel** (UX audit §1.6) — the daily countdown screen also offers practice / contests / challenges CTAs so the player isn't dead-ended
+- **Social-proof live pulse** (UX audit §1.4) — home screen shows "N שחקנים פעילים · M משחקים היום" via `/api/stats/live`, refreshed every 15s
+- **Unified shell + NavStack** (UX audit §2.1 + §3.1) — `mountShell()` injects a sticky back-arrow + title + actions bar across non-game screens (proof-of-pattern on the contest leaderboard; other screens still pending mechanical migration)
+- **Design tokens** (UX audit §2.2) — `:root` block in `base.css` exports `--color-*` / `--radius-*` / `--shadow-*` so every new component picks from one source of truth
+- **`showToast()` helper** — generic info/success/error/warning toast available globally via `window.__bloomToast`
 - **Security**: HMAC device-token (`/api/register`) required on all credit/state-mutating endpoints, atomic balance updates everywhere, strict CORS allowlist, `Strict-Transport-Security` + `Content-Security-Policy` headers, `drops`-mandatory anti-cheat, server-decided gift jackpots (no client-supplied amounts), single-submission guard on duel scores, server-authoritative skin ownership (`player_skins` table), strict per-day dedup on `/api/player/earn`, periodic DB cleanup of dedup keys and stale live-state rows
+- **Backups**: Railway-side `DAILY` (retention 6 days) + `WEEKLY` (Saturday, retention 27 days) volume snapshots on `Postgres-z2RQ` plus a manual `manual-baseline-20260520` snapshot. Configured via the `volumeInstanceBackupScheduleUpdate` mutation after the 2026-05-13 incident (see CLAUDE.md §11 for the full post-mortem).
 
 ## NOT currently in the build
 
-The repository's older `ROADMAP_1.md` describes a welcome splash, an interactive tutorial, and background MP3 music. **Those were rolled back** in commit `4fb5972` ("Roll back to initial daily-challenge game, layered with sound system"). Treat `ROADMAP_1.md` as a historical design doc, not a description of the current state.
+The repository's older `ROADMAP_1.md` describes a welcome splash, a longer 6-to-8-step tutorial, and background MP3 music. **Those were rolled back** in commit `4fb5972`. The current onboarding is the 3-step FTUE in [src/15-ftue.js](src/15-ftue.js), not the older tutorial. Treat `ROADMAP_1.md` as a historical design doc, not a description of the current state.
 
 ---
 
 ## Tech stack
 
-- **Frontend**: `public/index.html` (HTML shell, ~120 lines) + `public/styles.css` (CSS) + `public/app.js` (JS IIFE). Vanilla JS, RTL Hebrew UI, no framework, no CDN. SVG icons inlined as strings. Source files in `src/` (13 JS files) and `public/css/` (5 CSS files), concatenated by `build.sh`.
+- **Frontend**: `public/index.html` (HTML shell, ~120 lines) + `public/styles.css` (CSS) + `public/app.js` (JS IIFE). Vanilla JS, RTL Hebrew UI, no framework, no CDN. SVG icons inlined as strings. Source files in `src/` (15 numbered JS files + `99-close.js`) and `public/css/` (6 CSS files), concatenated by `build.sh`.
 - **Backend**: `server.js` — Node 18+, Express. Serves the static frontend and a JSON API. `bot-engine.js` — server-side bots (200 Israeli names, 3 modes, 4 speeds).
-- **Database**: Postgres via `pg`. Schema in `schema.sql` (16 tables), applied on every boot by `initDb()` (idempotent).
-- **Persistence**: `localStorage` for best score, mute, deviceId, player name, skins, streak, achievements, and the daily-played gate.
-- **Hosting**: Railway — `bloom-web` service + `Postgres-z2RQ` plugin. Auto-deploy from GitHub.
+- **Database**: Postgres via `pg`. Schema in `schema.sql` (18 tables), applied on every boot by `initDb()` (idempotent).
+- **Persistence**: `localStorage` for best score, mute, deviceId, player name, skins, streak, achievements, FTUE-done flag, and the daily-played gate.
+- **Hosting**: Railway — `bloom-web` service + `Postgres-z2RQ` plugin. Auto-deploy from GitHub. Automated daily + weekly volume backups on `Postgres-z2RQ` (Railway-side).
 
 ---
 
@@ -115,12 +122,13 @@ bloom-game/
 │   ├── sw.js           # Service worker
 │   ├── manifest.json   # PWA manifest
 │   └── assets/         # Icons, favicons, social-share.png
-├── src/                # JS source files (13 files) — see src/README.md
+├── src/                # JS source files (15 + 99-close.js) — see src/README.md
+│   └── 15-ftue.js      # First-time user experience (UX audit §1.1)
 ├── admin/index.html    # Admin dashboard (single-file, RTL Hebrew)
 ├── server.js           # Express server + API routes
 ├── bot-engine.js       # Server-side bots (200 names, 3 modes)
 ├── db.js               # Postgres pool + schema bootstrap
-├── schema.sql          # All tables (16, idempotent)
+├── schema.sql          # All tables (18, idempotent)
 ├── build.sh            # Concatenate src/*.js → app.js, css/*.css → styles.css
 ├── package.json        # deps: express + pg only
 ├── README.md           # This file
@@ -146,9 +154,14 @@ All endpoints are JSON. Bodies are limited to 4 KB.
 | Method | Path | Body / query | Returns |
 | --- | --- | --- | --- |
 | `GET` | `/api/health` | — | `{ ok: true }` |
-| `POST` | `/api/score` | `{ date, deviceId, name, score, tier }` | `{ ok, rank }` — upserts only if new score is higher than stored |
+| `GET` | `/api/stats/live` | — | `{ activeNow, playingNow, gamesToday }` — social-proof counters for the home pulse bar (UX audit §1.4). Polled every 15s; cheap aggregate queries with no auth. |
+| `POST` | `/api/score` | `{ date, deviceId, token, name, score, tier, drops, country? }` | `{ ok, rank, total }` — upserts only if new score is higher; `total` is the count of players who submitted today (so the game-over rank pill can say "#23 מתוך 847"). |
 | `GET` | `/api/leaderboard/:date` | `?deviceId=...` | `{ list (top 50), total, rank }` — single-day board |
 | `GET` | `/api/leaderboard/range/:period` | `period ∈ {day,week,month}`, `?endDate=YYYY-MM-DD&deviceId=...` | `{ list, total, rank, from, to, period }` — best-per-device over rolling window |
+| `GET` | `/api/leaderboard/v2` | `?scope=world\|country\|difficulty&period=day\|week\|month&difficulty=...&endDate=...&deviceId=...&country=...` | Unified scope×time leaderboard. Each row includes `country` and `player_code` so the client can offer challenge-to-duel affordances. |
+| `POST` | `/api/profile/country` | `{ deviceId, token, country }` | Persists ISO-3166 alpha-2 country to `player_profiles`. Rate-limit 10/hr. |
+| `POST` | `/api/profile/name` | `{ deviceId, token, name }` | Updates `player_profiles.display_name`. Backs the ✏️ edit-name pill on home. Rate-limit 10/hr. |
+| `POST` | `/api/score/practice` | `{ date, deviceId, name, score, tier, drops, country, difficulty, source, token }` | "Best score wins" upsert into `difficulty_scores`. Source ∈ `'practice' \| 'duel'`. Rate-limit 120/hr. |
 | `POST` | `/api/ping` | `{ deviceId }` | Records today's visit in `device_visits` (upsert; increments `visit_count`). Fire-and-forget on page load. Rate-limited 30/hr/device. |
 | `GET` | `/api/contests/mine` | `?deviceId=...` | List of contests the device is in |
 | `POST` | `/api/contests` | `{ name, hostName, deviceId, durationDays, boardType }` | Create new contest |
@@ -166,22 +179,43 @@ All endpoints are JSON. Bodies are limited to 4 KB.
 | `POST` | `/api/challenges/:slug/score` | `{ deviceId, score, tier, drops }` | Per-drop heartbeat. Server enforces score-only-grows + winner-slot assignment for race / first-to-tier. |
 | `POST` | `/api/challenges/:slug/complete` | `{ deviceId, score, tier, drops }` | Final submit (locks the entry). Runs cheat-flag sanity check + assigns winner for `beat`-type. |
 | `POST` | `/api/challenges/:slug/claim` | `{ deviceId, contactName, contactPhone, contactEmail }` | Winner-only: submit contact info for prize delivery. |
+| `POST` | `/api/duels` / `/api/duels/:id/accept` / `/api/duels/:id/score` | (auth + drops + token) | 1v1 wager-backed duels — see [CLAUDE.md §7](CLAUDE.md) for the full duel + player-economy endpoint surface. |
+| `POST` | `/api/player/gift` / `/api/player/ad-watch` / `/api/player/buy-skin` / `/api/player/buy-powerup` / `/api/player/buy-tile` / `/api/player/spend` / `/api/player/earn` | various | Server-authoritative credit economy. Per-game ad-watch dedup, server-decided gift jackpots, hourly caps. Full schema in CLAUDE.md §7. |
+| `GET` | `/api/weekly` | — | Current active weekly auto-challenge (created server-side on boot + hourly check). |
 
-Validation: `date` matches `YYYY-MM-DD`, `deviceId` is 8–64 chars, `score` is 0–10,000,000, `tier` is 1–8 (live endpoints also allow `tier=0`). The name is trimmed to 24 chars and falls back to `אנונימי`. `gridJson` must be a 24-cell array with each entry an integer 0–8.
+Validation: `date` matches `YYYY-MM-DD`, `deviceId` is 8–64 chars, `score` is 0–10,000,000, `tier` is 1–8 (live endpoints also allow `tier=0`). The name is trimmed to 24 chars and falls back to `אנונימי`. `gridJson` must be a 24-cell array with each entry an integer 0–8. **Every state-mutating endpoint requires an HMAC `token`** (issued by `/api/register`) — see CLAUDE.md §11 ("Security hardening round 2") for the full list. Read endpoints and high-frequency heartbeats remain `softDeviceAuth` (accept missing tokens; reject only invalid ones) pending client-adoption telemetry.
 
 ### Database schema
+
+18 tables in total. The 5 most-load-bearing are reproduced below; the full set lives in `schema.sql`:
 
 ```sql
 daily_scores (
   date TEXT, device_id TEXT, name TEXT,
   score INTEGER, tier INTEGER,
+  country VARCHAR(2),                  -- ISO-3166 alpha-2, nullable
+  drops INTEGER,                       -- anti-cheat: required on insert
   created_at, updated_at,
   PRIMARY KEY (date, device_id)
 )
 INDEX idx_daily_scores_lookup ON (date, score DESC)
 
+difficulty_scores (date, device_id, difficulty_label,
+                   name, score, tier, country, source, drops, ...,
+                   PRIMARY KEY (date, device_id, difficulty_label))
+-- Practice + duel scores. Daily is EXCLUDED for fairness.
+
+player_profiles (device_id PK, player_code 'BLOOM-XXXX', display_name,
+                 balance INTEGER, total_earned, total_spent,
+                 country, xp, level, ...)
+
+player_skins (device_id, skin_id, purchased_at,
+              PRIMARY KEY (device_id, skin_id))
+-- Server-authoritative skin ownership (closes the localStorage-edit hole)
+
 contests (code PK, name, host_name, host_device_id, board_seed,
-          board_type, duration_days, ends_at, status, ...)
+          board_type, duration_days, ends_at, status, contest_type, ...)
+-- contest_type ∈ 'private' (friends) | 'weekly' (auto-created)
 
 contest_scores (contest_code FK, device_id, display_name,
                 score, highest_tier, games_played,
@@ -199,7 +233,7 @@ contest_watchers (contest_code, watcher_device_id, watcher_name,
                   PRIMARY KEY (contest_code, watcher_device_id, target_device_id))
 ```
 
-One row per device per date for `daily_scores`. Re-submissions only overwrite if `new.score > old.score`. Contest scores accumulate. `contest_live_state` + `contest_watchers` are ephemeral — TTL is enforced by filtering on `updated_at` at read time, not by a cleanup cron.
+The remaining tables: `challenges`, `challenge_entries`, `duels`, `daily_jackpot`, `device_visits`, `game_config` (admin tunables + per-deviceId dedup keys), `referrals`, `wager_settlements`, `admin_actions`, `player_heartbeat`. One row per device per date for `daily_scores`. Re-submissions only overwrite if `new.score > old.score`. Contest scores accumulate. `contest_live_state` + `contest_watchers` are ephemeral — TTL is enforced by filtering on `updated_at` at read time, not by a cleanup cron.
 
 ---
 
@@ -270,15 +304,18 @@ Railway injects `DATABASE_URL` and `PORT` automatically. Schema is re-applied id
 
 In priority order:
 
-1. **Domain** — bloom-game.co.il
-2. **Landing page + SEO** — public-facing marketing page
-3. **Google Analytics / Mixpanel** — event tracking
-4. **App Store listing** (PWA)
-5. **Push notification reminders** ("חזור לאתגר היומי!")
-6. **First-day-back bonus** ("חזור מחר ל-500 נקודות בונוס")
-7. **Weekly auto-challenge** — automatic weekly contest
-8. **Player profile page** — public page with stats
-9. **Monetization** — ads / premium themes
+1. **Domain** — bloom-game.co.il (manual: buy + Railway custom domain)
+2. **GA4 activation** — set `GA_ID=G-XXXXXXX` env var in Railway (code is wired, just needs the ID)
+3. **Landing page** — marketing page for organic traffic
+4. **App Store listing** (PWA → Capacitor wrapper)
+5. **Push notification reminders** ("חזור לאתגר היומי!") — requires service-worker push permission UX
+6. **Monetization** — ads (AdSense SDK is partially wired but `ad_daily_cap` is the active gate) / premium themes / sound asset polish
+7. **Sound asset polish** — optional voice cues
+8. **Off-Railway backup automation** — `pg_dump` cron uploading to S3/Drive so a parallel incident can't take out both the live DB and its backups simultaneously (CLAUDE.md §13 — "Backup coverage is Railway-side only")
+9. **Remaining shell adoption** — migrate `showContestMenu` / `showCreateContestForm` / `showJoinContestForm` / `showContestPreview` / `showMyContestsList` + challenge screens off the legacy `createBackButton` onto `mountShell()` (one screen at a time to keep visual-regression risk small)
+10. **Bulk CSS-color migration** — sweep the remaining hard-coded hex values across screens/home/viral CSS onto the `:root` design tokens (incremental, when those surfaces are touched)
+
+**Recently shipped** (in case you're scanning a stale ROADMAP_1.md): the 3-step FTUE, social-proof live pulse, streak FOMO tiers, practice funnel on the daily countdown screen, scope×time leaderboard, BLOOM-XXXX identity, weekly auto-challenge, public player profile, daily-login reward with slot-machine reel, Aurora skin pack, admin bonus simulator, challenges system, and full security-hardening rounds 1+2. See CLAUDE.md §11 for the full feature changelog.
 
 ---
 
