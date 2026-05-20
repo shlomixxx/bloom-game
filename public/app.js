@@ -2608,17 +2608,12 @@
 
   /* ============ HOME SCREEN ============ */
   function showHome() {
-    // ── Home delegation chain: v3 (premium opt-in) → v2 (default) → v1 (legacy)
-    // Each tier is wrapped so a JS error inside the new home doesn't leave
-    // the user with a blank screen — we fall through to the next tier.
-    if (typeof homeV3Enabled === 'function' && homeV3Enabled()
-        && typeof showHomeV3 === 'function') {
-      try { return showHomeV3(); }
-      catch (e) {
-        console.error('[home] v3 failed, falling back to v2:', e);
-        try { if (typeof disableHomeV3 === 'function') disableHomeV3(); } catch (_) {}
-      }
-    }
+    // ── Home delegation chain: v2 (default) → v1 (legacy fallback) ──
+    // v3 (the star-mascot + tile-legend variant) was rolled back after
+    // the user explicitly didn't like it. Its source files stay in the
+    // repo for reference, but it's no longer reachable from this entry
+    // point. Anyone who had `bloom_home_v3` set is cleared on boot via
+    // the migration block in src/05a-home-v2.js.
     if (typeof homeV2Enabled === 'function' && homeV2Enabled()
         && typeof showHomeV2 === 'function') {
       try { return showHomeV2(); }
@@ -2919,6 +2914,9 @@
   // a quick rollback if something visual regresses on a player's setup.
   const HOME_V1_FORCE_KEY = 'bloom_home_v1_force';
   const HOME_V2_KEY = 'bloom_home_v2'; // legacy — read-only for migration
+  // One-shot migration: clear the v3 opt-in flag for anyone who had it
+  // set when we rolled v3 back. Runs once per page load — cheap.
+  try { localStorage.removeItem('bloom_home_v3'); } catch (e) {}
 
   function homeV2Enabled() {
     try {
@@ -3018,12 +3016,12 @@
       '<div class="home-jackpot" id="home-jackpot"></div>' +
 
       // ── Bottom links area ──
+      // v3 "try it" link removed (rolled back per user feedback).
       '<div class="home-v2-bottom">' +
         (hasSeenTour()
           ? '<button class="home-v2-link" id="home-v2-tour">📖 איך משחקים?</button>'
           : '<button class="home-v2-link home-v2-link-skip" id="home-v2-skip">דלג על הסיור</button>') +
         '<button class="home-v2-link" id="home-v2-invite">📱 הזמן חבר</button>' +
-        '<button class="home-v2-link home-v2-try-v3" id="home-v2-try-v3">✨ נסה את הגירסה החדשה</button>' +
         '<button class="home-v2-link home-v2-switch" id="home-v2-switch">↩ הגירסה הישנה</button>' +
         '<a class="home-v2-link" href="/privacy" target="_blank" rel="noopener">מדיניות פרטיות</a>' +
       '</div>';
@@ -3105,12 +3103,7 @@
       } catch (e) {}
       showHome(); // v1 fallback
     };
-    var tryV3Btn = document.getElementById('home-v2-try-v3');
-    if (tryV3Btn) tryV3Btn.onclick = function() {
-      if (typeof enableHomeV3 === 'function') enableHomeV3();
-      hideHomeV2();
-      showHome(); // delegation will route to v3
-    };
+    // v3 "try it" handler removed (button no longer rendered).
 
     // ── Populate dynamic sections ──
     renderHeroBannerV2();
