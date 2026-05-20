@@ -517,12 +517,56 @@
         ? '<div style="margin-top:6px;font-size:11px;color:#6F6E68">✓ קיבלת ' + adCredits + '💎 על המשחק הזה</div>'
         : '<button class="btn" id="watch-ad-btn" style="background:transparent;border:1px solid #2E8B6F;color:#2E8B6F;padding:8px 16px;font-size:12px;border-radius:10px;margin-top:6px;font-weight:600">▶️ צפה בפרסומת וקבל ' + adCredits + '💎</button>';
 
+      // ============ EMOTIONAL CONTEXT (1.3 game-over upgrade) ============
+      // Rank pill with total players so #23 doesn't read as "23 out of nowhere"
+      var rankPillHtml = '';
+      if (dailyRank) {
+        var rankPillBody = '🏆 מקום <strong>#' + dailyRank + '</strong>';
+        if (dailyTotal && dailyTotal > 0) {
+          rankPillBody += ' מתוך ' + dailyTotal.toLocaleString();
+        }
+        rankPillHtml = '<div class="lb-rank-pill">' + rankPillBody + '</div>';
+      }
+
+      // Best-score delta — "+2,300 שיא חדש" / "החמצת ב-180" / "הגעת לשיא"
+      var bestDeltaHtml = '';
+      if (opts.isNewBest && prevBest > 0 && score > prevBest) {
+        var delta = score - prevBest;
+        bestDeltaHtml = '<div class="over-best-delta over-best-delta-up">🎉 שיא אישי חדש! <strong>+' + delta.toLocaleString() + '</strong> מעל הקודם</div>';
+      } else if (prevBest > 0 && score < prevBest) {
+        var miss = prevBest - score;
+        var missPct = score / prevBest;
+        if (missPct >= 0.9) {
+          bestDeltaHtml = '<div class="over-best-delta over-best-delta-near">😱 קרוב לשיא! החמצת ב-<strong>' + miss.toLocaleString() + '</strong> בלבד</div>';
+        }
+      }
+
+      // Gap to next TOP-N tier — uses the top-50 list we already have
+      var rankTierHtml = '';
+      if (dailyRank && leaderboard && leaderboard.length > 0) {
+        var TIER_TARGETS = [3, 10, 20, 50, 100];
+        for (var ti2 = 0; ti2 < TIER_TARGETS.length; ti2++) {
+          var target = TIER_TARGETS[ti2];
+          if (dailyRank > target && leaderboard[target - 1]) {
+            var targetScore = leaderboard[target - 1].score || 0;
+            var gap = targetScore - score + 1;
+            if (gap > 0 && gap < score * 2 + 10000) {
+              rankTierHtml = '<div class="over-rank-tier">⬆️ עוד <strong>' + gap.toLocaleString() + '</strong> נקודות והיית ב-TOP ' + target + '</div>';
+              break;
+            }
+          }
+        }
+      }
+      // ====================================================================
+
       wrap.innerHTML =
         '<div class="overlay">' +
           '<div class="over-title">' + title + '</div>' +
           '<div class="over-score">' + score.toLocaleString() + '</div>' +
           '<div class="over-sub">הגעת ל' + getActiveTiers()[highestTier].name + ' · ' + highestTier + '/' + MAX_TIER + ' דרגות</div>' +
-          (dailyRank ? '<div class="lb-rank-pill">המקום שלך היום: #' + dailyRank + '</div>' : '') +
+          rankPillHtml +
+          bestDeltaHtml +
+          rankTierHtml +
           rivalHtml +
           continueHtml +
           // PRIMARY CTA — right after score

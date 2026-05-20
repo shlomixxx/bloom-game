@@ -2449,18 +2449,71 @@
   }
   html[data-theme="dark"] .over-rival { background: rgba(250,199,117,0.05); color: #B0AA9E; }
 
-  /* ── Game-Over: Prominent CTA ── */
+  /* ── Game-Over: Prominent CTA (1.3 — louder, bigger, more aggressive pull) ── */
   .over-again-btn {
-    margin: 14px 0 8px !important; padding: 16px 48px !important;
-    font-size: 18px !important; font-weight: 800 !important;
-    border-radius: 14px !important;
-    background: #1C1A18 !important; color: #FFF !important;
-    box-shadow: 0 4px 16px rgba(0,0,0,0.15) !important;
-    animation: ctaPop 0.4s ease-out;
+    display: block !important; width: 100% !important; max-width: 360px !important;
+    margin: 18px auto 10px !important; padding: 18px 32px !important;
+    font-size: 19px !important; font-weight: 800 !important;
+    border-radius: 16px !important;
+    background: linear-gradient(135deg, #1C1A18 0%, #2A2724 100%) !important;
+    color: #FFF !important;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.22), 0 0 0 0 rgba(250,199,117,0.6) !important;
+    animation: ctaPop 0.45s ease-out, ctaGlow 2.4s ease-in-out infinite 0.6s;
+    letter-spacing: 0.02em;
   }
   .over-again-btn:active { transform: scale(0.97) !important; }
-  @keyframes ctaPop { 0% { transform: scale(0.9); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
-  html[data-theme="dark"] .over-again-btn { background: #FAC775 !important; color: #1C1A18 !important; }
+  @keyframes ctaPop { 0% { transform: scale(0.92); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+  @keyframes ctaGlow {
+    0%, 100% { box-shadow: 0 6px 20px rgba(0,0,0,0.22), 0 0 0 0 rgba(250,199,117,0.0); }
+    50%      { box-shadow: 0 6px 22px rgba(0,0,0,0.22), 0 0 0 6px rgba(250,199,117,0.18); }
+  }
+  html[data-theme="dark"] .over-again-btn {
+    background: linear-gradient(135deg, #FAC775 0%, #F0B85F 100%) !important;
+    color: #1C1A18 !important;
+    box-shadow: 0 6px 20px rgba(250,199,117,0.25), 0 0 0 0 rgba(250,199,117,0.4) !important;
+  }
+
+  /* ── Game-Over: Best-score delta ── */
+  .over-best-delta {
+    margin: 10px auto; padding: 10px 16px;
+    border-radius: 10px; font-size: 14px;
+    text-align: center; direction: rtl;
+    max-width: 360px;
+    animation: bestDeltaIn 0.5s cubic-bezier(.2,1.2,.4,1);
+  }
+  .over-best-delta strong { font-weight: 800; font-variant-numeric: tabular-nums; }
+  .over-best-delta-up {
+    background: linear-gradient(135deg, rgba(255,215,0,0.16) 0%, rgba(255,140,66,0.12) 100%);
+    border: 1px solid rgba(255,180,0,0.35);
+    color: #8B5A00;
+  }
+  .over-best-delta-near {
+    background: rgba(255,140,66,0.08);
+    border: 1px solid rgba(255,140,66,0.25);
+    color: #8B3E0A;
+  }
+  @keyframes bestDeltaIn {
+    0%   { opacity: 0; transform: translateY(-6px) scale(0.96); }
+    100% { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  html[data-theme="dark"] .over-best-delta-up { color: #FAC775; border-color: rgba(250,199,117,0.4); }
+  html[data-theme="dark"] .over-best-delta-near { color: #F0A878; border-color: rgba(240,168,120,0.3); }
+
+  /* ── Game-Over: Gap to next TOP-N tier ── */
+  .over-rank-tier {
+    margin: 8px auto; padding: 8px 14px;
+    background: rgba(40,150,255,0.07);
+    border: 1px solid rgba(40,150,255,0.18);
+    border-radius: 10px; font-size: 13px; color: #2A5687;
+    text-align: center; direction: rtl;
+    max-width: 360px;
+  }
+  .over-rank-tier strong { font-weight: 800; font-variant-numeric: tabular-nums; }
+  html[data-theme="dark"] .over-rank-tier {
+    background: rgba(120,180,255,0.08);
+    border-color: rgba(120,180,255,0.18);
+    color: #A8C8F0;
+  }
   /* ── Home: Streak hero ── */
   .home-streak {
     display: flex; align-items: center; justify-content: center; gap: 10px;

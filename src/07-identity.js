@@ -92,10 +92,12 @@
   let rng = Math.random;
   let dailySubmitted = false;
   let dailyRank = null;
+  let dailyTotal = null;
   let leaderboard = [];
   let leaderboardLoading = false;
   let countdownTimer = null;
   let best = parseInt(localStorage.getItem(BEST_KEY) || '0', 10);
+  let prevBest = best;
   let playerName = localStorage.getItem(NAME_KEY) || '';
 
   // ============ FRIENDS CONTEST STATE ============

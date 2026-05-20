@@ -673,7 +673,12 @@ app.post('/api/score', requireDeviceAuth, async (req, res) => {
       }
     } catch (jpErr) { /* non-critical */ }
 
-    res.json({ ok: true, rank: parseInt(rankRes.rows[0].rank, 10) });
+    const totalRes = await pool.query(`SELECT COUNT(*)::int AS c FROM daily_scores WHERE date = $1`, [date]);
+    res.json({
+      ok: true,
+      rank: parseInt(rankRes.rows[0].rank, 10),
+      total: totalRes.rows[0].c
+    });
   } catch (e) {
     console.error('POST /api/score', e);
     res.status(500).json({ error: 'server' });

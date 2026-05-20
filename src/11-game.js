@@ -35,6 +35,8 @@
     trackEvent('game_start', { mode: mode });
     leaderboard = [];
     dailyRank = null;
+    dailyTotal = null;
+    prevBest = best;
     // Cleared at top of init: by the time we know we're entering contest mode,
     // we'll re-set this to the contest code the new game belongs to. For non-
     // contest modes it stays null — saveContestGameState() then no-ops.
@@ -456,6 +458,7 @@
       if (res.ok) {
         const data = await res.json();
         if (data && typeof data.rank === 'number') dailyRank = data.rank;
+        if (data && typeof data.total === 'number') dailyTotal = data.total;
         // Earn credits for daily completion
         if (!window.__bloomBotActive && mode === 'daily') earnCredits('daily_complete');
         trackEvent('game_over', { mode: mode, score: score, tier: highestTier });
@@ -512,6 +515,7 @@
         const data = await res.json();
         leaderboard = (data && data.list) || [];
         if (data && typeof data.rank === 'number') dailyRank = data.rank;
+        if (data && typeof data.total === 'number') dailyTotal = data.total;
       }
     } catch (e) {
       console.warn('Load leaderboard failed:', e);
