@@ -659,8 +659,30 @@
             actionBtn = '<span style="font-size:10px;color:#2E8B6F">✓ סיימת (' + (myScore|0).toLocaleString() + ')</span>';
           }
         }
-        html += '<div style="padding:6px 0;border-top:1px solid rgba(0,0,0,0.04)">' +
-          '<span style="font-weight:600">vs ' + otherName + '</span>' + amtText + ' · ' + statusText + winText + scoreLine + ' ' + actionBtn +
+        // Rematch ⚔️ — let the player re-challenge the same opponent on
+        // any terminal-state row (settled/tie/declined/expired). Pulls
+        // the opponent's BLOOM code (suffix) from the duel row and
+        // re-opens the duel modal pre-filled. This is a major retention
+        // lever — the closest BLOOM gets to a "play again" loop is the
+        // FRIEND already in this list; surfacing a one-tap rematch turns
+        // the duel list into a personal opponent leaderboard.
+        var rematchBtn = '';
+        var isTerminal = duel.status === 'settled' || duel.status === 'tie' ||
+                         duel.status === 'declined' || duel.status === 'expired';
+        if (isTerminal) {
+          var otherCode = isChallenger ? duel.opponent_code : duel.challenger_code;
+          if (otherCode) {
+            var sufRematch = String(otherCode).replace(/^BLOOM-/i, '').toUpperCase().slice(0, 4);
+            if (sufRematch.length === 4) {
+              rematchBtn = ' <button class="btn sm" title="אתגר שוב" style="font-size:11px;padding:3px 10px;background:#FAC775;color:#412402;border:none;font-weight:700" onclick="rematchDuel(\'' + sufRematch + '\')">⚔️ שוב</button>';
+            }
+          }
+        }
+        html += '<div style="padding:6px 0;border-top:1px solid rgba(0,0,0,0.04);display:flex;align-items:center;gap:6px;flex-wrap:wrap">' +
+          '<span style="flex:1;min-width:0">' +
+            '<span style="font-weight:600">vs ' + otherName + '</span>' + amtText + ' · ' + statusText + winText + scoreLine +
+          '</span>' +
+          actionBtn + rematchBtn +
         '</div>';
       });
       el.innerHTML = html;
@@ -715,6 +737,18 @@
     } catch (e) {
       alert('שגיאה בחיבור');
     }
+  };
+
+  // Re-challenge an opponent from a terminal-state duel row. The list
+  // sits INSIDE the duel modal, so we close + reopen it pre-filled
+  // with the opponent's 4-char suffix. The player taps "שלח אתגר" and
+  // the existing flow takes over from there.
+  window.rematchDuel = function(suffix) {
+    var clean = String(suffix || '').toUpperCase().replace(/[^A-HJ-NP-Z2-9]/g, '').slice(0, 4);
+    if (clean.length !== 4) return;
+    var existing = document.getElementById('duel-modal');
+    if (existing) existing.remove();
+    showDuelModal({ prefillSuffix: clean });
   };
 
   window.playDuel = async function(id) {
