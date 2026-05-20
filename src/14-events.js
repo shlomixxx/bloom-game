@@ -401,6 +401,8 @@
     if (shakeInt > 0) shakeGrid(shakeInt);
     bumpScore();
     checkScoreMilestones();
+    // Aurora juice — score bump animation. No-op for non-Aurora skins.
+    if (typeof auroraScoreBump === 'function') auroraScoreBump();
     // Apply gravity so tiles don't float after explosion
     applyGravity();
     render();
@@ -458,7 +460,14 @@
       showEventBanner('⭐ Level Up!', tierInfo.name + '! +' + pts, 'star');
       bumpScore();
       checkScoreMilestones();
+      // Aurora juice — score bump + variance on the upgraded cell. No-op
+      // for non-Aurora skins.
+      if (typeof auroraScoreBump === 'function') auroraScoreBump();
       render();
+      if (typeof auroraSetMergeVariance === 'function') {
+        var starCell = document.querySelector('#grid .cell[data-r="' + tRow + '"][data-c="' + evt.col + '"]');
+        if (starCell) auroraSetMergeVariance(starCell);
+      }
       markBonusHitCells([{ r: tRow, c: evt.col }], 'bonus-star', 900);
     } else if (tile === MAX_TIER) {
       score += pts * 5;
@@ -489,6 +498,9 @@
           showEventBanner('🎁 JACKPOT!!!', '+' + amount + ' 💎', 'gift-jackpot');
           buzz([80, 40, 80, 40, 80, 40, 80]);
           showConfetti(35);
+          // Aurora juice — extra score bump on jackpot moment. No-op for
+          // non-Aurora skins.
+          if (typeof auroraScoreBump === 'function') auroraScoreBump();
         } else {
           showEventBanner('🎁 מתנה!', '+' + amount + ' 💎', 'gift');
         }
@@ -588,6 +600,8 @@
     if (shakeInt > 0) shakeGrid(shakeInt);
     bumpScore();
     checkScoreMilestones();
+    // Aurora juice — score bump animation. No-op for non-Aurora skins.
+    if (typeof auroraScoreBump === 'function') auroraScoreBump();
     // Apply gravity so tiles above fall down
     applyGravity();
     render();
