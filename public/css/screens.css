@@ -1126,32 +1126,49 @@
     border-color: rgba(255,140,66,0.55);
   }
 
-  /* Exit-X button — sits as a fourth, narrower column on the HUD.
-     Small but with a generous tap target (24×24 visual, but the
-     parent button is min 28×28 for finger-safety on mobile). */
+  /* Exit-X button — sits as the rightmost column on the HUD.
+     Bumped 26→32px for finger-safety. The iOS HIG minimum-comfort
+     touch target is 44px, but exit is a secondary destructive
+     action confirmed by a native dialog, so 32 is enough — and a
+     larger visual would dominate the small HUD. */
   .duel-hud-exit {
     flex: 0 0 auto;
-    margin-right: 6px;
+    margin-right: 8px;
     margin-left: -4px;
-    width: 26px; height: 26px;
+    width: 32px; height: 32px;
     border-radius: 50%;
-    background: rgba(255,255,255,0.08);
-    border: 1px solid rgba(255,255,255,0.15);
+    background: rgba(255,255,255,0.10);
+    border: 1px solid rgba(255,255,255,0.20);
     color: #FAC775;
-    font-size: 13px;
+    font-size: 15px;
     font-weight: 700;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: background 0.15s ease, transform 0.1s ease;
+    transition: background 0.15s ease, transform 0.1s ease, color 0.15s ease;
     padding: 0;
     line-height: 1;
     font-family: inherit;
     align-self: center;
+    /* Larger invisible hit area for finger taps (24+ px on each side
+       beyond the visible circle is the iOS-recommended buffer). */
+    position: relative;
   }
-  .duel-hud-exit:hover { background: rgba(255,255,255,0.16); }
-  .duel-hud-exit:active { transform: scale(0.9); background: rgba(255,107,107,0.25); }
+  .duel-hud-exit::before {
+    content: '';
+    position: absolute;
+    inset: -6px;            /* expands the hit area by 6px in every direction */
+  }
+  .duel-hud-exit:hover {
+    background: rgba(255,255,255,0.18);
+    color: #FFE194;
+  }
+  .duel-hud-exit:active {
+    transform: scale(0.88);
+    background: rgba(255,107,107,0.30);
+    color: #FFFFFF;
+  }
 
   /* Narrow phones — shrink padding so the pill fits 320px viewports */
   @media (max-width: 360px) {

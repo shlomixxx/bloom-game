@@ -323,9 +323,13 @@
     _duelHudLastOppScore = null;
     _duelHudFinalized = false;
     renderDuelHud();
-    // First tick fires immediately so the HUD isn't empty for 3s
+    // First tick fires immediately so the HUD isn't empty for 2s
     refreshDuelHudData();
-    _duelHudPoller = setInterval(refreshDuelHudData, 3000);
+    // Tightened from 3s → 2s. The /api/duels/:id query is cheap (single
+    // row read) and the lag was noticeable when an opponent merged —
+    // the player's eye sees the action in real life faster than the
+    // HUD reflected it. 2s gets us inside the perception window.
+    _duelHudPoller = setInterval(refreshDuelHudData, 2000);
     // Also update the "my score" side via a fast tick that just reads
     // the game's score global — no network needed.
     _duelHudMyScoreTick = setInterval(syncDuelHudMyScore, 500);
