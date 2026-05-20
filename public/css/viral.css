@@ -271,3 +271,205 @@
   html[data-theme="light"] .home-weekly-meta { color: #6F6E68; }
   html[data-theme="light"] .home-weekly-meta strong { color: #1C1A18; }
   html[data-theme="light"] .home-weekly-arrow { color: #BA7517; }
+
+  /* ============================================================
+     FTUE — First-Time User Experience overlay (UX audit §1.1)
+     ============================================================
+     Full-screen onboarding for brand-new players. Demos the three
+     core moves (drop → merge → chain) in <30s on a real-looking
+     4×6 board, then hands off to showHome(). Marked once-and-done
+     via localStorage[bloom_ftue_done] in src/15-ftue.js.
+     ============================================================ */
+  .ftue-overlay {
+    position: fixed; inset: 0; z-index: 10000;
+    background: linear-gradient(160deg, var(--color-bg, #FAFAF6) 0%, var(--color-surface, #F2EFE9) 100%);
+    display: flex; align-items: center; justify-content: center;
+    direction: rtl;
+    padding: 24px 16px;
+    animation: ftueIn 0.35s cubic-bezier(.2,1.1,.4,1);
+  }
+  .ftue-overlay.ftue-leaving { animation: ftueOut 0.32s ease-in forwards; }
+  @keyframes ftueIn { 0% { opacity: 0; transform: scale(0.96); } 100% { opacity: 1; transform: scale(1); } }
+  @keyframes ftueOut { 0% { opacity: 1; transform: scale(1); } 100% { opacity: 0; transform: scale(0.96); } }
+  html[data-theme="dark"] .ftue-overlay { background: linear-gradient(160deg, #1A1816 0%, #2C2A28 100%); }
+
+  .ftue-card {
+    width: 100%; max-width: 380px;
+    display: flex; flex-direction: column; align-items: center; gap: 14px;
+  }
+  .ftue-brand {
+    font-size: 17px; font-weight: 700;
+    color: var(--color-text, #1C1A18);
+    letter-spacing: 0.01em;
+    text-align: center;
+  }
+  .ftue-step-dots {
+    display: flex; gap: 8px;
+    margin-bottom: 2px;
+  }
+  .ftue-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--color-text-faint, #A8A6A0);
+    opacity: 0.4;
+    transition: all 0.25s ease;
+  }
+  .ftue-dot.active {
+    width: 24px; border-radius: 4px;
+    background: var(--color-accent, #BA7517);
+    opacity: 1;
+  }
+  .ftue-dot.done {
+    background: var(--color-accent-soft, #FAC775);
+    opacity: 1;
+  }
+
+  .ftue-bubble {
+    background: var(--color-surface, #FFF);
+    color: var(--color-text, #1C1A18);
+    padding: 12px 18px;
+    border-radius: var(--radius-lg, 16px);
+    font-size: 15px; font-weight: 600;
+    text-align: center;
+    box-shadow: var(--shadow-md);
+    max-width: 320px;
+    min-height: 48px;
+    display: flex; align-items: center; justify-content: center;
+    opacity: 0; transform: translateY(6px);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+  }
+  .ftue-bubble.show { opacity: 1; transform: translateY(0); }
+  html[data-theme="dark"] .ftue-bubble { background: #2C2A28; color: #F2EFE9; }
+
+  .ftue-next-row {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 13px; font-weight: 600;
+    color: var(--color-text-muted, #6F6E68);
+  }
+  .ftue-next-tile {
+    width: 38px; height: 38px;
+    border-radius: var(--radius-md, 12px);
+    overflow: hidden;
+    display: flex; align-items: center; justify-content: center;
+    border: 1px solid var(--color-border, rgba(0,0,0,0.08));
+  }
+
+  .ftue-grid-wrap {
+    position: relative;
+    width: 100%;
+    max-width: 280px;
+    padding-top: 36px; /* room for the arrow */
+  }
+  .ftue-arrow {
+    position: absolute;
+    top: 0;
+    transform: translateX(50%); /* RTL: position from right */
+    font-size: 28px;
+    opacity: 0;
+    transition: opacity 0.4s ease, left 0.3s ease;
+    pointer-events: none;
+    animation: ftueArrowBounce 1.2s ease-in-out infinite;
+  }
+  @keyframes ftueArrowBounce {
+    0%, 100% { transform: translateX(50%) translateY(0); }
+    50%      { transform: translateX(50%) translateY(8px); }
+  }
+  .ftue-arrow.ftue-arrow-nudge {
+    animation: ftueArrowNudge 0.4s ease;
+  }
+  @keyframes ftueArrowNudge {
+    0%, 100% { transform: translateX(50%) translateY(0); }
+    25%      { transform: translateX(50%) translateY(0) rotate(-12deg); }
+    75%      { transform: translateX(50%) translateY(0) rotate(12deg); }
+  }
+
+  .ftue-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    grid-template-rows: repeat(6, 1fr);
+    gap: 4px;
+    aspect-ratio: 4 / 6;
+    background: var(--color-surface, #F5F2EC);
+    padding: 6px;
+    border-radius: var(--radius-lg, 16px);
+    box-shadow: var(--shadow-md);
+  }
+  html[data-theme="dark"] .ftue-grid { background: #2A2118; }
+
+  .ftue-cell {
+    background: var(--color-bg, #FAFAF6);
+    border-radius: var(--radius-sm, 8px);
+    position: relative;
+    overflow: hidden;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: background 0.15s ease;
+  }
+  .ftue-cell.hint-col { background: var(--color-accent-glow, rgba(250,199,117,0.18)); }
+  .ftue-cell:active { background: rgba(186,117,23,0.18); }
+  html[data-theme="dark"] .ftue-cell { background: rgba(255,255,255,0.04); }
+  html[data-theme="dark"] .ftue-cell.hint-col { background: rgba(250,199,117,0.10); }
+
+  .ftue-tile {
+    width: 88%; height: 88%;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.18);
+  }
+  .ftue-tile svg { width: 70%; height: 70%; }
+  .ftue-drop-anim {
+    position: relative;
+    z-index: 2;
+    transition: transform 0.36s cubic-bezier(.4,.05,.4,1);
+  }
+
+  .ftue-wow {
+    position: absolute;
+    top: 28%; left: 50%;
+    transform: translate(-50%, -50%);
+    background: linear-gradient(135deg, var(--color-accent-soft, #FAC775) 0%, var(--color-accent, #BA7517) 100%);
+    color: var(--color-accent-ink, #412402);
+    padding: 14px 26px;
+    border-radius: var(--radius-lg, 18px);
+    font-size: 18px; font-weight: 800;
+    text-align: center; direction: rtl;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.18), var(--shadow-glow);
+    z-index: 5;
+    animation: ftueWowPop 0.5s cubic-bezier(.2,1.4,.4,1);
+    max-width: 320px;
+  }
+  @keyframes ftueWowPop {
+    0%   { transform: translate(-50%, -50%) scale(0.5); opacity: 0; }
+    60%  { transform: translate(-50%, -50%) scale(1.15); opacity: 1; }
+    100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+  }
+
+  .ftue-chain-banner {
+    position: absolute;
+    top: 18%; left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(40,40,40,0.92);
+    color: #FFD93D;
+    padding: 8px 20px;
+    border-radius: var(--radius-lg, 18px);
+    font-size: 16px; font-weight: 800;
+    z-index: 6;
+    animation: ftueChainPop 0.5s cubic-bezier(.2,1.4,.4,1);
+  }
+  @keyframes ftueChainPop {
+    0%   { transform: translate(-50%, -50%) scale(0.5); opacity: 0; }
+    100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+  }
+
+  .ftue-skip {
+    margin-top: 4px;
+    background: transparent;
+    color: var(--color-text-muted, #8E8A82);
+    border: none;
+    font-size: 12px;
+    cursor: pointer;
+    padding: 6px 10px;
+    border-radius: var(--radius-sm, 8px);
+    transition: color 0.15s ease;
+  }
+  .ftue-skip:hover { color: var(--color-text, #1C1A18); }

@@ -104,7 +104,14 @@
   var hasHistory = loadGamesPlayed() > 0;
   var hasPracticeState = !!loadPracticeGameState();
   if (!hasHistory || (savedMode === 'daily' && !hasPracticeState)) {
-    showHome();
+    // §1.1 — first-time players see the 3-step FTUE before the home
+    // screen. Returning players (anyone with the bloom_ftue_done flag,
+    // or anyone with games_played > 0) skip straight to home.
+    if (typeof ftueShouldRun === 'function' && ftueShouldRun() && !hasHistory) {
+      startFTUE(function() { showHome(); });
+    } else {
+      showHome();
+    }
   }
 
   // Persist mode on every init so we can restore on refresh.
