@@ -574,6 +574,15 @@
     };
   }
 
+  // Provide a no-op fallback so this file works even if 05a-home-v2.js
+  // is concatenated later than expected.
+  function markDuelAcknowledged(id) {
+    if (typeof window.__bloomMarkDuelAcknowledged === 'function') window.__bloomMarkDuelAcknowledged(id);
+  }
+  function markAllDuelsAcknowledged(ids) {
+    if (typeof window.__bloomMarkAllDuelsAcknowledged === 'function') window.__bloomMarkAllDuelsAcknowledged(ids);
+  }
+
   async function loadMyDuels() {
     var el = document.getElementById('duel-list');
     if (!el) return;
@@ -581,11 +590,15 @@
       var r = await fetch(API_BASE + '/api/duels/mine?deviceId=' + encodeURIComponent(deviceId));
       var d = await r.json();
       if (!d || !d.duels || !d.duels.length) { el.textContent = 'אין דו-קרבות'; return; }
+      // Opening the modal = the user is now LOOKING at the list.
+      // Mark every currently-visible duel as acknowledged so the red
+      // badge on the home action button clears on next render.
+      markAllDuelsAcknowledged(d.duels.map(function(x) { return x.id; }));
       var html = '';
       d.duels.forEach(function(duel) {
         var isChallenger = duel.challenger_device === deviceId;
         var otherName = isChallenger ? (duel.opponent_name || duel.opponent_code) : (duel.challenger_name || duel.challenger_code);
-        var statusMap = { pending: '⏳ ממתין', accepted: '🎮 משחקים', settled: '✅ הסתיים', tie: '🤝 תיקו', expired: '⏰ פג תוקף' };
+        var statusMap = { pending: '⏳ ממתין', accepted: '🎮 משחקים', settled: '✅ הסתיים', tie: '🤝 תיקו', expired: '⏰ פג תוקף', declined: '✕ נדחה' };
         var statusText = statusMap[duel.status] || duel.status;
         var amtText = (duel.amount | 0) > 0 ? ' · ' + duel.amount + '💎' : '';
         var winText = '';
@@ -594,7 +607,17 @@
         }
         var actionBtn = '';
         if (duel.status === 'pending' && !isChallenger) {
-          actionBtn = '<button class="btn sm" style="font-size:10px;padding:3px 8px" onclick="acceptDuel(' + duel.id + ')">קבל ⚔️</button>';
+          // Two-button row: accept + decline. The decline path is what the
+          // user explicitly asked for — previously the only way out of a
+          // pending duel was to play it. Now: ✕ דחה calls the new
+          // /api/duels/:id/decline (refunds the challenger's wager).
+          actionBtn =
+            '<span style="display:inline-flex;gap:4px">' +
+              '<button class="btn sm" style="font-size:10px;padding:3px 8px" onclick="acceptDuel(' + duel.id + ')">קבל ⚔️</button>' +
+              '<button class="btn sm" style="font-size:10px;padding:3px 8px;background:transparent;border:1px solid rgba(0,0,0,0.15);color:#6F6E68" onclick="declineDuel(' + duel.id + ')">✕ דחה</button>' +
+            '</span>';
+        } else if (duel.status === 'declined') {
+          actionBtn = '<span style="font-size:10px;color:#6F6E68">דחיתי ✕</span>';
         } else if (duel.status === 'accepted') {
           var myScore = isChallenger ? duel.challenger_score : duel.opponent_score;
           if (myScore == null) {
@@ -618,6 +641,7 @@
     });
     var d = await r.json();
     if (d && d.ok) {
+      markDuelAcknowledged(id); // clear it from the badge count
       fetchPlayerCode();
       loadMyDuels();
       activeDuelOpponentName = d.duel ? (d.duel.challenger_name || d.duel.challenger_code || 'יריב') : 'יריב';
@@ -625,6 +649,38 @@
     } else {
       var msgs = { not_opponent: 'אתה לא היריב', not_pending: 'כבר קיבלת', expired: 'פג תוקף', insufficient_balance: 'אין מספיק 💎' };
       alert(msgs[d && d.reason] || 'שגיאה');
+    }
+  };
+
+  // Decline a pending duel. Opponent-only; refunds the challenger's
+  // wager on the server. A tiny native confirm() guards the click so
+  // a fat-finger tap on a tiny mobile row doesn't kill the duel.
+  window.declineDuel = async function(id) {
+    if (!window.confirm('לדחות את הדו-קרב? היריב יקבל את ההימור בחזרה.')) return;
+    try {
+      var r = await fetch(API_BASE + '/api/duels/' + id + '/decline', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deviceId: deviceId, token: deviceToken })
+      });
+      var d = await r.json();
+      if (d && d.ok) {
+        // Mark as acknowledged so the home badge clears too.
+        if (typeof markDuelAcknowledged === 'function') markDuelAcknowledged(id);
+        loadMyDuels();
+        if (typeof window.__bloomToast === 'function') window.__bloomToast('דו-קרב נדחה', 'info');
+      } else {
+        var msgs = {
+          not_opponent: 'אתה לא היריב',
+          not_pending: 'כבר טופל',
+          not_found: 'הדו-קרב לא נמצא',
+          race: 'הדו-קרב כבר השתנה. רענן ונסה שוב',
+          missing_token: 'התחבר מחדש',
+          bad_token: 'התחבר מחדש'
+        };
+        alert(msgs[d && d.reason] || 'שגיאה');
+      }
+    } catch (e) {
+      alert('שגיאה בחיבור');
     }
   };
 
@@ -972,20 +1028,30 @@
   // Shows a top-right toast for:
   //  - pending duels I haven't accepted yet (someone challenged me)
   //  - settled duels I haven't seen the result of (notify of win/loss)
-  // Tracks already-seen duel IDs in sessionStorage so we don't spam on
-  // every poll. sessionStorage is per-tab and clears on close, so a player
-  // who closes and re-opens the app DOES see the badge again — that's the
-  // desired re-notification behavior.
-  var SEEN_DUELS_KEY = 'bloom_seen_duel_notifications';
+  // Tracks already-seen duel IDs in localStorage. We used to use
+  // sessionStorage so the badge would re-fire each tab open, but that
+  // turned out to mean the red dot NEVER cleared on real-world usage —
+  // closing and re-opening Safari = unseen again, and on iOS that's
+  // basically every other session. localStorage keeps the seen-state
+  // across sessions; the entry is keyed { id → status } so a duel that
+  // *transitions* (pending → settled) re-notifies as expected.
+  var SEEN_DUELS_KEY = 'bloom_seen_duel_notifications_v2';
   function loadSeenDuels() {
-    try { return JSON.parse(sessionStorage.getItem(SEEN_DUELS_KEY) || '{}') || {}; }
+    try { return JSON.parse(localStorage.getItem(SEEN_DUELS_KEY) || '{}') || {}; }
     catch (e) { return {}; }
   }
   function markDuelSeen(duelId, status) {
     try {
       var seen = loadSeenDuels();
       seen[String(duelId)] = status;
-      sessionStorage.setItem(SEEN_DUELS_KEY, JSON.stringify(seen));
+      // Hard cap so this map can't grow forever for prolific duellists.
+      var keys = Object.keys(seen);
+      if (keys.length > 500) {
+        // Drop oldest half by lowest numeric id (duel ids are sequential).
+        keys.sort(function(a, b) { return parseInt(a, 10) - parseInt(b, 10); });
+        for (var i = 0; i < Math.floor(keys.length / 2); i++) delete seen[keys[i]];
+      }
+      localStorage.setItem(SEEN_DUELS_KEY, JSON.stringify(seen));
     } catch (e) {}
   }
   function showDuelNotificationBanner(opts) {
@@ -3323,21 +3389,97 @@
   }
 
   // ── §B1: notification badges on the action grid ──
+  //
+  // Acknowledgement persistence: previously the "seen" set lived in
+  // sessionStorage, so closing the tab made every duel "unseen" again
+  // and the red badge re-appeared forever. Moved to localStorage with
+  // a stable schema. The set is bounded (cleanupAcknowledgedDuels)
+  // so it can't grow unbounded.
+  const DUEL_ACK_KEY = 'bloom_ack_duel_ids';
+  function loadAcknowledgedDuels() {
+    try {
+      const raw = localStorage.getItem(DUEL_ACK_KEY);
+      if (!raw) {
+        // One-shot migration from the legacy sessionStorage key.
+        const legacy = sessionStorage.getItem('bloom_seen_duel_notifications');
+        if (legacy) {
+          try { localStorage.setItem(DUEL_ACK_KEY, legacy); } catch (e) {}
+          try { sessionStorage.removeItem('bloom_seen_duel_notifications'); } catch (e) {}
+          return JSON.parse(legacy) || [];
+        }
+        return [];
+      }
+      const arr = JSON.parse(raw);
+      return Array.isArray(arr) ? arr : [];
+    } catch (e) { return []; }
+  }
+  function saveAcknowledgedDuels(arr) {
+    try {
+      // Cap at the most recent 500 ids — anything beyond that is rotational
+      // noise (settled duels we'll never see again).
+      const trimmed = arr.length > 500 ? arr.slice(-500) : arr;
+      localStorage.setItem(DUEL_ACK_KEY, JSON.stringify(trimmed));
+    } catch (e) {}
+  }
+  function isDuelAcknowledged(id) {
+    return loadAcknowledgedDuels().indexOf(id) >= 0;
+  }
+  function markDuelAcknowledged(id) {
+    if (id == null) return;
+    const arr = loadAcknowledgedDuels();
+    if (arr.indexOf(id) < 0) {
+      arr.push(id);
+      saveAcknowledgedDuels(arr);
+    }
+  }
+  function markAllDuelsAcknowledged(ids) {
+    if (!Array.isArray(ids) || !ids.length) return;
+    const arr = loadAcknowledgedDuels();
+    let changed = false;
+    ids.forEach(function(id) {
+      if (id != null && arr.indexOf(id) < 0) { arr.push(id); changed = true; }
+    });
+    if (changed) {
+      saveAcknowledgedDuels(arr);
+      // Re-paint the home badge immediately so the change is visible
+      // the moment the modal closes (the home stays in the DOM behind
+      // the modal, so the badge element is updatable from here).
+      if (document.getElementById('home-v2-duel-badge')) {
+        try { refreshHomeV2Badges(); } catch (e) {}
+      }
+    }
+  }
+  // Expose for src/02-shop.js to call from inside the duel modal — both
+  // when the modal opens (mass-ack) and when the user declines a duel
+  // (single-ack). Also used by acceptDuel via the same path.
+  try {
+    window.__bloomMarkDuelAcknowledged = markDuelAcknowledged;
+    window.__bloomMarkAllDuelsAcknowledged = markAllDuelsAcknowledged;
+  } catch (e) {}
+
   function refreshHomeV2Badges() {
     if (typeof deviceId === 'undefined' || !deviceId) return;
-    // Duels pending where I'm the opponent
+    // Duels: count ids the player has NOT yet acknowledged. Once they
+    // open the duel modal (which calls markAllDuelsAcknowledged), the
+    // badge clears. New duels that arrive later are unacknowledged so
+    // the badge re-appears with just the new count.
     fetch(API_BASE + '/api/duels/mine?deviceId=' + encodeURIComponent(deviceId))
       .then(function(r) { return r.ok ? r.json() : null; })
       .then(function(data) {
         if (!data || !Array.isArray(data.duels)) return;
-        var pending = 0;
-        var unseenSettled = 0;
+        var unseen = 0;
         data.duels.forEach(function(d) {
-          if (d.opponent_code === playerCode && d.status === 'pending') pending++;
-          if ((d.status === 'settled' || d.status === 'tie') && !sessionHasSeenDuelV2(d.id)) unseenSettled++;
+          // Only "meaningful" statuses count toward the badge:
+          //   - pending where I'm the opponent (action needed)
+          //   - settled/tie (result to read)
+          // 'accepted' duels in progress aren't surfaced as a notification
+          // (the player knows — they're in the middle of playing).
+          const isPendingForMe = d.opponent_code === playerCode && d.status === 'pending';
+          const isResolved = d.status === 'settled' || d.status === 'tie';
+          if (!isPendingForMe && !isResolved) return;
+          if (!isDuelAcknowledged(d.id)) unseen++;
         });
-        var n = pending + unseenSettled;
-        paintBadgeV2('home-v2-duel-badge', n);
+        paintBadgeV2('home-v2-duel-badge', unseen);
       })
       .catch(function() {});
 
@@ -3352,13 +3494,6 @@
         paintBadgeV2('home-v2-challenge-badge', active.length);
       })
       .catch(function() {});
-  }
-  function sessionHasSeenDuelV2(id) {
-    try {
-      const raw = sessionStorage.getItem('bloom_seen_duel_notifications') || '[]';
-      const arr = JSON.parse(raw);
-      return Array.isArray(arr) && arr.indexOf(id) >= 0;
-    } catch (e) { return false; }
   }
   function paintBadgeV2(elId, n) {
     const el = document.getElementById(elId);

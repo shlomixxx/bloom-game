@@ -4338,6 +4338,62 @@ app.post('/api/duels/:id/accept', requireDeviceAuth, async (req, res) => {
   }
 });
 
+// POST /api/duels/:id/decline — opponent rejects a pending duel.
+// Refunds the challenger's wager if any. Atomic + race-safe via the
+// status='pending' guard on the UPDATE. Only the named opponent can
+// decline (verified by player_code, same pattern as /accept).
+app.post('/api/duels/:id/decline', requireDeviceAuth, async (req, res) => {
+  const deviceId = req.deviceId;
+  const duelId = parseInt(req.params.id, 10);
+  if (!Number.isFinite(duelId) || duelId <= 0) return res.status(400).json({ error: 'bad_id' });
+  try {
+    const d = await pool.query('SELECT * FROM duels WHERE id = $1', [duelId]);
+    if (!d.rows.length) return res.json({ ok: false, reason: 'not_found' });
+    const duel = d.rows[0];
+    if (duel.status !== 'pending') return res.json({ ok: false, reason: 'not_pending' });
+
+    // Verify this device is the opponent (by player_code, like /accept).
+    const player = await pool.query('SELECT player_code FROM player_profiles WHERE device_id = $1', [deviceId]);
+    if (!player.rows.length || player.rows[0].player_code !== duel.opponent_code) {
+      return res.json({ ok: false, reason: 'not_opponent' });
+    }
+
+    // Atomic transition + refund. The status='pending' guard on the
+    // UPDATE makes the whole thing race-safe against concurrent accepts.
+    await pool.query('BEGIN');
+    try {
+      const upd = await pool.query(
+        `UPDATE duels SET status = 'declined' WHERE id = $1 AND status = 'pending' RETURNING 1`,
+        [duelId]);
+      if (!upd.rows.length) {
+        await pool.query('ROLLBACK');
+        return res.json({ ok: false, reason: 'race' });
+      }
+      // Refund the challenger's wager if one was on the table.
+      const bet = duel.amount | 0;
+      if (bet > 0 && duel.challenger_device) {
+        await pool.query(
+          `UPDATE player_profiles
+              SET balance = balance + $1, total_spent = total_spent - $1
+            WHERE device_id = $2`,
+          [bet, duel.challenger_device]);
+        await pool.query(
+          `INSERT INTO wager_settlements (contest_code, device_id, amount, type)
+           VALUES ($1, $2, $3, 'duel_decline_refund')`,
+          ['DUEL:' + duelId, duel.challenger_device, bet]);
+      }
+      await pool.query('COMMIT');
+    } catch (txErr) {
+      await pool.query('ROLLBACK');
+      throw txErr;
+    }
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('POST /api/duels/:id/decline', e);
+    res.status(500).json({ error: 'server' });
+  }
+});
+
 // GET single duel by id (used for polling after submitting a duel score —
 // the player's UI watches this for the opponent's score to come in).
 // We hide the opponent's score from a viewer who has not yet submitted their
