@@ -4,6 +4,70 @@ import { readFile as readFileSw } from 'node:fs/promises';
 import { readFileSync } from 'node:fs';
 import { pool, initDb } from './db.js';
 import { startBots, stopBots, getBotStatus } from './bot-engine.js';
+import webpush from 'web-push';
+
+// ============================================================
+// WEB PUSH (PWA notifications) — closed-app delivery
+// ============================================================
+// Set VAPID_PUBLIC_KEY + VAPID_PRIVATE_KEY + VAPID_SUBJECT in env.
+// Generate keys with:  node -e "console.log(require('web-push').generateVAPIDKeys())"
+// Without keys, all sendPushToDevice() calls become silent no-ops
+// so the rest of the app keeps working in dev.
+const VAPID_PUBLIC_KEY  = process.env.VAPID_PUBLIC_KEY || '';
+const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || '';
+const VAPID_SUBJECT     = process.env.VAPID_SUBJECT || 'mailto:shlomibusiness@gmail.com';
+let _webpushConfigured = false;
+if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
+  try {
+    webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+    _webpushConfigured = true;
+    console.log('[push] VAPID configured');
+  } catch (e) {
+    console.warn('[push] VAPID setup failed:', e.message);
+  }
+} else {
+  console.log('[push] VAPID keys not set — push disabled');
+}
+
+// Best-effort fire-and-forget push. Returns immediately, doesn't
+// throw. Failures (network, invalid subscription, expired 410)
+// are logged + the dead subscription is pruned on 410. Designed
+// to be called from inside request handlers without blocking
+// the response.
+async function sendPushToDevice(deviceId, payload) {
+  if (!_webpushConfigured || !deviceId) return;
+  try {
+    const subs = await pool.query(
+      `SELECT endpoint, p256dh_key, auth_key
+         FROM push_subscriptions
+        WHERE device_id = $1`, [deviceId]);
+    if (!subs.rows.length) return;
+    const body = JSON.stringify(payload);
+    await Promise.all(subs.rows.map(async function(row) {
+      const sub = {
+        endpoint: row.endpoint,
+        keys: { p256dh: row.p256dh_key, auth: row.auth_key }
+      };
+      try {
+        await webpush.sendNotification(sub, body, { TTL: 60 * 60 * 24 });
+      } catch (err) {
+        // 410 Gone or 404 Not Found = subscription expired, prune it.
+        const code = err && err.statusCode;
+        if (code === 410 || code === 404) {
+          try {
+            await pool.query(
+              `DELETE FROM push_subscriptions WHERE device_id = $1 AND endpoint = $2`,
+              [deviceId, row.endpoint]);
+          } catch (delErr) { /* swallow */ }
+        } else {
+          console.warn('[push] send failed', code, err && err.message);
+        }
+      }
+    }));
+  } catch (e) {
+    console.warn('[push] sendPushToDevice swallowed', e.message);
+  }
+}
 
 // ============================================================
 // GLOBAL ERROR HANDLERS — prevent crashes from killing the server
@@ -4039,6 +4103,15 @@ app.post('/api/player/gift-friend', requireDeviceAuth, async (req, res) => {
       throw txErr;
     }
     res.json({ ok: true, amount: amt, recipientCode: fullCode, newBalance });
+
+    // Push notification to the recipient — fire-and-forget.
+    sendPushToDevice(recipient.device_id, {
+      title: '🎁 מתנה!',
+      body: (sender.display_name || 'מישהו') + ' שלח/ה לך ' + amt + '💎' +
+            (safeMessage ? ' · "' + safeMessage.slice(0, 60) + '"' : ''),
+      tag: 'gift-' + recipient.device_id + '-' + Date.now(),
+      data: { url: '/', kind: 'gift', amount: amt }
+    });
   } catch (e) {
     console.error('player/gift-friend', e.message);
     res.status(500).json({ error: 'server' });
@@ -4406,6 +4479,17 @@ app.post('/api/duels', requireDeviceAuth, async (req, res) => {
     // (Bug 3 fix). The frontend needs difficulty_weights, opponent_name, and
     // board_seed to kick off startDuelGame without waiting for opponent accept.
     res.json({ ok: true, duel: r.rows[0], duelId: r.rows[0].id, seed, amount: bet, expiresAt, difficulty: diff.label });
+
+    // Push notification to the opponent — fire-and-forget, never blocks
+    // the response. The opponent's device buzzes with the challenge
+    // even if BLOOM isn't open.
+    sendPushToDevice(opponent.rows[0].device_id, {
+      title: '⚔️ אתגר חדש!',
+      body: (challenger.rows[0].display_name || 'מישהו') + ' אתגר/ה אותך לדו-קרב' +
+            (bet > 0 ? ' · הימור ' + bet + '💎' : ''),
+      tag: 'duel-invite-' + r.rows[0].id,
+      data: { url: '/?action=duels', kind: 'duel_invite', duelId: r.rows[0].id }
+    });
   } catch (e) {
     console.error('duels/create', e.message);
     res.status(500).json({ error: 'server' });
@@ -4509,6 +4593,17 @@ async function expireStalePendingDuels() {
           console.warn('duel expire refund failed', row.id, refundErr.message);
         }
       }
+      // Push the challenger so they know their duel timed out even
+      // if they aren't currently in BLOOM. Fire-and-forget.
+      if (row.challenger_device) {
+        sendPushToDevice(row.challenger_device, {
+          title: '⏰ פג תוקף',
+          body: 'הדו-קרב שלך פג תוקף ללא תגובה' +
+                (bet > 0 ? ' · קיבלת חזרה ' + bet + '💎' : ''),
+          tag: 'duel-expire-' + row.id,
+          data: { url: '/?action=duels', kind: 'duel_expired', duelId: row.id }
+        });
+      }
     }));
   } catch (e) {
     console.warn('expireStalePendingDuels swallowed', e.message);
@@ -4565,6 +4660,14 @@ app.post('/api/duels/:id/decline', requireDeviceAuth, async (req, res) => {
       throw txErr;
     }
     res.json({ ok: true });
+    // Notify the challenger that their challenge was declined.
+    sendPushToDevice(duel.challenger_device, {
+      title: '🤷 נדחית',
+      body: (duel.opponent_name || duel.opponent_code || 'היריב') + ' סירב/ה לדו-קרב' +
+            ((duel.amount | 0) > 0 ? ' · קיבלת חזרה ' + duel.amount + '💎' : ''),
+      tag: 'duel-declined-' + duelId,
+      data: { url: '/?action=duels', kind: 'duel_declined', duelId }
+    });
   } catch (e) {
     console.error('POST /api/duels/:id/decline', e);
     res.status(500).json({ error: 'server' });
@@ -4712,6 +4815,21 @@ app.post('/api/duels/:id/score', requireDeviceAuth, async (req, res) => {
           // status-guard prevents a double-settle if two requests race here.
           await client.query(`UPDATE duels SET status = 'tie', winner_device = NULL WHERE id = $1 AND status IN ('pending','accepted')`, [duelId]);
           await client.query('COMMIT');
+          // Push both players — the one who's IN the app sees the
+          // result overlay normally, but the one who'd left gets a
+          // surprise "your duel is over!" buzz on their device.
+          sendPushToDevice(u.challenger_device, {
+            title: '🤝 תיקו!',
+            body: 'הדו-קרב מול ' + (u.opponent_name || 'יריב') + ' הסתיים בתיקו · ההימור הוחזר',
+            tag: 'duel-result-' + duelId,
+            data: { url: '/?action=duels', kind: 'duel_tie', duelId }
+          });
+          sendPushToDevice(u.opponent_device, {
+            title: '🤝 תיקו!',
+            body: 'הדו-קרב מול ' + (u.challenger_name || 'יריב') + ' הסתיים בתיקו · ההימור הוחזר',
+            tag: 'duel-result-' + duelId,
+            data: { url: '/?action=duels', kind: 'duel_tie', duelId }
+          });
           return res.json({ ok: true, result: 'tie', refunded: true });
         }
         if (prize > 0) {
@@ -4720,6 +4838,25 @@ app.post('/api/duels/:id/score', requireDeviceAuth, async (req, res) => {
         await client.query(`UPDATE duels SET status = 'settled', winner_device = $1 WHERE id = $2 AND status IN ('pending','accepted')`, [winner, duelId]);
         await client.query('COMMIT');
         res.json({ ok: true, result: 'settled', winner: winner === deviceId ? 'you' : 'opponent', prize });
+        // Push both players with personalised win/lose copy.
+        const winnerIsChall = (winner === u.challenger_device);
+        const challWin = winnerIsChall;
+        sendPushToDevice(u.challenger_device, {
+          title: challWin ? '🏆 ניצחת!' : '😔 הפסדת',
+          body: challWin
+            ? 'ניצחת את ' + (u.opponent_name || 'היריב') + (prize > 0 ? ' · +' + prize + '💎 פרס' : '')
+            : (u.opponent_name || 'היריב') + ' ניצח/ה אותך הפעם',
+          tag: 'duel-result-' + duelId,
+          data: { url: '/?action=duels', kind: 'duel_result', duelId, winner: challWin ? 'you' : 'opponent' }
+        });
+        sendPushToDevice(u.opponent_device, {
+          title: !challWin ? '🏆 ניצחת!' : '😔 הפסדת',
+          body: !challWin
+            ? 'ניצחת את ' + (u.challenger_name || 'היריב') + (prize > 0 ? ' · +' + prize + '💎 פרס' : '')
+            : (u.challenger_name || 'היריב') + ' ניצח/ה אותך הפעם',
+          tag: 'duel-result-' + duelId,
+          data: { url: '/?action=duels', kind: 'duel_result', duelId, winner: !challWin ? 'you' : 'opponent' }
+        });
       } catch (err) {
         await client.query('ROLLBACK');
         throw err;
@@ -4907,6 +5044,83 @@ app.get('/api/config', async (_req, res) => {
 // ============================================================
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
+
+// ============================================================
+// WEB PUSH endpoints
+// ============================================================
+// GET /api/push/vapid-public — the public VAPID key the client
+// needs to subscribe. Public is safe to expose. Returns null if
+// push isn't configured server-side, so the client can skip the
+// permission prompt cleanly.
+app.get('/api/push/vapid-public', (_req, res) => {
+  res.json({ key: _webpushConfigured ? VAPID_PUBLIC_KEY : null });
+});
+
+// POST /api/push/subscribe — client sends its PushSubscription
+// after the browser grants permission. We store it keyed by
+// (device_id, endpoint) so re-subscribes on the same device
+// just refresh the keys instead of creating duplicate rows.
+app.post('/api/push/subscribe', requireDeviceAuth, async (req, res) => {
+  const deviceId = req.deviceId;
+  const { endpoint, keys } = req.body || {};
+  if (!endpoint || typeof endpoint !== 'string') {
+    return res.status(400).json({ ok: false, reason: 'missing_endpoint' });
+  }
+  if (!keys || !keys.p256dh || !keys.auth) {
+    return res.status(400).json({ ok: false, reason: 'missing_keys' });
+  }
+  const ua = (req.headers['user-agent'] || '').toString().slice(0, 300);
+  try {
+    await pool.query(
+      `INSERT INTO push_subscriptions
+         (device_id, endpoint, p256dh_key, auth_key, user_agent, created_at, last_used_at)
+       VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
+       ON CONFLICT (device_id, endpoint) DO UPDATE
+         SET p256dh_key = EXCLUDED.p256dh_key,
+             auth_key   = EXCLUDED.auth_key,
+             user_agent = EXCLUDED.user_agent,
+             last_used_at = NOW()`,
+      [deviceId, endpoint, keys.p256dh, keys.auth, ua]);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('push/subscribe', e.message);
+    res.status(500).json({ error: 'server' });
+  }
+});
+
+// POST /api/push/unsubscribe — explicit teardown when the user
+// revokes notification permission or chooses to opt out.
+app.post('/api/push/unsubscribe', requireDeviceAuth, async (req, res) => {
+  const deviceId = req.deviceId;
+  const { endpoint } = req.body || {};
+  try {
+    if (endpoint) {
+      await pool.query(
+        `DELETE FROM push_subscriptions WHERE device_id = $1 AND endpoint = $2`,
+        [deviceId, endpoint]);
+    } else {
+      // No endpoint = wipe all subscriptions for this device.
+      await pool.query(`DELETE FROM push_subscriptions WHERE device_id = $1`, [deviceId]);
+    }
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('push/unsubscribe', e.message);
+    res.status(500).json({ error: 'server' });
+  }
+});
+
+// POST /api/push/test — for QA only. Sends a test push to the
+// requester's own subscriptions. Useful for verifying the SW + VAPID
+// + subscription chain works end-to-end.
+app.post('/api/push/test', requireDeviceAuth, async (req, res) => {
+  await sendPushToDevice(req.deviceId, {
+    title: '🌸 BLOOM',
+    body: 'התראות מיידיות פעילות!',
+    tag: 'test',
+    data: { url: '/', kind: 'test' }
+  });
+  res.json({ ok: true });
+});
 
 // GET /api/stats/live — public live-pulse counts for the home screen
 // social-proof badge (UX audit §1.4). Returns:

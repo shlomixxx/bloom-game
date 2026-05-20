@@ -378,6 +378,26 @@ CREATE INDEX IF NOT EXISTS idx_duels_opponent ON duels (opponent_code, status);
 CREATE INDEX IF NOT EXISTS idx_duels_challenger ON duels (challenger_device, status);
 
 -- ============================================================
+-- Web Push subscriptions. One device can have multiple rows (one
+-- per browser/install). When an event fires for a device, the
+-- server iterates these subscriptions and pushes to each endpoint.
+-- Expired subscriptions are auto-pruned on 410 Gone from the
+-- push service.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS push_subscriptions (
+  device_id    VARCHAR(64) NOT NULL,
+  endpoint     TEXT        NOT NULL,
+  p256dh_key   TEXT        NOT NULL,
+  auth_key     TEXT        NOT NULL,
+  user_agent   TEXT,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  last_used_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (device_id, endpoint)
+);
+CREATE INDEX IF NOT EXISTS idx_push_subscriptions_by_device
+  ON push_subscriptions (device_id);
+
+-- ============================================================
 -- Player-to-player gifts. Sender transfers gems to a recipient
 -- (by BLOOM-XXXX player_code). Used as both the wallet transfer
 -- ledger AND the unseen-notification queue — the recipient polls

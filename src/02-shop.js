@@ -154,6 +154,14 @@
             difficulty_speed_pct: null
           };
           activeDuelOpponentName = duelRow.opponent_name || opp;
+          // First-time social action = ideal moment to ask for push
+          // permission. The pre-prompt has its own 3-day cooldown so
+          // this can be called liberally.
+          try {
+            if (typeof window.__bloomMaybeAskPush === 'function') {
+              window.__bloomMaybeAskPush('כשהיריב יקבל / יסרב / יסיים — תקבל הודעה מיד, גם כשהמשחק סגור.');
+            }
+          } catch (e) {}
           setTimeout(function() {
             var m = document.getElementById('duel-modal');
             if (m) m.remove();
@@ -1309,6 +1317,13 @@
           errEl.style.color = '#2E8B6F';
           errEl.textContent = '✓ נשלח! ' + (d.recipientCode || ('BLOOM-' + suf)) + ' יקבל/ת הודעה';
           if (typeof showCreditToast === 'function') showCreditToast(-chosenAmt, 'מתנה ל-' + suf);
+          // Sending a gift is also a great moment to ask for push
+          // permission — the sender clearly cares about social play.
+          try {
+            if (typeof window.__bloomMaybeAskPush === 'function') {
+              window.__bloomMaybeAskPush('כשמישהו ישלח לך מתנה או יאתגר אותך — תדע מיד, גם כשהמשחק סגור.');
+            }
+          } catch (e) {}
           setTimeout(function() { modal.remove(); }, 1400);
         } else {
           var msgs = {

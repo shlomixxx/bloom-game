@@ -1,7 +1,81 @@
 /* BLOOM service worker — offline-first for the shell, network-only for the API.
    Bump CACHE_NAME whenever any pre-cached asset changes so the activate step
-   evicts the old cache. */
+   evicts the old cache.
+   Server.js rewrites CACHE_NAME to `bloom-v1-${BOOT_TS}` on every deploy so
+   the file you see here is just a template — the live SW always has a
+   deploy-unique cache key. */
 const CACHE_NAME = 'bloom-v4.2';
+
+// ============================================================
+// WEB PUSH — closed-app notifications
+// ============================================================
+// Handles incoming server pushes (duel invites, gifts, results)
+// when BLOOM isn't even open. The 'push' event fires on the
+// device's OS notification thread, the SW wakes up, shows a
+// system notification, and goes back to sleep.
+self.addEventListener('push', function(event) {
+  let data = {};
+  try { data = event.data ? event.data.json() : {}; } catch (e) {}
+  const title = (data.title || 'BLOOM').toString().slice(0, 80);
+  const options = {
+    body: (data.body || '').toString().slice(0, 200),
+    icon: '/assets/icon-192.png',
+    badge: '/assets/icon-192.png',
+    image: data.image || undefined,
+    data: data.data || {},
+    // tag = same-tag pushes replace each other (e.g. multiple duel-invite
+    // pings collapse into one banner instead of stacking).
+    tag: data.tag || 'bloom-' + Date.now(),
+    // requireInteraction=false → auto-dismisses; the user gets the alert
+    // sound + lockscreen banner regardless.
+    requireInteraction: !!data.requireInteraction,
+    // Vibration pattern per Android — iOS ignores this.
+    vibrate: data.vibrate || [100, 50, 100, 50, 100],
+    // Custom actions show as inline buttons on Android (e.g. "Accept" + "Decline").
+    actions: Array.isArray(data.actions) ? data.actions.slice(0, 2) : undefined
+  };
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+// Tap handler — focus the existing BLOOM tab if open, otherwise
+// open a new one, optionally deep-linking via the `url` field on
+// the payload (e.g. ?action=duels to open the duel modal).
+self.addEventListener('notificationclick', function(event) {
+  event.notification.close();
+  const data = event.notification.data || {};
+  const targetUrl = (data.url && typeof data.url === 'string')
+    ? new URL(data.url, self.location.origin).toString()
+    : self.location.origin + '/';
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function(list) {
+      for (const c of list) {
+        if (c.url.startsWith(self.location.origin) && 'focus' in c) {
+          // Already-open tab wins. Tell it where to navigate via postMessage.
+          c.postMessage({ type: 'bloom-push-click', url: targetUrl, data: data });
+          return c.focus();
+        }
+      }
+      if (self.clients.openWindow) return self.clients.openWindow(targetUrl);
+    })
+  );
+});
+
+// Subscription change (browser rotated the endpoint) — re-subscribe
+// silently in the background. Without this, expired endpoints
+// silently stop receiving pushes.
+self.addEventListener('pushsubscriptionchange', function(event) {
+  event.waitUntil((async function() {
+    try {
+      const newSub = await self.registration.pushManager.subscribe(event.oldSubscription.options);
+      // Notify the server via a clients.matchAll round trip so the
+      // active page can call /api/push/subscribe with the device's token.
+      const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+      for (const c of clients) {
+        c.postMessage({ type: 'bloom-push-resubscribe', subscription: newSub.toJSON() });
+      }
+    } catch (e) { /* swallow — the next page-open will resubscribe via the normal flow */ }
+  })());
+});
 
 // Tiny, stable shell. mp3 files are deliberately NOT pre-cached because some
 // browsers (Safari) misbehave when a service worker tries to fulfil Range
