@@ -365,10 +365,11 @@
         '<div class="duel-hud-label">' + escDuelHtml(oppName) + '</div>' +
         '<div class="duel-hud-score" id="duel-hud-opp-score">--</div>' +
       '</div>';
-    // Mount inside .app so it sits in the game viewport, not the page
-    var app = document.querySelector('.app');
-    if (app) app.appendChild(hud);
-    else document.body.appendChild(hud);
+    // Append to document.body (NOT .app) — .app has overflow:hidden
+    // which has clipped fixed children on some Safari versions. Body
+    // is the safest containing block for a position:fixed element.
+    document.body.appendChild(hud);
+    try { console.info('[duel-hud] mounted', { iAmChallenger: iAmChallenger, oppName: oppName }); } catch (e) {}
   }
 
   function syncDuelHudMyScore() {
