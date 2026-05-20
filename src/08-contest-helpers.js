@@ -532,11 +532,51 @@
         '<div class="dr-emoji">' + emoji + '</div>' +
         '<div class="dr-title">בונוס יומי!</div>' +
         '<div class="dr-streak"><strong>' + streakMsg + '</strong></div>' +
-        '<div class="dr-reward">+' + displayReward + ' 💎</div>' +
+        // §1.7 — Variable-reward slot animation. The actual payout is
+        // deterministic (rises with streak length), but the *experience*
+        // of seeing the number spin and land turns a flat "+25💎" into
+        // an event. The reel starts blurred and fast, decelerates over
+        // ~1.4s, and snaps to the true reward with a soundMilestone +
+        // scale-up landing animation.
+        '<div class="dr-reward dr-reward-spinning" id="dr-reward-num">+??? 💎</div>' +
         '<button class="dr-claim-btn" id="dr-claim">אסוף בונוס</button>' +
         '<div class="dr-tomorrow">חזור מחר ל-<strong>' + tomorrowReward + ' 💎' + tomorrowExtra + '</strong></div>' +
       '</div>';
     document.body.appendChild(overlay);
+
+    // §1.7 reel: cycle random values, slowing down with each iteration,
+    // then snap to the real reward.
+    (function runRewardReel() {
+      var el = document.getElementById('dr-reward-num');
+      if (!el) return;
+      var ticks = 0;
+      var maxTicks = 22;
+      var delay = 50;
+      // Sample values straddle the real reward so the reel doesn't
+      // visually contradict the outcome.
+      var low  = Math.max(5,  Math.floor(displayReward * 0.4));
+      var high = Math.max(50, Math.floor(displayReward * 2.2));
+      function tick() {
+        if (!document.getElementById('dr-reward-num')) return;
+        ticks++;
+        if (ticks >= maxTicks) {
+          el.textContent = '+' + displayReward + ' 💎';
+          el.classList.remove('dr-reward-spinning');
+          el.classList.add('dr-reward-landed');
+          try { if (typeof soundMilestone === 'function') soundMilestone(Math.min(8, 3 + Math.floor(displayStreak / 3))); } catch (e) {}
+          try { if (typeof buzz === 'function') buzz([10, 30, 10]); } catch (e) {}
+          return;
+        }
+        var fake = low + Math.floor(Math.random() * (high - low));
+        el.textContent = '+' + fake + ' 💎';
+        // Ease-out: each tick gets a bit slower
+        delay = Math.min(180, delay + (ticks > maxTicks - 8 ? 18 : 4));
+        setTimeout(tick, delay);
+      }
+      // Tiny initial delay so the overlay finishes its entrance animation
+      // before the reel starts spinning.
+      setTimeout(tick, 220);
+    })();
 
     var claimed = false;
     function claim() {

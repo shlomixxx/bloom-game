@@ -2977,6 +2977,26 @@
     margin-bottom: 16px;
     box-shadow: 0 4px 14px rgba(186,117,23,0.35);
     animation: drRewardGlow 2s ease-in-out infinite;
+    font-variant-numeric: tabular-nums;
+    /* Reserve a stable width so spinning numbers don't jitter the layout */
+    min-width: 160px;
+    transition: transform 0.18s ease;
+  }
+  /* §1.7 — Variable-reward slot animation: blur + scale-down while
+     spinning, then snap up with a bounce when the real number lands. */
+  .dr-reward.dr-reward-spinning {
+    filter: blur(0.6px);
+    transform: scale(0.92);
+    opacity: 0.92;
+  }
+  .dr-reward.dr-reward-landed {
+    animation: drRewardLand 0.55s cubic-bezier(.2,1.6,.4,1), drRewardGlow 2s ease-in-out infinite 0.55s;
+  }
+  @keyframes drRewardLand {
+    0%   { transform: scale(0.92); filter: blur(0.6px); }
+    45%  { transform: scale(1.18); filter: blur(0);   }
+    70%  { transform: scale(0.97); }
+    100% { transform: scale(1);    }
   }
   @keyframes drRewardGlow {
     0%,100% { box-shadow: 0 4px 14px rgba(186,117,23,0.35); }
