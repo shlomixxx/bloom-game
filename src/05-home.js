@@ -1,12 +1,22 @@
   function showHome() {
     // ── Home delegation chain: v3 (premium opt-in) → v2 (default) → v1 (legacy)
+    // Each tier is wrapped so a JS error inside the new home doesn't leave
+    // the user with a blank screen — we fall through to the next tier.
     if (typeof homeV3Enabled === 'function' && homeV3Enabled()
         && typeof showHomeV3 === 'function') {
-      return showHomeV3();
+      try { return showHomeV3(); }
+      catch (e) {
+        console.error('[home] v3 failed, falling back to v2:', e);
+        try { if (typeof disableHomeV3 === 'function') disableHomeV3(); } catch (_) {}
+      }
     }
     if (typeof homeV2Enabled === 'function' && homeV2Enabled()
         && typeof showHomeV2 === 'function') {
-      return showHomeV2();
+      try { return showHomeV2(); }
+      catch (e) {
+        console.error('[home] v2 failed, falling back to v1:', e);
+        try { if (typeof disableHomeV2 === 'function') disableHomeV2(); } catch (_) {}
+      }
     }
     stopEventSystem(); // don't run events behind home screen
     const app = document.querySelector('.app');
