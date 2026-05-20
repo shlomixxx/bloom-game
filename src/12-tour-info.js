@@ -528,6 +528,14 @@
         rankPillHtml = '<div class="lb-rank-pill">' + rankPillBody + '</div>';
       }
 
+      // 1.2-mod — invite the player to claim a real name (replaces the
+      // pre-game prompt). Only renders when the name is still the default
+      // placeholder, so returning players never see it.
+      var claimNameHtml = '';
+      if (typeof hasRealPlayerName === 'function' && !hasRealPlayerName() && dailyRank && (mode === 'daily' || mode === 'practice')) {
+        claimNameHtml = '<button class="btn over-claim-name" id="over-claim-name">✏️ קבע שם אמיתי בלוח</button>';
+      }
+
       // Best-score delta — "+2,300 שיא חדש" / "החמצת ב-180" / "הגעת לשיא"
       var bestDeltaHtml = '';
       if (opts.isNewBest && prevBest > 0 && score > prevBest) {
@@ -565,6 +573,7 @@
           '<div class="over-score">' + score.toLocaleString() + '</div>' +
           '<div class="over-sub">הגעת ל' + getActiveTiers()[highestTier].name + ' · ' + highestTier + '/' + MAX_TIER + ' דרגות</div>' +
           rankPillHtml +
+          claimNameHtml +
           bestDeltaHtml +
           rankTierHtml +
           rivalHtml +
@@ -681,6 +690,18 @@
       document.getElementById('again').onclick = function() {
         if (isContestOver) init('contest', { fresh: true });
         else init('practice', { fresh: true });
+      };
+
+      // 1.2-mod — "claim a real name" CTA wiring. Opens the existing
+      // promptForName in edit mode (pre-filled with default), then
+      // re-submits + re-renders so the leaderboard row picks up the
+      // new name without waiting for the next game.
+      var claimNameBtn = document.getElementById('over-claim-name');
+      if (claimNameBtn) claimNameBtn.onclick = function() {
+        promptForName(function() {
+          if (typeof submitAndShowLeaderboard === 'function') submitAndShowLeaderboard();
+          render({ over: true, isNewBest: !!opts.isNewBest, alreadyPlayed: !!opts.alreadyPlayed });
+        }, { edit: true });
       };
 
       // Continue (second chance) — watch ad or pay

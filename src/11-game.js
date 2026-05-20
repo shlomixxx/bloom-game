@@ -945,7 +945,9 @@
       maybeChainCountry(function() { cb && cb(); });
     }
     function skip() {
-      if (!playerName && !isEdit) { playerName = 'אנונימי'; }
+      // 1.2-mod — playerName always has at least the deterministic default
+      // ("שחקן XXXX"), so we don't fall back to "אנונימי" anymore. Skipping
+      // simply leaves whatever was there (default or previously-saved name).
       modal.remove();
       if (isEdit) { cb && cb(); return; }
       maybeChainCountry(function() { cb && cb(); });
@@ -1560,11 +1562,10 @@
           }
           render({ over: true, isNewBest: isNewBest });
           if (!window.__bloomBotActive && !skinTrialMode) {
-            if (!playerName) {
-              promptForName(function() { submitAndShowLeaderboard(); });
-            } else {
-              submitAndShowLeaderboard();
-            }
+            // 1.2-mod — auto-submit with default name; player can choose a
+            // real name via the ✏️ CTA on game-over (or the home pid) when
+            // they're actually ready to commit, not before their first play.
+            submitAndShowLeaderboard();
           }
         } else {
           render({ over: true, isNewBest: isNewBest });
@@ -1670,11 +1671,8 @@
         dailySubmitted = true;
         localStorage.setItem(DAILY_PLAYED_PREFIX + dailyDate, JSON.stringify({ score: score, tier: highestTier, ts: Date.now() }));
         render({ over: true, isNewBest: isNewBest });
-        if (!playerName) {
-          promptForName(function() { submitAndShowLeaderboard(); });
-        } else {
-          submitAndShowLeaderboard();
-        }
+        // 1.2-mod — auto-submit with default name (see src/07-identity.js).
+        submitAndShowLeaderboard();
       } else if (mode === 'practice') {
         render({ over: true, isNewBest: isNewBest });
         // Practice scores go to the daily leaderboard, but ONLY when the
@@ -1683,11 +1681,7 @@
         // also reuse the practice engine; never submit those to daily.
         var fair = !sessionDifficulty && !window._duelMode;
         if (fair && !window.__bloomBotActive && !skinTrialMode) {
-          if (!playerName) {
-            promptForName(function() { submitAndShowLeaderboard(); });
-          } else {
-            submitAndShowLeaderboard();
-          }
+          submitAndShowLeaderboard();
         } else if (!fair && !window.__bloomBotActive && !skinTrialMode) {
           // Non-default practice or duel — feeds only the difficulty board.
           submitPracticeOrDuelScore();

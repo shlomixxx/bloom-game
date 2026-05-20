@@ -2473,6 +2473,22 @@
     box-shadow: 0 6px 20px rgba(250,199,117,0.25), 0 0 0 0 rgba(250,199,117,0.4) !important;
   }
 
+  /* ── Game-Over: Claim a real name CTA (1.2-mod) ── */
+  .over-claim-name {
+    display: block; margin: 6px auto 4px;
+    padding: 6px 12px !important;
+    font-size: 12px !important; font-weight: 600 !important;
+    background: transparent !important;
+    border: 1px dashed rgba(186,117,23,0.45) !important;
+    color: #BA7517 !important;
+    border-radius: 8px !important;
+    letter-spacing: 0.02em;
+    transition: all 0.18s ease;
+  }
+  .over-claim-name:hover { background: rgba(186,117,23,0.05) !important; border-style: solid !important; }
+  html[data-theme="dark"] .over-claim-name { color: #FAC775 !important; border-color: rgba(250,199,117,0.4) !important; }
+  html[data-theme="dark"] .over-claim-name:hover { background: rgba(250,199,117,0.08) !important; }
+
   /* ── Game-Over: Best-score delta ── */
   .over-best-delta {
     margin: 10px auto; padding: 10px 16px;

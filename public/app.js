@@ -3925,6 +3925,29 @@
   }
   const deviceId = getDeviceId();
 
+  // ============ DEFAULT PLAYER NAME (1.2-mod, no upfront friction) ============
+  // The UX audit calls out that asking for a name before the player has
+  // experienced the game is the #1 drop-off. We now give every brand-new
+  // player a stable, deterministic placeholder ("שחקן 4F2C") derived from
+  // their deviceId so they can play immediately and *opt into* a real name
+  // later — either via the ✏️ on the home pid, or the "קבע שם אמיתי" CTA
+  // that appears on game-over while the name is still a default.
+  function defaultPlayerName(devId) {
+    var suffix = String(devId || '').replace(/[^A-Za-z0-9]/g, '').slice(-4).toUpperCase();
+    if (suffix.length < 4) suffix = (suffix + '0000').slice(0, 4);
+    return 'שחקן ' + suffix;
+  }
+  // Anyone who actually picked a real name has it in localStorage. The
+  // default is computed lazily and never persisted — that's how the rest
+  // of the app distinguishes "still using the placeholder" from "this
+  // player chose their name".
+  function hasRealPlayerName() {
+    return !!(localStorage.getItem(NAME_KEY) || '').trim();
+  }
+  if (!playerName) {
+    playerName = defaultPlayerName(deviceId);
+  }
+
   // ============ COUNTRY (for the country/world leaderboard tabs) ============
   // Player-chosen ISO-3166 alpha-2. Set once via the flag picker after the
   // name prompt, then sent with every score submission. Null = not chosen
@@ -6879,7 +6902,9 @@
       maybeChainCountry(function() { cb && cb(); });
     }
     function skip() {
-      if (!playerName && !isEdit) { playerName = 'אנונימי'; }
+      // 1.2-mod — playerName always has at least the deterministic default
+      // ("שחקן XXXX"), so we don't fall back to "אנונימי" anymore. Skipping
+      // simply leaves whatever was there (default or previously-saved name).
       modal.remove();
       if (isEdit) { cb && cb(); return; }
       maybeChainCountry(function() { cb && cb(); });
@@ -7494,11 +7519,10 @@
           }
           render({ over: true, isNewBest: isNewBest });
           if (!window.__bloomBotActive && !skinTrialMode) {
-            if (!playerName) {
-              promptForName(function() { submitAndShowLeaderboard(); });
-            } else {
-              submitAndShowLeaderboard();
-            }
+            // 1.2-mod — auto-submit with default name; player can choose a
+            // real name via the ✏️ CTA on game-over (or the home pid) when
+            // they're actually ready to commit, not before their first play.
+            submitAndShowLeaderboard();
           }
         } else {
           render({ over: true, isNewBest: isNewBest });
@@ -7604,11 +7628,8 @@
         dailySubmitted = true;
         localStorage.setItem(DAILY_PLAYED_PREFIX + dailyDate, JSON.stringify({ score: score, tier: highestTier, ts: Date.now() }));
         render({ over: true, isNewBest: isNewBest });
-        if (!playerName) {
-          promptForName(function() { submitAndShowLeaderboard(); });
-        } else {
-          submitAndShowLeaderboard();
-        }
+        // 1.2-mod — auto-submit with default name (see src/07-identity.js).
+        submitAndShowLeaderboard();
       } else if (mode === 'practice') {
         render({ over: true, isNewBest: isNewBest });
         // Practice scores go to the daily leaderboard, but ONLY when the
@@ -7617,11 +7638,7 @@
         // also reuse the practice engine; never submit those to daily.
         var fair = !sessionDifficulty && !window._duelMode;
         if (fair && !window.__bloomBotActive && !skinTrialMode) {
-          if (!playerName) {
-            promptForName(function() { submitAndShowLeaderboard(); });
-          } else {
-            submitAndShowLeaderboard();
-          }
+          submitAndShowLeaderboard();
         } else if (!fair && !window.__bloomBotActive && !skinTrialMode) {
           // Non-default practice or duel — feeds only the difficulty board.
           submitPracticeOrDuelScore();
@@ -8304,6 +8321,14 @@
         rankPillHtml = '<div class="lb-rank-pill">' + rankPillBody + '</div>';
       }
 
+      // 1.2-mod — invite the player to claim a real name (replaces the
+      // pre-game prompt). Only renders when the name is still the default
+      // placeholder, so returning players never see it.
+      var claimNameHtml = '';
+      if (typeof hasRealPlayerName === 'function' && !hasRealPlayerName() && dailyRank && (mode === 'daily' || mode === 'practice')) {
+        claimNameHtml = '<button class="btn over-claim-name" id="over-claim-name">✏️ קבע שם אמיתי בלוח</button>';
+      }
+
       // Best-score delta — "+2,300 שיא חדש" / "החמצת ב-180" / "הגעת לשיא"
       var bestDeltaHtml = '';
       if (opts.isNewBest && prevBest > 0 && score > prevBest) {
@@ -8341,6 +8366,7 @@
           '<div class="over-score">' + score.toLocaleString() + '</div>' +
           '<div class="over-sub">הגעת ל' + getActiveTiers()[highestTier].name + ' · ' + highestTier + '/' + MAX_TIER + ' דרגות</div>' +
           rankPillHtml +
+          claimNameHtml +
           bestDeltaHtml +
           rankTierHtml +
           rivalHtml +
@@ -8457,6 +8483,18 @@
       document.getElementById('again').onclick = function() {
         if (isContestOver) init('contest', { fresh: true });
         else init('practice', { fresh: true });
+      };
+
+      // 1.2-mod — "claim a real name" CTA wiring. Opens the existing
+      // promptForName in edit mode (pre-filled with default), then
+      // re-submits + re-renders so the leaderboard row picks up the
+      // new name without waiting for the next game.
+      var claimNameBtn = document.getElementById('over-claim-name');
+      if (claimNameBtn) claimNameBtn.onclick = function() {
+        promptForName(function() {
+          if (typeof submitAndShowLeaderboard === 'function') submitAndShowLeaderboard();
+          render({ over: true, isNewBest: !!opts.isNewBest, alreadyPlayed: !!opts.alreadyPlayed });
+        }, { edit: true });
       };
 
       // Continue (second chance) — watch ad or pay

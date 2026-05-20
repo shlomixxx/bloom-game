@@ -196,6 +196,29 @@
   }
   const deviceId = getDeviceId();
 
+  // ============ DEFAULT PLAYER NAME (1.2-mod, no upfront friction) ============
+  // The UX audit calls out that asking for a name before the player has
+  // experienced the game is the #1 drop-off. We now give every brand-new
+  // player a stable, deterministic placeholder ("שחקן 4F2C") derived from
+  // their deviceId so they can play immediately and *opt into* a real name
+  // later — either via the ✏️ on the home pid, or the "קבע שם אמיתי" CTA
+  // that appears on game-over while the name is still a default.
+  function defaultPlayerName(devId) {
+    var suffix = String(devId || '').replace(/[^A-Za-z0-9]/g, '').slice(-4).toUpperCase();
+    if (suffix.length < 4) suffix = (suffix + '0000').slice(0, 4);
+    return 'שחקן ' + suffix;
+  }
+  // Anyone who actually picked a real name has it in localStorage. The
+  // default is computed lazily and never persisted — that's how the rest
+  // of the app distinguishes "still using the placeholder" from "this
+  // player chose their name".
+  function hasRealPlayerName() {
+    return !!(localStorage.getItem(NAME_KEY) || '').trim();
+  }
+  if (!playerName) {
+    playerName = defaultPlayerName(deviceId);
+  }
+
   // ============ COUNTRY (for the country/world leaderboard tabs) ============
   // Player-chosen ISO-3166 alpha-2. Set once via the flag picker after the
   // name prompt, then sent with every score submission. Null = not chosen
