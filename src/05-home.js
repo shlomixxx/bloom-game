@@ -1,7 +1,9 @@
   function showHome() {
-    // ── Home v2 delegation ──
-    // The new home (HOME_AUDIT.md task plan) is opt-in for now. Once the
-    // user signs off we flip the default; until then v1 stays canonical.
+    // ── Home delegation chain: v3 (premium opt-in) → v2 (default) → v1 (legacy)
+    if (typeof homeV3Enabled === 'function' && homeV3Enabled()
+        && typeof showHomeV3 === 'function') {
+      return showHomeV3();
+    }
     if (typeof homeV2Enabled === 'function' && homeV2Enabled()
         && typeof showHomeV2 === 'function') {
       return showHomeV2();

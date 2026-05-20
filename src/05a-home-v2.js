@@ -129,6 +129,7 @@
           ? '<button class="home-v2-link" id="home-v2-tour">📖 איך משחקים?</button>'
           : '<button class="home-v2-link home-v2-link-skip" id="home-v2-skip">דלג על הסיור</button>') +
         '<button class="home-v2-link" id="home-v2-invite">📱 הזמן חבר</button>' +
+        '<button class="home-v2-link home-v2-try-v3" id="home-v2-try-v3">✨ נסה את הגירסה החדשה</button>' +
         '<button class="home-v2-link home-v2-switch" id="home-v2-switch">↩ הגירסה הישנה</button>' +
         '<a class="home-v2-link" href="/privacy" target="_blank" rel="noopener">מדיניות פרטיות</a>' +
       '</div>';
@@ -209,6 +210,12 @@
         history.replaceState(null, '', url.toString());
       } catch (e) {}
       showHome(); // v1 fallback
+    };
+    var tryV3Btn = document.getElementById('home-v2-try-v3');
+    if (tryV3Btn) tryV3Btn.onclick = function() {
+      if (typeof enableHomeV3 === 'function') enableHomeV3();
+      hideHomeV2();
+      showHome(); // delegation will route to v3
     };
 
     // ── Populate dynamic sections ──

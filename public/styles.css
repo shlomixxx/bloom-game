@@ -2297,6 +2297,347 @@
     color: var(--color-accent-soft, #FAC775);
     border-color: rgba(250,199,117,0.3);
   }
+  /* ============================================================
+     Home v3 — premium home screen (targets 9.5+ in HOME_AUDIT.md)
+     ============================================================
+     v3 layers on top of v2's foundation. Where a class is reused
+     (mute button, live pulse, hero card, player-ID, mystats,
+     featured action, actions grid) we inherit v2's styles via the
+     shared class name. v3-only additions get the .home-v3-* prefix.
+     ============================================================ */
+
+  .home-screen.home-v3 {
+    padding: 12px 18px max(24px, env(safe-area-inset-bottom));
+    padding-top: max(14px, env(safe-area-inset-top));
+    background: linear-gradient(180deg, var(--color-bg, #FAFAF6) 0%, var(--color-surface, #F2EFE9) 100%);
+    overflow-y: auto;
+    position: relative; /* anchor for mesh */
+  }
+  html[data-theme="dark"] .home-screen.home-v3 {
+    background: linear-gradient(180deg, #1A1816 0%, #232120 100%);
+  }
+
+  /* ──── Accessibility: skip link ──── */
+  .home-v3-skip-link {
+    position: absolute;
+    top: -40px;
+    right: 12px;
+    background: var(--color-text, #1C1A18);
+    color: #FFF;
+    padding: 8px 16px;
+    border-radius: 8px;
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: 700;
+    z-index: 1000;
+    transition: top 0.2s ease;
+  }
+  .home-v3-skip-link:focus {
+    top: 12px;
+    outline: 3px solid var(--color-accent-soft, #FAC775);
+  }
+
+  /* ──── Animated background mesh ──── */
+  .home-v3-mesh {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    pointer-events: none;
+    z-index: 0;
+  }
+  .mesh-tile {
+    position: absolute;
+    width: 64px;
+    height: 64px;
+    border-radius: 16px;
+    opacity: 0.045;
+    animation: meshDrift 24s ease-in-out infinite;
+  }
+  html[data-theme="dark"] .mesh-tile { opacity: 0.06; }
+  .mesh-t1 { background: #CECBF6; top: 8%;  right: -10px; animation-delay: 0s; }
+  .mesh-t2 { background: #9FE1CB; top: 24%; left: -20px;  animation-delay: -4s; animation-duration: 28s; }
+  .mesh-t3 { background: #F5C4B3; top: 42%; right: 12%;   animation-delay: -8s; animation-duration: 22s; }
+  .mesh-t4 { background: #F4C0D1; top: 56%; left: 10%;    animation-delay: -12s; animation-duration: 26s; }
+  .mesh-t5 { background: #C0DD97; top: 70%; right: -30px; animation-delay: -16s; animation-duration: 30s; }
+  .mesh-t6 { background: #FAC775; top: 85%; left: 20%;    animation-delay: -20s; animation-duration: 25s; }
+  .mesh-t7 { background: #FFD1DC; top: 14%; left: 30%;    animation-delay: -10s; animation-duration: 32s; width: 48px; height: 48px; }
+  @keyframes meshDrift {
+    0%, 100% { transform: translate(0, 0) rotate(0deg) scale(1); }
+    25%      { transform: translate(15px, 20px) rotate(8deg) scale(1.05); }
+    50%      { transform: translate(-10px, 30px) rotate(-6deg) scale(0.95); }
+    75%      { transform: translate(20px, -15px) rotate(10deg) scale(1.02); }
+  }
+
+  /* All non-decorative content sits above the mesh */
+  .home-screen.home-v3 > * { position: relative; z-index: 1; }
+  .home-screen.home-v3 > .home-v3-mesh { z-index: 0; }
+
+  /* ──── Topbar shares v2's styles, no override needed ──── */
+  .home-v3-topbar {
+    width: 100%;
+    max-width: 420px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin: 0 auto 4px;
+  }
+
+  /* ──── "What's new" banner ──── */
+  .home-v3-whats-new {
+    width: 100%; max-width: 420px;
+    margin: 8px auto 12px;
+    padding: 10px 14px;
+    background: linear-gradient(135deg, rgba(250,199,117,0.14) 0%, rgba(186,117,23,0.10) 100%);
+    border: 1px solid rgba(186,117,23,0.30);
+    border-radius: var(--radius-md, 12px);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    direction: rtl;
+    font-size: 12px;
+    color: var(--color-text, #1C1A18);
+    animation: wnSlideIn 0.45s cubic-bezier(.2,1.2,.4,1);
+  }
+  @keyframes wnSlideIn {
+    0%   { opacity: 0; transform: translateY(-6px) scale(0.97); }
+    100% { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  .home-v3-wn-sparkle {
+    font-size: 16px;
+    animation: wnSparkle 1.6s ease-in-out infinite;
+  }
+  @keyframes wnSparkle {
+    0%, 100% { transform: scale(1) rotate(0deg); }
+    50%      { transform: scale(1.18) rotate(15deg); }
+  }
+  .home-v3-wn-text { flex: 1; line-height: 1.3; }
+  .home-v3-wn-dismiss {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    color: var(--color-text-muted, #6F6E68);
+    font-size: 14px;
+    padding: 4px 6px;
+    border-radius: 4px;
+  }
+  .home-v3-wn-dismiss:hover { color: var(--color-text, #1C1A18); background: rgba(0,0,0,0.04); }
+  html[data-theme="dark"] .home-v3-whats-new {
+    background: linear-gradient(135deg, rgba(250,199,117,0.10) 0%, rgba(250,199,117,0.06) 100%);
+    border-color: rgba(250,199,117,0.30);
+    color: #F2EFE9;
+  }
+
+  /* ──── Brand area: mascot + animated mark + wordmark ──── */
+  .home-v3-brand-area {
+    width: 100%;
+    text-align: center;
+    margin: 8px 0 10px;
+    position: relative;
+  }
+
+  /* Flower mascot */
+  .home-v3-mascot {
+    width: 90px; height: 100px;
+    margin: 0 auto 4px;
+    display: block;
+    animation: mascotWiggle 4s ease-in-out infinite;
+    transform-origin: 50% 95%;
+  }
+  .mascot-svg { width: 100%; height: 100%; }
+  @keyframes mascotWiggle {
+    0%, 100% { transform: rotate(-1.5deg); }
+    50%      { transform: rotate(1.5deg); }
+  }
+  /* Independent petal pulsing — each petal breathes slightly off-phase */
+  .mascot-petal {
+    transform-origin: 50% 42%;
+    animation: petalBreath 3.4s ease-in-out infinite;
+  }
+  .mascot-petal-1 { animation-delay: 0s; }
+  .mascot-petal-2 { animation-delay: -0.7s; }
+  .mascot-petal-3 { animation-delay: -1.4s; }
+  .mascot-petal-4 { animation-delay: -2.1s; }
+  .mascot-petal-5 { animation-delay: -2.8s; }
+  @keyframes petalBreath {
+    0%, 100% { transform: scale(1); }
+    50%      { transform: scale(1.06); }
+  }
+  /* Blink loop: 4s pause then 0.18s closed */
+  .mascot-eye {
+    transform-origin: center;
+    animation: mascotBlink 4.5s ease-in-out infinite;
+  }
+  @keyframes mascotBlink {
+    0%, 86%, 100% { transform: scaleY(1); }
+    90%, 92%      { transform: scaleY(0.08); }
+    94%           { transform: scaleY(1); }
+  }
+  /* Wink on tap — only the right eye closes briefly */
+  .home-v3-mascot.mascot-wink .mascot-eye-right {
+    animation: mascotWinkOnce 0.6s ease-in-out;
+  }
+  @keyframes mascotWinkOnce {
+    0%, 100% { transform: scaleY(1); }
+    40%, 60% { transform: scaleY(0.08); }
+  }
+
+  /* Animated brand-mark loop (merge demo) */
+  .home-v3-mark {
+    width: 280px;
+    height: 50px;
+    margin: 0 auto 4px;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: space-evenly;
+    direction: ltr;
+  }
+  .mark-tile {
+    width: 36px; height: 36px;
+    border-radius: 9px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #FFF;
+  }
+  .mark-tile svg { width: 22px; height: 22px; }
+  .mark-t1 { background: #C0DD97; color: #173404; }
+  .mark-t2 { background: #9FE1CB; color: #04342C; }
+  .mark-t3 { background: #F4C0D1; color: #4B1528; }
+  .mark-result { background: #F5C4B3; color: #4A1B0C; opacity: 0; }
+  .mark-plus, .mark-arrow {
+    font-weight: 700;
+    color: var(--color-text-muted, #6F6E68);
+    font-size: 16px;
+    opacity: 0.6;
+  }
+  /* 8-second loop:
+       0-2s  show:  T1 + T1 + T1   (with plus signs)
+       2-3s  morph: T1 collapse → arrow appears → result fade-in
+       3-5s  result T2 visible
+       5-6s  fade out to reset
+       6-8s  blank (so the mascot is the focal point) */
+  .mark-t1, .mark-t2, .mark-t3 {
+    animation: markCollapse 8s ease-in-out infinite;
+  }
+  .mark-t2 { animation-delay: -0.4s; }
+  .mark-t3 { animation-delay: -0.8s; }
+  .mark-plus-1, .mark-plus-2, .mark-arrow {
+    animation: markPlusToggle 8s ease-in-out infinite;
+  }
+  .mark-result {
+    animation: markResultReveal 8s ease-in-out infinite;
+  }
+  @keyframes markCollapse {
+    0%, 22%   { transform: scale(1); opacity: 1; }
+    35%       { transform: scale(0.4); opacity: 0; }
+    100%      { transform: scale(0.4); opacity: 0; }
+  }
+  @keyframes markPlusToggle {
+    0%, 22%   { opacity: 0.6; }
+    32%       { opacity: 0; }
+    100%      { opacity: 0; }
+  }
+  @keyframes markResultReveal {
+    0%, 30%   { opacity: 0; transform: scale(0.4); }
+    40%       { opacity: 1; transform: scale(1.15); }
+    50%, 78%  { opacity: 1; transform: scale(1); }
+    90%, 100% { opacity: 0; transform: scale(0.95); }
+  }
+
+  /* Wordmark */
+  .home-v3-brand {
+    font-size: 26px;
+    letter-spacing: 0.32em;
+    font-weight: 800;
+    color: var(--color-text, #1C1A18);
+    text-align: center;
+    margin: 2px 0 0;
+  }
+  html[data-theme="dark"] .home-v3-brand { color: #F2EFE9; }
+
+  /* ──── Pre-game tier-up teaser ──── */
+  .home-v3-teaser {
+    width: 100%; max-width: 420px;
+    margin: -2px auto 10px;
+    padding: 10px 14px;
+    background: linear-gradient(135deg, rgba(46,139,111,0.10) 0%, rgba(159,225,203,0.18) 100%);
+    border: 1px dashed rgba(46,139,111,0.35);
+    border-radius: var(--radius-md, 12px);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    direction: rtl;
+    font-size: 12px;
+    color: var(--color-text, #1C1A18);
+    line-height: 1.35;
+    animation: teaserFloat 4s ease-in-out infinite;
+  }
+  @keyframes teaserFloat {
+    0%, 100% { transform: translateY(0); border-color: rgba(46,139,111,0.35); }
+    50%      { transform: translateY(-2px); border-color: rgba(46,139,111,0.55); }
+  }
+  .teaser-icon {
+    font-size: 18px;
+    flex-shrink: 0;
+  }
+  .teaser-text strong { font-weight: 800; color: var(--color-success, #2E8B6F); }
+  html[data-theme="dark"] .home-v3-teaser {
+    background: linear-gradient(135deg, rgba(46,139,111,0.15) 0%, rgba(46,139,111,0.08) 100%);
+    border-color: rgba(159,225,203,0.4);
+    color: #F2EFE9;
+  }
+  html[data-theme="dark"] .teaser-text strong { color: var(--color-success-soft, #9FE1CB); }
+
+  /* ──── Primary CTA (v3 — slightly bigger + custom hover gradient) ──── */
+  .home-v3-cta {
+    background: linear-gradient(135deg, #1C1A18 0%, #3B3128 100%);
+    /* extra ring on hover so the primary action visibly responds */
+  }
+  .home-v3-cta:hover {
+    box-shadow: var(--shadow-md), 0 0 0 8px rgba(250,199,117,0.20);
+  }
+  html[data-theme="dark"] .home-v3-cta {
+    background: linear-gradient(135deg, var(--color-accent-soft, #FAC775) 0%, #F08C2E 100%);
+  }
+
+  /* ──── Mystats with week-over-week delta arrows ──── */
+  .home-v3-mystats .mystats3-up   { color: var(--color-success, #2E8B6F); font-weight: 700; }
+  .home-v3-mystats .mystats3-down { color: #FF6B6B; font-weight: 700; }
+  .home-v3-mystats .mystats3-flat { color: var(--color-text-faint, #A8A6A0); font-weight: 700; }
+
+  /* ──── Reduce motion for accessibility ──── */
+  @media (prefers-reduced-motion: reduce) {
+    .mesh-tile,
+    .home-v3-mascot,
+    .mascot-petal,
+    .mascot-eye,
+    .home-v3-mark .mark-tile,
+    .home-v3-mark .mark-plus,
+    .home-v3-mark .mark-arrow,
+    .home-v3-mark .mark-result,
+    .home-v3-whats-new,
+    .home-v3-wn-sparkle,
+    .home-v3-teaser {
+      animation: none !important;
+    }
+    .mesh-tile { display: none; }
+  }
+
+  /* ──── "Try v3" link inside v2's bottom area ──── */
+  .home-v2-try-v3 {
+    color: var(--color-accent, #BA7517) !important;
+    font-weight: 700 !important;
+    background: rgba(250,199,117,0.12);
+    border: 1px dashed rgba(250,199,117,0.5);
+    border-radius: 999px;
+    padding: 6px 14px !important;
+  }
+  .home-v2-try-v3:hover {
+    background: rgba(250,199,117,0.22) !important;
+    border-style: solid;
+  }
   /* Contest screens - shared styles */
   .contest-screen {
     position: absolute; inset: 0;
