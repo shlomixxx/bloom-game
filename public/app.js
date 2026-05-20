@@ -786,26 +786,39 @@
   // comes first). Updates the in-flight result overlay in place.
   function pollDuelUntilSettled(duelId, myScore, oppName) {
     var attempts = 0;
-    var maxAttempts = 150; // 150 × 2s = 5 minutes
+    var maxAttempts = 150; // 150 × 2s = 5 minutes of active polling
     var poller = setInterval(function() {
       attempts++;
-      if (attempts > maxAttempts) { clearInterval(poller); return; }
+      if (attempts > maxAttempts) {
+        // The duel hasn't resolved in 5 minutes. Don't leave the player
+        // staring at a frozen spinner — swap the overlay to a friendly
+        // "go do something else, we'll notify you" state and stop the
+        // background spectator. The home-side checkIncomingDuels poll
+        // (every 60s) will pick up the eventual settle/decline/expire
+        // and surface it via the banner.
+        clearInterval(poller);
+        stopDuelLiveSpectator();
+        replaceDuelResultOverlay({
+          result: 'unresolved',
+          opponentName: oppName
+        }, myScore, oppName);
+        return;
+      }
       fetch(API_BASE + '/api/duels/' + duelId + '?deviceId=' + encodeURIComponent(deviceId), { method: 'GET' })
         .then(function(r) { return r.ok ? r.json() : null; })
         .then(function(resp) {
           if (!resp || !resp.duel) return;
           var u = resp.duel;
+          var isChallenger = u.challenger_device === deviceId;
+          // Settled / tie — the normal happy path.
           if (u.status === 'settled' || u.status === 'tie') {
             clearInterval(poller);
-            // Tear down the live-spectator poller too, if any.
             stopDuelLiveSpectator();
-            var isChallenger = u.challenger_device === deviceId;
             var oppScore = isChallenger ? u.opponent_score : u.challenger_score;
             var winner = null;
             if (u.status === 'settled') {
               winner = u.winner_device === deviceId ? 'you' : 'opponent';
             }
-            // Compute prize from amount * 2 minus 5% rake (mirrors server)
             var prize = u.amount ? Math.round((u.amount | 0) * 2 * 0.95) : 0;
             replaceDuelResultOverlay({
               result: u.status === 'tie' ? 'tie' : 'settled',
@@ -814,6 +827,25 @@
               prize: prize
             }, myScore, oppName);
             if (winner === 'you' || u.status === 'tie') fetchPlayerCode();
+            return;
+          }
+          // NEW: opponent declined, or duel auto-expired past its TTL.
+          // Both are terminal — refund already happened server-side.
+          // Surface a clear "you got your gems back, no win/loss" overlay
+          // so the challenger isn't stuck on "ממתין ליריב..." forever.
+          if (u.status === 'declined' || u.status === 'expired') {
+            clearInterval(poller);
+            stopDuelLiveSpectator();
+            replaceDuelResultOverlay({
+              result: u.status,            // 'declined' or 'expired'
+              opponentName: oppName,
+              refund: u.amount | 0          // for the message body
+            }, myScore, oppName);
+            // The wager came back — refresh balance immediately so the
+            // player sees the new total without waiting for the next
+            // navigation.
+            if (isChallenger) fetchPlayerCode();
+            return;
           }
         })
         .catch(function() {});
@@ -965,6 +997,9 @@
 
   function showDuelResultOverlay(d, myScore, oppName) {
     var emoji, title, detail, color, showConfettiFlag = false;
+    var ctaLabel = 'שחק שוב';                  // default close-overlay CTA
+    var ctaMode = 'practice';                  // default mode to start
+    var hideScoresVs = false;                  // hide the vs ... ... block when opponent didn't play
     if (d && d.result === 'settled' && d.winner === 'you') {
       emoji = '🏆'; title = 'ניצחת!'; color = '#2E8B6F'; showConfettiFlag = true;
       detail = '<div style="font-size:14px;color:#9FE1CB;margin-top:6px">+' + (d.prize || 0) + ' 💎 פרס</div>';
@@ -974,6 +1009,38 @@
     } else if (d && d.result === 'tie') {
       emoji = '🤝'; title = 'תיקו!'; color = '#BA7517';
       detail = '<div style="font-size:14px;color:#FAC775;margin-top:6px">ההימור הוחזר</div>';
+    } else if (d && d.result === 'declined') {
+      // The opponent explicitly declined the duel. No win/loss for either
+      // side; the wager has been refunded server-side already. Make the
+      // copy upbeat — this isn't a "failure", just an asymmetric outcome.
+      emoji = '🤷'; title = 'היריב סירב'; color = '#BA7517';
+      detail = '<div style="font-size:13px;color:#FAC775;margin-top:6px">' + escDuelHtml(oppName || 'היריב') + ' לא הצטרף לדו-קרב' +
+        (d.refund > 0 ? '<br>קיבלת חזרה <strong>' + d.refund + ' 💎</strong>' : '') +
+        '</div>';
+      ctaLabel = '↩ חזור לבית';
+      ctaMode = '__home__';
+      hideScoresVs = true;
+    } else if (d && d.result === 'expired') {
+      // The 24h window closed and the opponent never accepted. Server
+      // auto-expired + refunded.
+      emoji = '⏰'; title = 'פג תוקף'; color = '#BA7517';
+      detail = '<div style="font-size:13px;color:#FAC775;margin-top:6px">' + escDuelHtml(oppName || 'היריב') + ' לא קיבל את האתגר בזמן' +
+        (d.refund > 0 ? '<br>קיבלת חזרה <strong>' + d.refund + ' 💎</strong>' : '') +
+        '</div>';
+      ctaLabel = '↩ חזור לבית';
+      ctaMode = '__home__';
+      hideScoresVs = true;
+    } else if (d && d.result === 'unresolved') {
+      // 5 minutes of polling passed with no resolution. Don't hang the
+      // player on a frozen spinner — give them a graceful exit + reassure
+      // them they'll get notified later via the home banner.
+      emoji = '⏳'; title = 'הניקוד שלך נשמר'; color = '#6B5CE7';
+      detail = '<div style="font-size:13px;color:#B5B3F0;margin-top:6px">' +
+        escDuelHtml(oppName || 'היריב') + ' עדיין לא שיחק.<br>תקבל הודעה ברגע שהמשחק יסתיים — בינתיים תוכל לחזור לשחק' +
+        '</div>';
+      ctaLabel = '↩ חזור לבית';
+      ctaMode = '__home__';
+      hideScoresVs = true;
     } else if (d && d.result === 'waiting') {
       emoji = '⏳'; title = 'ממתין ליריב...'; color = '#6B5CE7';
       detail = '<div style="font-size:13px;color:#B5B3F0;margin-top:6px">הניקוד שלך נשלח. נעדכן כשהיריב יסיים</div>';
@@ -982,13 +1049,30 @@
       detail = '';
     }
 
-    // Build scores comparison
+    // Build scores comparison (skipped for declined / expired / unresolved
+    // where the opponent never played — showing "vs ..." would imply they
+    // *did* play, which is misleading).
     var oppScore = (d && d.opponentScore) ? d.opponentScore : null;
-    var scoresHtml = '<div style="display:flex;justify-content:center;gap:20px;margin:14px 0;font-size:13px">' +
-      '<div style="text-align:center"><div style="font-size:11px;color:#A8A6A0">אתה</div><div style="font-size:22px;font-weight:900;color:#FAC775">' + myScore.toLocaleString() + '</div></div>' +
-      '<div style="align-self:center;font-size:18px;color:#A8A6A0">vs</div>' +
-      '<div style="text-align:center"><div style="font-size:11px;color:#A8A6A0">' + escapeHtml(oppName) + '</div><div style="font-size:22px;font-weight:900;color:' + (oppScore != null ? '#FAC775' : '#555') + '">' + (oppScore != null ? oppScore.toLocaleString() : '...') + '</div></div>' +
-    '</div>';
+    var scoresHtml = '';
+    if (!hideScoresVs) {
+      scoresHtml = '<div style="display:flex;justify-content:center;gap:20px;margin:14px 0;font-size:13px">' +
+        '<div style="text-align:center"><div style="font-size:11px;color:#A8A6A0">אתה</div><div style="font-size:22px;font-weight:900;color:#FAC775">' + myScore.toLocaleString() + '</div></div>' +
+        '<div style="align-self:center;font-size:18px;color:#A8A6A0">vs</div>' +
+        '<div style="text-align:center"><div style="font-size:11px;color:#A8A6A0">' + escDuelHtml(oppName) + '</div><div style="font-size:22px;font-weight:900;color:' + (oppScore != null ? '#FAC775' : '#555') + '">' + (oppScore != null ? oppScore.toLocaleString() : '...') + '</div></div>' +
+      '</div>';
+    } else {
+      // Show only the player's own score in a compact card
+      scoresHtml = '<div style="margin:14px 0;font-size:13px">' +
+        '<div style="font-size:11px;color:#A8A6A0">הניקוד שלך</div>' +
+        '<div style="font-size:26px;font-weight:900;color:#FAC775">' + myScore.toLocaleString() + '</div>' +
+      '</div>';
+    }
+
+    // CTA wiring — for "go home" results we want the button to actually
+    // dismiss + return to home, not to start a fresh practice game.
+    var ctaOnClick = ctaMode === '__home__'
+      ? 'this.closest(\'div[style]\').parentElement.remove(); if (typeof showHome === \'function\') showHome();'
+      : 'this.closest(\'div[style]\').parentElement.remove();init(\'practice\',{fresh:true})';
 
     var overlay = document.createElement('div');
     overlay.setAttribute('data-duel-result-overlay', '1');
@@ -999,7 +1083,7 @@
         '<div style="font-size:24px;font-weight:900;color:' + color + '">' + title + '</div>' +
         scoresHtml +
         detail +
-        '<button onclick="this.closest(\'div[style]\').parentElement.remove();init(\'practice\',{fresh:true})" style="margin-top:18px;width:100%;padding:12px;border:none;border-radius:12px;background:#FAC775;color:#412402;font-size:16px;font-weight:800;cursor:pointer;font-family:inherit">שחק שוב</button>' +
+        '<button onclick="' + ctaOnClick + '" style="margin-top:18px;width:100%;padding:12px;border:none;border-radius:12px;background:#FAC775;color:#412402;font-size:16px;font-weight:800;cursor:pointer;font-family:inherit">' + escDuelHtml(ctaLabel) + '</button>' +
       '</div>';
     document.body.appendChild(overlay);
 
@@ -1069,6 +1153,12 @@
       emoji = '😔'; title = 'הפסדת בדו-קרב'; sub = 'מול ' + (opts.name || 'יריב'); border = '#C8472F';
     } else if (opts.kind === 'tie') {
       emoji = '🤝'; title = 'תיקו בדו-קרב'; sub = 'מול ' + (opts.name || 'יריב'); border = '#BA7517';
+    } else if (opts.kind === 'declined') {
+      // Opponent rejected. Tone is informative + warm — not "you failed".
+      emoji = '🤷'; title = (opts.name || 'היריב') + ' סירב/ה לדו-קרב'; sub = 'ההימור הוחזר אליך'; border = '#BA7517';
+    } else if (opts.kind === 'expired') {
+      // 24h window closed. Server already refunded.
+      emoji = '⏰'; title = 'דו-קרב מול ' + (opts.name || 'יריב') + ' פג תוקף'; sub = 'ההימור הוחזר אליך'; border = '#BA7517';
     }
     b.style.cssText = 'position:fixed;top:14px;left:50%;transform:translateX(-50%) translateY(-20px);' +
       'opacity:0;transition:opacity 240ms ease-out,transform 240ms ease-out;' +
@@ -1157,6 +1247,20 @@
               id: duel.id,
               kind: kind,
               name: opponentName,
+              onTap: function() { showDuelModal(); }
+            });
+          }
+          markDuelSeen(duel.id, duel.status);
+        } else if ((duel.status === 'declined' || duel.status === 'expired') && prevSeen !== duel.status) {
+          // I challenged someone and they declined OR didn't accept in
+          // time. The wager has been refunded server-side; surface a
+          // banner so I know what happened next time I open the app.
+          var iAmChallengerForOutcome = duel.challenger_device === deviceId;
+          if (iAmChallengerForOutcome) {
+            showDuelNotificationBanner({
+              id: duel.id,
+              kind: duel.status, // 'declined' or 'expired'
+              name: duel.opponent_name || duel.opponent_code,
               onTap: function() { showDuelModal(); }
             });
           }

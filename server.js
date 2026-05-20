@@ -4287,6 +4287,10 @@ app.get('/api/duels/mine', async (req, res) => {
   const deviceId = req.query.deviceId;
   if (!deviceId) return res.status(400).json({ error: 'missing_device' });
   try {
+    // Lazy cleanup: sweep stale pending duels FIRST so the response
+    // already reflects the auto-expired ones (no "still pending"
+    // ghosts in the player's list).
+    await expireStalePendingDuels();
     const playerCode = await pool.query('SELECT player_code FROM player_profiles WHERE device_id = $1', [deviceId]);
     const code = playerCode.rows.length ? playerCode.rows[0].player_code : '';
     const r = await pool.query(
@@ -4337,6 +4341,49 @@ app.post('/api/duels/:id/accept', requireDeviceAuth, async (req, res) => {
     res.status(500).json({ error: 'server' });
   }
 });
+
+// Lazy auto-expiry — runs on every duel read. Atomic + idempotent:
+// any pending duel past its expires_at is transitioned to 'expired',
+// the challenger's wager is refunded, and the refund is journalled to
+// wager_settlements. No background cron is needed — players naturally
+// trigger this when they open the duel modal or poll a result.
+//
+// SELECT ... FOR UPDATE is overkill for this volume; the WHERE clause
+// with status='pending' makes the UPDATE itself race-safe (a concurrent
+// /accept or /decline would have flipped the status first and our
+// UPDATE would no-op via RETURNING 0 rows).
+async function expireStalePendingDuels() {
+  try {
+    const stale = await pool.query(
+      `UPDATE duels
+          SET status = 'expired'
+        WHERE status = 'pending' AND expires_at < NOW()
+       RETURNING id, challenger_device, amount`);
+    if (!stale.rows.length) return;
+    // Refund each expired duel's wager in parallel — small N, safe.
+    await Promise.all(stale.rows.map(async function(row) {
+      const bet = row.amount | 0;
+      if (bet > 0 && row.challenger_device) {
+        try {
+          await pool.query(
+            `UPDATE player_profiles
+                SET balance = balance + $1, total_spent = total_spent - $1
+              WHERE device_id = $2`,
+            [bet, row.challenger_device]);
+          await pool.query(
+            `INSERT INTO wager_settlements (contest_code, device_id, amount, type)
+             VALUES ($1, $2, $3, 'duel_expire_refund')`,
+            ['DUEL:' + row.id, row.challenger_device, bet]);
+        } catch (refundErr) {
+          // Best-effort — never throw from the auto-expire path.
+          console.warn('duel expire refund failed', row.id, refundErr.message);
+        }
+      }
+    }));
+  } catch (e) {
+    console.warn('expireStalePendingDuels swallowed', e.message);
+  }
+}
 
 // POST /api/duels/:id/decline — opponent rejects a pending duel.
 // Refunds the challenger's wager if any. Atomic + race-safe via the
@@ -4403,6 +4450,10 @@ app.get('/api/duels/:id', async (req, res) => {
   if (!duelId) return res.status(400).json({ error: 'bad_id' });
   const viewerDeviceId = String(req.query.deviceId || '').slice(0, 64);
   try {
+    // Same lazy sweep as /mine — so a player polling their own duel
+    // sees it auto-flip to 'expired' the moment expires_at passes,
+    // not the next time someone else triggers a sweep.
+    await expireStalePendingDuels();
     const r = await pool.query('SELECT * FROM duels WHERE id = $1', [duelId]);
     if (!r.rows.length) return res.status(404).json({ error: 'not_found' });
     const d = r.rows[0];
