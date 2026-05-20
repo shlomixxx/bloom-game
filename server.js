@@ -4590,8 +4590,22 @@ app.get('/api/duels/:id', async (req, res) => {
     if (d.status !== 'settled' && d.status !== 'tie') {
       const iAmChallenger = viewerDeviceId === d.challenger_device;
       const iAmOpponent   = viewerDeviceId === d.opponent_device;
-      if (iAmChallenger && d.challenger_score == null) d.opponent_score = null;
-      if (iAmOpponent   && d.opponent_score == null)   d.challenger_score = null;
+      // Anti-cheat hide rule, now scoped to pre-accept only:
+      //   • status='pending': opponent hasn't accepted yet → they could
+      //     still /decline to refund their (yet-to-be-deducted) wager
+      //     based on what they peek at. Keep hiding the challenger's
+      //     score from them in this window.
+      //   • status='accepted' (or later non-settled state): both
+      //     players have already committed. The mid-game in-progress
+      //     player NEEDS to see the opponent's final score as their
+      //     target — hiding it broke the live-opponent HUD, where the
+      //     player who's still playing would never see the opponent's
+      //     score even after the opponent finished.
+      // Anyone else (spectator, random fetcher) still gets nothing.
+      if (d.status === 'pending' && iAmOpponent) {
+        // Opponent hasn't accepted yet → could decline based on peek.
+        d.challenger_score = null;
+      }
       if (!iAmChallenger && !iAmOpponent) {
         d.challenger_score = null;
         d.opponent_score = null;

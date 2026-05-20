@@ -315,6 +315,7 @@
   var _duelHudDuelRow = null;
   var _duelHudLastOppScore = null;  // for "score jump" flash animation
   var _duelHudFinalized = false;    // stops polling once opponent finalized
+  var _duelHudOppFinishedAnnounced = false; // single big-toast on transition
 
   function startDuelOpponentHud(duelRow) {
     if (!duelRow) return;
@@ -322,6 +323,7 @@
     _duelHudDuelRow = duelRow;
     _duelHudLastOppScore = null;
     _duelHudFinalized = false;
+    _duelHudOppFinishedAnnounced = false;
     renderDuelHud();
     // First tick fires immediately so the HUD isn't empty for 2s
     refreshDuelHudData();
@@ -343,6 +345,58 @@
     _duelHudDuelRow = null;
     _duelHudLastOppScore = null;
     _duelHudFinalized = false;
+    _duelHudOppFinishedAnnounced = false;
+  }
+
+  // Big toast that fires once when the opponent transitions from
+  // 'playing' to 'finished' during the player's own duel game. This
+  // is the dramatic moment the user explicitly asked for — the
+  // player needs to FEEL "your opponent locked in their score, you
+  // now have a target". HUD color change alone is too subtle.
+  function showOpponentFinishedToast(oppScore) {
+    var oppName = window._duelOpponentName || 'יריב';
+    var myScore = (typeof score === 'number') ? score : 0;
+    var diff = (myScore | 0) - (oppScore | 0);
+    var rallyText, color;
+    if (diff > 0) {
+      rallyText = 'אתה מוביל ב-' + diff.toLocaleString() + ' — תשמור על זה!';
+      color = '#2E8B6F';
+    } else if (diff < 0) {
+      rallyText = 'צריך עוד ' + Math.abs(diff).toLocaleString() + ' נקודות כדי לנצח!';
+      color = '#FF6B6B';
+    } else {
+      rallyText = 'אתם תיקו — כל merge קובע!';
+      color = '#BA7517';
+    }
+    var t = document.createElement('div');
+    t.id = 'duel-opp-finished-toast';
+    t.style.cssText =
+      'position:fixed;left:50%;top:max(72px, env(safe-area-inset-top));' +
+      'transform:translateX(-50%) translateY(-30px);opacity:0;' +
+      'transition:opacity 280ms ease-out, transform 280ms ease-out;' +
+      'z-index:9700;background:linear-gradient(135deg,#1C1A18,#2A2724);' +
+      'border:2px solid ' + color + ';border-radius:16px;padding:14px 18px;' +
+      'direction:rtl;font-family:inherit;color:#F2EFE9;' +
+      'box-shadow:0 12px 32px rgba(0,0,0,0.5);max-width:340px;' +
+      'width:calc(100vw - 32px);text-align:center;';
+    t.innerHTML =
+      '<div style="font-size:30px;line-height:1;margin-bottom:4px">🏁</div>' +
+      '<div style="font-size:14px;font-weight:800;color:#FFF;line-height:1.3">' +
+        escDuelHtml(oppName) + ' סיים/ה עם <span style="color:' + color + '">' +
+        (oppScore | 0).toLocaleString() + '</span></div>' +
+      '<div style="font-size:12px;color:#FAC775;margin-top:4px;font-weight:600">' + rallyText + '</div>';
+    document.body.appendChild(t);
+    requestAnimationFrame(function() {
+      t.style.opacity = '1';
+      t.style.transform = 'translateX(-50%) translateY(0)';
+    });
+    // Tactile cue: short buzz so the player feels the moment
+    try { if (typeof buzz === 'function') buzz([18, 40, 18]); } catch (e) {}
+    setTimeout(function() {
+      t.style.opacity = '0';
+      t.style.transform = 'translateX(-50%) translateY(-30px)';
+      setTimeout(function() { if (t.parentNode) t.parentNode.removeChild(t); }, 300);
+    }, 3800);
   }
   var _duelHudMyScoreTick = null;
 
@@ -527,6 +581,14 @@
       // Stop the heavy /api/duels/:id polling once we have the target —
       // we just need to keep updating MY score, which is the local tick.
       if (_duelHudPoller) { clearInterval(_duelHudPoller); _duelHudPoller = null; }
+      // First-time transition into 'finished' deserves a big moment —
+      // a celebratory toast that calls out the opponent's score as the
+      // new target. Without this, the HUD changes color but the player
+      // might miss that their opponent just locked in.
+      if (!_duelHudOppFinishedAnnounced) {
+        _duelHudOppFinishedAnnounced = true;
+        showOpponentFinishedToast(state.oppScore);
+      }
     }
 
     _duelHudLastOppScore = state.oppScore;
