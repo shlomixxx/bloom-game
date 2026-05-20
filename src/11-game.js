@@ -174,8 +174,15 @@
     updateModeBar();
     render();
     // Watch for opponents passing my score while I'm mid-game in a contest.
-    if (mode === 'contest' && activeContestCode) startOvertakeWatch(activeContestCode);
-    else stopOvertakeWatch();
+    // The contest live HUD shares the same lifecycle — both mount on
+    // contest-init and tear down on any other mode.
+    if (mode === 'contest' && activeContestCode) {
+      startOvertakeWatch(activeContestCode);
+      if (typeof startContestHud === 'function') startContestHud(activeContestCode);
+    } else {
+      stopOvertakeWatch();
+      if (typeof stopContestHud === 'function') stopContestHud();
+    }
     // First-drop ping so spectators / leaderboards see the entry immediately.
     if (mode === 'challenge' && activeChallenge) pushChallengeScore();
     // Onboarding: nudge the first-time player on the very first board paint.
@@ -1582,6 +1589,7 @@
           contestSubmitted = true;
           clearContestGameState();
           stopOvertakeWatch();
+          if (typeof stopContestHud === 'function') stopContestHud();
           setLastFinalScore(activeContestCode, score | 0);
           stopLivePush();
           activeGameContestCode = null;
@@ -1700,6 +1708,7 @@
         contestSubmitted = true;
         clearContestGameState();
         stopOvertakeWatch();
+        if (typeof stopContestHud === 'function') stopContestHud();
         setLastFinalScore(activeContestCode, score | 0);
         stopLivePush();
         // Detach the in-memory state from the contest — future saveContestGameState()

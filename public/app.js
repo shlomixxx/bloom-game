@@ -5074,6 +5074,10 @@
   function hideContestScreens() {
     stopContestRefresh();
     stopMyContestsRefresh();
+    // Live in-game HUD: tear down whenever the player navigates away from
+    // the contest game to any non-game screen (leaderboard, home, etc).
+    // init('contest') re-mounts it cleanly when they return.
+    if (typeof stopContestHud === 'function') stopContestHud();
     const el = document.getElementById('contest-screen');
     if (el) el.remove();
   }
@@ -6033,6 +6037,184 @@
     if (overtakeTimer) { clearTimeout(overtakeTimer); clearInterval(overtakeTimer); overtakeTimer = null; }
     overtakeCode = null;
     overtakeBaseline = null;
+  }
+
+  // ============================================================
+  // CONTEST LIVE HUD — persistent in-game widget
+  // ============================================================
+  // The duel mode has a live opponent HUD pinned at the top while playing.
+  // The contest mode used to have *only* periodic overtake banners — by the
+  // time those fire you've already missed multiple opponent score updates,
+  // and on a fresh game there's no ambient "where do I stand" signal at
+  // all. The contest HUD fixes that: a compact 3-column bar showing my
+  // live rank + score in the middle, the player I'm chasing on one side,
+  // and the player chasing me on the other. Tap = open the full contest
+  // leaderboard. Self-mounts on init('contest'), self-tears-down on game
+  // over or mode switch (mirrors the duel HUD lifecycle).
+  var _contestHudPoller = null;
+  var _contestHudTick = null;
+  var _contestHudCode = null;
+  var _contestHudLastRank = null;
+  var _contestHudLastMyScore = null;
+
+  function startContestHud(code) {
+    stopContestHud();
+    if (!code) return;
+    _contestHudCode = code;
+    renderContestHudShell();
+    // Fast first paint (no waiting on the slow data poll).
+    refreshContestHudData();
+    // Data refresh — same cadence as the existing overtake watch (~5s)
+    // so we don't double the contest-fetch load. Frequent enough that the
+    // HUD reflects opponents' real-time scores between drops.
+    _contestHudPoller = setInterval(refreshContestHudData, 5000);
+    // My-score tick — reads the local `score` global every 400ms so my
+    // own number updates instantly between merges, without waiting on
+    // the network round-trip.
+    _contestHudTick = setInterval(syncContestHudMyScore, 400);
+  }
+
+  function stopContestHud() {
+    if (_contestHudPoller) { clearInterval(_contestHudPoller); _contestHudPoller = null; }
+    if (_contestHudTick)   { clearInterval(_contestHudTick);   _contestHudTick   = null; }
+    var hud = document.getElementById('contest-hud');
+    if (hud) hud.remove();
+    _contestHudCode = null;
+    _contestHudLastRank = null;
+    _contestHudLastMyScore = null;
+  }
+
+  function renderContestHudShell() {
+    if (document.getElementById('contest-hud')) return;
+    var hud = document.createElement('div');
+    hud.id = 'contest-hud';
+    hud.className = 'contest-hud';
+    hud.innerHTML =
+      '<div class="contest-hud-side contest-hud-target" id="contest-hud-target">' +
+        '<div class="contest-hud-label">לעקוף ⚔️</div>' +
+        '<div class="contest-hud-name" id="contest-hud-target-name">—</div>' +
+        '<div class="contest-hud-score" id="contest-hud-target-score">--</div>' +
+      '</div>' +
+      '<div class="contest-hud-side contest-hud-me">' +
+        '<div class="contest-hud-rank" id="contest-hud-rank">#?</div>' +
+        '<div class="contest-hud-label">אתה</div>' +
+        '<div class="contest-hud-score contest-hud-my-score" id="contest-hud-my-score">0</div>' +
+      '</div>' +
+      '<div class="contest-hud-side contest-hud-chaser" id="contest-hud-chaser">' +
+        '<div class="contest-hud-label">רודף 👀</div>' +
+        '<div class="contest-hud-name" id="contest-hud-chaser-name">—</div>' +
+        '<div class="contest-hud-score" id="contest-hud-chaser-score">--</div>' +
+      '</div>' +
+      '<button class="contest-hud-expand" id="contest-hud-expand" aria-label="פתח לוח מובילים" type="button">⤢</button>';
+    document.body.appendChild(hud);
+    // Tap-to-expand → opens the full leaderboard. Save my current game
+    // state first (same as the existing pause/resume flow) so coming
+    // back picks up where I left off.
+    var expandBtn = document.getElementById('contest-hud-expand');
+    if (expandBtn) expandBtn.onclick = function(e) {
+      e.stopPropagation();
+      try { if (typeof saveContestGameState === 'function') saveContestGameState(); } catch(err) {}
+      try { if (typeof stopLivePush === 'function') stopLivePush(); } catch(err) {}
+      showContestLeaderboard(_contestHudCode);
+    };
+  }
+
+  function syncContestHudMyScore() {
+    var el = document.getElementById('contest-hud-my-score');
+    if (!el) return;
+    var s = (typeof score === 'number' ? score : 0) | 0;
+    if (s === _contestHudLastMyScore) return;
+    _contestHudLastMyScore = s;
+    el.textContent = s.toLocaleString();
+  }
+
+  function refreshContestHudData() {
+    if (!_contestHudCode) return;
+    if (typeof document !== 'undefined' && document.hidden) return;
+    if (mode !== 'contest' || activeContestCode !== _contestHudCode) return;
+    fetchContest(_contestHudCode).then(function(data) {
+      if (!data || !document.getElementById('contest-hud')) return;
+      paintContestHud(data.players || []);
+    }).catch(function() {});
+  }
+
+  function paintContestHud(players) {
+    if (!players.length) return;
+    // The server-side rank already includes other players' live scores,
+    // but MY live score isn't on the server until I submit. Recompute the
+    // ranking locally by replacing MY (score, liveScore) with my actual
+    // current game score. This way the HUD rank reflects what my position
+    // WOULD be if I locked in this score right now — the projection that
+    // turns "where do I stand?" into "if I keep this up, I overtake X".
+    var myLiveScore = (typeof score === 'number' ? score : 0) | 0;
+    var ranked = players.map(function(p) {
+      var total;
+      if (p.you) {
+        // My projected total = accumulated + this game (NOT + p.liveScore,
+        // which is what the server has — local `score` is always fresher).
+        total = (p.score | 0) + myLiveScore;
+      } else {
+        total = (p.score | 0) + (p.liveScore == null ? 0 : (p.liveScore | 0));
+      }
+      return { p: p, total: total };
+    });
+    ranked.sort(function(a, b) { return b.total - a.total; });
+    var myIdx = -1;
+    for (var i = 0; i < ranked.length; i++) {
+      if (ranked[i].p.you) { myIdx = i; break; }
+    }
+    if (myIdx === -1) return; // not a member (shouldn't happen mid-game)
+    var myRank = myIdx + 1;
+    var total = ranked.length;
+    var target = myIdx > 0 ? ranked[myIdx - 1] : null;       // player above me
+    var chaser = myIdx < ranked.length - 1 ? ranked[myIdx + 1] : null; // below me
+
+    // Rank
+    var rankEl = document.getElementById('contest-hud-rank');
+    if (rankEl) {
+      rankEl.textContent = '#' + myRank + ' / ' + total;
+      // Pulse on rank improvement — small but powerful dopamine hit
+      if (_contestHudLastRank != null && myRank < _contestHudLastRank) {
+        rankEl.classList.remove('rank-up'); void rankEl.offsetWidth;
+        rankEl.classList.add('rank-up');
+      } else if (_contestHudLastRank != null && myRank > _contestHudLastRank) {
+        rankEl.classList.remove('rank-down'); void rankEl.offsetWidth;
+        rankEl.classList.add('rank-down');
+      }
+      _contestHudLastRank = myRank;
+    }
+
+    // Target side (player I'm chasing)
+    var tName = document.getElementById('contest-hud-target-name');
+    var tScore = document.getElementById('contest-hud-target-score');
+    var targetWrap = document.getElementById('contest-hud-target');
+    if (target) {
+      if (tName) tName.textContent = target.p.name || 'אנונימי';
+      var gap = target.total - (ranked[myIdx].total | 0);
+      if (tScore) tScore.textContent = '−' + gap.toLocaleString();
+      if (targetWrap) targetWrap.classList.remove('contest-hud-empty');
+    } else {
+      // I'm #1 — celebrate
+      if (tName) tName.textContent = '🏆 אתה ראשון';
+      if (tScore) tScore.textContent = '';
+      if (targetWrap) targetWrap.classList.add('contest-hud-empty');
+    }
+
+    // Chaser side (player just behind me)
+    var cName = document.getElementById('contest-hud-chaser-name');
+    var cScore = document.getElementById('contest-hud-chaser-score');
+    var chaserWrap = document.getElementById('contest-hud-chaser');
+    if (chaser) {
+      if (cName) cName.textContent = chaser.p.name || 'אנונימי';
+      var lead = (ranked[myIdx].total | 0) - chaser.total;
+      if (cScore) cScore.textContent = '+' + lead.toLocaleString();
+      if (chaserWrap) chaserWrap.classList.remove('contest-hud-empty');
+    } else {
+      // I'm last (or alone)
+      if (cName) cName.textContent = '—';
+      if (cScore) cScore.textContent = '';
+      if (chaserWrap) chaserWrap.classList.add('contest-hud-empty');
+    }
   }
 
   function showContestAlert(type, player, extraCount) {
@@ -8863,8 +9045,15 @@
     updateModeBar();
     render();
     // Watch for opponents passing my score while I'm mid-game in a contest.
-    if (mode === 'contest' && activeContestCode) startOvertakeWatch(activeContestCode);
-    else stopOvertakeWatch();
+    // The contest live HUD shares the same lifecycle — both mount on
+    // contest-init and tear down on any other mode.
+    if (mode === 'contest' && activeContestCode) {
+      startOvertakeWatch(activeContestCode);
+      if (typeof startContestHud === 'function') startContestHud(activeContestCode);
+    } else {
+      stopOvertakeWatch();
+      if (typeof stopContestHud === 'function') stopContestHud();
+    }
     // First-drop ping so spectators / leaderboards see the entry immediately.
     if (mode === 'challenge' && activeChallenge) pushChallengeScore();
     // Onboarding: nudge the first-time player on the very first board paint.
@@ -10271,6 +10460,7 @@
           contestSubmitted = true;
           clearContestGameState();
           stopOvertakeWatch();
+          if (typeof stopContestHud === 'function') stopContestHud();
           setLastFinalScore(activeContestCode, score | 0);
           stopLivePush();
           activeGameContestCode = null;
@@ -10389,6 +10579,7 @@
         contestSubmitted = true;
         clearContestGameState();
         stopOvertakeWatch();
+        if (typeof stopContestHud === 'function') stopContestHud();
         setLastFinalScore(activeContestCode, score | 0);
         stopLivePush();
         // Detach the in-memory state from the contest — future saveContestGameState()
