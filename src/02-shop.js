@@ -1098,6 +1098,19 @@
       b.style.opacity = '1';
       b.style.transform = 'translateX(-50%) translateY(0)';
     });
+    // Tactile cue — different patterns by event kind so the player
+    // can subconsciously tell what type of notification just arrived.
+    try {
+      if (typeof buzz === 'function') {
+        var kind = (opts && opts.kind) || 'invite';
+        if      (kind === 'invite')   buzz([14, 30, 14, 30, 14]);
+        else if (kind === 'won')      buzz([20, 40, 20, 40, 40]);
+        else if (kind === 'lost')     buzz([40]);
+        else if (kind === 'tie')      buzz([18, 30, 18]);
+        else if (kind === 'declined') buzz([24]);
+        else if (kind === 'expired')  buzz([10, 40, 10]);
+      }
+    } catch (e) {}
     var dismiss = function() {
       b.style.opacity = '0';
       b.style.transform = 'translateX(-50%) translateY(-20px)';

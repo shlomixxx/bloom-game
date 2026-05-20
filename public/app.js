@@ -1518,6 +1518,19 @@
       b.style.opacity = '1';
       b.style.transform = 'translateX(-50%) translateY(0)';
     });
+    // Tactile cue — different patterns by event kind so the player
+    // can subconsciously tell what type of notification just arrived.
+    try {
+      if (typeof buzz === 'function') {
+        var kind = (opts && opts.kind) || 'invite';
+        if      (kind === 'invite')   buzz([14, 30, 14, 30, 14]);
+        else if (kind === 'won')      buzz([20, 40, 20, 40, 40]);
+        else if (kind === 'lost')     buzz([40]);
+        else if (kind === 'tie')      buzz([18, 30, 18]);
+        else if (kind === 'declined') buzz([24]);
+        else if (kind === 'expired')  buzz([10, 40, 10]);
+      }
+    } catch (e) {}
     var dismiss = function() {
       b.style.opacity = '0';
       b.style.transform = 'translateX(-50%) translateY(-20px)';
@@ -3971,6 +3984,13 @@
       localStorage.setItem(GIFT_SEEN_KEY, JSON.stringify(trimmed));
     } catch (e) {}
   }
+  // Exposed globally so the unified social refresh loop in 13-boot.js
+  // can call it on the same cadence as duel notifications (every 10s
+  // while visible + on visibility/focus). Without this, gifts only
+  // polled once-on-home-mount and were invisible to a recipient who
+  // was mid-game when the gift landed.
+  try { window.__bloomPollGiftInbox = pollGiftInbox; } catch (e) {}
+
   function pollGiftInbox() {
     if (typeof deviceId === 'undefined' || !deviceId) return;
     fetch(API_BASE + '/api/player/gifts/inbox?deviceId=' + encodeURIComponent(deviceId))
@@ -4023,6 +4043,12 @@
       banner.style.opacity = '1';
       banner.style.transform = 'translateX(-50%) translateY(0)';
     });
+    // Tactile + tonal alert so the player FEELS the gift arriving,
+    // not just sees it. Both are no-ops on browsers that don't
+    // support them — buzz() guards internally + soundDrop guards
+    // via ensureAudio.
+    try { if (typeof buzz === 'function') buzz([8, 20, 8, 20, 16]); } catch (e) {}
+    try { if (typeof soundMilestone === 'function') soundMilestone(3); } catch (e) {}
     const dismiss = function() {
       banner.style.opacity = '0';
       banner.style.transform = 'translateX(-50%) translateY(-20px)';
@@ -11305,25 +11331,48 @@
   updateMuteUI();
   renderStreakBadge();
 
-  // Duel notifications: scan for pending challenges / unread results on boot,
-  // then re-check every 60s while the tab is visible. The scan is cheap (one
-  // GET) and de-duped via sessionStorage so it can't spam toasts.
-  // SKIP entirely in spectator mode (?watch=...) — admin shouldn't see duel banners.
+  // ============================================================
+  // SOCIAL NOTIFICATIONS REFRESH LOOP — instant in-app delivery
+  // ============================================================
+  // Unified poller that scans BOTH /api/duels/mine AND
+  // /api/player/gifts/inbox so every social event (duel invite,
+  // result, decline, expire, gift) surfaces inside ~10 seconds
+  // while the app is foregrounded. Previously duels polled every
+  // 60s and gifts polled exactly once on home open — meaning a
+  // gift sent mid-game was invisible to the recipient until they
+  // navigated back to home.
+  //
+  // Triggered on:
+  //   (1) boot (after 1.5s warmup so deviceId is ready)
+  //   (2) setInterval every 10s while the tab is visible
+  //   (3) visibilitychange → visible
+  //   (4) window.focus (some browsers fire one event but not the other)
+  //
+  // True device-level push (closed-app notifications) requires
+  // PWA web push + VAPID keys + iOS Add-to-Home-Screen install —
+  // tracked separately. This loop covers the in-app case at the
+  // sub-perception threshold.
   var isSpectator = new URLSearchParams(window.location.search).has('watch');
-  if (!isSpectator && typeof window.__bloomCheckIncomingDuels === 'function') {
-    setTimeout(window.__bloomCheckIncomingDuels, 1500); // delay so deviceId is ready
-    setInterval(function() {
-      if (typeof window.__bloomCheckIncomingDuels === 'function') {
-        window.__bloomCheckIncomingDuels();
-      }
-    }, 60000);
-    // Also re-check when the tab regains focus — covers the case where a
-    // duel result lands while the player is in another app.
+  if (!isSpectator) {
+    function refreshSocial() {
+      if (document.visibilityState === 'hidden') return;
+      try {
+        if (typeof window.__bloomCheckIncomingDuels === 'function') {
+          window.__bloomCheckIncomingDuels();
+        }
+      } catch (e) { console.warn('[social] duel check failed', e); }
+      try {
+        if (typeof window.__bloomPollGiftInbox === 'function') {
+          window.__bloomPollGiftInbox();
+        }
+      } catch (e) { console.warn('[social] gift check failed', e); }
+    }
+    setTimeout(refreshSocial, 1500);
+    setInterval(refreshSocial, 10000);
     document.addEventListener('visibilitychange', function() {
-      if (document.visibilityState === 'visible' && typeof window.__bloomCheckIncomingDuels === 'function') {
-        window.__bloomCheckIncomingDuels();
-      }
+      if (document.visibilityState === 'visible') refreshSocial();
     });
+    window.addEventListener('focus', refreshSocial);
   }
 
   // Restore last active mode on refresh so players don't lose context.

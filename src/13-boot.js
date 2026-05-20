@@ -54,25 +54,48 @@
   updateMuteUI();
   renderStreakBadge();
 
-  // Duel notifications: scan for pending challenges / unread results on boot,
-  // then re-check every 60s while the tab is visible. The scan is cheap (one
-  // GET) and de-duped via sessionStorage so it can't spam toasts.
-  // SKIP entirely in spectator mode (?watch=...) — admin shouldn't see duel banners.
+  // ============================================================
+  // SOCIAL NOTIFICATIONS REFRESH LOOP — instant in-app delivery
+  // ============================================================
+  // Unified poller that scans BOTH /api/duels/mine AND
+  // /api/player/gifts/inbox so every social event (duel invite,
+  // result, decline, expire, gift) surfaces inside ~10 seconds
+  // while the app is foregrounded. Previously duels polled every
+  // 60s and gifts polled exactly once on home open — meaning a
+  // gift sent mid-game was invisible to the recipient until they
+  // navigated back to home.
+  //
+  // Triggered on:
+  //   (1) boot (after 1.5s warmup so deviceId is ready)
+  //   (2) setInterval every 10s while the tab is visible
+  //   (3) visibilitychange → visible
+  //   (4) window.focus (some browsers fire one event but not the other)
+  //
+  // True device-level push (closed-app notifications) requires
+  // PWA web push + VAPID keys + iOS Add-to-Home-Screen install —
+  // tracked separately. This loop covers the in-app case at the
+  // sub-perception threshold.
   var isSpectator = new URLSearchParams(window.location.search).has('watch');
-  if (!isSpectator && typeof window.__bloomCheckIncomingDuels === 'function') {
-    setTimeout(window.__bloomCheckIncomingDuels, 1500); // delay so deviceId is ready
-    setInterval(function() {
-      if (typeof window.__bloomCheckIncomingDuels === 'function') {
-        window.__bloomCheckIncomingDuels();
-      }
-    }, 60000);
-    // Also re-check when the tab regains focus — covers the case where a
-    // duel result lands while the player is in another app.
+  if (!isSpectator) {
+    function refreshSocial() {
+      if (document.visibilityState === 'hidden') return;
+      try {
+        if (typeof window.__bloomCheckIncomingDuels === 'function') {
+          window.__bloomCheckIncomingDuels();
+        }
+      } catch (e) { console.warn('[social] duel check failed', e); }
+      try {
+        if (typeof window.__bloomPollGiftInbox === 'function') {
+          window.__bloomPollGiftInbox();
+        }
+      } catch (e) { console.warn('[social] gift check failed', e); }
+    }
+    setTimeout(refreshSocial, 1500);
+    setInterval(refreshSocial, 10000);
     document.addEventListener('visibilitychange', function() {
-      if (document.visibilityState === 'visible' && typeof window.__bloomCheckIncomingDuels === 'function') {
-        window.__bloomCheckIncomingDuels();
-      }
+      if (document.visibilityState === 'visible') refreshSocial();
     });
+    window.addEventListener('focus', refreshSocial);
   }
 
   // Restore last active mode on refresh so players don't lose context.

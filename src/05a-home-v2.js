@@ -450,6 +450,13 @@
       localStorage.setItem(GIFT_SEEN_KEY, JSON.stringify(trimmed));
     } catch (e) {}
   }
+  // Exposed globally so the unified social refresh loop in 13-boot.js
+  // can call it on the same cadence as duel notifications (every 10s
+  // while visible + on visibility/focus). Without this, gifts only
+  // polled once-on-home-mount and were invisible to a recipient who
+  // was mid-game when the gift landed.
+  try { window.__bloomPollGiftInbox = pollGiftInbox; } catch (e) {}
+
   function pollGiftInbox() {
     if (typeof deviceId === 'undefined' || !deviceId) return;
     fetch(API_BASE + '/api/player/gifts/inbox?deviceId=' + encodeURIComponent(deviceId))
@@ -502,6 +509,12 @@
       banner.style.opacity = '1';
       banner.style.transform = 'translateX(-50%) translateY(0)';
     });
+    // Tactile + tonal alert so the player FEELS the gift arriving,
+    // not just sees it. Both are no-ops on browsers that don't
+    // support them — buzz() guards internally + soundDrop guards
+    // via ensureAudio.
+    try { if (typeof buzz === 'function') buzz([8, 20, 8, 20, 16]); } catch (e) {}
+    try { if (typeof soundMilestone === 'function') soundMilestone(3); } catch (e) {}
     const dismiss = function() {
       banner.style.opacity = '0';
       banner.style.transform = 'translateX(-50%) translateY(-20px)';
