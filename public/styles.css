@@ -2307,11 +2307,17 @@
      ============================================================ */
 
   .home-screen.home-v3 {
+    /* DON'T override `position` here — the base .home-screen rule sets
+       position:absolute + inset:0 + z-index:250, which is exactly what
+       we need to cover the game board fullscreen. A previous version
+       added position:relative here, which silently broke the overlay
+       and made the game board show through behind the home content.
+       The mesh tiles use position:absolute and the .home-screen.home-v3
+       still acts as their containing block because it's position:absolute. */
     padding: 12px 18px max(24px, env(safe-area-inset-bottom));
     padding-top: max(14px, env(safe-area-inset-top));
     background: linear-gradient(180deg, var(--color-bg, #FAFAF6) 0%, var(--color-surface, #F2EFE9) 100%);
     overflow-y: auto;
-    position: relative; /* anchor for mesh */
   }
   html[data-theme="dark"] .home-screen.home-v3 {
     background: linear-gradient(180deg, #1A1816 0%, #232120 100%);
@@ -2436,34 +2442,51 @@
     position: relative;
   }
 
-  /* Flower mascot */
+  /* Star mascot — universal, premium, gender-neutral */
   .home-v3-mascot {
-    width: 90px; height: 100px;
-    margin: 0 auto 4px;
+    width: 100px; height: 90px;
+    margin: 0 auto -4px;
     display: block;
+    cursor: pointer;
     animation: mascotWiggle 4s ease-in-out infinite;
-    transform-origin: 50% 95%;
+    transform-origin: 50% 80%;
   }
   .mascot-svg { width: 100%; height: 100%; }
   @keyframes mascotWiggle {
-    0%, 100% { transform: rotate(-1.5deg); }
-    50%      { transform: rotate(1.5deg); }
+    0%, 100% { transform: rotate(-2deg); }
+    50%      { transform: rotate(2deg); }
   }
-  /* Independent petal pulsing — each petal breathes slightly off-phase */
-  .mascot-petal {
-    transform-origin: 50% 42%;
-    animation: petalBreath 3.4s ease-in-out infinite;
+  /* Outer glow pulses with the wiggle */
+  .mascot-glow {
+    transform-origin: 55px 50px;
+    animation: mascotGlowPulse 2.6s ease-in-out infinite;
   }
-  .mascot-petal-1 { animation-delay: 0s; }
-  .mascot-petal-2 { animation-delay: -0.7s; }
-  .mascot-petal-3 { animation-delay: -1.4s; }
-  .mascot-petal-4 { animation-delay: -2.1s; }
-  .mascot-petal-5 { animation-delay: -2.8s; }
-  @keyframes petalBreath {
+  @keyframes mascotGlowPulse {
+    0%, 100% { opacity: 0.7; transform: scale(0.92); }
+    50%      { opacity: 1;   transform: scale(1.08); }
+  }
+  /* Subtle "shine" on the star body itself */
+  .mascot-star-body {
+    transform-origin: 55px 50px;
+    animation: starBreath 3.4s ease-in-out infinite;
+  }
+  @keyframes starBreath {
     0%, 100% { transform: scale(1); }
-    50%      { transform: scale(1.06); }
+    50%      { transform: scale(1.04); }
   }
-  /* Blink loop: 4s pause then 0.18s closed */
+  /* Sparkles twinkle out-of-phase */
+  .mascot-spark {
+    transform-origin: center;
+  }
+  .mascot-spark-1 { animation: sparkTwinkle 2.2s ease-in-out infinite; }
+  .mascot-spark-2 { animation: sparkTwinkle 2.8s ease-in-out infinite -0.6s; }
+  .mascot-spark-3 { animation: sparkTwinkle 2.4s ease-in-out infinite -1.2s; }
+  .mascot-spark-4 { animation: sparkTwinkle 3.0s ease-in-out infinite -1.8s; }
+  @keyframes sparkTwinkle {
+    0%, 100% { opacity: 0.25; transform: scale(0.85); }
+    50%      { opacity: 1;    transform: scale(1.15); }
+  }
+  /* Blink loop: ~4.5s pause then a quick blink */
   .mascot-eye {
     transform-origin: center;
     animation: mascotBlink 4.5s ease-in-out infinite;
@@ -2473,7 +2496,7 @@
     90%, 92%      { transform: scaleY(0.08); }
     94%           { transform: scaleY(1); }
   }
-  /* Wink on tap — only the right eye closes briefly */
+  /* Wink on tap — right eye closes briefly */
   .home-v3-mascot.mascot-wink .mascot-eye-right {
     animation: mascotWinkOnce 0.6s ease-in-out;
   }
@@ -2482,80 +2505,117 @@
     40%, 60% { transform: scaleY(0.08); }
   }
 
-  /* Animated brand-mark loop (merge demo) */
-  .home-v3-mark {
-    width: 280px;
-    height: 50px;
-    margin: 0 auto 4px;
-    position: relative;
-    display: flex;
-    align-items: center;
-    justify-content: space-evenly;
-    direction: ltr;
-  }
-  .mark-tile {
-    width: 36px; height: 36px;
-    border-radius: 9px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #FFF;
-  }
-  .mark-tile svg { width: 22px; height: 22px; }
-  .mark-t1 { background: #C0DD97; color: #173404; }
-  .mark-t2 { background: #9FE1CB; color: #04342C; }
-  .mark-t3 { background: #F4C0D1; color: #4B1528; }
-  .mark-result { background: #F5C4B3; color: #4A1B0C; opacity: 0; }
-  .mark-plus, .mark-arrow {
-    font-weight: 700;
-    color: var(--color-text-muted, #6F6E68);
-    font-size: 16px;
-    opacity: 0.6;
-  }
-  /* 8-second loop:
-       0-2s  show:  T1 + T1 + T1   (with plus signs)
-       2-3s  morph: T1 collapse → arrow appears → result fade-in
-       3-5s  result T2 visible
-       5-6s  fade out to reset
-       6-8s  blank (so the mascot is the focal point) */
-  .mark-t1, .mark-t2, .mark-t3 {
-    animation: markCollapse 8s ease-in-out infinite;
-  }
-  .mark-t2 { animation-delay: -0.4s; }
-  .mark-t3 { animation-delay: -0.8s; }
-  .mark-plus-1, .mark-plus-2, .mark-arrow {
-    animation: markPlusToggle 8s ease-in-out infinite;
-  }
-  .mark-result {
-    animation: markResultReveal 8s ease-in-out infinite;
-  }
-  @keyframes markCollapse {
-    0%, 22%   { transform: scale(1); opacity: 1; }
-    35%       { transform: scale(0.4); opacity: 0; }
-    100%      { transform: scale(0.4); opacity: 0; }
-  }
-  @keyframes markPlusToggle {
-    0%, 22%   { opacity: 0.6; }
-    32%       { opacity: 0; }
-    100%      { opacity: 0; }
-  }
-  @keyframes markResultReveal {
-    0%, 30%   { opacity: 0; transform: scale(0.4); }
-    40%       { opacity: 1; transform: scale(1.15); }
-    50%, 78%  { opacity: 1; transform: scale(1); }
-    90%, 100% { opacity: 0; transform: scale(0.95); }
-  }
-
   /* Wordmark */
   .home-v3-brand {
-    font-size: 26px;
+    font-size: 30px;
     letter-spacing: 0.32em;
     font-weight: 800;
     color: var(--color-text, #1C1A18);
     text-align: center;
     margin: 2px 0 0;
   }
+  .home-v3-tagline {
+    text-align: center;
+    font-size: 12px;
+    color: var(--color-text-muted, #6F6E68);
+    margin: 4px 0 0;
+    letter-spacing: 0.04em;
+  }
   html[data-theme="dark"] .home-v3-brand { color: #F2EFE9; }
+
+  /* ──── Tile legend — the 8-tier ladder with names + point values ──── */
+  .home-v3-legend-wrap {
+    width: 100%;
+    max-width: 420px;
+    margin: 14px auto 12px;
+    padding: 12px 10px 10px;
+    background: var(--color-surface, #F2EFE9);
+    border: 1px solid var(--color-border, rgba(0,0,0,0.08));
+    border-radius: var(--radius-lg, 14px);
+    box-shadow: var(--shadow-sm);
+  }
+  .home-v3-legend-title {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    direction: rtl;
+    margin: 0 4px 8px;
+  }
+  .legend-title-text {
+    font-size: 13px;
+    font-weight: 800;
+    color: var(--color-text, #1C1A18);
+    letter-spacing: 0.02em;
+  }
+  .legend-title-hint {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--color-text-muted, #6F6E68);
+  }
+  .home-v3-legend {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    gap: 4px;
+    direction: ltr; /* tier 1 → 8 reads naturally left-to-right */
+  }
+  .legend-tile {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    cursor: pointer;
+    padding: 4px 2px;
+    border-radius: 8px;
+    transition: transform 0.15s ease, background 0.15s ease;
+  }
+  .legend-tile:hover {
+    background: rgba(0,0,0,0.04);
+  }
+  .legend-tile:active {
+    transform: scale(0.94);
+  }
+  .legend-tile-icon {
+    width: 30px;
+    height: 30px;
+    border-radius: 7px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.10);
+  }
+  .legend-tile-icon svg { width: 20px; height: 20px; }
+  .legend-tile-name {
+    font-size: 9px;
+    font-weight: 700;
+    color: var(--color-text, #1C1A18);
+    text-align: center;
+    line-height: 1;
+    direction: rtl;
+  }
+  .legend-tile-pts {
+    font-size: 9px;
+    font-weight: 600;
+    color: var(--color-text-muted, #6F6E68);
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+  }
+  /* Smaller screens: tighten gaps and shrink icons so all 8 fit cleanly */
+  @media (max-width: 380px) {
+    .home-v3-legend { gap: 2px; }
+    .legend-tile-icon { width: 26px; height: 26px; border-radius: 6px; }
+    .legend-tile-icon svg { width: 17px; height: 17px; }
+    .legend-tile-name { font-size: 8.5px; }
+    .legend-tile-pts { font-size: 8.5px; }
+  }
+  html[data-theme="dark"] .home-v3-legend-wrap {
+    background: #2A2724;
+    border-color: rgba(255,255,255,0.06);
+  }
+  html[data-theme="dark"] .legend-title-text { color: #F2EFE9; }
+  html[data-theme="dark"] .legend-title-hint { color: #B0AA9E; }
+  html[data-theme="dark"] .legend-tile-name { color: #F2EFE9; }
+  html[data-theme="dark"] .legend-tile-pts { color: #8E8A82; }
+  html[data-theme="dark"] .legend-tile:hover { background: rgba(255,255,255,0.04); }
 
   /* ──── Pre-game tier-up teaser ──── */
   .home-v3-teaser {

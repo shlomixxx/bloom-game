@@ -162,20 +162,19 @@
       // "What's new" banner — conditional
       buildWhatsNewBanner() +
 
-      // Brand area: flower mascot + animated brand-mark loop
+      // Brand area: smiling-star mascot (universally appealing across
+      // demographics, ties into the tier-6 "star" goal in-game) + the
+      // wordmark + the new tile legend that replaces the old animated
+      // brand-mark loop.
       '<div class="home-v3-brand-area">' +
-        '<div class="home-v3-mascot" id="home-v3-mascot" aria-hidden="true">' + buildFlowerMascotSvg() + '</div>' +
-        '<div class="home-v3-mark" id="home-v3-mark" aria-hidden="true">' +
-          '<div class="mark-tile mark-t1">' + (getActiveTiers()[1] && getActiveTiers()[1].svg ? getActiveTiers()[1].svg : '🌱') + '</div>' +
-          '<div class="mark-tile mark-t2">' + (getActiveTiers()[2] && getActiveTiers()[2].svg ? getActiveTiers()[2].svg : '🍃') + '</div>' +
-          '<div class="mark-tile mark-t3">' + (getActiveTiers()[3] && getActiveTiers()[3].svg ? getActiveTiers()[3].svg : '🌸') + '</div>' +
-          '<div class="mark-plus mark-plus-1">+</div>' +
-          '<div class="mark-plus mark-plus-2">+</div>' +
-          '<div class="mark-arrow">→</div>' +
-          '<div class="mark-tile mark-result">' + (getActiveTiers()[4] && getActiveTiers()[4].svg ? getActiveTiers()[4].svg : '🔥') + '</div>' +
-        '</div>' +
+        '<div class="home-v3-mascot" id="home-v3-mascot">' + buildFlowerMascotSvg() + '</div>' +
         '<div class="home-v3-brand">BLOOM</div>' +
+        '<div class="home-v3-tagline">מזג, גדל, הגע לכתר 👑</div>' +
       '</div>' +
+
+      // §"חוקים לפי האריחים" — the player explicitly asked for the tier
+      // ladder to be visible on the home screen as a learning aid.
+      buildTileLegend() +
 
       // Personal hero banner — adaptive
       '<div class="home-v2-hero" id="home-v2-hero"></div>' +
@@ -292,6 +291,30 @@
         setTimeout(function() { mascot.classList.remove('mascot-wink'); }, 600);
       };
     }
+
+    // Tile-legend tap → toast with the rule for that tier. Teaches the
+    // mechanic on demand without crowding the static layout with text.
+    const legendEls = document.querySelectorAll('.home-v3-legend .legend-tile');
+    legendEls.forEach(function(el) {
+      el.onclick = function() {
+        const tier = parseInt(el.getAttribute('data-tier'), 10);
+        if (!tier || !window.__bloomToast) return;
+        const tiers = (typeof getActiveTiers === 'function') ? getActiveTiers() : [];
+        const ti = tiers[tier] || {};
+        const value = tierMergeValueV3(tier);
+        let msg;
+        if (tier === 1) {
+          msg = '🪨 ' + (ti.name || 'אבן') + ' — נופלת ראשונה. מזג 3 כדי לקבל ' + ((tiers[2] && tiers[2].name) || 'עלה') + ' (+' + tierMergeValueV3(2) + ' נק׳)';
+        } else if (tier === 8) {
+          msg = '👑 ' + (ti.name || 'כתר') + ' — הדרגה הגבוהה ביותר! +' + value.toLocaleString() + ' נק׳ למיזוג';
+        } else {
+          const prev = (tiers[tier - 1] && tiers[tier - 1].name) || 'הדרגה הקודמת';
+          const next = (tiers[tier + 1] && tiers[tier + 1].name) || 'הדרגה הבאה';
+          msg = (ti.name || 'דרגה ' + tier) + ' — מזג 3 ' + prev + ' כדי לקבל. +' + value.toLocaleString() + ' נק׳ למיזוג שלה. ממוזגת ל-' + next + '.';
+        }
+        try { window.__bloomToast(msg, 'info'); } catch (e) {}
+      };
+    });
 
     // What's-new dismiss
     const wnDismiss = document.getElementById('home-v3-wn-dismiss');
@@ -418,39 +441,89 @@
     el.style.display = '';
   }
 
-  // ===== Flower mascot SVG (Claude Design — hand-rolled) =====
-  // Five-petal flower with eyes, a smile, and a leafy stem. All shapes
-  // are inline so the mascot inherits currentColor and dark-mode shifts
-  // without an extra request. Animated via .home-v3-mascot CSS classes.
+  // ===== Star mascot SVG (Claude Design — gold star with smiley face) =====
+  // Replaces the previous flower mascot. The flower read as gendered to
+  // some players; a smiling gold star is the cross-cultural "premium
+  // aspiration" symbol that big merge/casual games (Royal Match, Toy
+  // Blast, Best Fiends) lean on. It also ties directly into BLOOM's
+  // mechanic — the player's actual goal is to merge their way up to
+  // the Star tier (tier 6) and beyond.
   function buildFlowerMascotSvg() {
-    return '<svg viewBox="0 0 100 110" xmlns="http://www.w3.org/2000/svg" class="mascot-svg">' +
-      // Stem
-      '<path d="M50 60 Q50 80 50 100" stroke="#4D8C4D" stroke-width="3.5" stroke-linecap="round" fill="none"/>' +
-      // Leaf
-      '<ellipse cx="42" cy="80" rx="9" ry="5" fill="#6BCB77" transform="rotate(-25 42 80)"/>' +
-      // Petals — 5 around the center
-      '<circle class="mascot-petal mascot-petal-1" cx="50" cy="20" r="14" fill="#F4C0D1"/>' +
-      '<circle class="mascot-petal mascot-petal-2" cx="78" cy="38" r="14" fill="#F4C0D1"/>' +
-      '<circle class="mascot-petal mascot-petal-3" cx="68" cy="62" r="14" fill="#F4C0D1"/>' +
-      '<circle class="mascot-petal mascot-petal-4" cx="32" cy="62" r="14" fill="#F4C0D1"/>' +
-      '<circle class="mascot-petal mascot-petal-5" cx="22" cy="38" r="14" fill="#F4C0D1"/>' +
-      // Center disc (face)
-      '<circle cx="50" cy="42" r="16" fill="#FAC775"/>' +
-      // Eyes (each in its own <g> so we can blink them independently)
+    return '<svg viewBox="0 0 110 100" xmlns="http://www.w3.org/2000/svg" class="mascot-svg" aria-hidden="true">' +
+      '<defs>' +
+        '<radialGradient id="starGlow" cx="50%" cy="50%" r="55%">' +
+          '<stop offset="0%" stop-color="#FFE194" stop-opacity="0.55"/>' +
+          '<stop offset="100%" stop-color="#FAC775" stop-opacity="0"/>' +
+        '</radialGradient>' +
+        '<linearGradient id="starBody" x1="0%" y1="0%" x2="0%" y2="100%">' +
+          '<stop offset="0%" stop-color="#FFE194"/>' +
+          '<stop offset="50%" stop-color="#FAC775"/>' +
+          '<stop offset="100%" stop-color="#E59B2C"/>' +
+        '</linearGradient>' +
+      '</defs>' +
+      // Outer glow halo (slow pulse via CSS)
+      '<circle class="mascot-glow" cx="55" cy="50" r="48" fill="url(#starGlow)"/>' +
+      // 5-pointed star
+      '<polygon class="mascot-star-body" points="55,15 65,40 92,42 70,60 78,88 55,72 32,88 40,60 18,42 45,40" ' +
+        'fill="url(#starBody)" stroke="#9C5E0F" stroke-width="2.5" stroke-linejoin="round"/>' +
+      // Inner highlight (top-left, sells the 3D feel)
+      '<polygon points="55,22 60,40 76,42 65,52" fill="#FFF1C2" opacity="0.65"/>' +
+      // Rosy cheeks
+      '<circle cx="44" cy="58" r="3.2" fill="#FF8FA8" opacity="0.65"/>' +
+      '<circle cx="66" cy="58" r="3.2" fill="#FF8FA8" opacity="0.65"/>' +
+      // Eyes — each in its own group so they can blink in unison
       '<g class="mascot-eye mascot-eye-left">' +
-        '<circle cx="44" cy="40" r="2.4" fill="#1C1A18"/>' +
-        '<circle cx="44.7" cy="39.3" r="0.7" fill="#FFF"/>' +
+        '<ellipse cx="47" cy="52" rx="2.6" ry="3.2" fill="#1C1A18"/>' +
+        '<circle cx="47.9" cy="50.8" r="0.95" fill="#FFF"/>' +
       '</g>' +
       '<g class="mascot-eye mascot-eye-right">' +
-        '<circle cx="56" cy="40" r="2.4" fill="#1C1A18"/>' +
-        '<circle cx="56.7" cy="39.3" r="0.7" fill="#FFF"/>' +
+        '<ellipse cx="63" cy="52" rx="2.6" ry="3.2" fill="#1C1A18"/>' +
+        '<circle cx="63.9" cy="50.8" r="0.95" fill="#FFF"/>' +
       '</g>' +
-      // Cheeks
-      '<circle cx="40" cy="47" r="2" fill="#F08AA8" opacity="0.6"/>' +
-      '<circle cx="60" cy="47" r="2" fill="#F08AA8" opacity="0.6"/>' +
-      // Smile
-      '<path d="M45 48 Q50 53 55 48" stroke="#1C1A18" stroke-width="1.4" fill="none" stroke-linecap="round"/>' +
+      // Mouth — friendly slight smile
+      '<path d="M49 62 Q55 68 61 62" stroke="#1C1A18" stroke-width="1.8" fill="none" stroke-linecap="round"/>' +
+      // Surrounding sparkles (animated independently)
+      '<g class="mascot-sparkles">' +
+        '<text x="10" y="22" font-size="11" class="mascot-spark mascot-spark-1">✨</text>' +
+        '<text x="92" y="28" font-size="10" class="mascot-spark mascot-spark-2">✦</text>' +
+        '<text x="14" y="82" font-size="9"  class="mascot-spark mascot-spark-3">✦</text>' +
+        '<text x="93" y="80" font-size="11" class="mascot-spark mascot-spark-4">✨</text>' +
+      '</g>' +
     '</svg>';
+  }
+
+  // ===== Tile legend (the 8 tiers, with Hebrew names + per-merge value) =====
+  // Educational element that doubles as gameplay hook: new players learn
+  // the ladder ("מאבן עד כתר"), returning players see a visual reminder
+  // of what they're working toward. The 8 tiles map 1:1 to the in-game
+  // tier bar above the board, so muscle memory transfers cleanly.
+  function tierMergeValueV3(t) {
+    // Mirrors pointsFor(tier, 1) in the engine: tier × 10 × (1 + (tier-1)*0.3) × 2
+    return Math.round(t * 10 * (1 + (t - 1) * 0.3) * 2);
+  }
+  function buildTileLegend() {
+    const tiers = (typeof getActiveTiers === 'function') ? getActiveTiers() : [];
+    let html = '<div class="home-v3-legend-wrap" aria-label="סולם הדרגות במשחק">' +
+                 '<div class="home-v3-legend-title">' +
+                   '<span class="legend-title-text">סולם המיזוג</span>' +
+                   '<span class="legend-title-hint">מזג 3 כדי לעלות דרגה</span>' +
+                 '</div>' +
+                 '<div class="home-v3-legend" role="list">';
+    for (let i = 1; i <= 8; i++) {
+      const ti = tiers[i] || {};
+      const value = tierMergeValueV3(i);
+      const bg = ti.bg || '#F2EFE9';
+      const fg = ti.fg || '#1C1A18';
+      const svg = ti.svg || ('<span style="font-size:18px">' + (ti.emoji || '?') + '</span>');
+      const name = ti.name || ('דרגה ' + i);
+      html += '<div class="legend-tile" role="listitem" data-tier="' + i + '" style="--tile-bg:' + bg + ';--tile-fg:' + fg + '">' +
+                '<div class="legend-tile-icon" style="background:' + bg + ';color:' + fg + '">' + svg + '</div>' +
+                '<div class="legend-tile-name">' + escapeV3(name) + '</div>' +
+                '<div class="legend-tile-pts">+' + value + '</div>' +
+              '</div>';
+    }
+    html += '</div></div>';
+    return html;
   }
 
   function escapeV3(s) {
