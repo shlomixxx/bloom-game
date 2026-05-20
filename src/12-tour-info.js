@@ -586,10 +586,28 @@
             var s = loadStreak();
             var n = s.count | 0;
             var tomorrowReward = getDailyRewardAmount((n || 0) + 1);
-            if (n >= 2) return '<div style="margin:8px 0;font-size:13px;color:#BA7517;font-weight:600">🔥 ' + n + ' ימים ברצף! חזור מחר ל-<strong>' + tomorrowReward + ' 💎</strong> בונוס</div>';
-            return '<div style="margin:8px 0;font-size:13px;color:#6F6E68">💪 חזור מחר לאתגר יומי + <strong style="color:#BA7517">' + tomorrowReward + ' 💎</strong> בונוס יומי 🔥</div>';
+            // §1.5 — streak FOMO. Sharper tone the longer the streak runs;
+            // brand-new players get the gentler "+bonus tomorrow" version.
+            if (n >= 7) return '<div class="over-streak over-streak-hot">🔥🔥 רצף של <strong>' + n + ' ימים</strong> — אל תאבד אותו! חזור מחר ל-<strong>' + tomorrowReward + ' 💎</strong></div>';
+            if (n >= 3) return '<div class="over-streak over-streak-mid">🔥 רצף של <strong>' + n + ' ימים</strong> — חזור מחר ל-<strong>' + tomorrowReward + ' 💎</strong> בונוס</div>';
+            if (n >= 1) return '<div class="over-streak over-streak-low">🔥 ' + n + ' ימים ברצף! חזור מחר ל-<strong>' + tomorrowReward + ' 💎</strong> בונוס</div>';
+            return '<div class="over-streak over-streak-cold">💪 חזור מחר לאתגר יומי + <strong>' + tomorrowReward + ' 💎</strong> בונוס יומי 🔥</div>';
           })() +
           (showCountdown ? '<div class="countdown" id="countdown"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span>אתגר חדש בעוד <span id="countdown-val">--:--:--</span></span></div>' : '') +
+          // §1.6 — "already played today" funnel. The audit calls out that
+          // the countdown screen is a dead-end and proposes practice /
+          // contests / challenges as forward actions. Only renders when the
+          // player has already completed today's daily.
+          ((mode === 'daily' && opts.alreadyPlayed) ?
+            '<div class="over-funnel">' +
+              '<div class="over-funnel-title">אבל למה לחכות?</div>' +
+              '<div class="over-funnel-grid">' +
+                '<button class="over-funnel-btn over-funnel-practice" id="over-funnel-practice">🎮 שחק פרקטיס</button>' +
+                '<button class="over-funnel-btn over-funnel-contest" id="over-funnel-contest">👥 תחרות חברים</button>' +
+                '<button class="over-funnel-btn over-funnel-challenge" id="over-funnel-challenge">🏆 אתגרי BLOOM</button>' +
+              '</div>' +
+            '</div>'
+          : '') +
           (showLeaderboard ? renderLeaderboard() : '') +
           '<div class="tier-table">' + tierRows.join('') + '</div>' +
           // Game stats summary
@@ -690,6 +708,21 @@
       document.getElementById('again').onclick = function() {
         if (isContestOver) init('contest', { fresh: true });
         else init('practice', { fresh: true });
+      };
+
+      // §1.6 — already-played-today funnel CTAs. Only present when the
+      // game-over is the "you've already played daily" variant.
+      var fnlPractice = document.getElementById('over-funnel-practice');
+      if (fnlPractice) fnlPractice.onclick = function() {
+        init('practice', { fresh: true });
+      };
+      var fnlContest = document.getElementById('over-funnel-contest');
+      if (fnlContest) fnlContest.onclick = function() {
+        if (typeof showContestMenu === 'function') showContestMenu();
+      };
+      var fnlChallenge = document.getElementById('over-funnel-challenge');
+      if (fnlChallenge) fnlChallenge.onclick = function() {
+        if (typeof showChallengesList === 'function') showChallengesList('game-over-funnel');
       };
 
       // 1.2-mod — "claim a real name" CTA wiring. Opens the existing

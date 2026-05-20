@@ -9,6 +9,12 @@
       '<button class="home-mute" id="home-mute" aria-label="השתק">' +
         '<svg id="home-mute-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 8a5 5 0 0 1 0 8M17.7 5a9 9 0 0 1 0 14M6 15H4a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1h2l3.5-4.5A.8.8 0 0 1 11 5v14a.8.8 0 0 1-1.5.5L6 15"/></svg>' +
       '</button>' +
+      // §1.4 — social-proof pulse bar. Hidden until first /api/stats/live
+      // response lands; refreshed every 15s while home is visible.
+      '<div class="home-live-pulse" id="home-live-pulse" style="display:none">' +
+        '<span class="home-live-dot"></span>' +
+        '<span class="home-live-text" id="home-live-text">טוען…</span>' +
+      '</div>' +
       '<div class="home-icons" id="home-icons-tap">' +
         '<div class="home-icon" style="background:#CECBF6;color:#26215C">' + SVG.crown + '</div>' +
         '<div class="home-icon" style="background:#9FE1CB;color:#04342C">' + SVG.star + '</div>' +
@@ -186,8 +192,53 @@
     setTimeout(function() {
       if (document.getElementById('home-screen')) showDailyLoginReward();
     }, 600);
+
+    // §1.4 — social proof: fetch live counts immediately, then every 15s
+    // while home is visible. The interval is torn down by hideHome().
+    startHomeLivePulse();
   }
+
+  // ============ §1.4 LIVE PULSE (social proof) ============
+  // Keeps a 15-second polling loop alive while the home screen is mounted.
+  // The bar shows "🟢 N שחקנים פעילים · M משחקים היום" — both numbers come
+  // from GET /api/stats/live. We hide it until first response so an empty
+  // value doesn't flash on cold open.
+  let homeLivePulseTimer = null;
+  function startHomeLivePulse() {
+    stopHomeLivePulse();
+    refreshHomeLivePulse();
+    homeLivePulseTimer = setInterval(refreshHomeLivePulse, 15000);
+  }
+  function stopHomeLivePulse() {
+    if (homeLivePulseTimer) { clearInterval(homeLivePulseTimer); homeLivePulseTimer = null; }
+  }
+  function refreshHomeLivePulse() {
+    fetch(API_BASE + '/api/stats/live').then(function(r) { return r.ok ? r.json() : null; }).then(function(data) {
+      if (!data) return;
+      const pulse = document.getElementById('home-live-pulse');
+      const text  = document.getElementById('home-live-text');
+      if (!pulse || !text) return;
+      const playing = (data.playingNow != null) ? data.playingNow : 0;
+      const games   = (data.gamesToday != null) ? data.gamesToday : 0;
+      // Only render the bar if we have at least *some* signal — empty
+      // bars feel ghost-towny and undermine the social-proof goal.
+      if (playing < 1 && games < 1) {
+        pulse.style.display = 'none';
+        return;
+      }
+      // Wording mirrors what the audit asked for, with a small fudge for
+      // the cold-start case where activeNow is genuinely 0 — fall back
+      // to playingNow (visited recently) so the bar still says *something*.
+      var parts = [];
+      if (playing > 0) parts.push('<strong>' + playing.toLocaleString() + '</strong> שחקנים פעילים');
+      if (games > 0)   parts.push('<strong>' + games.toLocaleString() + '</strong> משחקים היום');
+      text.innerHTML = parts.join(' · ');
+      pulse.style.display = '';
+    }).catch(function() { /* silent — social proof is best-effort */ });
+  }
+
   function hideHome() {
+    stopHomeLivePulse();
     const h = document.getElementById('home-screen');
     if (h) h.remove();
   }

@@ -4657,6 +4657,34 @@ app.get('/api/config', async (_req, res) => {
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
 
+// GET /api/stats/live — public live-pulse counts for the home screen
+// social-proof badge (UX audit §1.4). Returns:
+//   activeNow:    players who heartbeated to contest_live_state within
+//                 the last 30 seconds — the live spectator window
+//   playingNow:   players who pinged any device_visit within the last
+//                 ~3 minutes (broader signal: "people on the site")
+//   gamesToday:   total daily_scores rows submitted today (Asia/Jerusalem
+//                 day boundary, matching the rest of the daily logic)
+// Designed for 15-second polling from the client; very cheap queries.
+app.get('/api/stats/live', async (_req, res) => {
+  try {
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' });
+    const [active, playing, games] = await Promise.all([
+      pool.query(`SELECT COUNT(DISTINCT device_id)::int AS c FROM contest_live_state WHERE updated_at > NOW() - INTERVAL '30 seconds'`),
+      pool.query(`SELECT COUNT(DISTINCT device_id)::int AS c FROM device_visits WHERE last_at > NOW() - INTERVAL '3 minutes'`),
+      pool.query(`SELECT COUNT(*)::int AS c FROM daily_scores WHERE date = $1`, [today])
+    ]);
+    res.json({
+      activeNow: active.rows[0].c,
+      playingNow: playing.rows[0].c,
+      gamesToday: games.rows[0].c
+    });
+  } catch (e) {
+    console.error('GET /api/stats/live', e);
+    res.status(500).json({ error: 'server' });
+  }
+});
+
 // GET /api/weekly — current active weekly contest
 app.get('/api/weekly', async (req, res) => {
   try {

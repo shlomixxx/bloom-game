@@ -2318,6 +2318,47 @@
     for (var i = 0; i < els.length; i++) els[i].remove();
   }
 
+  // ============ §3.4 GENERIC TOAST HELPER ============
+  // The audit asked for a single `showToast(text, type)` so every async
+  // action (join contest, submit name, ad watch, etc) can confirm itself
+  // in a consistent way. Implemented as a thin wrapper over the existing
+  // transient-banner machinery so we don't duplicate the cleanup logic.
+  //
+  //   showToast('הצטרפת לתחרות הקיץ ✓');                     // info
+  //   showToast('שגיאת חיבור — נסה שוב', 'error');           // error
+  //   showToast('הציון נשמר!', 'success');                   // success
+  function showToast(text, type) {
+    if (!text) return null;
+    type = type || 'info';
+    var palette = {
+      info:    { bg: '#FFF',     fg: '#1C1A18', border: 'rgba(0,0,0,0.10)' },
+      success: { bg: '#2E8B6F',  fg: '#FFF',    border: 'transparent' },
+      error:   { bg: '#FF8C42',  fg: '#FFF',    border: 'transparent' },
+      warning: { bg: '#FAC775',  fg: '#412402', border: 'transparent' }
+    };
+    var p = palette[type] || palette.info;
+    // De-dupe by tag so rapid successive toasts of the same type stack
+    // gracefully (the previous banner gets cleaned up by its own timer).
+    var safe = String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    return showTransientBanner({
+      tag: 'toast-' + type,
+      style: 'position:fixed;left:50%;bottom:32px;transform:translateX(-50%);' +
+             'background:' + p.bg + ';color:' + p.fg + ';' +
+             'border:1px solid ' + p.border + ';' +
+             'padding:10px 18px;border-radius:10px;z-index:10005;' +
+             'box-shadow:0 6px 24px rgba(0,0,0,0.18);direction:rtl;' +
+             'font-size:14px;font-weight:600;letter-spacing:0.01em;' +
+             'max-width:80vw;text-align:center;',
+      html: safe,
+      holdMs: 2400,
+      fadeMs: 350,
+      exitTransform: 'translateX(-50%) translateY(10px)'
+    });
+  }
+  // Expose globally so screens defined outside the IIFE direct-access
+  // pattern (or future src/15-ftue.js etc) can still call it.
+  try { window.__bloomToast = showToast; } catch (e) {}
+
   function showNewBestBanner() {
     showTransientBanner({
       tag: 'new-best',
@@ -2573,6 +2614,12 @@
       '<button class="home-mute" id="home-mute" aria-label="השתק">' +
         '<svg id="home-mute-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 8a5 5 0 0 1 0 8M17.7 5a9 9 0 0 1 0 14M6 15H4a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1h2l3.5-4.5A.8.8 0 0 1 11 5v14a.8.8 0 0 1-1.5.5L6 15"/></svg>' +
       '</button>' +
+      // §1.4 — social-proof pulse bar. Hidden until first /api/stats/live
+      // response lands; refreshed every 15s while home is visible.
+      '<div class="home-live-pulse" id="home-live-pulse" style="display:none">' +
+        '<span class="home-live-dot"></span>' +
+        '<span class="home-live-text" id="home-live-text">טוען…</span>' +
+      '</div>' +
       '<div class="home-icons" id="home-icons-tap">' +
         '<div class="home-icon" style="background:#CECBF6;color:#26215C">' + SVG.crown + '</div>' +
         '<div class="home-icon" style="background:#9FE1CB;color:#04342C">' + SVG.star + '</div>' +
@@ -2750,8 +2797,53 @@
     setTimeout(function() {
       if (document.getElementById('home-screen')) showDailyLoginReward();
     }, 600);
+
+    // §1.4 — social proof: fetch live counts immediately, then every 15s
+    // while home is visible. The interval is torn down by hideHome().
+    startHomeLivePulse();
   }
+
+  // ============ §1.4 LIVE PULSE (social proof) ============
+  // Keeps a 15-second polling loop alive while the home screen is mounted.
+  // The bar shows "🟢 N שחקנים פעילים · M משחקים היום" — both numbers come
+  // from GET /api/stats/live. We hide it until first response so an empty
+  // value doesn't flash on cold open.
+  let homeLivePulseTimer = null;
+  function startHomeLivePulse() {
+    stopHomeLivePulse();
+    refreshHomeLivePulse();
+    homeLivePulseTimer = setInterval(refreshHomeLivePulse, 15000);
+  }
+  function stopHomeLivePulse() {
+    if (homeLivePulseTimer) { clearInterval(homeLivePulseTimer); homeLivePulseTimer = null; }
+  }
+  function refreshHomeLivePulse() {
+    fetch(API_BASE + '/api/stats/live').then(function(r) { return r.ok ? r.json() : null; }).then(function(data) {
+      if (!data) return;
+      const pulse = document.getElementById('home-live-pulse');
+      const text  = document.getElementById('home-live-text');
+      if (!pulse || !text) return;
+      const playing = (data.playingNow != null) ? data.playingNow : 0;
+      const games   = (data.gamesToday != null) ? data.gamesToday : 0;
+      // Only render the bar if we have at least *some* signal — empty
+      // bars feel ghost-towny and undermine the social-proof goal.
+      if (playing < 1 && games < 1) {
+        pulse.style.display = 'none';
+        return;
+      }
+      // Wording mirrors what the audit asked for, with a small fudge for
+      // the cold-start case where activeNow is genuinely 0 — fall back
+      // to playingNow (visited recently) so the bar still says *something*.
+      var parts = [];
+      if (playing > 0) parts.push('<strong>' + playing.toLocaleString() + '</strong> שחקנים פעילים');
+      if (games > 0)   parts.push('<strong>' + games.toLocaleString() + '</strong> משחקים היום');
+      text.innerHTML = parts.join(' · ');
+      pulse.style.display = '';
+    }).catch(function() { /* silent — social proof is best-effort */ });
+  }
+
   function hideHome() {
+    stopHomeLivePulse();
     const h = document.getElementById('home-screen');
     if (h) h.remove();
   }
@@ -8546,10 +8638,28 @@
             var s = loadStreak();
             var n = s.count | 0;
             var tomorrowReward = getDailyRewardAmount((n || 0) + 1);
-            if (n >= 2) return '<div style="margin:8px 0;font-size:13px;color:#BA7517;font-weight:600">🔥 ' + n + ' ימים ברצף! חזור מחר ל-<strong>' + tomorrowReward + ' 💎</strong> בונוס</div>';
-            return '<div style="margin:8px 0;font-size:13px;color:#6F6E68">💪 חזור מחר לאתגר יומי + <strong style="color:#BA7517">' + tomorrowReward + ' 💎</strong> בונוס יומי 🔥</div>';
+            // §1.5 — streak FOMO. Sharper tone the longer the streak runs;
+            // brand-new players get the gentler "+bonus tomorrow" version.
+            if (n >= 7) return '<div class="over-streak over-streak-hot">🔥🔥 רצף של <strong>' + n + ' ימים</strong> — אל תאבד אותו! חזור מחר ל-<strong>' + tomorrowReward + ' 💎</strong></div>';
+            if (n >= 3) return '<div class="over-streak over-streak-mid">🔥 רצף של <strong>' + n + ' ימים</strong> — חזור מחר ל-<strong>' + tomorrowReward + ' 💎</strong> בונוס</div>';
+            if (n >= 1) return '<div class="over-streak over-streak-low">🔥 ' + n + ' ימים ברצף! חזור מחר ל-<strong>' + tomorrowReward + ' 💎</strong> בונוס</div>';
+            return '<div class="over-streak over-streak-cold">💪 חזור מחר לאתגר יומי + <strong>' + tomorrowReward + ' 💎</strong> בונוס יומי 🔥</div>';
           })() +
           (showCountdown ? '<div class="countdown" id="countdown"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span>אתגר חדש בעוד <span id="countdown-val">--:--:--</span></span></div>' : '') +
+          // §1.6 — "already played today" funnel. The audit calls out that
+          // the countdown screen is a dead-end and proposes practice /
+          // contests / challenges as forward actions. Only renders when the
+          // player has already completed today's daily.
+          ((mode === 'daily' && opts.alreadyPlayed) ?
+            '<div class="over-funnel">' +
+              '<div class="over-funnel-title">אבל למה לחכות?</div>' +
+              '<div class="over-funnel-grid">' +
+                '<button class="over-funnel-btn over-funnel-practice" id="over-funnel-practice">🎮 שחק פרקטיס</button>' +
+                '<button class="over-funnel-btn over-funnel-contest" id="over-funnel-contest">👥 תחרות חברים</button>' +
+                '<button class="over-funnel-btn over-funnel-challenge" id="over-funnel-challenge">🏆 אתגרי BLOOM</button>' +
+              '</div>' +
+            '</div>'
+          : '') +
           (showLeaderboard ? renderLeaderboard() : '') +
           '<div class="tier-table">' + tierRows.join('') + '</div>' +
           // Game stats summary
@@ -8650,6 +8760,21 @@
       document.getElementById('again').onclick = function() {
         if (isContestOver) init('contest', { fresh: true });
         else init('practice', { fresh: true });
+      };
+
+      // §1.6 — already-played-today funnel CTAs. Only present when the
+      // game-over is the "you've already played daily" variant.
+      var fnlPractice = document.getElementById('over-funnel-practice');
+      if (fnlPractice) fnlPractice.onclick = function() {
+        init('practice', { fresh: true });
+      };
+      var fnlContest = document.getElementById('over-funnel-contest');
+      if (fnlContest) fnlContest.onclick = function() {
+        if (typeof showContestMenu === 'function') showContestMenu();
+      };
+      var fnlChallenge = document.getElementById('over-funnel-challenge');
+      if (fnlChallenge) fnlChallenge.onclick = function() {
+        if (typeof showChallengesList === 'function') showChallengesList('game-over-funnel');
       };
 
       // 1.2-mod — "claim a real name" CTA wiring. Opens the existing

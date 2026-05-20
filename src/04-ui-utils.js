@@ -351,6 +351,47 @@
     for (var i = 0; i < els.length; i++) els[i].remove();
   }
 
+  // ============ §3.4 GENERIC TOAST HELPER ============
+  // The audit asked for a single `showToast(text, type)` so every async
+  // action (join contest, submit name, ad watch, etc) can confirm itself
+  // in a consistent way. Implemented as a thin wrapper over the existing
+  // transient-banner machinery so we don't duplicate the cleanup logic.
+  //
+  //   showToast('הצטרפת לתחרות הקיץ ✓');                     // info
+  //   showToast('שגיאת חיבור — נסה שוב', 'error');           // error
+  //   showToast('הציון נשמר!', 'success');                   // success
+  function showToast(text, type) {
+    if (!text) return null;
+    type = type || 'info';
+    var palette = {
+      info:    { bg: '#FFF',     fg: '#1C1A18', border: 'rgba(0,0,0,0.10)' },
+      success: { bg: '#2E8B6F',  fg: '#FFF',    border: 'transparent' },
+      error:   { bg: '#FF8C42',  fg: '#FFF',    border: 'transparent' },
+      warning: { bg: '#FAC775',  fg: '#412402', border: 'transparent' }
+    };
+    var p = palette[type] || palette.info;
+    // De-dupe by tag so rapid successive toasts of the same type stack
+    // gracefully (the previous banner gets cleaned up by its own timer).
+    var safe = String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    return showTransientBanner({
+      tag: 'toast-' + type,
+      style: 'position:fixed;left:50%;bottom:32px;transform:translateX(-50%);' +
+             'background:' + p.bg + ';color:' + p.fg + ';' +
+             'border:1px solid ' + p.border + ';' +
+             'padding:10px 18px;border-radius:10px;z-index:10005;' +
+             'box-shadow:0 6px 24px rgba(0,0,0,0.18);direction:rtl;' +
+             'font-size:14px;font-weight:600;letter-spacing:0.01em;' +
+             'max-width:80vw;text-align:center;',
+      html: safe,
+      holdMs: 2400,
+      fadeMs: 350,
+      exitTransform: 'translateX(-50%) translateY(10px)'
+    });
+  }
+  // Expose globally so screens defined outside the IIFE direct-access
+  // pattern (or future src/15-ftue.js etc) can still call it.
+  try { window.__bloomToast = showToast; } catch (e) {}
+
   function showNewBestBanner() {
     showTransientBanner({
       tag: 'new-best',
