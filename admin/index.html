@@ -881,28 +881,28 @@
   <!-- Dynamic Boards (phase 2) -->
   <section id="boards-section" style="margin-bottom:12px">
     <h2>🎯 לוחות דינמיים <button class="tip-btn" data-tip-text="<strong>🎯 לוחות דינמיים</strong><br>לוחות עם חוקים שונים (מכפילי עמודות, תאים מיוחדים, צורות, חגים). כשלוח פעיל — שחקנים רואים אותו במקום הלוח הסטנדרטי. הלוח הפעיל נבחר לפי <code>priority DESC</code>, ובלבד שתאריך ההתחלה/סיום מתאים.<div class=&quot;tip-example&quot;>📐 <strong>שלב 1 (היום)</strong>: רק <code>multipliers</code> עובד בקליינט. <br>שלבים הבאים: special_cells (תאים מיוחדים), shape (צורות), themed (חגים), mode (וריאציות חוקים), vip (לקהל ספציפי).<br><br>💡 <strong>תזמון</strong>: השאר ריק להפעלה מיידית, או הגדר תאריך התחלה/סיום ללוחות חגים.<br><br>⚙️ <strong>קאש</strong>: השרת מטמן 60 שניות. שינוי באדמין מנקה את הקאש מיידית — שחקנים יראו את הלוח החדש בטעינה הבאה.</div>">?</button></h2>
-    <div style="padding:12px 16px;background:var(--card);border-radius:10px;margin-top:8px">
-      <div style="font-size:13px;font-weight:700;color:var(--gold);margin-bottom:6px">לוחות מוגדרים</div>
-      <div style="font-size:11px;color:var(--muted);margin-bottom:10px">הלוח הפעיל היחיד שמוצג לשחקנים כרגע מסומן ב-✅ למעלה. ניתן ליצור כמה לוחות שתרצה ולהפעיל ביניהם בהתאם לתזמון.</div>
+    <div style="padding:12px 16px;background:#FFFFFF;border:1px solid #E5E1D5;border-radius:10px;margin-top:8px">
+      <div style="font-size:13px;font-weight:700;color:#1C1A18;margin-bottom:6px">לוחות מוגדרים</div>
+      <div style="font-size:11px;color:#6F6E68;margin-bottom:10px">הלוח הפעיל היחיד שמוצג לשחקנים כרגע מסומן ב-✅ למעלה. ניתן ליצור כמה לוחות שתרצה ולהפעיל ביניהם בהתאם לתזמון.</div>
       <div id="boards-list" style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px"></div>
-      <button class="btn" id="btn-board-create" style="background:var(--gold);color:#1C1A18;font-weight:700;width:100%">+ צור לוח חדש</button>
-      <div id="boards-status" style="font-size:11px;color:var(--muted);text-align:center;margin-top:8px"></div>
+      <button class="btn" id="btn-board-create" style="background:#FAC775;color:#1C1A18;font-weight:700;width:100%">+ צור לוח חדש</button>
+      <div id="boards-status" style="font-size:11px;color:#6F6E68;text-align:center;margin-top:8px"></div>
     </div>
   </section>
 
   <!-- Boards editor modal -->
-  <div id="board-editor-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9000;align-items:center;justify-content:center;padding:20px">
-    <div style="background:var(--bg);border:1px solid var(--border);border-radius:14px;padding:18px;max-width:500px;width:100%;max-height:90vh;overflow-y:auto;direction:rtl">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-        <h3 id="board-editor-title" style="margin:0;color:var(--gold);font-size:16px">לוח חדש</h3>
-        <button onclick="closeBoardEditor()" style="background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer">✕</button>
+  <div id="board-editor-overlay" style="display:none;position:fixed;inset:0;background:rgba(28,26,24,0.7);z-index:99999;align-items:center;justify-content:center;padding:20px">
+    <div style="background:#FFFFFF;border:1px solid #E5E1D5;border-radius:14px;padding:20px;max-width:520px;width:100%;max-height:90vh;overflow-y:auto;direction:rtl;color:#1C1A18;box-shadow:0 24px 60px rgba(0,0,0,0.35)">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;border-bottom:1px solid #F2EFE6;padding-bottom:10px">
+        <h3 id="board-editor-title" style="margin:0;color:#BA7517;font-size:17px;font-weight:800">לוח חדש</h3>
+        <button onclick="closeBoardEditor()" style="background:#F4F1E8;border:none;color:#6F6E68;font-size:18px;cursor:pointer;width:28px;height:28px;border-radius:8px;line-height:1">✕</button>
       </div>
 
-      <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px">שם</label>
-      <input id="board-name" type="text" placeholder="לדוגמה: מכפילי ×6-×4-×2-×1" style="width:100%;padding:8px 10px;border-radius:8px;background:rgba(0,0,0,0.15);color:var(--text);border:1px solid var(--border);margin-bottom:10px;font-family:inherit">
+      <label style="font-size:12px;color:#6F6E68;display:block;margin-bottom:4px;font-weight:600">שם</label>
+      <input id="board-name" type="text" placeholder="לדוגמה: מכפילי ×6-×4-×2-×1" style="width:100%;padding:9px 11px;border-radius:8px;background:#FAFAF6;color:#1C1A18;border:1px solid #E5E1D5;margin-bottom:12px;font-family:inherit;font-size:13px">
 
-      <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px">סוג</label>
-      <select id="board-type" style="width:100%;padding:8px 10px;border-radius:8px;background:rgba(0,0,0,0.15);color:var(--text);border:1px solid var(--border);margin-bottom:10px;font-family:inherit" onchange="onBoardTypeChange()">
+      <label style="font-size:12px;color:#6F6E68;display:block;margin-bottom:4px;font-weight:600">סוג</label>
+      <select id="board-type" style="width:100%;padding:9px 11px;border-radius:8px;background:#FAFAF6;color:#1C1A18;border:1px solid #E5E1D5;margin-bottom:14px;font-family:inherit;font-size:13px" onchange="onBoardTypeChange()">
         <option value="multipliers">🎯 מכפילי עמודות</option>
         <option value="special_cells" disabled>🔮 תאים מיוחדים (שלב 3 — בקרוב)</option>
         <option value="shape" disabled>🟦 צורות (שלב 5 — בקרוב)</option>
@@ -912,61 +912,61 @@
       </select>
 
       <!-- Multipliers editor -->
-      <div id="board-editor-multipliers">
-        <div style="font-size:13px;font-weight:700;color:var(--gold);margin-bottom:6px">מכפילים פר עמודה</div>
-        <div style="font-size:11px;color:var(--muted);margin-bottom:8px">ערכים בטווח 0.5 עד 20. עמודה 1 = הימנית, עמודה 4 = השמאלית (מתאים ל-RTL).</div>
+      <div id="board-editor-multipliers" style="background:#FFF7E6;border:1px solid #FAC775;border-radius:10px;padding:12px;margin-bottom:14px">
+        <div style="font-size:13px;font-weight:700;color:#BA7517;margin-bottom:6px">מכפילים פר עמודה</div>
+        <div style="font-size:11px;color:#6F6E68;margin-bottom:8px">ערכים בטווח 0.5 עד 20. עמודה 1 = הימנית, עמודה 4 = השמאלית (מתאים ל-RTL).</div>
         <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:10px">
-          <input id="board-mult-0" type="number" min="0.5" max="20" step="0.5" placeholder="×N" style="padding:8px;border-radius:8px;background:rgba(0,0,0,0.15);color:var(--text);border:1px solid var(--border);text-align:center;font-weight:700">
-          <input id="board-mult-1" type="number" min="0.5" max="20" step="0.5" placeholder="×N" style="padding:8px;border-radius:8px;background:rgba(0,0,0,0.15);color:var(--text);border:1px solid var(--border);text-align:center;font-weight:700">
-          <input id="board-mult-2" type="number" min="0.5" max="20" step="0.5" placeholder="×N" style="padding:8px;border-radius:8px;background:rgba(0,0,0,0.15);color:var(--text);border:1px solid var(--border);text-align:center;font-weight:700">
-          <input id="board-mult-3" type="number" min="0.5" max="20" step="0.5" placeholder="×N" style="padding:8px;border-radius:8px;background:rgba(0,0,0,0.15);color:var(--text);border:1px solid var(--border);text-align:center;font-weight:700">
+          <input id="board-mult-0" type="number" min="0.5" max="20" step="0.5" placeholder="×N" style="padding:9px;border-radius:8px;background:#FFFFFF;color:#1C1A18;border:1px solid #E5E1D5;text-align:center;font-weight:700;font-size:14px">
+          <input id="board-mult-1" type="number" min="0.5" max="20" step="0.5" placeholder="×N" style="padding:9px;border-radius:8px;background:#FFFFFF;color:#1C1A18;border:1px solid #E5E1D5;text-align:center;font-weight:700;font-size:14px">
+          <input id="board-mult-2" type="number" min="0.5" max="20" step="0.5" placeholder="×N" style="padding:9px;border-radius:8px;background:#FFFFFF;color:#1C1A18;border:1px solid #E5E1D5;text-align:center;font-weight:700;font-size:14px">
+          <input id="board-mult-3" type="number" min="0.5" max="20" step="0.5" placeholder="×N" style="padding:9px;border-radius:8px;background:#FFFFFF;color:#1C1A18;border:1px solid #E5E1D5;text-align:center;font-weight:700;font-size:14px">
         </div>
-        <div style="font-size:11px;color:var(--muted);margin-bottom:4px">פריסטים מהירים:</div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">
-          <button class="btn sm" onclick="setMultipliers([6,4,2,1])" style="font-size:11px;padding:4px 8px">×6 ×4 ×2 ×1 (פירמידה)</button>
-          <button class="btn sm" onclick="setMultipliers([2,1,1,2])" style="font-size:11px;padding:4px 8px">×2 ×1 ×1 ×2 (קצוות)</button>
-          <button class="btn sm" onclick="setMultipliers([10,1,1,1])" style="font-size:11px;padding:4px 8px">×10 ×1 ×1 ×1 (מהמר)</button>
-          <button class="btn sm" onclick="setMultipliers([1,3,3,1])" style="font-size:11px;padding:4px 8px">×1 ×3 ×3 ×1 (אמצע)</button>
-          <button class="btn sm" onclick="setMultipliers([1,1,1,1])" style="font-size:11px;padding:4px 8px">×1 ×1 ×1 ×1 (אפס אפקט)</button>
-        </div>
-      </div>
-
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
-        <div>
-          <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px">תאריך התחלה (ריק = מיידי)</label>
-          <input id="board-starts-at" type="datetime-local" style="width:100%;padding:6px 8px;border-radius:8px;background:rgba(0,0,0,0.15);color:var(--text);border:1px solid var(--border);font-family:inherit">
-        </div>
-        <div>
-          <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px">תאריך סיום (ריק = ללא סיום)</label>
-          <input id="board-ends-at" type="datetime-local" style="width:100%;padding:6px 8px;border-radius:8px;background:rgba(0,0,0,0.15);color:var(--text);border:1px solid var(--border);font-family:inherit">
+        <div style="font-size:11px;color:#6F6E68;margin-bottom:4px;font-weight:600">פריסטים מהירים:</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button type="button" onclick="setMultipliers([6,4,2,1])" style="font-size:11px;padding:6px 10px;background:#1C1A18;color:#FFF;border:none;border-radius:8px;cursor:pointer;font-weight:600">×6 ×4 ×2 ×1 (פירמידה)</button>
+          <button type="button" onclick="setMultipliers([2,1,1,2])" style="font-size:11px;padding:6px 10px;background:#1C1A18;color:#FFF;border:none;border-radius:8px;cursor:pointer;font-weight:600">×2 ×1 ×1 ×2 (קצוות)</button>
+          <button type="button" onclick="setMultipliers([10,1,1,1])" style="font-size:11px;padding:6px 10px;background:#1C1A18;color:#FFF;border:none;border-radius:8px;cursor:pointer;font-weight:600">×10 ×1 ×1 ×1 (מהמר)</button>
+          <button type="button" onclick="setMultipliers([1,3,3,1])" style="font-size:11px;padding:6px 10px;background:#1C1A18;color:#FFF;border:none;border-radius:8px;cursor:pointer;font-weight:600">×1 ×3 ×3 ×1 (אמצע)</button>
+          <button type="button" onclick="setMultipliers([1,1,1,1])" style="font-size:11px;padding:6px 10px;background:#F4F1E8;color:#1C1A18;border:1px solid #E5E1D5;border-radius:8px;cursor:pointer;font-weight:600">×1 ×1 ×1 ×1 (אפס אפקט)</button>
         </div>
       </div>
 
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
         <div>
-          <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px">קהל יעד</label>
-          <select id="board-audience" style="width:100%;padding:8px 10px;border-radius:8px;background:rgba(0,0,0,0.15);color:var(--text);border:1px solid var(--border);font-family:inherit">
+          <label style="font-size:12px;color:#6F6E68;display:block;margin-bottom:4px;font-weight:600">תאריך התחלה (ריק = מיידי)</label>
+          <input id="board-starts-at" type="datetime-local" style="width:100%;padding:8px 10px;border-radius:8px;background:#FAFAF6;color:#1C1A18;border:1px solid #E5E1D5;font-family:inherit;font-size:12px">
+        </div>
+        <div>
+          <label style="font-size:12px;color:#6F6E68;display:block;margin-bottom:4px;font-weight:600">תאריך סיום (ריק = ללא סיום)</label>
+          <input id="board-ends-at" type="datetime-local" style="width:100%;padding:8px 10px;border-radius:8px;background:#FAFAF6;color:#1C1A18;border:1px solid #E5E1D5;font-family:inherit;font-size:12px">
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+        <div>
+          <label style="font-size:12px;color:#6F6E68;display:block;margin-bottom:4px;font-weight:600">קהל יעד</label>
+          <select id="board-audience" style="width:100%;padding:9px 11px;border-radius:8px;background:#FAFAF6;color:#1C1A18;border:1px solid #E5E1D5;font-family:inherit;font-size:13px">
             <option value="all">כל השחקנים</option>
             <option value="vip" disabled>VIP בלבד (בקרוב)</option>
             <option value="returning" disabled>שחקנים חוזרים (בקרוב)</option>
           </select>
         </div>
         <div>
-          <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px">עדיפות (גבוה יותר = נבחר)</label>
-          <input id="board-priority" type="number" min="0" max="1000" value="0" style="width:100%;padding:8px 10px;border-radius:8px;background:rgba(0,0,0,0.15);color:var(--text);border:1px solid var(--border);font-family:inherit;text-align:center">
+          <label style="font-size:12px;color:#6F6E68;display:block;margin-bottom:4px;font-weight:600">עדיפות (גבוה = נבחר)</label>
+          <input id="board-priority" type="number" min="0" max="1000" value="0" style="width:100%;padding:9px 11px;border-radius:8px;background:#FAFAF6;color:#1C1A18;border:1px solid #E5E1D5;font-family:inherit;text-align:center;font-size:13px">
         </div>
       </div>
 
-      <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text);margin-bottom:14px;cursor:pointer">
-        <input id="board-is-active" type="checkbox">
+      <label style="display:flex;align-items:center;gap:10px;font-size:13px;color:#1C1A18;margin-bottom:16px;cursor:pointer;padding:10px 12px;background:#F0F8F0;border:1px solid #9FE1CB;border-radius:8px;font-weight:600">
+        <input id="board-is-active" type="checkbox" style="width:18px;height:18px;cursor:pointer">
         <span>✅ פעיל (הצג לשחקנים)</span>
       </label>
 
       <div style="display:flex;gap:8px">
-        <button class="btn" onclick="closeBoardEditor()" style="flex:1">ביטול</button>
-        <button class="btn" id="btn-board-save" onclick="saveBoard()" style="flex:2;background:var(--gold);color:#1C1A18;font-weight:700">💾 שמור</button>
+        <button type="button" onclick="closeBoardEditor()" style="flex:1;background:#F4F1E8;color:#1C1A18;border:1px solid #E5E1D5;padding:11px;border-radius:10px;font-weight:600;cursor:pointer;font-family:inherit">ביטול</button>
+        <button type="button" id="btn-board-save" onclick="saveBoard()" style="flex:2;background:#FAC775;color:#1C1A18;border:none;padding:11px;border-radius:10px;font-weight:800;cursor:pointer;font-family:inherit">💾 שמור</button>
       </div>
-      <div id="board-editor-status" style="font-size:11px;color:var(--muted);text-align:center;margin-top:8px"></div>
+      <div id="board-editor-status" style="font-size:11px;color:#6F6E68;text-align:center;margin-top:10px;min-height:14px"></div>
     </div>
   </div>
   </div><!-- /admin-tab-panel game:config+difficulty+lb-tabs -->
@@ -2574,7 +2574,7 @@
       if (!d.ok) throw new Error(d.error || 'bad_response');
       renderBoardsList(d.boards || []);
     } catch (e) {
-      listEl.innerHTML = '<div style="font-size:12px;color:var(--danger,#e07a8e);padding:8px">⚠ שגיאה בטעינת לוחות: ' + (e.message || e) + '</div>';
+      listEl.innerHTML = '<div style="font-size:12px;color:#E07A8E;padding:8px">⚠ שגיאה בטעינת לוחות: ' + (e.message || e) + '</div>';
     }
   }
 
@@ -2582,7 +2582,7 @@
     const listEl = document.getElementById('boards-list');
     if (!listEl) return;
     if (!boards.length) {
-      listEl.innerHTML = '<div style="font-size:12px;color:var(--muted);padding:12px;text-align:center;border:1px dashed var(--border);border-radius:8px">אין לוחות מוגדרים. לחץ "צור לוח חדש" למטה.</div>';
+      listEl.innerHTML = '<div style="font-size:12px;color:#6F6E68;padding:12px;text-align:center;border:1px dashed #E5E1D5;border-radius:8px">אין לוחות מוגדרים. לחץ "צור לוח חדש" למטה.</div>';
       return;
     }
     listEl.innerHTML = boards.map(function(b) {
@@ -2595,8 +2595,8 @@
         vip:           '👑 בלעדי'
       }[b.type] || b.type;
       const statusBadge = b.is_active
-        ? '<span style="background:var(--mint,#4FBD8B);color:#0a2918;padding:2px 8px;border-radius:8px;font-size:11px;font-weight:700">✅ פעיל</span>'
-        : '<span style="background:rgba(0,0,0,0.15);color:var(--muted);padding:2px 8px;border-radius:8px;font-size:11px">⚫ כבוי</span>';
+        ? '<span style="background:#9FE1CB;color:#04342C;padding:2px 8px;border-radius:8px;font-size:11px;font-weight:700">✅ פעיל</span>'
+        : '<span style="background:#F4F1E8;color:#6F6E68;padding:2px 8px;border-radius:8px;font-size:11px">⚫ כבוי</span>';
       let defSummary = '';
       if (b.type === 'multipliers' && b.definition && Array.isArray(b.definition.multipliers)) {
         defSummary = b.definition.multipliers.map(function(m) {
@@ -2606,19 +2606,19 @@
       const schedSummary = b.starts_at || b.ends_at
         ? '🗓 ' + (b.starts_at ? new Date(b.starts_at).toLocaleString('he-IL') : 'מיידי') + ' → ' + (b.ends_at ? new Date(b.ends_at).toLocaleString('he-IL') : 'ללא סיום')
         : '⏰ פעיל תמיד';
-      return '<div style="padding:10px 12px;background:rgba(0,0,0,0.1);border-radius:8px;border:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-wrap:wrap">' +
+      return '<div style="padding:10px 12px;background:#FAFAF6;border-radius:8px;border:1px solid #E5E1D5;display:flex;align-items:center;gap:10px;flex-wrap:wrap">' +
         '<div style="flex:1;min-width:160px">' +
-          '<div style="font-weight:700;color:var(--text);margin-bottom:2px">' + escapeHtml(b.name) + ' ' + statusBadge + '</div>' +
-          '<div style="font-size:11px;color:var(--muted)">' + typeLabel + (defSummary ? ' · ' + defSummary : '') + '</div>' +
-          '<div style="font-size:10px;color:var(--muted);margin-top:2px">' + schedSummary + ' · עדיפות ' + b.priority + '</div>' +
+          '<div style="font-weight:700;color:#1C1A18;margin-bottom:2px">' + escapeHtml(b.name) + ' ' + statusBadge + '</div>' +
+          '<div style="font-size:11px;color:#6F6E68">' + typeLabel + (defSummary ? ' · ' + defSummary : '') + '</div>' +
+          '<div style="font-size:10px;color:#6F6E68;margin-top:2px">' + schedSummary + ' · עדיפות ' + b.priority + '</div>' +
         '</div>' +
         '<div style="display:flex;gap:4px;flex-wrap:wrap">' +
           (b.is_active
-            ? '<button class="btn sm" onclick="toggleBoardActive(' + b.id + ', false)" style="font-size:11px;padding:4px 8px">⏸ השבת</button>'
-            : '<button class="btn sm" onclick="toggleBoardActive(' + b.id + ', true)" style="font-size:11px;padding:4px 8px;background:var(--mint,#4FBD8B);color:#0a2918;font-weight:700">▶ הפעל</button>'
+            ? '<button class="btn sm" onclick="toggleBoardActive(' + b.id + ', false)" style="font-size:11px;padding:4px 8px;background:#F4F1E8;color:#1C1A18;border:1px solid #E5E1D5;border-radius:6px;cursor:pointer;font-family:inherit">⏸ השבת</button>'
+            : '<button class="btn sm" onclick="toggleBoardActive(' + b.id + ', true)" style="font-size:11px;padding:4px 8px;background:#9FE1CB;color:#04342C;font-weight:700;border:none;border-radius:6px;cursor:pointer;font-family:inherit">▶ הפעל</button>'
           ) +
-          '<button class="btn sm" onclick="openBoardEditor(' + b.id + ')" style="font-size:11px;padding:4px 8px">✏ ערוך</button>' +
-          '<button class="btn sm" onclick="deleteBoard(' + b.id + ', \'' + escapeHtml(b.name).replace(/'/g, "\\'") + '\')" style="font-size:11px;padding:4px 8px;background:var(--danger,#e07a8e);color:#fff">🗑</button>' +
+          '<button class="btn sm" onclick="openBoardEditor(' + b.id + ')" style="font-size:11px;padding:4px 8px;background:#1C1A18;color:#FFF;border:none;border-radius:6px;cursor:pointer;font-family:inherit">✏ ערוך</button>' +
+          '<button class="btn sm" onclick="deleteBoard(' + b.id + ', \'' + escapeHtml(b.name).replace(/'/g, "\\'") + '\')" style="font-size:11px;padding:4px 8px;background:#E07A8E;color:#fff;border:none;border-radius:6px;cursor:pointer;font-family:inherit">🗑</button>' +
         '</div>' +
       '</div>';
     }).join('');
