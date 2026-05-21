@@ -5,6 +5,29 @@
   function getBoardRows() { return 6; }
   function getBoardCols() { return 4; }
 
+  // Column score multipliers (phase 1 of Dynamic Boards System).
+  // null = no multiplier active → pointsFor() takes the vanilla branch with
+  // zero overhead. An array of length getBoardCols() activates per-column
+  // multiplication. Values are floats; sensible range is 0.5..20.
+  let _columnMultipliers = null;
+  function getColumnMultipliers() {
+    if (_columnMultipliers && Array.isArray(_columnMultipliers) && _columnMultipliers.length === getBoardCols()) {
+      return _columnMultipliers;
+    }
+    return null;
+  }
+  function setColumnMultipliers(arr) {
+    if (arr == null) { _columnMultipliers = null; return true; }
+    if (!Array.isArray(arr) || arr.length !== getBoardCols()) return false;
+    const sanitized = arr.map(function(v) {
+      const n = Number(v);
+      if (!isFinite(n) || n < 0) return 1;
+      return Math.min(20, Math.max(0.5, n));
+    });
+    _columnMultipliers = sanitized;
+    return true;
+  }
+
   const SVG = {
     circle:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/></svg>',
     leaf:    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21c.5-4.5 2.5-8 7-10"/><path d="M9 18c6.218 0 10.5-3.288 11-12v-2h-4.014c-9 0-11.986 4-12 9c0 1 0 3 2 5h3z"/></svg>',

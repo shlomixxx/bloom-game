@@ -322,6 +322,19 @@
     };
   }
 
+  // Always-on dev hooks for Dynamic Boards testing — exposed in plain prod
+  // so admins/developers can experiment from devtools without ?bot=1.
+  // Not a security risk: setColumnMultipliers is client-side only and the
+  // server score-submit path runs its own anti-cheat (drops-vs-score + token).
+  window.__bloomDebug = window.__bloomDebug || {};
+  window.__bloomDebug.setColumnMultipliers = function(arr) {
+    var ok = setColumnMultipliers(arr);
+    if (ok && typeof render === 'function') render();
+    return ok;
+  };
+  window.__bloomDebug.getColumnMultipliers = function() { return getColumnMultipliers(); };
+  window.__bloomDebug.restart = function(mode) { init(mode || 'practice'); };
+
   // ============ PWA INSTALL PROMPTS ============
   // iOS: show banner after 3 games (Safari doesn't auto-prompt)
   function maybeShowInstallPrompt() {

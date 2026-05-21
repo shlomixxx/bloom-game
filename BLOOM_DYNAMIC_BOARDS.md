@@ -7,8 +7,9 @@
 ### מצב נוכחי (עדכון 2026-05-22)
 
 - **שלב 0 — הכנת תשתית:** ✅ הושלם חלקית **לפני** שהמסמך הזה נכתב. בקוד כבר קיימים `getActiveTiers()`, `getBoardRows()`, `getBoardCols()` ב-[src/01-constants.js](src/01-constants.js) — תוארו בפירוט ב-[CLAUDE.md](CLAUDE.md) §11 כ"architectural prep for the App launch". **אסור לכפול** את האבסטרקציות האלה; כל שלב חייב לקרוא דרכן.
-- **שלב 1 — Score Multipliers:** ⏳ ממתין לאישור להתחיל.
-- שלבים 2-6: ⏳ עתידיים. ראה הערות "✨ ניצול תשתית קיימת" בכל שלב.
+- **שלב 1 — Score Multipliers:** ✅ הושלם 2026-05-22 — `getColumnMultipliers()`/`setColumnMultipliers()` + `pointsFor(tier, group, chain, col)` + pill-bar UI מעל הלוח + floating ×N badge על נחיתות ≥2× + `__bloomDebug.setColumnMultipliers([6,4,2,1])` בקונסול. zero-regression validated על `test_engine.mjs`.
+- **שלב 2 — Admin Control Panel:** ⏳ ממתין לאישור להתחיל.
+- שלבים 3-6: ⏳ עתידיים. ראה הערות "✨ ניצול תשתית קיימת" בכל שלב.
 
 ראה את סקציה [1.5 — התשתית הקיימת](#15-התשתית-הקיימת-מה-כבר-בקוד) **לפני** שמתחילים שלב.
 

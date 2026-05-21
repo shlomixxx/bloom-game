@@ -1636,8 +1636,19 @@
   // turns the late-game grind into a payoff: a Crown achievement now scores
   // ~62K (versus ~15K with the old linear formula) without touching the
   // chain ladder (which would invalidate existing leaderboards).
-  function pointsFor(tier, groupSize, chainMult) {
-    return Math.round(tier * 10 * (1 + (tier - 1) * 0.3) * groupSize * chainMult);
+  //
+  // The optional `col` argument is the survivor column of the merge. When a
+  // Dynamic Boards column-multiplier is active (getColumnMultipliers() !== null),
+  // it multiplies the base. If col is undefined or no multiplier is active,
+  // the function returns the vanilla score with zero overhead — pure refactor
+  // for the default case.
+  function pointsFor(tier, groupSize, chainMult, col) {
+    var base = tier * 10 * (1 + (tier - 1) * 0.3) * groupSize * chainMult;
+    var mults = getColumnMultipliers();
+    if (mults && typeof col === 'number' && col >= 0 && col < mults.length) {
+      base = base * mults[col];
+    }
+    return Math.round(base);
   }
   function pieceValue(tier) {
     return pointsFor(tier, 2, 1);

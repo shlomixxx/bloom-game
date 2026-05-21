@@ -5,6 +5,29 @@
   function getBoardRows() { return 6; }
   function getBoardCols() { return 4; }
 
+  // Column score multipliers (phase 1 of Dynamic Boards System).
+  // null = no multiplier active → pointsFor() takes the vanilla branch with
+  // zero overhead. An array of length getBoardCols() activates per-column
+  // multiplication. Values are floats; sensible range is 0.5..20.
+  let _columnMultipliers = null;
+  function getColumnMultipliers() {
+    if (_columnMultipliers && Array.isArray(_columnMultipliers) && _columnMultipliers.length === getBoardCols()) {
+      return _columnMultipliers;
+    }
+    return null;
+  }
+  function setColumnMultipliers(arr) {
+    if (arr == null) { _columnMultipliers = null; return true; }
+    if (!Array.isArray(arr) || arr.length !== getBoardCols()) return false;
+    const sanitized = arr.map(function(v) {
+      const n = Number(v);
+      if (!isFinite(n) || n < 0) return 1;
+      return Math.min(20, Math.max(0.5, n));
+    });
+    _columnMultipliers = sanitized;
+    return true;
+  }
+
   const SVG = {
     circle:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/></svg>',
     leaf:    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21c.5-4.5 2.5-8 7-10"/><path d="M9 18c6.218 0 10.5-3.288 11-12v-2h-4.014c-9 0-11.986 4-12 9c0 1 0 3 2 5h3z"/></svg>',
@@ -6751,8 +6774,19 @@
   // turns the late-game grind into a payoff: a Crown achievement now scores
   // ~62K (versus ~15K with the old linear formula) without touching the
   // chain ladder (which would invalidate existing leaderboards).
-  function pointsFor(tier, groupSize, chainMult) {
-    return Math.round(tier * 10 * (1 + (tier - 1) * 0.3) * groupSize * chainMult);
+  //
+  // The optional `col` argument is the survivor column of the merge. When a
+  // Dynamic Boards column-multiplier is active (getColumnMultipliers() !== null),
+  // it multiplies the base. If col is undefined or no multiplier is active,
+  // the function returns the vanilla score with zero overhead — pure refactor
+  // for the default case.
+  function pointsFor(tier, groupSize, chainMult, col) {
+    var base = tier * 10 * (1 + (tier - 1) * 0.3) * groupSize * chainMult;
+    var mults = getColumnMultipliers();
+    if (mults && typeof col === 'number' && col >= 0 && col < mults.length) {
+      base = base * mults[col];
+    }
+    return Math.round(base);
   }
   function pieceValue(tier) {
     return pointsFor(tier, 2, 1);
@@ -10524,7 +10558,10 @@
               'at=' + kr + ',' + kc, 'grid=' + serializeGrid());
             const multiplier = 1 + (chainCount - 1) * 0.5;
             var eventMult = getFeverMultiplier() * checkTargetMerge(nt);
-            const points = Math.round(pointsFor(nt, group.length, multiplier) * eventMult);
+            // Pass survivor column (kc) so an active column-multiplier is
+            // applied at the chokepoint. When no multiplier is active,
+            // pointsFor returns the vanilla score with zero overhead.
+            const points = Math.round(pointsFor(nt, group.length, multiplier, kc) * eventMult);
             score += points;
             if (nt > highestTier) highestTier = nt;
             // Track per-tier merge stats for game-over summary
@@ -10558,6 +10595,28 @@
             // tile that the render-time invariant had to clean up after the fact.
             try {
               showFloatingScore(kr, kc, points, chainCount);
+              // Dynamic Boards phase 1 — celebrate ≥2× column landings.
+              // Small companion badge near the merge cell. Only fires when a
+              // column multiplier is active AND the survivor column is ≥2×.
+              (function maybeShowMultBonus() {
+                if (typeof getColumnMultipliers !== 'function') return;
+                var mults = getColumnMultipliers();
+                if (!mults) return;
+                var m = mults[kc];
+                if (!m || m < 2) return;
+                var gridElTmp = document.getElementById('grid');
+                if (!gridElTmp) return;
+                var cellIdx = kr * getBoardCols() + kc;
+                var cellEl = gridElTmp.children[cellIdx];
+                if (!cellEl) return;
+                var rect = cellEl.getBoundingClientRect();
+                var badge = document.createElement('div');
+                badge.className = 'float-score';
+                badge.textContent = '×' + (Number.isInteger(m) ? m : m.toFixed(1)) + ' עמודה!';
+                badge.style.cssText = 'position:fixed;left:' + (rect.left + rect.width / 2) + 'px;top:' + (rect.top - 18) + 'px;background:linear-gradient(135deg,#FFB95C,#FF6B9D);color:#fff;font-weight:900;font-size:14px;padding:4px 10px;border-radius:12px;box-shadow:0 4px 14px rgba(255,107,157,0.45);pointer-events:none;z-index:9998';
+                document.body.appendChild(badge);
+                setTimeout(function() { badge.remove(); }, 1100);
+              })();
               bumpScore();
               soundMerge(nt);
               checkScoreMilestones();
@@ -11810,6 +11869,30 @@
     } else {
       gridEl.innerHTML = '';
     }
+    // Dynamic Boards phase 1 — column multiplier pills above the grid.
+    // The bar is rebuilt on every render() to track multiplier changes mid-
+    // game (e.g. admin pushes a new board, debug console call). When no
+    // multiplier is active getColumnMultipliers() returns null and we
+    // remove any existing bar — zero impact on vanilla play.
+    (function syncColumnMultiplierBar() {
+      var mults = (typeof getColumnMultipliers === 'function') ? getColumnMultipliers() : null;
+      var existing = wrap.querySelector('.col-mult-bar');
+      if (!mults) { if (existing) existing.remove(); return; }
+      // Don't show the bar in pre-game / game-over surfaces, only over a live grid.
+      if (opts.over) { if (existing) existing.remove(); return; }
+      var bar = existing || document.createElement('div');
+      bar.className = 'col-mult-bar';
+      bar.innerHTML = '';
+      for (var ci = 0; ci < mults.length; ci++) {
+        var m = mults[ci] || 1;
+        var pill = document.createElement('div');
+        var tierClass = m >= 6 ? 'tier-6x' : (m >= 4 ? 'tier-4x' : (m >= 2 ? 'tier-2x' : 'tier-1x'));
+        pill.className = 'col-mult-pill ' + tierClass;
+        pill.textContent = '×' + (Number.isInteger(m) ? m : m.toFixed(1));
+        bar.appendChild(pill);
+      }
+      if (!existing) wrap.insertBefore(bar, gridEl);
+    })();
     // Size the grid to fit the available area on BOTH axes (CSS aspect-ratio
     // alone can't constrain by both width and height cross-browser).
     fitGrid();
@@ -12309,6 +12392,19 @@
       restart: function() { init('practice'); },
     };
   }
+
+  // Always-on dev hooks for Dynamic Boards testing — exposed in plain prod
+  // so admins/developers can experiment from devtools without ?bot=1.
+  // Not a security risk: setColumnMultipliers is client-side only and the
+  // server score-submit path runs its own anti-cheat (drops-vs-score + token).
+  window.__bloomDebug = window.__bloomDebug || {};
+  window.__bloomDebug.setColumnMultipliers = function(arr) {
+    var ok = setColumnMultipliers(arr);
+    if (ok && typeof render === 'function') render();
+    return ok;
+  };
+  window.__bloomDebug.getColumnMultipliers = function() { return getColumnMultipliers(); };
+  window.__bloomDebug.restart = function(mode) { init(mode || 'practice'); };
 
   // ============ PWA INSTALL PROMPTS ============
   // iOS: show banner after 3 games (Safari doesn't auto-prompt)

@@ -859,6 +859,30 @@
     } else {
       gridEl.innerHTML = '';
     }
+    // Dynamic Boards phase 1 — column multiplier pills above the grid.
+    // The bar is rebuilt on every render() to track multiplier changes mid-
+    // game (e.g. admin pushes a new board, debug console call). When no
+    // multiplier is active getColumnMultipliers() returns null and we
+    // remove any existing bar — zero impact on vanilla play.
+    (function syncColumnMultiplierBar() {
+      var mults = (typeof getColumnMultipliers === 'function') ? getColumnMultipliers() : null;
+      var existing = wrap.querySelector('.col-mult-bar');
+      if (!mults) { if (existing) existing.remove(); return; }
+      // Don't show the bar in pre-game / game-over surfaces, only over a live grid.
+      if (opts.over) { if (existing) existing.remove(); return; }
+      var bar = existing || document.createElement('div');
+      bar.className = 'col-mult-bar';
+      bar.innerHTML = '';
+      for (var ci = 0; ci < mults.length; ci++) {
+        var m = mults[ci] || 1;
+        var pill = document.createElement('div');
+        var tierClass = m >= 6 ? 'tier-6x' : (m >= 4 ? 'tier-4x' : (m >= 2 ? 'tier-2x' : 'tier-1x'));
+        pill.className = 'col-mult-pill ' + tierClass;
+        pill.textContent = '×' + (Number.isInteger(m) ? m : m.toFixed(1));
+        bar.appendChild(pill);
+      }
+      if (!existing) wrap.insertBefore(bar, gridEl);
+    })();
     // Size the grid to fit the available area on BOTH axes (CSS aspect-ratio
     // alone can't constrain by both width and height cross-browser).
     fitGrid();

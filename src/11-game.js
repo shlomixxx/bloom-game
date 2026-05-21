@@ -1432,7 +1432,10 @@
               'at=' + kr + ',' + kc, 'grid=' + serializeGrid());
             const multiplier = 1 + (chainCount - 1) * 0.5;
             var eventMult = getFeverMultiplier() * checkTargetMerge(nt);
-            const points = Math.round(pointsFor(nt, group.length, multiplier) * eventMult);
+            // Pass survivor column (kc) so an active column-multiplier is
+            // applied at the chokepoint. When no multiplier is active,
+            // pointsFor returns the vanilla score with zero overhead.
+            const points = Math.round(pointsFor(nt, group.length, multiplier, kc) * eventMult);
             score += points;
             if (nt > highestTier) highestTier = nt;
             // Track per-tier merge stats for game-over summary
@@ -1466,6 +1469,28 @@
             // tile that the render-time invariant had to clean up after the fact.
             try {
               showFloatingScore(kr, kc, points, chainCount);
+              // Dynamic Boards phase 1 — celebrate ≥2× column landings.
+              // Small companion badge near the merge cell. Only fires when a
+              // column multiplier is active AND the survivor column is ≥2×.
+              (function maybeShowMultBonus() {
+                if (typeof getColumnMultipliers !== 'function') return;
+                var mults = getColumnMultipliers();
+                if (!mults) return;
+                var m = mults[kc];
+                if (!m || m < 2) return;
+                var gridElTmp = document.getElementById('grid');
+                if (!gridElTmp) return;
+                var cellIdx = kr * getBoardCols() + kc;
+                var cellEl = gridElTmp.children[cellIdx];
+                if (!cellEl) return;
+                var rect = cellEl.getBoundingClientRect();
+                var badge = document.createElement('div');
+                badge.className = 'float-score';
+                badge.textContent = '×' + (Number.isInteger(m) ? m : m.toFixed(1)) + ' עמודה!';
+                badge.style.cssText = 'position:fixed;left:' + (rect.left + rect.width / 2) + 'px;top:' + (rect.top - 18) + 'px;background:linear-gradient(135deg,#FFB95C,#FF6B9D);color:#fff;font-weight:900;font-size:14px;padding:4px 10px;border-radius:12px;box-shadow:0 4px 14px rgba(255,107,157,0.45);pointer-events:none;z-index:9998';
+                document.body.appendChild(badge);
+                setTimeout(function() { badge.remove(); }, 1100);
+              })();
               bumpScore();
               soundMerge(nt);
               checkScoreMilestones();
