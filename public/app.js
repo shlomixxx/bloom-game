@@ -2272,6 +2272,42 @@
       .catch(function() {});
   })();
 
+  // Dynamic Boards (phase 2) — pick up the active board on boot. The endpoint
+  // is cached for 60s on the server, so a periodic refetch is cheap. We retry
+  // every 90s during gameplay so an admin push reaches active players without
+  // a manual refresh, but skip the call when the tab is hidden (saves work).
+  var _activeBoard = null;
+  function applyActiveBoard(board) {
+    _activeBoard = board || null;
+    window._activeBoard = _activeBoard;
+    if (board && board.type === 'multipliers' && board.definition && Array.isArray(board.definition.multipliers)) {
+      if (typeof setColumnMultipliers === 'function') setColumnMultipliers(board.definition.multipliers);
+    } else {
+      if (typeof setColumnMultipliers === 'function') setColumnMultipliers(null);
+    }
+    if (typeof render === 'function') { try { render(); } catch (e) {} }
+  }
+  function refreshActiveBoard() {
+    if (document.hidden) return;
+    fetch(API_BASE + '/api/active-board').then(function(r) { return r.json(); })
+      .then(function(d) {
+        if (!d || !d.ok) return;
+        // Compare by id+updated_at; skip render if unchanged.
+        var prevSig = _activeBoard ? (_activeBoard.id + ':' + JSON.stringify(_activeBoard.definition)) : 'null';
+        var newSig  = d.board ? (d.board.id + ':' + JSON.stringify(d.board.definition)) : 'null';
+        if (prevSig === newSig) return;
+        applyActiveBoard(d.board);
+      })
+      .catch(function() {});
+  }
+  (function loadActiveBoard() {
+    refreshActiveBoard();
+    setInterval(refreshActiveBoard, 90 * 1000);
+    document.addEventListener('visibilitychange', function() {
+      if (!document.hidden) refreshActiveBoard();
+    });
+  })();
+
   // Per-game difficulty override. Populated by init() from the active
   // contest/duel row, or by practice mode from localStorage. When null,
   // getDropWeights() and gameSpeedScale() fall back to gameConfig (admin).

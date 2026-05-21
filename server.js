@@ -2369,6 +2369,76 @@ app.post('/api/ping', softDeviceAuth, async (req, res) => {
 });
 
 // ============================================================
+// DYNAMIC BOARDS — public read endpoint
+// Returns the highest-priority active board configuration for "now".
+// Result is cached in-memory for 60s; admin writes invalidate the cache.
+// When no board is active OR the table doesn't exist yet, returns
+// { ok: true, board: null } — clients treat null as "vanilla mode".
+// ============================================================
+let _boardCache = { value: undefined, expiresAt: 0 };
+function invalidateBoardCache() {
+  _boardCache = { value: undefined, expiresAt: 0 };
+}
+
+function validateBoardDefinition(type, definition) {
+  if (definition === null || typeof definition !== 'object' || Array.isArray(definition)) {
+    return { ok: false, error: 'definition_not_object' };
+  }
+  if (type === 'multipliers') {
+    const mults = definition.multipliers;
+    if (!Array.isArray(mults) || mults.length !== 4) {
+      return { ok: false, error: 'multipliers_must_be_array_of_4' };
+    }
+    for (const m of mults) {
+      const n = Number(m);
+      if (!Number.isFinite(n) || n < 0.5 || n > 20) {
+        return { ok: false, error: 'multiplier_out_of_range' };
+      }
+    }
+    return { ok: true };
+  }
+  // Future types (special_cells / shape / themed / mode / vip) accept any
+  // object — validation is added per-phase. Today no client-side code
+  // applies them, so a bad definition is a no-op.
+  return { ok: true };
+}
+
+app.get('/api/active-board', async (_req, res) => {
+  try {
+    const now = Date.now();
+    if (_boardCache.value !== undefined && _boardCache.expiresAt > now) {
+      return res.json({ ok: true, board: _boardCache.value });
+    }
+    let board = null;
+    try {
+      const r = await pool.query(
+        `SELECT id, name, type, definition, target_audience, starts_at, ends_at
+           FROM board_configurations
+          WHERE is_active = true
+            AND (starts_at IS NULL OR starts_at <= NOW())
+            AND (ends_at   IS NULL OR ends_at   >= NOW())
+          ORDER BY priority DESC, id DESC
+          LIMIT 1`
+      );
+      if (r.rows.length) board = r.rows[0];
+    } catch (innerErr) {
+      // Table may not exist yet on a fresh DB before schema.sql is applied
+      // — treat as "no active board" instead of 500.
+      if (innerErr && innerErr.code === '42P01') {
+        board = null;
+      } else {
+        throw innerErr;
+      }
+    }
+    _boardCache = { value: board, expiresAt: now + 60 * 1000 };
+    res.json({ ok: true, board });
+  } catch (e) {
+    console.error('GET /api/active-board', e);
+    res.json({ ok: true, board: null });
+  }
+});
+
+// ============================================================
 // ADMIN ROUTES (כל המסלולים מוגנים ב-requireAdmin)
 // ============================================================
 
@@ -3583,6 +3653,125 @@ if (ADMIN_PATH && ADMIN_PASSWORD) {
       res.end();
     } catch (e) {
       console.error('admin /export', e);
+      res.status(500).json({ error: 'server' });
+    }
+  });
+
+  // ============================================================
+  // Dynamic Boards admin CRUD. Every mutating route writes to
+  // admin_actions and invalidates the public /api/active-board cache.
+  // ============================================================
+  adminRouter.get('/api/boards', async (_req, res) => {
+    try {
+      const r = await pool.query(
+        `SELECT id, name, type, definition, is_active, starts_at, ends_at,
+                target_audience, priority, created_at, updated_at
+           FROM board_configurations
+          ORDER BY is_active DESC, priority DESC, id DESC`
+      );
+      res.json({ ok: true, boards: r.rows });
+    } catch (e) {
+      console.error('admin GET /boards', e);
+      res.status(500).json({ error: 'server' });
+    }
+  });
+
+  adminRouter.post('/api/boards', async (req, res) => {
+    try {
+      const b = req.body || {};
+      const name = String(b.name || '').trim().slice(0, 80);
+      const type = String(b.type || '').trim();
+      const definition = b.definition || {};
+      const allowed = ['multipliers', 'special_cells', 'shape', 'themed', 'mode', 'vip'];
+      if (!name) return res.status(400).json({ error: 'name_required' });
+      if (!allowed.includes(type)) return res.status(400).json({ error: 'bad_type' });
+      const v = validateBoardDefinition(type, definition);
+      if (!v.ok) return res.status(400).json({ error: v.error });
+      const isActive   = !!b.is_active;
+      const startsAt   = b.starts_at ? new Date(b.starts_at) : null;
+      const endsAt     = b.ends_at   ? new Date(b.ends_at)   : null;
+      const audience   = String(b.target_audience || 'all').slice(0, 32);
+      const priority   = Math.max(0, Math.min(1000, parseInt(b.priority || 0, 10) || 0));
+      const r = await pool.query(
+        `INSERT INTO board_configurations
+           (name, type, definition, is_active, starts_at, ends_at, target_audience, priority)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+         RETURNING *`,
+        [name, type, JSON.stringify(definition), isActive, startsAt, endsAt, audience, priority]
+      );
+      invalidateBoardCache();
+      await pool.query(
+        `INSERT INTO admin_actions (action, target_type, target_id, details)
+         VALUES ('board_create', 'board', $1, $2)`,
+        [String(r.rows[0].id), JSON.stringify({ name, type, isActive, priority })]
+      ).catch(() => {});
+      res.json({ ok: true, board: r.rows[0] });
+    } catch (e) {
+      console.error('admin POST /boards', e);
+      res.status(500).json({ error: 'server' });
+    }
+  });
+
+  adminRouter.patch('/api/boards/:id', async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'bad_id' });
+      const b = req.body || {};
+      const current = await pool.query(`SELECT * FROM board_configurations WHERE id = $1`, [id]);
+      if (!current.rows.length) return res.status(404).json({ error: 'not_found' });
+      const row = current.rows[0];
+      const patch = {
+        name:            b.name            !== undefined ? String(b.name).trim().slice(0, 80)       : row.name,
+        type:            b.type            !== undefined ? String(b.type).trim()                    : row.type,
+        definition:      b.definition      !== undefined ? b.definition                             : row.definition,
+        is_active:       b.is_active       !== undefined ? !!b.is_active                            : row.is_active,
+        starts_at:       b.starts_at       !== undefined ? (b.starts_at ? new Date(b.starts_at) : null) : row.starts_at,
+        ends_at:         b.ends_at         !== undefined ? (b.ends_at   ? new Date(b.ends_at)   : null) : row.ends_at,
+        target_audience: b.target_audience !== undefined ? String(b.target_audience).slice(0, 32)   : row.target_audience,
+        priority:        b.priority        !== undefined ? Math.max(0, Math.min(1000, parseInt(b.priority, 10) || 0)) : row.priority,
+      };
+      const allowed = ['multipliers', 'special_cells', 'shape', 'themed', 'mode', 'vip'];
+      if (!allowed.includes(patch.type)) return res.status(400).json({ error: 'bad_type' });
+      const v = validateBoardDefinition(patch.type, patch.definition);
+      if (!v.ok) return res.status(400).json({ error: v.error });
+      const r = await pool.query(
+        `UPDATE board_configurations
+            SET name=$1, type=$2, definition=$3, is_active=$4,
+                starts_at=$5, ends_at=$6, target_audience=$7, priority=$8,
+                updated_at=NOW()
+          WHERE id=$9
+          RETURNING *`,
+        [patch.name, patch.type, JSON.stringify(patch.definition), patch.is_active,
+         patch.starts_at, patch.ends_at, patch.target_audience, patch.priority, id]
+      );
+      invalidateBoardCache();
+      await pool.query(
+        `INSERT INTO admin_actions (action, target_type, target_id, details)
+         VALUES ('board_update', 'board', $1, $2)`,
+        [String(id), JSON.stringify(b)]
+      ).catch(() => {});
+      res.json({ ok: true, board: r.rows[0] });
+    } catch (e) {
+      console.error('admin PATCH /boards/:id', e);
+      res.status(500).json({ error: 'server' });
+    }
+  });
+
+  adminRouter.delete('/api/boards/:id', async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'bad_id' });
+      const r = await pool.query(`DELETE FROM board_configurations WHERE id = $1 RETURNING name`, [id]);
+      if (!r.rows.length) return res.status(404).json({ error: 'not_found' });
+      invalidateBoardCache();
+      await pool.query(
+        `INSERT INTO admin_actions (action, target_type, target_id, details)
+         VALUES ('board_delete', 'board', $1, $2)`,
+        [String(id), JSON.stringify({ name: r.rows[0].name })]
+      ).catch(() => {});
+      res.json({ ok: true });
+    } catch (e) {
+      console.error('admin DELETE /boards/:id', e);
       res.status(500).json({ error: 'server' });
     }
   });

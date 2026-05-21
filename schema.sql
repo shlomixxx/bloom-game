@@ -679,3 +679,29 @@ INSERT INTO game_config (key, value) VALUES ('diamond_pack_4_price', '149.90') O
 -- from the admin to hide the skin globally; players who had it active fall
 -- back to 'classic' on next page load.
 INSERT INTO game_config (key, value) VALUES ('aurora_skin_enabled', 'true') ON CONFLICT (key) DO NOTHING;
+
+-- ============================================================
+-- Dynamic Boards — phase 2 (May 2026)
+-- The board_configurations table backs admin-managed alternate
+-- boards (column multipliers, themed packs, future special cells
+-- and shapes). One row per configuration; the highest-priority
+-- row that's currently "active" by date wins. Definitions are
+-- JSON to keep the schema flexible across the 6 future types.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS board_configurations (
+  id SERIAL PRIMARY KEY,
+  name TEXT NOT NULL,
+  type TEXT NOT NULL CHECK (type IN ('multipliers', 'special_cells', 'shape', 'themed', 'mode', 'vip')),
+  definition JSONB NOT NULL DEFAULT '{}',
+  is_active BOOLEAN NOT NULL DEFAULT false,
+  starts_at TIMESTAMPTZ,
+  ends_at TIMESTAMPTZ,
+  target_audience TEXT NOT NULL DEFAULT 'all',
+  priority INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_board_configs_active
+  ON board_configurations (priority DESC, id DESC)
+  WHERE is_active = true;

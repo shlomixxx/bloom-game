@@ -8,7 +8,7 @@
 
 - **שלב 0 — הכנת תשתית:** ✅ הושלם חלקית **לפני** שהמסמך הזה נכתב. בקוד כבר קיימים `getActiveTiers()`, `getBoardRows()`, `getBoardCols()` ב-[src/01-constants.js](src/01-constants.js) — תוארו בפירוט ב-[CLAUDE.md](CLAUDE.md) §11 כ"architectural prep for the App launch". **אסור לכפול** את האבסטרקציות האלה; כל שלב חייב לקרוא דרכן.
 - **שלב 1 — Score Multipliers:** ✅ הושלם 2026-05-22 — `getColumnMultipliers()`/`setColumnMultipliers()` + `pointsFor(tier, group, chain, col)` + pill-bar UI מעל הלוח + floating ×N badge על נחיתות ≥2× + `__bloomDebug.setColumnMultipliers([6,4,2,1])` בקונסול. zero-regression validated על `test_engine.mjs`.
-- **שלב 2 — Admin Control Panel:** ⏳ ממתין לאישור להתחיל.
+- **שלב 2 — Admin Control Panel:** ✅ הושלם 2026-05-22 — טבלת `board_configurations` ב-[schema.sql](schema.sql) (idempotent + partial index על `is_active`), `GET /api/active-board` עם cache של 60 שניות (מתבטל אוטומטית בכל write), 3 endpoints אדמין (POST/PATCH/DELETE) עם audit log + `validateBoardDefinition`, sub-section ב-`🎮 משחק` של האדמין עם modal ל-CRUD + 5 preset chips למכפילים, וקליינט עם boot fetch + 90s רענון. שחקנים מקבלים את הלוח החדש בלי refresh.
 - שלבים 3-6: ⏳ עתידיים. ראה הערות "✨ ניצול תשתית קיימת" בכל שלב.
 
 ראה את סקציה [1.5 — התשתית הקיימת](#15-התשתית-הקיימת-מה-כבר-בקוד) **לפני** שמתחילים שלב.
