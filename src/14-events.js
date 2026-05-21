@@ -6,11 +6,27 @@
   var activeEvent = null;       // { type, row, col, timer, maxTimer, interval }
   var lastEventTime = 0;        // timestamp of last event end
   var eventSpawnTimer = null;    // setInterval handle
+  var eventInitTimer = null;     // setTimeout for the "force first event" boot
+  var eventSystemRunning = false; // gates async callbacks scheduled before stop
   var feverActive = false;       // is Fever mode on?
   var feverEndTime = 0;          // when Fever ends
   var feverMultiplier = 1;       // current multiplier (1 = normal)
   var targetTier = 0;            // which tier is targeted (🎯)
   var targetActive = false;
+
+  // Home/menu screens overlay the game but don't unmount the grid, so the
+  // grid still has non-zero bounding rects. Without this guard a pending
+  // event spawn would build a position:fixed overlay at the grid cell's
+  // viewport coords — which on a desktop browser sits OUTSIDE the centered
+  // .app column and visibly leaks next to the home card. Any code path
+  // that paints into the grid checks this first.
+  function isGameSurfaceVisible() {
+    if (document.getElementById('home-screen')) return false;
+    if (document.getElementById('contest-screen')) return false;
+    if (document.getElementById('challenge-screen')) return false;
+    if (document.getElementById('spectator-screen')) return false;
+    return true;
+  }
 
   var EVENT_TYPES = [
     { id: 'bomb',   emoji: '💣', label: 'פצצה' },
@@ -36,12 +52,20 @@
   function startEventSystem() {
     stopEventSystem();
     if (!eventsEnabled()) return;
+    eventSystemRunning = true;
     lastEventTime = Date.now();
     eventSpawnTimer = setInterval(function() {
+      if (!eventSystemRunning) return;
       try { trySpawnEvent(); } catch(e) { /* silent */ }
     }, 1000);
-    // Force first event after 3 seconds
-    setTimeout(function() {
+    // Force first event after 3 seconds. Tracked so stopEventSystem can
+    // cancel it — without that, a player who entered the game and bounced
+    // back to home within 3s would see a bomb tile spawn at the (now
+    // hidden) grid coords and "leak" beside the home card.
+    eventInitTimer = setTimeout(function() {
+      eventInitTimer = null;
+      if (!eventSystemRunning) return;
+      if (!isGameSurfaceVisible()) return;
       try {
         if (!activeEvent && !feverActive && !targetActive && grid) {
           spawnRandomEvent();
@@ -51,7 +75,9 @@
   }
 
   function stopEventSystem() {
+    eventSystemRunning = false;
     if (eventSpawnTimer) { clearInterval(eventSpawnTimer); eventSpawnTimer = null; }
+    if (eventInitTimer) { clearTimeout(eventInitTimer); eventInitTimer = null; }
     clearActiveEvent();
     clearComboCounter();
     feverActive = false;
@@ -63,6 +89,37 @@
     var targetHL = document.querySelector('.tier-target-highlight');
     if (targetHL) targetHL.classList.remove('tier-target-highlight');
   }
+
+  // Belt-and-suspenders: any non-game screen calls this to nuke a stray
+  // overlay even if the lifecycle above was bypassed somehow. Cheap and
+  // idempotent — safe to call as often as needed.
+  function purgeEventOverlays() {
+    var el = document.getElementById('event-drop-overlay');
+    if (el) el.remove();
+    var fxes = document.querySelectorAll('.fx-overlay');
+    for (var i = 0; i < fxes.length; i++) fxes[i].remove();
+  }
+  window.__bloomPurgeEventOverlays = purgeEventOverlays;
+
+  // Resize/orientation: the overlay is position:fixed at the cell's old
+  // viewport coords, so if the grid moves (window resize, soft-keyboard,
+  // device rotation), the overlay would drift. Reposition follows; if the
+  // game surface is gone, we just purge.
+  var _resizeRaf = 0;
+  window.addEventListener('resize', function() {
+    if (_resizeRaf) cancelAnimationFrame(_resizeRaf);
+    _resizeRaf = requestAnimationFrame(function() {
+      _resizeRaf = 0;
+      if (!isGameSurfaceVisible()) { purgeEventOverlays(); return; }
+      repositionEventOverlay();
+    });
+  });
+  window.addEventListener('orientationchange', function() {
+    setTimeout(function() {
+      if (!isGameSurfaceVisible()) { purgeEventOverlays(); return; }
+      repositionEventOverlay();
+    }, 250);
+  });
 
   function clearActiveEvent() {
     if (activeEvent) {
@@ -111,6 +168,8 @@
 
   function trySpawnEvent() {
     if (!eventsEnabled() || busy) return;
+    if (!eventSystemRunning) return;
+    if (!isGameSurfaceVisible()) return;
     if (activeEvent || feverActive || targetActive) return;
 
     var startDelay = getEventNum('events_start_delay', 15) * 1000;
@@ -133,6 +192,7 @@
 
   function spawnRandomEvent() {
     if (!grid || !grid.length) return;
+    if (!isGameSurfaceVisible()) return;
     // Build weighted list of enabled events
     var pool = [];
     var totalWeight = 0;
@@ -219,6 +279,7 @@
   function renderEventOnCell(evt) {
     var gridEl = document.getElementById('grid');
     if (!gridEl) return;
+    if (!isGameSurfaceVisible()) return;
 
     // Remove existing overlay
     var old = document.getElementById('event-drop-overlay');
@@ -230,6 +291,16 @@
 
     var rect = cell.getBoundingClientRect();
     if (rect.width === 0) return; // not laid out yet
+    // Final guard: if the cell's center sits outside the .app's box, the
+    // grid isn't really showing — refuse to mount. Belt-and-suspenders
+    // for any future overlay that the home/menu screens forget to hide.
+    var appEl = document.querySelector('.app');
+    if (appEl) {
+      var appRect = appEl.getBoundingClientRect();
+      var cx = rect.left + rect.width / 2;
+      var cy = rect.top + rect.height / 2;
+      if (cx < appRect.left || cx > appRect.right || cy < appRect.top || cy > appRect.bottom) return;
+    }
 
     var overlay = document.createElement('div');
     overlay.id = 'event-drop-overlay';

@@ -3346,6 +3346,7 @@
       }
     }
     stopEventSystem(); // don't run events behind home screen
+    if (typeof purgeEventOverlays === 'function') purgeEventOverlays();
     const app = document.querySelector('.app');
     if (!app || document.getElementById('home-screen')) return;
     // Mark the app so CSS can hide the game UI behind the home overlay.
@@ -3661,6 +3662,7 @@
 
   function showHomeV2() {
     stopEventSystem();
+    if (typeof purgeEventOverlays === 'function') purgeEventOverlays();
     const app = document.querySelector('.app');
     if (!app || document.getElementById('home-screen')) return;
     // Mark the app so CSS can hide the game UI behind the home overlay.
@@ -7240,8 +7242,8 @@
     setTimeout(function() { t.classList.remove('show'); setTimeout(function() { t.remove(); }, 400); }, 3500);
   }
   function showCreditToast(amount, action) {
-    var labels = { daily_complete: 'אתגר יומי', streak_3: 'רצף 3 ימים!', streak_7: 'רצף 7 ימים!', streak_30: 'רצף 30 ימים!',
-      contest_1st: 'מקום ראשון!', contest_2nd: 'מקום שני!', contest_3rd: 'מקום שלישי!', event_gift: '🎁 מתנה!' };
+    var labels = { daily_complete: 'אתגר יומי', daily_login: '🎁 בונוס יומי', streak_3: 'רצף 3 ימים!', streak_7: 'רצף 7 ימים!', streak_30: 'רצף 30 ימים!',
+      contest_1st: 'מקום ראשון!', contest_2nd: 'מקום שני!', contest_3rd: 'מקום שלישי!', event_gift: '🎁 מתנה!', comeback: '👋 ברוך שובך!' };
     var label = labels[action] || '';
     var t = document.createElement('div');
     t.className = 'credit-toast';
@@ -7815,6 +7817,24 @@
     var tomorrowReward = getDailyRewardAmount(displayStreak + 1);
     var tomorrowExtra = tomorrowReward > displayReward ? ' (x' + Math.round(tomorrowReward / 25) + '!)' : '';
 
+    // The server now applies tiered config keyed by streak (see
+    // /api/player/earn for action='daily_login'). gameConfig is fetched at
+    // boot, so we can pick the matching key locally without a round trip.
+    // Final number on the slot reel = max(display tier, server tier) so a
+    // generous admin tweak surfaces in the UI and a misconfig can never
+    // undercut what the overlay teased.
+    var resolvedReward = displayReward;
+    try {
+      if (typeof gameConfig === 'object' && gameConfig) {
+        var srvKey = displayStreak >= 30 ? 'daily_login_reward_streak_30'
+                   : displayStreak >= 7  ? 'daily_login_reward_streak_7'
+                   : displayStreak >= 3  ? 'daily_login_reward_streak_3'
+                   : 'daily_login_reward';
+        var srvVal = parseInt(gameConfig[srvKey], 10) || 0;
+        if (srvVal > 0) resolvedReward = Math.max(displayReward, srvVal);
+      }
+    } catch (e) {}
+
     var overlay = document.createElement('div');
     overlay.id = 'daily-reward-overlay';
     overlay.className = 'daily-reward-overlay';
@@ -7846,13 +7866,13 @@
       var delay = 50;
       // Sample values straddle the real reward so the reel doesn't
       // visually contradict the outcome.
-      var low  = Math.max(5,  Math.floor(displayReward * 0.4));
-      var high = Math.max(50, Math.floor(displayReward * 2.2));
+      var low  = Math.max(5,  Math.floor(resolvedReward * 0.4));
+      var high = Math.max(50, Math.floor(resolvedReward * 2.2));
       function tick() {
         if (!document.getElementById('dr-reward-num')) return;
         ticks++;
         if (ticks >= maxTicks) {
-          el.textContent = '+' + displayReward + ' 💎';
+          el.textContent = '+' + resolvedReward + ' 💎';
           el.classList.remove('dr-reward-spinning');
           el.classList.add('dr-reward-landed');
           try { if (typeof soundMilestone === 'function') soundMilestone(Math.min(8, 3 + Math.floor(displayStreak / 3))); } catch (e) {}
@@ -7876,8 +7896,10 @@
       claimed = true;
       // Mark as claimed for today
       try { localStorage.setItem(DAILY_LOGIN_KEY, JSON.stringify({ lastClaimed: todayInIsrael() })); } catch(e) {}
-      // Earn credits via server
-      earnCredits('daily_login');
+      // Earn credits via server. Streak passes through so the server picks
+      // the matching tier — without it, the wallet got the flat base
+      // amount even though the overlay teased the streak-tiered number.
+      earnCredits('daily_login', { streak: displayStreak });
       // Animate out
       var card = overlay.querySelector('.daily-reward-card');
       if (card) {
@@ -7890,7 +7912,7 @@
         overlay.style.opacity = '0';
         setTimeout(function() { overlay.remove(); }, 300);
       }, 200);
-      trackEvent('daily_login_claimed', { streak: displayStreak, reward: displayReward });
+      trackEvent('daily_login_claimed', { streak: displayStreak, reward: resolvedReward });
     }
 
     document.getElementById('dr-claim').onclick = claim;
@@ -10225,14 +10247,19 @@
     }
   }
 
-  // Score milestone celebrations during gameplay
+  // Score milestone celebrations during gameplay. Tiers MUST match the
+  // server's ALLOWED_MILESTONES allowlist in /api/player/earn — anything
+  // outside it gets paid the flat base reward instead of the tier amount.
+  // Reward values are also mirrored in schema.sql as score_milestone_reward_*
+  // so the banner number is what actually lands in the wallet.
   var SCORE_MILESTONES = [
-    { at: 10000,  label: '🔥 10K!',  reward: 2 },
-    { at: 25000,  label: '⚡ 25K!',  reward: 3 },
-    { at: 50000,  label: '⭐ 50K!',  reward: 5 },
-    { at: 100000, label: '💎 100K!', reward: 10 },
-    { at: 200000, label: '👑 200K!', reward: 20 },
-    { at: 500000, label: '🌟 500K!', reward: 50 }
+    { at: 10000,   label: '🔥 10K!',   reward: 2 },
+    { at: 25000,   label: '⚡ 25K!',   reward: 3 },
+    { at: 50000,   label: '⭐ 50K!',   reward: 5 },
+    { at: 100000,  label: '💎 100K!',  reward: 10 },
+    { at: 250000,  label: '👑 250K!',  reward: 25 },
+    { at: 500000,  label: '🌟 500K!',  reward: 50 },
+    { at: 1000000, label: '🏆 1M!',    reward: 100 }
   ];
   var scoreMilestonesHit = {};
 
@@ -10243,8 +10270,13 @@
         scoreMilestonesHit[m.at] = true;
         showScoreMilestoneBanner(m.label, m.reward);
         if (m.reward > 0 && !window.__bloomBotActive && !skinTrialMode) {
-          // Pass unique threshold as meta so each milestone is deduped individually
-          earnCredits('event_gift', { amount: m.reward, milestone: m.at });
+          // Was 'event_gift' which is clamped to [event_gift_credits_min,
+          // event_gift_credits_max] and rate-limited (30s + 20/hr). That
+          // both lied about the displayed amount and silently dropped
+          // milestones that hit within 30s of each other during chains.
+          // Use the dedicated 'score_milestone' action — per-milestone
+          // dedup, no rate-limit, tiered amount via score_milestone_reward_<at>.
+          earnCredits('score_milestone', { milestone: m.at });
         }
       }
     }
@@ -12298,11 +12330,27 @@
   var activeEvent = null;       // { type, row, col, timer, maxTimer, interval }
   var lastEventTime = 0;        // timestamp of last event end
   var eventSpawnTimer = null;    // setInterval handle
+  var eventInitTimer = null;     // setTimeout for the "force first event" boot
+  var eventSystemRunning = false; // gates async callbacks scheduled before stop
   var feverActive = false;       // is Fever mode on?
   var feverEndTime = 0;          // when Fever ends
   var feverMultiplier = 1;       // current multiplier (1 = normal)
   var targetTier = 0;            // which tier is targeted (🎯)
   var targetActive = false;
+
+  // Home/menu screens overlay the game but don't unmount the grid, so the
+  // grid still has non-zero bounding rects. Without this guard a pending
+  // event spawn would build a position:fixed overlay at the grid cell's
+  // viewport coords — which on a desktop browser sits OUTSIDE the centered
+  // .app column and visibly leaks next to the home card. Any code path
+  // that paints into the grid checks this first.
+  function isGameSurfaceVisible() {
+    if (document.getElementById('home-screen')) return false;
+    if (document.getElementById('contest-screen')) return false;
+    if (document.getElementById('challenge-screen')) return false;
+    if (document.getElementById('spectator-screen')) return false;
+    return true;
+  }
 
   var EVENT_TYPES = [
     { id: 'bomb',   emoji: '💣', label: 'פצצה' },
@@ -12328,12 +12376,20 @@
   function startEventSystem() {
     stopEventSystem();
     if (!eventsEnabled()) return;
+    eventSystemRunning = true;
     lastEventTime = Date.now();
     eventSpawnTimer = setInterval(function() {
+      if (!eventSystemRunning) return;
       try { trySpawnEvent(); } catch(e) { /* silent */ }
     }, 1000);
-    // Force first event after 3 seconds
-    setTimeout(function() {
+    // Force first event after 3 seconds. Tracked so stopEventSystem can
+    // cancel it — without that, a player who entered the game and bounced
+    // back to home within 3s would see a bomb tile spawn at the (now
+    // hidden) grid coords and "leak" beside the home card.
+    eventInitTimer = setTimeout(function() {
+      eventInitTimer = null;
+      if (!eventSystemRunning) return;
+      if (!isGameSurfaceVisible()) return;
       try {
         if (!activeEvent && !feverActive && !targetActive && grid) {
           spawnRandomEvent();
@@ -12343,7 +12399,9 @@
   }
 
   function stopEventSystem() {
+    eventSystemRunning = false;
     if (eventSpawnTimer) { clearInterval(eventSpawnTimer); eventSpawnTimer = null; }
+    if (eventInitTimer) { clearTimeout(eventInitTimer); eventInitTimer = null; }
     clearActiveEvent();
     clearComboCounter();
     feverActive = false;
@@ -12355,6 +12413,37 @@
     var targetHL = document.querySelector('.tier-target-highlight');
     if (targetHL) targetHL.classList.remove('tier-target-highlight');
   }
+
+  // Belt-and-suspenders: any non-game screen calls this to nuke a stray
+  // overlay even if the lifecycle above was bypassed somehow. Cheap and
+  // idempotent — safe to call as often as needed.
+  function purgeEventOverlays() {
+    var el = document.getElementById('event-drop-overlay');
+    if (el) el.remove();
+    var fxes = document.querySelectorAll('.fx-overlay');
+    for (var i = 0; i < fxes.length; i++) fxes[i].remove();
+  }
+  window.__bloomPurgeEventOverlays = purgeEventOverlays;
+
+  // Resize/orientation: the overlay is position:fixed at the cell's old
+  // viewport coords, so if the grid moves (window resize, soft-keyboard,
+  // device rotation), the overlay would drift. Reposition follows; if the
+  // game surface is gone, we just purge.
+  var _resizeRaf = 0;
+  window.addEventListener('resize', function() {
+    if (_resizeRaf) cancelAnimationFrame(_resizeRaf);
+    _resizeRaf = requestAnimationFrame(function() {
+      _resizeRaf = 0;
+      if (!isGameSurfaceVisible()) { purgeEventOverlays(); return; }
+      repositionEventOverlay();
+    });
+  });
+  window.addEventListener('orientationchange', function() {
+    setTimeout(function() {
+      if (!isGameSurfaceVisible()) { purgeEventOverlays(); return; }
+      repositionEventOverlay();
+    }, 250);
+  });
 
   function clearActiveEvent() {
     if (activeEvent) {
@@ -12403,6 +12492,8 @@
 
   function trySpawnEvent() {
     if (!eventsEnabled() || busy) return;
+    if (!eventSystemRunning) return;
+    if (!isGameSurfaceVisible()) return;
     if (activeEvent || feverActive || targetActive) return;
 
     var startDelay = getEventNum('events_start_delay', 15) * 1000;
@@ -12425,6 +12516,7 @@
 
   function spawnRandomEvent() {
     if (!grid || !grid.length) return;
+    if (!isGameSurfaceVisible()) return;
     // Build weighted list of enabled events
     var pool = [];
     var totalWeight = 0;
@@ -12511,6 +12603,7 @@
   function renderEventOnCell(evt) {
     var gridEl = document.getElementById('grid');
     if (!gridEl) return;
+    if (!isGameSurfaceVisible()) return;
 
     // Remove existing overlay
     var old = document.getElementById('event-drop-overlay');
@@ -12522,6 +12615,16 @@
 
     var rect = cell.getBoundingClientRect();
     if (rect.width === 0) return; // not laid out yet
+    // Final guard: if the cell's center sits outside the .app's box, the
+    // grid isn't really showing — refuse to mount. Belt-and-suspenders
+    // for any future overlay that the home/menu screens forget to hide.
+    var appEl = document.querySelector('.app');
+    if (appEl) {
+      var appRect = appEl.getBoundingClientRect();
+      var cx = rect.left + rect.width / 2;
+      var cy = rect.top + rect.height / 2;
+      if (cx < appRect.left || cx > appRect.right || cy < appRect.top || cy > appRect.bottom) return;
+    }
 
     var overlay = document.createElement('div');
     overlay.id = 'event-drop-overlay';

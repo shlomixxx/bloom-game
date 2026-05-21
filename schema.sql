@@ -262,6 +262,16 @@ INSERT INTO game_config (key, value) VALUES ('daily_reward', '10')
   ON CONFLICT (key) DO NOTHING;
 INSERT INTO game_config (key, value) VALUES ('daily_login_reward', '25')
   ON CONFLICT (key) DO NOTHING;
+-- Tiered daily-login rewards — the client overlay escalates the displayed
+-- amount with streak (25 → 50 → 100 → 200), so the server payment now
+-- mirrors the same tiers. Without these tiers the overlay said +200 while
+-- the wallet actually got the flat daily_login_reward, eroding trust.
+INSERT INTO game_config (key, value) VALUES ('daily_login_reward_streak_3', '50')
+  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('daily_login_reward_streak_7', '100')
+  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('daily_login_reward_streak_30', '200')
+  ON CONFLICT (key) DO NOTHING;
 INSERT INTO game_config (key, value) VALUES ('streak_3_reward', '15')
   ON CONFLICT (key) DO NOTHING;
 INSERT INTO game_config (key, value) VALUES ('streak_7_reward', '50')
@@ -527,6 +537,16 @@ INSERT INTO game_config (key, value) VALUES ('leaderboard_default_difficulty', '
 
 INSERT INTO game_config (key, value) VALUES ('score_milestone_reward', '5')
   ON CONFLICT (key) DO NOTHING;
+-- Tiered milestone rewards — must mirror SCORE_MILESTONES in src/11-game.js so
+-- the banner number is what actually lands in the wallet. Server picks via
+-- meta.milestone (validated against ALLOWED_MILESTONES in /api/player/earn).
+INSERT INTO game_config (key, value) VALUES ('score_milestone_reward_10000',   '2')   ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('score_milestone_reward_25000',   '3')   ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('score_milestone_reward_50000',   '5')   ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('score_milestone_reward_100000',  '10')  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('score_milestone_reward_250000',  '25')  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('score_milestone_reward_500000',  '50')  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('score_milestone_reward_1000000', '100') ON CONFLICT (key) DO NOTHING;
 
 INSERT INTO game_config (key, value) VALUES ('crown_merge_enabled', 'true')
   ON CONFLICT (key) DO NOTHING;

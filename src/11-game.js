@@ -1163,14 +1163,19 @@
     }
   }
 
-  // Score milestone celebrations during gameplay
+  // Score milestone celebrations during gameplay. Tiers MUST match the
+  // server's ALLOWED_MILESTONES allowlist in /api/player/earn — anything
+  // outside it gets paid the flat base reward instead of the tier amount.
+  // Reward values are also mirrored in schema.sql as score_milestone_reward_*
+  // so the banner number is what actually lands in the wallet.
   var SCORE_MILESTONES = [
-    { at: 10000,  label: '🔥 10K!',  reward: 2 },
-    { at: 25000,  label: '⚡ 25K!',  reward: 3 },
-    { at: 50000,  label: '⭐ 50K!',  reward: 5 },
-    { at: 100000, label: '💎 100K!', reward: 10 },
-    { at: 200000, label: '👑 200K!', reward: 20 },
-    { at: 500000, label: '🌟 500K!', reward: 50 }
+    { at: 10000,   label: '🔥 10K!',   reward: 2 },
+    { at: 25000,   label: '⚡ 25K!',   reward: 3 },
+    { at: 50000,   label: '⭐ 50K!',   reward: 5 },
+    { at: 100000,  label: '💎 100K!',  reward: 10 },
+    { at: 250000,  label: '👑 250K!',  reward: 25 },
+    { at: 500000,  label: '🌟 500K!',  reward: 50 },
+    { at: 1000000, label: '🏆 1M!',    reward: 100 }
   ];
   var scoreMilestonesHit = {};
 
@@ -1181,8 +1186,13 @@
         scoreMilestonesHit[m.at] = true;
         showScoreMilestoneBanner(m.label, m.reward);
         if (m.reward > 0 && !window.__bloomBotActive && !skinTrialMode) {
-          // Pass unique threshold as meta so each milestone is deduped individually
-          earnCredits('event_gift', { amount: m.reward, milestone: m.at });
+          // Was 'event_gift' which is clamped to [event_gift_credits_min,
+          // event_gift_credits_max] and rate-limited (30s + 20/hr). That
+          // both lied about the displayed amount and silently dropped
+          // milestones that hit within 30s of each other during chains.
+          // Use the dedicated 'score_milestone' action — per-milestone
+          // dedup, no rate-limit, tiered amount via score_milestone_reward_<at>.
+          earnCredits('score_milestone', { milestone: m.at });
         }
       }
     }

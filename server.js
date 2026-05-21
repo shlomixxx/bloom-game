@@ -3883,6 +3883,42 @@ app.post('/api/player/earn', requireDeviceAuth, async (req, res) => {
       const midR   = parseInt((lvlB.rows[0] || {}).value, 10) || 100;  // 7-29 days
       const longR  = parseInt((lvlC.rows[0] || {}).value, 10) || 200;  // 30+ days
       reward = days >= 30 ? longR : days >= 7 ? midR : shortR;
+    } else if (action === 'score_milestone') {
+      // Tiered reward, picked from a per-milestone config key. The dedup
+      // path above already validated meta.milestone against ALLOWED_MILESTONES,
+      // so we can trust validatedMeta.milestone here. If the tiered key
+      // is missing/zero, fall back to the legacy flat score_milestone_reward.
+      let mt = validatedMeta && validatedMeta.milestone;
+      let r = 0;
+      if (mt) {
+        const tierRow = await pool.query('SELECT value FROM game_config WHERE key = $1', ['score_milestone_reward_' + mt]);
+        r = parseInt((tierRow.rows[0] || {}).value, 10) || 0;
+      }
+      if (r <= 0) {
+        const cfgRow = await pool.query(`SELECT value FROM game_config WHERE key = 'score_milestone_reward'`);
+        r = parseInt((cfgRow.rows[0] || {}).value, 10) || 0;
+      }
+      reward = r;
+    } else if (action === 'daily_login') {
+      // Tiered by streak. Client passes meta.streak — capped to a sane
+      // range so a forged streak can't inflate the payout to absurdity.
+      // The dedup above guarantees one claim per device per day, so even
+      // a maxed-out streak claim is bounded by the 200💎 ceiling.
+      const streak = Math.max(1, Math.min(400, parseInt((meta && meta.streak) || 1, 10) || 1));
+      let tierKey;
+      if (streak >= 30)     tierKey = 'daily_login_reward_streak_30';
+      else if (streak >= 7) tierKey = 'daily_login_reward_streak_7';
+      else if (streak >= 3) tierKey = 'daily_login_reward_streak_3';
+      else                  tierKey = 'daily_login_reward';
+      const cfgRow = await pool.query('SELECT value FROM game_config WHERE key = $1', [tierKey]);
+      reward = parseInt((cfgRow.rows[0] || {}).value, 10) || 0;
+      // Belt-and-suspenders: if the tier key is missing/zero (e.g. fresh
+      // DB before the migration ran), fall back to the base flat reward
+      // so the player still gets *something* rather than 'reward_disabled'.
+      if (reward <= 0 && tierKey !== 'daily_login_reward') {
+        const fb = await pool.query(`SELECT value FROM game_config WHERE key = 'daily_login_reward'`);
+        reward = parseInt((fb.rows[0] || {}).value, 10) || 25;
+      }
     } else {
       const cfgRow = await pool.query('SELECT value FROM game_config WHERE key = $1', [configKey]);
       reward = parseInt((cfgRow.rows[0] || {}).value, 10) || 0;

@@ -14,6 +14,7 @@
       }
     }
     stopEventSystem(); // don't run events behind home screen
+    if (typeof purgeEventOverlays === 'function') purgeEventOverlays();
     const app = document.querySelector('.app');
     if (!app || document.getElementById('home-screen')) return;
     // Mark the app so CSS can hide the game UI behind the home overlay.

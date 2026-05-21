@@ -562,6 +562,24 @@
     var tomorrowReward = getDailyRewardAmount(displayStreak + 1);
     var tomorrowExtra = tomorrowReward > displayReward ? ' (x' + Math.round(tomorrowReward / 25) + '!)' : '';
 
+    // The server now applies tiered config keyed by streak (see
+    // /api/player/earn for action='daily_login'). gameConfig is fetched at
+    // boot, so we can pick the matching key locally without a round trip.
+    // Final number on the slot reel = max(display tier, server tier) so a
+    // generous admin tweak surfaces in the UI and a misconfig can never
+    // undercut what the overlay teased.
+    var resolvedReward = displayReward;
+    try {
+      if (typeof gameConfig === 'object' && gameConfig) {
+        var srvKey = displayStreak >= 30 ? 'daily_login_reward_streak_30'
+                   : displayStreak >= 7  ? 'daily_login_reward_streak_7'
+                   : displayStreak >= 3  ? 'daily_login_reward_streak_3'
+                   : 'daily_login_reward';
+        var srvVal = parseInt(gameConfig[srvKey], 10) || 0;
+        if (srvVal > 0) resolvedReward = Math.max(displayReward, srvVal);
+      }
+    } catch (e) {}
+
     var overlay = document.createElement('div');
     overlay.id = 'daily-reward-overlay';
     overlay.className = 'daily-reward-overlay';
@@ -593,13 +611,13 @@
       var delay = 50;
       // Sample values straddle the real reward so the reel doesn't
       // visually contradict the outcome.
-      var low  = Math.max(5,  Math.floor(displayReward * 0.4));
-      var high = Math.max(50, Math.floor(displayReward * 2.2));
+      var low  = Math.max(5,  Math.floor(resolvedReward * 0.4));
+      var high = Math.max(50, Math.floor(resolvedReward * 2.2));
       function tick() {
         if (!document.getElementById('dr-reward-num')) return;
         ticks++;
         if (ticks >= maxTicks) {
-          el.textContent = '+' + displayReward + ' 💎';
+          el.textContent = '+' + resolvedReward + ' 💎';
           el.classList.remove('dr-reward-spinning');
           el.classList.add('dr-reward-landed');
           try { if (typeof soundMilestone === 'function') soundMilestone(Math.min(8, 3 + Math.floor(displayStreak / 3))); } catch (e) {}
@@ -623,8 +641,10 @@
       claimed = true;
       // Mark as claimed for today
       try { localStorage.setItem(DAILY_LOGIN_KEY, JSON.stringify({ lastClaimed: todayInIsrael() })); } catch(e) {}
-      // Earn credits via server
-      earnCredits('daily_login');
+      // Earn credits via server. Streak passes through so the server picks
+      // the matching tier — without it, the wallet got the flat base
+      // amount even though the overlay teased the streak-tiered number.
+      earnCredits('daily_login', { streak: displayStreak });
       // Animate out
       var card = overlay.querySelector('.daily-reward-card');
       if (card) {
@@ -637,7 +657,7 @@
         overlay.style.opacity = '0';
         setTimeout(function() { overlay.remove(); }, 300);
       }, 200);
-      trackEvent('daily_login_claimed', { streak: displayStreak, reward: displayReward });
+      trackEvent('daily_login_claimed', { streak: displayStreak, reward: resolvedReward });
     }
 
     document.getElementById('dr-claim').onclick = claim;

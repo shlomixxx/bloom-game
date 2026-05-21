@@ -490,8 +490,8 @@
     setTimeout(function() { t.classList.remove('show'); setTimeout(function() { t.remove(); }, 400); }, 3500);
   }
   function showCreditToast(amount, action) {
-    var labels = { daily_complete: 'אתגר יומי', streak_3: 'רצף 3 ימים!', streak_7: 'רצף 7 ימים!', streak_30: 'רצף 30 ימים!',
-      contest_1st: 'מקום ראשון!', contest_2nd: 'מקום שני!', contest_3rd: 'מקום שלישי!', event_gift: '🎁 מתנה!' };
+    var labels = { daily_complete: 'אתגר יומי', daily_login: '🎁 בונוס יומי', streak_3: 'רצף 3 ימים!', streak_7: 'רצף 7 ימים!', streak_30: 'רצף 30 ימים!',
+      contest_1st: 'מקום ראשון!', contest_2nd: 'מקום שני!', contest_3rd: 'מקום שלישי!', event_gift: '🎁 מתנה!', comeback: '👋 ברוך שובך!' };
     var label = labels[action] || '';
     var t = document.createElement('div');
     t.className = 'credit-toast';
