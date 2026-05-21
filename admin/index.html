@@ -144,11 +144,20 @@
   .tip-popup {
     display: none; position: fixed; z-index: 9999;
     background: #1C1A18; color: #F2EFE9; border-radius: 12px;
-    padding: 14px 16px; font-size: 12px; line-height: 1.7;
-    max-width: 340px; width: calc(100vw - 32px);
+    padding: 32px 16px 14px 16px;       /* extra top padding leaves room for the ✕ button */
+    font-size: 12px; line-height: 1.7;
+    width: min(360px, calc(100vw - 16px));
+    max-height: calc(100vh - 16px);     /* never overflow viewport vertically */
+    overflow-y: auto;                   /* scroll long content instead of clipping */
     box-shadow: 0 12px 40px rgba(0,0,0,0.35);
     direction: rtl; text-align: right;
+    /* The positioning JS sets top/left explicitly — these are fallbacks if
+       the positioner hasn't run yet (prevents a flash in the top-left). */
+    top: 50%; left: 50%; transform: translate(-50%, -50%);
+    -webkit-overflow-scrolling: touch;
   }
+  /* When positioned by JS, undo the centering transform. */
+  .tip-popup[style*="top:"] { transform: none; }
   .tip-popup.show { display: block; }
 
   /* CONFIG-TABLE CONTROLS — toggle for booleans, chips for numeric/enum presets.
@@ -1504,18 +1513,63 @@
     popup.innerHTML = '<button class="tip-close" onclick="closeTip()">✕</button>' + html;
     document.body.appendChild(popup);
     _tipEl = popup;
-    // Position below the button
-    var rect = btn.getBoundingClientRect();
-    popup.style.top = Math.min(rect.bottom + 6, window.innerHeight - popup.offsetHeight - 10) + 'px';
-    popup.style.right = Math.max(8, window.innerWidth - rect.right) + 'px';
+    positionTip(btn, popup);
+    // Reposition on window resize while the tip is open.
+    window.addEventListener('resize', _tipReposition);
     // Close on outside click
     setTimeout(function() {
       document.addEventListener('pointerdown', _tipOutside, true);
     }, 0);
   }
+
+  // Two-axis viewport-safe positioning. The popup is rendered first so we
+  // know its actual width/height (max-width 340px, content can shrink it),
+  // then we pick the best of 4 quadrants relative to the button, and clamp
+  // both axes to the viewport with an 8px gutter so it can never get cut
+  // off — even inside modals on narrow viewports.
+  function positionTip(btn, popup) {
+    var rect = btn.getBoundingClientRect();
+    var vw = window.innerWidth;
+    var vh = window.innerHeight;
+    var gap = 8;
+    var gutter = 8;
+    var pw = popup.offsetWidth;
+    var ph = popup.offsetHeight;
+
+    // Vertical: prefer below the button, fall back to above if no room.
+    var spaceBelow = vh - rect.bottom;
+    var spaceAbove = rect.top;
+    var top;
+    if (ph + gap <= spaceBelow) {
+      top = rect.bottom + gap;
+    } else if (ph + gap <= spaceAbove) {
+      top = rect.top - gap - ph;
+    } else {
+      // Neither side fits the full popup — clamp to the side with more room
+      // and let CSS handle scrolling (max-height was added in the same fix).
+      top = spaceBelow >= spaceAbove ? rect.bottom + gap : Math.max(gutter, rect.top - gap - ph);
+    }
+    top = Math.max(gutter, Math.min(top, vh - ph - gutter));
+
+    // Horizontal: try to center on the button, then clamp to viewport.
+    var btnCenter = rect.left + rect.width / 2;
+    var left = btnCenter - pw / 2;
+    left = Math.max(gutter, Math.min(left, vw - pw - gutter));
+
+    popup.style.top = top + 'px';
+    popup.style.left = left + 'px';
+    popup.style.right = 'auto';  // CSS originally sets right; override.
+    popup.dataset.btnId = btn.id || '';
+    popup.__btn = btn;            // store ref for reposition
+  }
+
+  function _tipReposition() {
+    if (_tipEl && _tipEl.__btn) positionTip(_tipEl.__btn, _tipEl);
+  }
   function closeTip() {
     if (_tipEl) { _tipEl.remove(); _tipEl = null; }
     document.removeEventListener('pointerdown', _tipOutside, true);
+    window.removeEventListener('resize', _tipReposition);
   }
   function _tipOutside(e) {
     if (_tipEl && !_tipEl.contains(e.target) && !e.target.classList.contains('tip-btn')) closeTip();
