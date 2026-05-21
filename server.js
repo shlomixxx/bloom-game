@@ -1153,6 +1153,7 @@ app.get('/api/contests/mine', async (req, res) => {
        FROM contests c
        INNER JOIN contest_scores cs ON cs.contest_code = c.code
        WHERE cs.device_id = $1
+         AND cs.left_at IS NULL
        ORDER BY cs.last_played_at DESC, c.created_at DESC`,
       [deviceId]
     );
@@ -1401,7 +1402,7 @@ app.post('/api/contests/:code/join', requireDeviceAuth, async (req, res) => {
       `INSERT INTO contest_scores (contest_code, device_id, display_name, score, highest_tier)
        VALUES ($1, $2, $3, 0, 1)
        ON CONFLICT (contest_code, device_id)
-       DO UPDATE SET display_name = EXCLUDED.display_name`,
+       DO UPDATE SET display_name = EXCLUDED.display_name, left_at = NULL`,
       [code, deviceId, cleanedName]
     );
 
@@ -1431,6 +1432,43 @@ app.post('/api/contests/:code/join', requireDeviceAuth, async (req, res) => {
     res.json({ ok: true, contest: contest });
   } catch (e) {
     console.error('POST /api/contests/:code/join', e);
+    res.status(500).json({ error: 'server' });
+  }
+});
+
+// POST /api/contests/:code/leave — soft-leave: marks the row left_at so
+// /contests/mine stops returning this contest (the score stays visible in
+// the contest's own leaderboard per the confirm copy). Re-join via the
+// usual /join flow clears left_at and the player picks up where they
+// left off. Also wipes ephemeral live/watch rows so the player doesn't
+// keep appearing as "in this contest right now" to other members.
+app.post('/api/contests/:code/leave', requireDeviceAuth, async (req, res) => {
+  try {
+    const code = String(req.params.code || '').toUpperCase().slice(0, 8);
+    const deviceId = req.deviceId;
+    if (!code) return res.status(400).json({ error: 'bad_code' });
+    if (!checkRateLimit('contest:leave', deviceId, 30, 60 * 60 * 1000)) {
+      return res.status(429).json({ error: 'rate_limited' });
+    }
+    const upd = await pool.query(
+      `UPDATE contest_scores SET left_at = NOW()
+        WHERE contest_code = $1 AND device_id = $2 AND left_at IS NULL
+        RETURNING 1`,
+      [code, deviceId]
+    );
+    // Belt-and-suspenders cleanup so the player doesn't linger as a live
+    // entity in the contest's spectator/audience UI after leaving.
+    await pool.query(
+      `DELETE FROM contest_live_state WHERE contest_code = $1 AND device_id = $2`,
+      [code, deviceId]
+    ).catch(() => {});
+    await pool.query(
+      `DELETE FROM contest_watchers WHERE contest_code = $1 AND watcher_device_id = $2`,
+      [code, deviceId]
+    ).catch(() => {});
+    res.json({ ok: true, left: upd.rows.length > 0 });
+  } catch (e) {
+    console.error('POST /api/contests/:code/leave', e);
     res.status(500).json({ error: 'server' });
   }
 });

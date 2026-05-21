@@ -93,6 +93,13 @@ CREATE TABLE IF NOT EXISTS contest_scores (
 CREATE INDEX IF NOT EXISTS idx_contest_scores_contest_score
   ON contest_scores (contest_code, score DESC);
 
+-- "Soft leave": when a player taps נתק ממכשיר זה we mark the row instead
+-- of deleting, so the score stays visible in the contest's leaderboard
+-- (per the confirm copy) but /contests/mine filters them out — without
+-- this, the contest re-appeared on every refresh and the leave button
+-- looked broken. Cleared on re-join.
+ALTER TABLE contest_scores ADD COLUMN IF NOT EXISTS left_at TIMESTAMPTZ;
+
 -- ============================================================
 -- מצב חי בתחרות (Live state + spectators) — חדש
 -- ============================================================

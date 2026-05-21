@@ -1452,6 +1452,14 @@
     const leaveBtn = document.getElementById('clb-leave');
     if (leaveBtn) leaveBtn.onclick = async function() {
       if (!confirm('לנתק את המכשיר מהתחרות? הציון נשמר בלוח ותוכל להצטרף מחדש עם הקוד.')) return;
+      // Server-side soft-leave FIRST — without this the contest pops back
+      // into /api/contests/mine on the next page load and the leave looks
+      // broken. Fire-and-forget is intentional: the local cleanup below is
+      // what makes the UI feel responsive; the server call just ensures
+      // the row is flagged before the next /mine fetch.
+      try {
+        await apiPost('/api/contests/' + encodeURIComponent(code) + '/leave', {});
+      } catch (e) { /* network blip — the user still sees the local exit */ }
       clearContestGameState(code);
       clearContestDisplayName(code);
       stopContestRefresh();
