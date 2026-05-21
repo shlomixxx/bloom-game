@@ -982,7 +982,16 @@
   var _contestHudTick = null;
   var _contestHudCode = null;
   var _contestHudLastRank = null;
-  var _contestHudLastMyScore = null;
+  // Cache the most-recent /api/contests/:code response so the 400ms tick
+  // can re-run the full paint (incl. gap/lead recomputation) without a
+  // network round-trip. The old approach updated the score in isolation —
+  // displayed "10,546" while the rank+gap calc used accumulated+10,546,
+  // so the three HUD numbers were silently from different totals.
+  var _contestHudCachedPlayers = null;
+  // Cross-call flag: when set, the next showContestLeaderboard mount will
+  // route its back button back into the running game (init('contest')
+  // restores from the saved state). Consumed once and reset.
+  var _contestHudJustOpenedLb = false;
 
   function startContestHud(code) {
     stopContestHud();
@@ -1008,7 +1017,7 @@
     if (hud) hud.remove();
     _contestHudCode = null;
     _contestHudLastRank = null;
-    _contestHudLastMyScore = null;
+    _contestHudCachedPlayers = null;
   }
 
   function renderContestHudShell() {
@@ -1036,23 +1045,28 @@
     document.body.appendChild(hud);
     // Tap-to-expand → opens the full leaderboard. Save my current game
     // state first (same as the existing pause/resume flow) so coming
-    // back picks up where I left off.
+    // back picks up where I left off. The `_contestHudJustOpenedLb`
+    // flag tells the leaderboard mount to route its back button back
+    // into init('contest') instead of home, so a one-tap return works.
     var expandBtn = document.getElementById('contest-hud-expand');
     if (expandBtn) expandBtn.onclick = function(e) {
       e.stopPropagation();
       try { if (typeof saveContestGameState === 'function') saveContestGameState(); } catch(err) {}
       try { if (typeof stopLivePush === 'function') stopLivePush(); } catch(err) {}
+      _contestHudJustOpenedLb = true;
       showContestLeaderboard(_contestHudCode);
     };
   }
 
+  // Tick: re-paint the HUD using the cached players list so the displayed
+  // score, rank, and gaps are computed from one consistent set of numbers
+  // (the previous split between "tick writes score" and "poll writes rank"
+  // produced numbers that came from different totals — the inconsistency
+  // the user reported as "המספרים לא אמיתיים").
   function syncContestHudMyScore() {
-    var el = document.getElementById('contest-hud-my-score');
-    if (!el) return;
-    var s = (typeof score === 'number' ? score : 0) | 0;
-    if (s === _contestHudLastMyScore) return;
-    _contestHudLastMyScore = s;
-    el.textContent = s.toLocaleString();
+    if (!_contestHudCachedPlayers) return;
+    if (!document.getElementById('contest-hud')) return;
+    paintContestHud(_contestHudCachedPlayers);
   }
 
   function refreshContestHudData() {
@@ -1061,7 +1075,8 @@
     if (mode !== 'contest' || activeContestCode !== _contestHudCode) return;
     fetchContest(_contestHudCode).then(function(data) {
       if (!data || !document.getElementById('contest-hud')) return;
-      paintContestHud(data.players || []);
+      _contestHudCachedPlayers = data.players || [];
+      paintContestHud(_contestHudCachedPlayers);
     }).catch(function() {});
   }
 
@@ -1093,8 +1108,18 @@
     if (myIdx === -1) return; // not a member (shouldn't happen mid-game)
     var myRank = myIdx + 1;
     var total = ranked.length;
+    var myTotal = ranked[myIdx].total | 0;
     var target = myIdx > 0 ? ranked[myIdx - 1] : null;       // player above me
     var chaser = myIdx < ranked.length - 1 ? ranked[myIdx + 1] : null; // below me
+
+    // My displayed score = PROJECTED total (accumulated contest score +
+    // current in-progress game). Previously the score element showed only
+    // the current game's `score`, while the rank and gaps were computed
+    // against accumulated+current — so the displayed "10,546" was from a
+    // different total than the "−90,412 to overtake X" calculation. Same
+    // number now drives all three.
+    var myScoreEl = document.getElementById('contest-hud-my-score');
+    if (myScoreEl) myScoreEl.textContent = myTotal.toLocaleString();
 
     // Rank
     var rankEl = document.getElementById('contest-hud-rank');
@@ -1111,14 +1136,17 @@
       _contestHudLastRank = myRank;
     }
 
-    // Target side (player I'm chasing)
+    // Target side (player I'm chasing). Display is the absolute gap —
+    // the bare number reads as "this many points to close" without the
+    // confusing "−" prefix the previous version used (the gap IS
+    // positive; prefixing it with `−` made the intent ambiguous).
     var tName = document.getElementById('contest-hud-target-name');
     var tScore = document.getElementById('contest-hud-target-score');
     var targetWrap = document.getElementById('contest-hud-target');
     if (target) {
       if (tName) tName.textContent = target.p.name || 'אנונימי';
-      var gap = target.total - (ranked[myIdx].total | 0);
-      if (tScore) tScore.textContent = '−' + gap.toLocaleString();
+      var gap = target.total - myTotal;
+      if (tScore) tScore.textContent = gap.toLocaleString();
       if (targetWrap) targetWrap.classList.remove('contest-hud-empty');
     } else {
       // I'm #1 — celebrate
@@ -1127,14 +1155,14 @@
       if (targetWrap) targetWrap.classList.add('contest-hud-empty');
     }
 
-    // Chaser side (player just behind me)
+    // Chaser side (player just behind me) — same absolute-number rule.
     var cName = document.getElementById('contest-hud-chaser-name');
     var cScore = document.getElementById('contest-hud-chaser-score');
     var chaserWrap = document.getElementById('contest-hud-chaser');
     if (chaser) {
       if (cName) cName.textContent = chaser.p.name || 'אנונימי';
-      var lead = (ranked[myIdx].total | 0) - chaser.total;
-      if (cScore) cScore.textContent = '+' + lead.toLocaleString();
+      var lead = myTotal - chaser.total;
+      if (cScore) cScore.textContent = lead.toLocaleString();
       if (chaserWrap) chaserWrap.classList.remove('contest-hud-empty');
     } else {
       // I'm last (or alone)
@@ -1236,6 +1264,12 @@
     const playersHtml = renderContestSmartBoard(data.players || []);
     const link = buildContestShareLink(code);
 
+    // If we just arrived here from the in-game HUD's ⤢ button, the back
+    // arrow should resume the paused game (init('contest') restores from
+    // the saved state). Consume the flag so the next mount goes back to
+    // the regular home/contest-menu routing.
+    const returnToGame = _contestHudJustOpenedLb;
+    _contestHudJustOpenedLb = false;
     // Back: if player has 2+ contests, go to my-contests list; else home.
     const clbBackTarget = myContestsCountSync() >= 2 ? 'contest-menu' : 'home';
     // §2.1 — render via mountShell (unified header). The old back-button +
@@ -1258,7 +1292,8 @@
       '<div class="contest-scoring-note">סכום נקודות מצטבר — כל משחק מצטרף לסך</div>' +
       '<div class="contest-board" id="clb-board">' + playersHtml + '</div>' +
       '<div class="contest-form" style="margin-top:18px">' +
-        '<button class="contest-submit-btn" id="clb-play">שחק עכשיו</button>' +
+        (returnToGame ? '<button class="contest-submit-btn" id="clb-resume" style="background:linear-gradient(135deg,#2E8B6F,#1A6B53);color:#FFFFFF">↩ חזור למשחק שלך</button>' : '') +
+        '<button class="contest-submit-btn" id="clb-play"' + (returnToGame ? ' style="background:#FFFFFF;color:#1C1A18;border:1.5px solid rgba(0,0,0,0.12)"' : '') + '>' + (returnToGame ? 'התחל משחק חדש' : 'שחק עכשיו') + '</button>' +
         '<button class="contest-secondary-btn" id="clb-spectate" style="display:none">' +
           '<span style="display:inline-flex;align-items:center;gap:6px;justify-content:center">' +
             '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>' +
@@ -1273,11 +1308,23 @@
     // §2.1 — unified shell at the top of this screen. Back reuses the
     // legacy back-target logic (home vs contest-menu) so behavior is
     // unchanged; visually it now matches the rest of the new shell.
+    // EXCEPTION: when we arrived from the in-game HUD's ⤢ button, back
+    // resumes the paused game instead — the player just wanted to peek
+    // at the standings, not abandon their run.
     mountShell({
       target: screen,
       title: data.contest.name,
-      subtitle: 'תחרות חברים · ' + (data.players || []).length + ' שחקנים',
+      subtitle: returnToGame
+        ? '⏸ המשחק שלך מושהה'
+        : 'תחרות חברים · ' + (data.players || []).length + ' שחקנים',
       onBack: function() {
+        if (returnToGame) {
+          // Resume — the game state was saved by the HUD before the LB mount,
+          // so init('contest') restores it.
+          hideContestScreens();
+          if (typeof init === 'function') init('contest');
+          return;
+        }
         if (clbBackTarget === 'contest-menu') {
           hideContestScreens();
           showContestMenu();
@@ -1287,6 +1334,12 @@
         }
       }
     });
+    // Wire the explicit "resume game" CTA (only present when returnToGame).
+    var resumeBtn = document.getElementById('clb-resume');
+    if (resumeBtn) resumeBtn.onclick = function() {
+      hideContestScreens();
+      if (typeof init === 'function') init('contest');
+    };
 
     // Wire smart-board controls (expand/collapse/search) on first mount.
     // Silent refreshes re-call this themselves so the handlers stay alive
@@ -1298,7 +1351,9 @@
       setActiveContest(code);
       stopContestRefresh();
       hideContestScreens();
-      init('contest');
+      // In returnToGame mode the label is "התחל משחק חדש" — must wipe
+      // the saved mid-game state so init doesn't restore the paused game.
+      init('contest', returnToGame ? { fresh: true } : undefined);
     };
     const refreshBtn = document.getElementById('clb-refresh');
     if (refreshBtn) refreshBtn.onclick = function() {
