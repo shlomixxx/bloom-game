@@ -2956,6 +2956,17 @@
   .contest-board-row.first .contest-board-rank {
     background: #FAC775; color: #412402; border-color: #FAC775;
   }
+  /* Medal emoji rendering in podium ranks — emoji is taller than a digit
+     and the circle clips it without a tighter line-height. Also drop the
+     bordered chip look for medals so they read as a clean glyph. */
+  .contest-board-row.podium-gold .contest-board-rank,
+  .contest-board-row.podium-silver .contest-board-rank,
+  .contest-board-row.podium-bronze .contest-board-rank {
+    background: transparent;
+    border: none;
+    font-size: 22px;
+    line-height: 1;
+  }
   .contest-board-tier {
     width: 28px; height: 28px; border-radius: 7px;
     display: flex; align-items: center; justify-content: center;
@@ -3395,6 +3406,119 @@
   }
   .contest-spectate-hint svg { width: 10px; height: 10px; }
 
+  /* ============================================================
+     Smart contest board — sectioned layout for large contests
+     ============================================================
+     Activates when player count > 12. Shows top-5 + "you ± 2 neighbors"
+     in a compact view, with expand-all + search affordances. The flat
+     list (small contests OR explicitly expanded) still uses the
+     existing .contest-board-row styles unchanged. */
+  .contest-board-section-label {
+    font-size: 11px; font-weight: 700;
+    color: #6F6E68;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin: 8px 4px 2px;
+    padding-bottom: 2px;
+    border-bottom: 1px solid rgba(0,0,0,0.05);
+  }
+  .contest-board-section-label:first-child { margin-top: 0; }
+  .contest-board-divider {
+    display: flex; align-items: center; justify-content: center;
+    margin: 6px 0;
+    color: #C8C5BE;
+    font-size: 14px; letter-spacing: 0.4em;
+    user-select: none;
+  }
+  .contest-board-divider span {
+    background: #F5F2EC;
+    padding: 4px 14px;
+    border-radius: 999px;
+  }
+  .contest-board-expand-btn {
+    width: 100%;
+    margin-top: 10px;
+    padding: 10px 14px;
+    background: linear-gradient(135deg, #1C1A18, #2C2A28);
+    color: #FAC775;
+    border: 1px solid #FAC775;
+    border-radius: 12px;
+    font-family: inherit;
+    font-size: 13px; font-weight: 700;
+    cursor: pointer;
+    transition: transform 0.12s, box-shadow 0.12s;
+  }
+  .contest-board-expand-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 14px rgba(0,0,0,0.15);
+  }
+  .contest-board-expand-btn:active { transform: scale(0.98); }
+  .contest-board-collapse-btn {
+    width: 100%;
+    margin-bottom: 8px;
+    padding: 7px 12px;
+    background: transparent;
+    color: #6F6E68;
+    border: 1px solid rgba(0,0,0,0.08);
+    border-radius: 10px;
+    font-family: inherit;
+    font-size: 12px; font-weight: 600;
+    cursor: pointer;
+  }
+  .contest-board-collapse-btn:hover { background: rgba(0,0,0,0.03); }
+  .contest-board-search-wrap {
+    margin-bottom: 8px;
+  }
+  .contest-board-search {
+    width: 100%;
+    padding: 9px 12px;
+    border: 1px solid rgba(0,0,0,0.12);
+    border-radius: 10px;
+    background: #FFFFFF;
+    font-family: inherit;
+    font-size: 13px;
+    color: #1C1A18;
+    direction: rtl;
+    text-align: right;
+    outline: none;
+    transition: border-color 0.12s, box-shadow 0.12s;
+  }
+  .contest-board-search:focus {
+    border-color: #FAC775;
+    box-shadow: 0 0 0 3px rgba(250,199,117,0.18);
+  }
+  /* Podium tints — top-3 visual hierarchy. Gold for #1 was already
+     defined as .first; silver/bronze are new. Subtle but unmistakable. */
+  .contest-board-row.podium-silver { background: #F1F0EC; }
+  .contest-board-row.podium-bronze { background: #FBEFE1; }
+  /* "Next target" pill — the single most-addictive contest moment.
+     Renders directly under MY row whenever there's someone above. */
+  .contest-next-target {
+    display: flex; align-items: center; gap: 8px;
+    margin: 2px 0 6px;
+    padding: 8px 12px;
+    background: linear-gradient(90deg, #FFF5E1, #FFE9C2);
+    border: 1px solid #FAC775;
+    border-radius: 10px;
+    font-size: 12px;
+    color: #5A3E0F;
+    box-shadow: 0 2px 6px rgba(250,199,117,0.25);
+    animation: contestTargetPulse 2.4s ease-in-out infinite;
+  }
+  .contest-next-target strong {
+    font-weight: 800;
+    color: #1C1A18;
+    font-variant-numeric: tabular-nums;
+  }
+  .contest-next-target-arrow {
+    font-size: 16px;
+    flex-shrink: 0;
+  }
+  @keyframes contestTargetPulse {
+    0%, 100% { box-shadow: 0 2px 6px rgba(250,199,117,0.25); }
+    50%      { box-shadow: 0 2px 14px rgba(250,199,117,0.55); }
+  }
+
   /* Audience badge — floats over the grid while a contest game is being
      watched by someone else. Click expands the watcher list. */
   .audience-badge {
@@ -3519,7 +3643,20 @@
     position: relative;
     direction: ltr; /* Grid must match the game's LTR layout, not the RTL UI wrapper */
   }
+  /* Explicit dimensions — the main game grid is sized by fitGrid() at
+     runtime, but the spectator grid never gets that treatment. Without
+     an explicit width/aspect, `grid-template-rows: repeat(6, 1fr)`
+     collapses the cells to 0×0 and the board renders as empty space
+     (the bug the user reported as "לא ניתן לצפות בשחקן"). */
+  .spectator-grid > .grid {
+    width: min(280px, 80vw);
+    aspect-ratio: 4 / 6;
+    margin: 0 auto;
+  }
   .spectator-grid .cell { cursor: default; }
+  /* Cells inside the spectator grid are small — shrink the SVGs so the
+     icon doesn't overflow when the cell is ~50px. */
+  .spectator-grid .cell.filled svg { width: 60%; height: 60%; }
   .spectator-controls {
     display: flex; gap: 8px; width: 100%; max-width: 340px;
     margin-top: 14px;
@@ -3916,6 +4053,143 @@
     .duel-hud-label { font-size: 9px; }
     .duel-hud-status { font-size: 9px; max-width: 80px; }
     .duel-hud-delta { font-size: 10px; }
+  }
+
+  /* ============================================================
+     Contest live HUD — mid-game widget showing rank + neighbors.
+     Mirrors the duel-hud's position/size pattern (top-of-viewport
+     pill) but with 3 columns: chase target | me | chaser. Tap the
+     ⤢ icon to open the full leaderboard.
+     ============================================================ */
+  .contest-hud {
+    position: fixed;
+    left: 50%;
+    top: max(8px, env(safe-area-inset-top));
+    transform: translateX(-50%);
+    z-index: 9500;
+    display: flex;
+    align-items: stretch;
+    gap: 0;
+    background: linear-gradient(135deg, #1C1A18 0%, #2A2724 100%);
+    border: 2px solid #FAC775;
+    border-radius: 14px;
+    padding: 8px 12px;
+    direction: rtl;
+    font-family: inherit;
+    color: #F2EFE9;
+    box-shadow: 0 6px 22px rgba(0,0,0,0.45);
+    min-width: 300px;
+    max-width: calc(100vw - 24px);
+    animation: duelHudIn 0.4s cubic-bezier(.2,1.3,.4,1);
+    will-change: transform;
+  }
+  .contest-hud-side {
+    flex: 1 1 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: 2px 8px;
+    min-width: 78px;
+    /* Vertical dividers between columns — visual "vs". */
+    border-left: 1px solid rgba(255,255,255,0.08);
+  }
+  .contest-hud-side:last-of-type { border-left: none; }
+  .contest-hud-side.contest-hud-me {
+    /* My column is the visual anchor — slightly larger + gold accent. */
+    padding: 2px 10px;
+  }
+  .contest-hud-label {
+    font-size: 9px;
+    color: #A8A6A0;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-weight: 700;
+  }
+  .contest-hud-name {
+    font-size: 11px;
+    color: #F2EFE9;
+    font-weight: 700;
+    max-width: 84px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    direction: rtl;
+  }
+  .contest-hud-rank {
+    font-size: 16px;
+    font-weight: 900;
+    color: #FAC775;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+    margin-bottom: 1px;
+    transition: color 0.18s;
+  }
+  .contest-hud-rank.rank-up {
+    animation: contestHudRankUp 0.7s ease-out;
+  }
+  .contest-hud-rank.rank-down {
+    animation: contestHudRankDown 0.7s ease-out;
+  }
+  @keyframes contestHudRankUp {
+    0%   { color: #FAC775; transform: scale(1); }
+    35%  { color: #9FE1CB; transform: scale(1.25); }
+    100% { color: #FAC775; transform: scale(1); }
+  }
+  @keyframes contestHudRankDown {
+    0%   { color: #FAC775; transform: scale(1); }
+    35%  { color: #FF8FA8; transform: scale(0.85); }
+    100% { color: #FAC775; transform: scale(1); }
+  }
+  .contest-hud-score {
+    font-size: 13px;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    color: #F2EFE9;
+  }
+  .contest-hud-my-score {
+    font-size: 18px;
+    color: #FFE194;
+  }
+  .contest-hud-target .contest-hud-score { color: #FF8FA8; }
+  .contest-hud-chaser .contest-hud-score { color: #9FE1CB; }
+  .contest-hud-side.contest-hud-empty {
+    opacity: 0.45;
+  }
+  .contest-hud-expand {
+    align-self: center;
+    margin-right: 2px;
+    background: transparent;
+    border: 1px solid rgba(250,199,117,0.35);
+    color: #FAC775;
+    width: 26px;
+    height: 26px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: inherit;
+    transition: background 0.12s, border-color 0.12s;
+  }
+  .contest-hud-expand:hover {
+    background: rgba(250,199,117,0.15);
+    border-color: #FAC775;
+  }
+  .contest-hud-expand:active { transform: scale(0.92); }
+
+  /* Narrow phones — same shrink pattern as duel-hud */
+  @media (max-width: 360px) {
+    .contest-hud { min-width: auto; padding: 6px 8px; gap: 0; }
+    .contest-hud-side { min-width: 64px; padding: 2px 6px; }
+    .contest-hud-name { max-width: 64px; font-size: 10px; }
+    .contest-hud-my-score { font-size: 15px; }
+    .contest-hud-score { font-size: 11px; }
+    .contest-hud-rank { font-size: 13px; }
+    .contest-hud-label { font-size: 8px; }
+    .contest-hud-expand { width: 22px; height: 22px; font-size: 12px; }
   }
   /* ── Home: Streak hero ── */
   .home-streak {
@@ -4715,8 +4989,24 @@
   html[data-theme="dark"] .my-contest-row,
   html[data-theme="dark"] .contest-board-row,
   html[data-theme="dark"] .spectator-header { background: #2C2A28; border-color: rgba(255,255,255,0.06); }
-  html[data-theme="dark"] .contest-board-row.first { background: #3D2E0A; }
-  html[data-theme="dark"] .contest-board-row.me    { background: #1B3A2C; }
+  html[data-theme="dark"] .contest-board-row.first         { background: #3D2E0A; }
+  html[data-theme="dark"] .contest-board-row.podium-silver  { background: #2A2826; }
+  html[data-theme="dark"] .contest-board-row.podium-bronze  { background: #3A2A1A; }
+  html[data-theme="dark"] .contest-board-row.me             { background: #1B3A2C; }
+  /* Smart-board controls — dark variants */
+  html[data-theme="dark"] .contest-board-section-label { color: #8E8A82; border-bottom-color: rgba(255,255,255,0.06); }
+  html[data-theme="dark"] .contest-board-divider { color: #5A5852; }
+  html[data-theme="dark"] .contest-board-divider span { background: #2C2A28; }
+  html[data-theme="dark"] .contest-board-collapse-btn { color: #8E8A82; border-color: rgba(255,255,255,0.1); }
+  html[data-theme="dark"] .contest-board-collapse-btn:hover { background: rgba(255,255,255,0.04); }
+  html[data-theme="dark"] .contest-board-search { background: #1A1816; color: #F2EFE9; border-color: rgba(255,255,255,0.12); }
+  html[data-theme="dark"] .contest-board-search:focus { background: #2C2A28; border-color: #FAC775; }
+  html[data-theme="dark"] .contest-next-target {
+    background: linear-gradient(90deg, #3D2E0A, #5A4314);
+    color: #FAC775;
+    border-color: #BA7517;
+  }
+  html[data-theme="dark"] .contest-next-target strong { color: #F2EFE9; }
   html[data-theme="dark"] .contest-board-rank { background: #1A1816; color: #F2EFE9; border-color: rgba(255,255,255,0.06); }
   html[data-theme="dark"] .contest-board-name { color: #F2EFE9; }
   html[data-theme="dark"] .contest-board-score { color: #F2EFE9; }

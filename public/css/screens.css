@@ -906,7 +906,20 @@
     position: relative;
     direction: ltr; /* Grid must match the game's LTR layout, not the RTL UI wrapper */
   }
+  /* Explicit dimensions — the main game grid is sized by fitGrid() at
+     runtime, but the spectator grid never gets that treatment. Without
+     an explicit width/aspect, `grid-template-rows: repeat(6, 1fr)`
+     collapses the cells to 0×0 and the board renders as empty space
+     (the bug the user reported as "לא ניתן לצפות בשחקן"). */
+  .spectator-grid > .grid {
+    width: min(280px, 80vw);
+    aspect-ratio: 4 / 6;
+    margin: 0 auto;
+  }
   .spectator-grid .cell { cursor: default; }
+  /* Cells inside the spectator grid are small — shrink the SVGs so the
+     icon doesn't overflow when the cell is ~50px. */
+  .spectator-grid .cell.filled svg { width: 60%; height: 60%; }
   .spectator-controls {
     display: flex; gap: 8px; width: 100%; max-width: 340px;
     margin-top: 14px;

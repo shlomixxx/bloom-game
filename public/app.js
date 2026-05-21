@@ -8725,6 +8725,11 @@
     // Stop heartbeating my OWN game while I'm watching someone else — my
     // contest_live_state row will fade within 10s on the server side.
     stopLivePush();
+    // Tear down the in-game contest HUD too — it shows MY rank + targets
+    // which is irrelevant (and visually distracting) while I'm spectating
+    // someone else. stopSpectator() will re-mount it on exit if we're
+    // resuming a mid-game session.
+    if (typeof stopContestHud === 'function') stopContestHud();
     spectatorSession = {
       code: activeContestCode,
       targetDeviceId: targetDeviceId,
