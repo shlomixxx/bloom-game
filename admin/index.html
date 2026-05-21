@@ -891,17 +891,23 @@
   </section>
 
   <!-- Boards editor modal -->
-  <div id="board-editor-overlay" style="display:none;position:fixed;inset:0;background:rgba(28,26,24,0.7);z-index:99999;align-items:center;justify-content:center;padding:20px">
+  <div id="board-editor-overlay" style="display:none;position:fixed;inset:0;background:rgba(28,26,24,0.7);z-index:8000;align-items:center;justify-content:center;padding:20px">
     <div style="background:#FFFFFF;border:1px solid #E5E1D5;border-radius:14px;padding:20px;max-width:520px;width:100%;max-height:90vh;overflow-y:auto;direction:rtl;color:#1C1A18;box-shadow:0 24px 60px rgba(0,0,0,0.35)">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;border-bottom:1px solid #F2EFE6;padding-bottom:10px">
         <h3 id="board-editor-title" style="margin:0;color:#BA7517;font-size:17px;font-weight:800">לוח חדש</h3>
         <button onclick="closeBoardEditor()" style="background:#F4F1E8;border:none;color:#6F6E68;font-size:18px;cursor:pointer;width:28px;height:28px;border-radius:8px;line-height:1">✕</button>
       </div>
 
-      <label style="font-size:12px;color:#6F6E68;display:block;margin-bottom:4px;font-weight:600">שם</label>
+      <label style="font-size:12px;color:#6F6E68;display:flex;align-items:center;gap:6px;margin-bottom:4px;font-weight:600">
+        <span>שם</span>
+        <button class="tip-btn" data-tip-text="<strong>שם הלוח</strong><br>איך הלוח יוצג לשחקנים בפיקר ״🎯 לוחות דינמיים״ בעמוד הבית.<div class=&quot;tip-example&quot;>💡 <strong>טיפים לשמות טובים</strong>:<br>🎯 ״מכפילי ×6-×4-×2-×1״ — תיאורי, השחקן מבין מיד מה זה<br>🔥 ״ערב יום חמישי – פיצוץ ×10!״ — שיווקי, יוצר urgency<br>🎄 ״אקסטרא חגיגה – חנוכה 5786״ — קושר לאירוע<br><br>⚠ עד 80 תווים. אפשר אימוג'ים. נשמר בDB כ-TEXT, מועבר ללקוח כל 60 שניות.</div>">?</button>
+      </label>
       <input id="board-name" type="text" placeholder="לדוגמה: מכפילי ×6-×4-×2-×1" style="width:100%;padding:9px 11px;border-radius:8px;background:#FAFAF6;color:#1C1A18;border:1px solid #E5E1D5;margin-bottom:12px;font-family:inherit;font-size:13px">
 
-      <label style="font-size:12px;color:#6F6E68;display:block;margin-bottom:4px;font-weight:600">סוג</label>
+      <label style="font-size:12px;color:#6F6E68;display:flex;align-items:center;gap:6px;margin-bottom:4px;font-weight:600">
+        <span>סוג</span>
+        <button class="tip-btn" data-tip-text="<strong>סוג הלוח</strong><br>קובע איזה ״טוויסט״ מקבלים השחקנים בסשן שלהם.<div class=&quot;tip-example&quot;>🎯 <strong>מכפילי עמודות (פעיל)</strong>: כל עמודה נותנת מכפיל ניקוד שונה. שחקן בוחר אסטרטגית איפה להפיל.<br><br>🔮 <strong>תאים מיוחדים (שלב 3 - עתידי)</strong>: תאי זהב/קפוא/חשמלי/נעול/טלפורט/בונוס.<br><br>🟦 <strong>צורות (שלב 5)</strong>: לוח לא 4×6 (לב / עץ / מגן דוד / פירמידה).<br><br>🎄 <strong>חגים (שלב 4)</strong>: שילוב של כל הקודמים סביב תמה (חנוכה / פסח / ולנטיין).<br><br>⏱ <strong>וריאציות (עתידי)</strong>: speed mode / chain hunt / survival.<br><br>👑 <strong>בלעדי (עתידי)</strong>: VIP / Battle Pass / רמה 10+.<br><br>💡 כרגע רק <code>multipliers</code> מומש בקליינט. שאר הסוגים יחזרו 400 משרת אם תנסה ליצור.</div>">?</button>
+      </label>
       <select id="board-type" style="width:100%;padding:9px 11px;border-radius:8px;background:#FAFAF6;color:#1C1A18;border:1px solid #E5E1D5;margin-bottom:14px;font-family:inherit;font-size:13px" onchange="onBoardTypeChange()">
         <option value="multipliers">🎯 מכפילי עמודות</option>
         <option value="special_cells" disabled>🔮 תאים מיוחדים (שלב 3 — בקרוב)</option>
@@ -913,38 +919,65 @@
 
       <!-- Multipliers editor -->
       <div id="board-editor-multipliers" style="background:#FFF7E6;border:1px solid #FAC775;border-radius:10px;padding:12px;margin-bottom:14px">
-        <div style="font-size:13px;font-weight:700;color:#BA7517;margin-bottom:6px">מכפילים פר עמודה</div>
-        <div style="font-size:11px;color:#6F6E68;margin-bottom:8px">ערכים בטווח 0.5 עד 20. עמודה 1 = הימנית, עמודה 4 = השמאלית (מתאים ל-RTL).</div>
-        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:10px">
-          <input id="board-mult-0" type="number" min="0.5" max="20" step="0.5" placeholder="×N" style="padding:9px;border-radius:8px;background:#FFFFFF;color:#1C1A18;border:1px solid #E5E1D5;text-align:center;font-weight:700;font-size:14px">
-          <input id="board-mult-1" type="number" min="0.5" max="20" step="0.5" placeholder="×N" style="padding:9px;border-radius:8px;background:#FFFFFF;color:#1C1A18;border:1px solid #E5E1D5;text-align:center;font-weight:700;font-size:14px">
-          <input id="board-mult-2" type="number" min="0.5" max="20" step="0.5" placeholder="×N" style="padding:9px;border-radius:8px;background:#FFFFFF;color:#1C1A18;border:1px solid #E5E1D5;text-align:center;font-weight:700;font-size:14px">
-          <input id="board-mult-3" type="number" min="0.5" max="20" step="0.5" placeholder="×N" style="padding:9px;border-radius:8px;background:#FFFFFF;color:#1C1A18;border:1px solid #E5E1D5;text-align:center;font-weight:700;font-size:14px">
+        <div style="font-size:13px;font-weight:700;color:#BA7517;margin-bottom:6px;display:flex;align-items:center;gap:6px">
+          <span>מכפילים פר עמודה</span>
+          <button class="tip-btn" data-tip-text="<strong>מכפילים פר עמודה</strong><br>4 ערכים, אחד לכל עמודה בלוח. ניקוד של כל מיזוג מוכפל לפי העמודה שבה האריח שורד.<div class=&quot;tip-example&quot;>📐 <strong>איך זה עובד טכנית</strong>:<br><code>pointsFor(tier, group, chain, col) = base × mults[col]</code><br><br>📊 <strong>מתמטיקה לדוגמה</strong>: מיזוג של 3 אריחי כתר (דרגה 8) בלי שרשרת:<br>• ×1 = 744 נקודות<br>• ×6 = 4,464 נקודות<br>• ×10 = 7,440 נקודות<br><br>⚠ <strong>מגבלות</strong>: ערכים בטווח [0.5, 20]. ערך <code>0.5</code> = חצי-ניקוד (מענישה). ערך מעל 20 = השרת ידחה את השמירה.<br><br>💡 <strong>הערה חשובה</strong>: ה-multiplier מתייחס לעמודה שבה האריח <em>שורד</em> (לא לעמודה שבה הופל). שרשראות יכולות לעבור עמודות — והניקוד מתעדכן בהתאם.</div>">?</button>
         </div>
-        <div style="font-size:11px;color:#6F6E68;margin-bottom:4px;font-weight:600">פריסטים מהירים:</div>
+        <div style="font-size:11px;color:#6F6E68;margin-bottom:8px">ערכים בטווח 0.5 עד 20. עמודה 1 = הימנית בלוח (לפי כיוון השחקן).</div>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:10px">
+          <div style="position:relative">
+            <div style="font-size:9px;color:#BA7517;text-align:center;margin-bottom:2px;font-weight:700">עמודה 1</div>
+            <input id="board-mult-0" type="number" min="0.5" max="20" step="0.5" placeholder="×N" style="width:100%;padding:9px;border-radius:8px;background:#FFFFFF;color:#1C1A18;border:1px solid #E5E1D5;text-align:center;font-weight:700;font-size:14px">
+          </div>
+          <div style="position:relative">
+            <div style="font-size:9px;color:#BA7517;text-align:center;margin-bottom:2px;font-weight:700">עמודה 2</div>
+            <input id="board-mult-1" type="number" min="0.5" max="20" step="0.5" placeholder="×N" style="width:100%;padding:9px;border-radius:8px;background:#FFFFFF;color:#1C1A18;border:1px solid #E5E1D5;text-align:center;font-weight:700;font-size:14px">
+          </div>
+          <div style="position:relative">
+            <div style="font-size:9px;color:#BA7517;text-align:center;margin-bottom:2px;font-weight:700">עמודה 3</div>
+            <input id="board-mult-2" type="number" min="0.5" max="20" step="0.5" placeholder="×N" style="width:100%;padding:9px;border-radius:8px;background:#FFFFFF;color:#1C1A18;border:1px solid #E5E1D5;text-align:center;font-weight:700;font-size:14px">
+          </div>
+          <div style="position:relative">
+            <div style="font-size:9px;color:#BA7517;text-align:center;margin-bottom:2px;font-weight:700">עמודה 4</div>
+            <input id="board-mult-3" type="number" min="0.5" max="20" step="0.5" placeholder="×N" style="width:100%;padding:9px;border-radius:8px;background:#FFFFFF;color:#1C1A18;border:1px solid #E5E1D5;text-align:center;font-weight:700;font-size:14px">
+          </div>
+        </div>
+        <div style="font-size:11px;color:#6F6E68;margin-bottom:4px;font-weight:600;display:flex;align-items:center;gap:6px">
+          <span>פריסטים מהירים</span>
+          <button class="tip-btn" data-tip-text="<strong>פריסטים מהירים</strong><br>שילובים מומלצים שמתאימים לסגנונות משחק שונים.<div class=&quot;tip-example&quot;>🏔️ <strong>פירמידה (×6 ×4 ×2 ×1)</strong>: עמודה ימנית הכי מתגמלת, הולך ופוחת שמאלה. השחקן ילמד לכוון את האריחים החזקים לעמודה הימנית.<br><br>↔ <strong>קצוות (×2 ×1 ×1 ×2)</strong>: שני הצדדים יותר מתגמלים. יוצר נטייה למלא קצוות לפני אמצע, משנה את האסטרטגיה הטבעית.<br><br>🎰 <strong>מהמר (×10 ×1 ×1 ×1)</strong>: עמודה אחת קיצונית. כל מיזוג בעמודה הראשונה = מליונים. מסוכן — אם השחקן ייכשל הלוח מתמלא מהר.<br><br>🎯 <strong>אמצע (×1 ×3 ×3 ×1)</strong>: עמודות אמצעיות מתגמלות. נוגד את הנטייה הטבעית להפיל בקצוות.<br><br>⚖ <strong>אפס אפקט (×1 ×1 ×1 ×1)</strong>: זהה למשחק רגיל. שימושי לבדיקה ובסיס להתאמה.<br><br>💡 כל preset רק <em>טוען</em> את השדות — חייבים ללחוץ ״💾 שמור״ כדי שיוחל.</div>">?</button>
+        </div>
         <div style="display:flex;gap:6px;flex-wrap:wrap">
-          <button type="button" onclick="setMultipliers([6,4,2,1])" style="font-size:11px;padding:6px 10px;background:#1C1A18;color:#FFF;border:none;border-radius:8px;cursor:pointer;font-weight:600">×6 ×4 ×2 ×1 (פירמידה)</button>
-          <button type="button" onclick="setMultipliers([2,1,1,2])" style="font-size:11px;padding:6px 10px;background:#1C1A18;color:#FFF;border:none;border-radius:8px;cursor:pointer;font-weight:600">×2 ×1 ×1 ×2 (קצוות)</button>
-          <button type="button" onclick="setMultipliers([10,1,1,1])" style="font-size:11px;padding:6px 10px;background:#1C1A18;color:#FFF;border:none;border-radius:8px;cursor:pointer;font-weight:600">×10 ×1 ×1 ×1 (מהמר)</button>
-          <button type="button" onclick="setMultipliers([1,3,3,1])" style="font-size:11px;padding:6px 10px;background:#1C1A18;color:#FFF;border:none;border-radius:8px;cursor:pointer;font-weight:600">×1 ×3 ×3 ×1 (אמצע)</button>
-          <button type="button" onclick="setMultipliers([1,1,1,1])" style="font-size:11px;padding:6px 10px;background:#F4F1E8;color:#1C1A18;border:1px solid #E5E1D5;border-radius:8px;cursor:pointer;font-weight:600">×1 ×1 ×1 ×1 (אפס אפקט)</button>
+          <button type="button" onclick="setMultipliers([6,4,2,1])" style="font-size:11px;padding:6px 10px;background:#1C1A18;color:#FFF;border:none;border-radius:8px;cursor:pointer;font-weight:600" title="מכפיל יורד מימין לשמאל">×6 ×4 ×2 ×1 (פירמידה)</button>
+          <button type="button" onclick="setMultipliers([2,1,1,2])" style="font-size:11px;padding:6px 10px;background:#1C1A18;color:#FFF;border:none;border-radius:8px;cursor:pointer;font-weight:600" title="קצוות יותר מתגמלים מהאמצע">×2 ×1 ×1 ×2 (קצוות)</button>
+          <button type="button" onclick="setMultipliers([10,1,1,1])" style="font-size:11px;padding:6px 10px;background:#1C1A18;color:#FFF;border:none;border-radius:8px;cursor:pointer;font-weight:600" title="עמודה אחת קיצונית, חצי גורל">×10 ×1 ×1 ×1 (מהמר)</button>
+          <button type="button" onclick="setMultipliers([1,3,3,1])" style="font-size:11px;padding:6px 10px;background:#1C1A18;color:#FFF;border:none;border-radius:8px;cursor:pointer;font-weight:600" title="עמודות אמצעיות מתגמלות">×1 ×3 ×3 ×1 (אמצע)</button>
+          <button type="button" onclick="setMultipliers([1,1,1,1])" style="font-size:11px;padding:6px 10px;background:#F4F1E8;color:#1C1A18;border:1px solid #E5E1D5;border-radius:8px;cursor:pointer;font-weight:600" title="שווה ערך למשחק רגיל">×1 ×1 ×1 ×1 (אפס אפקט)</button>
         </div>
       </div>
 
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
         <div>
-          <label style="font-size:12px;color:#6F6E68;display:block;margin-bottom:4px;font-weight:600">תאריך התחלה (ריק = מיידי)</label>
+          <label style="font-size:12px;color:#6F6E68;display:flex;align-items:center;gap:6px;margin-bottom:4px;font-weight:600">
+            <span>תאריך התחלה</span>
+            <button class="tip-btn" data-tip-text="<strong>תאריך התחלה</strong><br>מתי הלוח יופיע בפיקר של השחקנים.<div class=&quot;tip-example&quot;>⏰ <strong>ריק = מיידי</strong>: ברגע שתשמור עם ״פעיל״, הלוח זמין לכל שחקן.<br><br>📅 <strong>תאריך עתידי</strong>: הלוח שמור בDB אבל לא מופיע ב-/api/boards/available עד הזמן הזה. שימושי לתזמן מראש לוחות לחגים, סופי שבוע, אירועי השקה.<br><br>💡 <strong>השעה היא בזמן ישראל</strong> (השרת מריץ <code>NOW()</code> ב-Postgres). אם הלוח אמור לעלות בחצות — הזן <code>00:00</code> של היום הרצוי.</div>">?</button>
+          </label>
           <input id="board-starts-at" type="datetime-local" style="width:100%;padding:8px 10px;border-radius:8px;background:#FAFAF6;color:#1C1A18;border:1px solid #E5E1D5;font-family:inherit;font-size:12px">
         </div>
         <div>
-          <label style="font-size:12px;color:#6F6E68;display:block;margin-bottom:4px;font-weight:600">תאריך סיום (ריק = ללא סיום)</label>
+          <label style="font-size:12px;color:#6F6E68;display:flex;align-items:center;gap:6px;margin-bottom:4px;font-weight:600">
+            <span>תאריך סיום</span>
+            <button class="tip-btn" data-tip-text="<strong>תאריך סיום</strong><br>מתי הלוח מפסיק להופיע בפיקר.<div class=&quot;tip-example&quot;>♾ <strong>ריק = ללא סיום</strong>: הלוח זמין כל עוד ״פעיל״ מסומן.<br><br>📅 <strong>תאריך עתידי</strong>: בזמן הזה הלוח ייעלם מהפיקר אוטומטית (השרת מסנן <code>WHERE ends_at >= NOW()</code>).<br><br>💡 <strong>סשנים פעילים</strong>: שחקנים שכבר באמצע משחק עם הלוח לא מתפנים בכוח — הם משחקים עד game-over. רק הפיקר מתעדכן.<br><br>⚠ <strong>קאש</strong>: השרת מטמן 60 שניות. בזמן ה-cutoff המדויק, יכול להיות עד דקה של חוסר עקביות.</div>">?</button>
+          </label>
           <input id="board-ends-at" type="datetime-local" style="width:100%;padding:8px 10px;border-radius:8px;background:#FAFAF6;color:#1C1A18;border:1px solid #E5E1D5;font-family:inherit;font-size:12px">
         </div>
       </div>
 
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
         <div>
-          <label style="font-size:12px;color:#6F6E68;display:block;margin-bottom:4px;font-weight:600">קהל יעד</label>
+          <label style="font-size:12px;color:#6F6E68;display:flex;align-items:center;gap:6px;margin-bottom:4px;font-weight:600">
+            <span>קהל יעד</span>
+            <button class="tip-btn" data-tip-text="<strong>קהל יעד</strong><br>למי הלוח מופיע בפיקר.<div class=&quot;tip-example&quot;>👥 <strong>כל השחקנים (פעיל)</strong>: כולם רואים את הלוח בכפתור ״🎯 לוחות דינמיים״ בבית.<br><br>👑 <strong>VIP בלבד (עתידי)</strong>: רק שחקנים עם Battle Pass פעיל. ייושם כשייכנס מנגנון מנוי.<br><br>↩ <strong>שחקנים חוזרים (עתידי)</strong>: שחקנים שלא היו 7+ ימים — לוח ״ברוך שובך״. ייושם כשהמערכת תהיה מוכנה.<br><br>💡 כרגע <code>all</code> בלבד. השרת מקבל כל ערך אבל מתעלם מהשאר עד שיוטמע סינון.</div>">?</button>
+          </label>
           <select id="board-audience" style="width:100%;padding:9px 11px;border-radius:8px;background:#FAFAF6;color:#1C1A18;border:1px solid #E5E1D5;font-family:inherit;font-size:13px">
             <option value="all">כל השחקנים</option>
             <option value="vip" disabled>VIP בלבד (בקרוב)</option>
@@ -952,19 +985,24 @@
           </select>
         </div>
         <div>
-          <label style="font-size:12px;color:#6F6E68;display:block;margin-bottom:4px;font-weight:600">עדיפות (גבוה = נבחר)</label>
+          <label style="font-size:12px;color:#6F6E68;display:flex;align-items:center;gap:6px;margin-bottom:4px;font-weight:600">
+            <span>עדיפות</span>
+            <button class="tip-btn" data-tip-text="<strong>עדיפות (0-1000)</strong><br>כשיש כמה לוחות פעילים — הסדר שבו הם מופיעים בפיקר.<div class=&quot;tip-example&quot;>📊 <strong>מספר גבוה = מופיע ראשון</strong> (סדר יורד).<br><br>💡 <strong>שימושים נפוצים</strong>:<br>• <code>0</code> (ברירת מחדל): לוחות רגילים<br>• <code>50</code>: לוחות שיווקיים מודגשים<br>• <code>100</code>: לוחות חגים שיש לקדם<br>• <code>500</code>: אירועי השקה גדולים<br>• <code>1000</code>: VIP מיוחד שתמיד ראשון<br><br>🔍 <strong>בלי שובר תיקו</strong>: אם שני לוחות עם אותה עדיפות → הגבוה לפי <code>id DESC</code> (החדש יותר ראשון).<br><br>⚠ <strong>בעבר</strong>: כשהיה ״לוח אחד נכפה על כולם״, ה-priority בחר את הלוח הזה. עכשיו זה רק קובע סדר ברשימה.</div>">?</button>
+          </label>
           <input id="board-priority" type="number" min="0" max="1000" value="0" style="width:100%;padding:9px 11px;border-radius:8px;background:#FAFAF6;color:#1C1A18;border:1px solid #E5E1D5;font-family:inherit;text-align:center;font-size:13px">
         </div>
       </div>
 
-      <label style="display:flex;align-items:center;gap:10px;font-size:13px;color:#1C1A18;margin-bottom:16px;cursor:pointer;padding:10px 12px;background:#F0F8F0;border:1px solid #9FE1CB;border-radius:8px;font-weight:600">
+      <label style="display:flex;align-items:center;gap:10px;font-size:13px;color:#1C1A18;margin-bottom:6px;cursor:pointer;padding:10px 12px;background:#F0F8F0;border:1px solid #9FE1CB;border-radius:8px;font-weight:600">
         <input id="board-is-active" type="checkbox" style="width:18px;height:18px;cursor:pointer">
-        <span>✅ פעיל (הצג לשחקנים)</span>
+        <span style="flex:1">✅ פעיל (זמין לבחירה בפיקר)</span>
+        <button class="tip-btn" data-tip-text="<strong>פעיל = ״זמין לבחירה בפיקר״</strong><br>חשוב: בארכיטקטורה הנוכחית (אחרי השיפוץ של 22.5), ״פעיל״ <em>לא</em> אומר ״כפוי על כל השחקנים״.<div class=&quot;tip-example&quot;>✅ <strong>פעיל = מופיע בפיקר</strong>: השחקן רואה את הלוח בכפתור ״🎯 לוחות דינמיים״ בבית ובוחר אותו רק אם הוא רוצה.<br><br>⚫ <strong>כבוי = מוסתר</strong>: שמור בDB אבל לא מופיע לאף שחקן.<br><br>🛡️ <strong>שום לוח לא נכפה</strong>: יומי / תחרות / דו-קרב / אתגר / practice ברירת מחדל — כל אלה תמיד שומרים על החוויה הסטנדרטית, ללא קשר ללוחות הפעילים.<br><br>📊 <strong>מטריקת שינוי</strong>: שינוי כאן נכנס לתוקף תוך 60-90 שניות (השרת מטמן ו-הקליינט מרענן כל 90 שניות).</div>">?</button>
       </label>
+      <div style="font-size:10px;color:#6F6E68;margin-bottom:16px;line-height:1.5">הלוח יופיע בכפתור ״🎯 לוחות דינמיים״ בבית. <strong>לא משפיע על</strong> יומי / תחרות / דו-קרב / אתגר / practice רגיל.</div>
 
       <div style="display:flex;gap:8px">
-        <button type="button" onclick="closeBoardEditor()" style="flex:1;background:#F4F1E8;color:#1C1A18;border:1px solid #E5E1D5;padding:11px;border-radius:10px;font-weight:600;cursor:pointer;font-family:inherit">ביטול</button>
-        <button type="button" id="btn-board-save" onclick="saveBoard()" style="flex:2;background:#FAC775;color:#1C1A18;border:none;padding:11px;border-radius:10px;font-weight:800;cursor:pointer;font-family:inherit">💾 שמור</button>
+        <button type="button" onclick="closeBoardEditor()" style="flex:1;background:#F4F1E8;color:#1C1A18;border:1px solid #E5E1D5;padding:11px;border-radius:10px;font-weight:600;cursor:pointer;font-family:inherit" title="סגור את העורך בלי לשמור. שינויים שעשית יאבדו.">ביטול</button>
+        <button type="button" id="btn-board-save" onclick="saveBoard()" style="flex:2;background:#FAC775;color:#1C1A18;border:none;padding:11px;border-radius:10px;font-weight:800;cursor:pointer;font-family:inherit" title="שמור את הלוח. אם ׳פעיל׳ מסומן — יופיע בפיקר תוך 60-90 שניות לכל השחקנים.">💾 שמור</button>
       </div>
       <div id="board-editor-status" style="font-size:11px;color:#6F6E68;text-align:center;margin-top:10px;min-height:14px"></div>
     </div>
@@ -2563,6 +2601,10 @@
   // ============================================================
   // Dynamic Boards (phase 2) — load, render, create, edit, delete.
   // ============================================================
+  // Note: escHtml() is defined earlier in this script (around L1425).
+  // The original phase-2 code mistakenly called escapeHtml (the game's
+  // version, which isn't available in admin) — fixed in this commit.
+  // ============================================================
   let _editingBoardId = null;
 
   async function loadBoards() {
@@ -2585,6 +2627,8 @@
       listEl.innerHTML = '<div style="font-size:12px;color:#6F6E68;padding:12px;text-align:center;border:1px dashed #E5E1D5;border-radius:8px">אין לוחות מוגדרים. לחץ "צור לוח חדש" למטה.</div>';
       return;
     }
+    // Use data-attributes + event delegation so we never have to fight
+    // HTML+JS string escaping for the board name inside inline onclicks.
     listEl.innerHTML = boards.map(function(b) {
       const typeLabel = {
         multipliers:   '🎯 מכפילי עמודות',
@@ -2608,20 +2652,32 @@
         : '⏰ פעיל תמיד';
       return '<div style="padding:10px 12px;background:#FAFAF6;border-radius:8px;border:1px solid #E5E1D5;display:flex;align-items:center;gap:10px;flex-wrap:wrap">' +
         '<div style="flex:1;min-width:160px">' +
-          '<div style="font-weight:700;color:#1C1A18;margin-bottom:2px">' + escapeHtml(b.name) + ' ' + statusBadge + '</div>' +
+          '<div style="font-weight:700;color:#1C1A18;margin-bottom:2px">' + escHtml(b.name) + ' ' + statusBadge + '</div>' +
           '<div style="font-size:11px;color:#6F6E68">' + typeLabel + (defSummary ? ' · ' + defSummary : '') + '</div>' +
           '<div style="font-size:10px;color:#6F6E68;margin-top:2px">' + schedSummary + ' · עדיפות ' + b.priority + '</div>' +
         '</div>' +
         '<div style="display:flex;gap:4px;flex-wrap:wrap">' +
           (b.is_active
-            ? '<button class="btn sm" onclick="toggleBoardActive(' + b.id + ', false)" style="font-size:11px;padding:4px 8px;background:#F4F1E8;color:#1C1A18;border:1px solid #E5E1D5;border-radius:6px;cursor:pointer;font-family:inherit">⏸ השבת</button>'
-            : '<button class="btn sm" onclick="toggleBoardActive(' + b.id + ', true)" style="font-size:11px;padding:4px 8px;background:#9FE1CB;color:#04342C;font-weight:700;border:none;border-radius:6px;cursor:pointer;font-family:inherit">▶ הפעל</button>'
+            ? '<button class="btn sm" data-board-action="deactivate" data-board-id="' + b.id + '" style="font-size:11px;padding:4px 8px;background:#F4F1E8;color:#1C1A18;border:1px solid #E5E1D5;border-radius:6px;cursor:pointer;font-family:inherit" title="הסתר את הלוח מה-picker של השחקנים. הנתונים נשמרים — אפשר להפעיל שוב בכל רגע.">⏸ השבת</button>'
+            : '<button class="btn sm" data-board-action="activate"   data-board-id="' + b.id + '" style="font-size:11px;padding:4px 8px;background:#9FE1CB;color:#04342C;font-weight:700;border:none;border-radius:6px;cursor:pointer;font-family:inherit" title="הצג את הלוח לשחקנים. הוא יופיע בכפתור ״🎯 לוחות דינמיים״ בעמוד הבית.">▶ הפעל</button>'
           ) +
-          '<button class="btn sm" onclick="openBoardEditor(' + b.id + ')" style="font-size:11px;padding:4px 8px;background:#1C1A18;color:#FFF;border:none;border-radius:6px;cursor:pointer;font-family:inherit">✏ ערוך</button>' +
-          '<button class="btn sm" onclick="deleteBoard(' + b.id + ', \'' + escapeHtml(b.name).replace(/'/g, "\\'") + '\')" style="font-size:11px;padding:4px 8px;background:#E07A8E;color:#fff;border:none;border-radius:6px;cursor:pointer;font-family:inherit">🗑</button>' +
+          '<button class="btn sm" data-board-action="edit"   data-board-id="' + b.id + '" style="font-size:11px;padding:4px 8px;background:#1C1A18;color:#FFF;border:none;border-radius:6px;cursor:pointer;font-family:inherit" title="ערוך שם / מכפילים / תאריכים / עדיפות.">✏ ערוך</button>' +
+          '<button class="btn sm" data-board-action="delete" data-board-id="' + b.id + '" data-board-name="' + escHtml(b.name) + '" style="font-size:11px;padding:4px 8px;background:#E07A8E;color:#fff;border:none;border-radius:6px;cursor:pointer;font-family:inherit" title="מחק לצמיתות. שחקנים שכבר משחקים את הלוח לא יושפעו, אך הוא לא יופיע שוב.">🗑 מחק</button>' +
         '</div>' +
       '</div>';
     }).join('');
+    // Single delegated listener handles all per-row actions (avoids
+    // re-binding 4 handlers per row on every loadBoards() refresh).
+    listEl.onclick = function(e) {
+      const btn = e.target.closest('[data-board-action]');
+      if (!btn) return;
+      const id = parseInt(btn.getAttribute('data-board-id'), 10);
+      const action = btn.getAttribute('data-board-action');
+      if (action === 'activate')        toggleBoardActive(id, true);
+      else if (action === 'deactivate') toggleBoardActive(id, false);
+      else if (action === 'edit')       openBoardEditor(id);
+      else if (action === 'delete')     deleteBoard(id, btn.getAttribute('data-board-name') || '');
+    };
   }
 
   function openBoardEditor(boardId) {
@@ -2688,7 +2744,7 @@
     const name = document.getElementById('board-name').value.trim();
     const type = document.getElementById('board-type').value;
     const statusEl = document.getElementById('board-editor-status');
-    if (!name) { statusEl.textContent = '⚠ חסר שם'; statusEl.style.color = 'var(--danger,#e07a8e)'; return; }
+    if (!name) { statusEl.textContent = '⚠ חסר שם'; statusEl.style.color = '#E07A8E'; return; }
     let definition = {};
     if (type === 'multipliers') {
       definition = { multipliers: readMultipliers() };
@@ -2706,7 +2762,7 @@
       priority: parseInt(document.getElementById('board-priority').value, 10) || 0
     };
     statusEl.textContent = '⏳ שומר...';
-    statusEl.style.color = 'var(--muted)';
+    statusEl.style.color = '#6F6E68';
     try {
       const url = _editingBoardId ? ('api/boards/' + _editingBoardId) : 'api/boards';
       const method = _editingBoardId ? 'PATCH' : 'POST';
@@ -2719,14 +2775,14 @@
       const d = await r.json();
       if (!d.ok) throw new Error(d.error || 'save_failed');
       statusEl.textContent = '✅ נשמר';
-      statusEl.style.color = 'var(--mint,#4FBD8B)';
+      statusEl.style.color = '#04342C';
       setTimeout(function() {
         closeBoardEditor();
         loadBoards();
       }, 400);
     } catch (e) {
       statusEl.textContent = '⚠ ' + (e.message || e);
-      statusEl.style.color = 'var(--danger,#e07a8e)';
+      statusEl.style.color = '#E07A8E';
     }
   }
 
