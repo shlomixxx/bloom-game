@@ -541,6 +541,46 @@
 
     let html = '';
 
+    // Highest-priority hero: a paused contest game. The state was saved
+    // on beforeunload / visibilitychange / per-drop autosave; without
+    // surfacing it on home the player has to navigate manually back into
+    // the contest to resume — friction that loses runs the player would
+    // otherwise have finished.
+    const pausedContest = findPausedContestGame();
+    if (pausedContest) {
+      const ageMin = Math.max(1, Math.round((Date.now() - pausedContest.ts) / 60000));
+      const ageText = ageMin < 60 ? ageMin + ' דק׳' : Math.round(ageMin / 60) + ' שע׳';
+      // After 12h the run almost certainly isn't worth resuming — soft-warn
+      // instead of celebrating, but still offer the path back.
+      const stale = ageMin > 12 * 60;
+      const cls = stale ? 'hero-card hero-card-done' : 'hero-card hero-card-best';
+      const icon = stale ? '⏱' : '⏸';
+      const title = stale
+        ? 'יש משחק ישן מושהה'
+        : 'המשך משחק בתחרות';
+      const sub = (pausedContest.contestName ? pausedContest.contestName + ' · ' : '') +
+        'ניקוד: ' + (pausedContest.score | 0).toLocaleString() + ' · נשמר לפני ' + ageText;
+      el.innerHTML = '<div class="' + cls + '" id="hero-resume-contest" role="button" tabindex="0" style="cursor:pointer">' +
+        '<span class="hero-icon">' + icon + '</span>' +
+        '<div class="hero-body">' +
+          '<div class="hero-title">' + escapeHtml(title) + '</div>' +
+          '<div class="hero-sub">' + escapeHtml(sub) + '</div>' +
+        '</div>' +
+      '</div>';
+      el.style.display = '';
+      const resumeEl = document.getElementById('hero-resume-contest');
+      if (resumeEl) {
+        const go = function() {
+          if (typeof setActiveContest === 'function') setActiveContest(pausedContest.code);
+          if (typeof hideHome === 'function') hideHome();
+          if (typeof init === 'function') init('contest');
+        };
+        resumeEl.onclick = go;
+        resumeEl.onkeydown = function(e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } };
+      }
+      return;
+    }
+
     if (totalGames === 0) {
       // Brand-new player: leave the hero empty (the FTUE/tour will handle them)
       el.style.display = 'none';

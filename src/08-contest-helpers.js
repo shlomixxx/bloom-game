@@ -167,6 +167,45 @@
     } catch (e) {}
   }
 
+  // Used by the home-screen hero card to surface "you have a paused
+  // game in contest X — tap to resume". Scans localStorage for every
+  // saved contest state and returns the freshest one (or null). Also
+  // garbage-collects entries that have expired the TTL or that point
+  // to a contest the player has since left.
+  function findPausedContestGame() {
+    try {
+      const all = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (!k || k.indexOf(CONTEST_STATE_KEY_PREFIX) !== 0) continue;
+        let s;
+        try { s = JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { continue; }
+        if (!s || !s.code || !Array.isArray(s.grid)) continue;
+        if (Date.now() - (s.ts || 0) > CONTEST_STATE_TTL_MS) {
+          // GC stale entries opportunistically — we're already iterating
+          try { localStorage.removeItem(k); } catch (e) {}
+          continue;
+        }
+        // Must have actual progress (a piece on the board OR a score > 0).
+        const hasPiece = s.grid.some(function(row) { return row.some(function(c) { return c > 0; }); });
+        if (!hasPiece && (s.score | 0) === 0) continue;
+        all.push(s);
+      }
+      if (!all.length) return null;
+      all.sort(function(a, b) { return (b.ts || 0) - (a.ts || 0); });
+      // Best-effort: attach the contest name from cached list (if any)
+      const top = all[0];
+      try {
+        const cache = JSON.parse(localStorage.getItem('bloom_my_contests_cache') || 'null');
+        if (cache && Array.isArray(cache.list)) {
+          const match = cache.list.find(function(c) { return c.code === top.code; });
+          if (match && match.name) top.contestName = match.name;
+        }
+      } catch (e) {}
+      return top;
+    } catch (e) { return null; }
+  }
+
   // ============ PRACTICE STATE SAVE/RESTORE ============
   // Mirrors the contest state pattern so switching tabs mid-game doesn't
   // lose the player's board. TTL: 1 hour (practice is low-stakes).

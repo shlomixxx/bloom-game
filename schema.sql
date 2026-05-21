@@ -71,6 +71,12 @@ CREATE INDEX IF NOT EXISTS idx_contests_host
 -- Weekly auto-challenge support: distinguish private vs weekly contests
 ALTER TABLE contests ADD COLUMN IF NOT EXISTS contest_type VARCHAR(20) NOT NULL DEFAULT 'private';
 
+-- Score mode: 'cumulative' (default — every game adds to the total) or
+-- 'best' (only the player's highest single-game score counts). Set by the
+-- host at contest creation; existing contests default to cumulative so
+-- behavior is unchanged.
+ALTER TABLE contests ADD COLUMN IF NOT EXISTS score_mode VARCHAR(16) NOT NULL DEFAULT 'cumulative';
+
 CREATE TABLE IF NOT EXISTS contest_scores (
   id              SERIAL PRIMARY KEY,
   contest_code    VARCHAR(8) NOT NULL REFERENCES contests(code) ON DELETE CASCADE,

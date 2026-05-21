@@ -1181,7 +1181,7 @@ app.get('/api/contests/mine', async (req, res) => {
 // POST /api/contests — יצירת תחרות חדשה
 app.post('/api/contests', requireDeviceAuth, async (req, res) => {
   try {
-    const { name, hostName, deviceId, durationDays, boardType, wagerAmount, difficulty } = req.body || {};
+    const { name, hostName, deviceId, durationDays, boardType, wagerAmount, difficulty, scoreMode } = req.body || {};
 
     const cleanedName = cleanContestName(name);
     if (!cleanedName) return res.status(400).json({ error: 'bad_name' });
@@ -1229,10 +1229,16 @@ app.post('/api/contests', requireDeviceAuth, async (req, res) => {
 
     const diff = resolveDifficulty(difficulty);
 
+    // Score mode — 'best' means only the player's highest single-game
+    // score counts (max-of); 'cumulative' adds every game to the total
+    // (the long-standing default). Whitelisted so a malformed body can't
+    // store a garbage value the upsert below would silently mishandle.
+    const mode = scoreMode === 'best' ? 'best' : 'cumulative';
+
     const result = await pool.query(
-      `INSERT INTO contests (code, name, host_name, host_device_id, board_seed, board_type, duration_days, ends_at, wager_amount, wager_pool, difficulty_label, difficulty_weights, difficulty_speed_pct)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING *`,
-      [code, cleanedName, cleanedHost, deviceId, seed, type, dur, endsAt, wager, wager, diff.label, diff.weights, diff.speed_pct]
+      `INSERT INTO contests (code, name, host_name, host_device_id, board_seed, board_type, duration_days, ends_at, wager_amount, wager_pool, difficulty_label, difficulty_weights, difficulty_speed_pct, score_mode)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING *`,
+      [code, cleanedName, cleanedHost, deviceId, seed, type, dur, endsAt, wager, wager, diff.label, diff.weights, diff.speed_pct, mode]
     );
 
     // Record settlement entry for host
@@ -1336,9 +1342,14 @@ app.get('/api/contests/:code', async (req, res) => {
       };
     });
 
+    // contest.score_mode falls back to 'cumulative' for any row that
+    // predates the column (the schema default + the IFNULL-style fallback
+    // here means existing contests keep their original behavior).
+    const contestRow = contestResult.rows[0];
+    if (!contestRow.score_mode) contestRow.score_mode = 'cumulative';
     res.json({
       ok: true,
-      contest: contestResult.rows[0],
+      contest: contestRow,
       players,
       liveFreshSeconds: LIVE_FRESH_SECONDS
     });
@@ -1452,13 +1463,14 @@ app.post('/api/contests/:code/score', requireDeviceAuth, async (req, res) => {
     }
     const cleanedName = cleanDisplayName(displayName);
 
-    const contestResult = await pool.query('SELECT ends_at FROM contests WHERE code = $1', [code]);
+    const contestResult = await pool.query('SELECT ends_at, score_mode FROM contests WHERE code = $1', [code]);
     if (contestResult.rows.length === 0) {
       return res.status(404).json({ error: 'not_found' });
     }
     if (new Date(contestResult.rows[0].ends_at) < new Date()) {
       return res.status(403).json({ error: 'ended' });
     }
+    const scoreMode = contestResult.rows[0].score_mode === 'best' ? 'best' : 'cumulative';
 
     // Per-contest cool-down: a single device must wait at least 30s between
     // game submissions, so the cumulative score can't be inflated by spamming.
@@ -1498,13 +1510,20 @@ app.post('/api/contests/:code/score', requireDeviceAuth, async (req, res) => {
       }
     }
 
+    // Score reducer: cumulative = sum of every submitted game (default);
+    // best = the player's highest single-game score (max-of). Mode is
+    // snapshotted onto the contest row at creation — changing the mode
+    // later won't retroactively re-balance an in-flight contest.
+    const scoreReducer = scoreMode === 'best'
+      ? 'GREATEST(contest_scores.score, EXCLUDED.score)'
+      : 'contest_scores.score + EXCLUDED.score';
     await pool.query(
       `INSERT INTO contest_scores (contest_code, device_id, display_name, score, highest_tier, games_played, last_played_at)
        VALUES ($1, $2, $3, $4, $5, 1, NOW())
        ON CONFLICT (contest_code, device_id)
        DO UPDATE SET
          display_name = EXCLUDED.display_name,
-         score = contest_scores.score + EXCLUDED.score,
+         score = ${scoreReducer},
          highest_tier = GREATEST(contest_scores.highest_tier, EXCLUDED.highest_tier),
          games_played = contest_scores.games_played + 1,
          last_played_at = NOW()`,

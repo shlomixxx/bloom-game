@@ -226,6 +226,12 @@
           '<div class="contest-duration-pill" data-diff="insane">💀 גהינום</div>' +
         '</div>' +
         '<div class="contest-form-hint" id="ctf-difficulty-hint">המארגן בוחר רמה אחת לכולם — כך התחרות הוגנת</div>' +
+        '<div class="contest-form-label">🏆 איך סופרים נקודות?</div>' +
+        '<div class="contest-duration-row" id="ctf-score-mode">' +
+          '<div class="contest-duration-pill selected" data-mode="cumulative">🧮 מצטבר</div>' +
+          '<div class="contest-duration-pill" data-mode="best">🏆 הכי גבוה</div>' +
+        '</div>' +
+        '<div class="contest-form-hint" id="ctf-mode-hint">כל המשחקים מצטרפים לסכום אחד — שחק הרבה כדי לטפס</div>' +
         '<div class="contest-form-label">🎰 הימור (אופציונלי)</div>' +
         '<div style="display:flex;align-items:center;gap:8px;direction:rtl;margin-bottom:4px">' +
           '<input type="number" class="contest-input" id="ctf-wager" placeholder="0" min="0" max="500" value="0" style="width:80px;text-align:center;font-weight:700" />' +
@@ -239,6 +245,11 @@
     let selectedDays = 7;
     let selectedBoardType = 'shared';
     let selectedDifficulty = 'default';
+    let selectedScoreMode = 'cumulative';
+    const MODE_HINTS = {
+      cumulative: 'כל המשחקים מצטרפים לסכום אחד — שחק הרבה כדי לטפס',
+      best:       'רק המשחק הכי טוב נספר — איכות מנצחת כמות'
+    };
     const DIFF_HINTS = {
       default: 'המארגן בוחר רמה אחת לכולם — כך התחרות הוגנת',
       easy:    '😊 קל · אריחים נמוכים שולטים — נעים לחימום',
@@ -273,6 +284,15 @@
         if (hint) hint.textContent = DIFF_HINTS[selectedDifficulty] || DIFF_HINTS.default;
       };
     });
+    document.querySelectorAll('#ctf-score-mode .contest-duration-pill').forEach(function(pill) {
+      pill.onclick = function() {
+        document.querySelectorAll('#ctf-score-mode .contest-duration-pill').forEach(function(p) { p.classList.remove('selected'); });
+        pill.classList.add('selected');
+        selectedScoreMode = pill.dataset.mode;
+        const hint = document.getElementById('ctf-mode-hint');
+        if (hint) hint.textContent = MODE_HINTS[selectedScoreMode] || MODE_HINTS.cumulative;
+      };
+    });
 
     document.getElementById('ctf-submit').onclick = async function() {
       const nameVal = document.getElementById('ctf-name').value.trim();
@@ -305,7 +325,8 @@
             durationDays: selectedDays,
             boardType: selectedBoardType,
             wagerAmount: wagerVal,
-            difficulty: selectedDifficulty
+            difficulty: selectedDifficulty,
+            scoreMode: selectedScoreMode
           })
         });
         if (res.status === 429) {
@@ -1025,21 +1046,26 @@
     var hud = document.createElement('div');
     hud.id = 'contest-hud';
     hud.className = 'contest-hud';
+    // Each side shows: name → ABSOLUTE score → small delta line below.
+    // The previous "Hadas 4,194" was a delta but read like a score, which
+    // led to the user thinking Hadas was gaining points as their own
+    // score grew. Now the big number is always the OTHER player's actual
+    // total; the delta with ↑/↓ sits underneath as secondary info.
     hud.innerHTML =
       '<div class="contest-hud-side contest-hud-target" id="contest-hud-target">' +
-        '<div class="contest-hud-label">לעקוף ⚔️</div>' +
         '<div class="contest-hud-name" id="contest-hud-target-name">—</div>' +
         '<div class="contest-hud-score" id="contest-hud-target-score">--</div>' +
+        '<div class="contest-hud-delta" id="contest-hud-target-delta">לעקוף ⚔️</div>' +
       '</div>' +
       '<div class="contest-hud-side contest-hud-me">' +
         '<div class="contest-hud-rank" id="contest-hud-rank">#?</div>' +
-        '<div class="contest-hud-label">אתה</div>' +
         '<div class="contest-hud-score contest-hud-my-score" id="contest-hud-my-score">0</div>' +
+        '<div class="contest-hud-label" id="contest-hud-mode-label">אתה</div>' +
       '</div>' +
       '<div class="contest-hud-side contest-hud-chaser" id="contest-hud-chaser">' +
-        '<div class="contest-hud-label">רודף 👀</div>' +
         '<div class="contest-hud-name" id="contest-hud-chaser-name">—</div>' +
         '<div class="contest-hud-score" id="contest-hud-chaser-score">--</div>' +
+        '<div class="contest-hud-delta" id="contest-hud-chaser-delta">רודף 👀</div>' +
       '</div>' +
       '<button class="contest-hud-expand" id="contest-hud-expand" aria-label="פתח לוח מובילים" type="button">⤢</button>';
     document.body.appendChild(hud);
@@ -1082,21 +1108,30 @@
 
   function paintContestHud(players) {
     if (!players.length) return;
-    // The server-side rank already includes other players' live scores,
-    // but MY live score isn't on the server until I submit. Recompute the
-    // ranking locally by replacing MY (score, liveScore) with my actual
-    // current game score. This way the HUD rank reflects what my position
-    // WOULD be if I locked in this score right now — the projection that
-    // turns "where do I stand?" into "if I keep this up, I overtake X".
+    // Score mode resolution: for 'best' contests the projection is
+    // max(accumulated_best, this_game) instead of accumulated + this_game.
+    // The mode is on activeContestData (which init('contest') populates
+    // before we ever mount the HUD).
+    var bestMode = activeContestData && activeContestData.score_mode === 'best';
     var myLiveScore = (typeof score === 'number' ? score : 0) | 0;
     var ranked = players.map(function(p) {
       var total;
       if (p.you) {
-        // My projected total = accumulated + this game (NOT + p.liveScore,
-        // which is what the server has — local `score` is always fresher).
-        total = (p.score | 0) + myLiveScore;
+        if (bestMode) {
+          // For other players, p.score already holds their best so far.
+          // For me, take the max of my accumulated best and this game.
+          total = Math.max(p.score | 0, myLiveScore);
+        } else {
+          total = (p.score | 0) + myLiveScore;
+        }
       } else {
-        total = (p.score | 0) + (p.liveScore == null ? 0 : (p.liveScore | 0));
+        var live = p.liveScore == null ? 0 : (p.liveScore | 0);
+        if (bestMode) {
+          // Their projection = max(their stored best, their live game).
+          total = Math.max(p.score | 0, live);
+        } else {
+          total = (p.score | 0) + live;
+        }
       }
       return { p: p, total: total };
     });
@@ -1113,13 +1148,16 @@
     var chaser = myIdx < ranked.length - 1 ? ranked[myIdx + 1] : null; // below me
 
     // My displayed score = PROJECTED total (accumulated contest score +
-    // current in-progress game). Previously the score element showed only
-    // the current game's `score`, while the rank and gaps were computed
-    // against accumulated+current — so the displayed "10,546" was from a
-    // different total than the "−90,412 to overtake X" calculation. Same
-    // number now drives all three.
+    // current in-progress game in cumulative mode; max-of in best mode).
+    // Same number drives the rank + the gaps so the three HUD readings
+    // never disagree.
     var myScoreEl = document.getElementById('contest-hud-my-score');
     if (myScoreEl) myScoreEl.textContent = myTotal.toLocaleString();
+    // Mode label under my score — small but always visible, so the
+    // player knows whether they're playing "every game counts" or
+    // "best one wins".
+    var modeLabelEl = document.getElementById('contest-hud-mode-label');
+    if (modeLabelEl) modeLabelEl.textContent = bestMode ? 'אתה · 🏆 הכי גבוה' : 'אתה';
 
     // Rank
     var rankEl = document.getElementById('contest-hud-rank');
@@ -1136,38 +1174,47 @@
       _contestHudLastRank = myRank;
     }
 
-    // Target side (player I'm chasing). Display is the absolute gap —
-    // the bare number reads as "this many points to close" without the
-    // confusing "−" prefix the previous version used (the gap IS
-    // positive; prefixing it with `−` made the intent ambiguous).
+    // Target side (player above me). Big number = their ACTUAL score;
+    // small line below = the gap I need to close. This is the layout
+    // that broke the "Hadas is gaining points" misreading — the user
+    // sees the opponent's real score, not a delta in disguise.
     var tName = document.getElementById('contest-hud-target-name');
     var tScore = document.getElementById('contest-hud-target-score');
+    var tDelta = document.getElementById('contest-hud-target-delta');
     var targetWrap = document.getElementById('contest-hud-target');
     if (target) {
       if (tName) tName.textContent = target.p.name || 'אנונימי';
+      if (tScore) tScore.textContent = (target.total | 0).toLocaleString();
       var gap = target.total - myTotal;
-      if (tScore) tScore.textContent = gap.toLocaleString();
+      if (tDelta) tDelta.textContent = '↑ ' + gap.toLocaleString() + ' לעקוף';
       if (targetWrap) targetWrap.classList.remove('contest-hud-empty');
     } else {
       // I'm #1 — celebrate
-      if (tName) tName.textContent = '🏆 אתה ראשון';
+      if (tName) tName.textContent = '🏆 ראשון';
       if (tScore) tScore.textContent = '';
+      if (tDelta) tDelta.textContent = 'אין מעליך';
       if (targetWrap) targetWrap.classList.add('contest-hud-empty');
     }
 
-    // Chaser side (player just behind me) — same absolute-number rule.
+    // Chaser side (player below me) — same pattern: their score on top,
+    // my lead in the small delta line. The chaser's number stays put as
+    // their score grows on their own merges; my LEAD over them changes
+    // as I score — and the lead label says exactly that.
     var cName = document.getElementById('contest-hud-chaser-name');
     var cScore = document.getElementById('contest-hud-chaser-score');
+    var cDelta = document.getElementById('contest-hud-chaser-delta');
     var chaserWrap = document.getElementById('contest-hud-chaser');
     if (chaser) {
       if (cName) cName.textContent = chaser.p.name || 'אנונימי';
+      if (cScore) cScore.textContent = (chaser.total | 0).toLocaleString();
       var lead = myTotal - chaser.total;
-      if (cScore) cScore.textContent = lead.toLocaleString();
+      if (cDelta) cDelta.textContent = '↓ ' + lead.toLocaleString() + ' לפניך';
       if (chaserWrap) chaserWrap.classList.remove('contest-hud-empty');
     } else {
       // I'm last (or alone)
       if (cName) cName.textContent = '—';
       if (cScore) cScore.textContent = '';
+      if (cDelta) cDelta.textContent = '';
       if (chaserWrap) chaserWrap.classList.add('contest-hud-empty');
     }
   }
@@ -1289,7 +1336,12 @@
           '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11A8.1 8.1 0 0 0 4.5 9M4 5v4h4"/><path d="M4 13a8.1 8.1 0 0 0 15.5 2M20 19v-4h-4"/></svg>' +
         '</button>' +
       '</div>' +
-      '<div class="contest-scoring-note">סכום נקודות מצטבר — כל משחק מצטרף לסך</div>' +
+      '<div class="contest-scoring-note">' +
+        (data.contest.score_mode === 'best'
+          ? '🏆 הכי גבוה — רק המשחק הטוב ביותר נספר'
+          : '🧮 ניקוד מצטבר — כל משחק מצטרף לסך הכל'
+        ) +
+      '</div>' +
       '<div class="contest-board" id="clb-board">' + playersHtml + '</div>' +
       '<div class="contest-form" style="margin-top:18px">' +
         (returnToGame ? '<button class="contest-submit-btn" id="clb-resume" style="background:linear-gradient(135deg,#2E8B6F,#1A6B53);color:#FFFFFF">↩ חזור למשחק שלך</button>' : '') +
