@@ -1474,10 +1474,13 @@ app.post('/api/contests/:code/score', requireDeviceAuth, async (req, res) => {
 
     // Per-contest cool-down: a single device must wait at least 30s between
     // game submissions, so the cumulative score can't be inflated by spamming.
+    // Skip the gate when games_played === 0 — last_played_at defaults to NOW()
+    // on join, which otherwise blocks a new joiner's legitimate first
+    // submission for 30s after they pressed "הצטרף ושחק".
     const lastPlay = await pool.query(
-      `SELECT last_played_at FROM contest_scores WHERE contest_code = $1 AND device_id = $2`,
+      `SELECT last_played_at, games_played FROM contest_scores WHERE contest_code = $1 AND device_id = $2`,
       [code, deviceId]);
-    if (lastPlay.rows.length && lastPlay.rows[0].last_played_at) {
+    if (lastPlay.rows.length && lastPlay.rows[0].last_played_at && (lastPlay.rows[0].games_played | 0) > 0) {
       const sinceMs = Date.now() - new Date(lastPlay.rows[0].last_played_at).getTime();
       if (sinceMs < 30_000) {
         return res.status(429).json({ error: 'too_soon', waitMs: 30_000 - sinceMs });
