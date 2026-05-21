@@ -859,19 +859,31 @@
     } else {
       gridEl.innerHTML = '';
     }
-    // Dynamic Boards phase 1 — column multiplier pills above the grid.
-    // The bar is rebuilt on every render() to track multiplier changes mid-
-    // game (e.g. admin pushes a new board, debug console call). When no
-    // multiplier is active getColumnMultipliers() returns null and we
-    // remove any existing bar — zero impact on vanilla play.
+    // Size the grid to fit the available area on BOTH axes (CSS aspect-ratio
+    // alone can't constrain by both width and height cross-browser).
+    fitGrid();
+    // Dynamic Boards (phase 2 redesigned, May 2026) — column multiplier
+    // pills, ONLY shown when:
+    //   (a) the game is running in 'dynamic' mode (an opt-in mode that
+    //       the player chose from the boards picker), AND
+    //   (b) a multiplier is actually configured.
+    // The bar is mounted as a SIBLING of #grid-wrap (under #tier-bar in
+    // the page flow) — width-matched to the grid so the pills line up
+    // exactly with the columns below. Daily / contest / duel / challenge
+    // / default-practice never see this bar because they never set
+    // mode='dynamic'.
     (function syncColumnMultiplierBar() {
       var mults = (typeof getColumnMultipliers === 'function') ? getColumnMultipliers() : null;
-      var existing = wrap.querySelector('.col-mult-bar');
-      if (!mults) { if (existing) existing.remove(); return; }
-      // Don't show the bar in pre-game / game-over surfaces, only over a live grid.
-      if (opts.over) { if (existing) existing.remove(); return; }
+      var pageHost = wrap.parentNode;
+      var existing = pageHost && pageHost.querySelector('.col-mult-bar');
+      var isDynamicMode = (typeof mode !== 'undefined') && mode === 'dynamic';
+      if (!pageHost || !mults || !isDynamicMode || opts.over) {
+        if (existing) existing.remove();
+        return;
+      }
       var bar = existing || document.createElement('div');
       bar.className = 'col-mult-bar';
+      bar.style.width = gridEl.style.width || '100%';
       bar.innerHTML = '';
       for (var ci = 0; ci < mults.length; ci++) {
         var m = mults[ci] || 1;
@@ -881,11 +893,10 @@
         pill.textContent = '×' + (Number.isInteger(m) ? m : m.toFixed(1));
         bar.appendChild(pill);
       }
-      if (!existing) wrap.insertBefore(bar, gridEl);
+      if (!existing) {
+        pageHost.insertBefore(bar, wrap);  // sits between #tier-bar and #grid-wrap
+      }
     })();
-    // Size the grid to fit the available area on BOTH axes (CSS aspect-ratio
-    // alone can't constrain by both width and height cross-browser).
-    fitGrid();
     // `?debug=1` (or window.__bloomEngineLog) draws a tiny "r,c · tN" tag
     // on every cell so the user can verify exactly which square got which
     // tile — and which cells a bomb actually destroyed vs the visual blast.

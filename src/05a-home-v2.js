@@ -52,6 +52,8 @@
   function showHomeV2() {
     stopEventSystem();
     if (typeof purgeEventOverlays === 'function') purgeEventOverlays();
+    // Going home = leaving any dynamic-board session. Next game starts vanilla.
+    if (typeof clearDynamicBoardSession === 'function') clearDynamicBoardSession();
     const app = document.querySelector('.app');
     if (!app || document.getElementById('home-screen')) return;
     // Mark the app so CSS can hide the game UI behind the home overlay.
@@ -125,6 +127,18 @@
         '</button>' +
       '</div>' +
 
+      // ── Dynamic Boards entry — only visible when boards are available.
+      // Hidden by default; updateDynamicBoardsButton() flips display
+      // after the /api/boards/available fetch resolves.
+      '<button class="home-v2-boards" id="home-v2-boards" style="display:none">' +
+        '<span class="home-v2-boards-icon">🎯</span>' +
+        '<span class="home-v2-boards-text">' +
+          '<span class="home-v2-boards-title">לוחות דינמיים</span>' +
+          '<span class="home-v2-boards-count">לוחות זמינים</span>' +
+        '</span>' +
+        '<span class="home-v2-boards-arrow">›</span>' +
+      '</button>' +
+
       // ── Weekly + Jackpot (reuse v1 hosts so the existing refresh* helpers work as-is) ──
       '<div id="home-weekly-host"></div>' +
       '<div class="home-jackpot" id="home-jackpot"></div>' +
@@ -185,6 +199,12 @@
     document.getElementById('home-v2-skins').onclick = function() {
       if (typeof showSkinShop === 'function') showSkinShop();
     };
+    document.getElementById('home-v2-boards').onclick = function() {
+      ensureAudio();
+      if (typeof showDynamicBoardsPicker === 'function') showDynamicBoardsPicker();
+    };
+    // Sync visibility immediately in case the boards-list was already loaded.
+    if (typeof updateDynamicBoardsButton === 'function') updateDynamicBoardsButton();
 
     // Tier-icons tap → reveal stats bubble (same behaviour as v1)
     var iconsTap = document.getElementById('home-icons-tap');

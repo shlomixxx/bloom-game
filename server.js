@@ -2376,8 +2376,10 @@ app.post('/api/ping', softDeviceAuth, async (req, res) => {
 // { ok: true, board: null } — clients treat null as "vanilla mode".
 // ============================================================
 let _boardCache = { value: undefined, expiresAt: 0 };
+let _boardsListCache = { value: undefined, expiresAt: 0 };
 function invalidateBoardCache() {
   _boardCache = { value: undefined, expiresAt: 0 };
+  _boardsListCache = { value: undefined, expiresAt: 0 };
 }
 
 function validateBoardDefinition(type, definition) {
@@ -2403,6 +2405,9 @@ function validateBoardDefinition(type, definition) {
   return { ok: true };
 }
 
+// Returns the SINGLE highest-priority board. Kept for back-compat but no
+// longer used by the boot path — clients now use /api/boards/available
+// and let the player pick from the list.
 app.get('/api/active-board', async (_req, res) => {
   try {
     const now = Date.now();
@@ -2422,8 +2427,6 @@ app.get('/api/active-board', async (_req, res) => {
       );
       if (r.rows.length) board = r.rows[0];
     } catch (innerErr) {
-      // Table may not exist yet on a fresh DB before schema.sql is applied
-      // — treat as "no active board" instead of 500.
       if (innerErr && innerErr.code === '42P01') {
         board = null;
       } else {
@@ -2435,6 +2438,41 @@ app.get('/api/active-board', async (_req, res) => {
   } catch (e) {
     console.error('GET /api/active-board', e);
     res.json({ ok: true, board: null });
+  }
+});
+
+// Returns ALL active boards (filtered by schedule). Client uses this to
+// populate the dynamic-boards picker. Empty array = picker hidden.
+app.get('/api/boards/available', async (_req, res) => {
+  try {
+    const now = Date.now();
+    if (_boardsListCache.value !== undefined && _boardsListCache.expiresAt > now) {
+      return res.json({ ok: true, boards: _boardsListCache.value });
+    }
+    let rows = [];
+    try {
+      const r = await pool.query(
+        `SELECT id, name, type, definition, priority
+           FROM board_configurations
+          WHERE is_active = true
+            AND (starts_at IS NULL OR starts_at <= NOW())
+            AND (ends_at   IS NULL OR ends_at   >= NOW())
+          ORDER BY priority DESC, id DESC
+          LIMIT 25`
+      );
+      rows = r.rows;
+    } catch (innerErr) {
+      if (innerErr && innerErr.code === '42P01') {
+        rows = [];
+      } else {
+        throw innerErr;
+      }
+    }
+    _boardsListCache = { value: rows, expiresAt: now + 60 * 1000 };
+    res.json({ ok: true, boards: rows });
+  } catch (e) {
+    console.error('GET /api/boards/available', e);
+    res.json({ ok: true, boards: [] });
   }
 });
 

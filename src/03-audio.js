@@ -28,39 +28,34 @@
       .catch(function() {});
   })();
 
-  // Dynamic Boards (phase 2) — pick up the active board on boot. The endpoint
-  // is cached for 60s on the server, so a periodic refetch is cheap. We retry
-  // every 90s during gameplay so an admin push reaches active players without
-  // a manual refresh, but skip the call when the tab is hidden (saves work).
-  var _activeBoard = null;
-  function applyActiveBoard(board) {
-    _activeBoard = board || null;
-    window._activeBoard = _activeBoard;
-    if (board && board.type === 'multipliers' && board.definition && Array.isArray(board.definition.multipliers)) {
-      if (typeof setColumnMultipliers === 'function') setColumnMultipliers(board.definition.multipliers);
-    } else {
-      if (typeof setColumnMultipliers === 'function') setColumnMultipliers(null);
-    }
-    if (typeof render === 'function') { try { render(); } catch (e) {} }
-  }
-  function refreshActiveBoard() {
+  // Dynamic Boards (phase 2, redesigned May 2026) — boards are now OPT-IN.
+  // The boot path only FETCHES the list of available boards so the home
+  // screen can show a "🎯 לוחות דינמיים" mode button when at least one
+  // exists. It does NOT apply any board automatically — applying happens
+  // only when the player explicitly picks one from the picker, scoped to
+  // a single play session. Daily / contest / duel / challenge / default
+  // practice are never affected by admin board pushes.
+  var _availableBoards = [];
+  window._availableBoards = _availableBoards;
+  function refreshAvailableBoards() {
     if (document.hidden) return;
-    fetch(API_BASE + '/api/active-board').then(function(r) { return r.json(); })
+    fetch(API_BASE + '/api/boards/available').then(function(r) { return r.json(); })
       .then(function(d) {
         if (!d || !d.ok) return;
-        // Compare by id+updated_at; skip render if unchanged.
-        var prevSig = _activeBoard ? (_activeBoard.id + ':' + JSON.stringify(_activeBoard.definition)) : 'null';
-        var newSig  = d.board ? (d.board.id + ':' + JSON.stringify(d.board.definition)) : 'null';
-        if (prevSig === newSig) return;
-        applyActiveBoard(d.board);
+        _availableBoards = Array.isArray(d.boards) ? d.boards : [];
+        window._availableBoards = _availableBoards;
+        // Let the home screen show/hide its boards button if it's mounted.
+        if (typeof updateDynamicBoardsButton === 'function') {
+          try { updateDynamicBoardsButton(); } catch (e) {}
+        }
       })
       .catch(function() {});
   }
-  (function loadActiveBoard() {
-    refreshActiveBoard();
-    setInterval(refreshActiveBoard, 90 * 1000);
+  (function loadAvailableBoards() {
+    refreshAvailableBoards();
+    setInterval(refreshAvailableBoards, 90 * 1000);
     document.addEventListener('visibilitychange', function() {
-      if (!document.hidden) refreshActiveBoard();
+      if (!document.hidden) refreshAvailableBoards();
     });
   })();
 

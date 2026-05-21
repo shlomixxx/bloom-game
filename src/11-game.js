@@ -10,6 +10,12 @@
     // setTimeout can be paused by tab-blur or skipped on page-hide, leaving
     // a stuck modal over the board. clearTransientBanners is idempotent.
     if (typeof clearTransientBanners === 'function') clearTransientBanners();
+    // Dynamic Boards safety: if the new mode is anything OTHER than
+    // 'dynamic', wipe any column multiplier the player picked earlier
+    // so daily/contest/duel/challenge/practice stay vanilla.
+    if (nextMode && nextMode !== 'dynamic' && typeof clearDynamicBoardSession === 'function') {
+      clearDynamicBoardSession();
+    }
     if (nextMode) mode = nextMode;
     dailyDate = todayInIsrael();
     // Resolve per-game difficulty BEFORE the first board paint. Daily stays
@@ -169,6 +175,14 @@
           }
         }
       }
+    } else if (mode === 'dynamic') {
+      // Dynamic Boards mode — practice-like but bound to a selected board.
+      // No leaderboard submit (different ruleset, can't compare). No state
+      // save (each board pick starts fresh). The board's multipliers were
+      // applied by the picker BEFORE calling init('dynamic'); init does
+      // not touch setColumnMultipliers so a refresh keeps the chosen board.
+      // If somehow getColumnMultipliers() returns null at this point, fall
+      // back to practice behavior — the bar will simply not render.
     }
     if (!restoredContestState) nextPiece = pickPiece();
     updateModeBar();

@@ -1,15 +1,20 @@
-/* BLOOM Dynamic Boards — phase 1: column score multipliers.
-   Scoped under .col-mult-bar so the rest of the app is untouched when no
-   board is active. All colors come from design tokens (base.css :root). */
+/* BLOOM Dynamic Boards — column score multipliers.
+   The bar floats AS AN OVERLAY above the grid's top edge using a negative
+   margin-top so it never reflows the surrounding UI (tier ladder etc).
+   Only rendered when the player is in the opt-in 'dynamic' mode AND a
+   multiplier is active — see syncColumnMultiplierBar in 12-tour-info.js.
+   All colors come from base.css design tokens with hex fallbacks so the
+   bar still looks right even when the tokens aren't loaded. */
 
 .col-mult-bar {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 4px;
-  width: 100%;
-  margin: 0 0 6px 0;
-  padding: 0;
+  gap: 5px;                /* matches .grid gap so pills line up with columns */
+  margin: 2px auto 6px;
+  padding: 0 6px;          /* matches .grid-wrap horizontal padding so widths line up perfectly */
   pointer-events: none;
+  box-sizing: content-box;
+  /* width is set in JS to match gridEl.style.width — pills line up with columns */
 }
 
 .col-mult-pill {
@@ -61,9 +66,161 @@
   50% { transform: scale(1.06); }
 }
 
-/* RTL: keep the visual order matching board columns. The grid renders
-   right-to-left in Hebrew, so the bar should mirror that. */
-html[dir="rtl"] .col-mult-bar,
-html:not([dir]) .col-mult-bar {
+/* Grid is rendered LTR (the engine indexes col=0..3 left-to-right).
+   The bar matches that direction so pills align with their columns. */
+.col-mult-bar { direction: ltr; }
+
+/* ============================================================
+   Home: "🎯 לוחות דינמיים" entry button (home v2)
+   ============================================================ */
+.home-v2-boards {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  margin: 10px 0;
+  border: 1px solid #E5E1D5;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #FFF7E6 0%, #FFE6D9 100%);
+  color: #1C1A18;
+  cursor: pointer;
+  font-family: inherit;
+  text-align: right;
   direction: rtl;
+  box-shadow: 0 2px 8px rgba(255, 185, 92, 0.18);
+  transition: transform 0.12s, box-shadow 0.12s;
 }
+.home-v2-boards:hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(255, 185, 92, 0.3); }
+.home-v2-boards:active { transform: scale(0.98); }
+.home-v2-boards-icon {
+  font-size: 26px;
+  width: 44px; height: 44px;
+  display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(135deg, #FFB95C, #FF6B9D);
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(255, 107, 157, 0.4);
+}
+.home-v2-boards-text { flex: 1; display: flex; flex-direction: column; }
+.home-v2-boards-title { font-size: 15px; font-weight: 800; color: #1C1A18; }
+.home-v2-boards-count { font-size: 12px; color: #BA7517; font-weight: 600; margin-top: 1px; }
+.home-v2-boards-arrow {
+  font-size: 22px; color: #BA7517; font-weight: 700; line-height: 1;
+  margin-left: 4px;
+}
+
+/* ============================================================
+   Picker modal (showDynamicBoardsPicker)
+   ============================================================ */
+.dyn-boards-overlay {
+  position: fixed; inset: 0;
+  background: rgba(28, 26, 24, 0.65);
+  z-index: 9000;
+  display: flex; align-items: center; justify-content: center;
+  padding: 16px;
+  animation: dynBoardsFadeIn 0.18s ease-out;
+}
+@keyframes dynBoardsFadeIn { from { opacity: 0; } to { opacity: 1; } }
+.dyn-boards-modal {
+  background: #FFFFFF;
+  border-radius: 18px;
+  width: 100%;
+  max-width: 440px;
+  max-height: 88vh;
+  display: flex; flex-direction: column;
+  overflow: hidden;
+  direction: rtl;
+  box-shadow: 0 28px 70px rgba(0, 0, 0, 0.35);
+  animation: dynBoardsSlideUp 0.22s ease-out;
+}
+@keyframes dynBoardsSlideUp {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+.dyn-boards-head {
+  position: relative;
+  padding: 18px 18px 14px;
+  background: linear-gradient(135deg, #FFF7E6 0%, #FFFFFF 100%);
+  border-bottom: 1px solid #F2EFE6;
+}
+.dyn-boards-close {
+  position: absolute; top: 12px; left: 12px;
+  width: 32px; height: 32px;
+  background: rgba(28, 26, 24, 0.08);
+  border: none; border-radius: 10px;
+  font-size: 16px; color: #1C1A18;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+.dyn-boards-close:hover { background: rgba(28, 26, 24, 0.15); }
+.dyn-boards-title { font-size: 19px; font-weight: 900; color: #1C1A18; margin-bottom: 4px; }
+.dyn-boards-sub { font-size: 12.5px; color: #6F6E68; line-height: 1.45; }
+
+.dyn-boards-list {
+  padding: 12px 14px;
+  overflow-y: auto;
+  flex: 1 1 auto;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.dyn-boards-card {
+  display: flex; align-items: center; gap: 12px;
+  width: 100%;
+  padding: 12px 14px;
+  background: #FAFAF6;
+  border: 1px solid #E5E1D5;
+  border-radius: 12px;
+  cursor: pointer;
+  font-family: inherit;
+  text-align: right;
+  direction: rtl;
+  transition: transform 0.1s, background 0.12s, border-color 0.12s;
+}
+.dyn-boards-card:hover {
+  background: #FFF7E6;
+  border-color: #FAC775;
+  transform: translateY(-1px);
+}
+.dyn-boards-card:active { transform: scale(0.99); }
+.dyn-boards-card-icon {
+  font-size: 22px;
+  width: 40px; height: 40px;
+  display: flex; align-items: center; justify-content: center;
+  background: #FFFFFF;
+  border: 1px solid #E5E1D5;
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+.dyn-boards-card-body { flex: 1; min-width: 0; }
+.dyn-boards-card-name {
+  font-size: 14px; font-weight: 800; color: #1C1A18;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.dyn-boards-card-type {
+  font-size: 11.5px; color: #6F6E68; margin-top: 2px; font-weight: 600;
+}
+.dyn-boards-card-cta {
+  font-size: 12px; font-weight: 700; color: #BA7517;
+  background: #FFF7E6; padding: 5px 10px; border-radius: 8px;
+  white-space: nowrap;
+}
+
+.dyn-boards-empty {
+  text-align: center;
+  padding: 32px 20px;
+}
+.dyn-boards-empty-icon { font-size: 36px; margin-bottom: 8px; }
+.dyn-boards-empty-title { font-size: 15px; font-weight: 800; color: #1C1A18; margin-bottom: 4px; }
+.dyn-boards-empty-sub { font-size: 12.5px; color: #6F6E68; line-height: 1.5; }
+
+.dyn-boards-foot {
+  padding: 12px 14px 14px;
+  border-top: 1px solid #F2EFE6;
+  background: #FAFAF6;
+}
+.dyn-boards-cancel {
+  width: 100%; padding: 11px;
+  background: #F4F1E8; color: #1C1A18;
+  border: 1px solid #E5E1D5; border-radius: 10px;
+  font-weight: 700; cursor: pointer; font-family: inherit;
+}
+.dyn-boards-cancel:hover { background: #ECE7DA; }
