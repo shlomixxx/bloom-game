@@ -42,7 +42,7 @@
   }
   // Mirror the server's SPECIAL_CELL_TYPES allowlist. Keep in sync.
   // (Defining here so the client doesn't import from the server module.)
-  const CLIENT_SPECIAL_CELL_TYPES = ['gold', 'bonus'];
+  const CLIENT_SPECIAL_CELL_TYPES = ['gold', 'bonus', 'frozen'];
   function setSpecialCells(arr) {
     if (arr == null) { _specialCells = null; _specialCellsByPos = null; return true; }
     if (!Array.isArray(arr)) return false;
@@ -10563,6 +10563,17 @@
   }
   function gsleep(ms) { return sleep(Math.round(ms * gameSpeedScale())); }
 
+  // Helper: is the tile at (r,c) "frozen" — i.e. sitting on a frozen
+  // special cell? Frozen tiles are anchored: they don't fall with
+  // gravity, and they refuse to participate in merge groups. The cell
+  // itself stays frozen even after the tile clears (it's a board
+  // property, not a per-tile state).
+  function isFrozenAt(r, c) {
+    if (typeof getSpecialCellAt !== 'function') return false;
+    var sc = getSpecialCellAt(r, c);
+    return !!(sc && sc.type === 'frozen');
+  }
+
   function findGroup(sr, sc, tier) {
     const visited = new Set();
     const group = [];
@@ -10574,6 +10585,11 @@
       if (visited.has(k)) continue;
       if (r < 0 || r >= getBoardRows() || c < 0 || c >= getBoardCols()) continue;
       if (grid[r][c] !== tier) continue;
+      // Dynamic Boards — Frozen (phase 3D): tiles sitting on a frozen
+      // special cell are inert. They count as "blocked" — the BFS treats
+      // them as if they were the wrong tier. This prevents both being a
+      // group seed AND being absorbed into a neighbor's group.
+      if (isFrozenAt(r, c)) continue;
       visited.add(k);
       group.push([r, c]);
       stack.push([r-1,c], [r+1,c], [r,c-1], [r,c+1]);
@@ -10584,12 +10600,22 @@
   function applyGravity() {
     var moves = 0;
     for (let c = 0; c < getBoardCols(); c++) {
+      // Walk bottom-up. Frozen-cell tiles act as ANCHORS: they don't
+      // move themselves, and tiles above them stack on top normally.
+      // Implementation: when we hit a frozen tile, snap the write
+      // cursor to that row-1 (the next empty slot ABOVE the anchor)
+      // so subsequent falling tiles stack above it without overwriting.
       let w = getBoardRows() - 1;
       for (let r = getBoardRows() - 1; r >= 0; r--) {
-        if (grid[r][c] !== 0) {
-          if (r !== w) { grid[w][c] = grid[r][c]; grid[r][c] = 0; moves++; }
-          w--;
+        if (grid[r][c] === 0) continue;
+        if (isFrozenAt(r, c)) {
+          // Frozen tile stays. The write cursor jumps to just above
+          // this anchor so tiles falling from higher rows land on top.
+          if (r - 1 < w) w = r - 1;
+          continue;
         }
+        if (r !== w) { grid[w][c] = grid[r][c]; grid[r][c] = 0; moves++; }
+        w--;
       }
     }
     if (window.__bloomEngineLog) console.log('[gravity]', 'moves=' + moves, 'grid=' + serializeGrid());

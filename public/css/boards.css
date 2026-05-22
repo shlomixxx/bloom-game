@@ -153,6 +153,65 @@
   }
 }
 
+/* Frozen cell (phase 3D). Ice-blue ring + ❄️ corner. When a tile is
+   AT a frozen cell, .cell.special-frozen.filled gets a frost overlay
+   on TOP of the tile colors — visually "iced over" so the player
+   instantly knows that tile is stuck. */
+.cell.special-frozen {
+  box-shadow:
+    inset 0 0 0 2px #6FB7E0,
+    inset 0 0 14px rgba(111, 183, 224, 0.55),
+    0 0 8px rgba(111, 183, 224, 0.35);
+  background-image: radial-gradient(circle at center, rgba(181, 212, 244, 0.22) 0%, transparent 65%);
+  animation: frozenCellPulse 3.0s ease-in-out infinite;
+  position: relative;
+}
+.cell.special-frozen::after {
+  content: '❄️';
+  position: absolute;
+  top: 2px; right: 3px;
+  font-size: 11px;
+  opacity: 0.95;
+  pointer-events: none;
+  filter: drop-shadow(0 1px 2px rgba(4, 44, 83, 0.4));
+  animation: frozenCornerDrift 4s ease-in-out infinite;
+}
+/* When a tile is ON a frozen cell, paint frost over the SVG so the
+   player can see at a glance "this tile is stuck". Uses ::before to
+   avoid clobbering the existing tile background. */
+.cell.special-frozen.filled::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.45) 0%, rgba(181, 212, 244, 0.35) 100%);
+  mix-blend-mode: lighten;
+  pointer-events: none;
+  z-index: 2;
+}
+.cell.special-frozen.filled svg {
+  filter: saturate(0.55) brightness(0.85);  /* ice mutes the tile color */
+}
+@keyframes frozenCellPulse {
+  0%, 100% {
+    box-shadow:
+      inset 0 0 0 2px #6FB7E0,
+      inset 0 0 14px rgba(111, 183, 224, 0.55),
+      0 0 8px rgba(111, 183, 224, 0.35);
+  }
+  50% {
+    box-shadow:
+      inset 0 0 0 2px #B5D4F4,
+      inset 0 0 22px rgba(181, 212, 244, 0.75),
+      0 0 16px rgba(111, 183, 224, 0.55);
+  }
+}
+@keyframes frozenCornerDrift {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50%      { transform: translateY(-1px) rotate(12deg); }
+}
+
 /* ============================================================
    Bonus burst — the "+N נקודות" celebration that fires when a
    merge survivor lands on a bonus cell. Built for maximum dopamine:
