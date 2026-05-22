@@ -1483,7 +1483,13 @@
     if (opts.method && opts.method !== 'GET' && !opts.headers) {
       opts.headers = { 'Content-Type': 'application/json' };
     }
-    const res = await fetch(API + path, opts);
+    // Cache-bust every admin request so reads after writes always reflect
+    // the latest server state — closes a class of "I just saved but it
+    // looks stale" complaints across every admin section, not just boards.
+    opts.cache = opts.cache || 'no-store';
+    const sep = path.indexOf('?') === -1 ? '?' : '&';
+    const url = API + path + sep + '_t=' + Date.now();
+    const res = await fetch(url, opts);
     if (res.status === 401 || res.status === 403) { location.reload(); return null; }
     if (!res.ok) { toast('שגיאת שרת: ' + res.status); return null; }
     return res.json();
@@ -2693,7 +2699,12 @@
     const listEl = document.getElementById('boards-list');
     if (!listEl) return;
     try {
-      const r = await fetch('api/boards', { credentials: 'same-origin' });
+      // Cache-bust so a freshly-saved board never gets occluded by the
+      // browser's HTTP cache. Same trick used by other admin loaders.
+      const r = await fetch('api/boards?_t=' + Date.now(), {
+        credentials: 'same-origin',
+        cache: 'no-store'
+      });
       const d = await r.json();
       if (!d.ok) throw new Error(d.error || 'bad_response');
       renderBoardsList(d.boards || []);
@@ -2790,10 +2801,21 @@
     setBoardAppliesTo(['dynamic']);
     document.getElementById('board-editor-status').textContent = '';
     if (boardId) {
-      // Fetch the row to pre-fill — single GET /boards already cached client-side
-      fetch('api/boards', { credentials: 'same-origin' }).then(function(r) { return r.json(); }).then(function(d) {
+      // Always cache-bust so opening "edit" right after a save sees the
+      // freshest row, not a stale browser-cached copy.
+      fetch('api/boards?_t=' + Date.now(), {
+        credentials: 'same-origin',
+        cache: 'no-store'
+      }).then(function(r) { return r.json(); }).then(function(d) {
         const b = (d.boards || []).find(function(x) { return x.id === boardId; });
-        if (!b) return;
+        if (!b) {
+          var stat = document.getElementById('board-editor-status');
+          if (stat) {
+            stat.innerHTML = '⚠ הלוח (id=' + boardId + ') לא נמצא בשרת. אולי נמחק?';
+            stat.style.color = '#E07A8E';
+          }
+          return;
+        }
         document.getElementById('board-name').value = b.name || '';
         document.getElementById('board-type').value = b.type || 'multipliers';
         if (b.definition && Array.isArray(b.definition.multipliers)) {
@@ -2806,6 +2828,12 @@
         document.getElementById('board-is-active').checked = !!b.is_active;
         setBoardAppliesTo(b.applies_to || ['dynamic']);
         onBoardTypeChange();
+      }).catch(function(err) {
+        var stat = document.getElementById('board-editor-status');
+        if (stat) {
+          stat.innerHTML = '⚠ שגיאה בטעינה: ' + (err.message || err);
+          stat.style.color = '#E07A8E';
+        }
       });
     }
     onBoardTypeChange();
@@ -2891,50 +2919,89 @@
     };
     statusEl.textContent = '⏳ שומר...';
     statusEl.style.color = '#6F6E68';
+    // Disable save button so a frustrated double-click can't double-save.
+    var saveBtn = document.getElementById('btn-board-save');
+    var origSaveLabel = saveBtn ? saveBtn.innerHTML : null;
+    if (saveBtn) { saveBtn.disabled = true; saveBtn.innerHTML = '⏳ שומר…'; saveBtn.style.opacity = '0.7'; }
     try {
       const url = _editingBoardId ? ('api/boards/' + _editingBoardId) : 'api/boards';
       const method = _editingBoardId ? 'PATCH' : 'POST';
+      console.log('[boards] save →', method, url, body);
       const r = await fetch(url, {
         method: method,
         credentials: 'same-origin',
+        cache: 'no-store',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body)
       });
-      const d = await r.json();
-      if (!d.ok) throw new Error(d.error || 'save_failed');
-      statusEl.textContent = '✅ נשמר';
+      const d = await r.json().catch(function() { return {}; });
+      console.log('[boards] save ← status=' + r.status, d);
+      if (!r.ok || !d.ok) throw new Error(d.error || ('http_' + r.status));
+      // VERIFY round-trip — read the row back from the server to confirm the
+      // applies_to / multipliers / is_active were actually persisted. This
+      // catches any silent server-side coercion that would surprise the admin.
+      const savedBoard = d.board || {};
+      const savedAppliesTo = (savedBoard.applies_to || []).join('/');
+      const savedActiveStr = savedBoard.is_active ? 'פעיל' : 'כבוי';
+      // GLOBAL top-of-screen toast — visible even if the admin scrolled
+      // past the modal's status line at the bottom.
+      toast('✅ נשמר: ' + (savedBoard.name || name) +
+            ' · מזהה ' + savedBoard.id +
+            ' · ' + savedActiveStr +
+            ' · חל על: ' + savedAppliesTo);
+      statusEl.innerHTML = '✅ <strong>נשמר!</strong> מזהה ' + savedBoard.id +
+                           ' · חל על: <code>' + savedAppliesTo + '</code>' +
+                           ' · ' + savedActiveStr;
       statusEl.style.color = '#04342C';
+      // Slightly longer delay so the admin sees the success state, then
+      // close modal and reload the list (cache-busted in loadBoards).
       setTimeout(function() {
         closeBoardEditor();
         loadBoards();
-      }, 400);
+      }, 1100);
     } catch (e) {
-      statusEl.textContent = '⚠ ' + (e.message || e);
+      console.error('[boards] save failed:', e);
+      toast('⚠ שמירה נכשלה: ' + (e.message || e));
+      statusEl.innerHTML = '⚠ <strong>שמירה נכשלה</strong>: ' + (e.message || e) +
+                           '<br><small style="opacity:0.7">ראה Console (F12) לפרטים</small>';
       statusEl.style.color = '#E07A8E';
+    } finally {
+      if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = origSaveLabel || '💾 שמור'; saveBtn.style.opacity = ''; }
     }
   }
 
   async function toggleBoardActive(id, makeActive) {
     try {
-      await fetch('api/boards/' + id, {
+      const r = await fetch('api/boards/' + id, {
         method: 'PATCH',
         credentials: 'same-origin',
+        cache: 'no-store',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ is_active: makeActive })
       });
+      const d = await r.json().catch(function() { return {}; });
+      if (!r.ok || !d.ok) throw new Error(d.error || ('http_' + r.status));
+      toast(makeActive ? '▶ הופעל' : '⏸ הושבת');
       loadBoards();
     } catch (e) {
-      alert('שגיאה: ' + (e.message || e));
+      toast('⚠ שגיאה: ' + (e.message || e));
     }
   }
 
   async function deleteBoard(id, name) {
     if (!confirm('למחוק את הלוח "' + name + '"? פעולה זו בלתי הפיכה.')) return;
     try {
-      await fetch('api/boards/' + id, { method: 'DELETE', credentials: 'same-origin' });
+      const r = await fetch('api/boards/' + id, {
+        method: 'DELETE',
+        credentials: 'same-origin',
+        cache: 'no-store'
+      });
+      const d = await r.json().catch(function() { return {}; });
+      if (!r.ok || !d.ok) throw new Error(d.error || ('http_' + r.status));
+      toast('🗑 הלוח "' + name + '" נמחק');
       loadBoards();
     } catch (e) {
-      alert('שגיאה: ' + (e.message || e));
+      toast('⚠ שגיאה: ' + (e.message || e));
     }
   }
 
