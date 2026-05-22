@@ -1084,6 +1084,44 @@
   html[data-theme="dark"] .over-board-rank.over-board-rank-loaded { color: #FFE9B0; }
   html[data-theme="dark"] .over-board-rank.over-board-rank-king { color: #FFFFFF; }
 
+  /* ── Game-Over: Cross-board streak banner ── */
+  .over-streak-banner {
+    margin: 8px auto; padding: 11px 18px;
+    border-radius: var(--radius-md); font-size: 14px;
+    text-align: center; direction: rtl;
+    max-width: 360px;
+    background: linear-gradient(135deg, rgba(255,107,107,0.10), rgba(255,180,0,0.10));
+    border: 1px solid rgba(255,107,107,0.30);
+    color: #8B3E0A;
+    animation: bestDeltaIn 0.5s cubic-bezier(.2,1.2,.4,1);
+  }
+  .over-streak-banner strong { font-weight: 900; font-variant-numeric: tabular-nums; }
+  .over-streak-progress {
+    margin-top: 4px;
+    font-size: 12px;
+    color: #6F6E68;
+    font-weight: 600;
+  }
+  .over-streak-banner-milestone {
+    background: linear-gradient(135deg, #FFD86B, #FF6B9D);
+    border-color: rgba(255,107,157,0.6);
+    color: #FFFFFF;
+    box-shadow: 0 0 20px rgba(255,107,157,0.5);
+    animation: bestDeltaIn 0.5s cubic-bezier(.2,1.2,.4,1), boardBestPulse 1.6s ease-in-out 0.5s infinite;
+  }
+  .over-streak-reward {
+    margin-top: 6px;
+    font-size: 13px;
+    font-weight: 800;
+    color: #FFFFFF;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+  }
+  html[data-theme="dark"] .over-streak-banner { color: #FF9B8C; }
+  html[data-theme="dark"] .over-streak-banner .over-streak-progress { color: #B5B3AC; }
+  html[data-theme="dark"] .over-streak-banner-milestone,
+  html[data-theme="dark"] .over-streak-banner-milestone .over-streak-progress,
+  html[data-theme="dark"] .over-streak-banner-milestone .over-streak-reward { color: #FFFFFF; }
+
   /* ── Game-Over: streak FOMO variants (§1.5) ── */
   .over-streak {
     margin: 10px auto;

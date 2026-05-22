@@ -2599,6 +2599,27 @@
             __isBoardBest = setBoardBest(__boardId, score, highestTier);
           }
         } catch (e) {}
+        // Cross-board streak — increments at most once per Asia/Jerusalem day.
+        // Milestone hits (3/7/14/30/60/100) grant credits via earnCredits.
+        var __streakResult = null;
+        try {
+          if (typeof recordDynamicStreakDay === 'function') {
+            __streakResult = recordDynamicStreakDay();
+            if (__streakResult && __streakResult.milestoneHit && __streakResult.reward) {
+              // Award via earnCredits with a synthetic action key so the
+              // existing dedup table (one earn per action+date) doesn't
+              // conflict with regular gift rewards.
+              try {
+                if (typeof earnCredits === 'function') {
+                  earnCredits('event_gift', {
+                    amount: __streakResult.reward,
+                    streak_milestone: __streakResult.milestoneHit
+                  });
+                }
+              } catch (e) {}
+            }
+          }
+        } catch (e) {}
         // Fire the global per-board leaderboard submit + render the
         // game-over screen optimistically. The fetch returns rank+total
         // which we paint into the screen once it resolves (so the
@@ -2619,7 +2640,8 @@
           boardBest: __prevBoardBest,
           isBoardBest: __isBoardBest,
           activeBoard: window._activeDynamicBoard,
-          boardLeader: { pending: true }
+          boardLeader: { pending: true },
+          streakResult: __streakResult
         });
         (function() {
           try {

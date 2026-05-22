@@ -606,6 +606,29 @@
           bestDeltaHtml +
           boardBestHtml +
           (opts.boardLeader ? '<div class="over-board-rank" id="over-board-rank-host">⏳ מחשב דירוג בלוח…</div>' : '') +
+          (function() {
+            var sr = opts.streakResult;
+            if (!sr || sr.alreadyToday) return '';
+            var after = sr.streakAfter | 0;
+            if (after < 1) return '';
+            if (sr.milestoneHit) {
+              return '<div class="over-streak-banner over-streak-banner-milestone">' +
+                '🎉 רצף לוחות דינמיים: <strong>' + after + ' ימים!</strong>' +
+                '<div class="over-streak-reward">+' + (sr.reward || 0) + '💎 בונוס באדג׳!</div>' +
+              '</div>';
+            }
+            var nextMile = (typeof nextStreakMilestone === 'function') ? nextStreakMilestone(after) : null;
+            var prog = '';
+            if (nextMile) {
+              var gap = nextMile - after;
+              var reward = (window.DYN_STREAK_REWARDS || {})[nextMile] || 0;
+              prog = '<div class="over-streak-progress">עוד <strong>' + gap + ' ימים</strong> לבאדג׳ ' + nextMile + (reward ? ' (+' + reward + '💎)' : '') + '</div>';
+            }
+            return '<div class="over-streak-banner">' +
+              '🔥 רצף לוחות דינמיים: <strong>' + after + ' ימים</strong>' +
+              prog +
+            '</div>';
+          })() +
           rankTierHtml +
           rivalHtml +
           continueHtml +

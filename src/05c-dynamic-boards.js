@@ -118,30 +118,46 @@
     btn.style.display = '';
     var countEl = btn.querySelector('.home-v2-boards-count');
     var focus = pickFocusBoard(boards);
+    // Streak status — if the player is on day ≥3 and HASN'T played
+    // today, that's the highest-priority headline (loss aversion).
+    var streakSt = (typeof getDynamicStreak === 'function') ? getDynamicStreak() : { count: 0, last: null };
+    var streakDanger = (typeof isStreakInDanger === 'function') && isStreakInDanger();
     if (countEl) {
       // Default label
       var defaultLabel = boards.length + ' ' + (boards.length === 1 ? 'לוח זמין' : 'לוחות זמינים');
-      if (focus) {
+      var label;
+      // Streak-in-danger overrides FOMO countdowns because losing a
+      // streak is a stronger signal than missing a single special board.
+      if (streakDanger) {
+        label = '🔥 הרצף שלך בסכנה! ' + streakSt.count + ' ימים — שחק היום';
+      } else if (focus) {
         var u = boardUrgency(focus);
         var endsIn = boardEndsInMs(focus);
-        var label = '';
         if (u === 'critical') {
           label = '🔥 ' + (focus.name || 'לוח') + ' מסתיים בעוד ' + fmtCountdown(endsIn);
         } else if (u === 'new') {
           label = '🆕 ' + (focus.name || 'לוח') + ' — חדש היום';
         } else if (u === 'soon') {
           label = '⏰ ' + (focus.name || 'לוח') + ' — נשאר ' + fmtCountdown(endsIn);
+        } else if (streakSt.count >= 1) {
+          // Calm-state streak surfacing — even without urgency, show
+          // the streak so the player knows what they're protecting.
+          label = '🔥 רצף ' + streakSt.count + (streakSt.count === 1 ? ' יום' : ' ימים') + ' · ' + defaultLabel;
         } else {
           label = defaultLabel;
         }
-        countEl.textContent = label;
+      } else if (streakSt.count >= 1) {
+        label = '🔥 רצף ' + streakSt.count + (streakSt.count === 1 ? ' יום' : ' ימים') + ' · ' + defaultLabel;
       } else {
-        countEl.textContent = defaultLabel;
+        label = defaultLabel;
       }
+      countEl.textContent = label;
     }
     // Add urgency CSS class to the button so we can pulse it for critical.
-    btn.classList.remove('fomo-critical', 'fomo-new', 'fomo-soon');
-    if (focus) {
+    btn.classList.remove('fomo-critical', 'fomo-new', 'fomo-soon', 'fomo-streak-danger');
+    if (streakDanger) {
+      btn.classList.add('fomo-streak-danger');
+    } else if (focus) {
       var fu = boardUrgency(focus);
       if (fu === 'critical' || fu === 'new' || fu === 'soon') btn.classList.add('fomo-' + fu);
     }
@@ -198,6 +214,107 @@
   window.getBoardBest        = getBoardBest;
   window.setBoardBest        = setBoardBest;
   window.formatBoardScore    = formatBoardScore;
+
+  // ============================================================
+  // Cross-board streak (Phase 5 — multi-day return loop)
+  //
+  // The streak counts CONSECUTIVE Asia/Jerusalem days on which the
+  // player has finished at least one dynamic-board game. Missing a
+  // day resets the streak (no auto-freeze in v1 — losing it on
+  // purpose makes the regain feel earned).
+  //
+  // Milestones: 3, 7, 14, 30 days. Each milestone fires a celebratory
+  // game-over banner + grants credits via earnCredits('event_gift').
+  // The home button + picker header surface the running streak so
+  // the player is reminded every time they return to the app.
+  // ============================================================
+  var DYN_STREAK_KEY = 'bloom_dyn_streak';
+  var DYN_STREAK_MILESTONES = [3, 7, 14, 30, 60, 100];
+  var DYN_STREAK_REWARDS    = { 3: 50, 7: 150, 14: 300, 30: 600, 60: 1000, 100: 2000 };
+  function getDynamicStreak() {
+    try {
+      var raw = localStorage.getItem(DYN_STREAK_KEY);
+      if (!raw) return { count: 0, last: null, milestonesClaimed: [] };
+      var obj = JSON.parse(raw);
+      if (!obj || typeof obj.count !== 'number') return { count: 0, last: null, milestonesClaimed: [] };
+      if (!Array.isArray(obj.milestonesClaimed)) obj.milestonesClaimed = [];
+      return obj;
+    } catch (e) {
+      return { count: 0, last: null, milestonesClaimed: [] };
+    }
+  }
+  function setDynamicStreak(obj) {
+    try { localStorage.setItem(DYN_STREAK_KEY, JSON.stringify(obj)); } catch (e) {}
+  }
+  // Returns YYYY-MM-DD in Asia/Jerusalem — same epoch as the daily seed.
+  function streakToday() {
+    if (typeof todayInIsrael === 'function') return todayInIsrael();
+    var d = new Date();
+    return d.toISOString().slice(0, 10);
+  }
+  function dayDiffDates(a, b) {
+    if (!a || !b) return Infinity;
+    var ad = new Date(a + 'T00:00:00');
+    var bd = new Date(b + 'T00:00:00');
+    return Math.round((bd - ad) / (24 * 60 * 60 * 1000));
+  }
+  // Called when player FINISHES a dynamic-board game. Returns a status
+  // object: { streakBefore, streakAfter, milestoneHit, reward }.
+  function recordDynamicStreakDay() {
+    var st = getDynamicStreak();
+    var today = streakToday();
+    var before = st.count | 0;
+    var milestoneHit = null;
+    if (st.last === today) {
+      // Already counted today — no-op, return current state.
+      return { streakBefore: before, streakAfter: before, milestoneHit: null, alreadyToday: true };
+    }
+    var gap = dayDiffDates(st.last, today);
+    if (st.last && gap === 1) {
+      st.count = (st.count | 0) + 1;
+    } else {
+      // First play OR a day was skipped → reset to 1.
+      st.count = 1;
+      // Reset claimed milestones so the player can re-earn them on the next streak.
+      st.milestonesClaimed = [];
+    }
+    st.last = today;
+    setDynamicStreak(st);
+    var after = st.count;
+    // Milestone check — only the first time it's hit per streak.
+    if (DYN_STREAK_MILESTONES.indexOf(after) !== -1 && st.milestonesClaimed.indexOf(after) === -1) {
+      milestoneHit = after;
+      st.milestonesClaimed = (st.milestonesClaimed || []).concat([after]);
+      setDynamicStreak(st);
+    }
+    return {
+      streakBefore: before,
+      streakAfter: after,
+      milestoneHit: milestoneHit,
+      reward: milestoneHit ? DYN_STREAK_REWARDS[milestoneHit] : 0,
+      alreadyToday: false
+    };
+  }
+  // Returns the next milestone target above the current streak — used
+  // for the "עוד N לבאדג׳" progress line.
+  function nextStreakMilestone(currentCount) {
+    for (var i = 0; i < DYN_STREAK_MILESTONES.length; i++) {
+      if (DYN_STREAK_MILESTONES[i] > currentCount) return DYN_STREAK_MILESTONES[i];
+    }
+    return null;
+  }
+  // True when the player has a streak ≥3 and HASN'T played today (yet).
+  // The streak is at risk — drives the loss-aversion FOMO banner.
+  function isStreakInDanger() {
+    var st = getDynamicStreak();
+    if (!st || (st.count | 0) < 3) return false;
+    return st.last !== streakToday();
+  }
+  window.getDynamicStreak       = getDynamicStreak;
+  window.recordDynamicStreakDay = recordDynamicStreakDay;
+  window.nextStreakMilestone    = nextStreakMilestone;
+  window.isStreakInDanger       = isStreakInDanger;
+  window.DYN_STREAK_REWARDS     = DYN_STREAK_REWARDS;
 
   // Human-readable labels for themes / shapes so the player can tell the
   // boards apart before clicking — boring rectangular cards = no clicks.
@@ -267,6 +384,49 @@
   function showDynamicBoardsPicker() {
     closeDynamicBoardsPicker();
     var boards = Array.isArray(window._availableBoards) ? window._availableBoards : [];
+    // Streak banner — sits between the title and the list. Three states:
+    //  - none / single day → muted "🌱 התחל רצף היום" pioneer copy
+    //  - active streak, played today → calm "🔥 רצף N — שמרת אותו היום!"
+    //  - active streak, NOT played today → red-orange "🔥 הרצף בסכנה!"
+    var streakSt2 = (typeof getDynamicStreak === 'function') ? getDynamicStreak() : { count: 0, last: null };
+    var streakDanger2 = (typeof isStreakInDanger === 'function') && isStreakInDanger();
+    var streakBannerHtml = '';
+    if (streakSt2.count >= 1) {
+      var nextM = (typeof nextStreakMilestone === 'function') ? nextStreakMilestone(streakSt2.count) : null;
+      var nextMRew = (window.DYN_STREAK_REWARDS || {})[nextM] || 0;
+      var progressLine = nextM
+        ? '<div class="dyn-streak-progress">עוד <strong>' + (nextM - streakSt2.count) + ' ימים</strong> לבאדג׳ ' + nextM + (nextMRew ? ' (+' + nextMRew + '💎)' : '') + '</div>'
+        : '<div class="dyn-streak-progress">🏆 הרצף הארוך בהיסטוריה שלך!</div>';
+      if (streakDanger2) {
+        streakBannerHtml =
+          '<div class="dyn-streak-banner dyn-streak-banner-danger">' +
+            '<div class="dyn-streak-banner-icon">🔥</div>' +
+            '<div class="dyn-streak-banner-body">' +
+              '<div class="dyn-streak-banner-title">הרצף בסכנה! <strong>' + streakSt2.count + ' ימים</strong></div>' +
+              '<div class="dyn-streak-banner-sub">שחק כל לוח דינמי עד חצות (אסיה/ירושלים) כדי לשמור עליו</div>' +
+              progressLine +
+            '</div>' +
+          '</div>';
+      } else {
+        streakBannerHtml =
+          '<div class="dyn-streak-banner dyn-streak-banner-safe">' +
+            '<div class="dyn-streak-banner-icon">🔥</div>' +
+            '<div class="dyn-streak-banner-body">' +
+              '<div class="dyn-streak-banner-title">רצף <strong>' + streakSt2.count + ' ימים</strong> · שמרת אותו היום ✓</div>' +
+              progressLine +
+            '</div>' +
+          '</div>';
+      }
+    } else {
+      streakBannerHtml =
+        '<div class="dyn-streak-banner dyn-streak-banner-pioneer">' +
+          '<div class="dyn-streak-banner-icon">🌱</div>' +
+          '<div class="dyn-streak-banner-body">' +
+            '<div class="dyn-streak-banner-title">התחל רצף לוחות דינמיים היום</div>' +
+            '<div class="dyn-streak-banner-sub">סיים לוח אחד כל יום · יום 3 = 50💎, יום 7 = 150💎, יום 14 = 300💎, יום 30 = 600💎</div>' +
+          '</div>' +
+        '</div>';
+    }
     var overlay = document.createElement('div');
     overlay.id = 'dynamic-boards-picker';
     overlay.className = 'dyn-boards-overlay';
@@ -275,7 +435,8 @@
         '<div class="dyn-boards-head">' +
           '<button class="dyn-boards-close" aria-label="סגור">✕</button>' +
           '<div class="dyn-boards-title">🎯 לוחות דינמיים</div>' +
-          '<div class="dyn-boards-sub">בחר לוח לסשן חד-פעמי. הניקוד לא נשמר בלוחות המובילים — חוויית משחק טהורה.</div>' +
+          '<div class="dyn-boards-sub">בחר לוח לסשן חד-פעמי. הניקוד נשמר בלוח המובילים של הלוח הזה.</div>' +
+          streakBannerHtml +
         '</div>' +
         '<div class="dyn-boards-list" id="dyn-boards-list"></div>' +
         '<div class="dyn-boards-foot">' +
