@@ -5520,13 +5520,18 @@ const XP_MAP = {
 
 // Server-authoritative skin prices. Must match SKIN_PACKS in src/01-constants.js.
 // Client cannot influence the cost; buy-skin reads from this map only.
+// NOTE: This is a fallback for the legacy code path. The current buy-skin
+// implementation reads from the skin_configurations DB table (admin-managed).
+// When a skin is in the DB it wins; this map covers the case where a player
+// somehow ends up requesting a legacy id before the DB table is seeded.
 const SKIN_PRICES = {
   classic: 0,
   ocean:   200,
   candy:   200,
   space:   300,
   fire:    300,
-  gold:    500
+  gold:    500,
+  aurora:  300
 };
 const LEVELS = [
   { level: 1,  xp: 0,      title: 'מתחיל' },
