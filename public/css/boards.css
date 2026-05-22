@@ -332,6 +332,63 @@
   100% { transform: translate(-50%, -180%) scale(1.0); opacity: 0; }
 }
 
+/* Frozen RELOCATE (phase 3D++) — after shatter, the frozen cell jumps
+   to a random empty position. The toast at the top of the screen
+   announces it, the pulse at the new position helps the eye find it
+   instantly. Distinct from the shatter burst (different color tone
+   so the player parses two events: "broke + moved"). */
+.frozen-relocate-toast {
+  position: fixed;
+  top: 24px;
+  left: 50%;
+  transform: translateX(-50%) translateY(-200%);
+  background: linear-gradient(135deg, #6FB7E0 0%, #B5D4F4 100%);
+  color: #04335C;
+  padding: 10px 18px;
+  border-radius: 14px;
+  font-weight: 800;
+  font-size: 14px;
+  white-space: nowrap;
+  box-shadow: 0 10px 30px rgba(111, 183, 224, 0.55);
+  z-index: 9099;
+  pointer-events: none;
+  animation: frozenRelocateToastIn 0.5s cubic-bezier(0.2, 1.4, 0.3, 1) forwards,
+             frozenRelocateToastOut 0.4s ease-in 1.4s forwards;
+}
+@keyframes frozenRelocateToastIn {
+  to { transform: translateX(-50%) translateY(0); }
+}
+@keyframes frozenRelocateToastOut {
+  to { transform: translateX(-50%) translateY(-200%); opacity: 0; }
+}
+
+/* Pulse halo at the new frozen position. Two concentric expanding
+   rings draw the eye even if the player wasn't looking that way. */
+.frozen-relocate-pulse {
+  position: fixed;
+  width: 0; height: 0;
+  z-index: 9098;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+}
+.frozen-relocate-pulse::before,
+.frozen-relocate-pulse::after {
+  content: '';
+  position: absolute;
+  top: 0; left: 0;
+  width: 30px; height: 30px;
+  border-radius: 50%;
+  border: 3px solid #6FB7E0;
+  transform: translate(-50%, -50%) scale(0.4);
+  opacity: 1;
+  animation: frozenRelocatePulse 1.0s ease-out forwards;
+}
+.frozen-relocate-pulse::after { animation-delay: 0.18s; border-color: #B5D4F4; }
+@keyframes frozenRelocatePulse {
+  0%   { transform: translate(-50%, -50%) scale(0.4); opacity: 1; }
+  100% { transform: translate(-50%, -50%) scale(2.6); opacity: 0; }
+}
+
 /* ============================================================
    Bonus burst — the "+N נקודות" celebration that fires when a
    merge survivor lands on a bonus cell. Built for maximum dopamine:

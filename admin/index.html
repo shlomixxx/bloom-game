@@ -987,6 +987,16 @@
           </label>
         </div>
 
+        <!-- Frozen-only: relocate mode dropdown (phase 3D++) -->
+        <div id="board-frozen-relocate-row" style="display:flex;align-items:center;justify-content:center;gap:6px;flex-wrap:wrap;margin-bottom:8px;padding:8px 10px;background:#E6F0FA;border:1px solid #6FB7E0;border-radius:8px">
+          <span style="font-size:11px;color:#0E4D7E;font-weight:700">❄️ אחרי שבר:</span>
+          <select id="board-relocate-mode" style="font-size:11px;padding:4px 8px;border-radius:6px;background:#FFFFFF;color:#1C1A18;border:1px solid #6FB7E0;font-weight:600">
+            <option value="static">🧊 סטטי — תא נשאר במקום (ברירת מחדל)</option>
+            <option value="shatter">🎲 זז אחרי שבר — קופץ למיקום אקראי</option>
+          </select>
+          <button class="tip-btn" data-tip-text="<strong>❄️ התנהגות תא קפוא אחרי שבר</strong><br>שולט מה קורה לתא הקפוא אחרי ששחקן ניפץ אריח שעליו.<div class=&quot;tip-example&quot;>🧊 <strong>סטטי (ברירת מחדל)</strong>: התא נשאר באותו מיקום. האריח הבא שיפול עליו יוקפא שוב. צפוי, אפשר ללמוד.<br><br>🎲 <strong>זז אחרי שבר</strong>: ברגע השבר, התא הקפוא <em>קופץ למיקום אקראי</em> (תא ריק לא-מיוחד). השחקן רואה ❄️ toast מלמעלה + פולס במיקום החדש. ⭐ <strong>הכי ממכר</strong> — שחקן נצח אבל הפיצוץ הבא במקום שונה, צריך לחשב מחדש. ״chaos קל״ שמונע שעמום.<br><br>💡 <strong>מצב מומלץ לאתגר</strong>: שלב את שני המצבים בלוחות שונים — סטטי לטיול בנוף, שבר לליגת אלופים. או: סמן ״שבר״ ללוח הדיילי שיהיה מטורף כל יום.</div>">?</button>
+        </div>
+
         <div style="font-size:11px;color:#6F6E68;margin-bottom:8px;text-align:center">בחר צבע למעלה, לחץ על תא לצבוע אותו. עמודה 1 = הימנית.</div>
         <div id="board-cells-grid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:4px;max-width:240px;margin:0 auto 8px;direction:ltr">
           <!-- 24 cells injected by JS, row-major order matching the engine -->
@@ -2829,6 +2839,8 @@
     document.getElementById('board-type').value = 'multipliers';
     setMultipliers([1, 1, 1, 1]);
     setSpecialCellsUI([]);  // reset grid editor
+    var relEl = document.getElementById('board-relocate-mode');
+    if (relEl) relEl.value = 'static';
     document.getElementById('board-starts-at').value = '';
     document.getElementById('board-ends-at').value = '';
     document.getElementById('board-audience').value = 'all';
@@ -2862,6 +2874,11 @@
           setSpecialCellsUI(b.definition.cells);
         } else {
           setSpecialCellsUI([]);
+        }
+        // Preload the saved relocate_mode (defaults to 'static' if missing).
+        var relSavedEl = document.getElementById('board-relocate-mode');
+        if (relSavedEl) {
+          relSavedEl.value = (b.definition && b.definition.relocate_mode) || 'static';
         }
         if (b.starts_at) document.getElementById('board-starts-at').value = new Date(b.starts_at).toISOString().slice(0, 16);
         if (b.ends_at)   document.getElementById('board-ends-at').value   = new Date(b.ends_at).toISOString().slice(0, 16);
@@ -3017,6 +3034,8 @@
           b.classList.toggle('paint-mode-active', on);
           b.style.borderColor = on ? (PAINT_BORDER[mode] || '#1C1A18') : 'transparent';
         });
+        // Toggle the frozen-relocate row visibility (it's frozen-only).
+        updateCellsCount();
       };
     });
   }
@@ -3080,6 +3099,10 @@
     if (frozen > 0)  parts.push('❄️ ' + frozen);
     el.textContent = parts.length ? parts.join(' · ') : '0 תאים';
     el.style.color = cells.length === 0 ? '#6F6E68' : (cells.length > 8 ? '#E07A8E' : '#BA7517');
+    // Show the frozen-relocate row only when there's at least one frozen
+    // cell (it's irrelevant otherwise — saves visual real estate).
+    var relRow = document.getElementById('board-frozen-relocate-row');
+    if (relRow) relRow.style.display = (frozen > 0 || _paintMode === 'frozen') ? 'flex' : 'none';
   }
 
   function setCellsPreset(name) {
@@ -3131,6 +3154,11 @@
         statusEl.style.color = '#E07A8E';
         return;
       }
+      // Phase 3D++: include relocate_mode (only meaningful when there
+      // are frozen cells, but the server accepts it on any board).
+      var relSaveEl = document.getElementById('board-relocate-mode');
+      var relMode = relSaveEl ? relSaveEl.value : 'static';
+      if (relMode && relMode !== 'static') definition.relocate_mode = relMode;
     }
     const startsAtVal = document.getElementById('board-starts-at').value;
     const endsAtVal   = document.getElementById('board-ends-at').value;

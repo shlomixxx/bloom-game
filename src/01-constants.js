@@ -76,6 +76,28 @@
     return true;
   }
 
+  // Surgical move of a single special cell at runtime (phase 3D++).
+  // Used by the "relocate after shatter" mechanic — mutates _specialCells
+  // + _specialCellsByPos in place without rebuilding the whole list.
+  // Returns true on success, false if the source doesn't exist or the
+  // target is already occupied by another special cell.
+  function moveSpecialCellInPlace(fromR, fromC, toR, toC) {
+    if (!_specialCells || !_specialCellsByPos) return false;
+    if (fromR === toR && fromC === toC) return false;
+    var rows = getBoardRows(), cols = getBoardCols();
+    if (toR < 0 || toR >= rows || toC < 0 || toC >= cols) return false;
+    var fromKey = fromR + ',' + fromC;
+    var toKey = toR + ',' + toC;
+    var entry = _specialCellsByPos[fromKey];
+    if (!entry) return false;
+    if (_specialCellsByPos[toKey]) return false;  // target already special
+    entry.row = toR;
+    entry.col = toC;
+    delete _specialCellsByPos[fromKey];
+    _specialCellsByPos[toKey] = entry;
+    return true;
+  }
+
   const SVG = {
     circle:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/></svg>',
     leaf:    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21c.5-4.5 2.5-8 7-10"/><path d="M9 18c6.218 0 10.5-3.288 11-12v-2h-4.014c-9 0-11.986 4-12 9c0 1 0 3 2 5h3z"/></svg>',

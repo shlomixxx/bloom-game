@@ -76,6 +76,28 @@
     return true;
   }
 
+  // Surgical move of a single special cell at runtime (phase 3D++).
+  // Used by the "relocate after shatter" mechanic — mutates _specialCells
+  // + _specialCellsByPos in place without rebuilding the whole list.
+  // Returns true on success, false if the source doesn't exist or the
+  // target is already occupied by another special cell.
+  function moveSpecialCellInPlace(fromR, fromC, toR, toC) {
+    if (!_specialCells || !_specialCellsByPos) return false;
+    if (fromR === toR && fromC === toC) return false;
+    var rows = getBoardRows(), cols = getBoardCols();
+    if (toR < 0 || toR >= rows || toC < 0 || toC >= cols) return false;
+    var fromKey = fromR + ',' + fromC;
+    var toKey = toR + ',' + toC;
+    var entry = _specialCellsByPos[fromKey];
+    if (!entry) return false;
+    if (_specialCellsByPos[toKey]) return false;  // target already special
+    entry.row = toR;
+    entry.col = toC;
+    delete _specialCellsByPos[fromKey];
+    _specialCellsByPos[toKey] = entry;
+    return true;
+  }
+
   const SVG = {
     circle:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/></svg>',
     leaf:    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21c.5-4.5 2.5-8 7-10"/><path d="M9 18c6.218 0 10.5-3.288 11-12v-2h-4.014c-9 0-11.986 4-12 9c0 1 0 3 2 5h3z"/></svg>',
@@ -10633,6 +10655,77 @@
       }
       if (typeof soundMerge === 'function') soundMerge(2);
       if (typeof buzz === 'function') buzz([30, 50]);
+    } catch (e) {}
+
+    // Phase 3D++: relocate the frozen cell to a random empty spot if
+    // admin enabled the "shatter relocate" mode for this board. Runs
+    // AFTER the shatter burst (550ms) so the player sees: shatter at
+    // old position → toast → new ice forming at new position.
+    var board = window._activeSpecialBoard;
+    var relocateMode = (board && board.definition && board.definition.relocate_mode) || 'static';
+    if (relocateMode === 'shatter') {
+      setTimeout(function() { relocateFrozenCellRandomly(r, c); }, 550);
+    }
+  }
+
+  // Pick a random empty non-special cell on the board and move the frozen
+  // cell at (fromR, fromC) there. If no candidate exists (rare — full
+  // board or all special), the frozen cell silently disappears.
+  function relocateFrozenCellRandomly(fromR, fromC) {
+    if (typeof moveSpecialCellInPlace !== 'function') return;
+    var rows = getBoardRows(), cols = getBoardCols();
+    var candidates = [];
+    for (var r = 0; r < rows; r++) {
+      for (var c = 0; c < cols; c++) {
+        if (r === fromR && c === fromC) continue;
+        if (getSpecialCellAt(r, c)) continue;     // skip other special cells
+        if (grid[r][c] !== 0) continue;            // skip filled cells
+        candidates.push([r, c]);
+      }
+    }
+    if (!candidates.length) {
+      // Nowhere to go — frozen cell disappears. Drop it from the map.
+      if (typeof setSpecialCells === 'function' && typeof getSpecialCells === 'function') {
+        var cur = getSpecialCells() || [];
+        var filtered = cur.filter(function(x) { return !(x.row === fromR && x.col === fromC); });
+        setSpecialCells(filtered);
+        if (typeof render === 'function') render();
+      }
+      return;
+    }
+    var pick = candidates[Math.floor(Math.random() * candidates.length)];
+    var moved = moveSpecialCellInPlace(fromR, fromC, pick[0], pick[1]);
+    if (!moved) return;
+    showFrozenRelocateToast(pick[0], pick[1]);
+    if (typeof render === 'function') render();
+  }
+
+  // Top-of-screen toast announcing the relocation + a "❄️ poof" overlay
+  // anchored to the new cell so the player can locate it instantly.
+  function showFrozenRelocateToast(newR, newC) {
+    try {
+      // Top banner
+      var toast = document.createElement('div');
+      toast.className = 'frozen-relocate-toast';
+      toast.textContent = '❄️ הקרח קפץ למיקום חדש!';
+      document.body.appendChild(toast);
+      setTimeout(function() { toast.remove(); }, 1800);
+      // Pulse at new position (after render places the new ice ring there)
+      setTimeout(function() {
+        var gridEl = document.getElementById('grid');
+        if (!gridEl) return;
+        var idx = newR * getBoardCols() + newC;
+        var cellEl = gridEl.children[idx];
+        if (!cellEl) return;
+        var rect = cellEl.getBoundingClientRect();
+        var pulse = document.createElement('div');
+        pulse.className = 'frozen-relocate-pulse';
+        pulse.style.left = (rect.left + rect.width / 2) + 'px';
+        pulse.style.top = (rect.top + rect.height / 2) + 'px';
+        document.body.appendChild(pulse);
+        setTimeout(function() { pulse.remove(); }, 1100);
+      }, 80);
+      if (typeof soundDrop === 'function') soundDrop();
     } catch (e) {}
   }
 

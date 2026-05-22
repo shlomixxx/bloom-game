@@ -2443,6 +2443,14 @@ function validateBoardDefinition(type, definition) {
       if (seen.has(key)) return { ok: false, error: 'duplicate_cell_position' };
       seen.add(key);
     }
+    // Optional: relocate_mode (phase 3D++). Controls whether frozen cells
+    // jump to a random empty position after they shatter.
+    if (definition.relocate_mode !== undefined) {
+      const validModes = ['static', 'shatter'];
+      if (!validModes.includes(definition.relocate_mode)) {
+        return { ok: false, error: 'bad_relocate_mode' };
+      }
+    }
     return { ok: true };
   }
   // Future types (shape / themed / mode / vip) accept any object —
