@@ -5127,6 +5127,126 @@
   50%      { transform: translateY(-1px) rotate(12deg); }
 }
 
+/* Frozen SHADOW — empty cells below a frozen anchor in the same column.
+   The frozen tile blocks gravity downward, leaving these cells unfillable.
+   Tinting them ice-blue with a small ❄️ marker makes the visual intent
+   crystal clear: "this is blocked by ice from above, not a bug". */
+.cell.frozen-shadow {
+  background-image:
+    repeating-linear-gradient(
+      45deg,
+      rgba(181, 212, 244, 0.18) 0px,
+      rgba(181, 212, 244, 0.18) 4px,
+      rgba(255, 255, 255, 0.10) 4px,
+      rgba(255, 255, 255, 0.10) 8px
+    );
+  position: relative;
+}
+.cell.frozen-shadow::after {
+  content: '❄️';
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 14px;
+  opacity: 0.35;
+  pointer-events: none;
+  animation: frozenShadowDrift 4s ease-in-out infinite;
+}
+@keyframes frozenShadowDrift {
+  0%, 100% { transform: translate(-50%, -50%) translateY(0); opacity: 0.35; }
+  50%      { transform: translate(-50%, -50%) translateY(2px); opacity: 0.5; }
+}
+
+/* Frozen CRACK frames (1/2/3) — visible cracks on a frozen tile as
+   adjacent merges accumulate. 3 = shatter (engine removes tile,
+   .frozen-shatter-burst plays). Cracks paint OVER the tile via
+   ::before so they're visible on top of the ice overlay. */
+.cell.special-frozen.frozen-crack-1.filled::before {
+  background:
+    linear-gradient(45deg, transparent 47%, rgba(255,255,255,0.6) 49%, rgba(255,255,255,0.6) 51%, transparent 53%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.45) 0%, rgba(181, 212, 244, 0.35) 100%);
+}
+.cell.special-frozen.frozen-crack-2.filled::before {
+  background:
+    linear-gradient(45deg,  transparent 47%, rgba(255,255,255,0.8) 49%, rgba(255,255,255,0.8) 51%, transparent 53%),
+    linear-gradient(135deg, transparent 47%, rgba(255,255,255,0.7) 49%, rgba(255,255,255,0.7) 51%, transparent 53%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.45) 0%, rgba(181, 212, 244, 0.35) 100%);
+  animation: frozenCrackShimmer 0.6s ease-out;
+}
+.cell.special-frozen.frozen-crack-3.filled::before {
+  background:
+    linear-gradient(45deg,  transparent 45%, rgba(255,255,255,1.0) 48%, rgba(255,255,255,1.0) 52%, transparent 55%),
+    linear-gradient(135deg, transparent 45%, rgba(255,255,255,0.9) 48%, rgba(255,255,255,0.9) 52%, transparent 55%),
+    linear-gradient(90deg,  transparent 47%, rgba(255,255,255,0.8) 49%, rgba(255,255,255,0.8) 51%, transparent 53%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.55) 0%, rgba(181, 212, 244, 0.45) 100%);
+  animation: frozenCrackShimmer 0.4s ease-out infinite alternate;
+}
+@keyframes frozenCrackShimmer {
+  from { filter: brightness(1); }
+  to   { filter: brightness(1.35); }
+}
+
+/* Frozen SHATTER burst — fires when a frozen tile thaws (3 adjacent
+   merges accumulated). 4 ice flakes fly outward + a "+200" amount
+   in the middle. The most rewarding moment in the frozen mechanic. */
+.frozen-shatter-burst {
+  position: fixed;
+  z-index: 9998;
+  width: 0; height: 0;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+}
+.frozen-shatter-burst .fs-ice {
+  position: absolute;
+  top: 0; left: 0;
+  font-size: 18px;
+  filter: drop-shadow(0 1px 4px rgba(111, 183, 224, 0.6));
+  animation: fsIceFly 0.85s ease-out forwards;
+}
+.fs-ice-1 { animation-name: fsIceFlyTL; }
+.fs-ice-2 { animation-name: fsIceFlyTR; }
+.fs-ice-3 { animation-name: fsIceFlyBL; }
+.fs-ice-4 { animation-name: fsIceFlyBR; }
+@keyframes fsIceFlyTL {
+  0%   { transform: translate(-50%, -50%) scale(0.5); opacity: 0; }
+  20%  { opacity: 1; }
+  100% { transform: translate(-180%, -180%) rotate(-90deg) scale(0.5); opacity: 0; }
+}
+@keyframes fsIceFlyTR {
+  0%   { transform: translate(-50%, -50%) scale(0.5); opacity: 0; }
+  20%  { opacity: 1; }
+  100% { transform: translate(80%, -180%) rotate(90deg) scale(0.5); opacity: 0; }
+}
+@keyframes fsIceFlyBL {
+  0%   { transform: translate(-50%, -50%) scale(0.5); opacity: 0; }
+  20%  { opacity: 1; }
+  100% { transform: translate(-180%, 80%) rotate(-90deg) scale(0.5); opacity: 0; }
+}
+@keyframes fsIceFlyBR {
+  0%   { transform: translate(-50%, -50%) scale(0.5); opacity: 0; }
+  20%  { opacity: 1; }
+  100% { transform: translate(80%, 80%) rotate(90deg) scale(0.5); opacity: 0; }
+}
+.fs-burst-amount {
+  position: absolute;
+  top: 0; left: 0;
+  transform: translate(-50%, -50%) scale(0.4);
+  background: linear-gradient(135deg, #B5D4F4 0%, #6FB7E0 100%);
+  color: #04335C;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-weight: 900;
+  font-size: 16px;
+  box-shadow: 0 4px 14px rgba(111, 183, 224, 0.55);
+  white-space: nowrap;
+  animation: fsBurstAmount 0.85s cubic-bezier(0.2, 1.4, 0.3, 1) forwards;
+}
+@keyframes fsBurstAmount {
+  0%   { transform: translate(-50%, -50%) scale(0.4); opacity: 0; }
+  30%  { transform: translate(-50%, -75%) scale(1.2); opacity: 1; }
+  100% { transform: translate(-50%, -180%) scale(1.0); opacity: 0; }
+}
+
 /* ============================================================
    Bonus burst — the "+N נקודות" celebration that fires when a
    merge survivor lands on a bonus cell. Built for maximum dopamine:

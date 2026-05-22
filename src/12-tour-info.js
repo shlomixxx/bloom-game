@@ -937,6 +937,32 @@
         _specByPos[sc.row + ',' + sc.col] = sc;
       }
     }
+    // Phase 3D+: compute which empty cells sit BELOW a frozen tile in
+    // the same column. They get a .frozen-shadow tint so the player
+    // understands the empty area is intentionally blocked by ice from
+    // above, not just an empty hole. Walk top-down per column, find the
+    // topmost frozen-with-tile, then mark empty cells below it (stop
+    // at the next non-empty cell).
+    var _frozenShadowed = null;
+    if (_specByPos && Array.isArray(grid)) {
+      _frozenShadowed = {};
+      for (var fc = 0; fc < getBoardCols(); fc++) {
+        var anchor = -1;
+        for (var fr = 0; fr < getBoardRows(); fr++) {
+          var spp = _specByPos[fr + ',' + fc];
+          if (spp && spp.type === 'frozen' && grid[fr][fc] !== 0) { anchor = fr; break; }
+        }
+        if (anchor >= 0) {
+          for (var fr2 = anchor + 1; fr2 < getBoardRows(); fr2++) {
+            if (grid[fr2][fc] === 0) {
+              _frozenShadowed[fr2 + ',' + fc] = true;
+            } else {
+              break;
+            }
+          }
+        }
+      }
+    }
     for (let r = 0; r < getBoardRows(); r++) {
       for (let c = 0; c < getBoardCols(); c++) {
         const t = grid[r][c];
@@ -948,7 +974,22 @@
         // even on empty squares (player needs to know where to aim).
         if (_specByPos) {
           var spec = _specByPos[r + ',' + c];
-          if (spec) cell.classList.add('special-' + spec.type);
+          if (spec) {
+            cell.classList.add('special-' + spec.type);
+            // Frozen-cell crack progression: if there's a tile here and
+            // its thaw count > 0, paint cracks. After 3 cracks the tile
+            // shatters (handled by the engine — by render time, the tile
+            // is already gone, so this only fires while count is 1-2).
+            if (spec.type === 'frozen' && t > 0 && typeof getFrozenThawCount === 'function') {
+              var thawN = getFrozenThawCount(r, c);
+              if (thawN > 0) cell.classList.add('frozen-crack-' + Math.min(3, thawN));
+            }
+          }
+        }
+        // Shadow indicator: empty cell below a frozen anchor in the
+        // same column — gravity is blocked by the ice above.
+        if (_frozenShadowed && _frozenShadowed[r + ',' + c]) {
+          cell.classList.add('frozen-shadow');
         }
         if (t > 0) {
           cell.classList.add('filled');

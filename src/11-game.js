@@ -75,6 +75,7 @@
     currentGameMaxChain = 0;
     tierUpHit = {};   // reset milestone-bonus tracker for this fresh game
     scoreMilestonesHit = {}; // reset score milestones
+    _frozenThawProgress = {};   // reset frozen-cell thaw counters (phase 3D+)
     bestBeatenThisGame = false; // reset live best tracking
     usedContinue = false; // reset second chance
     // Clear duel mode unless this init was called from startDuelGame
@@ -1121,6 +1122,67 @@
     return !!(sc && sc.type === 'frozen');
   }
 
+  // Frozen-cell adjacent-thaw mechanic (phase 3D+).
+  // When a merge happens at (mergeRow, mergeCol), any frozen-with-tile
+  // cell that's orthogonally adjacent gets a crack. After 3 cracks the
+  // tile shatters: it's removed, score gets a shatter bonus, and the
+  // frozen cell goes back to empty (ready to freeze the next tile).
+  // This turns frozen from "stuck until bomb" → strategic puzzle:
+  // merge near the ice to thaw it.
+  function checkFrozenThawAdjacent(mergeRow, mergeCol) {
+    var deltas = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+    var rows = getBoardRows(), cols = getBoardCols();
+    for (var i = 0; i < deltas.length; i++) {
+      var nr = mergeRow + deltas[i][0];
+      var nc = mergeCol + deltas[i][1];
+      if (nr < 0 || nr >= rows || nc < 0 || nc >= cols) continue;
+      if (!isFrozenAt(nr, nc) || grid[nr][nc] === 0) continue;
+      var key = nr + ',' + nc;
+      _frozenThawProgress[key] = (_frozenThawProgress[key] || 0) + 1;
+      if (_frozenThawProgress[key] >= FROZEN_THAW_THRESHOLD) {
+        thawFrozenTile(nr, nc);
+        delete _frozenThawProgress[key];
+      }
+    }
+  }
+
+  // Read-only accessor for render() to paint crack frames.
+  function getFrozenThawCount(r, c) {
+    return _frozenThawProgress[r + ',' + c] || 0;
+  }
+
+  function thawFrozenTile(r, c) {
+    if (grid[r][c] === 0) return;
+    score += FROZEN_SHATTER_BONUS;
+    grid[r][c] = 0;
+    try {
+      var gridElT = document.getElementById('grid');
+      if (gridElT) {
+        var tIdx = r * getBoardCols() + c;
+        var tCell = gridElT.children[tIdx];
+        if (tCell) {
+          // Burst overlay anchored to the cell. CSS handles the
+          // shatter animation (icicle pieces flying out).
+          var rect = tCell.getBoundingClientRect();
+          var burst = document.createElement('div');
+          burst.className = 'frozen-shatter-burst';
+          burst.style.left = (rect.left + rect.width / 2) + 'px';
+          burst.style.top = (rect.top + rect.height / 2) + 'px';
+          burst.innerHTML =
+            '<span class="fs-ice fs-ice-1">❄️</span>' +
+            '<span class="fs-ice fs-ice-2">❄️</span>' +
+            '<span class="fs-ice fs-ice-3">❄️</span>' +
+            '<span class="fs-ice fs-ice-4">❄️</span>' +
+            '<span class="fs-burst-amount">+' + FROZEN_SHATTER_BONUS + '</span>';
+          document.body.appendChild(burst);
+          setTimeout(function() { burst.remove(); }, 900);
+        }
+      }
+      if (typeof soundMerge === 'function') soundMerge(2);
+      if (typeof buzz === 'function') buzz([30, 50]);
+    } catch (e) {}
+  }
+
   function findGroup(sr, sc, tier) {
     const visited = new Set();
     const group = [];
@@ -1294,6 +1356,12 @@
     { at: 1000000, label: '🏆 1M!',    reward: 100 }
   ];
   var scoreMilestonesHit = {};
+  // Frozen-cell thaw progress (phase 3D+): "r,c" → adjacent-merge count.
+  // When a frozen tile accumulates 3 adjacent merges, it shatters and
+  // awards a shatter bonus. Map is reset in init() per fresh game.
+  var _frozenThawProgress = {};
+  var FROZEN_THAW_THRESHOLD = 3;
+  var FROZEN_SHATTER_BONUS = 200;
 
   function checkScoreMilestones() {
     for (var i = 0; i < SCORE_MILESTONES.length; i++) {
@@ -1645,6 +1713,12 @@
               bumpScore();
               soundMerge(nt);
               checkScoreMilestones();
+              // Frozen-thaw: every merge "cracks" any frozen-with-tile
+              // cell that's orthogonally adjacent to the merge survivor.
+              // 3 cracks → shatter + +200 bonus. Lets players actively
+              // unstick frozen tiles via skill instead of waiting for a
+              // random bomb event.
+              try { checkFrozenThawAdjacent(kr, kc); } catch (e) {}
               if (group.length >= 3) showMultiMergeBadge(group.length);
               if (chainCount > currentGameMaxChain) currentGameMaxChain = chainCount;
               bumpLifetimeMax(BEST_CHAIN_KEY, chainCount);
