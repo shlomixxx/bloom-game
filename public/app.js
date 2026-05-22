@@ -5749,6 +5749,26 @@
     var bd = new Date(b + 'T00:00:00');
     return Math.round((bd - ad) / (24 * 60 * 60 * 1000));
   }
+  // Streak freeze count — pure client-side counter. Server enforces
+  // the purchase (200💎 atomic deduction); the count itself is local.
+  // A determined cheater could give themselves freezes, but the only
+  // thing a freeze does is protect THEIR OWN streak — no trade value.
+  var FREEZES_KEY = 'bloom_dyn_freezes';
+  function getStreakFreezes() {
+    try { return Math.max(0, parseInt(localStorage.getItem(FREEZES_KEY) || '0', 10) || 0); } catch (e) { return 0; }
+  }
+  function setStreakFreezes(n) {
+    try { localStorage.setItem(FREEZES_KEY, String(Math.max(0, n | 0))); } catch (e) {}
+  }
+  function consumeStreakFreeze() {
+    var n = getStreakFreezes();
+    if (n <= 0) return false;
+    setStreakFreezes(n - 1);
+    return true;
+  }
+  window.getStreakFreezes = getStreakFreezes;
+  window.setStreakFreezes = setStreakFreezes;
+
   // Called when player FINISHES a dynamic-board game. Returns a status
   // object: { streakBefore, streakAfter, milestoneHit, reward }. When
   // the admin has disabled the streak feature this becomes a no-op.
@@ -5763,10 +5783,21 @@
       return { streakBefore: before, streakAfter: before, milestoneHit: null, alreadyToday: true };
     }
     var gap = dayDiffDates(st.last, today);
+    var freezeUsed = false;
     if (st.last && gap === 1) {
       st.count = (st.count | 0) + 1;
+    } else if (st.last && gap === 2 && dynConfigBool('dyn_streak_freeze_enabled', true) && getStreakFreezes() > 0) {
+      // 1-day miss + freeze available → consume freeze, treat as continuous.
+      consumeStreakFreeze();
+      st.count = (st.count | 0) + 1;
+      freezeUsed = true;
     } else {
-      // First play OR a day was skipped → reset to 1.
+      // First play OR a real gap (≥2 days without freeze, or freeze absent) → reset to 1.
+      // Save the lost streak for the comeback mechanic.
+      if (before >= dynConfigInt('dyn_comeback_min_streak', 3)) {
+        st.lostStreak = before;
+        st.lostStreakDate = today;
+      }
       st.count = 1;
       // Reset claimed milestones so the player can re-earn them on the next streak.
       st.milestonesClaimed = [];
@@ -5785,6 +5816,7 @@
       streakAfter: after,
       milestoneHit: milestoneHit,
       reward: milestoneHit ? dynStreakReward(milestoneHit) : 0,
+      freezeUsed: freezeUsed,
       alreadyToday: false
     };
   }
@@ -6586,6 +6618,145 @@
   window.openMysteryChest          = openMysteryChest;
   window.dynChestFeatureEnabled    = dynChestFeatureEnabled;
 
+  // ============================================================
+  // Streak Freeze purchase + Comeback bonus (May 2026)
+  // ============================================================
+  function buyStreakFreeze() {
+    if (!dynConfigBool('dyn_streak_freeze_enabled', true)) return Promise.resolve({ ok: false, reason: 'disabled' });
+    var deviceId = (typeof getDeviceId === 'function') ? getDeviceId() : '';
+    var token    = (typeof deviceToken !== 'undefined') ? deviceToken : null;
+    return fetch('/api/player/streak-freeze/buy', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ deviceId: deviceId, token: token })
+    })
+      .then(function(r) { return r.json(); })
+      .catch(function() { return { ok: false, reason: 'network' }; })
+      .then(function(d) {
+        if (d && d.ok) {
+          // Increment local freeze count + refresh balance UI.
+          setStreakFreezes(getStreakFreezes() + 1);
+          try { if (typeof playerBalance !== 'undefined' && typeof d.newBalance === 'number') playerBalance = d.newBalance; } catch (e) {}
+          try { if (typeof updateBalanceDisplay === 'function') updateBalanceDisplay(); } catch (e) {}
+          try { if (typeof soundMilestone === 'function') soundMilestone(3); } catch (e) {}
+          try { if (typeof buzz === 'function') buzz([40, 40]); } catch (e) {}
+        }
+        return d;
+      });
+  }
+  window.buyStreakFreeze = buyStreakFreeze;
+
+  // Returns the comeback context if eligible, else null. Reads
+  // ONLY localStorage — server-side dedup happens in the claim call.
+  function getComebackContext() {
+    if (!dynConfigBool('dyn_comeback_enabled', true)) return null;
+    var st = getDynamicStreak();
+    var minDays = dynConfigInt('dyn_comeback_min_days', 3);
+    var minStreak = dynConfigInt('dyn_comeback_min_streak', 3);
+    var lostStreak = st.lostStreak | 0;
+    if (lostStreak < minStreak) return null;
+    var lostDate = st.lostStreakDate || st.last;
+    if (!lostDate) return null;
+    var today = streakToday();
+    var diff = dayDiffDates(lostDate, today);
+    if (diff < minDays) return null;
+    // Already claimed this comeback (cleared after claim).
+    if (st.comebackClaimedFor === lostDate) return null;
+    return {
+      daysAway: diff,
+      lostStreak: lostStreak,
+      lostStreakDate: lostDate,
+      reward: dynConfigInt('dyn_comeback_reward', 150)
+    };
+  }
+  function claimComebackBonus() {
+    var ctx = getComebackContext();
+    if (!ctx) return Promise.resolve({ ok: false, reason: 'not_eligible' });
+    var deviceId = (typeof getDeviceId === 'function') ? getDeviceId() : '';
+    var token    = (typeof deviceToken !== 'undefined') ? deviceToken : null;
+    return fetch('/api/player/comeback-claim', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        deviceId: deviceId,
+        token: token,
+        daysAway: ctx.daysAway,
+        lostStreak: ctx.lostStreak
+      })
+    })
+      .then(function(r) { return r.json(); })
+      .catch(function() { return { ok: false, reason: 'network' }; })
+      .then(function(d) {
+        if (d && d.ok) {
+          // Mark this comeback as claimed so we don't show it again.
+          var st = getDynamicStreak();
+          st.comebackClaimedFor = ctx.lostStreakDate;
+          setDynamicStreak(st);
+          // Grant the freeze gift if configured.
+          if (d.freezeGift) {
+            setStreakFreezes(getStreakFreezes() + (d.freezeGift | 0));
+          }
+          // Refresh balance UI.
+          try { if (typeof playerBalance !== 'undefined' && typeof d.newBalance === 'number') playerBalance = d.newBalance; } catch (e) {}
+          try { if (typeof updateBalanceDisplay === 'function') updateBalanceDisplay(); } catch (e) {}
+        }
+        return d;
+      });
+  }
+  window.getComebackContext = getComebackContext;
+  window.claimComebackBonus = claimComebackBonus;
+
+  // The comeback overlay — big celebration when a lapsed player
+  // returns. Fires from the picker open / home open if eligible.
+  function showComebackOverlay() {
+    var ctx = getComebackContext();
+    if (!ctx) return;
+    // Tear down any existing overlay first.
+    document.querySelectorAll('.dyn-comeback-overlay').forEach(function(el) { el.remove(); });
+    var overlay = document.createElement('div');
+    overlay.className = 'dyn-comeback-overlay';
+    overlay.innerHTML =
+      '<div class="dyn-comeback-card">' +
+        '<div class="dyn-comeback-confetti"></div>' +
+        '<div class="dyn-comeback-icon">👋</div>' +
+        '<div class="dyn-comeback-title">ברוך שובך!</div>' +
+        '<div class="dyn-comeback-sub">היה לך רצף <strong>' + ctx.lostStreak + ' ימים</strong>. נתחיל מחדש?</div>' +
+        '<div class="dyn-comeback-reward">+<span id="dyn-comeback-amount">' + ctx.reward + '</span>💎</div>' +
+        '<div class="dyn-comeback-gift">+ הקפאת רצף 🛡 (חינם!)</div>' +
+        '<button class="dyn-comeback-claim">🎁 קבל את הבונוס</button>' +
+        '<button class="dyn-comeback-skip">לא תודה</button>' +
+      '</div>';
+    document.body.appendChild(overlay);
+    overlay.querySelector('.dyn-comeback-claim').onclick = function() {
+      claimComebackBonus().then(function(d) {
+        if (d && d.ok) {
+          var amountEl = overlay.querySelector('#dyn-comeback-amount');
+          if (amountEl) amountEl.textContent = d.reward;
+          try { if (typeof soundMilestone === 'function') soundMilestone(5); } catch (e) {}
+          try { if (typeof buzz === 'function') buzz([60, 40, 80]); } catch (e) {}
+          overlay.classList.add('dyn-comeback-celebrating');
+          setTimeout(function() {
+            overlay.classList.add('dyn-comeback-out');
+            setTimeout(function() { overlay.remove(); }, 320);
+          }, 1800);
+        } else {
+          // Soft-fail — close overlay either way.
+          overlay.classList.add('dyn-comeback-out');
+          setTimeout(function() { overlay.remove(); }, 320);
+        }
+      });
+    };
+    overlay.querySelector('.dyn-comeback-skip').onclick = function() {
+      // Mark claimed so we don't re-prompt (player explicitly declined).
+      var st = getDynamicStreak();
+      st.comebackClaimedFor = ctx.lostStreakDate;
+      setDynamicStreak(st);
+      overlay.classList.add('dyn-comeback-out');
+      setTimeout(function() { overlay.remove(); }, 320);
+    };
+  }
+  window.showComebackOverlay = showComebackOverlay;
+
   // Human-readable labels for themes / shapes so the player can tell the
   // boards apart before clicking — boring rectangular cards = no clicks.
   var THEME_LABELS = {
@@ -6755,6 +6926,22 @@
           questsHeadlineHtml +
           achProgressHtml +
           streakBannerHtml +
+          (function() {
+            // Streak Freeze row — only when the feature is on. Shows
+            // current count + buy button. Hidden if streak itself is off.
+            if (!streakEnabled2) return '';
+            if (!dynConfigBool('dyn_streak_freeze_enabled', true)) return '';
+            var count = getStreakFreezes();
+            var price = dynConfigInt('dyn_streak_freeze_price', 200);
+            return '<div class="dyn-freeze-row">' +
+              '<span class="dyn-freeze-icon">🛡</span>' +
+              '<span class="dyn-freeze-text">' +
+                'הקפאות רצף: <strong>' + count + '</strong>' +
+                (count > 0 ? ' <span class="dyn-freeze-hint">(מצילות יום אחד שפספסת)</span>' : ' <span class="dyn-freeze-hint">(קנה לפני שתפספס יום)</span>') +
+              '</span>' +
+              '<button class="dyn-freeze-buy" id="dyn-freeze-buy-btn">🛡 קנה (' + price + '💎)</button>' +
+            '</div>';
+          })() +
         '</div>' +
         '<div class="dyn-boards-list" id="dyn-boards-list"></div>' +
         '<div class="dyn-boards-foot">' +
@@ -6766,6 +6953,30 @@
     if (achBtn) achBtn.onclick = showAchievementsModal;
     var qBtn = document.getElementById('dyn-quests-headline');
     if (qBtn) qBtn.onclick = showQuestsModal;
+    // Streak-freeze buy button + comeback overlay (if eligible).
+    var freezeBuyBtn = document.getElementById('dyn-freeze-buy-btn');
+    if (freezeBuyBtn) freezeBuyBtn.onclick = function() {
+      freezeBuyBtn.disabled = true;
+      freezeBuyBtn.innerHTML = '⏳';
+      buyStreakFreeze().then(function(d) {
+        freezeBuyBtn.disabled = false;
+        if (d && d.ok) {
+          // Re-render the picker header to show updated count + balance.
+          closeDynamicBoardsPicker();
+          setTimeout(showDynamicBoardsPicker, 50);
+        } else {
+          freezeBuyBtn.innerHTML = d && d.reason === 'insufficient_funds' ? '💎 חסר' : 'שגיאה';
+          setTimeout(function() {
+            freezeBuyBtn.innerHTML = '🛡 קנה (' + (dynConfigInt('dyn_streak_freeze_price', 200)) + '💎)';
+          }, 1800);
+        }
+      });
+    };
+    // Comeback — fire 350ms after picker opens so the player sees the
+    // shell first, then the celebration. Acts as a positive re-entry.
+    setTimeout(function() {
+      if (getComebackContext()) showComebackOverlay();
+    }, 350);
 
     var listEl = document.getElementById('dyn-boards-list');
     if (!boards.length) {
@@ -14664,8 +14875,18 @@
             if (!sr || sr.alreadyToday) return '';
             var after = sr.streakAfter | 0;
             if (after < 1) return '';
+            // Special variant — the freeze auto-applied (saved the streak).
+            // Loss-aversion psychology: this is the moment the player
+            // realises the 200💎 they spent was worth it. Highlight loud.
+            var freezeBanner = '';
+            if (sr.freezeUsed) {
+              freezeBanner = '<div class="over-streak-banner over-streak-banner-freeze">' +
+                '🛡 הקפאת רצף הצילה אותך!' +
+                '<div class="over-streak-progress">איבדת יום אבל הרצף ממשיך</div>' +
+              '</div>';
+            }
             if (sr.milestoneHit) {
-              return '<div class="over-streak-banner over-streak-banner-milestone">' +
+              return freezeBanner + '<div class="over-streak-banner over-streak-banner-milestone">' +
                 '🎉 רצף לוחות דינמיים: <strong>' + after + ' ימים!</strong>' +
                 '<div class="over-streak-reward">+' + (sr.reward || 0) + '💎 בונוס באדג׳!</div>' +
               '</div>';
@@ -14677,7 +14898,7 @@
               var reward = (window.DYN_STREAK_REWARDS || {})[nextMile] || 0;
               prog = '<div class="over-streak-progress">עוד <strong>' + gap + ' ימים</strong> לבאדג׳ ' + nextMile + (reward ? ' (+' + reward + '💎)' : '') + '</div>';
             }
-            return '<div class="over-streak-banner">' +
+            return freezeBanner + '<div class="over-streak-banner">' +
               '🔥 רצף לוחות דינמיים: <strong>' + after + ' ימים</strong>' +
               prog +
             '</div>';

@@ -6901,6 +6901,174 @@ html[data-theme="dark"] .dyn-quest-row-claimed { background: #2C2926; }
 }
 
 /* ============================================================
+   Streak Freeze row in picker header
+   ============================================================ */
+.dyn-freeze-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(159,225,203,0.18), rgba(61,139,250,0.10));
+  border: 1px solid rgba(61,139,250,0.30);
+  direction: rtl;
+  color: #1A4A8C;
+}
+.dyn-freeze-icon { font-size: 22px; flex-shrink: 0; }
+.dyn-freeze-text {
+  flex: 1;
+  font-size: 12.5px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+.dyn-freeze-text strong { font-weight: 900; font-size: 14px; }
+.dyn-freeze-hint {
+  display: block;
+  font-size: 10.5px;
+  font-weight: 600;
+  opacity: 0.75;
+  margin-top: 1px;
+}
+.dyn-freeze-buy {
+  background: linear-gradient(135deg,#3D8BFA,#1A4A8C);
+  border: none;
+  color: #FFFFFF;
+  padding: 7px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  font-family: inherit;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(61,139,250,0.35);
+}
+.dyn-freeze-buy:hover { filter: brightness(1.06); }
+.dyn-freeze-buy:active { transform: scale(0.96); }
+.dyn-freeze-buy:disabled { opacity: 0.6; cursor: wait; }
+html[data-theme="dark"] .dyn-freeze-row {
+  color: #B5D4F4;
+  background: linear-gradient(135deg, rgba(61,139,250,0.16), rgba(159,225,203,0.08));
+}
+
+/* Freeze-used variant of the over-streak banner */
+.over-streak-banner-freeze {
+  background: linear-gradient(135deg, rgba(61,139,250,0.18), rgba(159,225,203,0.12));
+  border-color: rgba(61,139,250,0.45);
+  color: #1A4A8C;
+  animation: bestDeltaIn 0.5s cubic-bezier(.2,1.2,.4,1), dynFreezePulse 1.4s ease-in-out 0.3s 3;
+}
+@keyframes dynFreezePulse {
+  0%, 100% { box-shadow: 0 0 8px rgba(61,139,250,0.25); }
+  50%      { box-shadow: 0 0 18px rgba(61,139,250,0.55); }
+}
+html[data-theme="dark"] .over-streak-banner-freeze { color: #B5D4F4; }
+
+/* ============================================================
+   Comeback overlay — big "ברוך שובך!" celebration
+   ============================================================ */
+.dyn-comeback-overlay {
+  position: fixed; inset: 0;
+  background: radial-gradient(ellipse at center, rgba(0,0,0,0.78) 0%, rgba(0,0,0,0.92) 100%);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  z-index: 10070;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 14px;
+  animation: dynBoardsFadeIn 0.25s ease;
+}
+.dyn-comeback-overlay.dyn-comeback-out {
+  animation: dynChestFadeOut 0.32s ease forwards;
+}
+.dyn-comeback-card {
+  position: relative;
+  width: min(380px, 92vw);
+  padding: 32px 28px 24px;
+  border-radius: 24px;
+  background: linear-gradient(135deg, #FFD86B 0%, #FF6B9D 50%, #3D8BFA 100%);
+  text-align: center;
+  color: #FFFFFF;
+  direction: rtl;
+  box-shadow: 0 0 50px rgba(255,107,157,0.45), 0 0 100px rgba(61,139,250,0.3);
+  animation: dynChestPopIn 0.45s cubic-bezier(.2,1.2,.4,1);
+}
+.dyn-comeback-card.dyn-comeback-celebrating {
+  animation: dynChestPopIn 0.45s cubic-bezier(.2,1.2,.4,1), dynChestRimPulse 1.6s ease-in-out infinite;
+}
+.dyn-comeback-icon {
+  font-size: 80px;
+  filter: drop-shadow(0 6px 18px rgba(0,0,0,0.4));
+  animation: dynComebackWave 1.4s ease-in-out infinite;
+}
+@keyframes dynComebackWave {
+  0%, 100% { transform: rotate(-8deg); }
+  50%      { transform: rotate(15deg); }
+}
+.dyn-comeback-title {
+  font-size: 32px;
+  font-weight: 900;
+  margin-top: 8px;
+  text-shadow: 0 2px 12px rgba(0,0,0,0.35);
+}
+.dyn-comeback-sub {
+  font-size: 14px;
+  font-weight: 700;
+  margin-top: 8px;
+  opacity: 0.95;
+  line-height: 1.4;
+}
+.dyn-comeback-sub strong { font-weight: 900; }
+.dyn-comeback-reward {
+  font-size: 42px;
+  font-weight: 900;
+  margin-top: 18px;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 18px rgba(255,255,255,0.5), 0 2px 12px rgba(0,0,0,0.4);
+}
+.dyn-comeback-gift {
+  font-size: 13px;
+  font-weight: 700;
+  margin-top: 6px;
+  opacity: 0.9;
+  background: rgba(255,255,255,0.18);
+  border-radius: 999px;
+  padding: 5px 14px;
+  display: inline-block;
+}
+.dyn-comeback-claim {
+  display: block;
+  width: 100%;
+  margin-top: 20px;
+  padding: 14px;
+  border-radius: 14px;
+  border: none;
+  background: rgba(255,255,255,0.95);
+  color: #FF6B9D;
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 900;
+  cursor: pointer;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.25);
+}
+.dyn-comeback-claim:hover { filter: brightness(1.05); transform: translateY(-1px); }
+.dyn-comeback-claim:active { transform: scale(0.98); }
+.dyn-comeback-skip {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+  padding: 8px;
+  border: none;
+  background: transparent;
+  color: rgba(255,255,255,0.7);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* ============================================================
    In-game target chip (dynamic mode "beat your score" loop)
    ============================================================ */
 .dyn-target-chip {

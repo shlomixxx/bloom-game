@@ -766,6 +766,33 @@ INSERT INTO game_config (key, value) VALUES ('dyn_chest_daily_cap',        '20')
 INSERT INTO game_config (key, value) VALUES ('dyn_chest_boosted_count',    '3')  ON CONFLICT (key) DO NOTHING;
 
 -- ============================================================
+-- Dynamic Boards — Streak Freeze (May 2026)
+--
+-- Duolingo-style soft-monetization. Player buys "freezes" with 💎
+-- that auto-apply when they miss a single day. Prevents the
+-- "I lost my 14-day streak over one missed day" frustration which
+-- causes hard churn after 2 weeks.
+-- ============================================================
+INSERT INTO game_config (key, value) VALUES ('dyn_streak_freeze_enabled', 'true') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('dyn_streak_freeze_price',   '200')  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('dyn_streak_freeze_max_per_streak', '2') ON CONFLICT (key) DO NOTHING;
+
+-- ============================================================
+-- Dynamic Boards — Comeback Bonus (May 2026)
+--
+-- When a player who HAD a streak ≥3 returns after 3+ days of
+-- absence, surface a big celebration overlay + grant a bonus.
+-- Re-engages lapsed players with a positive emotion instead of
+-- the punishment of "your streak was reset".
+-- ============================================================
+INSERT INTO game_config (key, value) VALUES ('dyn_comeback_enabled',     'true') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('dyn_comeback_min_days',    '3')    ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('dyn_comeback_min_streak',  '3')    ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('dyn_comeback_reward',      '150')  ON CONFLICT (key) DO NOTHING;
+-- Bonus boost when comeback player ALSO has a freeze ready to apply.
+INSERT INTO game_config (key, value) VALUES ('dyn_comeback_freeze_gift', '1')    ON CONFLICT (key) DO NOTHING;
+
+-- ============================================================
 -- Dynamic Boards — phase 2 (May 2026)
 -- The board_configurations table backs admin-managed alternate
 -- boards (column multipliers, themed packs, future special cells

@@ -611,8 +611,18 @@
             if (!sr || sr.alreadyToday) return '';
             var after = sr.streakAfter | 0;
             if (after < 1) return '';
+            // Special variant — the freeze auto-applied (saved the streak).
+            // Loss-aversion psychology: this is the moment the player
+            // realises the 200💎 they spent was worth it. Highlight loud.
+            var freezeBanner = '';
+            if (sr.freezeUsed) {
+              freezeBanner = '<div class="over-streak-banner over-streak-banner-freeze">' +
+                '🛡 הקפאת רצף הצילה אותך!' +
+                '<div class="over-streak-progress">איבדת יום אבל הרצף ממשיך</div>' +
+              '</div>';
+            }
             if (sr.milestoneHit) {
-              return '<div class="over-streak-banner over-streak-banner-milestone">' +
+              return freezeBanner + '<div class="over-streak-banner over-streak-banner-milestone">' +
                 '🎉 רצף לוחות דינמיים: <strong>' + after + ' ימים!</strong>' +
                 '<div class="over-streak-reward">+' + (sr.reward || 0) + '💎 בונוס באדג׳!</div>' +
               '</div>';
@@ -624,7 +634,7 @@
               var reward = (window.DYN_STREAK_REWARDS || {})[nextMile] || 0;
               prog = '<div class="over-streak-progress">עוד <strong>' + gap + ' ימים</strong> לבאדג׳ ' + nextMile + (reward ? ' (+' + reward + '💎)' : '') + '</div>';
             }
-            return '<div class="over-streak-banner">' +
+            return freezeBanner + '<div class="over-streak-banner">' +
               '🔥 רצף לוחות דינמיים: <strong>' + after + ' ימים</strong>' +
               prog +
             '</div>';

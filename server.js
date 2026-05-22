@@ -2918,6 +2918,118 @@ app.post('/api/boards/chest/open', requireDeviceAuth, async (req, res) => {
 });
 
 // ============================================================
+// Dynamic Boards — Streak Freeze purchase (May 2026)
+//
+// Atomic deduct via the existing balance-guarded UPDATE pattern.
+// Client increments its local freeze counter on successful response.
+// We don't store a server-side freeze count (the protection itself
+// is purely client-side — buying a freeze converts 💎 to "missed-day
+// insurance"). The atomic deduction is the anti-cheat door.
+// ============================================================
+app.post('/api/player/streak-freeze/buy', requireDeviceAuth, async (req, res) => {
+  try {
+    const { deviceId } = req.body || {};
+    if (typeof deviceId !== 'string' || deviceId.length < 8 || deviceId.length > 64) {
+      return res.status(400).json({ error: 'bad_device' });
+    }
+    if (!checkRateLimit('streak_freeze:buy', deviceId, 10, 60 * 60 * 1000)) {
+      return res.status(429).json({ error: 'rate_limited' });
+    }
+    const cfg = await pool.query(
+      `SELECT key, value FROM game_config WHERE key IN ('dyn_streak_freeze_enabled','dyn_streak_freeze_price')`
+    );
+    const cfgMap = {};
+    cfg.rows.forEach(r => { cfgMap[r.key] = r.value; });
+    if (cfgMap.dyn_streak_freeze_enabled === 'false') {
+      return res.json({ ok: false, reason: 'disabled' });
+    }
+    const price = parseInt(cfgMap.dyn_streak_freeze_price, 10) || 200;
+    // Atomic guarded deduction — caller must have at least `price` gems.
+    const upd = await pool.query(
+      `UPDATE player_profiles SET balance = balance - $1, updated_at = NOW()
+        WHERE device_id = $2 AND balance >= $1 RETURNING balance`,
+      [price, deviceId]
+    );
+    if (!upd.rows[0]) {
+      return res.json({ ok: false, reason: 'insufficient_funds', price: price });
+    }
+    res.json({ ok: true, price: price, newBalance: upd.rows[0].balance });
+  } catch (e) {
+    console.error('POST /api/player/streak-freeze/buy', e);
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
+// ============================================================
+// Dynamic Boards — Comeback claim (May 2026)
+//
+// Re-engagement reward for lapsed players. Client computes
+// eligibility from its localStorage (last_played + lost_streak),
+// hits this endpoint to claim. Server-side dedup via a per-week
+// game_config row so the player can't farm the comeback bonus by
+// faking absence — they can claim at most once per 7-day window.
+// ============================================================
+app.post('/api/player/comeback-claim', requireDeviceAuth, async (req, res) => {
+  try {
+    const { deviceId, daysAway, lostStreak } = req.body || {};
+    if (typeof deviceId !== 'string' || deviceId.length < 8 || deviceId.length > 64) {
+      return res.status(400).json({ error: 'bad_device' });
+    }
+    if (!checkRateLimit('comeback:claim', deviceId, 6, 24 * 60 * 60 * 1000)) {
+      return res.status(429).json({ error: 'rate_limited' });
+    }
+    const daysAwayN = parseInt(daysAway, 10) || 0;
+    const lostStreakN = parseInt(lostStreak, 10) || 0;
+    const cfg = await pool.query(
+      `SELECT key, value FROM game_config WHERE key LIKE 'dyn_comeback_%'`
+    );
+    const cfgMap = {};
+    cfg.rows.forEach(r => { cfgMap[r.key] = r.value; });
+    if (cfgMap.dyn_comeback_enabled === 'false') {
+      return res.json({ ok: false, reason: 'disabled' });
+    }
+    const minDays    = parseInt(cfgMap.dyn_comeback_min_days,    10) || 3;
+    const minStreak  = parseInt(cfgMap.dyn_comeback_min_streak,  10) || 3;
+    const reward     = parseInt(cfgMap.dyn_comeback_reward,      10) || 150;
+    const freezeGift = parseInt(cfgMap.dyn_comeback_freeze_gift, 10) || 1;
+    if (daysAwayN < minDays || lostStreakN < minStreak) {
+      return res.json({ ok: false, reason: 'not_eligible', minDays, minStreak });
+    }
+    // Server-side dedup: one comeback claim per device per rolling 7 days.
+    const dedupKey = `_comeback:${deviceId}:${Math.floor(Date.now() / (7 * 24 * 60 * 60 * 1000))}`;
+    const existing = await pool.query(`SELECT value FROM game_config WHERE key = $1`, [dedupKey]);
+    if (existing.rows.length) {
+      return res.json({ ok: false, reason: 'already_claimed' });
+    }
+    await pool.query(
+      `INSERT INTO game_config (key, value) VALUES ($1, $2) ON CONFLICT (key) DO NOTHING`,
+      [dedupKey, '1']
+    );
+    // Atomic credit.
+    let newBalance = null;
+    try {
+      const credit = await pool.query(
+        `UPDATE player_profiles SET balance = balance + $1, total_earned = total_earned + $1, updated_at = NOW()
+          WHERE device_id = $2 RETURNING balance`,
+        [reward, deviceId]
+      );
+      if (credit.rows[0]) newBalance = credit.rows[0].balance;
+    } catch (e) {
+      console.error('comeback credit failed', e && e.message);
+    }
+    res.json({
+      ok: true,
+      reward: reward,
+      freezeGift: freezeGift,
+      newBalance: newBalance
+    });
+  } catch (e) {
+    console.error('POST /api/player/comeback-claim', e);
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
+// ============================================================
 // ADMIN ROUTES (כל המסלולים מוגנים ב-requireAdmin)
 // ============================================================
 
