@@ -2687,6 +2687,16 @@
         if (typeof openMysteryChest === 'function') {
           setTimeout(function() { try { openMysteryChest(); } catch (e) {} }, 900);
         }
+        // 🎖 Season Pass XP — server grants XP based on score/tier,
+        // dedup'd per gameId. Fire silently; the level-up toast
+        // (handled inside grantSeasonXpForGame) is delayed to land
+        // AFTER the chest reveal so the dopamine bursts don't overlap.
+        if (typeof grantSeasonXpForGame === 'function') {
+          try {
+            var __sessionGameId = (typeof getCurrentGameId === 'function') ? getCurrentGameId() : 'dyn-' + __boardId + '-' + Date.now();
+            grantSeasonXpForGame(__sessionGameId, score, highestTier);
+          } catch (e) {}
+        }
         (function() {
           try {
             fetch('/api/boards/' + __boardId + '/score', {

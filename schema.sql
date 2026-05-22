@@ -796,6 +796,97 @@ INSERT INTO game_config (key, value) VALUES ('dyn_comeback_reward',      '150') 
 -- Bonus boost when comeback player ALSO has a freeze ready to apply.
 INSERT INTO game_config (key, value) VALUES ('dyn_comeback_freeze_gift', '1')    ON CONFLICT (key) DO NOTHING;
 
+-- ============================================================
+-- Season Pass (May 2026)
+--
+-- The #1 retention engine in modern F2P (Fortnite / Genshin / Apex).
+-- Player earns Season XP from every action, climbs a 20-tier track,
+-- manually claims rewards at each unlocked tier (Clash Royale-style
+-- claim hook). Each season lasts ~30 days; admin advances the
+-- season_id to reset progress + change the theme.
+--
+-- Storage: one row per (device_id, season_id). claimed_tiers is a
+-- JSONB int[] of tier numbers the player already collected.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS player_season_progress (
+  device_id      VARCHAR(64) NOT NULL,
+  season_id      VARCHAR(32) NOT NULL,
+  xp             INT NOT NULL DEFAULT 0,
+  claimed_tiers  JSONB NOT NULL DEFAULT '[]'::jsonb,
+  last_xp_at     TIMESTAMPTZ,
+  -- per-game-id dedup: keep up to ~24h of recent game_ids so we never
+  -- grant XP twice for the same finished game. Older entries are
+  -- naturally rotated out by the JSONB-trim logic in the endpoint.
+  recent_game_ids JSONB NOT NULL DEFAULT '[]'::jsonb,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (device_id, season_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_season_progress_season
+  ON player_season_progress (season_id, xp DESC);
+
+-- Master toggle + active season + season name (for the modal header).
+INSERT INTO game_config (key, value) VALUES ('season_pass_enabled',   'true') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('season_pass_season_id', 'S1')   ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('season_pass_name',      '🌸 עונה 1 — הפריחה') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('season_pass_ends_at',   '')     ON CONFLICT (key) DO NOTHING;
+
+-- XP earning rates. Each is admin-tunable. Defaults tuned so a casual
+-- player (3 games/day) climbs ~1 tier/day, and a heavy player (10
+-- games/day with crowns) climbs ~2-3 tiers/day.
+INSERT INTO game_config (key, value) VALUES ('season_xp_game_finish',   '10') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('season_xp_crown_bonus',   '25') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('season_xp_per_10k_score', '5')  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('season_xp_quest_done',    '30') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('season_xp_achievement',   '50') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('season_xp_max_per_game',  '100') ON CONFLICT (key) DO NOTHING;
+
+-- Tier rewards — 20 tiers. Format: tier_<N>_xp + tier_<N>_reward (gems).
+-- The XP thresholds use an "easy early, harder late" curve so the first
+-- 5 tiers feel like instant progression (the "first-day wow") and tier
+-- 20 takes ~3-4 weeks of consistent play.
+INSERT INTO game_config (key, value) VALUES ('season_tier_1_xp',  '40')   ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('season_tier_1_reward', '25')   ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('season_tier_2_xp',  '100')  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('season_tier_2_reward', '50')   ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('season_tier_3_xp',  '180')  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('season_tier_3_reward', '75')   ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('season_tier_4_xp',  '280')  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('season_tier_4_reward', '100')  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('season_tier_5_xp',  '400')  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('season_tier_5_reward', '150')  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('season_tier_6_xp',  '550')  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('season_tier_6_reward', '200')  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('season_tier_7_xp',  '720')  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('season_tier_7_reward', '250')  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('season_tier_8_xp',  '920')  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('season_tier_8_reward', '300')  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('season_tier_9_xp',  '1150') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('season_tier_9_reward', '400')  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('season_tier_10_xp', '1420') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('season_tier_10_reward','550') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('season_tier_11_xp', '1720') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('season_tier_11_reward','650') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('season_tier_12_xp', '2050') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('season_tier_12_reward','750') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('season_tier_13_xp', '2420') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('season_tier_13_reward','900') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('season_tier_14_xp', '2820') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('season_tier_14_reward','1050') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('season_tier_15_xp', '3250') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('season_tier_15_reward','1200') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('season_tier_16_xp', '3720') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('season_tier_16_reward','1400') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('season_tier_17_xp', '4220') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('season_tier_17_reward','1600') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('season_tier_18_xp', '4750') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('season_tier_18_reward','1800') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('season_tier_19_xp', '5320') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('season_tier_19_reward','2100') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('season_tier_20_xp', '5950') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('season_tier_20_reward','3000') ON CONFLICT (key) DO NOTHING;
+
 -- Push notifications: master toggle. The push_subscriptions table
 -- is defined earlier in this file (line ~410); we only need the
 -- master toggle here so the admin can disable broadcasts globally.

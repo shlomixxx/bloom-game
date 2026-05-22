@@ -6876,6 +6876,249 @@
   }
   window.showComebackOverlay = showComebackOverlay;
 
+  // ============================================================
+  // Season Pass (May 2026) — the #1 retention engine in F2P games.
+  //
+  // Every dynamic-board game / quest / achievement grants Season XP.
+  // 20 reward tiers; each unlocked tier needs to be MANUALLY claimed
+  // (Clash Royale pattern). "🎁 N לקבל" badge keeps players coming
+  // back even on days they don't want to play — just to claim.
+  //
+  // Cache the latest status response so multiple UI surfaces (picker
+  // header, modal, home button) can read without re-fetching.
+  // ============================================================
+  var _seasonCache = { data: null, fetchedAt: 0 };
+  var SEASON_CACHE_MS = 60 * 1000;
+  function getCachedSeasonStatus() { return _seasonCache.data; }
+  function fetchSeasonStatus(force) {
+    var deviceId = (typeof getDeviceId === 'function') ? getDeviceId() : '';
+    if (!deviceId) return Promise.resolve(null);
+    if (!force && _seasonCache.data && (Date.now() - _seasonCache.fetchedAt) < SEASON_CACHE_MS) {
+      return Promise.resolve(_seasonCache.data);
+    }
+    return fetch('/api/player/season/status?deviceId=' + encodeURIComponent(deviceId), { cache: 'no-store' })
+      .then(function(r) { return r.json(); })
+      .catch(function() { return null; })
+      .then(function(d) {
+        if (d && d.ok && d.enabled !== false) {
+          _seasonCache.data = d;
+          _seasonCache.fetchedAt = Date.now();
+        }
+        return d;
+      });
+  }
+  window.fetchSeasonStatus = fetchSeasonStatus;
+  window.getCachedSeasonStatus = getCachedSeasonStatus;
+
+  // Grant XP from a dynamic-board game finish. Called from 11-game.js
+  // after the chest reveal. Idempotent via gameId. Refreshes the
+  // status cache so the picker shows the new XP/tier immediately.
+  function grantSeasonXpForGame(gameId, score, tier) {
+    if (!dynConfigBool('season_pass_enabled', true)) return Promise.resolve(null);
+    var deviceId = (typeof getDeviceId === 'function') ? getDeviceId() : '';
+    var token    = (typeof deviceToken !== 'undefined') ? deviceToken : null;
+    if (!deviceId || !gameId) return Promise.resolve(null);
+    return fetch('/api/player/season/grant-xp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        deviceId: deviceId,
+        token: token,
+        gameId: gameId,
+        source: 'dyn_game_finish',
+        meta: { score: score, tier: tier }
+      })
+    })
+      .then(function(r) { return r.json(); })
+      .catch(function() { return null; })
+      .then(function(d) {
+        if (d && d.ok) {
+          // Update the cache directly so the picker (when next opened)
+          // shows the new XP without waiting for the next 60s refresh.
+          if (_seasonCache.data) {
+            _seasonCache.data.xp = d.newXp;
+            _seasonCache.data.currentTier = d.currentTier;
+            // Recompute unclaimed count.
+            var tiers = _seasonCache.data.tiers || [];
+            var claimed = _seasonCache.data.claimedTiers || [];
+            _seasonCache.data.unclaimedCount = tiers
+              .filter(function(t) { return t.tier <= d.currentTier && claimed.indexOf(t.tier) === -1; })
+              .length;
+          }
+          // Big "leveled up!" celebration when the player crosses a tier.
+          if (d.leveledUp) {
+            setTimeout(function() { showSeasonLevelUpToast(d.currentTier); }, 4500);
+          }
+        }
+        return d;
+      });
+  }
+  window.grantSeasonXpForGame = grantSeasonXpForGame;
+
+  function showSeasonLevelUpToast(tier) {
+    var t = document.createElement('div');
+    t.className = 'dyn-season-levelup-toast';
+    t.innerHTML =
+      '<span class="dyn-season-levelup-icon">🎖</span>' +
+      '<span class="dyn-season-levelup-body">' +
+        '<strong>עלית רמה בעונה! דרגה ' + tier + '</strong>' +
+        '<span class="dyn-season-levelup-sub">🎁 פרס ממתין במסלול העונה</span>' +
+      '</span>';
+    document.body.appendChild(t);
+    setTimeout(function() { t.classList.add('dyn-season-levelup-out'); setTimeout(function() { t.remove(); }, 320); }, 4200);
+    try { if (typeof soundMilestone === 'function') soundMilestone(5); } catch (e) {}
+    try { if (typeof buzz === 'function') buzz([60, 50, 90]); } catch (e) {}
+  }
+  window.showSeasonLevelUpToast = showSeasonLevelUpToast;
+
+  // The Season Pass modal — 20-tier roadmap.
+  function closeSeasonPassModal() {
+    var el = document.getElementById('dyn-season-modal');
+    if (el) el.remove();
+  }
+  function showSeasonPassModal() {
+    closeSeasonPassModal();
+    // Render shell first with loading state, then patch in the data.
+    var overlay = document.createElement('div');
+    overlay.id = 'dyn-season-modal';
+    overlay.className = 'dyn-season-modal-overlay';
+    overlay.innerHTML =
+      '<div class="dyn-season-modal-card">' +
+        '<div class="dyn-season-modal-head">' +
+          '<button class="dyn-season-modal-close" aria-label="סגור">✕</button>' +
+          '<div class="dyn-season-modal-title">🎖 מסלול העונה</div>' +
+          '<div class="dyn-season-modal-sub" id="dyn-season-modal-sub">⏳ טוען...</div>' +
+        '</div>' +
+        '<div class="dyn-season-modal-progress-row">' +
+          '<div class="dyn-season-bar-wrap">' +
+            '<div class="dyn-season-bar-fill" id="dyn-season-bar-fill" style="width:0%"></div>' +
+          '</div>' +
+          '<div class="dyn-season-bar-label" id="dyn-season-bar-label">0 / 0 XP</div>' +
+        '</div>' +
+        '<div class="dyn-season-modal-body" id="dyn-season-modal-body">' +
+          '<div class="board-lb-loading">⏳ טוען...</div>' +
+        '</div>' +
+        '<div class="dyn-season-modal-foot">' +
+          '<button class="dyn-season-modal-back">חזור</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(overlay);
+    overlay.querySelector('.dyn-season-modal-close').onclick = closeSeasonPassModal;
+    overlay.querySelector('.dyn-season-modal-back').onclick = closeSeasonPassModal;
+    overlay.addEventListener('click', function(e) { if (e.target === overlay) closeSeasonPassModal(); });
+    fetchSeasonStatus(true).then(function(d) {
+      renderSeasonModalBody(d);
+    });
+  }
+  function renderSeasonModalBody(d) {
+    var body = document.getElementById('dyn-season-modal-body');
+    var sub  = document.getElementById('dyn-season-modal-sub');
+    var barFill = document.getElementById('dyn-season-bar-fill');
+    var barLabel = document.getElementById('dyn-season-bar-label');
+    if (!body) return;
+    if (!d || !d.ok) {
+      body.innerHTML = '<div class="board-lb-empty">שגיאה בטעינת מסלול העונה</div>';
+      return;
+    }
+    if (d.enabled === false) {
+      body.innerHTML = '<div class="board-lb-empty">מסלול העונה כבוי כרגע</div>';
+      return;
+    }
+    var xp = d.xp | 0;
+    var currentTier = d.currentTier | 0;
+    var claimed = d.claimedTiers || [];
+    var tiers = d.tiers || [];
+    if (sub) {
+      var unclaimed = d.unclaimedCount | 0;
+      sub.innerHTML = escapeHtml(d.seasonName || '') +
+        (unclaimed > 0 ? ' · <span class="dyn-season-unclaimed-pill">' + unclaimed + ' 🎁 לקבל</span>' : '');
+    }
+    // Progress bar to the next unlocked tier (or to tier 20 if maxed).
+    var nextTier = tiers.find(function(t) { return t.tier > currentTier; });
+    var prevTierXp = currentTier > 0 ? (tiers.find(function(t) { return t.tier === currentTier; }) || {}).xpRequired || 0 : 0;
+    var nextXp = nextTier ? nextTier.xpRequired : (tiers[tiers.length - 1] || {}).xpRequired || 1;
+    var pct = nextTier
+      ? Math.max(0, Math.min(100, Math.round(((xp - prevTierXp) / (nextXp - prevTierXp)) * 100)))
+      : 100;
+    if (barFill) barFill.style.width = pct + '%';
+    if (barLabel) {
+      barLabel.textContent = nextTier
+        ? (xp - prevTierXp).toLocaleString() + ' / ' + (nextXp - prevTierXp).toLocaleString() + ' XP'
+        : (xp.toLocaleString() + ' XP · עוונה הושלמה');
+    }
+    // Tier cards
+    var html = '';
+    for (var i = 0; i < tiers.length; i++) {
+      var t = tiers[i];
+      var isUnlocked = currentTier >= t.tier;
+      var isClaimed = claimed.indexOf(t.tier) !== -1;
+      var stateCls = isClaimed ? 'claimed' : (isUnlocked ? 'unclocked' : 'locked');
+      var stateLabel = isClaimed ? '✓ נאסף' : (isUnlocked ? '🎁 קבל' : '🔒');
+      var ctaHtml = '';
+      if (isClaimed) {
+        ctaHtml = '<div class="dyn-season-tier-cta dyn-season-tier-cta-claimed">' + stateLabel + '</div>';
+      } else if (isUnlocked) {
+        ctaHtml = '<button class="dyn-season-tier-cta dyn-season-tier-cta-claim" data-claim-tier="' + t.tier + '">' + stateLabel + ' +' + t.reward + '💎</button>';
+      } else {
+        ctaHtml = '<div class="dyn-season-tier-cta dyn-season-tier-cta-locked">+' + t.reward + '💎</div>';
+      }
+      html +=
+        '<div class="dyn-season-tier-card dyn-season-tier-' + stateCls + '">' +
+          '<div class="dyn-season-tier-num">' + t.tier + '</div>' +
+          '<div class="dyn-season-tier-body">' +
+            '<div class="dyn-season-tier-xp">' + t.xpRequired.toLocaleString() + ' XP</div>' +
+            '<div class="dyn-season-tier-reward">+' + t.reward + '💎</div>' +
+          '</div>' +
+          ctaHtml +
+        '</div>';
+    }
+    body.innerHTML = html;
+    body.querySelectorAll('[data-claim-tier]').forEach(function(btn) {
+      btn.onclick = function() {
+        var tn = parseInt(btn.getAttribute('data-claim-tier'), 10);
+        claimSeasonTier(tn, btn);
+      };
+    });
+  }
+  function claimSeasonTier(tierN, btnEl) {
+    var deviceId = (typeof getDeviceId === 'function') ? getDeviceId() : '';
+    var token    = (typeof deviceToken !== 'undefined') ? deviceToken : null;
+    if (!deviceId) return;
+    if (btnEl) { btnEl.disabled = true; btnEl.innerHTML = '⏳'; }
+    fetch('/api/player/season/claim-tier', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ deviceId: deviceId, token: token, tier: tierN })
+    })
+      .then(function(r) { return r.json(); })
+      .catch(function() { return null; })
+      .then(function(d) {
+        if (d && d.ok) {
+          // Update local cache + balance UI.
+          if (_seasonCache.data) {
+            _seasonCache.data.claimedTiers = d.claimedTiers || [];
+            var tiers = _seasonCache.data.tiers || [];
+            var currentTier = _seasonCache.data.currentTier | 0;
+            _seasonCache.data.unclaimedCount = tiers
+              .filter(function(t) { return t.tier <= currentTier && (d.claimedTiers || []).indexOf(t.tier) === -1; })
+              .length;
+          }
+          if (typeof d.newBalance === 'number') {
+            try { if (typeof playerBalance !== 'undefined') playerBalance = d.newBalance; } catch (e) {}
+            try { if (typeof updateBalanceDisplay === 'function') updateBalanceDisplay(); } catch (e) {}
+          }
+          try { if (typeof soundMilestone === 'function') soundMilestone(4); } catch (e) {}
+          try { if (typeof buzz === 'function') buzz([40, 40, 60]); } catch (e) {}
+          // Re-render the modal body so the just-claimed tier flips to ✓ נאסף.
+          renderSeasonModalBody(_seasonCache.data);
+        } else {
+          if (btnEl) { btnEl.disabled = false; btnEl.innerHTML = (d && d.reason) || 'שגיאה'; }
+        }
+      });
+  }
+  window.showSeasonPassModal = showSeasonPassModal;
+  window.closeSeasonPassModal = closeSeasonPassModal;
+
   // Human-readable labels for themes / shapes so the player can tell the
   // boards apart before clicking — boring rectangular cards = no clicks.
   var THEME_LABELS = {
@@ -6991,6 +7234,35 @@
           '</div>' +
         '</div>';
     }
+    // Season Pass headline — sits at the very top of the header.
+    // The most-prominent retention surface: XP bar + unclaimed badge.
+    var seasonCached = getCachedSeasonStatus();
+    var seasonHeadlineHtml = '';
+    if (seasonCached && seasonCached.enabled !== false) {
+      var sXp = seasonCached.xp | 0;
+      var sTier = seasonCached.currentTier | 0;
+      var sUnclaimed = seasonCached.unclaimedCount | 0;
+      var tiers = seasonCached.tiers || [];
+      var nextTier = tiers.find(function(t) { return t.tier > sTier; });
+      var prevTierXp = sTier > 0 ? (tiers.find(function(t) { return t.tier === sTier; }) || {}).xpRequired || 0 : 0;
+      var nextXp = nextTier ? nextTier.xpRequired : (tiers[tiers.length - 1] || {}).xpRequired || 1;
+      var pct = nextTier
+        ? Math.max(0, Math.min(100, Math.round(((sXp - prevTierXp) / (nextXp - prevTierXp)) * 100)))
+        : 100;
+      var unclaimedPill = sUnclaimed > 0
+        ? ' <span class="dyn-season-headline-claim">' + sUnclaimed + ' 🎁</span>'
+        : '';
+      seasonHeadlineHtml =
+        '<button class="dyn-season-headline" id="dyn-season-headline"' + (sUnclaimed > 0 ? ' data-has-claim="1"' : '') + '>' +
+          '<span class="dyn-season-headline-icon">🎖</span>' +
+          '<span class="dyn-season-headline-body">' +
+            '<span class="dyn-season-headline-title">דרגה <strong>' + sTier + '</strong> · מסלול העונה' + unclaimedPill + '</span>' +
+            '<span class="dyn-season-headline-bar"><span class="dyn-season-headline-bar-fill" style="width:' + pct + '%"></span></span>' +
+          '</span>' +
+          '<span class="dyn-season-headline-arrow">›</span>' +
+        '</button>';
+    }
+
     // Daily quests headline — sits at the very top of the header.
     // Shows progress + "claim N rewards" hint if any are completed
     // but unclaimed.
@@ -7042,6 +7314,7 @@
           '<button class="dyn-boards-close" aria-label="סגור">✕</button>' +
           '<div class="dyn-boards-title">🎯 לוחות דינמיים</div>' +
           '<div class="dyn-boards-sub">לוחות מיוחדים עם חוקים משלהם. כל לוח — לוח מובילים נפרד, שיא אישי משלך, ומשימות.</div>' +
+          seasonHeadlineHtml +
           questsHeadlineHtml +
           achProgressHtml +
           streakBannerHtml +
@@ -7072,6 +7345,12 @@
     if (achBtn) achBtn.onclick = showAchievementsModal;
     var qBtn = document.getElementById('dyn-quests-headline');
     if (qBtn) qBtn.onclick = showQuestsModal;
+    var sBtn = document.getElementById('dyn-season-headline');
+    if (sBtn) sBtn.onclick = showSeasonPassModal;
+    // Fire a background fetch on every picker open so the cache stays
+    // fresh for the NEXT open. The current render uses whatever is in
+    // the cache (which may be from a previous game-over's XP grant).
+    fetchSeasonStatus(false);
     // Streak-freeze buy button + comeback overlay (if eligible).
     var freezeBuyBtn = document.getElementById('dyn-freeze-buy-btn');
     if (freezeBuyBtn) freezeBuyBtn.onclick = function() {
@@ -14169,6 +14448,16 @@
         // headline before the chest takes over. Server rolls the dice.
         if (typeof openMysteryChest === 'function') {
           setTimeout(function() { try { openMysteryChest(); } catch (e) {} }, 900);
+        }
+        // 🎖 Season Pass XP — server grants XP based on score/tier,
+        // dedup'd per gameId. Fire silently; the level-up toast
+        // (handled inside grantSeasonXpForGame) is delayed to land
+        // AFTER the chest reveal so the dopamine bursts don't overlap.
+        if (typeof grantSeasonXpForGame === 'function') {
+          try {
+            var __sessionGameId = (typeof getCurrentGameId === 'function') ? getCurrentGameId() : 'dyn-' + __boardId + '-' + Date.now();
+            grantSeasonXpForGame(__sessionGameId, score, highestTier);
+          } catch (e) {}
         }
         (function() {
           try {

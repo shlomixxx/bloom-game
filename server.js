@@ -3030,6 +3030,243 @@ app.post('/api/player/comeback-claim', requireDeviceAuth, async (req, res) => {
 });
 
 // ============================================================
+// Season Pass (May 2026)
+//
+// 20-tier reward track. Player earns XP from game completion,
+// quests, achievements. Tiers unlock at fixed XP thresholds. Each
+// tier has a 💎 reward that must be MANUALLY claimed (the F2P
+// Clash Royale claim hook — "I have rewards waiting" drives
+// return visits).
+//
+// Anti-cheat: server stores the per-game dedup list in the same
+// row as the XP. Client passes a gameId on grant; server refuses
+// duplicates. XP per request is capped by season_xp_max_per_game
+// so a forged-meta exploit can't grant arbitrary XP.
+// ============================================================
+async function loadSeasonConfig() {
+  try {
+    const r = await pool.query(`SELECT key, value FROM game_config WHERE key LIKE 'season_%'`);
+    const out = {};
+    r.rows.forEach(row => { out[row.key] = row.value; });
+    return out;
+  } catch (e) { return {}; }
+}
+function buildSeasonTiers(cfg) {
+  const tiers = [];
+  for (let i = 1; i <= 20; i++) {
+    const xp = parseInt(cfg['season_tier_' + i + '_xp'], 10);
+    const reward = parseInt(cfg['season_tier_' + i + '_reward'], 10);
+    if (Number.isFinite(xp) && Number.isFinite(reward)) {
+      tiers.push({ tier: i, xpRequired: xp, reward: reward });
+    }
+  }
+  return tiers;
+}
+function seasonTierIndexForXP(tiers, xp) {
+  // Returns the highest tier number the player has unlocked (0 = none).
+  let unlocked = 0;
+  for (const t of tiers) {
+    if (xp >= t.xpRequired) unlocked = t.tier;
+    else break;
+  }
+  return unlocked;
+}
+
+app.get('/api/player/season/status', async (req, res) => {
+  try {
+    const deviceId = (req.query.deviceId || '').toString().slice(0, 64);
+    if (!deviceId || deviceId.length < 8) return res.status(400).json({ error: 'bad_device' });
+    const cfg = await loadSeasonConfig();
+    if (cfg.season_pass_enabled === 'false') {
+      return res.json({ ok: true, enabled: false });
+    }
+    const seasonId = cfg.season_pass_season_id || 'S1';
+    const tiers = buildSeasonTiers(cfg);
+    let row = { xp: 0, claimed_tiers: [] };
+    try {
+      const r = await pool.query(
+        `SELECT xp, claimed_tiers FROM player_season_progress
+          WHERE device_id = $1 AND season_id = $2`,
+        [deviceId, seasonId]
+      );
+      if (r.rows[0]) row = r.rows[0];
+    } catch (e) {}
+    const xp = Number(row.xp) || 0;
+    const claimed = Array.isArray(row.claimed_tiers) ? row.claimed_tiers : [];
+    const currentTier = seasonTierIndexForXP(tiers, xp);
+    res.json({
+      ok: true,
+      enabled: true,
+      seasonId,
+      seasonName: cfg.season_pass_name || '🌸 Season',
+      endsAt: cfg.season_pass_ends_at || null,
+      xp,
+      currentTier,
+      claimedTiers: claimed,
+      // Number of unclaimed-but-unlocked tiers (drives the "🎁 N לקבל"
+      // badge on the picker / home).
+      unclaimedCount: tiers
+        .filter(t => t.tier <= currentTier && !claimed.includes(t.tier))
+        .length,
+      tiers
+    });
+  } catch (e) {
+    console.error('GET /api/player/season/status', e);
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
+app.post('/api/player/season/grant-xp', requireDeviceAuth, async (req, res) => {
+  try {
+    const { deviceId, gameId, source, meta } = req.body || {};
+    if (typeof deviceId !== 'string' || deviceId.length < 8 || deviceId.length > 64) {
+      return res.status(400).json({ error: 'bad_device' });
+    }
+    if (!checkRateLimit('season_xp', deviceId, 120, 60 * 60 * 1000)) {
+      return res.status(429).json({ error: 'rate_limited' });
+    }
+    const cfg = await loadSeasonConfig();
+    if (cfg.season_pass_enabled === 'false') return res.json({ ok: false, reason: 'disabled' });
+    const seasonId = cfg.season_pass_season_id || 'S1';
+    // Compute XP from validated source + meta. Client suggests but
+    // server validates — bypassing this would let a cheater mint XP.
+    let xpGain = 0;
+    const baseFinish = parseInt(cfg.season_xp_game_finish, 10) || 10;
+    const crownBonus = parseInt(cfg.season_xp_crown_bonus, 10) || 25;
+    const per10k     = parseInt(cfg.season_xp_per_10k_score, 10) || 5;
+    const questDone  = parseInt(cfg.season_xp_quest_done, 10) || 30;
+    const achievement = parseInt(cfg.season_xp_achievement, 10) || 50;
+    const maxPerGame = parseInt(cfg.season_xp_max_per_game, 10) || 100;
+    if (source === 'dyn_game_finish') {
+      const score = parseInt((meta && meta.score) || 0, 10) || 0;
+      const tier  = parseInt((meta && meta.tier)  || 0, 10) || 0;
+      xpGain += baseFinish;
+      if (tier >= 8) xpGain += crownBonus;
+      xpGain += Math.min(5, Math.floor(score / 10000)) * per10k;
+      xpGain = Math.min(maxPerGame, xpGain);
+    } else if (source === 'quest_done') {
+      xpGain = questDone;
+    } else if (source === 'achievement') {
+      xpGain = achievement;
+    } else {
+      return res.json({ ok: false, reason: 'bad_source' });
+    }
+    if (xpGain <= 0) return res.json({ ok: false, reason: 'no_xp' });
+    // Per-game/per-quest dedup — uses gameId or a synthetic key per source.
+    const dedupId = String(gameId || (source + ':' + (meta && meta.id) || '')).slice(0, 64);
+    // Ensure row exists.
+    await pool.query(
+      `INSERT INTO player_season_progress (device_id, season_id) VALUES ($1, $2)
+       ON CONFLICT (device_id, season_id) DO NOTHING`,
+      [deviceId, seasonId]
+    );
+    // Read current state + check dedup.
+    const cur = await pool.query(
+      `SELECT xp, recent_game_ids FROM player_season_progress
+        WHERE device_id = $1 AND season_id = $2`,
+      [deviceId, seasonId]
+    );
+    const row = cur.rows[0] || { xp: 0, recent_game_ids: [] };
+    const recent = Array.isArray(row.recent_game_ids) ? row.recent_game_ids : [];
+    if (recent.includes(dedupId)) {
+      return res.json({ ok: false, reason: 'already_granted', xp: Number(row.xp) || 0 });
+    }
+    // Append + trim to last 50 ids (keeps the JSON small).
+    const newRecent = [dedupId].concat(recent).slice(0, 50);
+    const newXp = (Number(row.xp) || 0) + xpGain;
+    await pool.query(
+      `UPDATE player_season_progress
+          SET xp = $1, recent_game_ids = $2::jsonb, last_xp_at = NOW(), updated_at = NOW()
+        WHERE device_id = $3 AND season_id = $4`,
+      [newXp, JSON.stringify(newRecent), deviceId, seasonId]
+    );
+    const tiers = buildSeasonTiers(cfg);
+    const oldTier = seasonTierIndexForXP(tiers, Number(row.xp) || 0);
+    const newTier = seasonTierIndexForXP(tiers, newXp);
+    res.json({
+      ok: true,
+      xpGained: xpGain,
+      newXp,
+      previousTier: oldTier,
+      currentTier: newTier,
+      leveledUp: newTier > oldTier
+    });
+  } catch (e) {
+    console.error('POST /api/player/season/grant-xp', e);
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
+app.post('/api/player/season/claim-tier', requireDeviceAuth, async (req, res) => {
+  try {
+    const { deviceId, tier } = req.body || {};
+    if (typeof deviceId !== 'string' || deviceId.length < 8 || deviceId.length > 64) {
+      return res.status(400).json({ error: 'bad_device' });
+    }
+    const tierN = parseInt(tier, 10);
+    if (!Number.isFinite(tierN) || tierN < 1 || tierN > 20) {
+      return res.status(400).json({ error: 'bad_tier' });
+    }
+    if (!checkRateLimit('season_claim', deviceId, 30, 60 * 60 * 1000)) {
+      return res.status(429).json({ error: 'rate_limited' });
+    }
+    const cfg = await loadSeasonConfig();
+    if (cfg.season_pass_enabled === 'false') return res.json({ ok: false, reason: 'disabled' });
+    const seasonId = cfg.season_pass_season_id || 'S1';
+    const tiers = buildSeasonTiers(cfg);
+    const tierObj = tiers.find(t => t.tier === tierN);
+    if (!tierObj) return res.json({ ok: false, reason: 'tier_not_found' });
+    // Read state.
+    const cur = await pool.query(
+      `SELECT xp, claimed_tiers FROM player_season_progress
+        WHERE device_id = $1 AND season_id = $2`,
+      [deviceId, seasonId]
+    );
+    if (!cur.rows[0]) return res.json({ ok: false, reason: 'no_progress' });
+    const xp = Number(cur.rows[0].xp) || 0;
+    const claimed = Array.isArray(cur.rows[0].claimed_tiers) ? cur.rows[0].claimed_tiers : [];
+    if (claimed.includes(tierN)) return res.json({ ok: false, reason: 'already_claimed' });
+    if (xp < tierObj.xpRequired) return res.json({ ok: false, reason: 'not_unlocked', xpRequired: tierObj.xpRequired, xp });
+    // Atomic: append tier to claimed_tiers + credit the reward in one
+    // transaction. If anything fails, both roll back.
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const newClaimed = claimed.concat([tierN]);
+      await client.query(
+        `UPDATE player_season_progress
+            SET claimed_tiers = $1::jsonb, updated_at = NOW()
+          WHERE device_id = $2 AND season_id = $3`,
+        [JSON.stringify(newClaimed), deviceId, seasonId]
+      );
+      const credit = await client.query(
+        `UPDATE player_profiles
+            SET balance = balance + $1, total_earned = total_earned + $1, updated_at = NOW()
+          WHERE device_id = $2 RETURNING balance`,
+        [tierObj.reward, deviceId]
+      );
+      await client.query('COMMIT');
+      const newBalance = credit.rows[0] ? credit.rows[0].balance : null;
+      return res.json({
+        ok: true,
+        tier: tierN,
+        reward: tierObj.reward,
+        newBalance,
+        claimedTiers: newClaimed
+      });
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  } catch (e) {
+    console.error('POST /api/player/season/claim-tier', e);
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
+// ============================================================
 // ADMIN ROUTES (כל המסלולים מוגנים ב-requireAdmin)
 // ============================================================
 
