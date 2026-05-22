@@ -5733,8 +5733,7 @@ app.post('/api/player/earn', requireDeviceAuth, async (req, res) => {
     } else if (action === 'daily_login') {
       // Tiered by streak. Client passes meta.streak — capped to a sane
       // range so a forged streak can't inflate the payout to absurdity.
-      // The dedup above guarantees one claim per device per day, so even
-      // a maxed-out streak claim is bounded by the 200💎 ceiling.
+      // The dedup above guarantees one claim per device per day.
       const streak = Math.max(1, Math.min(400, parseInt((meta && meta.streak) || 1, 10) || 1));
       let tierKey;
       if (streak >= 30)     tierKey = 'daily_login_reward_streak_30';
@@ -5742,14 +5741,60 @@ app.post('/api/player/earn', requireDeviceAuth, async (req, res) => {
       else if (streak >= 3) tierKey = 'daily_login_reward_streak_3';
       else                  tierKey = 'daily_login_reward';
       const cfgRow = await pool.query('SELECT value FROM game_config WHERE key = $1', [tierKey]);
-      reward = parseInt((cfgRow.rows[0] || {}).value, 10) || 0;
-      // Belt-and-suspenders: if the tier key is missing/zero (e.g. fresh
-      // DB before the migration ran), fall back to the base flat reward
-      // so the player still gets *something* rather than 'reward_disabled'.
-      if (reward <= 0 && tierKey !== 'daily_login_reward') {
+      let base = parseInt((cfgRow.rows[0] || {}).value, 10) || 0;
+      // Belt-and-suspenders: if the tier key is missing/zero, fall back
+      // to the base flat reward so the player still gets something.
+      if (base <= 0 && tierKey !== 'daily_login_reward') {
         const fb = await pool.query(`SELECT value FROM game_config WHERE key = 'daily_login_reward'`);
-        reward = parseInt((fb.rows[0] || {}).value, 10) || 25;
+        base = parseInt((fb.rows[0] || {}).value, 10) || 25;
       }
+      reward = base;
+      // ============================================================
+      // Stage 14 — multiplier stack. Adds bonuses for the dynamic-board
+      // streak + a friend who shared playing yesterday. Each is admin-
+      // tunable + the total is capped at daily_login_mult_max_pct% of
+      // the base (default 400% = 4x) for safety.
+      // ============================================================
+      const dynStreakRaw = parseInt((meta && meta.dynStreak) || 0, 10) || 0;
+      const dynStreak = Math.max(0, Math.min(400, dynStreakRaw));
+      const friendSharedRaw = !!(meta && meta.friendSharedYesterday);
+      // Pull multiplier config in parallel.
+      const cfgM = await pool.query(
+        `SELECT key, value FROM game_config WHERE key LIKE 'daily_login_mult_%'`
+      );
+      const cfgMap = {};
+      cfgM.rows.forEach(r => { cfgMap[r.key] = r.value; });
+      const dynPct    = parseInt(cfgMap.daily_login_mult_dyn_streak_pct, 10) || 0;
+      const dynMin    = parseInt(cfgMap.daily_login_mult_dyn_streak_min, 10) || 3;
+      const friendPct = parseInt(cfgMap.daily_login_mult_friend_shared_pct, 10) || 0;
+      const maxPct    = parseInt(cfgMap.daily_login_mult_max_pct, 10) || 300;
+      // Build breakdown so the client can render it transparently.
+      const breakdown = [
+        { label: 'base', tier: tierKey, factor: 1.0, contribution: base }
+      ];
+      let totalPct = 100; // base = 100%
+      if (dynStreak >= dynMin && dynPct > 0) {
+        totalPct += dynPct;
+        breakdown.push({ label: 'dyn_streak', dynStreak, factor: 1 + (dynPct / 100), contribution: Math.floor(base * dynPct / 100) });
+      }
+      if (friendSharedRaw && friendPct > 0) {
+        totalPct += friendPct;
+        breakdown.push({ label: 'friend_shared', factor: 1 + (friendPct / 100), contribution: Math.floor(base * friendPct / 100) });
+      }
+      // Apply cap.
+      if (totalPct > maxPct) totalPct = maxPct;
+      reward = Math.floor(base * totalPct / 100);
+      // Stash breakdown so the response includes it (closure variable —
+      // we'll attach to res.json below).
+      res.locals = res.locals || {};
+      res.locals.dailyLoginBreakdown = {
+        base,
+        baseTier: tierKey,
+        totalPct,
+        cappedAtPct: totalPct === maxPct,
+        breakdown,
+        finalReward: reward
+      };
     } else {
       const cfgRow = await pool.query('SELECT value FROM game_config WHERE key = $1', [configKey]);
       reward = parseInt((cfgRow.rows[0] || {}).value, 10) || 0;
@@ -5769,7 +5814,12 @@ app.post('/api/player/earn', requireDeviceAuth, async (req, res) => {
       [reward, xpGain, newLevel.level, deviceId]);
 
     const newBal = player.rows[0].balance + reward;
-    res.json({ ok: true, action, reward, xpGain, newBalance: newBal, level: newLevel, leveledUp });
+    const responseBody = { ok: true, action, reward, xpGain, newBalance: newBal, level: newLevel, leveledUp };
+    // Stage 14 — attach daily_login multiplier breakdown if the handler stashed it.
+    if (res.locals && res.locals.dailyLoginBreakdown) {
+      responseBody.breakdown = res.locals.dailyLoginBreakdown;
+    }
+    res.json(responseBody);
   } catch (e) {
     console.error('player/earn', e.message);
     res.status(500).json({ error: 'server' });

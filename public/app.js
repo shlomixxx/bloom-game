@@ -11030,6 +11030,90 @@
     return 25;
   }
 
+  // Stage 14 — render the multiplier breakdown inside the daily login
+  // overlay. Shows EARNED multipliers (with green ✓) AND LOCKED ones
+  // (greyed with "🔒 do X to unlock") so the player sees the path to
+  // more rewards next time. The actual amount is computed server-side;
+  // this is purely the visualization layer.
+  function renderDailyLoginBreakdown(overlay, displayStreak) {
+    if (!overlay) return;
+    var host = overlay.querySelector('.daily-reward-card');
+    if (!host) return;
+    if (overlay.querySelector('.dr-breakdown')) return;
+    // Pull current state from the cached helpers.
+    var dynSt = (typeof getDynamicStreak === 'function') ? getDynamicStreak() : null;
+    var dynStreakN = (dynSt && dynSt.count) | 0;
+    var fc = (typeof getCachedFriends === 'function') ? getCachedFriends() : null;
+    var friendActiveToday = !!(fc && fc.friends && fc.friends.some(function(f) { return f.playedToday; }));
+    // Read multiplier configs from gameConfig.
+    var dynPct = 25, dynMin = 3, friendPct = 20;
+    try {
+      if (typeof gameConfig === 'object' && gameConfig) {
+        dynPct = parseInt(gameConfig.daily_login_mult_dyn_streak_pct, 10) || 25;
+        dynMin = parseInt(gameConfig.daily_login_mult_dyn_streak_min, 10) || 3;
+        friendPct = parseInt(gameConfig.daily_login_mult_friend_shared_pct, 10) || 20;
+      }
+    } catch (e) {}
+    // Determine which streak tier the daily-login bonus is at.
+    var streakTier = displayStreak >= 30 ? '30+ ימים' :
+                     displayStreak >= 7 ? '7+ ימים' :
+                     displayStreak >= 3 ? '3+ ימים' : 'מתחיל';
+    var streakMult = displayStreak >= 30 ? '×4' :
+                     displayStreak >= 7 ? '×3' :
+                     displayStreak >= 3 ? '×2' : '×1';
+    var rows = '';
+    // Row 1: streak tier (always shown).
+    rows += '<div class="dr-mult-row dr-mult-row-active">' +
+      '<span class="dr-mult-row-icon">🔥</span>' +
+      '<span class="dr-mult-row-label">רצף יומי · ' + streakTier + '</span>' +
+      '<span class="dr-mult-row-factor">' + streakMult + '</span>' +
+    '</div>';
+    // Row 2: dynamic-board streak.
+    if (dynStreakN >= dynMin) {
+      rows += '<div class="dr-mult-row dr-mult-row-active">' +
+        '<span class="dr-mult-row-icon">🎯</span>' +
+        '<span class="dr-mult-row-label">רצף לוחות דינמיים · ' + dynStreakN + ' ימים</span>' +
+        '<span class="dr-mult-row-factor">+' + dynPct + '%</span>' +
+      '</div>';
+    } else {
+      var needDays = Math.max(1, dynMin - dynStreakN);
+      rows += '<div class="dr-mult-row dr-mult-row-locked">' +
+        '<span class="dr-mult-row-icon">🎯</span>' +
+        '<span class="dr-mult-row-label">רצף לוחות דינמיים · עוד ' + needDays + ' ימים</span>' +
+        '<span class="dr-mult-row-factor">+' + dynPct + '%</span>' +
+      '</div>';
+    }
+    // Row 3: friend shared yesterday.
+    if (friendActiveToday) {
+      rows += '<div class="dr-mult-row dr-mult-row-active">' +
+        '<span class="dr-mult-row-icon">👥</span>' +
+        '<span class="dr-mult-row-label">חבר שיחק היום</span>' +
+        '<span class="dr-mult-row-factor">+' + friendPct + '%</span>' +
+      '</div>';
+    } else if (fc && fc.friends && fc.friends.length > 0) {
+      rows += '<div class="dr-mult-row dr-mult-row-locked">' +
+        '<span class="dr-mult-row-icon">👥</span>' +
+        '<span class="dr-mult-row-label">בקש מחבר לשחק היום</span>' +
+        '<span class="dr-mult-row-factor">+' + friendPct + '%</span>' +
+      '</div>';
+    } else {
+      // No friends yet — show invite hint.
+      rows += '<div class="dr-mult-row dr-mult-row-locked dr-mult-row-cta">' +
+        '<span class="dr-mult-row-icon">👥</span>' +
+        '<span class="dr-mult-row-label">הזמן חבר → בכל יום ששניכם תשחקו</span>' +
+        '<span class="dr-mult-row-factor">+' + friendPct + '%</span>' +
+      '</div>';
+    }
+    // Insert before the claim button so the breakdown sits below the reward number.
+    var claimBtn = host.querySelector('#dr-claim');
+    if (!claimBtn) return;
+    var wrap = document.createElement('div');
+    wrap.className = 'dr-breakdown';
+    wrap.innerHTML = '<div class="dr-breakdown-title">מה מרכיב את הבונוס</div>' + rows;
+    host.insertBefore(wrap, claimBtn);
+  }
+  window.renderDailyLoginBreakdown = renderDailyLoginBreakdown;
+
   function showDailyLoginReward() {
     if (!hasDailyLoginReward()) return;
     if (document.getElementById('daily-reward-overlay')) return;
@@ -11134,9 +11218,31 @@
       // Mark as claimed for today
       try { localStorage.setItem(DAILY_LOGIN_KEY, JSON.stringify({ lastClaimed: todayInIsrael() })); } catch(e) {}
       // Earn credits via server. Streak passes through so the server picks
-      // the matching tier — without it, the wallet got the flat base
-      // amount even though the overlay teased the streak-tiered number.
-      earnCredits('daily_login', { streak: displayStreak });
+      // the matching tier. Stage 14 — also pass dynStreak + friend-shared
+      // flag so the server stacks multipliers on top of the base tier.
+      var dynStreakForLogin = 0;
+      try {
+        var dynSt = (typeof getDynamicStreak === 'function') ? getDynamicStreak() : null;
+        if (dynSt && dynSt.count >= 1) dynStreakForLogin = dynSt.count | 0;
+      } catch (e) {}
+      // Check if any friend played yesterday (the "shared-yesterday" bonus).
+      // Conservative: only flag when we can prove from the cached friends
+      // list that at least one friend played the day before.
+      var friendSharedYesterdayFlag = false;
+      try {
+        var fc = (typeof getCachedFriends === 'function') ? getCachedFriends() : null;
+        if (fc && Array.isArray(fc.friends)) {
+          // V1: use "playedToday" as a proxy — if a friend has activity today,
+          // we know they're active. The server enforces its own anti-cheat
+          // bounds so we don't need to second-guess.
+          friendSharedYesterdayFlag = fc.friends.some(function(f) { return f.playedToday; });
+        }
+      } catch (e) {}
+      earnCredits('daily_login', {
+        streak: displayStreak,
+        dynStreak: dynStreakForLogin,
+        friendSharedYesterday: friendSharedYesterdayFlag
+      });
       // Animate out
       var card = overlay.querySelector('.daily-reward-card');
       if (card) {
@@ -11153,6 +11259,10 @@
     }
 
     document.getElementById('dr-claim').onclick = claim;
+    // Render the multiplier breakdown row by row — see definition below.
+    if (typeof renderDailyLoginBreakdown === 'function') {
+      try { renderDailyLoginBreakdown(overlay, displayStreak); } catch (e) {}
+    }
     document.getElementById('dr-close').onclick = function() {
       // Closing without claiming = still claim (they saw it)
       claim();

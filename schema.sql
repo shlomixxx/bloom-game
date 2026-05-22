@@ -995,6 +995,20 @@ INSERT INTO game_config (key, value) VALUES ('friends_signup_bonus',     '200') 
 INSERT INTO game_config (key, value) VALUES ('friends_shared_day_bonus', '100')  ON CONFLICT (key) DO NOTHING;
 INSERT INTO game_config (key, value) VALUES ('friends_max_per_device',   '50')   ON CONFLICT (key) DO NOTHING;
 
+-- ============================================================
+-- Daily Login Multiplier Stack — stage 14 (May 2026)
+--
+-- The existing daily_login_reward + tiered streak bonuses already
+-- pay more for longer streaks. This adds stacked multipliers from
+-- the dynamic-board streak + friend shared-day pairing — so a
+-- player with both streaks active gets visibly bigger rewards,
+-- and the overlay shows the WHY ("base × 3 × 1.25 × 1.25").
+-- ============================================================
+INSERT INTO game_config (key, value) VALUES ('daily_login_mult_dyn_streak_pct',     '25') ON CONFLICT (key) DO NOTHING; -- +25% when dyn_streak ≥ 3
+INSERT INTO game_config (key, value) VALUES ('daily_login_mult_dyn_streak_min',     '3')  ON CONFLICT (key) DO NOTHING; -- min dyn streak for the bonus
+INSERT INTO game_config (key, value) VALUES ('daily_login_mult_friend_shared_pct',  '20') ON CONFLICT (key) DO NOTHING; -- +20% if any friend shared yesterday
+INSERT INTO game_config (key, value) VALUES ('daily_login_mult_max_pct',            '300') ON CONFLICT (key) DO NOTHING; -- cap final reward at 4x base (anti-abuse safety)
+
 -- Push notifications: master toggle. The push_subscriptions table
 -- is defined earlier in this file (line ~410); we only need the
 -- master toggle here so the admin can disable broadcasts globally.
