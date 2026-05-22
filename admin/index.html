@@ -1673,7 +1673,20 @@
     </div>
     <div class="help">אתגרים פתוחים לכל גולש. ניסיון אחד למכשיר. ⚠ = z-score outlier או יחס drops/score חשוד — בדוק לפני שאתה משלם.</div>
   </section>
-  </div><!-- /admin-tab-panel contests:contests+challenges -->
+
+  <!-- Live Tournaments -->
+  <section id="tournaments-section" style="margin-top:14px;background:var(--card);border-radius:12px;padding:14px 16px;border:1px solid rgba(231,76,60,0.30)">
+    <h2 style="margin:0 0 6px 0;display:flex;align-items:center;gap:8px">
+      🏆 טורנירים חיים
+      <button class="tip-btn" data-tip-text="<strong>🏆 טורנירים חיים — Stage 12</strong><br>אירועי prime-time מתוזמנים. שחקן שמשחק לוח דינמי במהלך החלון הזה מצטרף אוטומטית.<div class=&quot;tip-example&quot;>💡 <strong>איך לתזמן הכי טוב</strong>:<br>• יום ה׳ 20:00-21:00 — שעת ה-prime-time של ישראל<br>• שישי 14:00 — חופשי + צופים<br>• מוצ&quot;ש 21:00 — חזרה מתחילת השבוע<br><br>📊 <strong>מבנה פרסים מומלץ</strong>:<br>• 1st: 5,000💎<br>• 2nd: 2,000💎<br>• 3rd: 1,000💎<br>• 4-10: 200-500💎<br><br>⚡ <strong>איך זה עובד טכנית</strong>: שחקן משחק לוח דינמי → score נשלח אוטומטית. Best-score-wins (לא מצטבר). אחרי ends_at → 3 הראשונים מקבלים פרס אוטומטית + push notification.<br><br>💰 <strong>תקציב</strong>: לטורניר רגיל של 100 משתתפים, פרסים של ~8,000💎 = רווחיות סבירה לאינטראקציה.</div>">?</button>
+      <button class="btn sm" id="tour-new" style="margin-right:auto;background:#E74C3C;color:#FFF">+ טורניר חדש</button>
+    </h2>
+    <div class="table-wrap" id="tournaments-host">
+      <div class="loading">טוען…</div>
+    </div>
+    <div class="help">טורניר עם חלון זמן מוגבל + פרסים לטופ-N. אחרי ends_at → פרסים מתחלקים אוטומטית.</div>
+  </section>
+  </div><!-- /admin-tab-panel contests:contests+challenges+tournaments -->
 
   <div class="admin-tab-panel" data-tab="players">
   <!-- Players -->
@@ -4175,6 +4188,196 @@
 
   $('btn-refresh').onclick = refreshAll;
   $('ch-new').onclick = function() { openChallengeModal(null); };
+
+  // ====== TOURNAMENTS ADMIN ======
+  async function loadTournaments() {
+    var host = $('tournaments-host');
+    if (!host) return;
+    try {
+      var d = await api('/tournaments');
+      if (!d || !d.ok) { host.innerHTML = '<div class="error">שגיאה בטעינה</div>'; return; }
+      var rows = d.tournaments || [];
+      if (!rows.length) { host.innerHTML = '<div class="help">אין טורנירים. לחץ "+ טורניר חדש" כדי ליצור.</div>'; return; }
+      var html = '<table><thead><tr><th>#</th><th>שם</th><th>חלון</th><th>סטטוס</th><th>שחקנים</th><th>פרסים</th><th>פעולות</th></tr></thead><tbody>';
+      var now = Date.now();
+      rows.forEach(function(t) {
+        var startsAt = new Date(t.starts_at);
+        var endsAt = new Date(t.ends_at);
+        var statusBadge = t.status === 'finalized' ? '✓ הסתיים' :
+                         (endsAt < new Date() ? '⏰ ממתין לסיום' :
+                         (startsAt > new Date() ? '⏳ עתידי' : '🔴 חי עכשיו'));
+        var statusColor = t.status === 'finalized' ? '#7AC97A' :
+                         (endsAt < new Date() ? '#E07A8E' :
+                         (startsAt > new Date() ? '#FAC775' : '#FF6B6B'));
+        var pp = Array.isArray(t.prize_pool) ? t.prize_pool : [];
+        var prizeSummary = pp.length ? pp.slice(0, 3).map(function(p) { return '#' + p.rank + ' ' + p.reward + '💎'; }).join(' · ') : '—';
+        var canFinalize = endsAt <= new Date() && t.status !== 'finalized';
+        html += '<tr>' +
+          '<td>' + t.id + '</td>' +
+          '<td><strong>' + escHtml(t.name) + '</strong>' + (t.description ? '<br><span class="muted" style="font-size:10.5px">' + escHtml(t.description) + '</span>' : '') + '</td>' +
+          '<td style="font-size:11px">' +
+            startsAt.toLocaleString('he-IL') + '<br>↓<br>' + endsAt.toLocaleString('he-IL') +
+          '</td>' +
+          '<td><span style="color:' + statusColor + ';font-weight:800">' + statusBadge + '</span></td>' +
+          '<td>' + (t.players || 0) + '</td>' +
+          '<td style="font-size:11px">' + prizeSummary + '</td>' +
+          '<td>' +
+            '<button class="btn sm" data-tour-edit="' + t.id + '">✏️</button> ' +
+            (canFinalize ? '<button class="btn sm" data-tour-finalize="' + t.id + '" style="background:#FAC775;color:#1C1A18">💰 סיום</button> ' : '') +
+            '<button class="btn sm" data-tour-delete="' + t.id + '" style="background:#7A3030;color:#FFF">🗑</button>' +
+          '</td>' +
+        '</tr>';
+      });
+      html += '</tbody></table>';
+      host.innerHTML = html;
+      host.querySelectorAll('[data-tour-edit]').forEach(function(b) {
+        b.onclick = function() {
+          var id = parseInt(b.getAttribute('data-tour-edit'), 10);
+          var row = rows.find(function(x) { return x.id === id; });
+          if (row) openTournamentModal(row);
+        };
+      });
+      host.querySelectorAll('[data-tour-finalize]').forEach(function(b) {
+        b.onclick = async function() {
+          if (!confirm('לסיים את הטורניר ולחלק פרסים אוטומטית?')) return;
+          var id = parseInt(b.getAttribute('data-tour-finalize'), 10);
+          b.disabled = true;
+          var r = await api('/tournaments/' + id + '/finalize', { method: 'POST' });
+          if (r && r.ok) { toast && toast('✅ הטורניר סוים, פרסים חולקו'); loadTournaments(); }
+          else { alert('שגיאה'); b.disabled = false; }
+        };
+      });
+      host.querySelectorAll('[data-tour-delete]').forEach(function(b) {
+        b.onclick = async function() {
+          if (!confirm('למחוק את הטורניר? פעולה לא הפיכה.')) return;
+          var id = parseInt(b.getAttribute('data-tour-delete'), 10);
+          var r = await api('/tournaments/' + id, { method: 'DELETE' });
+          if (r && r.ok) { toast && toast('✓ נמחק'); loadTournaments(); }
+        };
+      });
+    } catch (e) {
+      host.innerHTML = '<div class="error">' + (e.message || 'שגיאה') + '</div>';
+    }
+  }
+  function openTournamentModal(existing) {
+    var existingPool = (existing && Array.isArray(existing.prize_pool)) ? existing.prize_pool : [];
+    var defaultPool = existingPool.length ? existingPool : [
+      { rank: 1, reward: 5000 },
+      { rank: 2, reward: 2000 },
+      { rank: 3, reward: 1000 },
+      { rank: 4, reward: 500 },
+      { rank: 5, reward: 250 }
+    ];
+    var poolStr = defaultPool.map(function(p) { return '#' + p.rank + ':' + p.reward; }).join(', ');
+    var startsDefault = existing ? new Date(existing.starts_at).toISOString().slice(0, 16) : '';
+    var endsDefault   = existing ? new Date(existing.ends_at).toISOString().slice(0, 16) : '';
+    var ov = document.createElement('div');
+    ov.id = 'tour-edit-overlay';
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:11000;display:flex;align-items:center;justify-content:center;padding:14px';
+    ov.innerHTML =
+      '<div style="background:#FAFAF6;color:#1C1A18;max-width:520px;width:100%;max-height:88vh;overflow:auto;border-radius:18px;padding:22px;direction:rtl">' +
+        '<h3 style="margin-top:0">' + (existing ? '✏️ עריכת טורניר' : '+ טורניר חדש') + '</h3>' +
+        '<label style="display:block;font-size:13px;font-weight:700;margin-bottom:4px">שם</label>' +
+        '<input id="tour-name" type="text" maxlength="80" value="' + escHtml((existing && existing.name) || '') + '" style="width:100%;padding:9px;border-radius:8px;background:#FFF;color:#1C1A18;border:1px solid #E5E1D5;margin-bottom:10px;font-family:inherit">' +
+        '<label style="display:block;font-size:13px;font-weight:700;margin-bottom:4px">תיאור</label>' +
+        '<textarea id="tour-desc" maxlength="300" rows="2" style="width:100%;padding:9px;border-radius:8px;background:#FFF;color:#1C1A18;border:1px solid #E5E1D5;margin-bottom:10px;font-family:inherit;resize:vertical">' + escHtml((existing && existing.description) || '') + '</textarea>' +
+        '<div style="display:flex;gap:10px;margin-bottom:10px">' +
+          '<div style="flex:1">' +
+            '<label style="display:block;font-size:13px;font-weight:700;margin-bottom:4px">מתחיל</label>' +
+            '<input id="tour-starts" type="datetime-local" value="' + startsDefault + '" style="width:100%;padding:9px;border-radius:8px;background:#FFF;color:#1C1A18;border:1px solid #E5E1D5;font-family:inherit">' +
+          '</div>' +
+          '<div style="flex:1">' +
+            '<label style="display:block;font-size:13px;font-weight:700;margin-bottom:4px">מסתיים</label>' +
+            '<input id="tour-ends" type="datetime-local" value="' + endsDefault + '" style="width:100%;padding:9px;border-radius:8px;background:#FFF;color:#1C1A18;border:1px solid #E5E1D5;font-family:inherit">' +
+          '</div>' +
+        '</div>' +
+        '<label style="display:block;font-size:13px;font-weight:700;margin-bottom:4px">מבנה פרסים</label>' +
+        '<input id="tour-pool" type="text" value="' + escHtml(poolStr) + '" placeholder="#1:5000, #2:2000, #3:1000" style="width:100%;padding:9px;border-radius:8px;background:#FFF;color:#1C1A18;border:1px solid #E5E1D5;margin-bottom:6px;font-family:inherit">' +
+        '<div style="font-size:11.5px;color:#6F6E68;margin-bottom:10px">פורמט: <code>#1:5000, #2:2000, #3:1000</code> — דרגות 1-100, פרס 0-100,000💎.</div>' +
+        '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">' +
+          '<button class="btn sm" type="button" data-preset="primetime">⭐ Prime Time</button>' +
+          '<button class="btn sm" type="button" data-preset="weekend">🎉 Weekend</button>' +
+          '<button class="btn sm" type="button" data-preset="quick">⚡ Quick (1h)</button>' +
+        '</div>' +
+        '<div id="tour-status" style="font-size:12px;margin-bottom:10px"></div>' +
+        '<div style="display:flex;gap:8px">' +
+          '<button class="btn" id="tour-cancel" style="flex:1;background:transparent;border:1px solid #E5E1D5;color:#1C1A18">ביטול</button>' +
+          '<button class="btn" id="tour-save" style="flex:2;background:#E74C3C;color:#FFF">' + (existing ? '💾 שמור' : '🚀 צור טורניר') + '</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(ov);
+    ov.querySelectorAll('[data-preset]').forEach(function(b) {
+      b.onclick = function() {
+        var preset = b.getAttribute('data-preset');
+        var now = new Date();
+        var pad = function(n) { return n < 10 ? '0' + n : n; };
+        var fmt = function(d) { return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate()) + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes()); };
+        if (preset === 'primetime') {
+          // Today 20:00 - 21:00
+          var s = new Date(now); s.setHours(20, 0, 0, 0);
+          if (s < now) s.setDate(s.getDate() + 1);
+          var e = new Date(s); e.setHours(21, 0, 0, 0);
+          $('tour-starts').value = fmt(s); $('tour-ends').value = fmt(e);
+          $('tour-name').value = '⭐ טורניר Prime Time';
+        } else if (preset === 'weekend') {
+          // Next Friday 14:00 for 2h
+          var s2 = new Date(now);
+          var daysToFri = (5 - s2.getDay() + 7) % 7 || 7;
+          s2.setDate(s2.getDate() + daysToFri); s2.setHours(14, 0, 0, 0);
+          var e2 = new Date(s2); e2.setHours(16, 0, 0, 0);
+          $('tour-starts').value = fmt(s2); $('tour-ends').value = fmt(e2);
+          $('tour-name').value = '🎉 טורניר סוף שבוע';
+        } else if (preset === 'quick') {
+          var s3 = new Date(now); s3.setMinutes(s3.getMinutes() + 5);
+          var e3 = new Date(s3); e3.setMinutes(e3.getMinutes() + 60);
+          $('tour-starts').value = fmt(s3); $('tour-ends').value = fmt(e3);
+          $('tour-name').value = '⚡ טורניר בזק';
+        }
+      };
+    });
+    $('tour-cancel').onclick = function() { ov.remove(); };
+    $('tour-save').onclick = async function() {
+      var name = $('tour-name').value.trim();
+      var desc = $('tour-desc').value.trim();
+      var startsAt = $('tour-starts').value;
+      var endsAt = $('tour-ends').value;
+      var poolText = $('tour-pool').value.trim();
+      var status = $('tour-status');
+      status.style.color = '#6F6E68';
+      if (!name) { status.textContent = '⚠ חסר שם'; status.style.color = '#E07A8E'; return; }
+      if (!startsAt || !endsAt) { status.textContent = '⚠ חסרים תאריכים'; status.style.color = '#E07A8E'; return; }
+      // Parse pool: "#1:5000, #2:2000"
+      var pool = [];
+      poolText.split(',').forEach(function(seg) {
+        var m = seg.trim().match(/^#?(\d+):\s*(\d+)/);
+        if (m) pool.push({ rank: parseInt(m[1], 10), reward: parseInt(m[2], 10) });
+      });
+      var body = {
+        name: name, description: desc,
+        starts_at: new Date(startsAt).toISOString(),
+        ends_at: new Date(endsAt).toISOString(),
+        prize_pool: pool
+      };
+      status.textContent = '⏳ שומר...';
+      var url = existing ? '/tournaments/' + existing.id : '/tournaments';
+      var method = existing ? 'PATCH' : 'POST';
+      var r = await api(url, { method: method, body: JSON.stringify(body) });
+      if (r && r.ok) {
+        ov.remove();
+        toast && toast(existing ? '✓ הטורניר עודכן' : '✓ נוצר טורניר חדש');
+        loadTournaments();
+      } else {
+        status.textContent = '❌ ' + ((r && r.error) || 'שגיאה');
+        status.style.color = '#E07A8E';
+      }
+    };
+  }
+  var tourNewBtn = $('tour-new');
+  if (tourNewBtn) tourNewBtn.onclick = function() { openTournamentModal(null); };
+  // Load tournaments on tab open + every 30s if monitor tab is active.
+  loadTournaments();
+
+
   $('btn-logout').onclick = function() {
     // Forces the browser to drop cached Basic Auth creds.
     location.replace('/');

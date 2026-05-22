@@ -2697,6 +2697,11 @@
             grantSeasonXpForGame(__sessionGameId, score, highestTier);
           } catch (e) {}
         }
+        // 🏆 Live Tournament — if there's a tournament currently in its
+        // window, auto-submit this score. Server best-score-wins.
+        if (typeof submitTournamentScoreFromGame === 'function') {
+          try { submitTournamentScoreFromGame(score, highestTier, window.__bloomDropCount || 0); } catch (e) {}
+        }
         (function() {
           try {
             fetch('/api/boards/' + __boardId + '/score', {

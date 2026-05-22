@@ -887,6 +887,57 @@ INSERT INTO game_config (key, value) VALUES ('season_tier_19_reward','2100') ON 
 INSERT INTO game_config (key, value) VALUES ('season_tier_20_xp', '5950') ON CONFLICT (key) DO NOTHING;
 INSERT INTO game_config (key, value) VALUES ('season_tier_20_reward','3000') ON CONFLICT (key) DO NOTHING;
 
+-- ============================================================
+-- Live Tournaments — stage 12 (May 2026)
+--
+-- Scheduled prime-time events: admin creates a tournament with a
+-- start/end window + prize amounts for top-N. Any dynamic-board
+-- game played within the window submits the player's BEST score
+-- to the tournament. After end_at, top-N auto-claim their prizes
+-- on the next /api/tournaments fetch (no cron needed — lazy
+-- finalize keeps the infra simple).
+--
+-- The killer hook: "Wed 8pm Tournament" creates a "must show up"
+-- moment. Players plan their evening around it.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS tournaments (
+  id            SERIAL PRIMARY KEY,
+  name          TEXT NOT NULL,
+  description   TEXT,
+  starts_at     TIMESTAMPTZ NOT NULL,
+  ends_at       TIMESTAMPTZ NOT NULL,
+  -- prize_pool: JSON array of {rank, reward}. E.g. [{rank:1,reward:5000},{rank:2,reward:2000},{rank:3,reward:1000}]
+  prize_pool    JSONB NOT NULL DEFAULT '[]'::jsonb,
+  -- status: scheduled | live | ended | finalized
+  status        TEXT NOT NULL DEFAULT 'scheduled',
+  -- True after the top-N prizes have been auto-credited.
+  finalized_at  TIMESTAMPTZ,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_tournaments_window
+  ON tournaments (starts_at, ends_at);
+
+CREATE TABLE IF NOT EXISTS tournament_scores (
+  tournament_id INT NOT NULL REFERENCES tournaments(id) ON DELETE CASCADE,
+  device_id     VARCHAR(64) NOT NULL,
+  name          VARCHAR(32) NOT NULL DEFAULT 'אנונימי',
+  score         INT NOT NULL DEFAULT 0,
+  tier          INT NOT NULL DEFAULT 1,
+  games_played  INT NOT NULL DEFAULT 0,
+  country       VARCHAR(2),
+  prize_claimed INT,  -- amount awarded when finalized (NULL = not yet)
+  updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (tournament_id, device_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_tournament_scores_lb
+  ON tournament_scores (tournament_id, score DESC);
+
+-- Master toggle.
+INSERT INTO game_config (key, value) VALUES ('tournament_enabled', 'true') ON CONFLICT (key) DO NOTHING;
+
 -- Push notifications: master toggle. The push_subscriptions table
 -- is defined earlier in this file (line ~410); we only need the
 -- master toggle here so the admin can disable broadcasts globally.

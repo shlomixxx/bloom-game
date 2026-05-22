@@ -1609,6 +1609,226 @@
   window.showSeasonPassModal = showSeasonPassModal;
   window.closeSeasonPassModal = closeSeasonPassModal;
 
+  // ============================================================
+  // Live Tournaments — stage 12 (May 2026)
+  //
+  // Scheduled prime-time events. Player sees a live banner in the
+  // picker header during the window. Every dynamic-board game-over
+  // auto-submits to the tournament (best-score-wins). Top-N winners
+  // are auto-credited when the window ends.
+  // ============================================================
+  var _tournamentsCache = { data: null, fetchedAt: 0 };
+  var TOURNAMENT_CACHE_MS = 60 * 1000;
+  function fetchTournaments(force) {
+    if (!force && _tournamentsCache.data && (Date.now() - _tournamentsCache.fetchedAt) < TOURNAMENT_CACHE_MS) {
+      return Promise.resolve(_tournamentsCache.data);
+    }
+    return fetch('/api/tournaments', { cache: 'no-store' })
+      .then(function(r) { return r.json(); })
+      .catch(function() { return null; })
+      .then(function(d) {
+        if (d && d.ok && d.enabled !== false) {
+          _tournamentsCache.data = d;
+          _tournamentsCache.fetchedAt = Date.now();
+        }
+        return d;
+      });
+  }
+  function getLiveTournament() {
+    var d = _tournamentsCache.data;
+    if (!d || !Array.isArray(d.tournaments)) return null;
+    return d.tournaments.find(function(t) { return t.isLive; }) || null;
+  }
+  function getUpcomingTournament() {
+    var d = _tournamentsCache.data;
+    if (!d || !Array.isArray(d.tournaments)) return null;
+    var now = Date.now();
+    return d.tournaments.find(function(t) {
+      return t.isUpcoming && (new Date(t.starts_at).getTime() - now) < 24 * 60 * 60 * 1000;
+    }) || null;
+  }
+  window.fetchTournaments = fetchTournaments;
+  window.getLiveTournament = getLiveTournament;
+  window.getUpcomingTournament = getUpcomingTournament;
+
+  // Auto-submit a dynamic-board game-over score to the live tournament.
+  // Idempotent server-side via best-score-wins upsert.
+  function submitTournamentScoreFromGame(score, tier, drops) {
+    var live = getLiveTournament();
+    if (!live) return Promise.resolve(null);
+    var deviceId = (typeof getDeviceId === 'function') ? getDeviceId() : '';
+    var token    = (typeof deviceToken !== 'undefined') ? deviceToken : null;
+    var name     = (typeof getPlayerName === 'function') ? getPlayerName() : 'אנונימי';
+    var country  = (typeof getCountry === 'function') ? getCountry() : null;
+    if (!deviceId) return Promise.resolve(null);
+    return fetch('/api/tournaments/' + live.id + '/score', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        deviceId: deviceId,
+        token: token,
+        name: name,
+        score: score | 0,
+        tier: tier | 0,
+        drops: drops | 0,
+        country: country
+      })
+    }).then(function(r) { return r.json(); }).catch(function() { return null; });
+  }
+  window.submitTournamentScoreFromGame = submitTournamentScoreFromGame;
+
+  // Format a countdown like "4ש 12ד" or "23ד".
+  function fmtTournamentCountdown(ms) {
+    if (!Number.isFinite(ms) || ms <= 0) return '';
+    var total = Math.floor(ms / 1000);
+    var d = Math.floor(total / (24 * 3600));
+    var h = Math.floor((total % (24 * 3600)) / 3600);
+    var m = Math.floor((total % 3600) / 60);
+    if (d > 0) return d + 'י ' + h + 'ש';
+    if (h > 0) return h + 'ש ' + m + 'ד';
+    return m + ' דקות';
+  }
+
+  function renderTournamentBannerHtml() {
+    var live = getLiveTournament();
+    if (live) {
+      var endsIn = new Date(live.ends_at).getTime() - Date.now();
+      var topPrize = Array.isArray(live.prize_pool) && live.prize_pool.length ? live.prize_pool[0].reward : 0;
+      return '<button class="dyn-tournament-banner dyn-tournament-banner-live" id="dyn-tournament-banner" data-tournament-id="' + live.id + '">' +
+        '<div class="dyn-tournament-banner-pulse">🔴 LIVE</div>' +
+        '<div class="dyn-tournament-banner-body">' +
+          '<div class="dyn-tournament-banner-title">🏆 ' + escapeHtml(live.name) + '</div>' +
+          '<div class="dyn-tournament-banner-sub">מסתיים בעוד <strong>' + fmtTournamentCountdown(endsIn) + '</strong> · פרס ראשון: ' + topPrize.toLocaleString() + '💎</div>' +
+        '</div>' +
+        '<div class="dyn-tournament-banner-cta">שחק וצבור!</div>' +
+      '</button>';
+    }
+    var upcoming = getUpcomingTournament();
+    if (upcoming) {
+      var startsIn = new Date(upcoming.starts_at).getTime() - Date.now();
+      var topPrize2 = Array.isArray(upcoming.prize_pool) && upcoming.prize_pool.length ? upcoming.prize_pool[0].reward : 0;
+      return '<button class="dyn-tournament-banner dyn-tournament-banner-upcoming" id="dyn-tournament-banner" data-tournament-id="' + upcoming.id + '">' +
+        '<div class="dyn-tournament-banner-pulse">⏰ בקרוב</div>' +
+        '<div class="dyn-tournament-banner-body">' +
+          '<div class="dyn-tournament-banner-title">' + escapeHtml(upcoming.name) + '</div>' +
+          '<div class="dyn-tournament-banner-sub">מתחיל בעוד <strong>' + fmtTournamentCountdown(startsIn) + '</strong> · פרס ראשון: ' + topPrize2.toLocaleString() + '💎</div>' +
+        '</div>' +
+        '<div class="dyn-tournament-banner-cta">פרטים</div>' +
+      '</button>';
+    }
+    return '';
+  }
+
+  // Tournament leaderboard modal — top 50 + my rank + prize pool display.
+  function closeTournamentModal() {
+    var el = document.getElementById('dyn-tournament-modal');
+    if (el) el.remove();
+  }
+  function showTournamentModal(tournamentId) {
+    closeTournamentModal();
+    var deviceId = (typeof getDeviceId === 'function') ? getDeviceId() : '';
+    var overlay = document.createElement('div');
+    overlay.id = 'dyn-tournament-modal';
+    overlay.className = 'dyn-tournament-modal-overlay';
+    overlay.innerHTML =
+      '<div class="dyn-tournament-modal-card">' +
+        '<div class="dyn-tournament-modal-head">' +
+          '<button class="dyn-tournament-modal-close" aria-label="סגור">✕</button>' +
+          '<div class="dyn-tournament-modal-title">🏆 טורניר</div>' +
+          '<div class="dyn-tournament-modal-sub" id="dyn-tournament-modal-sub">⏳ טוען...</div>' +
+        '</div>' +
+        '<div class="dyn-tournament-modal-body" id="dyn-tournament-modal-body">' +
+          '<div class="board-lb-loading">⏳ טוען מובילי טורניר...</div>' +
+        '</div>' +
+        '<div class="dyn-tournament-modal-foot">' +
+          '<button class="dyn-tournament-modal-back">חזור</button>' +
+          '<button class="dyn-tournament-modal-play">🏆 שחק בטורניר</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(overlay);
+    overlay.querySelector('.dyn-tournament-modal-close').onclick = closeTournamentModal;
+    overlay.querySelector('.dyn-tournament-modal-back').onclick = closeTournamentModal;
+    overlay.querySelector('.dyn-tournament-modal-play').onclick = function() {
+      closeTournamentModal();
+      // Open the picker so the player can pick a board and start playing.
+      // The submit-on-game-over flow will auto-submit to the live tournament.
+      if (typeof showDynamicBoardsPicker === 'function') showDynamicBoardsPicker();
+    };
+    overlay.addEventListener('click', function(e) { if (e.target === overlay) closeTournamentModal(); });
+    var url = '/api/tournaments/' + tournamentId + '/leaderboard' + (deviceId ? '?deviceId=' + encodeURIComponent(deviceId) : '');
+    fetch(url, { cache: 'no-store' })
+      .then(function(r) { return r.json(); })
+      .catch(function() { return null; })
+      .then(function(d) {
+        var body = document.getElementById('dyn-tournament-modal-body');
+        var sub  = document.getElementById('dyn-tournament-modal-sub');
+        if (!body) return;
+        if (!d || !d.ok) {
+          body.innerHTML = '<div class="board-lb-empty">שגיאה בטעינה</div>';
+          return;
+        }
+        var t = d.tournament || {};
+        var endsIn = new Date(t.ends_at).getTime() - Date.now();
+        if (sub) sub.innerHTML = escapeHtml(t.name || '') + (endsIn > 0 ? ' · נשאר ' + fmtTournamentCountdown(endsIn) : ' · הסתיים');
+        var list = d.list || [];
+        if (!list.length) {
+          body.innerHTML = '<div class="board-lb-empty">🌱 עדיין אין מתחרים<br><span class="board-lb-empty-sub">היה הראשון להציב ניקוד!</span></div>';
+          return;
+        }
+        // Find the cached tournament for prize_pool.
+        var cached = _tournamentsCache.data;
+        var fullTour = cached && cached.tournaments && cached.tournaments.find(function(x) { return x.id === tournamentId; });
+        var prizePool = (fullTour && Array.isArray(fullTour.prize_pool)) ? fullTour.prize_pool : [];
+        var rows = '';
+        for (var i = 0; i < list.length; i++) {
+          var p = list[i];
+          var rank = i + 1;
+          var rankBadge = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : '#' + rank;
+          var prize = prizePool.find(function(x) { return x.rank === rank; });
+          var prizeHtml = prize ? '<span class="dyn-tournament-row-prize">+' + prize.reward.toLocaleString() + '💎</span>' : '';
+          var youCls = p.you ? ' dyn-tournament-row-you' : '';
+          var flagHtml = '';
+          if (p.country) {
+            try {
+              var cc = String(p.country).toUpperCase();
+              if (cc.length === 2) {
+                flagHtml = '<span class="dyn-tournament-row-flag">' +
+                  String.fromCodePoint(0x1F1E6 + cc.charCodeAt(0) - 65) +
+                  String.fromCodePoint(0x1F1E6 + cc.charCodeAt(1) - 65) +
+                  '</span>';
+              }
+            } catch (e) {}
+          }
+          rows +=
+            '<div class="dyn-tournament-row' + youCls + '">' +
+              '<span class="dyn-tournament-row-rank">' + rankBadge + '</span>' +
+              flagHtml +
+              '<span class="dyn-tournament-row-name">' + escapeHtml(p.name || 'אנונימי') + (p.you ? ' (אתה)' : '') + '</span>' +
+              '<span class="dyn-tournament-row-score">' + (p.score || 0).toLocaleString() + '</span>' +
+              prizeHtml +
+            '</div>';
+        }
+        var prizeTable = '';
+        if (prizePool.length) {
+          prizeTable = '<div class="dyn-tournament-prize-pool">';
+          prizeTable += '<div class="dyn-tournament-prize-pool-title">💎 פרסים</div>';
+          prizeTable += '<div class="dyn-tournament-prize-list">';
+          prizePool.slice(0, 5).forEach(function(p) {
+            var emoji = p.rank === 1 ? '🥇' : p.rank === 2 ? '🥈' : p.rank === 3 ? '🥉' : '#' + p.rank;
+            prizeTable += '<span class="dyn-tournament-prize-item">' + emoji + ' ' + p.reward.toLocaleString() + '💎</span>';
+          });
+          prizeTable += '</div></div>';
+        }
+        body.innerHTML = prizeTable + '<div class="dyn-tournament-list">' + rows + '</div>';
+      });
+  }
+  window.showTournamentModal = showTournamentModal;
+  window.closeTournamentModal = closeTournamentModal;
+
+  // Pre-fetch on module load so the cache is warm by the time the
+  // picker opens.
+  setTimeout(function() { try { fetchTournaments(false); } catch (e) {} }, 1500);
+
   // Human-readable labels for themes / shapes so the player can tell the
   // boards apart before clicking — boring rectangular cards = no clicks.
   var THEME_LABELS = {
@@ -1724,6 +1944,11 @@
           '</div>' +
         '</div>';
     }
+    // Live Tournament banner — sits at the absolute TOP of the header
+    // when a tournament is live or about to start. Highest-priority
+    // surface because tournaments are time-limited community moments.
+    var tournamentBannerHtml = renderTournamentBannerHtml();
+
     // Season Pass headline — sits at the very top of the header.
     // The most-prominent retention surface: XP bar + unclaimed badge.
     var seasonCached = getCachedSeasonStatus();
@@ -1804,6 +2029,7 @@
           '<button class="dyn-boards-close" aria-label="סגור">✕</button>' +
           '<div class="dyn-boards-title">🎯 לוחות דינמיים</div>' +
           '<div class="dyn-boards-sub">לוחות מיוחדים עם חוקים משלהם. כל לוח — לוח מובילים נפרד, שיא אישי משלך, ומשימות.</div>' +
+          tournamentBannerHtml +
           seasonHeadlineHtml +
           questsHeadlineHtml +
           achProgressHtml +
@@ -1837,10 +2063,16 @@
     if (qBtn) qBtn.onclick = showQuestsModal;
     var sBtn = document.getElementById('dyn-season-headline');
     if (sBtn) sBtn.onclick = showSeasonPassModal;
+    var tBnr = document.getElementById('dyn-tournament-banner');
+    if (tBnr) tBnr.onclick = function() {
+      var tid = parseInt(tBnr.getAttribute('data-tournament-id'), 10);
+      if (Number.isFinite(tid)) showTournamentModal(tid);
+    };
     // Fire a background fetch on every picker open so the cache stays
     // fresh for the NEXT open. The current render uses whatever is in
     // the cache (which may be from a previous game-over's XP grant).
     fetchSeasonStatus(false);
+    fetchTournaments(false);
     // Streak-freeze buy button + comeback overlay (if eligible).
     var freezeBuyBtn = document.getElementById('dyn-freeze-buy-btn');
     if (freezeBuyBtn) freezeBuyBtn.onclick = function() {

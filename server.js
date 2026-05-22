@@ -3267,6 +3267,247 @@ app.post('/api/player/season/claim-tier', requireDeviceAuth, async (req, res) =>
 });
 
 // ============================================================
+// Live Tournaments — stage 12 (May 2026)
+//
+// Scheduled prime-time events with a fixed window + top-N prize
+// pool. Any dynamic-board game played within the window submits
+// the player's BEST score. After end_at, the next fetch of
+// /tournaments lazily finalizes — top-N receive their prize, the
+// row's status flips to 'finalized'. No cron needed.
+//
+// Anti-cheat: best-score-wins upsert (same as daily_scores), drops
+// validation, server-side rank computation at finalize time.
+// ============================================================
+async function maybeFinalizeTournament(tournamentId) {
+  // Lazy-finalize a tournament whose ends_at has passed. Idempotent —
+  // safe to call multiple times. Top-N players have their prizes
+  // credited to balance + recorded in tournament_scores.prize_claimed.
+  try {
+    const t = await pool.query(
+      `SELECT id, prize_pool, status, ends_at FROM tournaments WHERE id = $1`,
+      [tournamentId]
+    );
+    if (!t.rows.length) return false;
+    const row = t.rows[0];
+    if (row.status === 'finalized') return true;
+    if (new Date(row.ends_at) > new Date()) return false;
+    const pool_ = Array.isArray(row.prize_pool) ? row.prize_pool : [];
+    if (!pool_.length) {
+      await pool.query(`UPDATE tournaments SET status = 'finalized', finalized_at = NOW() WHERE id = $1`, [tournamentId]);
+      return true;
+    }
+    // Order top players by score desc. Tie-breaker: earliest score wins
+    // (rewards consistency, not late-game catch-up).
+    const lb = await pool.query(
+      `SELECT device_id, score, updated_at
+         FROM tournament_scores
+        WHERE tournament_id = $1
+          AND (prize_claimed IS NULL)
+        ORDER BY score DESC, updated_at ASC
+        LIMIT $2`,
+      [tournamentId, pool_.length]
+    );
+    // Credit each top-N player.
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      for (let i = 0; i < lb.rows.length; i++) {
+        const player = lb.rows[i];
+        const tier = pool_[i] || {};
+        const reward = parseInt(tier.reward, 10) || 0;
+        if (reward <= 0) continue;
+        await client.query(
+          `UPDATE tournament_scores SET prize_claimed = $1 WHERE tournament_id = $2 AND device_id = $3`,
+          [reward, tournamentId, player.device_id]
+        );
+        await client.query(
+          `UPDATE player_profiles
+              SET balance = balance + $1, total_earned = total_earned + $1, updated_at = NOW()
+            WHERE device_id = $2`,
+          [reward, player.device_id]
+        );
+        // Push notification to the winner.
+        if (typeof sendPushToDevice === 'function') {
+          sendPushToDevice(player.device_id, {
+            title: '🏆 זכית בטורניר!',
+            body: 'מקום ' + (i + 1) + ' · ' + reward + '💎 נכנסו לחשבון',
+            tag: 'tournament-prize-' + tournamentId,
+            data: { url: '/' }
+          }).catch(function() {});
+        }
+      }
+      await client.query(
+        `UPDATE tournaments SET status = 'finalized', finalized_at = NOW(), updated_at = NOW() WHERE id = $1`,
+        [tournamentId]
+      );
+      await client.query('COMMIT');
+      return true;
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  } catch (e) {
+    console.error('maybeFinalizeTournament', tournamentId, e.message);
+    return false;
+  }
+}
+
+// GET /api/tournaments — lists active + upcoming + recent.
+// Lazily finalizes any that ended without being finalized yet.
+app.get('/api/tournaments', async (req, res) => {
+  try {
+    const cfg = await pool.query(`SELECT value FROM game_config WHERE key = 'tournament_enabled'`);
+    if (cfg.rows[0] && cfg.rows[0].value === 'false') {
+      return res.json({ ok: true, enabled: false, tournaments: [] });
+    }
+    // Pull tournaments that are live OR upcoming OR ended within the last 7 days.
+    const r = await pool.query(
+      `SELECT id, name, description, starts_at, ends_at, prize_pool, status, finalized_at
+         FROM tournaments
+        WHERE ends_at >= NOW() - INTERVAL '7 days'
+        ORDER BY starts_at ASC
+        LIMIT 25`
+    );
+    // Lazy-finalize any that ended but aren't marked finalized yet.
+    const toFinalize = r.rows.filter(t => new Date(t.ends_at) <= new Date() && t.status !== 'finalized');
+    for (const t of toFinalize) {
+      await maybeFinalizeTournament(t.id);
+    }
+    // Re-fetch if anything was finalized.
+    let rows = r.rows;
+    if (toFinalize.length) {
+      const r2 = await pool.query(
+        `SELECT id, name, description, starts_at, ends_at, prize_pool, status, finalized_at
+           FROM tournaments
+          WHERE ends_at >= NOW() - INTERVAL '7 days'
+          ORDER BY starts_at ASC
+          LIMIT 25`
+      );
+      rows = r2.rows;
+    }
+    // Derive a normalised state label for the client.
+    const enriched = rows.map(t => ({
+      ...t,
+      isLive:    new Date(t.starts_at) <= new Date() && new Date(t.ends_at) > new Date(),
+      isUpcoming: new Date(t.starts_at) > new Date(),
+      isEnded:   new Date(t.ends_at) <= new Date()
+    }));
+    res.json({ ok: true, enabled: true, tournaments: enriched });
+  } catch (e) {
+    console.error('GET /api/tournaments', e);
+    res.status(500).json({ ok: false, error: 'internal' });
+  }
+});
+
+// GET /api/tournaments/:id/leaderboard — top 50 + my rank.
+app.get('/api/tournaments/:id/leaderboard', async (req, res) => {
+  try {
+    const tid = parseInt(req.params.id, 10);
+    if (!Number.isFinite(tid)) return res.status(400).json({ error: 'bad_id' });
+    const deviceId = (req.query.deviceId || '').toString().slice(0, 64);
+    const t = await pool.query(`SELECT id, name, ends_at FROM tournaments WHERE id = $1`, [tid]);
+    if (!t.rows.length) return res.status(404).json({ error: 'not_found' });
+    const top = await pool.query(
+      `SELECT device_id, name, score, tier, country, games_played, prize_claimed
+         FROM tournament_scores
+        WHERE tournament_id = $1
+        ORDER BY score DESC, updated_at ASC
+        LIMIT 50`,
+      [tid]
+    );
+    let myRank = null, myScore = 0;
+    if (deviceId) {
+      try {
+        const m = await pool.query(
+          `SELECT score, (1 + (SELECT COUNT(*) FROM tournament_scores
+                              WHERE tournament_id = $1 AND score > ts.score)) AS rank
+             FROM tournament_scores ts
+            WHERE tournament_id = $1 AND device_id = $2`,
+          [tid, deviceId]
+        );
+        if (m.rows[0]) { myScore = Number(m.rows[0].score) || 0; myRank = Number(m.rows[0].rank) || null; }
+      } catch (e) {}
+    }
+    const totalRow = await pool.query(`SELECT COUNT(*)::int AS c FROM tournament_scores WHERE tournament_id = $1`, [tid]);
+    res.json({
+      ok: true,
+      tournament: t.rows[0],
+      list: top.rows.map(r => ({
+        name: r.name, score: r.score, tier: r.tier, country: r.country,
+        games: r.games_played, prizeClaimed: r.prize_claimed,
+        you: deviceId && r.device_id === deviceId
+      })),
+      total: (totalRow.rows[0] && totalRow.rows[0].c) || 0,
+      myRank, myScore
+    });
+  } catch (e) {
+    console.error('GET /api/tournaments/:id/leaderboard', e);
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
+// POST /api/tournaments/:id/score — submit a dynamic-board game score.
+// Best-score-wins upsert (mirroring the daily_scores pattern).
+// Window-enforced: rejects scores outside the [starts_at, ends_at) window.
+app.post('/api/tournaments/:id/score', requireDeviceAuth, async (req, res) => {
+  try {
+    const tid = parseInt(req.params.id, 10);
+    if (!Number.isFinite(tid)) return res.status(400).json({ error: 'bad_id' });
+    const { deviceId, name, score, tier, drops, country } = req.body || {};
+    if (typeof deviceId !== 'string' || deviceId.length < 8 || deviceId.length > 64) {
+      return res.status(400).json({ error: 'bad_device' });
+    }
+    if (!checkRateLimit('tournament_score', deviceId, 60, 60 * 60 * 1000)) {
+      return res.status(429).json({ error: 'rate_limited' });
+    }
+    const s = parseInt(score, 10);
+    if (!Number.isFinite(s) || s < 0 || s > 10_000_000) return res.status(400).json({ error: 'bad_score' });
+    const t = parseInt(tier, 10);
+    if (!Number.isFinite(t) || t < 1 || t > 8) return res.status(400).json({ error: 'bad_tier' });
+    const dropsN = typeof drops === 'number' && Number.isFinite(drops) && drops >= 0 ? Math.floor(drops) : null;
+    if (dropsN === null) return res.status(400).json({ error: 'missing_drops' });
+    if (challengeDropsImplausible(s, dropsN)) {
+      console.warn(`[anti-cheat] tournament score rejected: device=${deviceId} tournament=${tid} score=${s} drops=${dropsN}`);
+      return res.status(400).json({ error: 'implausible_score' });
+    }
+    // Verify tournament window.
+    const tour = await pool.query(
+      `SELECT starts_at, ends_at, status FROM tournaments WHERE id = $1`, [tid]
+    );
+    if (!tour.rows.length) return res.status(404).json({ error: 'not_found' });
+    const now = new Date();
+    const startsAt = new Date(tour.rows[0].starts_at);
+    const endsAt = new Date(tour.rows[0].ends_at);
+    if (now < startsAt) return res.json({ ok: false, reason: 'not_started' });
+    if (now >= endsAt) return res.json({ ok: false, reason: 'ended' });
+    const safeName = cleanName(name);
+    const safeCountry = cleanCountry(country);
+    await pool.query(
+      `INSERT INTO tournament_scores (tournament_id, device_id, name, score, tier, country, games_played)
+       VALUES ($1, $2, $3, $4, $5, $6, 1)
+       ON CONFLICT (tournament_id, device_id) DO UPDATE
+         SET name = EXCLUDED.name,
+             score = GREATEST(tournament_scores.score, EXCLUDED.score),
+             tier  = CASE WHEN EXCLUDED.score > tournament_scores.score THEN EXCLUDED.tier ELSE tournament_scores.tier END,
+             country = COALESCE(EXCLUDED.country, tournament_scores.country),
+             games_played = tournament_scores.games_played + 1,
+             updated_at = NOW()`,
+      [tid, deviceId, safeName, s, t, safeCountry]
+    );
+    // Mark the tournament 'live' if it was still 'scheduled'.
+    if (tour.rows[0].status === 'scheduled') {
+      await pool.query(`UPDATE tournaments SET status = 'live', updated_at = NOW() WHERE id = $1`, [tid]);
+    }
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('POST /api/tournaments/:id/score', e);
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
+// ============================================================
 // ADMIN ROUTES (כל המסלולים מוגנים ב-requireAdmin)
 // ============================================================
 
@@ -4619,6 +4860,115 @@ if (ADMIN_PATH && ADMIN_PASSWORD) {
   // are removed by the existing sendPushToDevice cleanup logic
   // (410 Gone responses delete the row).
   // ============================================================
+  // ============================================================
+  // Admin — Tournament CRUD (May 2026)
+  // ============================================================
+  adminRouter.get('/api/tournaments', async (_req, res) => {
+    try {
+      const r = await pool.query(
+        `SELECT id, name, description, starts_at, ends_at, prize_pool, status, finalized_at, created_at,
+                (SELECT COUNT(*) FROM tournament_scores WHERE tournament_id = tournaments.id)::int AS players
+         FROM tournaments
+        ORDER BY starts_at DESC LIMIT 100`
+      );
+      res.json({ ok: true, tournaments: r.rows });
+    } catch (e) {
+      console.error('admin tournaments list', e.message);
+      res.status(500).json({ error: 'server' });
+    }
+  });
+  adminRouter.post('/api/tournaments', async (req, res) => {
+    try {
+      const { name, description, starts_at, ends_at, prize_pool } = req.body || {};
+      if (!name || !starts_at || !ends_at) return res.status(400).json({ error: 'missing_fields' });
+      if (new Date(starts_at) >= new Date(ends_at)) return res.status(400).json({ error: 'bad_window' });
+      // Validate prize_pool — array of {rank, reward} with reward 0-100K.
+      let validPool = [];
+      if (Array.isArray(prize_pool)) {
+        validPool = prize_pool
+          .map(p => ({ rank: parseInt(p.rank, 10), reward: parseInt(p.reward, 10) }))
+          .filter(p => p.rank >= 1 && p.rank <= 100 && p.reward >= 0 && p.reward <= 100000)
+          .sort((a, b) => a.rank - b.rank);
+      }
+      const r = await pool.query(
+        `INSERT INTO tournaments (name, description, starts_at, ends_at, prize_pool)
+         VALUES ($1, $2, $3, $4, $5::jsonb) RETURNING *`,
+        [String(name).slice(0, 80), String(description || '').slice(0, 300), starts_at, ends_at, JSON.stringify(validPool)]
+      );
+      await pool.query(
+        `INSERT INTO admin_actions (action, details, created_at) VALUES ('tournament_create', $1, NOW())`,
+        [JSON.stringify({ id: r.rows[0].id, name: r.rows[0].name })]
+      ).catch(() => {});
+      res.json({ ok: true, tournament: r.rows[0] });
+    } catch (e) {
+      console.error('admin tournament create', e.message);
+      res.status(500).json({ error: 'server' });
+    }
+  });
+  adminRouter.patch('/api/tournaments/:id', async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (!Number.isFinite(id)) return res.status(400).json({ error: 'bad_id' });
+      const cur = await pool.query(`SELECT * FROM tournaments WHERE id = $1`, [id]);
+      if (!cur.rows.length) return res.status(404).json({ error: 'not_found' });
+      const body = req.body || {};
+      const updates = [];
+      const params = [];
+      let idx = 1;
+      if (body.name != null) { updates.push(`name = $${idx++}`); params.push(String(body.name).slice(0, 80)); }
+      if (body.description != null) { updates.push(`description = $${idx++}`); params.push(String(body.description).slice(0, 300)); }
+      if (body.ends_at != null) { updates.push(`ends_at = $${idx++}`); params.push(body.ends_at); }
+      if (body.starts_at != null) { updates.push(`starts_at = $${idx++}`); params.push(body.starts_at); }
+      if (body.prize_pool != null && Array.isArray(body.prize_pool)) {
+        const validPool = body.prize_pool
+          .map(p => ({ rank: parseInt(p.rank, 10), reward: parseInt(p.reward, 10) }))
+          .filter(p => p.rank >= 1 && p.rank <= 100 && p.reward >= 0 && p.reward <= 100000)
+          .sort((a, b) => a.rank - b.rank);
+        updates.push(`prize_pool = $${idx++}::jsonb`); params.push(JSON.stringify(validPool));
+      }
+      if (!updates.length) return res.json({ ok: true, tournament: cur.rows[0] });
+      updates.push(`updated_at = NOW()`);
+      params.push(id);
+      const r = await pool.query(
+        `UPDATE tournaments SET ${updates.join(', ')} WHERE id = $${idx} RETURNING *`,
+        params
+      );
+      await pool.query(
+        `INSERT INTO admin_actions (action, details, created_at) VALUES ('tournament_update', $1, NOW())`,
+        [JSON.stringify({ id, body })]
+      ).catch(() => {});
+      res.json({ ok: true, tournament: r.rows[0] });
+    } catch (e) {
+      console.error('admin tournament update', e.message);
+      res.status(500).json({ error: 'server' });
+    }
+  });
+  adminRouter.delete('/api/tournaments/:id', async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (!Number.isFinite(id)) return res.status(400).json({ error: 'bad_id' });
+      await pool.query(`DELETE FROM tournaments WHERE id = $1`, [id]);
+      await pool.query(
+        `INSERT INTO admin_actions (action, details, created_at) VALUES ('tournament_delete', $1, NOW())`,
+        [JSON.stringify({ id })]
+      ).catch(() => {});
+      res.json({ ok: true });
+    } catch (e) {
+      console.error('admin tournament delete', e.message);
+      res.status(500).json({ error: 'server' });
+    }
+  });
+  adminRouter.post('/api/tournaments/:id/finalize', async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      const ok = await maybeFinalizeTournament(id);
+      res.json({ ok });
+    } catch (e) {
+      console.error('admin tournament finalize', e.message);
+      res.status(500).json({ error: 'server' });
+    }
+  });
+
   adminRouter.get('/api/push/status', async (_req, res) => {
     try {
       const r = await pool.query(`SELECT COUNT(*)::int AS c FROM push_subscriptions`);
