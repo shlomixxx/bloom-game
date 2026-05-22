@@ -1088,3 +1088,55 @@ CREATE TABLE IF NOT EXISTS dynamic_board_scores (
 
 CREATE INDEX IF NOT EXISTS idx_dynamic_board_scores_board_score
   ON dynamic_board_scores (board_id, score DESC);
+
+-- ============================================================
+-- Skin Configurations (admin-managed shop catalog, May 2026)
+-- Single source of truth for everything the skin shop shows + the
+-- buy-skin endpoint enforces. Replaces the hardcoded SKIN_PRICES map
+-- on the server and SKIN_PACKS on the client (which now only carries
+-- a fallback used until the boot fetch resolves).
+--
+-- definition shape: { tiers: [t1, t2, ..., t8] } where each ti is
+--   { bg: "#hex or linear-gradient(...)", fg: "#hex", svg_key: "crown",
+--     name: "כתר", emoji: "👑" }
+-- svg_key references the SVG dictionary in src/01-constants.js
+-- (circle/leaf/flower/flame/bolt/star/diamond/crown).
+--
+-- is_enabled = show in shop at all
+-- is_sellable = can be purchased now (false = existing owners keep,
+--   new buyers see "currently unavailable")
+-- special_class = optional body class (e.g. 'aurora' to flip
+--   body.skin-aurora-active and enable the bespoke CSS animations).
+-- ============================================================
+CREATE TABLE IF NOT EXISTS skin_configurations (
+  id            SERIAL PRIMARY KEY,
+  skin_id       VARCHAR(40) UNIQUE NOT NULL,
+  name          VARCHAR(80) NOT NULL,
+  price         INTEGER NOT NULL DEFAULT 0,
+  is_enabled    BOOLEAN NOT NULL DEFAULT TRUE,
+  is_sellable   BOOLEAN NOT NULL DEFAULT TRUE,
+  definition    JSONB NOT NULL DEFAULT '{}'::jsonb,
+  special_class VARCHAR(40),
+  sort_order    INTEGER NOT NULL DEFAULT 100,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_skin_configurations_sort
+  ON skin_configurations (sort_order, id);
+
+-- ============================================================
+-- Daily Special Board (Stage 15 — Daily mini-event boards, May 2026)
+-- One dynamic board each day (Asia/Jerusalem) becomes the "🌟 הלוח של היום"
+-- with 3× Season XP + 2× quest rewards. Deterministic per-date pick from
+-- the active dynamic boards list; all players see the SAME board today,
+-- but it rotates. Drives daily-board roulette ("what's special today?")
+-- which is the single most-tested daily-return hook in F2P puzzle games.
+--
+-- Admin override: `daily_special_override_id` = numeric board id forces
+-- that board to be today's special regardless of the hash pick.
+-- Empty string = use the deterministic hash.
+-- ============================================================
+INSERT INTO game_config (key, value) VALUES ('daily_special_enabled',      'true') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('daily_special_xp_mult',      '3')    ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('daily_special_reward_mult',  '2')    ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('daily_special_override_id',  '')     ON CONFLICT (key) DO NOTHING;

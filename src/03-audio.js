@@ -8,22 +8,19 @@
     fetch(API_BASE + '/api/config').then(function(r) { return r.json(); })
       .then(function(d) {
         if (d && d.config) gameConfig = d.config;
-        // Aurora admin-gate. Default: enabled. Only the explicit string 'false'
-        // disables it. When disabled: hide from shop and, if a player has it
-        // active, revert them to classic so they don't keep showing gradients
-        // that the admin can't see in their own account.
-        try {
-          if (gameConfig.aurora_skin_enabled === 'false') {
-            if (typeof SKIN_PACKS !== 'undefined' && SKIN_PACKS.aurora) delete SKIN_PACKS.aurora;
-            if (typeof activeSkinId !== 'undefined' && activeSkinId === 'aurora') {
-              activeSkinId = 'classic';
-              try { localStorage.setItem(ACTIVE_SKIN_KEY, 'classic'); } catch(e) {}
-              if (typeof syncBodySkinClass === 'function') syncBodySkinClass();
-              if (typeof buildTierBar === 'function') try { buildTierBar(true); } catch(e) {}
-              if (typeof render === 'function') try { render(); } catch(e) {}
-            }
-          }
-        } catch (e) {}
+      })
+      .catch(function() {});
+  })();
+
+  // Fetch the admin-managed skin catalog and rebuild SKIN_PACKS. The legacy
+  // aurora_skin_enabled flag is no longer needed — admins manage each skin's
+  // is_enabled / is_sellable / price directly through the new skins admin UI.
+  (function loadServerSkins() {
+    fetch(API_BASE + '/api/skins/available').then(function(r) { return r.json(); })
+      .then(function(d) {
+        if (d && d.ok && Array.isArray(d.skins) && typeof window.__bloomApplyServerSkins === 'function') {
+          window.__bloomApplyServerSkins(d.skins);
+        }
       })
       .catch(function() {});
   })();
@@ -39,6 +36,8 @@
   // challenge are NOT yet wired (planned for next round).
   var _availableBoards = [];
   window._availableBoards = _availableBoards;
+  // Stage 15 — daily special board info ({enabled, id, xpMult, rewardMult, date}).
+  window._dailySpecial = { enabled: false };
   function refreshAvailableBoards() {
     if (document.hidden) return;
     fetch(API_BASE + '/api/boards/available').then(function(r) { return r.json(); })
@@ -46,6 +45,7 @@
         if (!d || !d.ok) return;
         _availableBoards = Array.isArray(d.boards) ? d.boards : [];
         window._availableBoards = _availableBoards;
+        window._dailySpecial = (d.dailySpecial && d.dailySpecial.enabled) ? d.dailySpecial : { enabled: false };
         if (typeof updateDynamicBoardsButton === 'function') {
           try { updateDynamicBoardsButton(); } catch (e) {}
         }

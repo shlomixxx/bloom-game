@@ -2385,6 +2385,52 @@ function invalidateBoardCache() {
   _boardsListCache = { value: undefined, expiresAt: 0 };
 }
 
+// Skin shop catalog cache. /api/skins/available is hot at boot and re-fetched
+// every page load; admin changes are rare. 60s TTL.
+let _skinsCache = { value: undefined, expiresAt: 0 };
+function invalidateSkinsCache() { _skinsCache = { value: undefined, expiresAt: 0 }; }
+
+// SVG keys the skin renderer knows about — keep aligned with the SVG dict
+// in src/01-constants.js. Adding a new key requires the matching SVG path
+// on the client; otherwise the tile renders blank.
+const SKIN_SVG_KEYS = ['circle', 'leaf', 'flower', 'flame', 'bolt', 'star', 'diamond', 'crown'];
+
+// Validate a skin's definition payload before write. Accepts only the shape
+// the client renderer can consume — bad input on save would otherwise crash
+// the merge engine for any owner of that skin.
+function validateSkinDefinition(def) {
+  if (!def || typeof def !== 'object') return { ok: false, error: 'definition_required' };
+  const tiers = def.tiers;
+  if (!Array.isArray(tiers) || tiers.length !== 8) return { ok: false, error: 'tiers_must_be_8' };
+  for (let i = 0; i < 8; i++) {
+    const t = tiers[i];
+    if (!t || typeof t !== 'object') return { ok: false, error: `tier_${i + 1}_missing` };
+    const bg = String(t.bg || '');
+    const fg = String(t.fg || '');
+    const svgKey = String(t.svg_key || '');
+    const name = String(t.name || '');
+    const emoji = String(t.emoji || '');
+    if (!bg || bg.length > 300) return { ok: false, error: `tier_${i + 1}_bg_invalid` };
+    // bg allowlist: #hex (3/6/8 char) OR linear-gradient(...) OR radial-gradient(...)
+    if (!/^#[0-9A-Fa-f]{3,8}$/.test(bg) && !/^(linear|radial)-gradient\(/.test(bg)) {
+      return { ok: false, error: `tier_${i + 1}_bg_format` };
+    }
+    if (!/^#[0-9A-Fa-f]{3,8}$/.test(fg)) return { ok: false, error: `tier_${i + 1}_fg_format` };
+    if (!SKIN_SVG_KEYS.includes(svgKey)) return { ok: false, error: `tier_${i + 1}_svg_key_unknown` };
+    if (!name || name.length > 40) return { ok: false, error: `tier_${i + 1}_name_invalid` };
+    if (!emoji || emoji.length > 10) return { ok: false, error: `tier_${i + 1}_emoji_invalid` };
+  }
+  return { ok: true };
+}
+
+// Skin id must be lowercase letters/digits/underscore, 2-40 chars. Used as
+// a CSS-class-friendly identifier across client + server.
+function validateSkinId(raw) {
+  const s = String(raw || '').trim();
+  if (!/^[a-z][a-z0-9_]{1,39}$/.test(s)) return null;
+  return s;
+}
+
 // Allowed cell types for special_cells boards. Expand here as new types
 // land (frozen / electric / locked / teleport). Client code uses the
 // same list to decide what to render.
@@ -2577,11 +2623,81 @@ app.get('/api/active-board', async (_req, res) => {
 // admin set "this is the duel-of-the-day" without ticking dynamic) are
 // excluded from the picker so the player isn't confused by boards they
 // can't start manually.
+// ============================================================
+// Daily Special Board picker (Stage 15 — Daily mini-event boards)
+// Deterministic per Asia/Jerusalem date — same board for all players today,
+// rotates tomorrow. Admin can override via game_config.daily_special_override_id.
+// Drives daily-board roulette ("what's special today?") — the strongest
+// daily-return hook in F2P puzzle games.
+// ============================================================
+function _dailySpecialHash(dateStr) {
+  let h = 2166136261;
+  for (let i = 0; i < dateStr.length; i++) {
+    h ^= dateStr.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return (h >>> 0);
+}
+
+async function loadConfigKeys(keys) {
+  try {
+    const r = await pool.query(
+      `SELECT key, value FROM game_config WHERE key = ANY($1::text[])`,
+      [keys]
+    );
+    const out = {};
+    for (const row of r.rows) out[row.key] = row.value;
+    return out;
+  } catch (e) { return {}; }
+}
+
+async function pickDailySpecial(boardRows) {
+  try {
+    const cfg = await loadConfigKeys([
+      'daily_special_enabled',
+      'daily_special_xp_mult',
+      'daily_special_reward_mult',
+      'daily_special_override_id'
+    ]);
+    if (cfg.daily_special_enabled === 'false') return { enabled: false };
+    if (!Array.isArray(boardRows) || boardRows.length === 0) return { enabled: false };
+    const xpMult = Math.max(1, Math.min(10, parseFloat(cfg.daily_special_xp_mult || '3') || 3));
+    const rewardMult = Math.max(1, Math.min(10, parseFloat(cfg.daily_special_reward_mult || '2') || 2));
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' });
+    const overrideId = parseInt(cfg.daily_special_override_id || '', 10);
+    if (Number.isFinite(overrideId) && overrideId > 0) {
+      const match = boardRows.find(function(b) { return b.id === overrideId; });
+      if (match) return { enabled: true, id: overrideId, xpMult, rewardMult, date: today, isOverride: true };
+    }
+    const idx = _dailySpecialHash(today) % boardRows.length;
+    return { enabled: true, id: boardRows[idx].id, xpMult, rewardMult, date: today, isOverride: false };
+  } catch (e) {
+    return { enabled: false };
+  }
+}
+
+// Convenience: resolves today's special board id without going through the
+// public endpoint. Used by /season/grant-xp + /earn dyn_quest to apply mults.
+async function getDailySpecialForToday() {
+  try {
+    const r = await pool.query(
+      `SELECT id FROM board_configurations
+        WHERE is_active = true
+          AND 'dynamic' = ANY(applies_to)
+          AND (starts_at IS NULL OR starts_at <= NOW())
+          AND (ends_at   IS NULL OR ends_at   >= NOW())
+        ORDER BY priority DESC, id DESC
+        LIMIT 25`
+    );
+    return await pickDailySpecial(r.rows);
+  } catch (e) { return { enabled: false }; }
+}
+
 app.get('/api/boards/available', async (_req, res) => {
   try {
     const now = Date.now();
     if (_boardsListCache.value !== undefined && _boardsListCache.expiresAt > now) {
-      return res.json({ ok: true, boards: _boardsListCache.value });
+      return res.json(_boardsListCache.value);
     }
     let rows = [];
     try {
@@ -2654,11 +2770,13 @@ app.get('/api/boards/available', async (_req, res) => {
         }
       }
     }
-    _boardsListCache = { value: rows, expiresAt: now + 60 * 1000 };
-    res.json({ ok: true, boards: rows });
+    const dailySpecial = await pickDailySpecial(rows);
+    const payload = { ok: true, boards: rows, dailySpecial };
+    _boardsListCache = { value: payload, expiresAt: now + 60 * 1000 };
+    res.json(payload);
   } catch (e) {
     console.error('GET /api/boards/available', e);
-    res.json({ ok: true, boards: [] });
+    res.json({ ok: true, boards: [], dailySpecial: { enabled: false } });
   }
 });
 
@@ -3158,6 +3276,25 @@ app.post('/api/player/season/grant-xp', requireDeviceAuth, async (req, res) => {
       return res.json({ ok: false, reason: 'bad_source' });
     }
     if (xpGain <= 0) return res.json({ ok: false, reason: 'no_xp' });
+    // Daily Special multiplier — when the player just finished a game
+    // on today's special board, multiply XP. Client passes meta.boardId.
+    // Server verifies the boardId IS today's special via getDailySpecialForToday.
+    let dailySpecialApplied = false;
+    let dailySpecialMult = 1;
+    const boardId = parseInt((meta && meta.boardId) || 0, 10) || 0;
+    if (boardId > 0 && (source === 'dyn_game_finish' || source === 'quest_done')) {
+      try {
+        const ctx = await getDailySpecialForToday();
+        if (ctx && ctx.enabled && ctx.id === boardId) {
+          dailySpecialMult = ctx.xpMult;
+          // Cap at maxPerGame × mult so a player on the daily special can
+          // earn up to ~300 XP in one game when xpMult=3 and the base
+          // cap is 100. This is the explicit "today's the day to grind" payoff.
+          xpGain = Math.min(maxPerGame * Math.ceil(dailySpecialMult), Math.round(xpGain * dailySpecialMult));
+          dailySpecialApplied = true;
+        }
+      } catch (specErr) { /* soft-fail — base XP still grants */ }
+    }
     // Per-game/per-quest dedup — uses gameId or a synthetic key per source.
     const dedupId = String(gameId || (source + ':' + (meta && meta.id) || '')).slice(0, 64);
     // Ensure row exists.
@@ -3195,7 +3332,9 @@ app.post('/api/player/season/grant-xp', requireDeviceAuth, async (req, res) => {
       newXp,
       previousTier: oldTier,
       currentTier: newTier,
-      leveledUp: newTier > oldTier
+      leveledUp: newTier > oldTier,
+      dailySpecialApplied,
+      dailySpecialMult
     });
   } catch (e) {
     console.error('POST /api/player/season/grant-xp', e);
@@ -5099,6 +5238,140 @@ if (ADMIN_PATH && ADMIN_PASSWORD) {
   });
 
   // ============================================================
+  // Skin Configurations admin CRUD (May 2026)
+  // Lets the admin add, edit, enable/disable, and price any skin
+  // in the shop without a redeploy. Every mutating route invalidates
+  // _skinsCache and writes to admin_actions.
+  // ============================================================
+  adminRouter.get('/api/skins', async (_req, res) => {
+    try {
+      const r = await pool.query(
+        `SELECT s.id, s.skin_id, s.name, s.price, s.is_enabled, s.is_sellable,
+                s.definition, s.special_class, s.sort_order, s.created_at, s.updated_at,
+                COUNT(ps.skin_id)::int AS owner_count
+           FROM skin_configurations s
+           LEFT JOIN player_skins ps ON ps.skin_id = s.skin_id
+          GROUP BY s.id
+          ORDER BY s.sort_order ASC, s.id ASC`
+      );
+      res.json({ ok: true, skins: r.rows });
+    } catch (e) {
+      console.error('admin GET /skins', e);
+      res.status(500).json({ error: 'server' });
+    }
+  });
+
+  adminRouter.post('/api/skins', async (req, res) => {
+    try {
+      const b = req.body || {};
+      const skinId = validateSkinId(b.skin_id);
+      if (!skinId) return res.status(400).json({ error: 'bad_skin_id' });
+      const name = String(b.name || '').trim().slice(0, 80);
+      if (!name) return res.status(400).json({ error: 'name_required' });
+      const price = Math.max(0, Math.min(100000, parseInt(b.price, 10) || 0));
+      const isEnabled  = b.is_enabled  !== undefined ? !!b.is_enabled  : true;
+      const isSellable = b.is_sellable !== undefined ? !!b.is_sellable : true;
+      const sortOrder  = Math.max(0, Math.min(10000, parseInt(b.sort_order, 10) || 100));
+      const specialClass = b.special_class ? String(b.special_class).trim().slice(0, 40) : null;
+      const definition = b.definition || {};
+      const v = validateSkinDefinition(definition);
+      if (!v.ok) return res.status(400).json({ error: v.error });
+      const exists = await pool.query(`SELECT 1 FROM skin_configurations WHERE skin_id = $1`, [skinId]);
+      if (exists.rows.length) return res.status(409).json({ error: 'skin_id_taken' });
+      const r = await pool.query(
+        `INSERT INTO skin_configurations
+           (skin_id, name, price, is_enabled, is_sellable, definition, special_class, sort_order)
+         VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8)
+         RETURNING *`,
+        [skinId, name, price, isEnabled, isSellable, JSON.stringify(definition), specialClass, sortOrder]
+      );
+      invalidateSkinsCache();
+      await pool.query(
+        `INSERT INTO admin_actions (action, target_type, target_id, details)
+         VALUES ('skin_create', 'skin', $1, $2)`,
+        [skinId, JSON.stringify({ name, price, isEnabled, isSellable, sortOrder })]
+      ).catch(() => {});
+      res.json({ ok: true, skin: r.rows[0] });
+    } catch (e) {
+      console.error('admin POST /skins', e);
+      res.status(500).json({ error: 'server' });
+    }
+  });
+
+  adminRouter.patch('/api/skins/:id', async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'bad_id' });
+      const current = await pool.query(`SELECT * FROM skin_configurations WHERE id = $1`, [id]);
+      if (!current.rows.length) return res.status(404).json({ error: 'not_found' });
+      const row = current.rows[0];
+      const b = req.body || {};
+      const patch = {
+        name:          b.name          !== undefined ? String(b.name).trim().slice(0, 80) : row.name,
+        price:         b.price         !== undefined ? Math.max(0, Math.min(100000, parseInt(b.price, 10) || 0)) : row.price,
+        is_enabled:    b.is_enabled    !== undefined ? !!b.is_enabled  : row.is_enabled,
+        is_sellable:   b.is_sellable   !== undefined ? !!b.is_sellable : row.is_sellable,
+        definition:    b.definition    !== undefined ? b.definition    : row.definition,
+        special_class: b.special_class !== undefined ? (b.special_class ? String(b.special_class).trim().slice(0, 40) : null) : row.special_class,
+        sort_order:    b.sort_order    !== undefined ? Math.max(0, Math.min(10000, parseInt(b.sort_order, 10) || 100)) : row.sort_order,
+      };
+      if (!patch.name) return res.status(400).json({ error: 'name_required' });
+      const v = validateSkinDefinition(patch.definition);
+      if (!v.ok) return res.status(400).json({ error: v.error });
+      const r = await pool.query(
+        `UPDATE skin_configurations
+            SET name=$1, price=$2, is_enabled=$3, is_sellable=$4,
+                definition=$5::jsonb, special_class=$6, sort_order=$7, updated_at=NOW()
+          WHERE id=$8
+          RETURNING *`,
+        [patch.name, patch.price, patch.is_enabled, patch.is_sellable,
+         JSON.stringify(patch.definition), patch.special_class, patch.sort_order, id]
+      );
+      invalidateSkinsCache();
+      await pool.query(
+        `INSERT INTO admin_actions (action, target_type, target_id, details)
+         VALUES ('skin_update', 'skin', $1, $2)`,
+        [row.skin_id, JSON.stringify({ patch: Object.keys(b) })]
+      ).catch(() => {});
+      res.json({ ok: true, skin: r.rows[0] });
+    } catch (e) {
+      console.error('admin PATCH /skins/:id', e);
+      res.status(500).json({ error: 'server' });
+    }
+  });
+
+  adminRouter.delete('/api/skins/:id', async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'bad_id' });
+      const current = await pool.query(`SELECT skin_id, name FROM skin_configurations WHERE id = $1`, [id]);
+      if (!current.rows.length) return res.status(404).json({ error: 'not_found' });
+      const owners = await pool.query(
+        `SELECT COUNT(*)::int AS n FROM player_skins WHERE skin_id = $1`,
+        [current.rows[0].skin_id]);
+      // Block delete if anyone owns it — admin should is_enabled=false instead.
+      // Override via ?force=1 in case admin really wants to nuke (data lost for owners).
+      if (owners.rows[0].n > 0 && req.query.force !== '1') {
+        return res.status(409).json({ error: 'has_owners', owner_count: owners.rows[0].n });
+      }
+      await pool.query(`DELETE FROM skin_configurations WHERE id = $1`, [id]);
+      if (req.query.force === '1') {
+        await pool.query(`DELETE FROM player_skins WHERE skin_id = $1`, [current.rows[0].skin_id]);
+      }
+      invalidateSkinsCache();
+      await pool.query(
+        `INSERT INTO admin_actions (action, target_type, target_id, details)
+         VALUES ('skin_delete', 'skin', $1, $2)`,
+        [current.rows[0].skin_id, JSON.stringify({ name: current.rows[0].name, forced: req.query.force === '1' })]
+      ).catch(() => {});
+      res.json({ ok: true });
+    } catch (e) {
+      console.error('admin DELETE /skins/:id', e);
+      res.status(500).json({ error: 'server' });
+    }
+  });
+
+  // ============================================================
   // Push notifications — admin broadcast (May 2026)
   //
   // Three endpoints:
@@ -5725,6 +5998,17 @@ app.post('/api/player/earn', requireDeviceAuth, async (req, res) => {
       // in the dedup pass above. Bypasses the event_gift clamp entirely.
       const r = await pool.query('SELECT value FROM game_config WHERE key = $1', ['dyn_quest_reward_' + validatedMeta.quest_id]);
       reward = parseInt((r.rows[0] || {}).value, 10) || 0;
+      // Daily Special multiplier — if the quest was completed on today's
+      // special board, multiply the reward. Client passes meta.boardId.
+      const dqBoardId = parseInt((meta && meta.boardId) || 0, 10) || 0;
+      if (reward > 0 && dqBoardId > 0) {
+        try {
+          const ctx = await getDailySpecialForToday();
+          if (ctx && ctx.enabled && ctx.id === dqBoardId) {
+            reward = Math.round(reward * ctx.rewardMult);
+          }
+        } catch (specErr) { /* soft-fail */ }
+      }
     } else if (action === 'dyn_ach' && validatedMeta) {
       // Achievement reward — same pattern. Cross + per-board share the
       // dyn_ach_reward_<id> namespace because ach_ids are unique across
@@ -6202,20 +6486,59 @@ app.post('/api/player/buy-tile', requireDeviceAuth, async (req, res) => {
   }
 });
 
+// GET /api/skins/available — public skin catalog used by the shop at boot.
+// Returns only enabled skins so admin can hide one without deleting it.
+// Each row also reports is_sellable separately: when false, existing owners
+// still see the skin in their list (and can equip it), but the shop's buy
+// button is greyed out with "currently unavailable" copy.
+app.get('/api/skins/available', async (_req, res) => {
+  try {
+    const now = Date.now();
+    if (_skinsCache.value !== undefined && _skinsCache.expiresAt > now) {
+      return res.json(_skinsCache.value);
+    }
+    const r = await pool.query(
+      `SELECT skin_id, name, price, is_sellable, definition, special_class, sort_order
+         FROM skin_configurations
+        WHERE is_enabled = TRUE
+        ORDER BY sort_order ASC, id ASC`
+    );
+    const payload = { ok: true, skins: r.rows };
+    _skinsCache = { value: payload, expiresAt: now + 60 * 1000 };
+    res.json(payload);
+  } catch (e) {
+    console.error('GET /api/skins/available', e.message);
+    res.status(500).json({ error: 'server' });
+  }
+});
+
 // POST /api/player/buy-skin — purchase a skin with credits.
-// Price comes from SKIN_PRICES (server-authoritative). Records ownership in
-// player_skins in the SAME transaction as the balance deduction, so a player
-// can never end up debited without the skin (or with the skin but not debited).
-// If the player already owns the skin, returns ok:true cost:0 alreadyOwned:true
-// without re-charging.
+// Price comes from skin_configurations (admin-managed, server-authoritative).
+// Records ownership in player_skins in the SAME transaction as the balance
+// deduction, so a player can never end up debited without the skin (or with
+// the skin but not debited). If the player already owns the skin, returns
+// ok:true cost:0 alreadyOwned:true without re-charging.
+// Skins disabled or marked unsellable by the admin reject with explicit reasons.
 app.post('/api/player/buy-skin', requireDeviceAuth, async (req, res) => {
   const { deviceId, skinId } = req.body || {};
   if (!deviceId || !skinId) return res.status(400).json({ error: 'missing_params' });
-  if (!Object.prototype.hasOwnProperty.call(SKIN_PRICES, skinId)) {
-    return res.json({ ok: false, reason: 'invalid_skin' });
-  }
-  const cost = SKIN_PRICES[skinId] | 0;
   try {
+    const skinRow = await pool.query(
+      `SELECT price, is_enabled, is_sellable FROM skin_configurations WHERE skin_id = $1`,
+      [skinId]);
+    if (!skinRow.rows.length) {
+      // Fallback for the legacy hardcoded map — accepts the historical 7 ids
+      // in case the DB seed hasn't run yet (e.g. fresh dev environment).
+      if (!Object.prototype.hasOwnProperty.call(SKIN_PRICES, skinId)) {
+        return res.json({ ok: false, reason: 'invalid_skin' });
+      }
+    } else {
+      if (!skinRow.rows[0].is_enabled) return res.json({ ok: false, reason: 'skin_disabled' });
+      if (!skinRow.rows[0].is_sellable) return res.json({ ok: false, reason: 'not_sellable' });
+    }
+    const cost = skinRow.rows.length
+      ? (skinRow.rows[0].price | 0)
+      : (SKIN_PRICES[skinId] | 0);
     // Already owns? Free no-op.
     const owned = await pool.query(
       `SELECT 1 FROM player_skins WHERE device_id = $1 AND skin_id = $2`,
@@ -6297,9 +6620,19 @@ app.post('/api/player/skins/declare', requireDeviceAuth, async (req, res) => {
   if (!checkRateLimit('skins:declare', deviceId, 3, 24 * 60 * 60 * 1000)) {
     return res.status(429).json({ error: 'rate_limited' });
   }
-  const valid = skins.filter(s =>
-    typeof s === 'string' && Object.prototype.hasOwnProperty.call(SKIN_PRICES, s));
+  // Accept any string id; let the DB validate against the skin_configurations
+  // catalog so admin-added skins also work for the migration. Cap the array
+  // length to bound abuse; the SKIN_PRICES legacy map still works as fallback.
+  const raw = skins.filter(s => typeof s === 'string' && s.length > 0 && s.length < 64).slice(0, 50);
+  let valid = [];
   try {
+    if (raw.length) {
+      const known = await pool.query(
+        `SELECT skin_id FROM skin_configurations WHERE skin_id = ANY($1::text[])`,
+        [raw]);
+      const dbSet = new Set(known.rows.map(r => r.skin_id));
+      valid = raw.filter(s => dbSet.has(s) || Object.prototype.hasOwnProperty.call(SKIN_PRICES, s));
+    }
     for (const s of valid) {
       await pool.query(
         `INSERT INTO player_skins (device_id, skin_id) VALUES ($1, $2)

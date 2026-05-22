@@ -190,8 +190,16 @@
   const WEIGHTS = [0, 55, 28, 12, 5];
 
   // ============ SKIN PACKS ============
-  const SKIN_PACKS = {
-    classic: { id: 'classic', name: '🌸 קלאסי', price: 0, tiers: null }, // null = use TIERS
+  // Authoritative shape at runtime: { id, name, price, tiers, specialClass?, isSellable }.
+  // `tiers` is either null (use the default TIERS palette) or an 8-element
+  // array of { svg, bg, fg, name, emoji }. `specialClass` is the body class
+  // to flip while this skin is active — currently used by Aurora for its
+  // CSS-only animations. The fallback below covers the 7 historical skins
+  // so the shop still works if /api/skins/available is unreachable on boot.
+  // applyServerSkins() (defined below) rebuilds this object from the server's
+  // skin_configurations catalog on every page load.
+  let SKIN_PACKS = {
+    classic: { id: 'classic', name: '🌸 קלאסי', price: 0, isSellable: true, tiers: null }, // null = use TIERS
     ocean: { id: 'ocean', name: '🌊 אוקיינוס', price: 200, tiers: [
       null,
       { svg: SVG.circle, bg: '#B8D4E3', fg: '#1A3A4A', name: 'חול',   emoji: '⬜' },
@@ -251,7 +259,7 @@
     // body.skin-aurora-active. The existing render path
     // (cell.style.background = tiers[t].bg in 12-tour-info.js) accepts
     // string gradients as-is. Other skins are completely unaffected.
-    aurora: { id: 'aurora', name: '🌌 אורורה', price: 300, tiers: [
+    aurora: { id: 'aurora', name: '🌌 אורורה', price: 300, isSellable: true, specialClass: 'aurora', tiers: [
       null,
       { svg: SVG.circle,  bg: 'linear-gradient(140deg,#EBE7DA 0%,#C0BAA8 100%)', fg: '#3D3A33', name: 'אבן',   emoji: '⬜' },
       { svg: SVG.leaf,    bg: 'linear-gradient(140deg,#D9EDB7 0%,#88B450 100%)', fg: '#1F3A0E', name: 'עלה',   emoji: '🟩' },
@@ -268,18 +276,73 @@
   var activeSkinId = localStorage.getItem(ACTIVE_SKIN_KEY) || 'classic';
   var ownedSkins = JSON.parse(localStorage.getItem(OWNED_SKINS_KEY) || '["classic"]');
 
-  // Single source of truth for the body.skin-aurora-active class. Called from
-  // every place activeSkinId mutates (boot, purchase, equip, trial, revert).
-  // Aurora's CSS-only effects live exclusively under this class — other skins
-  // remain untouched. No-op if the body isn't ready yet (called again on boot).
+  // Track the special class currently applied so we can remove it cleanly
+  // when the active skin changes (admin can register new ones via the
+  // skin_configurations table — each with its own specialClass + CSS).
+  let _appliedSkinClass = null;
   function syncBodySkinClass() {
     if (typeof document === 'undefined' || !document.body) return;
-    document.body.classList.toggle('skin-aurora-active', activeSkinId === 'aurora');
+    if (_appliedSkinClass) {
+      document.body.classList.remove('skin-' + _appliedSkinClass + '-active');
+      _appliedSkinClass = null;
+    }
+    var pack = SKIN_PACKS[activeSkinId];
+    if (pack && pack.specialClass) {
+      document.body.classList.add('skin-' + pack.specialClass + '-active');
+      _appliedSkinClass = pack.specialClass;
+    }
   }
   // Boot sync — if body already exists, set the class now; otherwise wait.
   if (typeof document !== 'undefined') {
     if (document.body) syncBodySkinClass();
     else document.addEventListener('DOMContentLoaded', syncBodySkinClass, { once: true });
+  }
+
+  // Rebuild SKIN_PACKS from the server's skin_configurations catalog. Called
+  // at boot; falls back silently to the hardcoded packs above if the fetch
+  // fails (offline, server down). Each server tier carries svg_key — we map
+  // it back to the matching SVG string via the SVG dict above.
+  function applyServerSkins(serverSkins) {
+    if (!Array.isArray(serverSkins) || !serverSkins.length) return;
+    var rebuilt = {};
+    serverSkins.forEach(function(s) {
+      var def = s.definition || {};
+      var tiers = null;
+      if (Array.isArray(def.tiers) && def.tiers.length === 8) {
+        tiers = [null]; // engine tiers are 1-indexed
+        def.tiers.forEach(function(t) {
+          tiers.push({
+            svg: SVG[t.svg_key] || SVG.circle,
+            bg: t.bg, fg: t.fg, name: t.name, emoji: t.emoji
+          });
+        });
+      }
+      rebuilt[s.skin_id] = {
+        id: s.skin_id,
+        name: s.name,
+        price: s.price | 0,
+        isSellable: s.is_sellable !== false,
+        specialClass: s.special_class || null,
+        tiers: tiers // null = inherit from default TIERS (classic)
+      };
+    });
+    // Preserve the classic fallback if the server somehow drops it.
+    if (!rebuilt.classic) rebuilt.classic = SKIN_PACKS.classic;
+    SKIN_PACKS = rebuilt;
+    // If the previously-active skin no longer exists (admin disabled/deleted
+    // it), revert to classic so the renderer doesn't crash on an undefined pack.
+    if (!SKIN_PACKS[activeSkinId]) {
+      activeSkinId = 'classic';
+      try { localStorage.setItem(ACTIVE_SKIN_KEY, 'classic'); } catch(e) {}
+    }
+    syncBodySkinClass();
+    if (typeof buildTierBar === 'function') { try { buildTierBar(true); } catch(e) {} }
+    if (typeof render === 'function')       { try { render();          } catch(e) {} }
+  }
+  // Expose for the boot-time fetch in src/03-audio.js (which already owns
+  // the /api/config request — we piggyback the skin fetch alongside).
+  if (typeof window !== 'undefined') {
+    window.__bloomApplyServerSkins = applyServerSkins;
   }
 
   // ─── Aurora-only juice helpers ───
@@ -406,10 +469,13 @@
         preview += '<div style="width:28px;height:28px;border-radius:8px;background:' + tiers[t].bg + ';color:' + tiers[t].fg + ';display:flex;align-items:center;justify-content:center">' + tiers[t].svg + '</div>';
       }
       var btnsHtml = '';
+      var sellable = s.isSellable !== false;
       if (active) {
         btnsHtml = '<button class="btn sm" disabled style="opacity:0.5;min-width:60px">✓ פעיל</button>';
       } else if (owned) {
         btnsHtml = '<button class="btn sm skin-equip-btn" data-skin="' + id + '" style="min-width:60px">לבש</button>';
+      } else if (!sellable) {
+        btnsHtml = '<button class="btn sm" disabled style="opacity:0.55;min-width:60px;font-size:11px">לא זמין כרגע</button>';
       } else {
         btnsHtml = '<div style="display:flex;gap:4px">' +
           '<button class="btn sm skin-try-btn" data-skin="' + id + '" style="min-width:50px;font-size:11px">נסה</button>' +
