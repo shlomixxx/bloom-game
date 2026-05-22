@@ -110,6 +110,43 @@
   }
 }
 
+/* Bonus cell (phase 3C). Mint-green ring that pays out +N points
+   on every merge that survives here. Same anatomy as gold: ring
+   + glow + corner marker — different color so the player can tell
+   the two apart at a glance. */
+.cell.special-bonus {
+  box-shadow:
+    inset 0 0 0 2px #4FBD8B,
+    inset 0 0 14px rgba(79, 189, 139, 0.55),
+    0 0 8px rgba(79, 189, 139, 0.35);
+  background-image: radial-gradient(circle at center, rgba(159, 225, 203, 0.20) 0%, transparent 65%);
+  animation: bonusCellPulse 2.4s ease-in-out infinite;
+  position: relative;
+}
+.cell.special-bonus::after {
+  content: '💎';
+  position: absolute;
+  top: 2px; right: 3px;
+  font-size: 11px;
+  opacity: 0.9;
+  pointer-events: none;
+  filter: drop-shadow(0 1px 2px rgba(4, 52, 44, 0.5));
+}
+@keyframes bonusCellPulse {
+  0%, 100% {
+    box-shadow:
+      inset 0 0 0 2px #4FBD8B,
+      inset 0 0 14px rgba(79, 189, 139, 0.55),
+      0 0 8px rgba(79, 189, 139, 0.35);
+  }
+  50% {
+    box-shadow:
+      inset 0 0 0 2px #9FE1CB,
+      inset 0 0 22px rgba(159, 225, 203, 0.75),
+      0 0 16px rgba(79, 189, 139, 0.55);
+  }
+}
+
 /* ============================================================
    Home: "🎯 לוחות דינמיים" entry button (home v2)
    ============================================================ */

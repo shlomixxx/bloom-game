@@ -40,6 +40,9 @@
     if (!_specialCellsByPos) return null;
     return _specialCellsByPos[row + ',' + col] || null;
   }
+  // Mirror the server's SPECIAL_CELL_TYPES allowlist. Keep in sync.
+  // (Defining here so the client doesn't import from the server module.)
+  const CLIENT_SPECIAL_CELL_TYPES = ['gold', 'bonus'];
   function setSpecialCells(arr) {
     if (arr == null) { _specialCells = null; _specialCellsByPos = null; return true; }
     if (!Array.isArray(arr)) return false;
@@ -55,10 +58,16 @@
       const type = String(c.type || '');
       if (!Number.isInteger(row) || row < 0 || row >= rows) continue;
       if (!Number.isInteger(col) || col < 0 || col >= cols) continue;
-      if (type !== 'gold') continue;  // phase 3A: gold only
+      if (!CLIENT_SPECIAL_CELL_TYPES.includes(type)) continue;
       const key = row + ',' + col;
       if (byPos[key]) continue;        // dedupe
       const entry = { row: row, col: col, type: type };
+      // Per-type fields. Bonus carries an `amount` (50-10000).
+      if (type === 'bonus') {
+        const amt = Number(c.amount);
+        if (!Number.isFinite(amt) || amt < 50 || amt > 10000) continue;  // drop bad bonus cells
+        entry.amount = amt;
+      }
       sanitized.push(entry);
       byPos[key] = entry;
     }

@@ -964,15 +964,29 @@
         </div>
       </div>
 
-      <!-- Special-cells editor (phase 3A: gold only). Visible only when
-           board-type = special_cells. 4×6 grid where each cell can be
-           toggled gold by clicking it. -->
+      <!-- Special-cells editor (phase 3B: gold, 3C: bonus). Visible only when
+           board-type = special_cells. 4×6 grid + paint-mode selector — pick
+           a type up top, click cells to paint with it. Re-clicking a cell of
+           the current type clears it. -->
       <div id="board-editor-special-cells" style="display:none;background:#FFF7E6;border:1px solid #FAC775;border-radius:10px;padding:12px;margin-bottom:14px">
         <div style="font-size:13px;font-weight:700;color:#BA7517;margin-bottom:6px;display:flex;align-items:center;gap:6px">
-          <span>✨ תאי זהב על הלוח</span>
-          <button class="tip-btn" data-tip-text="<strong>תאי זהב</strong><br>לחץ על תא ברשת כדי להפוך אותו לזהב. אריח שנוחת על תא זהב <em>עולה דרגה אחת אוטומטית</em> (אבן→עלה, עלה→פרח, וכו׳ עד כתר).<div class=&quot;tip-example&quot;>🎯 <strong>טקטיקה אדמינית</strong>: 2-3 תאי זהב במיקום אסטרטגי = שדרוג חזק לחוויה. יותר מ-6 = המשחק נהיה שטוף-זהב ומאבד אתגר.<br><br>💡 <strong>איפה למקם</strong>?<br>• <strong>שורה תחתונה</strong>: הכי קל להגיע (drop=tier-up), הכי שכיח.<br>• <strong>פינות עליונות</strong>: קשה להגיע, מתגמל שחקן שמבחין.<br>• <strong>אמצע</strong>: מאלץ אסטרטגיית מילוי הפוכה מהרגיל.<br><br>🟨 <strong>וויזואל</strong>: התא מוקף ברינג זוהב נושם + ✨ פיניש. גלוי כשהתא ריק (השחקן יודע לאן לכוון).<br><br>🏆 <strong>אריח כתר על זהב</strong>: כתר הוא מקסימום — אם אריח כתר נוחת על זהב, הוא נשאר כתר (אין דרגה 9). שאר הדרגות עולות.<br><br>⚠ עד 24 תאים (כל הלוח). מומלץ 2-5.</div>">?</button>
+          <span>🔮 תאים מיוחדים על הלוח</span>
+          <button class="tip-btn" data-tip-text="<strong>תאים מיוחדים</strong><br>בחר ״צבע״ למעלה, ואז לחץ על תא ברשת כדי לצבוע אותו. לחיצה חוזרת מנקה אותו.<div class=&quot;tip-example&quot;>🟡 <strong>זהב</strong> — אריח שנוחת שם <em>עולה דרגה אחת אוטומטית</em>. הכי חזק. מומלץ 2-4 תאים.<br><br>💚 <strong>בונוס</strong> — כל מיזוג שהאריח השורד שלו על תא בונוס, מקבל +N נקודות נוספות (N מוגדר למעלה). מתאים ל-3-6 תאים.<br><br>🎯 <strong>טקטיקות אדמיניות</strong>:<br>• זהב בשורה תחתונה + בונוס באמצע = ״הצלת אריח חלש בתחתית, פיצוץ נקודות באמצע״.<br>• 4 פינות כולן בונוס עם 1000₪ = ״משחק של פינות״ — שחקן צריך לתכנן מיזוגים שמסתיימים בפינה.<br>• כל הלוח זהב = משחק מטורף, כל אריח נוחת ועולה דרגה. ניסיוני, מהיר מאוד.<br><br>🏆 <strong>אריח כתר על זהב</strong>: כתר נשאר כתר (אין דרגה 9).<br><br>⚠ עד 24 תאים. מומלץ סה״כ 4-8.</div>">?</button>
         </div>
-        <div style="font-size:11px;color:#6F6E68;margin-bottom:8px">לחץ על תא להפעיל/לכבות זהב. עמודה 1 = הימנית (לפי כיוון השחקן).</div>
+
+        <!-- Paint mode + global bonus amount -->
+        <div style="display:flex;align-items:center;gap:6px;justify-content:center;flex-wrap:wrap;margin-bottom:8px">
+          <span style="font-size:11px;color:#6F6E68;font-weight:700">צבע נוכחי:</span>
+          <button type="button" data-paint-mode="gold" class="paint-mode-btn paint-mode-active" style="font-size:11px;padding:5px 10px;border-radius:8px;cursor:pointer;font-weight:700;border:2px solid #BA7517;background:linear-gradient(135deg,#FFE9A8,#FAC775);color:#412402">✨ זהב</button>
+          <button type="button" data-paint-mode="bonus" class="paint-mode-btn" style="font-size:11px;padding:5px 10px;border-radius:8px;cursor:pointer;font-weight:700;border:2px solid transparent;background:#F4F1E8;color:#1C1A18">💎 בונוס</button>
+          <label style="font-size:11px;color:#6F6E68;display:inline-flex;align-items:center;gap:4px;font-weight:600">
+            <span>סכום:</span>
+            <input id="board-bonus-amount" type="number" min="50" max="10000" step="50" value="500" style="width:64px;padding:3px 6px;border-radius:6px;background:#FFFFFF;color:#1C1A18;border:1px solid #E5E1D5;text-align:center;font-weight:700">
+            <span>💎</span>
+          </label>
+        </div>
+
+        <div style="font-size:11px;color:#6F6E68;margin-bottom:8px;text-align:center">בחר צבע למעלה, לחץ על תא לצבוע אותו. עמודה 1 = הימנית.</div>
         <div id="board-cells-grid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:4px;max-width:240px;margin:0 auto 8px;direction:ltr">
           <!-- 24 cells injected by JS, row-major order matching the engine -->
         </div>
@@ -981,7 +995,7 @@
           <button type="button" onclick="setCellsPreset('corners')" style="font-size:11px;padding:5px 9px;background:#1C1A18;color:#FFF;border:none;border-radius:6px;cursor:pointer;font-weight:600">4 פינות</button>
           <button type="button" onclick="setCellsPreset('cross')" style="font-size:11px;padding:5px 9px;background:#1C1A18;color:#FFF;border:none;border-radius:6px;cursor:pointer;font-weight:600">צלב במרכז</button>
           <button type="button" onclick="setCellsPreset('clear')" style="font-size:11px;padding:5px 9px;background:#F4F1E8;color:#1C1A18;border:1px solid #E5E1D5;border-radius:6px;cursor:pointer;font-weight:600">נקה הכל</button>
-          <span id="board-cells-count" style="font-size:11px;color:#6F6E68;font-weight:700">0 תאי זהב</span>
+          <span id="board-cells-count" style="font-size:11px;color:#6F6E68;font-weight:700">0 תאים</span>
         </div>
       </div>
 
@@ -2917,20 +2931,61 @@
   }
 
   // ============================================================
-  // Special-cells editor (4×6 grid · phase 3A: gold only)
+  // Special-cells editor (4×6 grid · phase 3B gold + 3C bonus)
+  //
+  // The paint-mode selector at the top determines which type a click
+  // paints. Clicking a cell that's already that type clears it.
+  // Clicking a cell of a different type REPLACES it (one type per cell).
   // ============================================================
   var BOARD_ROWS = 6;
   var BOARD_COLS = 4;
+  var _paintMode = 'gold';  // current "brush" color
+
+  // Visual signature for each painted type — keep parallel to the in-game
+  // CSS (.cell.special-{type}). Adding a new type later means adding here.
+  var CELL_PAINT_STYLES = {
+    gold: {
+      label: '✨',
+      bg: 'linear-gradient(135deg,#FFE9A8 0%,#FAC775 100%)',
+      border: '#BA7517',
+      shadow: '0 0 8px rgba(250,199,117,0.55)'
+    },
+    bonus: {
+      label: '💎',
+      bg: 'linear-gradient(135deg,#D8F4E6 0%,#9FE1CB 100%)',
+      border: '#04342C',
+      shadow: '0 0 8px rgba(79,189,139,0.55)'
+    }
+  };
+  function paintCellAs(btn, type) {
+    // Reset prior state
+    Object.keys(CELL_PAINT_STYLES).forEach(function(t) { btn.classList.remove('on-' + t); });
+    if (!type || !CELL_PAINT_STYLES[type]) {
+      btn.textContent = '';
+      btn.style.background = '#F5F2EC';
+      btn.style.borderColor = '#E5E1D5';
+      btn.style.boxShadow = '';
+      btn.dataset.cellType = '';
+      return;
+    }
+    var style = CELL_PAINT_STYLES[type];
+    btn.classList.add('on-' + type);
+    btn.textContent = style.label;
+    btn.style.background = style.bg;
+    btn.style.borderColor = style.border;
+    btn.style.boxShadow = style.shadow;
+    btn.dataset.cellType = type;
+  }
+  function currentTypeOf(btn) { return btn.dataset.cellType || ''; }
+
   function ensureCellsGrid() {
     const host = document.getElementById('board-cells-grid');
     if (!host || host.children.length) return;  // already built
     var html = '';
-    // Build row-major like the engine. Visually the grid editor displays
-    // 6 rows × 4 cols, top row first.
     for (var r = 0; r < BOARD_ROWS; r++) {
       for (var c = 0; c < BOARD_COLS; c++) {
         html += '<button type="button" class="board-cell-btn" data-r="' + r + '" data-c="' + c +
-          '" style="aspect-ratio:1;background:#F5F2EC;border:1px solid #E5E1D5;border-radius:8px;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;padding:0;transition:transform 0.08s">' +
+          '" data-cell-type="" style="aspect-ratio:1;background:#F5F2EC;border:1px solid #E5E1D5;border-radius:8px;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;padding:0;transition:transform 0.08s">' +
           '</button>';
       }
     }
@@ -2938,21 +2993,21 @@
     host.addEventListener('click', function(e) {
       var btn = e.target.closest('.board-cell-btn');
       if (!btn) return;
-      var isGold = btn.classList.contains('on-gold');
-      if (isGold) {
-        btn.classList.remove('on-gold');
-        btn.textContent = '';
-        btn.style.background = '#F5F2EC';
-        btn.style.borderColor = '#E5E1D5';
-        btn.style.boxShadow = '';
-      } else {
-        btn.classList.add('on-gold');
-        btn.textContent = '✨';
-        btn.style.background = 'linear-gradient(135deg,#FFE9A8 0%,#FAC775 100%)';
-        btn.style.borderColor = '#BA7517';
-        btn.style.boxShadow = '0 0 8px rgba(250,199,117,0.55)';
-      }
+      var current = currentTypeOf(btn);
+      // Same brush as current → clear. Different brush → replace.
+      paintCellAs(btn, current === _paintMode ? '' : _paintMode);
       updateCellsCount();
+    });
+    // Wire paint-mode selector buttons (once).
+    document.querySelectorAll('.paint-mode-btn').forEach(function(modeBtn) {
+      modeBtn.onclick = function() {
+        _paintMode = modeBtn.getAttribute('data-paint-mode');
+        document.querySelectorAll('.paint-mode-btn').forEach(function(b) {
+          var on = b.getAttribute('data-paint-mode') === _paintMode;
+          b.classList.toggle('paint-mode-active', on);
+          b.style.borderColor = on ? (b.getAttribute('data-paint-mode') === 'gold' ? '#BA7517' : '#04342C') : 'transparent';
+        });
+      };
     });
   }
 
@@ -2960,44 +3015,44 @@
     ensureCellsGrid();
     const host = document.getElementById('board-cells-grid');
     if (!host) return;
-    const goldSet = new Set();
+    const byPos = {};
+    var bonusAmt = null;
     if (Array.isArray(cells)) {
       cells.forEach(function(c) {
-        if (c && c.type === 'gold') goldSet.add(c.row + ',' + c.col);
+        if (!c || !c.type) return;
+        byPos[c.row + ',' + c.col] = c.type;
+        if (c.type === 'bonus' && Number.isFinite(Number(c.amount)) && bonusAmt == null) {
+          bonusAmt = Number(c.amount);
+        }
       });
     }
     Array.from(host.children).forEach(function(btn) {
       var key = btn.dataset.r + ',' + btn.dataset.c;
-      var isGold = goldSet.has(key);
-      if (isGold) {
-        btn.classList.add('on-gold');
-        btn.textContent = '✨';
-        btn.style.background = 'linear-gradient(135deg,#FFE9A8 0%,#FAC775 100%)';
-        btn.style.borderColor = '#BA7517';
-        btn.style.boxShadow = '0 0 8px rgba(250,199,117,0.55)';
-      } else {
-        btn.classList.remove('on-gold');
-        btn.textContent = '';
-        btn.style.background = '#F5F2EC';
-        btn.style.borderColor = '#E5E1D5';
-        btn.style.boxShadow = '';
-      }
+      paintCellAs(btn, byPos[key] || '');
     });
+    if (bonusAmt != null) {
+      var amtEl = document.getElementById('board-bonus-amount');
+      if (amtEl) amtEl.value = String(bonusAmt);
+    }
     updateCellsCount();
   }
 
   function readSpecialCellsUI() {
     const host = document.getElementById('board-cells-grid');
     if (!host) return [];
+    const amtEl = document.getElementById('board-bonus-amount');
+    const bonusAmt = amtEl ? Math.max(50, Math.min(10000, parseInt(amtEl.value, 10) || 500)) : 500;
     const out = [];
     Array.from(host.children).forEach(function(btn) {
-      if (btn.classList.contains('on-gold')) {
-        out.push({
-          row: parseInt(btn.dataset.r, 10),
-          col: parseInt(btn.dataset.c, 10),
-          type: 'gold'
-        });
-      }
+      var type = currentTypeOf(btn);
+      if (!type) return;
+      var entry = {
+        row: parseInt(btn.dataset.r, 10),
+        col: parseInt(btn.dataset.c, 10),
+        type: type
+      };
+      if (type === 'bonus') entry.amount = bonusAmt;
+      out.push(entry);
     });
     return out;
   }
@@ -3005,32 +3060,45 @@
   function updateCellsCount() {
     const el = document.getElementById('board-cells-count');
     if (!el) return;
-    var n = readSpecialCellsUI().length;
-    el.textContent = n + ' תאי זהב';
-    el.style.color = n === 0 ? '#6F6E68' : (n > 6 ? '#E07A8E' : '#BA7517');
+    var cells = readSpecialCellsUI();
+    var golds = cells.filter(function(c) { return c.type === 'gold'; }).length;
+    var bonuses = cells.filter(function(c) { return c.type === 'bonus'; }).length;
+    var parts = [];
+    if (golds > 0)   parts.push('✨ ' + golds);
+    if (bonuses > 0) parts.push('💎 ' + bonuses);
+    el.textContent = parts.length ? parts.join(' · ') : '0 תאים';
+    el.style.color = cells.length === 0 ? '#6F6E68' : (cells.length > 8 ? '#E07A8E' : '#BA7517');
   }
 
   function setCellsPreset(name) {
-    var cells = [];
+    // Presets paint with the currently-selected brush so the admin can,
+    // e.g., select 💎 בונוס then click "4 פינות" → bonus in the corners.
+    var type = _paintMode || 'gold';
+    var amtEl = document.getElementById('board-bonus-amount');
+    var amount = amtEl ? (parseInt(amtEl.value, 10) || 500) : 500;
+    var positions = [];
     if (name === 'bottom-row') {
-      for (var c = 0; c < BOARD_COLS; c++) cells.push({ row: BOARD_ROWS - 1, col: c, type: 'gold' });
+      for (var c = 0; c < BOARD_COLS; c++) positions.push([BOARD_ROWS - 1, c]);
     } else if (name === 'corners') {
-      cells = [
-        { row: 0, col: 0, type: 'gold' },
-        { row: 0, col: BOARD_COLS - 1, type: 'gold' },
-        { row: BOARD_ROWS - 1, col: 0, type: 'gold' },
-        { row: BOARD_ROWS - 1, col: BOARD_COLS - 1, type: 'gold' }
+      positions = [
+        [0, 0], [0, BOARD_COLS - 1],
+        [BOARD_ROWS - 1, 0], [BOARD_ROWS - 1, BOARD_COLS - 1]
       ];
     } else if (name === 'cross') {
       var midR = Math.floor(BOARD_ROWS / 2);
       var midC = Math.floor(BOARD_COLS / 2);
-      cells = [
-        { row: midR - 1, col: midC, type: 'gold' },
-        { row: midR,     col: midC - 1, type: 'gold' },
-        { row: midR,     col: midC, type: 'gold' },
-        { row: midR + 1, col: midC, type: 'gold' }
+      positions = [
+        [midR - 1, midC],
+        [midR, midC - 1], [midR, midC],
+        [midR + 1, midC]
       ];
     }
+    // For 'clear', positions stays empty → setSpecialCellsUI([]) clears everything.
+    var cells = positions.map(function(p) {
+      var c = { row: p[0], col: p[1], type: type };
+      if (type === 'bonus') c.amount = amount;
+      return c;
+    });
     setSpecialCellsUI(cells);
   }
   window.setCellsPreset = setCellsPreset;

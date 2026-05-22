@@ -2386,9 +2386,9 @@ function invalidateBoardCache() {
 }
 
 // Allowed cell types for special_cells boards. Expand here as new types
-// land (frozen / electric / locked / teleport / bonus). Client code uses
-// the same list to decide what to render.
-const SPECIAL_CELL_TYPES = ['gold'];  // phase 3A: gold only
+// land (frozen / electric / locked / teleport). Client code uses the
+// same list to decide what to render.
+const SPECIAL_CELL_TYPES = ['gold', 'bonus'];  // phase 3B: gold, 3C: bonus
 
 function validateBoardDefinition(type, definition) {
   if (definition === null || typeof definition !== 'object' || Array.isArray(definition)) {
@@ -2430,6 +2430,14 @@ function validateBoardDefinition(type, definition) {
       }
       if (!SPECIAL_CELL_TYPES.includes(ctype)) {
         return { ok: false, error: 'cell_type_unsupported' };
+      }
+      // Per-type required fields. Bonus needs an `amount` (50-10000).
+      // Gold has no extra fields. Future types add their own checks.
+      if (ctype === 'bonus') {
+        const amt = Number(c.amount);
+        if (!Number.isFinite(amt) || amt < 50 || amt > 10000) {
+          return { ok: false, error: 'bonus_amount_out_of_range' };
+        }
       }
       const key = row + ',' + col;
       if (seen.has(key)) return { ok: false, error: 'duplicate_cell_position' };

@@ -1527,6 +1527,32 @@
             // pointsFor returns the vanilla score with zero overhead.
             const points = Math.round(pointsFor(nt, group.length, multiplier, kc) * eventMult);
             score += points;
+            // Dynamic Boards — Special Cell: Bonus (phase 3C, May 2026).
+            // If the merge survivor lands on a bonus cell, add the cell's
+            // configured amount to the score on top of the regular reward.
+            // The bonus is per-merge — chains hitting the same bonus cell
+            // multiple times collect each time. Fires BEFORE the milestone
+            // banner so the +N badge stacks naturally with any tier-up FX.
+            var __bonusCell = (typeof getSpecialCellAt === 'function') ? getSpecialCellAt(kr, kc) : null;
+            if (__bonusCell && __bonusCell.type === 'bonus' && __bonusCell.amount > 0) {
+              score += __bonusCell.amount;
+              try {
+                var gridElB = document.getElementById('grid');
+                if (gridElB) {
+                  var bIdx = kr * getBoardCols() + kc;
+                  var bCell = gridElB.children[bIdx];
+                  if (bCell) {
+                    var bRect = bCell.getBoundingClientRect();
+                    var bBadge = document.createElement('div');
+                    bBadge.className = 'float-score';
+                    bBadge.textContent = '💎 +' + __bonusCell.amount;
+                    bBadge.style.cssText = 'position:fixed;left:' + (bRect.left + bRect.width/2) + 'px;top:' + (bRect.top + 6) + 'px;background:linear-gradient(135deg,#9FE1CB,#4FBD8B);color:#04342C;font-weight:900;font-size:14px;padding:4px 10px;border-radius:12px;box-shadow:0 4px 14px rgba(79,189,139,0.45);pointer-events:none;z-index:9998';
+                    document.body.appendChild(bBadge);
+                    setTimeout(function() { bBadge.remove(); }, 1100);
+                  }
+                }
+              } catch (e) {}
+            }
             if (nt > highestTier) highestTier = nt;
             // Track per-tier merge stats for game-over summary
             gameMergesPerTier[nt] = (gameMergesPerTier[nt] || 0) + 1;
