@@ -1225,6 +1225,143 @@
     if (typeof render === 'function') render();
   }
 
+  // Per-type visual identity for the relocate animations. Keep parallel
+  // to the in-game .cell.special-* CSS so the flying emoji matches the
+  // ring it's about to land in.
+  var SPECIAL_FLY_STYLE = {
+    gold:   { emoji: '✨', color: '#FAC775' },
+    bonus:  { emoji: '🪙', color: '#4FBD8B' },
+    frozen: { emoji: '❄️', color: '#6FB7E0' }
+  };
+
+  // Reshuffle every empty special cell to a new random empty non-special
+  // position. Cells with tiles on them stay put (a frozen-with-tile is
+  // still a puzzle to solve, gold/bonus cells with merging tiles in
+  // mid-chain shouldn't be yanked mid-action).
+  // Each move animates: a flying emoji arcs from old → new position
+  // while a sparkle bursts at arrival. Moves are STAGGERED 110ms apart
+  // so the player can see each one — feels like the board is alive.
+  function reshuffleAllSpecialCells() {
+    if (typeof getSpecialCells !== 'function' || typeof moveSpecialCellInPlace !== 'function') return;
+    var cells = getSpecialCells();
+    if (!cells || !cells.length) return;
+    var rows = getBoardRows(), cols = getBoardCols();
+
+    // Only cells without a tile on them are eligible for reshuffle.
+    var shuffleable = [];
+    for (var i = 0; i < cells.length; i++) {
+      var sc = cells[i];
+      if (grid[sc.row][sc.col] === 0) {
+        shuffleable.push({ row: sc.row, col: sc.col, type: sc.type });
+      }
+    }
+    if (!shuffleable.length) return;
+
+    // Enumerate empty non-special positions as candidate targets.
+    var targets = [];
+    for (var r = 0; r < rows; r++) {
+      for (var c = 0; c < cols; c++) {
+        if (getSpecialCellAt(r, c)) continue;
+        if (grid[r][c] !== 0) continue;
+        targets.push([r, c]);
+      }
+    }
+    if (!targets.length) return;
+
+    // Fisher–Yates shuffle the target pool.
+    for (var i = targets.length - 1; i > 0; i--) {
+      var j = Math.floor(Math.random() * (i + 1));
+      var t = targets[i]; targets[i] = targets[j]; targets[j] = t;
+    }
+
+    // Pair each shuffleable cell with a unique target.
+    var moves = [];
+    for (var i = 0; i < Math.min(shuffleable.length, targets.length); i++) {
+      var src = shuffleable[i];
+      var dst = targets[i];
+      // Skip no-ops (target same as source — rare but possible after RNG).
+      if (src.row === dst[0] && src.col === dst[1]) continue;
+      moves.push({ from: [src.row, src.col], to: [dst[0], dst[1]], type: src.type });
+    }
+    if (!moves.length) return;
+
+    // Capture pre-move bounding rects BEFORE mutating — DOM coords don't
+    // change during render (grid size is stable) but capturing now keeps
+    // the animation independent of any concurrent re-render races.
+    var gridEl = document.getElementById('grid');
+    if (!gridEl) return;
+    var coords = moves.map(function(m) {
+      var fIdx = m.from[0] * cols + m.from[1];
+      var tIdx = m.to[0] * cols + m.to[1];
+      var fEl = gridEl.children[fIdx];
+      var tEl = gridEl.children[tIdx];
+      return {
+        from: fEl ? fEl.getBoundingClientRect() : null,
+        to:   tEl ? tEl.getBoundingClientRect() : null
+      };
+    });
+
+    // Mutate special cells + re-render so the new rings appear at the
+    // destinations. The flying emojis play ON TOP, drawing the eye
+    // from old → new so the player can follow each move.
+    for (var i = 0; i < moves.length; i++) {
+      moveSpecialCellInPlace(moves[i].from[0], moves[i].from[1], moves[i].to[0], moves[i].to[1]);
+    }
+    if (typeof render === 'function') render();
+
+    // Stagger the fly animations so each one is individually visible.
+    for (var i = 0; i < moves.length; i++) {
+      (function(m, c, delay) {
+        setTimeout(function() {
+          if (c.from && c.to) animateSpecialCellFly(c.from, c.to, m.type);
+        }, delay);
+      })(moves[i], coords[i], i * 110);
+    }
+
+    // One soft chime for the whole reshuffle — not per-move (would be loud).
+    try { if (typeof soundDrop === 'function') soundDrop(); } catch (e) {}
+  }
+
+  // The flight animation: a big emoji shoots from `fromRect` to `toRect`
+  // along a curved path (CSS arc via translate), spinning 720° and
+  // briefly scaling up. Lands with a sparkle burst at the destination.
+  function animateSpecialCellFly(fromRect, toRect, type) {
+    var style = SPECIAL_FLY_STYLE[type] || SPECIAL_FLY_STYLE.gold;
+    // Mid-point lifted UP for a satisfying arc (visual gravity reversed).
+    var midX = (fromRect.left + toRect.left) / 2 + fromRect.width / 2;
+    var midY = Math.min(fromRect.top, toRect.top) - 40;  // 40px above the higher of the two
+    // Flying emoji
+    var flyer = document.createElement('div');
+    flyer.className = 'special-fly special-fly-' + type;
+    flyer.textContent = style.emoji;
+    flyer.style.left = (fromRect.left + fromRect.width / 2) + 'px';
+    flyer.style.top  = (fromRect.top + fromRect.height / 2) + 'px';
+    // CSS variables drive the keyframe's `to` translate. The browser
+    // interpolates linearly between keyframe stops; we add one mid-stop
+    // for the arc.
+    flyer.style.setProperty('--fly-mid-x', (midX - fromRect.left - fromRect.width / 2) + 'px');
+    flyer.style.setProperty('--fly-mid-y', (midY - fromRect.top - fromRect.height / 2) + 'px');
+    flyer.style.setProperty('--fly-end-x', (toRect.left + toRect.width / 2 - fromRect.left - fromRect.width / 2) + 'px');
+    flyer.style.setProperty('--fly-end-y', (toRect.top + toRect.height / 2 - fromRect.top - fromRect.height / 2) + 'px');
+    document.body.appendChild(flyer);
+    setTimeout(function() { flyer.remove(); }, 700);
+
+    // Sparkle burst at arrival (fires ~500ms in so the emoji is landing).
+    setTimeout(function() {
+      var arrive = document.createElement('div');
+      arrive.className = 'special-arrive special-arrive-' + type;
+      arrive.style.left = (toRect.left + toRect.width / 2) + 'px';
+      arrive.style.top  = (toRect.top + toRect.height / 2) + 'px';
+      arrive.innerHTML =
+        '<span class="sa-spark sa-spark-1"></span>' +
+        '<span class="sa-spark sa-spark-2"></span>' +
+        '<span class="sa-spark sa-spark-3"></span>' +
+        '<span class="sa-spark sa-spark-4"></span>';
+      document.body.appendChild(arrive);
+      setTimeout(function() { arrive.remove(); }, 600);
+    }, 520);
+  }
+
   // Top-of-screen toast announcing the relocation + a "❄️ poof" overlay
   // anchored to the new cell so the player can locate it instantly.
   function showFrozenRelocateToast(newR, newC) {
@@ -2017,9 +2154,30 @@
       // shifting the board around it.
       await gsleep(120);
     }
+    // Snapshot total-merges BEFORE the chain so we can detect what this
+    // drop actually produced. Used to trigger the special-cells reshuffle
+    // when the admin's selected mode matches.
+    var _preMerges = gameTotalMerges;
     await processChains(row, col);
+    var _thisDropMerges = gameTotalMerges - _preMerges;
     rollNextPiece();
     render();
+    // Phase 3D+++ — Special-cells board-wide reshuffle.
+    // 'on_merge': any merge this drop triggers the shuffle.
+    // 'on_chain': only chains (≥2 merges) trigger.
+    // 'shatter' and 'static' are handled elsewhere (thawFrozenTile / never).
+    try {
+      var __board = window._activeSpecialBoard;
+      var __mode = __board && __board.definition && __board.definition.relocate_mode;
+      var __shouldShuffle =
+        (__mode === 'on_merge' && _thisDropMerges > 0) ||
+        (__mode === 'on_chain' && _thisDropMerges >= 2);
+      if (__shouldShuffle && typeof reshuffleAllSpecialCells === 'function') {
+        // Tiny delay so the chain's settle-render paints before the
+        // shuffle starts moving rings around.
+        setTimeout(function() { reshuffleAllSpecialCells(); }, 120);
+      }
+    } catch (e) {}
     var isNewBest = score > best && !skinTrialMode;
     if (isNewBest) { best = score; localStorage.setItem(BEST_KEY, String(best)); }
     if (isGameOver()) {

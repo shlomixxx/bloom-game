@@ -987,14 +987,16 @@
           </label>
         </div>
 
-        <!-- Frozen-only: relocate mode dropdown (phase 3D++) -->
+        <!-- Reshuffle behavior (phase 3D++ → 3D+++) -->
         <div id="board-frozen-relocate-row" style="display:flex;align-items:center;justify-content:center;gap:6px;flex-wrap:wrap;margin-bottom:8px;padding:8px 10px;background:#E6F0FA;border:1px solid #6FB7E0;border-radius:8px">
-          <span style="font-size:11px;color:#0E4D7E;font-weight:700">❄️ אחרי שבר:</span>
+          <span style="font-size:11px;color:#0E4D7E;font-weight:700">🎲 התנהגות תאים:</span>
           <select id="board-relocate-mode" style="font-size:11px;padding:4px 8px;border-radius:6px;background:#FFFFFF;color:#1C1A18;border:1px solid #6FB7E0;font-weight:600">
-            <option value="static">🧊 סטטי — תא נשאר במקום (ברירת מחדל)</option>
-            <option value="shatter">🎲 זז אחרי שבר — קופץ למיקום אקראי</option>
+            <option value="static">🧊 סטטי — תאים נשארים במקום (ברירת מחדל)</option>
+            <option value="shatter">❄️ זז אחרי שבר קרח — רק תא הקרח שמתפוצץ קופץ</option>
+            <option value="on_chain">⚡ ערבוב אחרי שרשרת — כל התאים הריקים מתערבבים על שרשרת (≥2 מיזוגים)</option>
+            <option value="on_merge">🌪 ערבוב אחרי כל מיזוג — chaos מקסימלי, מערבוב על כל מיזוג</option>
           </select>
-          <button class="tip-btn" data-tip-text="<strong>❄️ התנהגות תא קפוא אחרי שבר</strong><br>שולט מה קורה לתא הקפוא אחרי ששחקן ניפץ אריח שעליו.<div class=&quot;tip-example&quot;>🧊 <strong>סטטי (ברירת מחדל)</strong>: התא נשאר באותו מיקום. האריח הבא שיפול עליו יוקפא שוב. צפוי, אפשר ללמוד.<br><br>🎲 <strong>זז אחרי שבר</strong>: ברגע השבר, התא הקפוא <em>קופץ למיקום אקראי</em> (תא ריק לא-מיוחד). השחקן רואה ❄️ toast מלמעלה + פולס במיקום החדש. ⭐ <strong>הכי ממכר</strong> — שחקן נצח אבל הפיצוץ הבא במקום שונה, צריך לחשב מחדש. ״chaos קל״ שמונע שעמום.<br><br>💡 <strong>מצב מומלץ לאתגר</strong>: שלב את שני המצבים בלוחות שונים — סטטי לטיול בנוף, שבר לליגת אלופים. או: סמן ״שבר״ ללוח הדיילי שיהיה מטורף כל יום.</div>">?</button>
+          <button class="tip-btn" data-tip-text="<strong>🎲 התנהגות תאים מיוחדים</strong><br>שולט מתי תאים מיוחדים זזים על הלוח. ככל שיותר תזוזות = יותר chaos = יותר ממכר אבל גם יותר כאוטי.<div class=&quot;tip-example&quot;>🧊 <strong>סטטי (ברירת מחדל)</strong>: תאים נשארים במקום. הכי צפוי, השחקן יכול ללמוד את הלוח.<br><br>❄️ <strong>זז אחרי שבר קרח</strong>: רק תא קפוא שמתפוצץ זז. תא בודד אחרי שבר. עדין.<br><br>⚡ <strong>ערבוב אחרי שרשרת</strong>: כל תא ריק (זהב/בונוס/קרח-ריק) קופץ למיקום חדש <em>רק כשהשחקן עושה שרשרת</em> (2+ מיזוגים מאותה הפלה). מתגמל skill — שחקן שעושה chains רואה מופע אנימציות מהפנט. <strong>מומלץ ביותר</strong> — אדרנלין + reward.<br><br>🌪 <strong>ערבוב אחרי כל מיזוג</strong>: כל מיזוג מערבב. <em>chaos מקסימלי</em>. ל-VIP/דיילי מטורף. אריחים על תאים (קפוא תקוע, גולד-בתהליך) <em>לא זזים</em> — רק הריקים.<br><br>💡 <strong>אנימציה</strong>: כל תא שזז עף בקשת עגולה למיקום החדש עם סיבוב 720° + sparkle burst בנחיתה. Mesmerizing.<br><br>⚠ אריחים על תאים מיוחדים נשארים במקום שלהם — רק הריקים זזים. לוגיקה ״טבעית״.</div>">?</button>
         </div>
 
         <div style="font-size:11px;color:#6F6E68;margin-bottom:8px;text-align:center">בחר צבע למעלה, לחץ על תא לצבוע אותו. עמודה 1 = הימנית.</div>
@@ -3099,10 +3101,11 @@
     if (frozen > 0)  parts.push('❄️ ' + frozen);
     el.textContent = parts.length ? parts.join(' · ') : '0 תאים';
     el.style.color = cells.length === 0 ? '#6F6E68' : (cells.length > 8 ? '#E07A8E' : '#BA7517');
-    // Show the frozen-relocate row only when there's at least one frozen
-    // cell (it's irrelevant otherwise — saves visual real estate).
+    // Show the relocate row whenever there's at least one special cell
+    // of any type — modes apply board-wide (not just frozen) since
+    // phase 3D+++.
     var relRow = document.getElementById('board-frozen-relocate-row');
-    if (relRow) relRow.style.display = (frozen > 0 || _paintMode === 'frozen') ? 'flex' : 'none';
+    if (relRow) relRow.style.display = (cells.length > 0) ? 'flex' : 'none';
   }
 
   function setCellsPreset(name) {

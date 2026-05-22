@@ -5305,6 +5305,80 @@
 }
 
 /* ============================================================
+   Special-cells RESHUFFLE animations (phase 3D+++)
+   When the admin enables on_merge/on_chain modes, every merge
+   triggers all empty special cells to jump to random new positions.
+   Each cell's flight is staggered ~110ms apart and shows:
+     1. A big spinning emoji flying along an arc (this rule)
+     2. A sparkle burst at the destination (.special-arrive)
+   The whole effect is the "lava lamp" magic that makes the board
+   feel alive.
+   ============================================================ */
+.special-fly {
+  position: fixed;
+  z-index: 9099;
+  pointer-events: none;
+  font-size: 26px;
+  line-height: 1;
+  transform: translate(-50%, -50%);
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.25));
+  animation: specialFly 0.7s cubic-bezier(0.45, 0.05, 0.55, 0.95) forwards;
+}
+@keyframes specialFly {
+  /* Path: source → arc midpoint (lifted UP) → destination. Spin 720°
+     and pulse scale during flight, fade at the very end. */
+  0%   { transform: translate(-50%, -50%) translate(0, 0) rotate(0deg) scale(0.6); opacity: 0; }
+  15%  { opacity: 1; transform: translate(-50%, -50%) translate(calc(var(--fly-mid-x) * 0.4), calc(var(--fly-mid-y) * 0.6)) rotate(180deg) scale(1.2); }
+  50%  { transform: translate(-50%, -50%) translate(var(--fly-mid-x), var(--fly-mid-y)) rotate(360deg) scale(1.4); }
+  85%  { opacity: 1; transform: translate(-50%, -50%) translate(calc(var(--fly-end-x) * 0.85 + var(--fly-mid-x) * 0.15), calc(var(--fly-end-y) * 0.85 + var(--fly-mid-y) * 0.15)) rotate(620deg) scale(1.1); }
+  100% { transform: translate(-50%, -50%) translate(var(--fly-end-x), var(--fly-end-y)) rotate(720deg) scale(0.8); opacity: 0; }
+}
+.special-fly-gold   { color: #BA7517; text-shadow: 0 0 16px rgba(250, 199, 117, 0.7); }
+.special-fly-bonus  { color: #04342C; text-shadow: 0 0 16px rgba(79, 189, 139, 0.7); }
+.special-fly-frozen { color: #04335C; text-shadow: 0 0 16px rgba(111, 183, 224, 0.7); }
+
+/* Arrival sparkle — 4 small specks burst outward from the new cell. */
+.special-arrive {
+  position: fixed;
+  z-index: 9098;
+  pointer-events: none;
+  width: 0; height: 0;
+  transform: translate(-50%, -50%);
+}
+.special-arrive .sa-spark {
+  position: absolute;
+  top: 0; left: 0;
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: radial-gradient(circle at center, #FFFFFF 0%, transparent 70%);
+  transform: translate(-50%, -50%) scale(0.4);
+  animation: spArriveSpark 0.6s ease-out forwards;
+}
+.special-arrive-gold   .sa-spark { background: radial-gradient(circle at center, #FFE9A8 0%, #FAC775 60%, transparent 80%); box-shadow: 0 0 8px #FAC775; }
+.special-arrive-bonus  .sa-spark { background: radial-gradient(circle at center, #D8F4E6 0%, #9FE1CB 60%, transparent 80%); box-shadow: 0 0 8px #4FBD8B; }
+.special-arrive-frozen .sa-spark { background: radial-gradient(circle at center, #E6F0FA 0%, #B5D4F4 60%, transparent 80%); box-shadow: 0 0 8px #6FB7E0; }
+.sa-spark-1 { animation-name: spArriveSparkTL; }
+.sa-spark-2 { animation-name: spArriveSparkTR; }
+.sa-spark-3 { animation-name: spArriveSparkBL; }
+.sa-spark-4 { animation-name: spArriveSparkBR; }
+@keyframes spArriveSparkTL {
+  0%   { transform: translate(-50%, -50%) scale(0.4); opacity: 1; }
+  100% { transform: translate(-260%, -260%) scale(0.2); opacity: 0; }
+}
+@keyframes spArriveSparkTR {
+  0%   { transform: translate(-50%, -50%) scale(0.4); opacity: 1; }
+  100% { transform: translate(160%, -260%) scale(0.2); opacity: 0; }
+}
+@keyframes spArriveSparkBL {
+  0%   { transform: translate(-50%, -50%) scale(0.4); opacity: 1; }
+  100% { transform: translate(-260%, 160%) scale(0.2); opacity: 0; }
+}
+@keyframes spArriveSparkBR {
+  0%   { transform: translate(-50%, -50%) scale(0.4); opacity: 1; }
+  100% { transform: translate(160%, 160%) scale(0.2); opacity: 0; }
+}
+
+/* ============================================================
    Bonus burst — the "+N נקודות" celebration that fires when a
    merge survivor lands on a bonus cell. Built for maximum dopamine:
    a spinning coin, a chunky pulsing amount, and a soft "נקודות"

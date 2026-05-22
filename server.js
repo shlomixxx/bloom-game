@@ -2443,10 +2443,14 @@ function validateBoardDefinition(type, definition) {
       if (seen.has(key)) return { ok: false, error: 'duplicate_cell_position' };
       seen.add(key);
     }
-    // Optional: relocate_mode (phase 3D++). Controls whether frozen cells
-    // jump to a random empty position after they shatter.
+    // Optional: relocate_mode (phase 3D++ → 3D+++). Controls when and
+    // how special cells reshuffle their positions during gameplay.
+    //   'static'    → no movement (default)
+    //   'shatter'   → only the shattered frozen cell jumps (targeted)
+    //   'on_merge'  → ALL empty specials reshuffle after every merge
+    //   'on_chain'  → ALL empty specials reshuffle after chains (≥2)
     if (definition.relocate_mode !== undefined) {
-      const validModes = ['static', 'shatter'];
+      const validModes = ['static', 'shatter', 'on_merge', 'on_chain'];
       if (!validModes.includes(definition.relocate_mode)) {
         return { ok: false, error: 'bad_relocate_mode' };
       }
