@@ -1998,7 +1998,40 @@
     diamond_pack_4_price: [99.90, 149.90, 199.90, 299.90],
     // Slot
     slot_duration_ms: [200, 400, 650, 1000, 1500, 2000],
-    slot_intensity: [1, 2, 3, 4, 5, 6, 7, 8]
+    slot_intensity: [1, 2, 3, 4, 5, 6, 7, 8],
+    // ---- Dynamic Boards rewards ----
+    // Quests
+    dyn_quest_reward_play2:      [25, 50, 75, 100, 150],
+    dyn_quest_reward_play3:      [50, 100, 150, 200],
+    dyn_quest_reward_score10k:   [25, 50, 75, 100],
+    dyn_quest_reward_score30k:   [50, 100, 150, 200],
+    dyn_quest_reward_score75k:   [100, 250, 400, 500],
+    dyn_quest_reward_tier7:      [50, 75, 100, 150],
+    dyn_quest_reward_tier8:      [100, 200, 300, 400],
+    dyn_quest_reward_theme:      [30, 60, 100, 150],
+    dyn_quest_reward_shape:      [30, 60, 100, 150],
+    dyn_quest_reward_beatself:   [75, 120, 200, 250],
+    dyn_quest_reward_beatleader: [200, 300, 500, 1000],
+    // Achievements per-board
+    dyn_ach_reward_played:   [10, 25, 50, 100],
+    dyn_ach_reward_crown:    [75, 150, 250, 300],
+    dyn_ach_reward_score10:  [25, 50, 75, 100],
+    dyn_ach_reward_score50:  [75, 150, 250, 300],
+    dyn_ach_reward_score100: [150, 300, 400, 500],
+    // Achievements cross-board
+    dyn_ach_reward_pioneer5:     [100, 200, 300, 400],
+    dyn_ach_reward_pioneer10:    [300, 500, 750, 1000],
+    dyn_ach_reward_crown5:       [300, 500, 750, 1000],
+    dyn_ach_reward_all_themes:   [400, 800, 1200, 1500],
+    dyn_ach_reward_all_shapes:   [400, 800, 1200, 1500],
+    dyn_ach_reward_leaderboard1: [500, 1000, 1500, 2000],
+    // Streak milestones
+    dyn_streak_reward_3:   [25, 50, 100, 150],
+    dyn_streak_reward_7:   [75, 150, 200, 300],
+    dyn_streak_reward_14:  [150, 300, 400, 500],
+    dyn_streak_reward_30:  [300, 600, 800, 1000],
+    dyn_streak_reward_60:  [500, 1000, 1500, 2000],
+    dyn_streak_reward_100: [1000, 2000, 3000, 5000]
   };
 
   // Boolean keys — render as a 2-button toggle (פעיל / כבוי) instead of an input.
@@ -2160,7 +2193,54 @@
     leaderboard_default_tab: 'הטאב שמוצג כברירת מחדל כשהשחקן פותח את הלידרבורד.<div class="tip-example">🌍 <code>world</code> — הכי כללי<br>🇮🇱 <code>country</code> — פטריוטי<br>🎚️ <code>difficulty</code> — מתאים אם רוב משחקים practice עם קושי</div>',
     leaderboard_default_difficulty: 'דרגת הקושי שנבחרת מראש בכניסה לטאב "קושי".<div class="tip-example">📦 <code>default</code>, 😊 <code>easy</code>, 🎯 <code>medium</code>, 🔥 <code>hard</code>, 💀 <code>insane</code><br>💡 default = הציון של רוב השחקנים, הכי מאוכלס.</div>',
     // ---- Aurora skin ----
-    aurora_skin_enabled: 'הצגת סקין 🌌 Aurora בחנות הסקינים.<div class="tip-example">✅ <code>true</code> (ברירת מחדל) — הסקין זמין לרכישה ב-300💎, מציג gradients/shimmer/text-bursts לשחקנים שבחרו בו.<br>❌ <code>false</code> — הסקין נעלם מהחנות. שחקנים שכבר היה להם פעיל חוזרים אוטומטית ל-Classic בטעינה הבאה (הבעלות עצמה נשמרת ב-DB ולא נמחקת — חוזרת אוטומטית אם תפעיל שוב).<br><br>💡 שינוי תוקף ב-page reload של השחקן. אין צורך ב-deploy.</div>'
+    aurora_skin_enabled: 'הצגת סקין 🌌 Aurora בחנות הסקינים.<div class="tip-example">✅ <code>true</code> (ברירת מחדל) — הסקין זמין לרכישה ב-300💎, מציג gradients/shimmer/text-bursts לשחקנים שבחרו בו.<br>❌ <code>false</code> — הסקין נעלם מהחנות. שחקנים שכבר היה להם פעיל חוזרים אוטומטית ל-Classic בטעינה הבאה (הבעלות עצמה נשמרת ב-DB ולא נמחקת — חוזרת אוטומטית אם תפעיל שוב).<br><br>💡 שינוי תוקף ב-page reload של השחקן. אין צורך ב-deploy.</div>',
+
+    // ============================================================
+    // ---- Dynamic Boards — global retention controls ----
+    // ============================================================
+    // Master toggles (6)
+    dyn_quests_enabled:        '🎯 <strong>מתג ראשי</strong> ל-3 המשימות היומיות בלוחות דינמיים.<div class="tip-example">✅ <code>true</code> (ברירת מחדל) — שחקן רואה 3 משימות פתוחות בכותרת הפיקר + claim button בכל הושלמה.<br>❌ <code>false</code> — המודאל + הכפתור + הבאנרים נעלמים. רצוי לכבות אם הכלכלה חמה מדי (מקסימום 600💎/יום משלוש משימות).<br><br>💡 השארת on = הכי ממכר. ה-claim button הוא ה-hook לחזרה אחרי שעות.</div>',
+    dyn_achievements_enabled:  '🏅 <strong>מתג ראשי</strong> להישגים (5 פר-לוח + 6 חוצי-לוחות).<div class="tip-example">✅ <code>true</code> (ברירת מחדל) — completionist drive מקסימלי. כל הישג מציג צ׳יפ זהב בכרטיס + באנר במסך הסיום.<br>❌ <code>false</code> — מנותק. כל ההישגים שכבר הושגו שמורים בלוקאל ויופיעו חזרה מיד שתפעיל.<br><br>💡 אל תכבה את זה ללא סיבה — ההישגים הם המעין-המרכזי של retention ארוך-טווח (DAU/MAU).</div>',
+    dyn_streak_enabled:        '🔥 <strong>מתג ראשי</strong> לרצף הימים החוצה-לוחות.<div class="tip-example">✅ <code>true</code> (ברירת מחדל) — הרצף נספר כל יום שמסיים לפחות לוח דינמי אחד. אובדן רצף = איפוס ל-1.<br>❌ <code>false</code> — אין רצף, אין מילסטונים (3/7/14/30/60/100), אין באנר "הרצף שלך בסכנה".<br><br>💡 הכי חזק ל-day-2 retention. אם אתה מכבה — אתה מאבד את המנגנון היחיד שגורם לאנשים לחזור מחר.</div>',
+    dyn_personal_best_enabled: '🏆 <strong>מתג ראשי</strong> לשיא האישי פר-לוח (לולאת "לעבור את עצמי").<div class="tip-example">✅ <code>true</code> (ברירת מחדל) — שחקן רואה "🏆 שיא 47K" על כל כרטיס + צ׳יפ "לעבור: N" במהלך משחק + באנר shower במסך הסיום.<br>❌ <code>false</code> — כל הצ׳יפים והבאנרים מוסתרים. ה-localStorage עצמו נשמר.<br><br>💡 הלולאה הכי חזקה בכל המשחק. כיבוי = להרוס את לב ההתמכרות.</div>',
+    dyn_global_lb_enabled:     '👑 <strong>מתג ראשי</strong> ללוח המובילים הגלובלי פר-לוח דינמי.<div class="tip-example">✅ <code>true</code> (ברירת מחדל) — כל לוח מציג "👑 דניאל: 89K" + כפתור גביע פותח מודאל top-50. ניקודי השחקנים נשלחים אוטומטית בסוף משחק.<br>❌ <code>false</code> — כל הצ׳יפים + הכפתור + המודאל מוסתרים. הניקודים שכבר נשלחו נשארים ב-DB.<br><br>💡 ה-social hook. כיבוי הופך את כל ה-experience ל-single-player.</div>',
+    dyn_fomo_enabled:          '⏰ <strong>מתג ראשי</strong> ל-FOMO countdown על לוחות שמסתיימים.<div class="tip-example">✅ <code>true</code> (ברירת מחדל) — לוחות עם <code>ends_at</code> מציגים "🔥 מסתיים בעוד 4ש 12ד" + פעימה אדומה ב-&lt;4ש.<br>❌ <code>false</code> — כל הצבעוניות של ה-urgency נעלמת. הלוחות עדיין יסתיימו לפי <code>ends_at</code>, אבל בלי לחץ זמן ויזואלי.<br><br>💡 רצוי לכבות רק אם אתה מודאג מ"לחץ" על שחקנים. הפעימה האדומה היא ה-trigger החזק ביותר לחזרה.</div>',
+
+    // Quest rewards (11) — each tooltip explains the quest + economy math
+    dyn_quest_reward_play2:      'פרס למשימה "שחק 2 לוחות שונים".<div class="tip-example">📊 <strong>ערכים</strong>:<br>• <code>25</code> — קמצני, השחקן ישכח שיש משימה<br>• <code>50</code> (ברירת מחדל) — מענה הוגן ל-2 משחקים<br>• <code>100+</code> — נדיב, ינטה לשחקנים לנצל גם משחק כושל<br><br>💰 משימה זו הכי קלה לסיים — שמור על פרס נמוך ביחס לאחרים.</div>',
+    dyn_quest_reward_play3:      'פרס למשימה "שחק 3 לוחות שונים".<div class="tip-example">📊 <strong>ערכים</strong>: 50-200💎. ברירת מחדל 100💎.<br>💡 דורש שלושה משחקים שלמים = ~10 דקות. 100💎 = שווה ערך לכ-5 חיפושים יומיים.</div>',
+    dyn_quest_reward_score10k:   'פרס ל"הגע ל-10K נקודות בלוח דינמי".<div class="tip-example">📊 ערכים: 25-100💎. ברירת מחדל 50💎.<br>💡 10K = משחק בינוני (5-6 דקות). שווה תגמול נמוך.</div>',
+    dyn_quest_reward_score30k:   'פרס ל"הגע ל-30K נקודות".<div class="tip-example">📊 ערכים: 50-200💎. ברירת מחדל 100💎.<br>💡 30K = משחק טוב (~10 דקות). שילוב 10K + 30K + 75K ב-3 משימות = אופציה ל-400💎+ ביום אחד.</div>',
+    dyn_quest_reward_score75k:   'פרס ל"הגע ל-75K נקודות".<div class="tip-example">📊 ערכים: 100-500💎. ברירת מחדל 250💎.<br>💡 75K = משחק יוצא דופן. רצוי תגמול שמתמרץ "להפר את השיא האישי".</div>',
+    dyn_quest_reward_tier7:      'פרס ל"הגע לדרגה 7 (יהלום)".<div class="tip-example">📊 ערכים: 50-150💎. ברירת מחדל 75💎.<br>💡 יהלום הוא הדרגה החוץ-מ-כתר הגבוהה ביותר. מספיק קשה כדי לדרוש מאמץ אבל לא בלתי-אפשרי.</div>',
+    dyn_quest_reward_tier8:      'פרס ל"הגע לכתר (דרגה 8)".<div class="tip-example">📊 ערכים: 100-400💎. ברירת מחדל 200💎.<br>💡 כתר = הישג רציני, ראוי לתגמול גדול. שילוב עם crown_merge_bonus = "המסלול הזהב" של המשחק.</div>',
+    dyn_quest_reward_theme:      'פרס ל"שחק לוח חג (themed)".<div class="tip-example">📊 ערכים: 30-150💎. ברירת מחדל 60💎.<br>💡 דרוש שיהיו לוחות חג זמינים בשלב הפיקר. אם לא יש — המשימה לא תופיע בכלל. הפרס מתאים למשימה "easy + thematic".</div>',
+    dyn_quest_reward_shape:      'פרס ל"שחק לוח עם צורה (heart/diamond/tree/pyramid)".<div class="tip-example">📊 ערכים: 30-150💎. ברירת מחדל 60💎.<br>💡 דורש לוח עם <code>shape_id</code> פעיל. לוחות צורה הם קצרים יותר (15-20 תאים), כדאי לתגמל בהתאם.</div>',
+    dyn_quest_reward_beatself:   'פרס ל"עבור את השיא האישי שלך באיזשהו לוח".<div class="tip-example">📊 ערכים: 75-250💎. ברירת מחדל 120💎.<br>💡 קשה ככל שהשחקן משחק יותר. שילוב מובהק עם dyn_personal_best_enabled — שני המנגנונים תומכים זה בזה.</div>',
+    dyn_quest_reward_beatleader: 'פרס ל"עבור את המוביל הגלובלי באיזשהו לוח (תהיה #1)".<div class="tip-example">📊 ערכים: 200-1000💎. ברירת מחדל 300💎.<br>💡 הכי קשה. המשימה היחידה שמשלבת חתימה גלובלית. תגמול גבוה מצדיק את הקושי.<br>⚠ נשלמת רק אחרי שה-/leaderboard fetch מאשר rank=1.</div>',
+
+    // Achievement rewards — per-board (5)
+    dyn_ach_reward_played:   'פרס להישג 🌱 "הצטרפת" — סיים משחק בלוח דינמי פעם אחת.<div class="tip-example">📊 ערכים: 10-100💎. ברירת מחדל 25💎.<br>💡 ההישג הכי נפוץ. נשלם פעם אחת לכל לוח. תגמול קטן ראוי כי קל לקבל.</div>',
+    dyn_ach_reward_crown:    'פרס להישג 👑 "הגעת לכתר בלוח" (tier 8).<div class="tip-example">📊 ערכים: 75-300💎. ברירת מחדל 150💎.<br>💡 כתר = הישג רציני. השחקן יזכור שהוא קיבל 150💎 על הלוח הספציפי הזה ויחפש לחזור על זה בלוחות נוספים.</div>',
+    dyn_ach_reward_score10:  'פרס להישג 💎 "10K+ נקודות בלוח".<div class="tip-example">📊 ערכים: 25-100💎. ברירת מחדל 50💎.<br>💡 ההישג הגבוה ההכי-קל. צריך 1-3 משחקים סבירים. שילוב עם crown — שחקן יקבל גם וגם באותו משחק.</div>',
+    dyn_ach_reward_score50:  'פרס להישג 🏆 "50K+ נקודות בלוח".<div class="tip-example">📊 ערכים: 75-300💎. ברירת מחדל 150💎.<br>💡 דרגה אמצעית. השחקן יראה את הסיכוי שלו ויחפש לטפס. הצ׳יפ 🏆 בכרטיס הופך לפגאן השני.</div>',
+    dyn_ach_reward_score100: 'פרס להישג 💯 "100K+ נקודות בלוח".<div class="tip-example">📊 ערכים: 150-500💎. ברירת מחדל 300💎.<br>💡 ההישג הגבוה ביותר פר-לוח. דורש דדיקציה אמיתית. ראוי לתגמול גדול.</div>',
+
+    // Achievement rewards — cross-board (6)
+    dyn_ach_reward_pioneer5:     'פרס להישג 🗺️ "חלוץ — 5 לוחות שונים".<div class="tip-example">📊 ערכים: 100-400💎. ברירת מחדל 200💎.<br>💡 הראשון בקטגוריית cross-board. דורש "להסתובב" בין לוחות במקום להתעקש על אחד.</div>',
+    dyn_ach_reward_pioneer10:    'פרס להישג 🧭 "חוקר — 10 לוחות שונים".<div class="tip-example">📊 ערכים: 300-1000💎. ברירת מחדל 500💎.<br>💡 דורש exposure רחב. שילוב עם schedule of holiday boards = החוקר משחק את כולם.</div>',
+    dyn_ach_reward_crown5:       'פרס להישג 👑 "5 כתרים בלוחות שונים".<div class="tip-example">📊 ערכים: 300-1000💎. ברירת מחדל 500💎.<br>💡 הישג skill-based. דורש לשחק טוב ב-5 לוחות שונים, לא רק להופיע.</div>',
+    dyn_ach_reward_all_themes:   'פרס להישג 🎄 "אספן חגים (4 themes)".<div class="tip-example">📊 ערכים: 400-1500💎. ברירת מחדל 800💎.<br>💡 דרושים hanukkah + valentine + yom_haatzmaut + passover. ה-collectible הכי גדול. תגמול גדול ראוי.</div>',
+    dyn_ach_reward_all_shapes:   'פרס להישג 🟦 "אומן צורות (4 shapes)".<div class="tip-example">📊 ערכים: 400-1500💎. ברירת מחדל 800💎.<br>💡 דרושים heart + diamond + tree + pyramid. שתיים מתוך 4 מופיעות רק בלוחות חג, כך שהאספן רוב הזמן מאוחד עם dyn_ach_reward_all_themes.</div>',
+    dyn_ach_reward_leaderboard1: 'פרס להישג 🥇 "מקום #1 באיזשהו לוח דינמי".<div class="tip-example">📊 ערכים: 500-2000💎. ברירת מחדל 1000💎.<br>💡 הכי קשה — דורש לעקוף את כל השחקנים בלוח ספציפי. תגמול גבוה מצדיק.</div>',
+
+    // Streak milestone rewards (6)
+    dyn_streak_reward_3:   'פרס למילסטון רצף של 3 ימים.<div class="tip-example">📊 ערכים: 25-150💎. ברירת מחדל 50💎.<br>💡 ה"hook" הראשון — שחקן שמתחיל רצף יראה כבר ביום השלישי שאפשר להמשיך. תגמול נמוך = יעד קל.</div>',
+    dyn_streak_reward_7:   'פרס למילסטון רצף של שבוע.<div class="tip-example">📊 ערכים: 75-300💎. ברירת מחדל 150💎.<br>💡 שבוע = הוכחה שהשחקן נכנס לאפליקציה כל יום. ראוי לתגמול משמעותי.</div>',
+    dyn_streak_reward_14:  'פרס למילסטון רצף של שבועיים.<div class="tip-example">📊 ערכים: 150-500💎. ברירת מחדל 300💎.<br>💡 חצי-חודש = שחקן core. תגמול חזק.</div>',
+    dyn_streak_reward_30:  'פרס למילסטון רצף של חודש.<div class="tip-example">📊 ערכים: 300-1000💎. ברירת מחדל 600💎.<br>💡 חודש = שחקן ultra-loyal. רואה את ה-fire אצל חברים. תגמול גדול הוא retention investment.</div>',
+    dyn_streak_reward_60:  'פרס למילסטון רצף של חודשיים.<div class="tip-example">📊 ערכים: 500-2000💎. ברירת מחדל 1000💎.<br>💡 בקצה הקיצוני של retention. רוב המשחקים מאבדים שחקנים לפני שלב זה.</div>',
+    dyn_streak_reward_100: 'פרס למילסטון רצף של 100 ימים.<div class="tip-example">📊 ערכים: 1000-5000💎. ברירת מחדל 2000💎.<br>💡 ה"גביע" הסופי. שחקן עם רצף 100 ימים = שחקן לחיים. תגמול גדול מאוד ראוי.</div>'
   };
 
   // Wire all .tip-btn elements after DOM load. Two modes:

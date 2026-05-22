@@ -681,6 +681,60 @@ INSERT INTO game_config (key, value) VALUES ('diamond_pack_4_price', '149.90') O
 INSERT INTO game_config (key, value) VALUES ('aurora_skin_enabled', 'true') ON CONFLICT (key) DO NOTHING;
 
 -- ============================================================
+-- Dynamic Boards — global admin controls (May 2026)
+--
+-- These keys let the admin toggle each of the 6 retention systems
+-- on/off and tune every reward without a redeploy. Defaults
+-- mirror the hardcoded client-side values; clients fall back to
+-- the defaults when a key is missing or empty.
+-- ============================================================
+
+-- Master toggles for each retention system. Set to 'false' to disable
+-- the surface entirely (no chip / no banner / no modal).
+INSERT INTO game_config (key, value) VALUES ('dyn_quests_enabled',        'true') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('dyn_achievements_enabled',  'true') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('dyn_streak_enabled',        'true') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('dyn_personal_best_enabled', 'true') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('dyn_global_lb_enabled',     'true') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('dyn_fomo_enabled',          'true') ON CONFLICT (key) DO NOTHING;
+
+-- Quest rewards (one per quest id in DYN_QUEST_POOL).
+INSERT INTO game_config (key, value) VALUES ('dyn_quest_reward_play2',      '50')  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('dyn_quest_reward_play3',      '100') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('dyn_quest_reward_score10k',   '50')  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('dyn_quest_reward_score30k',   '100') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('dyn_quest_reward_score75k',   '250') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('dyn_quest_reward_tier7',      '75')  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('dyn_quest_reward_tier8',      '200') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('dyn_quest_reward_theme',      '60')  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('dyn_quest_reward_shape',      '60')  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('dyn_quest_reward_beatself',   '120') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('dyn_quest_reward_beatleader', '300') ON CONFLICT (key) DO NOTHING;
+
+-- Per-board achievement rewards.
+INSERT INTO game_config (key, value) VALUES ('dyn_ach_reward_played',   '25')  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('dyn_ach_reward_crown',    '150') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('dyn_ach_reward_score10',  '50')  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('dyn_ach_reward_score50',  '150') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('dyn_ach_reward_score100', '300') ON CONFLICT (key) DO NOTHING;
+
+-- Cross-board achievement rewards.
+INSERT INTO game_config (key, value) VALUES ('dyn_ach_reward_pioneer5',     '200')  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('dyn_ach_reward_pioneer10',    '500')  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('dyn_ach_reward_crown5',       '500')  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('dyn_ach_reward_all_themes',   '800')  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('dyn_ach_reward_all_shapes',   '800')  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('dyn_ach_reward_leaderboard1', '1000') ON CONFLICT (key) DO NOTHING;
+
+-- Streak milestone rewards.
+INSERT INTO game_config (key, value) VALUES ('dyn_streak_reward_3',   '50')   ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('dyn_streak_reward_7',   '150')  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('dyn_streak_reward_14',  '300')  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('dyn_streak_reward_30',  '600')  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('dyn_streak_reward_60',  '1000') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('dyn_streak_reward_100', '2000') ON CONFLICT (key) DO NOTHING;
+
+-- ============================================================
 -- Dynamic Boards — phase 2 (May 2026)
 -- The board_configurations table backs admin-managed alternate
 -- boards (column multipliers, themed packs, future special cells

@@ -377,19 +377,23 @@
       bar.classList.add('practice');
       var dbName = window._activeDynamicBoard.name || 'לוח דינמי';
       title.textContent = '🎯 ' + dbName;
-      var bbRec = (typeof getBoardBest === 'function') ? getBoardBest(window._activeDynamicBoard.id) : null;
-      var selfChip;
-      if (bbRec && bbRec.score > 0) {
-        selfChip = '<span class="dyn-target-chip" id="dyn-target-chip" data-target="' + bbRec.score + '">🏆 לעבור: <strong>' + bbRec.score.toLocaleString() + '</strong></span>';
-      } else {
-        selfChip = '<span class="dyn-target-chip dyn-target-chip-pioneer">🌱 הצב את השיא הראשון שלך</span>';
+      var pbEnabled = (typeof dynFeatureEnabled === 'function') ? dynFeatureEnabled('personal_best') : true;
+      var lbEnabled = (typeof dynFeatureEnabled === 'function') ? dynFeatureEnabled('global_lb') : true;
+      var bbRec = (pbEnabled && typeof getBoardBest === 'function') ? getBoardBest(window._activeDynamicBoard.id) : null;
+      var selfChip = '';
+      if (pbEnabled) {
+        if (bbRec && bbRec.score > 0) {
+          selfChip = '<span class="dyn-target-chip" id="dyn-target-chip" data-target="' + bbRec.score + '">🏆 לעבור: <strong>' + bbRec.score.toLocaleString() + '</strong></span>';
+        } else {
+          selfChip = '<span class="dyn-target-chip dyn-target-chip-pioneer">🌱 הצב את השיא הראשון שלך</span>';
+        }
       }
       // Leader chip — only when the leader is someone OTHER than the
       // current player (i.e. there's something to chase). If the
       // player IS the leader, surface that instead.
       var leaderChip = '';
       var brd = window._activeDynamicBoard;
-      if (brd.leader_name && brd.leader_score) {
+      if (lbEnabled && brd.leader_name && brd.leader_score) {
         var bestSoFar = bbRec ? bbRec.score : 0;
         if (bestSoFar >= brd.leader_score) {
           leaderChip = ' <span class="dyn-leader-chip dyn-leader-chip-king">👑 אתה מוביל</span>';

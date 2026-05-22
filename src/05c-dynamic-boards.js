@@ -103,6 +103,47 @@
     if (_fomoTickHandle) { clearInterval(_fomoTickHandle); _fomoTickHandle = null; }
   }
 
+  // ============================================================
+  // Admin-controlled config readers (May 2026)
+  //
+  // Every reward and feature toggle in the dynamic-boards retention
+  // stack reads from gameConfig (loaded from /api/config). Defaults
+  // mirror the original hardcoded values so legacy DBs that haven't
+  // run the schema seeds still work. Master toggles default to true
+  // — admin opts OUT, not in.
+  // ============================================================
+  function dynConfig(key, defaultValue) {
+    try {
+      if (typeof gameConfig !== 'undefined' && gameConfig && gameConfig[key] != null && gameConfig[key] !== '') {
+        return gameConfig[key];
+      }
+    } catch (e) {}
+    return defaultValue;
+  }
+  function dynConfigInt(key, defaultValue) {
+    var raw = dynConfig(key, null);
+    if (raw == null || raw === '') return defaultValue;
+    var n = parseInt(raw, 10);
+    return Number.isFinite(n) ? n : defaultValue;
+  }
+  function dynConfigBool(key, defaultValue) {
+    var raw = dynConfig(key, null);
+    if (raw == null || raw === '') return defaultValue;
+    return String(raw) !== 'false';
+  }
+  function dynFeatureEnabled(name) {
+    // Master toggles — admin can disable each retention system.
+    if (name === 'quests')        return dynConfigBool('dyn_quests_enabled',        true);
+    if (name === 'achievements')  return dynConfigBool('dyn_achievements_enabled',  true);
+    if (name === 'streak')        return dynConfigBool('dyn_streak_enabled',        true);
+    if (name === 'personal_best') return dynConfigBool('dyn_personal_best_enabled', true);
+    if (name === 'global_lb')     return dynConfigBool('dyn_global_lb_enabled',     true);
+    if (name === 'fomo')          return dynConfigBool('dyn_fomo_enabled',          true);
+    return true;
+  }
+  window.dynFeatureEnabled = dynFeatureEnabled;
+  window.dynConfigInt      = dynConfigInt;
+
   // Called by the audio module after /api/boards/available resolves.
   // Toggles the home button's visibility. Safe to call when home isn't
   // mounted yet — it just no-ops.
@@ -120,8 +161,12 @@
     var focus = pickFocusBoard(boards);
     // Streak status — if the player is on day ≥3 and HASN'T played
     // today, that's the highest-priority headline (loss aversion).
-    var streakSt = (typeof getDynamicStreak === 'function') ? getDynamicStreak() : { count: 0, last: null };
-    var streakDanger = (typeof isStreakInDanger === 'function') && isStreakInDanger();
+    // Master toggle: when admin disables streak feature, both the
+    // count and the in-danger flag are forced to falsy values.
+    var streakEnabled = dynFeatureEnabled('streak');
+    var streakSt = (streakEnabled && typeof getDynamicStreak === 'function') ? getDynamicStreak() : { count: 0, last: null };
+    var streakDanger = streakEnabled && typeof isStreakInDanger === 'function' && isStreakInDanger();
+    var fomoEnabled = dynFeatureEnabled('fomo');
     // Quest claimable check — highest-priority headline when present
     // (a free 💎 sitting unclaimed is louder than any FOMO countdown).
     var qHomeSum = (typeof questsSummary === 'function') ? questsSummary() : null;
@@ -138,7 +183,7 @@
       // streak is a stronger signal than missing a single special board.
       else if (streakDanger) {
         label = '🔥 הרצף שלך בסכנה! ' + streakSt.count + ' ימים — שחק היום';
-      } else if (focus) {
+      } else if (focus && fomoEnabled) {
         var u = boardUrgency(focus);
         var endsIn = boardEndsInMs(focus);
         if (u === 'critical') {
@@ -167,7 +212,7 @@
       btn.classList.add('fomo-quest-claim');
     } else if (streakDanger) {
       btn.classList.add('fomo-streak-danger');
-    } else if (focus) {
+    } else if (focus && fomoEnabled) {
       var fu = boardUrgency(focus);
       if (fu === 'critical' || fu === 'new' || fu === 'soon') btn.classList.add('fomo-' + fu);
     }
@@ -240,7 +285,13 @@
   // ============================================================
   var DYN_STREAK_KEY = 'bloom_dyn_streak';
   var DYN_STREAK_MILESTONES = [3, 7, 14, 30, 60, 100];
-  var DYN_STREAK_REWARDS    = { 3: 50, 7: 150, 14: 300, 30: 600, 60: 1000, 100: 2000 };
+  // Defaults (used as fallback when admin config keys are missing).
+  // The live values come from dynStreakReward(milestone) which reads
+  // dyn_streak_reward_<N> from gameConfig.
+  var DYN_STREAK_REWARDS_DEFAULTS = { 3: 50, 7: 150, 14: 300, 30: 600, 60: 1000, 100: 2000 };
+  function dynStreakReward(milestone) {
+    return dynConfigInt('dyn_streak_reward_' + milestone, DYN_STREAK_REWARDS_DEFAULTS[milestone] || 0);
+  }
   function getDynamicStreak() {
     try {
       var raw = localStorage.getItem(DYN_STREAK_KEY);
@@ -269,8 +320,10 @@
     return Math.round((bd - ad) / (24 * 60 * 60 * 1000));
   }
   // Called when player FINISHES a dynamic-board game. Returns a status
-  // object: { streakBefore, streakAfter, milestoneHit, reward }.
+  // object: { streakBefore, streakAfter, milestoneHit, reward }. When
+  // the admin has disabled the streak feature this becomes a no-op.
   function recordDynamicStreakDay() {
+    if (!dynFeatureEnabled('streak')) return { streakBefore: 0, streakAfter: 0, milestoneHit: null, reward: 0, alreadyToday: true, disabled: true };
     var st = getDynamicStreak();
     var today = streakToday();
     var before = st.count | 0;
@@ -301,7 +354,7 @@
       streakBefore: before,
       streakAfter: after,
       milestoneHit: milestoneHit,
-      reward: milestoneHit ? DYN_STREAK_REWARDS[milestoneHit] : 0,
+      reward: milestoneHit ? dynStreakReward(milestoneHit) : 0,
       alreadyToday: false
     };
   }
@@ -324,7 +377,16 @@
   window.recordDynamicStreakDay = recordDynamicStreakDay;
   window.nextStreakMilestone    = nextStreakMilestone;
   window.isStreakInDanger       = isStreakInDanger;
-  window.DYN_STREAK_REWARDS     = DYN_STREAK_REWARDS;
+  // Live-read accessor so UI code that reads window.DYN_STREAK_REWARDS[N]
+  // gets admin-configured values, not the hardcoded defaults.
+  window.DYN_STREAK_REWARDS = new Proxy({}, {
+    get: function(_target, key) {
+      var n = parseInt(key, 10);
+      if (!Number.isFinite(n)) return undefined;
+      return dynStreakReward(n);
+    }
+  });
+  window.dynStreakReward = dynStreakReward;
 
   // ============================================================
   // Achievements — the completionist engine.
@@ -341,7 +403,8 @@
   var DYN_ACH_KEY = 'bloom_dyn_achievements';
 
   // Per-board achievements — checked against EACH board the player finishes.
-  // Each grants its reward exactly once per board id.
+  // Each grants its reward exactly once per board id. The `reward` field is
+  // a DEFAULT — runtime calls dynAchReward(id) to pick up admin overrides.
   var ACH_PER_BOARD = [
     { id: 'played',  icon: '🌱', label: 'הצטרפת',         reward:  25, check: function(ctx) { return true; } },
     { id: 'crown',   icon: '👑', label: 'הגעת לכתר',      reward: 150, check: function(ctx) { return ctx.tier >= 8; } },
@@ -365,6 +428,14 @@
     { id: 'leaderboard1', icon: '🥇', label: 'מקום #1 באיזשהו לוח', reward: 1000,
       check: function(agg) { return agg.rankOnes >= 1; } }
   ];
+  function dynAchReward(id) {
+    // Lookup the admin override; fall back to the default in the
+    // ACH_PER_BOARD / ACH_CROSS tables above.
+    var def = ACH_PER_BOARD.find(function(a) { return a.id === id; }) ||
+              ACH_CROSS.find(function(a) { return a.id === id; });
+    var fallback = def ? def.reward : 0;
+    return dynConfigInt('dyn_ach_reward_' + id, fallback);
+  }
 
   function getAchievementsState() {
     try {
@@ -426,8 +497,10 @@
   // achievement objects unlocked this game (could be both per-board and
   // cross-board). Each carries icon/label/reward — the over screen
   // renders them. Also fires earnCredits for each unlocked achievement.
+  // Master toggle: admin can disable the system entirely.
   function checkAndGrantAchievements(ctx) {
     if (!ctx || !ctx.boardId) return [];
+    if (!dynFeatureEnabled('achievements')) return [];
     var state = getAchievementsState();
     var unlocked = [];
     // Per-board pass
@@ -436,7 +509,7 @@
       if (hasPerBoard(state, ctx.boardId, ach.id)) continue;
       if (!ach.check(ctx)) continue;
       grantPerBoard(state, ctx.boardId, ach.id);
-      unlocked.push({ scope: 'board', boardId: ctx.boardId, id: ach.id, icon: ach.icon, label: ach.label, reward: ach.reward });
+      unlocked.push({ scope: 'board', boardId: ctx.boardId, id: ach.id, icon: ach.icon, label: ach.label, reward: dynAchReward(ach.id) });
     }
     // Also flag "crown" / "rank1" markers used by the cross-board aggregate.
     if (ctx.tier >= 8 && state.perBoard[ctx.boardId] && !state.perBoard[ctx.boardId].crown) {
@@ -452,7 +525,7 @@
       if (hasCross(state, cach.id)) continue;
       if (!cach.check(agg)) continue;
       grantCross(state, cach.id);
-      unlocked.push({ scope: 'cross', id: cach.id, icon: cach.icon, label: cach.label, reward: cach.reward });
+      unlocked.push({ scope: 'cross', id: cach.id, icon: cach.icon, label: cach.label, reward: dynAchReward(cach.id) });
     }
     saveAchievementsState(state);
     // Fire credits for each unlock.
@@ -471,15 +544,21 @@
     ACH_PER_BOARD.forEach(function(a) { if (entry[a.id]) icons.push(a.icon); });
     return icons;
   }
-  // Used by the achievements modal.
+  // Used by the achievements modal. Rewards are resolved through the
+  // admin config so the catalog matches what the player will actually
+  // receive.
   function listAllAchievementsForUI(knownBoards) {
     var state = getAchievementsState();
     var agg = aggregateAchievementContext(state, knownBoards || window._availableBoards || []);
     return {
       cross: ACH_CROSS.map(function(a) {
-        return Object.assign({}, a, { earned: hasCross(state, a.id), progress: aggProgress(a, agg) });
+        return Object.assign({}, a, {
+          reward: dynAchReward(a.id),
+          earned: hasCross(state, a.id),
+          progress: aggProgress(a, agg)
+        });
       }),
-      perBoard: ACH_PER_BOARD,
+      perBoard: ACH_PER_BOARD.map(function(a) { return Object.assign({}, a, { reward: dynAchReward(a.id) }); }),
       perBoardState: state.perBoard
     };
   }
@@ -635,15 +714,23 @@
   ];
   function questDateToday() { return (typeof todayInIsrael === 'function') ? todayInIsrael() : new Date().toISOString().slice(0, 10); }
   function questStorageKey(date) { return DYN_QUEST_KEY_PREFIX + (date || questDateToday()); }
+  function dynQuestReward(id) {
+    var def = DYN_QUEST_POOL.find(function(q) { return q.id === id; });
+    var fallback = def ? def.reward : 0;
+    return dynConfigInt('dyn_quest_reward_' + id, fallback);
+  }
   function pickDailyQuests(date) {
+    var poolWithRewards = DYN_QUEST_POOL.map(function(q) {
+      return Object.assign({}, q, { reward: dynQuestReward(q.id) });
+    });
     if (typeof mulberry32 !== 'function' || typeof hashSeed !== 'function') {
       // Fallback to first 3 if RNG helpers are missing.
-      return DYN_QUEST_POOL.slice(0, 3).map(function(q) {
+      return poolWithRewards.slice(0, 3).map(function(q) {
         return Object.assign({}, q, { progress: 0, completed: false, claimed: false });
       });
     }
     var rng = mulberry32(hashSeed(date + ':dyn-quests-v1'));
-    var pool = DYN_QUEST_POOL.slice();
+    var pool = poolWithRewards.slice();
     // Fisher–Yates with deterministic RNG.
     for (var i = pool.length - 1; i > 0; i--) {
       var j = Math.floor(rng() * (i + 1));
@@ -654,13 +741,25 @@
     });
   }
   function getDailyQuests() {
+    // Admin disabled the quests system → return an empty quest list so
+    // every check / claim / banner short-circuits cleanly without
+    // breaking the UI shape.
+    if (!dynFeatureEnabled('quests')) return { date: questDateToday(), quests: [], disabled: true };
     var date = questDateToday();
     var key = questStorageKey(date);
     try {
       var raw = localStorage.getItem(key);
       if (raw) {
         var parsed = JSON.parse(raw);
-        if (parsed && Array.isArray(parsed.quests)) return parsed;
+        if (parsed && Array.isArray(parsed.quests)) {
+          // Live-refresh rewards from admin config — progress + claimed
+          // state are preserved. So if admin bumps a reward mid-day,
+          // un-claimed completed quests will show the new value.
+          parsed.quests.forEach(function(q) {
+            q.reward = dynQuestReward(q.id);
+          });
+          return parsed;
+        }
       }
     } catch (e) {}
     var fresh = { date: date, quests: pickDailyQuests(date) };
@@ -943,10 +1042,11 @@
     //  - none / single day → muted "🌱 התחל רצף היום" pioneer copy
     //  - active streak, played today → calm "🔥 רצף N — שמרת אותו היום!"
     //  - active streak, NOT played today → red-orange "🔥 הרצף בסכנה!"
-    var streakSt2 = (typeof getDynamicStreak === 'function') ? getDynamicStreak() : { count: 0, last: null };
-    var streakDanger2 = (typeof isStreakInDanger === 'function') && isStreakInDanger();
+    var streakEnabled2 = dynFeatureEnabled('streak');
+    var streakSt2 = (streakEnabled2 && typeof getDynamicStreak === 'function') ? getDynamicStreak() : { count: 0, last: null };
+    var streakDanger2 = streakEnabled2 && typeof isStreakInDanger === 'function' && isStreakInDanger();
     var streakBannerHtml = '';
-    if (streakSt2.count >= 1) {
+    if (streakEnabled2 && streakSt2.count >= 1) {
       var nextM = (typeof nextStreakMilestone === 'function') ? nextStreakMilestone(streakSt2.count) : null;
       var nextMRew = (window.DYN_STREAK_REWARDS || {})[nextM] || 0;
       var progressLine = nextM
@@ -972,13 +1072,16 @@
             '</div>' +
           '</div>';
       }
-    } else {
+    } else if (streakEnabled2) {
+      // Pioneer copy — adjust the day-N rewards to whatever the admin
+      // has configured so the onboarding promise matches reality.
+      var r3 = dynStreakReward(3), r7 = dynStreakReward(7), r14 = dynStreakReward(14), r30 = dynStreakReward(30);
       streakBannerHtml =
         '<div class="dyn-streak-banner dyn-streak-banner-pioneer">' +
           '<div class="dyn-streak-banner-icon">🌱</div>' +
           '<div class="dyn-streak-banner-body">' +
             '<div class="dyn-streak-banner-title">התחל רצף לוחות דינמיים היום</div>' +
-            '<div class="dyn-streak-banner-sub">סיים לוח אחד כל יום · יום 3 = 50💎, יום 7 = 150💎, יום 14 = 300💎, יום 30 = 600💎</div>' +
+            '<div class="dyn-streak-banner-sub">סיים לוח אחד כל יום · יום 3 = ' + r3 + '💎, יום 7 = ' + r7 + '💎, יום 14 = ' + r14 + '💎, יום 30 = ' + r30 + '💎</div>' +
           '</div>' +
         '</div>';
     }
@@ -1094,24 +1197,28 @@
         // Empty record: gentle "🌱" pioneer chip (also drives "be the
         // first" psychology). Has a record: gold "🏆" chip with score.
         var best = getBoardBest(b.id);
-        if (best && best.score > 0) {
-          chips.push('<span class="dyn-boards-chip dyn-boards-chip-best">🏆 שיא ' + formatBoardScore(best.score) + '</span>');
-        } else {
-          chips.push('<span class="dyn-boards-chip dyn-boards-chip-pioneer">🌱 חדש לך</span>');
+        if (dynFeatureEnabled('personal_best')) {
+          if (best && best.score > 0) {
+            chips.push('<span class="dyn-boards-chip dyn-boards-chip-best">🏆 שיא ' + formatBoardScore(best.score) + '</span>');
+          } else {
+            chips.push('<span class="dyn-boards-chip dyn-boards-chip-pioneer">🌱 חדש לך</span>');
+          }
         }
         // Global per-board leader — the social half of the addiction loop.
         // When you're #1: special crown chip. Otherwise: shows the leader's
         // score as a clear target.
-        if (b.leader_name && b.leader_score) {
-          var imLeader = best && best.score >= b.leader_score;
-          if (imLeader) {
-            chips.push('<span class="dyn-boards-chip dyn-boards-chip-king">👑 אתה מוביל!</span>');
-          } else {
-            chips.push('<span class="dyn-boards-chip dyn-boards-chip-leader">👑 ' + escapeHtml(b.leader_name) + ': ' + formatBoardScore(b.leader_score) + '</span>');
+        if (dynFeatureEnabled('global_lb')) {
+          if (b.leader_name && b.leader_score) {
+            var imLeader = best && best.score >= b.leader_score;
+            if (imLeader) {
+              chips.push('<span class="dyn-boards-chip dyn-boards-chip-king">👑 אתה מוביל!</span>');
+            } else {
+              chips.push('<span class="dyn-boards-chip dyn-boards-chip-leader">👑 ' + escapeHtml(b.leader_name) + ': ' + formatBoardScore(b.leader_score) + '</span>');
+            }
           }
-        }
-        if (b.players && b.players > 0) {
-          chips.push('<span class="dyn-boards-chip dyn-boards-chip-players">👥 ' + b.players + ' שיחקו</span>');
+          if (b.players && b.players > 0) {
+            chips.push('<span class="dyn-boards-chip dyn-boards-chip-players">👥 ' + b.players + ' שיחקו</span>');
+          }
         }
         // Earned achievement badge stack — shows ONLY the icons of
         // achievements the player has earned on THIS specific board.
@@ -1129,6 +1236,10 @@
         var endsAttr = b.ends_at ? (' data-ends-at="' + escapeHtml(b.ends_at) + '"') : '';
         var startsAttr = b.starts_at ? (' data-starts-at="' + escapeHtml(b.starts_at) + '"') : '';
         var classExtra = (u === 'critical' || u === 'new' || u === 'soon') ? (' fomo-' + u) : '';
+        var trophyHtml = dynFeatureEnabled('global_lb')
+          ? '<button class="dyn-boards-trophy-btn" data-board-id="' + b.id + '" data-action="trophy" aria-label="לוח מובילים">🏆</button>'
+          : '';
+        var fomoBadgeHtml = dynFeatureEnabled('fomo') ? renderFomoBadge(b) : '';
         html +=
           '<div class="dyn-boards-card-wrap">' +
             '<button class="dyn-boards-card' + classExtra + '" data-board-id="' + b.id + '" data-action="play"' + endsAttr + startsAttr + extraStyle + '>' +
@@ -1137,12 +1248,11 @@
                 '<div class="dyn-boards-card-name">' + escapeHtml(b.name || 'לוח') + '</div>' +
                 '<div class="dyn-boards-card-type">' + badge.label + (desc && b.type === 'multipliers' ? ' · ' + desc : '') + '</div>' +
                 chipsHtml +
-                '<div class="dyn-boards-card-fomo" data-fomo-host="1">' + renderFomoBadge(b) + '</div>' +
+                '<div class="dyn-boards-card-fomo" data-fomo-host="1">' + fomoBadgeHtml + '</div>' +
               '</div>' +
               '<div class="dyn-boards-card-cta">שחק ←</div>' +
             '</button>' +
-            // Trophy button — independent action, opens the per-board top-50.
-            '<button class="dyn-boards-trophy-btn" data-board-id="' + b.id + '" data-action="trophy" aria-label="לוח מובילים">🏆</button>' +
+            trophyHtml +
           '</div>';
       }
       listEl.innerHTML = html;
