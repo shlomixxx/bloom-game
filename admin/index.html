@@ -969,8 +969,9 @@
            a type up top, click cells to paint with it. Re-clicking a cell of
            the current type clears it. -->
       <div id="board-editor-special-cells" style="display:none;background:#FFF7E6;border:1px solid #FAC775;border-radius:10px;padding:12px;margin-bottom:14px">
-        <div style="font-size:13px;font-weight:700;color:#BA7517;margin-bottom:6px;display:flex;align-items:center;gap:6px">
+        <div style="font-size:13px;font-weight:700;color:#BA7517;margin-bottom:6px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
           <span>🔮 תאים מיוחדים על הלוח</span>
+          <button type="button" onclick="openSpecialCellsGuide()" style="font-size:11px;padding:4px 10px;background:linear-gradient(135deg,#FFB95C,#FF6B9D);color:#FFF;border:none;border-radius:8px;cursor:pointer;font-weight:700;box-shadow:0 2px 8px rgba(255,107,157,0.35)">📚 איך זה עובד + תבניות מוכנות</button>
           <button class="tip-btn" data-tip-text="<strong>תאים מיוחדים</strong><br>בחר ״צבע״ למעלה, ואז לחץ על תא ברשת כדי לצבוע אותו. לחיצה חוזרת מנקה אותו.<div class=&quot;tip-example&quot;>✨ <strong>זהב</strong> — אריח שנוחת שם <em>עולה דרגה אחת אוטומטית</em>. הכי חזק. מומלץ 2-4 תאים.<br><br>🪙 <strong>בונוס</strong> — כל מיזוג שהאריח השורד שלו על תא בונוס, מקבל <em>+N נקודות משחק</em> נוספות (לא קרדיטים! N מוגדר למעלה). מתאים ל-3-6 תאים.<br><br>❄️ <strong>קפוא</strong> — אריח שנוחת על תא קפוא <em>נתפס בקרח</em>, לא מתמזג, ולא נופל עם הגרוויטציה. אריחים מעליו נערמים, תאים מתחתיו מסומנים ב-❄️ דהוי (חסומים מהקרח שמלמעלה — לא באג).<br><br><strong>איך משחרר?</strong> 3 מיזוגים <em>צמודים</em> לאריח הקפוא (למעלה / למטה / לצדדים) → סדק → סדק עמוק → 💥 <strong>שבר!</strong> האריח מתפוצץ + <strong>+200 בונוס</strong>. הופך לפאזל אמיתי במקום ״תקוע עד שתבוא פצצה״.<br><br>מומלץ 1-3 תאים — יותר = המשחק עשוי להפוך לקשה מדי.<br><br>⚡ <strong>חשמלי</strong> — תא צהוב חשמלי שמרחיב מיזוגים. כשתא חשמלי נכלל בקבוצת מיזוג, ה-BFS <em>קופץ ברדיוס 2 + אלכסונים</em> ומצרף אריחים מאותה דרגה שלא היו צמודים. שרשרות חוצות לוח, מיזוגים של 5-8 אריחים במכה אחת. ויזואל מטורף: כל הקבוצה זוהרת בצהוב + 8 ⚡ עפים מהתא החשמלי לכל הכיוונים. <strong>הכי מרהיב</strong>. מומלץ 1-2 תאים.<br><br>🎯 <strong>טקטיקות אדמיניות</strong>:<br>• זהב בשורה תחתונה + בונוס באמצע = ״הצלת אריח חלש בתחתית, פיצוץ נקודות באמצע״.<br>• קפוא במרכז + בונוס בפינות = ״שחקן צריך לעקוף את הקרח״.<br>• 4 פינות כולן בונוס עם 1000 נקודות = ״משחק של פינות״ — שחקן צריך לתכנן מיזוגים שמסתיימים בפינה.<br><br>🏆 <strong>אריח כתר על זהב</strong>: כתר נשאר כתר (אין דרגה 9).<br><br>⚠ עד 24 תאים. מומלץ סה״כ 4-8.</div>">?</button>
         </div>
 
@@ -1091,6 +1092,119 @@
         <button type="button" id="btn-board-save" onclick="saveBoard()" style="flex:2;background:#FAC775;color:#1C1A18;border:none;padding:11px;border-radius:10px;font-weight:800;cursor:pointer;font-family:inherit" title="שמור את הלוח. אם ׳פעיל׳ מסומן — יופיע בפיקר תוך 60-90 שניות לכל השחקנים.">💾 שמור</button>
       </div>
       <div id="board-editor-status" style="font-size:11px;color:#6F6E68;text-align:center;margin-top:10px;min-height:14px"></div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       Special-Cells Guide modal — comprehensive admin help with
+       per-type explanations, examples, and one-click pattern presets.
+       Opens via the "📚 איך זה עובד" button inside the cells editor.
+       ============================================================ -->
+  <div id="special-cells-guide-overlay" style="display:none;position:fixed;inset:0;background:rgba(28,26,24,0.75);z-index:8500;align-items:center;justify-content:center;padding:14px">
+    <div style="background:#FFFFFF;border:1px solid #E5E1D5;border-radius:14px;padding:20px;max-width:680px;width:100%;max-height:92vh;overflow-y:auto;direction:rtl;color:#1C1A18;box-shadow:0 24px 60px rgba(0,0,0,0.45)">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;border-bottom:1px solid #F2EFE6;padding-bottom:10px;position:sticky;top:0;background:#FFFFFF;z-index:1">
+        <h3 style="margin:0;color:#BA7517;font-size:18px;font-weight:800">📚 מדריך תאים מיוחדים</h3>
+        <button onclick="closeSpecialCellsGuide()" style="background:#F4F1E8;border:none;color:#6F6E68;font-size:18px;cursor:pointer;width:30px;height:30px;border-radius:8px;line-height:1">✕</button>
+      </div>
+
+      <!-- Quick overview cards 2×2 -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:18px">
+        <div style="padding:10px;background:linear-gradient(135deg,#FFE9A8,#FAC775);border-radius:10px;border:2px solid #BA7517">
+          <div style="font-size:18px;font-weight:900;color:#412402">✨ זהב</div>
+          <div style="font-size:12px;color:#412402;line-height:1.4;margin-top:4px"><strong>שדרוג אוטומטי</strong> — אריח שנוחת על תא זהב עולה דרגה אחת מיד.</div>
+        </div>
+        <div style="padding:10px;background:linear-gradient(135deg,#D8F4E6,#9FE1CB);border-radius:10px;border:2px solid #04342C">
+          <div style="font-size:18px;font-weight:900;color:#04342C">🪙 בונוס</div>
+          <div style="font-size:12px;color:#04342C;line-height:1.4;margin-top:4px"><strong>נקודות נוספות</strong> — כל מיזוג שמסתיים על תא בונוס = +N נקודות.</div>
+        </div>
+        <div style="padding:10px;background:linear-gradient(135deg,#E6F0FA,#B5D4F4);border-radius:10px;border:2px solid #0E4D7E">
+          <div style="font-size:18px;font-weight:900;color:#04335C">❄️ קפוא</div>
+          <div style="font-size:12px;color:#04335C;line-height:1.4;margin-top:4px"><strong>פאזל</strong> — אריח נתפס. 3 מיזוגים צמודים → 💥 שבר + 200 נקודות.</div>
+        </div>
+        <div style="padding:10px;background:linear-gradient(135deg,#FFF4B3,#F5C400);border-radius:10px;border:2px solid #7A6100">
+          <div style="font-size:18px;font-weight:900;color:#412402">⚡ חשמלי</div>
+          <div style="font-size:12px;color:#412402;line-height:1.4;margin-top:4px"><strong>שרשרת מטורפת</strong> — merge מתרחב לרדיוס 2 + אלכסונים.</div>
+        </div>
+      </div>
+
+      <!-- Per-type detailed explanations -->
+      <details open style="margin-bottom:10px;background:#FFF7E6;border:1px solid #FAC775;border-radius:10px;padding:12px">
+        <summary style="font-size:14px;font-weight:800;color:#BA7517;cursor:pointer">✨ זהב — שדרוג אוטומטי</summary>
+        <div style="margin-top:10px;font-size:12.5px;color:#1C1A18;line-height:1.6">
+          <div><strong>מה זה עושה:</strong> אריח שנוחת על תא זהב עולה דרגה אחת אוטומטית. אבן → עלה, עלה → פרח, וכו׳. כתר נשאר כתר (אין דרגה 9).</div>
+          <div style="margin-top:6px"><strong>דוגמה ויזואלית</strong> (תא זהב באמצע):</div>
+          <pre style="font-family:monospace;background:#FFFFFF;padding:8px;border-radius:6px;font-size:12px;line-height:1.7;margin:6px 0;text-align:left;direction:ltr">⬜ ⬜ ⬜ ⬜
+⬜ ⬜ ⬜ ⬜
+⬜ ✨ ⬜ ⬜  ← תא זהב
+⬜ ⬜ ⬜ ⬜
+⬜ ⬜ ⬜ ⬜
+⬜ ⬜ ⬜ ⬜</pre>
+          <div>שחקן זורק אריח אבן (דרגה 1) → נוחת על הזהב → מקבל עלה (דרגה 2). חוסך לו מיזוג שלם.</div>
+          <div style="margin-top:6px;color:#BA7517"><strong>💡 טיפ:</strong> 2-3 תאים בשורה תחתונה = ״מנוע ניקוד״. השחקן מתרגל לזרוק אריחים זולים שם.</div>
+        </div>
+      </details>
+
+      <details style="margin-bottom:10px;background:#F0FAF4;border:1px solid #9FE1CB;border-radius:10px;padding:12px">
+        <summary style="font-size:14px;font-weight:800;color:#04342C;cursor:pointer">🪙 בונוס — נקודות נוספות</summary>
+        <div style="margin-top:10px;font-size:12.5px;color:#1C1A18;line-height:1.6">
+          <div><strong>מה זה עושה:</strong> כשאריח שורד של מיזוג נוחת על תא בונוס, הניקוד מקבל +N נקודות (N מוגדר על-ידי האדמין לכל הלוח, 50-10000).</div>
+          <div style="margin-top:6px"><strong>דוגמה</strong>: מיזוג 3 אריחי דרגה 4 = ~700 נק׳ רגיל. אם השורד נוחת על תא בונוס של 1000 → 1700 נק׳!</div>
+          <div style="margin-top:6px;color:#04342C"><strong>💡 טיפ:</strong> 1000 נק׳ בונוס במרכז (4 תאים) = שחקנים מתחילים לתכנן מיזוגים שמסתיימים שם. שונה מהאסטרטגיה הרגילה.</div>
+        </div>
+      </details>
+
+      <details style="margin-bottom:10px;background:#E6F0FA;border:1px solid #6FB7E0;border-radius:10px;padding:12px">
+        <summary style="font-size:14px;font-weight:800;color:#0E4D7E;cursor:pointer">❄️ קפוא — פאזל אסטרטגי</summary>
+        <div style="margin-top:10px;font-size:12.5px;color:#1C1A18;line-height:1.6">
+          <div><strong>מה זה עושה:</strong> אריח שנוחת על תא קפוא <em>נתפס</em>: לא מתמזג, לא נופל עם הגרוויטציה (אנקור). אריחים מעליו מערמים, תאים מתחת חסומים (מסומנים ב-❄️ דהוי).</div>
+          <div style="margin-top:6px"><strong>איך משחררים:</strong> 3 מיזוגים <em>צמודים</em> לאריח הקפוא (סדק 1 → סדק 2 → 💥 שבר!) = +200 נק׳ בונוס. התא הקפוא נשאר במקום (מוכן להקפיא את הבא).</div>
+          <div style="margin-top:6px"><strong>דוגמה</strong>: קרח באמצע. שחקן צריך לעשות 3 מיזוגים בתאים סמוכים → שבירה.</div>
+          <div style="margin-top:6px;color:#0E4D7E"><strong>💡 טיפ:</strong> 1-2 תאים בלבד. יותר = משחק תקוע. ההפתעה: השחקן לומד שהוא יכול לפצח את הקרח ולא רק להמתין לפצצה.</div>
+        </div>
+      </details>
+
+      <details style="margin-bottom:14px;background:#FFFCE0;border:1px solid #F5C400;border-radius:10px;padding:12px">
+        <summary style="font-size:14px;font-weight:800;color:#7A6100;cursor:pointer">⚡ חשמלי — שרשרות חוצות לוח</summary>
+        <div style="margin-top:10px;font-size:12.5px;color:#1C1A18;line-height:1.6">
+          <div><strong>מה זה עושה:</strong> כשמיזוג כולל אריח על תא חשמלי, ה-BFS שמחפש קבוצה מתרחב ל-<em>רדיוס 2 + 4 אלכסונים</em>. אריחים מאותה דרגה ברחבי הלוח מתחברים למיזוג ענק.</div>
+          <div style="margin-top:6px"><strong>דוגמה ויזואלית</strong> (⚡ באמצע, אריחי דרגה 4):</div>
+          <pre style="font-family:monospace;background:#FFFFFF;padding:8px;border-radius:6px;font-size:12px;line-height:1.7;margin:6px 0;text-align:left;direction:ltr">⬜ ⬜ 4️⃣ ⬜    ← נצרף!
+⬜ 4️⃣ ⚡ 4️⃣  ← merge group רגיל
+4️⃣ ⬜ ⬜ 4️⃣  ← נצרף! (רדיוס 2 + אלכסונים)
+⬜ 4️⃣ ⬜ ⬜    ← נצרף!</pre>
+          <div>מיזוג של <strong>7+ אריחים</strong> במכה אחת = ניקוד מטורף + 8 ⚡ עפים מהתא לכל הכיוונים.</div>
+          <div style="margin-top:6px;color:#7A6100"><strong>💡 טיפ:</strong> 1-2 תאים בלבד. ⚡ הוא "הגדול" — שמור אותו ללוחות VIP / דיילי-של-יום-שישי.</div>
+        </div>
+      </details>
+
+      <!-- Reshuffle mode explanation -->
+      <div style="background:#F4F1E8;border:1px solid #E5E1D5;border-radius:10px;padding:12px;margin-bottom:18px">
+        <div style="font-size:14px;font-weight:800;color:#1C1A18;margin-bottom:8px">🎲 התנהגות תאים — מתי הם זזים?</div>
+        <div style="font-size:12.5px;line-height:1.7;color:#1C1A18">
+          <div>• <strong>🧊 סטטי</strong>: תאים נשארים במקום (ברירת מחדל).</div>
+          <div>• <strong>❄️ זז אחרי שבר קרח</strong>: רק קרח שהתפוצץ קופץ למיקום אקראי.</div>
+          <div>• <strong>⚡ ערבוב אחרי שרשרת</strong>: כל התאים הריקים מתערבבים על שרשרת (≥2 מיזוגים) — <strong>הכי ממכר</strong>, מתגמל skill.</div>
+          <div>• <strong>🌪 ערבוב אחרי כל מיזוג</strong>: chaos מקסימלי — אריחים מתערבבים בכל מיזוג. ל-VIP / דיילי מטורף.</div>
+          <div style="margin-top:6px;color:#BA7517"><strong>חשוב:</strong> תאים עם אריח עליהם (קפוא תקוע, זהב מתבצע) <em>לא זזים</em> — רק הריקים.</div>
+        </div>
+      </div>
+
+      <!-- READY-MADE PRESETS — one-click apply -->
+      <div style="font-size:15px;font-weight:900;color:#1C1A18;margin-bottom:8px;border-top:2px solid #FAC775;padding-top:14px">⭐ תבניות מוכנות (לחיצה אחת)</div>
+      <div style="font-size:11.5px;color:#6F6E68;margin-bottom:10px">לחץ ״השתמש״ ותקבל לוח מוכן + שם + מצב reshuffle מומלץ. אפשר להתאים אחר כך.</div>
+      <div id="pattern-presets-list" style="display:flex;flex-direction:column;gap:10px"></div>
+
+      <!-- Strategic tips at the bottom -->
+      <div style="margin-top:16px;padding:12px;background:#FFFCEF;border:1px dashed #FAC775;border-radius:10px">
+        <div style="font-size:13px;font-weight:800;color:#BA7517;margin-bottom:6px">💡 טיפים אסטרטגיים</div>
+        <ul style="margin:0;padding-right:20px;font-size:12px;color:#1C1A18;line-height:1.7">
+          <li><strong>2-3 סוגים שונים</strong> = לוח מאוזן. הכל-בהכל לעיתים נחמד אבל יכול להרגיש כאוטי.</li>
+          <li><strong>4-8 תאים סה״כ</strong> = הסוויט-ספוט. 9+ = משחק קצר, 1-3 = השפעה דלה.</li>
+          <li><strong>קפוא + ברק יחד</strong> = פאזל מתוחכם. שחקן יכול לרכז ברקים סמוך לקרח כדי לשבור אותו במהירות.</li>
+          <li><strong>שלב reshuffle ״⚡ אחרי שרשרת״</strong> = הכי ממכר. שחקן עושה chain → מקבל אנימציית ערבוב מהפנטת.</li>
+          <li><strong>סמן ״📅 דיילי״</strong> + תבנית שונה כל יום = שחקנים חוזרים לראות מה היום.</li>
+        </ul>
+      </div>
     </div>
   </div>
   </div><!-- /admin-tab-panel game:config+difficulty+lb-tabs -->
@@ -3149,6 +3263,203 @@
     setSpecialCellsUI(cells);
   }
   window.setCellsPreset = setCellsPreset;
+
+  // ============================================================
+  // Special-Cells Guide modal + ready-made pattern presets.
+  // Each preset bundles a cells layout + a recommended relocate_mode
+  // + an auto-name + a default bonus amount. One click → full setup.
+  // ============================================================
+  var SPECIAL_PATTERN_PRESETS = [
+    {
+      key: 'ice-bottom-bonus-above',
+      name: 'קרח למטה + בונוסים מעל',
+      bonusAmount: 600,
+      relocate: 'on_chain',
+      description: 'שורה תחתונה 4 קרחים = מילוי הלוח מהר. שורה מעל 4 בונוסים = כל מיזוג שמסתיים שם +600.',
+      strategy: 'שחקן ילמד לעשות מיזוגים בשורה השנייה כדי להוציא בונוסים, ולשבור קרחים דרך 3 מיזוגים צמודים.',
+      preview: [
+        '⬜ ⬜ ⬜ ⬜',
+        '⬜ ⬜ ⬜ ⬜',
+        '⬜ ⬜ ⬜ ⬜',
+        '⬜ ⬜ ⬜ ⬜',
+        '🪙 🪙 🪙 🪙',
+        '❄️ ❄️ ❄️ ❄️'
+      ],
+      cells: [
+        { row: 5, col: 0, type: 'frozen' },
+        { row: 5, col: 1, type: 'frozen' },
+        { row: 5, col: 2, type: 'frozen' },
+        { row: 5, col: 3, type: 'frozen' },
+        { row: 4, col: 0, type: 'bonus', amount: 600 },
+        { row: 4, col: 1, type: 'bonus', amount: 600 },
+        { row: 4, col: 2, type: 'bonus', amount: 600 },
+        { row: 4, col: 3, type: 'bonus', amount: 600 }
+      ]
+    },
+    {
+      key: 'twin-lightning-gold-corners',
+      name: 'ברקים תאומים + פינות זהב',
+      bonusAmount: 500,
+      relocate: 'on_merge',
+      description: '2 ברקים על האלכסון המרכזי + 4 פינות זהב. שרשרות חוצות לוח עם שדרוגי דרגות בפינות.',
+      strategy: 'שחקן יכוון לפינות (זהב) → אריחים גבוהים → מיזוגים שמעוררים את הברקים → אנימציות מטורפות.',
+      preview: [
+        '✨ ⬜ ⬜ ✨',
+        '⬜ ⬜ ⬜ ⬜',
+        '⬜ ⚡ ⬜ ⬜',
+        '⬜ ⬜ ⚡ ⬜',
+        '⬜ ⬜ ⬜ ⬜',
+        '✨ ⬜ ⬜ ✨'
+      ],
+      cells: [
+        { row: 0, col: 0, type: 'gold' },
+        { row: 0, col: 3, type: 'gold' },
+        { row: 5, col: 0, type: 'gold' },
+        { row: 5, col: 3, type: 'gold' },
+        { row: 2, col: 1, type: 'electric' },
+        { row: 3, col: 2, type: 'electric' }
+      ]
+    },
+    {
+      key: 'checkers-gold-bonus',
+      name: 'שחמט זהב ובונוס',
+      bonusAmount: 800,
+      relocate: 'static',
+      description: 'דפוס שחמט של זהב ובונוס בשתי שורות תחתונות. כל אריח שנופל למטה משדרג או מקבל בונוס.',
+      strategy: 'משחק רגוע יותר — שחקנים שחוזרים יום-יום ירצו לראות איך הם משפרים את הסטטיסטיקות.',
+      preview: [
+        '⬜ ⬜ ⬜ ⬜',
+        '⬜ ⬜ ⬜ ⬜',
+        '⬜ ⬜ ⬜ ⬜',
+        '✨ 🪙 ✨ 🪙',
+        '🪙 ✨ 🪙 ✨',
+        '⬜ ⬜ ⬜ ⬜'
+      ],
+      cells: [
+        { row: 3, col: 0, type: 'gold' },
+        { row: 3, col: 1, type: 'bonus', amount: 800 },
+        { row: 3, col: 2, type: 'gold' },
+        { row: 3, col: 3, type: 'bonus', amount: 800 },
+        { row: 4, col: 0, type: 'bonus', amount: 800 },
+        { row: 4, col: 1, type: 'gold' },
+        { row: 4, col: 2, type: 'bonus', amount: 800 },
+        { row: 4, col: 3, type: 'gold' }
+      ]
+    },
+    {
+      key: 'ice-puzzle-electric-rescue',
+      name: 'קרח מסוכן + ברק תושיע',
+      bonusAmount: 500,
+      relocate: 'shatter',
+      description: '2 קרחים באמצע + 1 ברק מעליהם. השחקן יכול להשתמש ברדיוס הברק כדי לעשות מיזוגים צמודים לקרח ולהמיס אותו מהר.',
+      strategy: 'פאזל אמיתי — שחקן לומד להפיל אריחי דרגה דומה ליד הברק כדי לנצל את ההרחבה לרדיוס 2.',
+      preview: [
+        '⬜ ⬜ ⬜ ⬜',
+        '⬜ ⚡ ⬜ ⬜',
+        '⬜ ❄️ ❄️ ⬜',
+        '⬜ ⬜ ⬜ ⬜',
+        '⬜ ⬜ ⬜ ⬜',
+        '⬜ ⬜ ⬜ ⬜'
+      ],
+      cells: [
+        { row: 1, col: 1, type: 'electric' },
+        { row: 2, col: 1, type: 'frozen' },
+        { row: 2, col: 2, type: 'frozen' }
+      ]
+    },
+    {
+      key: 'chaos-everything',
+      name: '🌟 הכל יחד — לוח מטורף',
+      bonusAmount: 1000,
+      relocate: 'on_merge',
+      description: '2 ברקים + 2 קרחים + 2 בונוסים + 2 זהב + reshuffle מקסימלי. כל מיזוג מערבב את הכל. אדרנלין רצוף.',
+      strategy: 'ל-VIP / דיילי שיגעון / אירוע השקה. לא לשחקנים חדשים.',
+      preview: [
+        '⚡ ⬜ ⬜ ⚡',
+        '⬜ 🪙 🪙 ⬜',
+        '⬜ ❄️ ❄️ ⬜',
+        '⬜ ⬜ ⬜ ⬜',
+        '⬜ ⬜ ⬜ ⬜',
+        '✨ ⬜ ⬜ ✨'
+      ],
+      cells: [
+        { row: 0, col: 0, type: 'electric' },
+        { row: 0, col: 3, type: 'electric' },
+        { row: 1, col: 1, type: 'bonus', amount: 1000 },
+        { row: 1, col: 2, type: 'bonus', amount: 1000 },
+        { row: 2, col: 1, type: 'frozen' },
+        { row: 2, col: 2, type: 'frozen' },
+        { row: 5, col: 0, type: 'gold' },
+        { row: 5, col: 3, type: 'gold' }
+      ]
+    }
+  ];
+
+  function openSpecialCellsGuide() {
+    renderPatternPresetsList();
+    var ov = document.getElementById('special-cells-guide-overlay');
+    if (ov) ov.style.display = 'flex';
+  }
+  function closeSpecialCellsGuide() {
+    var ov = document.getElementById('special-cells-guide-overlay');
+    if (ov) ov.style.display = 'none';
+  }
+  window.openSpecialCellsGuide = openSpecialCellsGuide;
+  window.closeSpecialCellsGuide = closeSpecialCellsGuide;
+
+  function renderPatternPresetsList() {
+    var host = document.getElementById('pattern-presets-list');
+    if (!host) return;
+    var modeLabels = {
+      static:    '🧊 סטטי',
+      shatter:   '❄️ זז אחרי שבר',
+      on_chain:  '⚡ ערבוב אחרי שרשרת',
+      on_merge:  '🌪 ערבוב אחרי כל מיזוג'
+    };
+    var html = '';
+    for (var i = 0; i < SPECIAL_PATTERN_PRESETS.length; i++) {
+      var p = SPECIAL_PATTERN_PRESETS[i];
+      var previewHtml = p.preview.join('<br>');
+      html +=
+        '<div style="display:flex;gap:12px;padding:12px;background:#FAFAF6;border:1px solid #E5E1D5;border-radius:10px;flex-wrap:wrap">' +
+          '<div style="flex:1;min-width:180px">' +
+            '<div style="font-size:14px;font-weight:800;color:#1C1A18;margin-bottom:4px">' + escHtml(p.name) + '</div>' +
+            '<div style="font-size:11.5px;color:#6F6E68;line-height:1.5;margin-bottom:6px">' + escHtml(p.description) + '</div>' +
+            '<div style="font-size:11px;color:#BA7517;margin-bottom:8px"><strong>אסטרטגיה:</strong> ' + escHtml(p.strategy) + '</div>' +
+            '<div style="font-size:10.5px;color:#6F6E68;margin-bottom:8px">מצב מומלץ: <strong>' + (modeLabels[p.relocate] || p.relocate) + '</strong></div>' +
+            '<button type="button" onclick="applyPatternPreset(\'' + p.key + '\')" style="padding:7px 14px;background:linear-gradient(135deg,#FFB95C,#FF6B9D);color:#FFF;border:none;border-radius:8px;cursor:pointer;font-weight:700;font-size:12px;box-shadow:0 2px 8px rgba(255,107,157,0.35)">⬇ השתמש בתבנית</button>' +
+          '</div>' +
+          '<div style="background:#1C1A18;color:#FFD37A;padding:10px;border-radius:8px;font-family:monospace;font-size:14px;line-height:1.8;text-align:center;letter-spacing:2px;min-width:140px;direction:ltr">' +
+            previewHtml +
+          '</div>' +
+        '</div>';
+    }
+    host.innerHTML = html;
+  }
+
+  function applyPatternPreset(key) {
+    var preset = SPECIAL_PATTERN_PRESETS.find(function(p) { return p.key === key; });
+    if (!preset) return;
+    // Switch the form to special_cells type if it's not already there.
+    var typeEl = document.getElementById('board-type');
+    if (typeEl) { typeEl.value = 'special_cells'; if (typeof onBoardTypeChange === 'function') onBoardTypeChange(); }
+    // Apply cells + bonus amount.
+    var amtEl = document.getElementById('board-bonus-amount');
+    if (amtEl) amtEl.value = String(preset.bonusAmount || 500);
+    setSpecialCellsUI(preset.cells);
+    // Apply recommended reshuffle mode.
+    var relEl = document.getElementById('board-relocate-mode');
+    if (relEl) relEl.value = preset.relocate || 'static';
+    // Auto-fill name if empty.
+    var nameEl = document.getElementById('board-name');
+    if (nameEl && !nameEl.value.trim()) {
+      nameEl.value = preset.name;
+    }
+    // Provide instant feedback + close the guide.
+    if (typeof toast === 'function') toast('✅ תבנית ״' + preset.name + '״ הוחלה — כעת סמן ״פעיל״ ושמור');
+    closeSpecialCellsGuide();
+  }
+  window.applyPatternPreset = applyPatternPreset;
 
   async function saveBoard() {
     const name = document.getElementById('board-name').value.trim();
