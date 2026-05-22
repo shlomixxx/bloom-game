@@ -1829,6 +1829,303 @@
   // picker opens.
   setTimeout(function() { try { fetchTournaments(false); } catch (e) {} }, 1500);
 
+  // ============================================================
+  // Friends Invite + Shared Streak — stage 13 (May 2026)
+  //
+  // The viral loop: every player has a BLOOM-XXXX code already
+  // (from player_profiles). Sharing it via WhatsApp / native share
+  // generates a URL like https://bloom.../?ref=BLOOM-XXXX. When the
+  // recipient opens that URL on first load, the client auto-pops a
+  // "ADD AS FRIEND" overlay → tap → both get 200💎. From then on,
+  // every day both play a dynamic-board game → both get 100💎.
+  // ============================================================
+  var _friendsCache = { data: null, fetchedAt: 0 };
+  var FRIENDS_CACHE_MS = 60 * 1000;
+  function fetchFriends(force) {
+    var deviceId = (typeof getDeviceId === 'function') ? getDeviceId() : '';
+    if (!deviceId) return Promise.resolve(null);
+    if (!force && _friendsCache.data && (Date.now() - _friendsCache.fetchedAt) < FRIENDS_CACHE_MS) {
+      return Promise.resolve(_friendsCache.data);
+    }
+    return fetch('/api/friends/list?deviceId=' + encodeURIComponent(deviceId), { cache: 'no-store' })
+      .then(function(r) { return r.json(); })
+      .catch(function() { return null; })
+      .then(function(d) {
+        if (d && d.ok) {
+          _friendsCache.data = d;
+          _friendsCache.fetchedAt = Date.now();
+        }
+        return d;
+      });
+  }
+  function getCachedFriends() { return _friendsCache.data; }
+  window.fetchFriends = fetchFriends;
+
+  // Send an invite — paired with a server endpoint that resolves the
+  // BLOOM-XXXX code → device_id, creates the friendship symmetrically,
+  // pays both signup bonuses.
+  function sendFriendInvite(friendCode) {
+    var deviceId = (typeof getDeviceId === 'function') ? getDeviceId() : '';
+    var token    = (typeof deviceToken !== 'undefined') ? deviceToken : null;
+    return fetch('/api/friends/invite', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ deviceId: deviceId, token: token, friendCode: friendCode })
+    })
+      .then(function(r) { return r.json(); })
+      .catch(function() { return { ok: false, reason: 'network' }; })
+      .then(function(d) {
+        if (d && d.ok && !d.alreadyFriends && d.signupBonus) {
+          // Update balance immediately.
+          if (typeof updateBalanceDisplay === 'function') {
+            try { updateBalanceDisplay(); } catch (e) {}
+          }
+          // Force-refetch the wallet + friends list.
+          try {
+            if (typeof playerBalance !== 'undefined') playerBalance = (playerBalance | 0) + d.signupBonus;
+            if (typeof updateBalanceDisplay === 'function') updateBalanceDisplay();
+          } catch (e) {}
+          fetchFriends(true);
+        }
+        return d;
+      });
+  }
+  window.sendFriendInvite = sendFriendInvite;
+
+  // Build the shareable invite URL. Format: <origin>/?ref=BLOOM-XXXX
+  function buildInviteUrl() {
+    var code = (typeof getMyPlayerCode === 'function') ? getMyPlayerCode() : '';
+    if (!code) return null;
+    return window.location.origin + '/?ref=' + encodeURIComponent(code);
+  }
+  function getMyPlayerCodeForShare() {
+    // Resolve the player's own BLOOM-XXXX. Prefer the value cached by
+    // the profile/identity module; fall back to localStorage.
+    try {
+      var raw = localStorage.getItem('bloom_player_code');
+      if (raw) return raw;
+    } catch (e) {}
+    try {
+      if (typeof window._myPlayerCode === 'string' && window._myPlayerCode) return window._myPlayerCode;
+    } catch (e) {}
+    return null;
+  }
+  function shareInviteViaWhatsApp() {
+    var url = buildInviteUrl();
+    if (!url) {
+      // Fallback: just share the code if we have it.
+      var code = getMyPlayerCodeForShare();
+      if (!code) {
+        if (typeof __bloomToast === 'function') __bloomToast('עדיין אין לך קוד שחקן · שחק משחק אחד קודם', 'warning');
+        return;
+      }
+      url = window.location.origin + '/?ref=' + encodeURIComponent(code);
+    }
+    var text = '🌸 בוא תשחק איתי BLOOM! משחק מיזוג ממכר בעברית. הצטרף עם הקישור שלי וקבל 200💎 בחינם: ' + url;
+    window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank');
+  }
+  function shareInviteViaNative() {
+    var url = buildInviteUrl();
+    var code = getMyPlayerCodeForShare();
+    if (!url) { url = window.location.origin + '/?ref=' + encodeURIComponent(code || ''); }
+    var text = '🌸 בוא תשחק איתי BLOOM! קבל 200💎 בחינם כשתצטרף עם הקישור שלי';
+    if (navigator.share) {
+      navigator.share({ title: 'BLOOM', text: text, url: url }).catch(function() {});
+    } else {
+      // Clipboard fallback.
+      try {
+        navigator.clipboard.writeText(text + ' ' + url);
+        if (typeof __bloomToast === 'function') __bloomToast('הקישור הועתק ללוח', 'success');
+      } catch (e) {}
+    }
+  }
+  window.shareInviteViaWhatsApp = shareInviteViaWhatsApp;
+  window.shareInviteViaNative   = shareInviteViaNative;
+
+  // ?ref= URL param handler — fires once on boot. If the player isn't
+  // already a friend, pops the soft pre-prompt overlay ("Add דניאל and
+  // get 200💎?"). Stores a "ref_seen" flag in localStorage so we don't
+  // re-prompt across reloads.
+  function handleRefParam() {
+    if (!dynConfigBool('friends_enabled', true)) return;
+    try {
+      var params = new URLSearchParams(window.location.search);
+      var ref = params.get('ref');
+      if (!ref) return;
+      var key = 'bloom_ref_seen:' + ref;
+      if (localStorage.getItem(key) === '1') return;
+      localStorage.setItem(key, '1');
+      // Don't auto-prompt if the player IS the inviter (opens own link).
+      var myCode = getMyPlayerCodeForShare();
+      if (myCode && (ref === myCode || ref === 'BLOOM-' + myCode)) return;
+      // Wait until profile is loaded so the API has a deviceId to pair.
+      setTimeout(function() { showRefPrompt(ref); }, 2000);
+    } catch (e) {}
+  }
+  function showRefPrompt(refCode) {
+    if (document.getElementById('dyn-ref-prompt')) return;
+    var bonus = dynConfigInt('friends_signup_bonus', 200);
+    var ov = document.createElement('div');
+    ov.id = 'dyn-ref-prompt';
+    ov.className = 'dyn-ref-prompt-overlay';
+    ov.innerHTML =
+      '<div class="dyn-ref-prompt-card">' +
+        '<div class="dyn-ref-prompt-icon">👥</div>' +
+        '<div class="dyn-ref-prompt-title">חבר הזמין אותך!</div>' +
+        '<div class="dyn-ref-prompt-sub">קוד החבר: <strong>' + escapeHtml(refCode) + '</strong></div>' +
+        '<div class="dyn-ref-prompt-reward">+' + bonus + '💎</div>' +
+        '<div class="dyn-ref-prompt-bonus-note">לשניכם · יחד מקבלים +100💎 בכל יום ששניכם תשחקו</div>' +
+        '<button class="dyn-ref-prompt-accept">🎁 קבל את הבונוס</button>' +
+        '<button class="dyn-ref-prompt-skip">לא תודה</button>' +
+      '</div>';
+    document.body.appendChild(ov);
+    ov.querySelector('.dyn-ref-prompt-accept').onclick = function() {
+      sendFriendInvite(refCode).then(function(d) {
+        if (d && d.ok) {
+          try { if (typeof soundMilestone === 'function') soundMilestone(5); } catch (e) {}
+          try { if (typeof buzz === 'function') buzz([60, 50, 90]); } catch (e) {}
+          ov.classList.add('dyn-ref-prompt-out');
+          setTimeout(function() { ov.remove(); }, 320);
+        } else {
+          var sub = ov.querySelector('.dyn-ref-prompt-sub');
+          if (sub) sub.innerHTML = '❌ ' + ((d && d.reason) || 'שגיאה');
+        }
+      });
+    };
+    ov.querySelector('.dyn-ref-prompt-skip').onclick = function() {
+      ov.classList.add('dyn-ref-prompt-out');
+      setTimeout(function() { ov.remove(); }, 320);
+    };
+  }
+  window.handleRefParam = handleRefParam;
+  // Run on module load. Wait 1.5s so the identity module finishes
+  // resolving the player's own code first.
+  setTimeout(function() { try { handleRefParam(); } catch (e) {} }, 1500);
+
+  // Friends modal — list + add-by-code + share buttons.
+  function closeFriendsModal() {
+    var el = document.getElementById('dyn-friends-modal');
+    if (el) el.remove();
+  }
+  function showFriendsModal() {
+    closeFriendsModal();
+    var myCode = getMyPlayerCodeForShare();
+    var bonus = dynConfigInt('friends_signup_bonus', 200);
+    var sharedBonus = dynConfigInt('friends_shared_day_bonus', 100);
+    var ov = document.createElement('div');
+    ov.id = 'dyn-friends-modal';
+    ov.className = 'dyn-friends-modal-overlay';
+    ov.innerHTML =
+      '<div class="dyn-friends-modal-card">' +
+        '<div class="dyn-friends-modal-head">' +
+          '<button class="dyn-friends-modal-close" aria-label="סגור">✕</button>' +
+          '<div class="dyn-friends-modal-title">👥 חברים</div>' +
+          '<div class="dyn-friends-modal-sub">הזמן חבר → שניכם מקבלים <strong>' + bonus + '💎</strong> · בכל יום ששניכם תשחקו = <strong>+' + sharedBonus + '💎</strong> כל אחד</div>' +
+        '</div>' +
+        '<div class="dyn-friends-share-row">' +
+          (myCode
+            ? '<div class="dyn-friends-mycode">הקוד שלך: <strong>' + escapeHtml(myCode) + '</strong></div>' +
+              '<div class="dyn-friends-share-btns">' +
+                '<button class="dyn-friends-share-wa">💬 שתף ב-WhatsApp</button>' +
+                '<button class="dyn-friends-share-native">📤 שתף</button>' +
+                '<button class="dyn-friends-share-copy">📋 העתק קישור</button>' +
+              '</div>'
+            : '<div class="dyn-friends-mycode-missing">⏳ הקוד שלך עוד לא זמין · סיים משחק אחד קודם</div>') +
+        '</div>' +
+        '<div class="dyn-friends-add-row">' +
+          '<label class="dyn-friends-add-label">הוסף חבר לפי קוד</label>' +
+          '<div class="dyn-friends-add-input-row">' +
+            '<input type="text" id="dyn-friends-add-input" placeholder="BLOOM-XXXX" maxlength="14" />' +
+            '<button class="dyn-friends-add-btn" id="dyn-friends-add-btn">➕ הוסף</button>' +
+          '</div>' +
+          '<div class="dyn-friends-add-status" id="dyn-friends-add-status"></div>' +
+        '</div>' +
+        '<div class="dyn-friends-list-host" id="dyn-friends-list-host">' +
+          '<div class="board-lb-loading">⏳ טוען חברים...</div>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(ov);
+    ov.querySelector('.dyn-friends-modal-close').onclick = closeFriendsModal;
+    ov.addEventListener('click', function(e) { if (e.target === ov) closeFriendsModal(); });
+    var waBtn = ov.querySelector('.dyn-friends-share-wa');
+    if (waBtn) waBtn.onclick = shareInviteViaWhatsApp;
+    var natBtn = ov.querySelector('.dyn-friends-share-native');
+    if (natBtn) natBtn.onclick = shareInviteViaNative;
+    var copyBtn = ov.querySelector('.dyn-friends-share-copy');
+    if (copyBtn) copyBtn.onclick = function() {
+      var u = buildInviteUrl(); if (!u) return;
+      try { navigator.clipboard.writeText(u); if (typeof __bloomToast === 'function') __bloomToast('הקישור הועתק', 'success'); } catch (e) {}
+    };
+    var addBtn = document.getElementById('dyn-friends-add-btn');
+    var addInput = document.getElementById('dyn-friends-add-input');
+    var addStatus = document.getElementById('dyn-friends-add-status');
+    if (addBtn) addBtn.onclick = function() {
+      var code = (addInput.value || '').trim().toUpperCase();
+      if (!code) return;
+      addBtn.disabled = true; addStatus.textContent = '⏳ מוסיף...';
+      sendFriendInvite(code).then(function(d) {
+        addBtn.disabled = false;
+        if (d && d.ok) {
+          if (d.alreadyFriends) {
+            addStatus.textContent = '✓ כבר חברים';
+            addStatus.style.color = '#6F6E68';
+          } else {
+            addStatus.innerHTML = '✅ נוסף! שניכם קיבלתם <strong>+' + d.signupBonus + '💎</strong>';
+            addStatus.style.color = '#04342C';
+            addInput.value = '';
+            try { if (typeof soundMilestone === 'function') soundMilestone(4); } catch (e) {}
+            // Refresh list.
+            renderFriendsList();
+          }
+        } else {
+          var reasons = {
+            'friend_not_found': '❌ קוד לא נמצא',
+            'cant_self_friend': '❌ אי-אפשר להוסיף את עצמך',
+            'max_friends_reached': '❌ הגעת למקסימום חברים',
+            'disabled': '⚠ המנגנון כבוי',
+            'network': '❌ שגיאת רשת',
+            'rate_limited': '⚠ נסה שוב מאוחר יותר'
+          };
+          addStatus.textContent = reasons[(d && d.reason)] || ('❌ ' + ((d && d.reason) || 'שגיאה'));
+          addStatus.style.color = '#E07A8E';
+        }
+      });
+    };
+    function renderFriendsList() {
+      var host = document.getElementById('dyn-friends-list-host');
+      if (!host) return;
+      fetchFriends(true).then(function(d) {
+        if (!d || !d.ok) {
+          host.innerHTML = '<div class="board-lb-empty">שגיאה בטעינה</div>';
+          return;
+        }
+        var list = d.friends || [];
+        if (!list.length) {
+          host.innerHTML = '<div class="board-lb-empty">🌱 עדיין אין חברים<br><span class="board-lb-empty-sub">שתף את הקוד שלך עם חבר!</span></div>';
+          return;
+        }
+        var html = '<div class="dyn-friends-list-title">החברים שלך · ' + list.length + '</div>';
+        list.forEach(function(f) {
+          var todayPill = f.playedToday
+            ? '<span class="dyn-friend-row-today dyn-friend-row-today-yes">✓ שיחק היום</span>'
+            : '<span class="dyn-friend-row-today dyn-friend-row-today-no">⏰ עדיין לא היום</span>';
+          html += '<div class="dyn-friend-row">' +
+            '<div class="dyn-friend-row-avatar">👤</div>' +
+            '<div class="dyn-friend-row-body">' +
+              '<div class="dyn-friend-row-name">' + escapeHtml(f.name || 'אנונימי') + '</div>' +
+              '<div class="dyn-friend-row-code">' + escapeHtml(f.code || '') + '</div>' +
+            '</div>' +
+            todayPill +
+          '</div>';
+        });
+        host.innerHTML = html;
+      });
+    }
+    renderFriendsList();
+  }
+  window.showFriendsModal = showFriendsModal;
+  window.closeFriendsModal = closeFriendsModal;
+
   // Human-readable labels for themes / shapes so the player can tell the
   // boards apart before clicking — boring rectangular cards = no clicks.
   var THEME_LABELS = {
@@ -1944,6 +2241,32 @@
           '</div>' +
         '</div>';
     }
+    // Friends headline — minimal pill at the top of the header when
+    // the feature is enabled. Shows friend count + "X שיחקו היום" so
+    // the player sees the social FOMO ("דניאל כבר שיחק היום, גם אני").
+    var friendsCached = (typeof getCachedFriends === 'function') ? getCachedFriends() : null;
+    var friendsHeadlineHtml = '';
+    if (dynConfigBool('friends_enabled', true)) {
+      var friendsCount = (friendsCached && friendsCached.friends) ? friendsCached.friends.length : 0;
+      var playedTodayCount = (friendsCached && friendsCached.friends)
+        ? friendsCached.friends.filter(function(f) { return f.playedToday; }).length
+        : 0;
+      var label;
+      if (friendsCount === 0) {
+        label = '👥 הזמן חבר → +' + dynConfigInt('friends_signup_bonus', 200) + '💎 לשניכם';
+      } else if (playedTodayCount > 0) {
+        label = '👥 ' + playedTodayCount + ' מ-' + friendsCount + ' חברים שיחקו היום';
+      } else {
+        label = '👥 ' + friendsCount + (friendsCount === 1 ? ' חבר' : ' חברים') + ' · אף אחד לא שיחק היום';
+      }
+      friendsHeadlineHtml =
+        '<button class="dyn-friends-headline" id="dyn-friends-headline">' +
+          '<span class="dyn-friends-headline-icon">👥</span>' +
+          '<span class="dyn-friends-headline-text">' + label + '</span>' +
+          '<span class="dyn-friends-headline-arrow">›</span>' +
+        '</button>';
+    }
+
     // Live Tournament banner — sits at the absolute TOP of the header
     // when a tournament is live or about to start. Highest-priority
     // surface because tournaments are time-limited community moments.
@@ -2030,6 +2353,7 @@
           '<div class="dyn-boards-title">🎯 לוחות דינמיים</div>' +
           '<div class="dyn-boards-sub">לוחות מיוחדים עם חוקים משלהם. כל לוח — לוח מובילים נפרד, שיא אישי משלך, ומשימות.</div>' +
           tournamentBannerHtml +
+          friendsHeadlineHtml +
           seasonHeadlineHtml +
           questsHeadlineHtml +
           achProgressHtml +
@@ -2068,11 +2392,14 @@
       var tid = parseInt(tBnr.getAttribute('data-tournament-id'), 10);
       if (Number.isFinite(tid)) showTournamentModal(tid);
     };
+    var fBtn = document.getElementById('dyn-friends-headline');
+    if (fBtn) fBtn.onclick = showFriendsModal;
     // Fire a background fetch on every picker open so the cache stays
     // fresh for the NEXT open. The current render uses whatever is in
     // the cache (which may be from a previous game-over's XP grant).
     fetchSeasonStatus(false);
     fetchTournaments(false);
+    fetchFriends(false);
     // Streak-freeze buy button + comeback overlay (if eligible).
     var freezeBuyBtn = document.getElementById('dyn-freeze-buy-btn');
     if (freezeBuyBtn) freezeBuyBtn.onclick = function() {

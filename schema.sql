@@ -938,6 +938,63 @@ CREATE INDEX IF NOT EXISTS idx_tournament_scores_lb
 -- Master toggle.
 INSERT INTO game_config (key, value) VALUES ('tournament_enabled', 'true') ON CONFLICT (key) DO NOTHING;
 
+-- ============================================================
+-- Friends Invite + Shared Streak — stage 13 (May 2026)
+--
+-- Viral loop: player A shares their BLOOM-XXXX code with friend B
+-- via WhatsApp/native share. B opens the URL (with ?ref=BLOOM-XXXX)
+-- or pastes the code in the friends modal → both get a one-time
+-- signup bonus. Recurring: every day BOTH players play a dynamic
+-- game, each gets a shared-day bonus.
+--
+-- Symmetric storage: (device_a, device_b) where device_a is always
+-- the lexicographically-smaller string. Avoids duplicate rows for
+-- the same friendship.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS friendships (
+  device_a    VARCHAR(64) NOT NULL,
+  device_b    VARCHAR(64) NOT NULL,
+  -- Who invited whom (for analytics + audit). Always equals device_a OR device_b.
+  initiator   VARCHAR(64) NOT NULL,
+  -- Signup bonus paid out (idempotent flag).
+  bonus_paid  BOOLEAN NOT NULL DEFAULT false,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (device_a, device_b),
+  CHECK (device_a < device_b)
+);
+
+CREATE INDEX IF NOT EXISTS idx_friendships_device_a ON friendships (device_a);
+CREATE INDEX IF NOT EXISTS idx_friendships_device_b ON friendships (device_b);
+
+-- Per-day shared-play bonus dedup. One row when BOTH players played
+-- a dynamic-board game on the same Asia/Jerusalem date — bonus paid
+-- to both. Prevents double-pay if both finish multiple games same day.
+CREATE TABLE IF NOT EXISTS friendship_shared_days (
+  device_a   VARCHAR(64) NOT NULL,
+  device_b   VARCHAR(64) NOT NULL,
+  date       DATE NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (device_a, device_b, date),
+  CHECK (device_a < device_b)
+);
+
+-- Daily "last played dynamic" tracker — used by the shared-day bonus
+-- to know who played today. Kept separately from daily_scores so the
+-- mode-check stays cheap.
+CREATE TABLE IF NOT EXISTS player_daily_dyn_activity (
+  device_id VARCHAR(64) NOT NULL,
+  date      DATE NOT NULL,
+  game_count INT NOT NULL DEFAULT 1,
+  PRIMARY KEY (device_id, date)
+);
+CREATE INDEX IF NOT EXISTS idx_daily_dyn_activity_date ON player_daily_dyn_activity (date);
+
+-- Master toggle + per-feature rewards.
+INSERT INTO game_config (key, value) VALUES ('friends_enabled',          'true') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('friends_signup_bonus',     '200')  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('friends_shared_day_bonus', '100')  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('friends_max_per_device',   '50')   ON CONFLICT (key) DO NOTHING;
+
 -- Push notifications: master toggle. The push_subscriptions table
 -- is defined earlier in this file (line ~410); we only need the
 -- master toggle here so the admin can disable broadcasts globally.

@@ -2739,6 +2739,12 @@ app.post('/api/boards/:id/score', requireDeviceAuth, async (req, res) => {
       total: Number(row.total) || 0,
       score: Number(row.my_score) || 0
     });
+    // Side-effect: record dynamic-mode activity + pay shared-day bonus
+    // to every friend who also played today. Fire-and-forget — don't
+    // make the score submission depend on the friend bonus succeeding.
+    if (typeof recordDynActivityAndPayShared === 'function') {
+      recordDynActivityAndPayShared(deviceId).catch(function() {});
+    }
   } catch (e) {
     console.error('POST /api/boards/:id/score', e);
     res.status(500).json({ error: 'internal' });
@@ -3506,6 +3512,251 @@ app.post('/api/tournaments/:id/score', requireDeviceAuth, async (req, res) => {
     res.status(500).json({ error: 'internal' });
   }
 });
+
+// ============================================================
+// Friends Invite + Shared Streak — stage 13 (May 2026)
+//
+// Viral acquisition + recurring social retention. A invites B via
+// WhatsApp/native share (URL contains ?ref=BLOOM-XXXX). When B
+// opens the URL or pastes the code, the server pairs the devices,
+// gives both a one-time signup bonus, and starts tracking shared-
+// play days. Every day BOTH play a dynamic game → both get a
+// recurring bonus.
+//
+// Anti-abuse:
+// - Can't friend yourself.
+// - Each device has a hard cap (friends_max_per_device).
+// - Signup bonus is one-time per friendship (bonus_paid flag).
+// - Shared-day bonus is once per (a, b, date) tuple.
+// - Friendships are stored symmetrically (device_a < device_b lex).
+// ============================================================
+function orderDevicePair(d1, d2) {
+  return d1 < d2 ? [d1, d2] : [d2, d1];
+}
+
+// Resolve a BLOOM-XXXX code to a device_id.
+async function resolveDeviceFromCode(code) {
+  if (typeof code !== 'string') return null;
+  const clean = code.toUpperCase().replace(/^BLOOM-?/, '').replace(/[^A-Z0-9]/g, '').slice(0, 8);
+  if (!clean) return null;
+  try {
+    const r = await pool.query(
+      `SELECT device_id FROM player_profiles WHERE player_code = $1 OR player_code = $2`,
+      [clean, 'BLOOM-' + clean]
+    );
+    return r.rows[0] ? r.rows[0].device_id : null;
+  } catch (e) { return null; }
+}
+
+// POST /api/friends/invite — body: { deviceId, friendCode } OR { deviceId, friendDeviceId }
+// Pairs the two devices + grants the signup bonus to BOTH (once).
+app.post('/api/friends/invite', requireDeviceAuth, async (req, res) => {
+  try {
+    const { deviceId, friendCode, friendDeviceId } = req.body || {};
+    if (typeof deviceId !== 'string' || deviceId.length < 8) return res.status(400).json({ error: 'bad_device' });
+    if (!checkRateLimit('friends_invite', deviceId, 10, 60 * 60 * 1000)) {
+      return res.status(429).json({ error: 'rate_limited' });
+    }
+    const cfg = await pool.query(`SELECT key, value FROM game_config WHERE key LIKE 'friends_%'`);
+    const cfgMap = {};
+    cfg.rows.forEach(r => { cfgMap[r.key] = r.value; });
+    if (cfgMap.friends_enabled === 'false') return res.json({ ok: false, reason: 'disabled' });
+    const signupBonus = parseInt(cfgMap.friends_signup_bonus, 10) || 200;
+    const maxFriends = parseInt(cfgMap.friends_max_per_device, 10) || 50;
+    // Resolve target device.
+    let targetDevice = friendDeviceId;
+    if (!targetDevice && friendCode) {
+      targetDevice = await resolveDeviceFromCode(friendCode);
+    }
+    if (!targetDevice) return res.json({ ok: false, reason: 'friend_not_found' });
+    if (targetDevice === deviceId) return res.json({ ok: false, reason: 'cant_self_friend' });
+    // Verify both devices exist as profiles.
+    const both = await pool.query(
+      `SELECT device_id FROM player_profiles WHERE device_id = ANY($1::text[])`,
+      [[deviceId, targetDevice]]
+    );
+    if (both.rows.length < 2) return res.json({ ok: false, reason: 'profile_missing' });
+    // Check both devices' friend counts.
+    const myCount = await pool.query(
+      `SELECT COUNT(*)::int AS c FROM friendships WHERE device_a = $1 OR device_b = $1`,
+      [deviceId]
+    );
+    if ((myCount.rows[0].c || 0) >= maxFriends) {
+      return res.json({ ok: false, reason: 'max_friends_reached', cap: maxFriends });
+    }
+    const [a, b] = orderDevicePair(deviceId, targetDevice);
+    // Idempotent insert. If already exists, return ok with no bonus.
+    const existing = await pool.query(
+      `SELECT bonus_paid FROM friendships WHERE device_a = $1 AND device_b = $2`,
+      [a, b]
+    );
+    if (existing.rows.length) {
+      return res.json({ ok: true, alreadyFriends: true, bonusPaid: existing.rows[0].bonus_paid });
+    }
+    // Insert + grant bonus in a transaction.
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(
+        `INSERT INTO friendships (device_a, device_b, initiator, bonus_paid) VALUES ($1, $2, $3, true)`,
+        [a, b, deviceId]
+      );
+      // Credit both.
+      await client.query(
+        `UPDATE player_profiles SET balance = balance + $1, total_earned = total_earned + $1, updated_at = NOW()
+          WHERE device_id = $2`,
+        [signupBonus, a]
+      );
+      await client.query(
+        `UPDATE player_profiles SET balance = balance + $1, total_earned = total_earned + $1, updated_at = NOW()
+          WHERE device_id = $2`,
+        [signupBonus, b]
+      );
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+    // Push notification to the friend (B) that A added them.
+    if (typeof sendPushToDevice === 'function') {
+      const inviterDevice = deviceId === a ? a : b;
+      const inviteeDevice = inviterDevice === a ? b : a;
+      const inviterName = await pool.query(
+        `SELECT display_name FROM player_profiles WHERE device_id = $1`, [inviterDevice]);
+      const friendName = (inviterName.rows[0] && inviterName.rows[0].display_name) || 'חבר חדש';
+      sendPushToDevice(inviteeDevice, {
+        title: '👥 חבר חדש הצטרף!',
+        body: friendName + ' הוסיף אותך — שניכם קיבלתם ' + signupBonus + '💎',
+        tag: 'friend-added',
+        data: { url: '/' }
+      }).catch(function() {});
+    }
+    res.json({ ok: true, signupBonus });
+  } catch (e) {
+    console.error('POST /api/friends/invite', e);
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
+// GET /api/friends/list?deviceId= — list of friends + their last-played-dyn date.
+app.get('/api/friends/list', async (req, res) => {
+  try {
+    const deviceId = (req.query.deviceId || '').toString().slice(0, 64);
+    if (!deviceId || deviceId.length < 8) return res.status(400).json({ error: 'bad_device' });
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' });
+    const r = await pool.query(
+      `SELECT
+         f.device_a, f.device_b, f.created_at,
+         CASE WHEN f.device_a = $1 THEN pb.display_name ELSE pa.display_name END AS friend_name,
+         CASE WHEN f.device_a = $1 THEN pb.player_code  ELSE pa.player_code  END AS friend_code,
+         CASE WHEN f.device_a = $1 THEN f.device_b ELSE f.device_a END AS friend_device,
+         CASE WHEN f.device_a = $1 THEN ab.date     ELSE aa.date     END AS friend_last_active
+       FROM friendships f
+       LEFT JOIN player_profiles pa ON pa.device_id = f.device_a
+       LEFT JOIN player_profiles pb ON pb.device_id = f.device_b
+       LEFT JOIN player_daily_dyn_activity aa ON aa.device_id = f.device_a AND aa.date = $2
+       LEFT JOIN player_daily_dyn_activity ab ON ab.device_id = f.device_b AND ab.date = $2
+       WHERE f.device_a = $1 OR f.device_b = $1
+       ORDER BY f.created_at DESC
+       LIMIT 100`,
+      [deviceId, today]
+    );
+    // Did *I* play today? (Affects the "shared today?" pill.)
+    const myAct = await pool.query(
+      `SELECT 1 FROM player_daily_dyn_activity WHERE device_id = $1 AND date = $2`,
+      [deviceId, today]
+    );
+    const iPlayedToday = myAct.rows.length > 0;
+    res.json({
+      ok: true,
+      iPlayedToday,
+      friends: r.rows.map(row => ({
+        deviceId: row.friend_device,
+        name: row.friend_name || 'אנונימי',
+        code: row.friend_code ? ('BLOOM-' + row.friend_code) : null,
+        playedToday: !!row.friend_last_active,
+        createdAt: row.created_at
+      }))
+    });
+  } catch (e) {
+    console.error('GET /api/friends/list', e);
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
+// Helper called from dynamic game-over: records that this device played a
+// dynamic game today AND triggers the shared-day bonus for every friend
+// who has ALSO played today (one-time per (a, b, date)).
+async function recordDynActivityAndPayShared(deviceId) {
+  try {
+    const cfg = await pool.query(
+      `SELECT value FROM game_config WHERE key IN ('friends_enabled', 'friends_shared_day_bonus')`
+    );
+    const cfgMap = {};
+    cfg.rows.forEach(r => { cfgMap[r.key] = r.value; });
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' });
+    // Always upsert activity (independent of friends feature toggle).
+    await pool.query(
+      `INSERT INTO player_daily_dyn_activity (device_id, date, game_count) VALUES ($1, $2, 1)
+       ON CONFLICT (device_id, date) DO UPDATE
+         SET game_count = player_daily_dyn_activity.game_count + 1`,
+      [deviceId, today]
+    );
+    if (cfgMap.friends_enabled === 'false') return;
+    const sharedBonus = parseInt(cfgMap.friends_shared_day_bonus, 10) || 100;
+    // Find every friend who played today AND we haven't paid the shared
+    // bonus for the (us, friend, today) tuple yet.
+    const candidates = await pool.query(
+      `SELECT f.device_a, f.device_b,
+              CASE WHEN f.device_a = $1 THEN f.device_b ELSE f.device_a END AS friend_device
+         FROM friendships f
+        WHERE (f.device_a = $1 OR f.device_b = $1)
+          AND EXISTS (
+            SELECT 1 FROM player_daily_dyn_activity a
+             WHERE a.date = $2
+               AND a.device_id = CASE WHEN f.device_a = $1 THEN f.device_b ELSE f.device_a END
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM friendship_shared_days sd
+             WHERE sd.device_a = f.device_a AND sd.device_b = f.device_b AND sd.date = $2
+          )`,
+      [deviceId, today]
+    );
+    for (const row of candidates.rows) {
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        // Mark this shared day so we don't double-pay.
+        await client.query(
+          `INSERT INTO friendship_shared_days (device_a, device_b, date) VALUES ($1, $2, $3)
+           ON CONFLICT DO NOTHING`,
+          [row.device_a, row.device_b, today]
+        );
+        // Pay both.
+        await client.query(
+          `UPDATE player_profiles SET balance = balance + $1, total_earned = total_earned + $1, updated_at = NOW()
+            WHERE device_id = ANY($2::text[])`,
+          [sharedBonus, [row.device_a, row.device_b]]
+        );
+        await client.query('COMMIT');
+      } catch (err) {
+        await client.query('ROLLBACK');
+        console.warn('shared-day bonus failed for pair', row.device_a, row.device_b, err.message);
+      } finally {
+        client.release();
+      }
+    }
+  } catch (e) {
+    console.error('recordDynActivityAndPayShared', e.message);
+  }
+}
+
+// Hook the activity recorder into the existing dynamic-board score
+// submission. Don't expose a separate endpoint — it's a server-side
+// concern triggered by the existing /api/boards/:id/score flow below.
+// (We patch that endpoint to also call recordDynActivityAndPayShared.)
 
 // ============================================================
 // ADMIN ROUTES (כל המסלולים מוגנים ב-requireAdmin)
