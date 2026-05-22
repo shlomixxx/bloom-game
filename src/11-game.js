@@ -2636,6 +2636,22 @@
             }) || [];
           }
         } catch (e) {}
+        // Daily quests progress — updates the 3 quests for today.
+        // Returns array of newly-completed quests (manual claim, so
+        // the over screen shows "✅ הושלמה — לחץ לקבל את הפרס").
+        var __questsCompleted = [];
+        try {
+          if (typeof applyQuestProgressOnGameOver === 'function') {
+            __questsCompleted = applyQuestProgressOnGameOver({
+              boardId: __boardId,
+              board: window._activeDynamicBoard,
+              score: score,
+              tier: highestTier,
+              rank: null,
+              isBoardBest: __isBoardBest
+            }) || [];
+          }
+        } catch (e) {}
         // Fire the global per-board leaderboard submit + render the
         // game-over screen optimistically. The fetch returns rank+total
         // which we paint into the screen once it resolves (so the
@@ -2658,7 +2674,8 @@
           activeBoard: window._activeDynamicBoard,
           boardLeader: { pending: true },
           streakResult: __streakResult,
-          achUnlocks: __achUnlocks
+          achUnlocks: __achUnlocks,
+          questsCompleted: __questsCompleted
         });
         (function() {
           try {
@@ -2700,6 +2717,22 @@
                     });
                     if (post && post.length && typeof renderAchievementUnlockToast === 'function') {
                       post.forEach(function(u) { renderAchievementUnlockToast(u); });
+                    }
+                  } catch (e) {}
+                }
+                // Second-pass quest check for the beat_leader quest.
+                if (rank === 1 && typeof applyQuestProgressOnGameOver === 'function') {
+                  try {
+                    var postQ = applyQuestProgressOnGameOver({
+                      boardId: __boardId,
+                      board: window._activeDynamicBoard,
+                      score: score,
+                      tier: highestTier,
+                      rank: 1,
+                      isBoardBest: __isBoardBest
+                    });
+                    if (postQ && postQ.length && typeof renderQuestCompletedToast === 'function') {
+                      postQ.forEach(function(qd) { renderQuestCompletedToast(qd); });
                     }
                   } catch (e) {}
                 }

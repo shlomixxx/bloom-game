@@ -122,13 +122,21 @@
     // today, that's the highest-priority headline (loss aversion).
     var streakSt = (typeof getDynamicStreak === 'function') ? getDynamicStreak() : { count: 0, last: null };
     var streakDanger = (typeof isStreakInDanger === 'function') && isStreakInDanger();
+    // Quest claimable check — highest-priority headline when present
+    // (a free 💎 sitting unclaimed is louder than any FOMO countdown).
+    var qHomeSum = (typeof questsSummary === 'function') ? questsSummary() : null;
+    var questClaimable = !!(qHomeSum && qHomeSum.claimable > 0);
     if (countEl) {
       // Default label
       var defaultLabel = boards.length + ' ' + (boards.length === 1 ? 'לוח זמין' : 'לוחות זמינים');
       var label;
+      // Quest-claimable: top priority — there's free 💎 waiting.
+      if (questClaimable) {
+        label = '🎁 ' + qHomeSum.claimable + ' פרס' + (qHomeSum.claimable === 1 ? '' : 'ים') + ' של משימה ממתינים לך — לחץ!';
+      }
       // Streak-in-danger overrides FOMO countdowns because losing a
       // streak is a stronger signal than missing a single special board.
-      if (streakDanger) {
+      else if (streakDanger) {
         label = '🔥 הרצף שלך בסכנה! ' + streakSt.count + ' ימים — שחק היום';
       } else if (focus) {
         var u = boardUrgency(focus);
@@ -154,8 +162,10 @@
       countEl.textContent = label;
     }
     // Add urgency CSS class to the button so we can pulse it for critical.
-    btn.classList.remove('fomo-critical', 'fomo-new', 'fomo-soon', 'fomo-streak-danger');
-    if (streakDanger) {
+    btn.classList.remove('fomo-critical', 'fomo-new', 'fomo-soon', 'fomo-streak-danger', 'fomo-quest-claim');
+    if (questClaimable) {
+      btn.classList.add('fomo-quest-claim');
+    } else if (streakDanger) {
       btn.classList.add('fomo-streak-danger');
     } else if (focus) {
       var fu = boardUrgency(focus);
@@ -596,6 +606,271 @@
   window.showAchievementsModal  = showAchievementsModal;
   window.closeAchievementsModal = closeAchievementsModal;
 
+  // ============================================================
+  // Daily quests — 3 fresh tasks every Asia/Jerusalem day.
+  //
+  // The strongest checklist mechanic in F2P games (Fortnite,
+  // Clash Royale, Genshin). Layers on top of streaks + achievements
+  // by giving the player 3 SPECIFIC tasks per day, each with its
+  // own gem reward. Manual claim creates the "I have rewards
+  // waiting!" hook even between play sessions.
+  //
+  // Selection: deterministic per date via mulberry32(hashSeed(date)),
+  // so two players opening the app the same day see the same quests
+  // (community talking-point), but different days vary the menu.
+  // ============================================================
+  var DYN_QUEST_KEY_PREFIX = 'bloom_dyn_quests_';
+  var DYN_QUEST_POOL = [
+    { id: 'play2',     label: 'שחק 2 לוחות דינמיים שונים',  reward:  50, type: 'play_boards', target: 2 },
+    { id: 'play3',     label: 'שחק 3 לוחות דינמיים שונים',  reward: 100, type: 'play_boards', target: 3 },
+    { id: 'score10k',  label: 'הגע ל-10,000+ נקודות בלוח דינמי', reward:  50, type: 'score_any', target: 10000 },
+    { id: 'score30k',  label: 'הגע ל-30,000+ נקודות בלוח דינמי', reward: 100, type: 'score_any', target: 30000 },
+    { id: 'score75k',  label: 'הגע ל-75,000+ נקודות בלוח דינמי', reward: 250, type: 'score_any', target: 75000 },
+    { id: 'tier7',     label: 'הגע לדרגה 7 (יהלום) בלוח דינמי', reward:  75, type: 'tier_any', target: 7 },
+    { id: 'tier8',     label: 'הגע לכתר (דרגה 8) בלוח דינמי',  reward: 200, type: 'tier_any', target: 8 },
+    { id: 'theme',     label: 'שחק לוח חג (themed)',            reward:  60, type: 'play_theme' },
+    { id: 'shape',     label: 'שחק לוח עם צורה',                reward:  60, type: 'play_shape' },
+    { id: 'beatself',  label: 'עבור את השיא האישי שלך באיזשהו לוח', reward: 120, type: 'beat_self' },
+    { id: 'beatleader',label: 'עבור את המוביל באיזשהו לוח (#1)',  reward: 300, type: 'beat_leader' }
+  ];
+  function questDateToday() { return (typeof todayInIsrael === 'function') ? todayInIsrael() : new Date().toISOString().slice(0, 10); }
+  function questStorageKey(date) { return DYN_QUEST_KEY_PREFIX + (date || questDateToday()); }
+  function pickDailyQuests(date) {
+    if (typeof mulberry32 !== 'function' || typeof hashSeed !== 'function') {
+      // Fallback to first 3 if RNG helpers are missing.
+      return DYN_QUEST_POOL.slice(0, 3).map(function(q) {
+        return Object.assign({}, q, { progress: 0, completed: false, claimed: false });
+      });
+    }
+    var rng = mulberry32(hashSeed(date + ':dyn-quests-v1'));
+    var pool = DYN_QUEST_POOL.slice();
+    // Fisher–Yates with deterministic RNG.
+    for (var i = pool.length - 1; i > 0; i--) {
+      var j = Math.floor(rng() * (i + 1));
+      var tmp = pool[i]; pool[i] = pool[j]; pool[j] = tmp;
+    }
+    return pool.slice(0, 3).map(function(q) {
+      return Object.assign({}, q, { progress: 0, completed: false, claimed: false, _seenBoards: [] });
+    });
+  }
+  function getDailyQuests() {
+    var date = questDateToday();
+    var key = questStorageKey(date);
+    try {
+      var raw = localStorage.getItem(key);
+      if (raw) {
+        var parsed = JSON.parse(raw);
+        if (parsed && Array.isArray(parsed.quests)) return parsed;
+      }
+    } catch (e) {}
+    var fresh = { date: date, quests: pickDailyQuests(date) };
+    try { localStorage.setItem(key, JSON.stringify(fresh)); } catch (e) {}
+    // Best-effort cleanup — keep only today's row.
+    try {
+      for (var k = 0; k < localStorage.length; k++) {
+        var name = localStorage.key(k);
+        if (name && name.indexOf(DYN_QUEST_KEY_PREFIX) === 0 && name !== key) {
+          // Defer removal so we don't mutate while iterating.
+          setTimeout((function(n) { return function() { try { localStorage.removeItem(n); } catch (e) {} }; })(name), 0);
+        }
+      }
+    } catch (e) {}
+    return fresh;
+  }
+  function saveDailyQuests(obj) {
+    try { localStorage.setItem(questStorageKey(obj.date), JSON.stringify(obj)); } catch (e) {}
+  }
+  // Called after a dynamic-mode game-over. Updates progress on every
+  // active quest, returns the array of quests that JUST completed.
+  function applyQuestProgressOnGameOver(ctx) {
+    var state = getDailyQuests();
+    var justCompleted = [];
+    state.quests.forEach(function(q) {
+      if (q.completed) return;
+      var prevProgress = q.progress | 0;
+      if (q.type === 'play_boards') {
+        if (q._seenBoards.indexOf(ctx.boardId) === -1) {
+          q._seenBoards.push(ctx.boardId);
+          q.progress = q._seenBoards.length;
+        }
+      } else if (q.type === 'score_any') {
+        if (ctx.score > q.progress) q.progress = ctx.score;
+      } else if (q.type === 'tier_any') {
+        if (ctx.tier > q.progress) q.progress = ctx.tier;
+      } else if (q.type === 'play_theme') {
+        if (ctx.board && ctx.board.definition && ctx.board.definition.theme_id) {
+          q.progress = 1;
+        }
+      } else if (q.type === 'play_shape') {
+        if (ctx.board && ctx.board.definition && ctx.board.definition.shape_id) {
+          q.progress = 1;
+        }
+      } else if (q.type === 'beat_self') {
+        if (ctx.isBoardBest) q.progress = 1;
+      } else if (q.type === 'beat_leader') {
+        if (ctx.rank === 1) q.progress = 1;
+      }
+      var newlyCompleted = q.progress >= (q.target || 1) && !q.completed;
+      if (newlyCompleted) {
+        q.completed = true;
+        if (q.progress < (q.target || 1)) q.progress = (q.target || 1);
+        justCompleted.push(Object.assign({}, q));
+      }
+      // Hint: if the quest changed in any way, still safe to persist.
+    });
+    saveDailyQuests(state);
+    return justCompleted;
+  }
+  function claimQuestReward(questId) {
+    var state = getDailyQuests();
+    var q = state.quests.find(function(x) { return x.id === questId; });
+    if (!q) return { ok: false, reason: 'not_found' };
+    if (!q.completed) return { ok: false, reason: 'not_completed' };
+    if (q.claimed) return { ok: false, reason: 'already_claimed' };
+    q.claimed = true;
+    saveDailyQuests(state);
+    if (typeof earnCredits === 'function') {
+      try { earnCredits('event_gift', { amount: q.reward, daily_quest_id: q.id }); } catch (e) {}
+    }
+    return { ok: true, reward: q.reward };
+  }
+  function questsSummary() {
+    var st = getDailyQuests();
+    var done = st.quests.filter(function(q) { return q.completed; }).length;
+    var claimable = st.quests.filter(function(q) { return q.completed && !q.claimed; }).length;
+    var total = st.quests.length;
+    return { done: done, total: total, claimable: claimable, quests: st.quests };
+  }
+  window.getDailyQuests              = getDailyQuests;
+  window.applyQuestProgressOnGameOver = applyQuestProgressOnGameOver;
+  window.claimQuestReward            = claimQuestReward;
+  window.questsSummary               = questsSummary;
+  window.DYN_QUEST_POOL              = DYN_QUEST_POOL;
+
+  // Floating toast for quest completions that fire AFTER the over
+  // screen renders (the beat_leader quest needs the leaderboard
+  // fetch to resolve before we know rank).
+  function renderQuestCompletedToast(q) {
+    if (!q) return;
+    var t = document.createElement('div');
+    t.className = 'dyn-quest-toast';
+    t.innerHTML =
+      '<span class="dyn-quest-toast-icon">🎯</span>' +
+      '<span class="dyn-quest-toast-body">' +
+        '<strong>משימה הושלמה!</strong> ' + escapeHtml(q.label || '') +
+        '<span class="dyn-quest-toast-reward">+' + (q.reward || 0) + '💎 ממתין במודאל המשימות</span>' +
+      '</span>';
+    document.body.appendChild(t);
+    setTimeout(function() { t.classList.add('dyn-ach-toast-out'); setTimeout(function() { t.remove(); }, 320); }, 4500);
+  }
+  window.renderQuestCompletedToast = renderQuestCompletedToast;
+
+  // ============================================================
+  // Quests modal — 3 rows per day, each with progress bar + claim.
+  // The claim button is the dopamine hit (Clash Royale pattern):
+  // - locked (not completed): dimmed, shows "X / Y" progress bar
+  // - completed but unclaimed: pulsing gold "🎁 קבל +N💎" button
+  // - claimed: ✓ silent state, "✓ נאסף"
+  // ============================================================
+  function closeQuestsModal() {
+    var el = document.getElementById('dyn-quests-modal');
+    if (el) el.remove();
+  }
+  function renderQuestRow(q) {
+    var target = q.target || 1;
+    var progress = Math.min(q.progress || 0, target);
+    var pct = Math.round((progress / target) * 100);
+    var stateCls = q.claimed ? 'claimed' : (q.completed ? 'completed' : 'locked');
+    var ctaHtml = '';
+    if (q.claimed) {
+      ctaHtml = '<div class="dyn-quest-row-cta dyn-quest-row-cta-claimed">✓ נאסף</div>';
+    } else if (q.completed) {
+      ctaHtml = '<button class="dyn-quest-row-cta dyn-quest-row-cta-claim" data-claim="' + q.id + '">🎁 קבל +' + q.reward + '💎</button>';
+    } else {
+      ctaHtml = '<div class="dyn-quest-row-cta dyn-quest-row-cta-locked">+' + q.reward + '💎</div>';
+    }
+    var progressLabel;
+    if (q.type === 'score_any' || q.type === 'tier_any') {
+      progressLabel = (progress).toLocaleString() + ' / ' + (target).toLocaleString();
+    } else if (q.type === 'play_boards') {
+      progressLabel = progress + ' / ' + target;
+    } else {
+      progressLabel = q.completed ? '✓ הושלמה' : '⏳ לא הושלמה';
+    }
+    return (
+      '<div class="dyn-quest-row dyn-quest-row-' + stateCls + '">' +
+        '<div class="dyn-quest-row-head">' +
+          '<div class="dyn-quest-row-label">' + escapeHtml(q.label || '') + '</div>' +
+          ctaHtml +
+        '</div>' +
+        '<div class="dyn-quest-row-bar"><div class="dyn-quest-row-fill" style="width:' + pct + '%"></div></div>' +
+        '<div class="dyn-quest-row-sub">' + progressLabel + '</div>' +
+      '</div>'
+    );
+  }
+  function showQuestsModal() {
+    closeQuestsModal();
+    var sum = questsSummary();
+    var body = sum.quests.map(renderQuestRow).join('');
+    var overlay = document.createElement('div');
+    overlay.id = 'dyn-quests-modal';
+    overlay.className = 'dyn-quests-modal-overlay';
+    overlay.innerHTML =
+      '<div class="dyn-quests-modal-card">' +
+        '<div class="dyn-quests-modal-head">' +
+          '<button class="dyn-quests-modal-close" aria-label="סגור">✕</button>' +
+          '<div class="dyn-quests-modal-title">🎯 משימות יומיות</div>' +
+          '<div class="dyn-quests-modal-sub">3 משימות מתחדשות כל יום בחצות (אסיה/ירושלים)</div>' +
+        '</div>' +
+        '<div class="dyn-quests-modal-body">' + body + '</div>' +
+        '<div class="dyn-quests-modal-foot">' +
+          '<button class="dyn-quests-modal-back">חזור</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(overlay);
+    overlay.querySelector('.dyn-quests-modal-close').onclick = closeQuestsModal;
+    overlay.querySelector('.dyn-quests-modal-back').onclick = closeQuestsModal;
+    overlay.addEventListener('click', function(e) {
+      if (e.target === overlay) closeQuestsModal();
+    });
+    // Wire claim buttons.
+    overlay.querySelectorAll('[data-claim]').forEach(function(btn) {
+      btn.onclick = function() {
+        var qid = btn.getAttribute('data-claim');
+        var res = claimQuestReward(qid);
+        if (res && res.ok) {
+          // Replace just the claim button with the claimed state +
+          // play a quick celebration. Avoid full re-render so the
+          // user keeps scroll position.
+          var row = btn.closest('.dyn-quest-row');
+          if (row) {
+            row.classList.remove('dyn-quest-row-completed');
+            row.classList.add('dyn-quest-row-claimed');
+            btn.outerHTML = '<div class="dyn-quest-row-cta dyn-quest-row-cta-claimed">✓ נאסף</div>';
+          }
+          try { if (typeof soundMilestone === 'function') soundMilestone(3); } catch (e) {}
+          try { if (typeof buzz === 'function') buzz([30, 30, 60]); } catch (e) {}
+          // Update the picker headline button if the picker is still open.
+          var hBtn = document.getElementById('dyn-quests-headline');
+          if (hBtn && typeof questsSummary === 'function') {
+            var ns = questsSummary();
+            var textEl = hBtn.querySelector('.dyn-quests-headline-text');
+            if (textEl) {
+              var cp = ns.claimable > 0
+                ? ' <span class="dyn-quests-headline-claim">' + ns.claimable + ' 🎁 לקבל</span>'
+                : '';
+              textEl.innerHTML = 'משימות יומיות: ' + ns.done + ' / ' + ns.total + cp;
+            }
+            if (ns.claimable > 0) hBtn.setAttribute('data-claimable', '1');
+            else hBtn.removeAttribute('data-claimable');
+          }
+        }
+      };
+    });
+  }
+  window.showQuestsModal  = showQuestsModal;
+  window.closeQuestsModal = closeQuestsModal;
+
   // Human-readable labels for themes / shapes so the player can tell the
   // boards apart before clicking — boring rectangular cards = no clicks.
   var THEME_LABELS = {
@@ -707,6 +982,25 @@
           '</div>' +
         '</div>';
     }
+    // Daily quests headline — sits at the very top of the header.
+    // Shows progress + "claim N rewards" hint if any are completed
+    // but unclaimed.
+    var qSum = (typeof questsSummary === 'function') ? questsSummary() : null;
+    var questsHeadlineHtml = '';
+    if (qSum && qSum.total > 0) {
+      var claimablePill = qSum.claimable > 0
+        ? ' <span class="dyn-quests-headline-claim">' + qSum.claimable + ' 🎁 לקבל</span>'
+        : '';
+      questsHeadlineHtml =
+        '<button class="dyn-quests-headline" id="dyn-quests-headline"' + (qSum.claimable > 0 ? ' data-claimable="1"' : '') + '>' +
+          '<span class="dyn-quests-headline-icon">🎯</span>' +
+          '<span class="dyn-quests-headline-text">' +
+            'משימות יומיות: ' + qSum.done + ' / ' + qSum.total +
+            claimablePill +
+          '</span>' +
+          '<span class="dyn-quests-headline-arrow">›</span>' +
+        '</button>';
+    }
     // Achievement progress headline — "X / Y total" pill that opens
     // the achievements modal on click. Visible regardless of streak
     // state since it's a separate completionist track.
@@ -739,6 +1033,7 @@
           '<button class="dyn-boards-close" aria-label="סגור">✕</button>' +
           '<div class="dyn-boards-title">🎯 לוחות דינמיים</div>' +
           '<div class="dyn-boards-sub">בחר לוח לסשן חד-פעמי. הניקוד נשמר בלוח המובילים של הלוח הזה.</div>' +
+          questsHeadlineHtml +
           achProgressHtml +
           streakBannerHtml +
         '</div>' +
@@ -750,6 +1045,8 @@
     document.body.appendChild(overlay);
     var achBtn = document.getElementById('dyn-ach-progress-btn');
     if (achBtn) achBtn.onclick = showAchievementsModal;
+    var qBtn = document.getElementById('dyn-quests-headline');
+    if (qBtn) qBtn.onclick = showQuestsModal;
 
     var listEl = document.getElementById('dyn-boards-list');
     if (!boards.length) {

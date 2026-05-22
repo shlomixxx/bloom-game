@@ -6468,6 +6468,266 @@ html[data-theme="dark"] .dyn-ach-pb-badge.earned .dyn-ach-pb-label,
 html[data-theme="dark"] .dyn-ach-pb-badge.earned .dyn-ach-pb-reward { color: #6B3D00; }
 
 /* ============================================================
+   Daily Quests
+   ============================================================ */
+.home-v2-boards.fomo-quest-claim {
+  background: linear-gradient(135deg,#D8F4E6,#9FE1CB);
+  border-color: rgba(4,52,44,0.35);
+  animation: dynBoardCardCritical 1.8s ease-in-out infinite;
+}
+
+/* Picker header quests button */
+.dyn-quests-headline {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  margin-top: 10px;
+  padding: 10px 14px;
+  border: none;
+  border-radius: 12px;
+  background: linear-gradient(135deg,#E6F5EE,#9FE1CB);
+  color: #04342C;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: filter 0.1s, transform 0.1s;
+}
+.dyn-quests-headline[data-claimable] {
+  background: linear-gradient(135deg,#9FE1CB,#4FBD8B);
+  color: #FFFFFF;
+  box-shadow: 0 0 10px rgba(79,189,139,0.4);
+  animation: dynChipKing 1.6s ease-in-out infinite;
+}
+.dyn-quests-headline:hover { filter: brightness(1.04); }
+.dyn-quests-headline:active { transform: scale(0.99); }
+.dyn-quests-headline-icon { font-size: 20px; }
+.dyn-quests-headline-text { flex: 1; text-align: right; }
+.dyn-quests-headline-claim {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.35);
+  color: inherit;
+  font-size: 11.5px;
+  font-weight: 900;
+}
+.dyn-quests-headline-arrow { font-size: 18px; opacity: 0.6; }
+
+/* Game-over quest banner */
+.over-quest-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 8px auto;
+  padding: 12px 16px;
+  border-radius: 14px;
+  max-width: 360px;
+  direction: rtl;
+  background: linear-gradient(135deg, #4FBD8B, #04342C);
+  color: #FFFFFF;
+  box-shadow: 0 0 20px rgba(79,189,139,0.45);
+  animation: bestDeltaIn 0.5s cubic-bezier(.2,1.2,.4,1), boardBestPulse 1.6s ease-in-out 0.5s infinite;
+}
+.over-quest-icon { font-size: 28px; flex-shrink: 0; }
+.over-quest-body { flex: 1; min-width: 0; }
+.over-quest-title { font-size: 14px; font-weight: 800; }
+.over-quest-title strong { font-weight: 900; }
+.over-quest-reward { font-size: 13px; font-weight: 800; margin-top: 4px; }
+
+/* Floating quest toast (late completions) */
+.dyn-quest-toast {
+  position: fixed;
+  top: 22px; left: 50%;
+  transform: translateX(-50%);
+  z-index: 10050;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 18px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #4FBD8B, #04342C);
+  color: #FFFFFF;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  box-shadow: 0 8px 22px rgba(79,189,139,0.45);
+  direction: rtl;
+  max-width: 92vw;
+  animation: dynAchToastIn 0.35s cubic-bezier(.2,1.2,.4,1);
+}
+.dyn-quest-toast-icon { font-size: 22px; }
+.dyn-quest-toast-body strong { font-weight: 900; }
+.dyn-quest-toast-reward {
+  display: block;
+  margin-top: 4px;
+  font-weight: 800;
+  opacity: 0.95;
+}
+
+/* Quests modal */
+.dyn-quests-modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.55);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  z-index: 10025;
+  display: flex; align-items: center; justify-content: center;
+  padding: 14px;
+  animation: dynBoardsFadeIn 0.2s ease;
+}
+.dyn-quests-modal-card {
+  width: 100%;
+  max-width: 460px;
+  max-height: 88vh;
+  background: #FAFAF6;
+  border-radius: 18px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.35);
+  animation: dynBoardsSlideUp 0.25s cubic-bezier(.2,1.2,.4,1);
+  direction: rtl;
+}
+.dyn-quests-modal-head {
+  position: relative;
+  padding: 18px 18px 14px;
+  background: linear-gradient(135deg,#9FE1CB,#4FBD8B);
+  border-bottom: 1px solid rgba(4,52,44,0.25);
+  color: #FFFFFF;
+}
+.dyn-quests-modal-close {
+  position: absolute;
+  top: 10px; left: 10px;
+  width: 32px; height: 32px;
+  background: rgba(255,255,255,0.25);
+  border: none; border-radius: 50%;
+  font-size: 14px;
+  cursor: pointer;
+  color: #FFFFFF;
+}
+.dyn-quests-modal-title {
+  font-size: 16px; font-weight: 800;
+  text-align: center;
+  margin-bottom: 4px;
+}
+.dyn-quests-modal-sub {
+  font-size: 12px; text-align: center; opacity: 0.92;
+}
+.dyn-quests-modal-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 14px;
+  background: #FAFAF6;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.dyn-quest-row {
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid #E5E1D5;
+  background: #FFFFFF;
+}
+.dyn-quest-row-completed {
+  background: linear-gradient(135deg, rgba(79,189,139,0.16), rgba(159,225,203,0.20));
+  border-color: rgba(4,52,44,0.35);
+}
+.dyn-quest-row-claimed {
+  background: #F4F1E8;
+  opacity: 0.7;
+}
+.dyn-quest-row-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.dyn-quest-row-label {
+  font-size: 13.5px; font-weight: 800;
+  color: #1C1A18;
+  flex: 1;
+  line-height: 1.35;
+}
+.dyn-quest-row-cta {
+  flex-shrink: 0;
+  font-size: 12.5px; font-weight: 900;
+  padding: 7px 12px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.dyn-quest-row-cta-locked {
+  background: #F4F1E8;
+  color: #6F6E68;
+  border: 1px dashed #E5E1D5;
+}
+.dyn-quest-row-cta-claim {
+  background: linear-gradient(135deg, #FFD86B, #FF6B9D);
+  color: #FFFFFF;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  box-shadow: 0 0 10px rgba(255,107,157,0.4);
+  animation: dynChipKing 1.4s ease-in-out infinite;
+}
+.dyn-quest-row-cta-claim:hover  { filter: brightness(1.06); }
+.dyn-quest-row-cta-claim:active { transform: scale(0.97); }
+.dyn-quest-row-cta-claimed {
+  background: rgba(4,52,44,0.10);
+  color: #04342C;
+  border: 1px solid rgba(4,52,44,0.25);
+}
+.dyn-quest-row-bar {
+  height: 8px;
+  background: #F4F1E8;
+  border-radius: 999px;
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+.dyn-quest-row-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #4FBD8B, #9FE1CB);
+  transition: width 0.4s cubic-bezier(.2,1.2,.4,1);
+}
+.dyn-quest-row-completed .dyn-quest-row-fill,
+.dyn-quest-row-claimed .dyn-quest-row-fill {
+  background: linear-gradient(90deg, #FFD86B, #FF6B9D);
+}
+.dyn-quest-row-sub {
+  font-size: 11px;
+  color: #6F6E68;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.dyn-quests-modal-foot {
+  padding: 12px 14px;
+  border-top: 1px solid #F2EFE6;
+  background: #F4F1E8;
+}
+.dyn-quests-modal-back {
+  width: 100%;
+  background: linear-gradient(135deg, #4FBD8B, #04342C);
+  border: none;
+  color: #FFFFFF;
+  padding: 11px;
+  border-radius: 10px;
+  font-weight: 800;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 14px;
+  box-shadow: 0 2px 8px rgba(79,189,139,0.35);
+}
+html[data-theme="dark"] .dyn-quests-modal-card { background: #2A2724; }
+html[data-theme="dark"] .dyn-quests-modal-body { background: #2A2724; }
+html[data-theme="dark"] .dyn-quests-modal-foot { background: #1F1D1A; border-color: rgba(255,255,255,0.06); }
+html[data-theme="dark"] .dyn-quest-row { background: #1F1D1A; border-color: rgba(255,255,255,0.08); }
+html[data-theme="dark"] .dyn-quest-row-label { color: #FAFAF6; }
+html[data-theme="dark"] .dyn-quest-row-sub { color: #B5B3AC; }
+html[data-theme="dark"] .dyn-quest-row-cta-locked { background: #2C2926; color: #B5B3AC; border-color: rgba(255,255,255,0.08); }
+html[data-theme="dark"] .dyn-quest-row-claimed { background: #2C2926; }
+
+/* ============================================================
    In-game target chip (dynamic mode "beat your score" loop)
    ============================================================ */
 .dyn-target-chip {

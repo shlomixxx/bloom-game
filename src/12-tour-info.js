@@ -649,6 +649,26 @@
             }
             return html;
           })() +
+          (function() {
+            // Daily quest completions — green pulsing card per quest
+            // completed THIS game. Sends the player to claim via the
+            // picker → quests modal.
+            var qcomp = opts.questsCompleted || [];
+            if (!qcomp.length) return '';
+            var html = '';
+            for (var i = 0; i < qcomp.length; i++) {
+              var q = qcomp[i];
+              html +=
+                '<div class="over-quest-banner">' +
+                  '<div class="over-quest-icon">🎯</div>' +
+                  '<div class="over-quest-body">' +
+                    '<div class="over-quest-title">משימה הושלמה! <strong>' + escapeHtml(q.label || '') + '</strong></div>' +
+                    '<div class="over-quest-reward">🎁 ' + (q.reward || 0) + '💎 ממתין במודאל המשימות</div>' +
+                  '</div>' +
+                '</div>';
+            }
+            return html;
+          })() +
           rankTierHtml +
           rivalHtml +
           continueHtml +
