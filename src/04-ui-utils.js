@@ -210,6 +210,10 @@
       '</div>' +
       '<div class="mute-item mute-item-all" data-kind="all">' +
         '<div class="mute-item-label">השתק הכל</div>' +
+      '</div>' +
+      '<div class="mute-item mute-item-reset" data-kind="reset" style="background:linear-gradient(135deg,#9FE1CB,#4FBD8B);color:#04342C;cursor:pointer">' +
+        '<div class="mute-item-label" style="font-weight:800">🔊 איפוס סאונד</div>' +
+        '<div class="mute-item-state" style="font-size:11px;opacity:0.8">לחיצה חוזרת אם הסאונד נעלם</div>' +
       '</div>';
     parent.appendChild(menu);
     syncMuteMenuItems();
@@ -235,6 +239,15 @@
     if (allBtn) allBtn.onclick = function(e) {
       e.stopPropagation();
       if (isMusicMuted() && isSfxMuted()) unmuteAll(); else muteAll();
+    };
+
+    // Audio reset button — re-creates the audio context, restores volumes
+    // to defaults if they collapsed to zero, plays a test chirp. Recovery
+    // path for the "I lost all sound" complaint.
+    const resetBtn = menu.querySelector('[data-kind="reset"]');
+    if (resetBtn) resetBtn.onclick = function(e) {
+      e.stopPropagation();
+      if (typeof window.__bloomResetAudio === 'function') window.__bloomResetAudio();
     };
 
     // Theme cycle: auto → light → dark → auto

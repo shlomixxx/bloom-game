@@ -2505,22 +2505,22 @@
     return audioCtx;
   }
 
-  // Belt-and-suspenders: register a one-shot first-interaction listener so
-  // audio unlocks even if no code path through ensureAudio() runs inside the
-  // first click handler. Removes itself after the first successful resume.
-  (function attachFirstGestureUnlock() {
-    var unlocked = false;
-    function tryUnlock() {
-      if (unlocked) return;
-      unlocked = true;
-      ensureAudio();
-      document.removeEventListener('pointerdown', tryUnlock, true);
-      document.removeEventListener('touchstart', tryUnlock, true);
-      document.removeEventListener('keydown', tryUnlock, true);
-    }
+  // Persistent gesture-unlock (was one-shot — recovered audio only once,
+  // and any later context-suspend stayed permanently broken). Now every
+  // user gesture re-runs ensureAudio. The check inside ensureAudio is
+  // a no-op when the context is already running, so the cost is zero
+  // when audio is already happy.
+  (function attachGestureUnlock() {
+    function tryUnlock() { try { ensureAudio(); } catch (e) {} }
     document.addEventListener('pointerdown', tryUnlock, true);
     document.addEventListener('touchstart', tryUnlock, true);
     document.addEventListener('keydown', tryUnlock, true);
+    // Also recover audio when the tab becomes visible again — iOS
+    // Safari and some Chrome versions suspend the context on tab blur
+    // and don't auto-resume on visibility change.
+    document.addEventListener('visibilitychange', function() {
+      if (!document.hidden) try { ensureAudio(); } catch (e) {}
+    });
   })();
 
   /* Music manager: 3 tracks (lobby/game/fail) with 0.5s cross-fade */
@@ -2833,6 +2833,68 @@
     setSfxVolume(sfxVolume > 0 ? sfxVolume : DEFAULT_SFX_VOLUME);
   }
 
+  // Audio reset — exposed to the mute menu button + window for devtools.
+  // Recovers from "I lost all sound" by:
+  //   1. Discarding the existing AudioContext (which may be stuck suspended)
+  //   2. Restoring volumes to defaults if they collapsed to zero
+  //   3. Creating a fresh ctx and playing a confirmation tone
+  function __bloomResetAudio() {
+    try {
+      // Tear down the old ctx + nodes if any
+      if (audioCtx) {
+        try {
+          Object.keys(MUSIC_TRACKS).forEach(function(k) {
+            var t = MUSIC_TRACKS[k];
+            if (t.source) { try { t.source.stop(); } catch (e) {} }
+            t.source = null;
+            t.gain = null;
+            t.buffer = null;
+            t.loadingPromise = null;
+            t.fadeTimer = null;
+          });
+        } catch (e) {}
+        try { audioCtx.close(); } catch (e) {}
+        audioCtx = null;
+      }
+      // Restore volumes to sensible defaults if user accidentally
+      // dragged them to zero.
+      var resetMusicVol = (musicVolume < VOL_MUTE_THRESHOLD) ? DEFAULT_MUSIC_VOLUME : musicVolume;
+      var resetSfxVol   = (sfxVolume   < VOL_MUTE_THRESHOLD) ? DEFAULT_SFX_VOLUME   : sfxVolume;
+      musicVolume = resetMusicVol;
+      sfxVolume   = resetSfxVol;
+      saveVolumeState();
+      // Update mute UI to reflect the recovered volumes.
+      if (typeof updateMuteUI === 'function') { try { updateMuteUI(); } catch (e) {} }
+      if (typeof syncMuteMenuItems === 'function') { try { syncMuteMenuItems(); } catch (e) {} }
+      // Create a fresh ctx + confirm with a chirp.
+      ensureAudio();
+      setTimeout(function() {
+        try { tone({ freq: 587, duration: 0.10, type: 'sine', vol: 0.18 }); } catch (e) {}
+        setTimeout(function() {
+          try { tone({ freq: 784, duration: 0.12, type: 'sine', vol: 0.18 }); } catch (e) {}
+        }, 130);
+      }, 80);
+      // Re-arm music if a track was playing.
+      try {
+        if (currentTrack && !isMusicMuted()) {
+          fadeInTrack(currentTrack, MUSIC_FADE_MS, musicVolume);
+        }
+      } catch (e) {}
+      if (typeof showTransientBanner === 'function') {
+        try {
+          showTransientBanner({
+            tag: 'audio-reset', holdMs: 1400, fadeMs: 300,
+            style: 'position:fixed;top:18%;left:50%;transform:translate(-50%,-50%);z-index:9999;background:linear-gradient(135deg,#9FE1CB,#4FBD8B);color:#04342C;border-radius:14px;padding:12px 18px;font-weight:800;box-shadow:0 6px 22px rgba(79,189,139,0.4);direction:rtl;text-align:center',
+            html: '🔊 הסאונד אופחל מחדש'
+          });
+        } catch (e) {}
+      }
+    } catch (err) {
+      console.warn('[audio-reset] failed:', err);
+    }
+  }
+  window.__bloomResetAudio = __bloomResetAudio;
+
   /* Mute popover menu — 3 choices: music, sfx, all */
   const SVG_MUSIC_NOTE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>';
   const SVG_BELL = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>';
@@ -3063,6 +3125,10 @@
       '</div>' +
       '<div class="mute-item mute-item-all" data-kind="all">' +
         '<div class="mute-item-label">השתק הכל</div>' +
+      '</div>' +
+      '<div class="mute-item mute-item-reset" data-kind="reset" style="background:linear-gradient(135deg,#9FE1CB,#4FBD8B);color:#04342C;cursor:pointer">' +
+        '<div class="mute-item-label" style="font-weight:800">🔊 איפוס סאונד</div>' +
+        '<div class="mute-item-state" style="font-size:11px;opacity:0.8">לחיצה חוזרת אם הסאונד נעלם</div>' +
       '</div>';
     parent.appendChild(menu);
     syncMuteMenuItems();
@@ -3088,6 +3154,15 @@
     if (allBtn) allBtn.onclick = function(e) {
       e.stopPropagation();
       if (isMusicMuted() && isSfxMuted()) unmuteAll(); else muteAll();
+    };
+
+    // Audio reset button — re-creates the audio context, restores volumes
+    // to defaults if they collapsed to zero, plays a test chirp. Recovery
+    // path for the "I lost all sound" complaint.
+    const resetBtn = menu.querySelector('[data-kind="reset"]');
+    if (resetBtn) resetBtn.onclick = function(e) {
+      e.stopPropagation();
+      if (typeof window.__bloomResetAudio === 'function') window.__bloomResetAudio();
     };
 
     // Theme cycle: auto → light → dark → auto
