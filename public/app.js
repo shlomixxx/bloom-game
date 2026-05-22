@@ -5765,6 +5765,20 @@
         } else {
           chips.push('<span class="dyn-boards-chip dyn-boards-chip-pioneer">🌱 חדש לך</span>');
         }
+        // Global per-board leader — the social half of the addiction loop.
+        // When you're #1: special crown chip. Otherwise: shows the leader's
+        // score as a clear target.
+        if (b.leader_name && b.leader_score) {
+          var imLeader = best && best.score >= b.leader_score;
+          if (imLeader) {
+            chips.push('<span class="dyn-boards-chip dyn-boards-chip-king">👑 אתה מוביל!</span>');
+          } else {
+            chips.push('<span class="dyn-boards-chip dyn-boards-chip-leader">👑 ' + escapeHtml(b.leader_name) + ': ' + formatBoardScore(b.leader_score) + '</span>');
+          }
+        }
+        if (b.players && b.players > 0) {
+          chips.push('<span class="dyn-boards-chip dyn-boards-chip-players">👥 ' + b.players + ' שיחקו</span>');
+        }
         var chipsHtml = chips.length ? ('<div class="dyn-boards-card-chips">' + chips.join('') + '</div>') : '';
         // Per-card urgency badge (Phase 6 LiveOps). data-board-id +
         // data-ends-at on the card so refreshPickerTimers() can re-paint
@@ -10286,19 +10300,36 @@
         : '';
       sub.textContent = 'vs ' + (window._duelOpponentName || 'יריב') + duelDiffStr;
     } else if (mode === 'dynamic' && window._activeDynamicBoard) {
-      // Dynamic-board mode — surface the personal best as a target chip.
-      // The chip is the in-game half of the "beat your score" loop;
-      // when score exceeds the target it auto-swaps to a 👑 crown badge
-      // (handled in render() so it updates per drop).
+      // Dynamic-board mode — surface the personal best AND the global
+      // leader as target chips. The personal-best chip is the in-game
+      // half of the "beat your score" loop; when score exceeds the
+      // target it auto-swaps to a 👑 crown badge (handled in
+      // bumpScore() so it updates per drop). The leader chip provides
+      // the social goal: "you're chasing דניאל".
       bar.classList.add('practice');
       var dbName = window._activeDynamicBoard.name || 'לוח דינמי';
       title.textContent = '🎯 ' + dbName;
       var bbRec = (typeof getBoardBest === 'function') ? getBoardBest(window._activeDynamicBoard.id) : null;
+      var selfChip;
       if (bbRec && bbRec.score > 0) {
-        sub.innerHTML = '<span class="dyn-target-chip" id="dyn-target-chip" data-target="' + bbRec.score + '">🏆 לעבור: <strong>' + bbRec.score.toLocaleString() + '</strong></span>';
+        selfChip = '<span class="dyn-target-chip" id="dyn-target-chip" data-target="' + bbRec.score + '">🏆 לעבור: <strong>' + bbRec.score.toLocaleString() + '</strong></span>';
       } else {
-        sub.innerHTML = '<span class="dyn-target-chip dyn-target-chip-pioneer">🌱 הצב את השיא הראשון שלך</span>';
+        selfChip = '<span class="dyn-target-chip dyn-target-chip-pioneer">🌱 הצב את השיא הראשון שלך</span>';
       }
+      // Leader chip — only when the leader is someone OTHER than the
+      // current player (i.e. there's something to chase). If the
+      // player IS the leader, surface that instead.
+      var leaderChip = '';
+      var brd = window._activeDynamicBoard;
+      if (brd.leader_name && brd.leader_score) {
+        var bestSoFar = bbRec ? bbRec.score : 0;
+        if (bestSoFar >= brd.leader_score) {
+          leaderChip = ' <span class="dyn-leader-chip dyn-leader-chip-king">👑 אתה מוביל</span>';
+        } else {
+          leaderChip = ' <span class="dyn-leader-chip" id="dyn-leader-chip" data-leader="' + (brd.leader_score | 0) + '">👑 ' + escapeHtml(brd.leader_name) + ': ' + brd.leader_score.toLocaleString() + '</span>';
+        }
+      }
+      sub.innerHTML = selfChip + leaderChip;
     } else {
       bar.classList.add('practice');
       title.textContent = 'משחק חופשי';
@@ -11818,6 +11849,23 @@
         dynTargetEl.innerHTML = '👑 עברת את עצמך! +' + (score - tgt).toLocaleString();
       }
     }
+    // Dynamic-board global leader chip — same live-overtake feedback,
+    // even bigger reward (overtaking another player is the strongest
+    // dopamine spike a casual game can give).
+    var dynLeaderEl = document.getElementById('dyn-leader-chip');
+    if (dynLeaderEl) {
+      var leaderTgt = parseInt(dynLeaderEl.getAttribute('data-leader') || '0', 10) || 0;
+      if (leaderTgt > 0 && score > leaderTgt) {
+        dynLeaderEl.classList.add('dyn-leader-chip-king');
+        dynLeaderEl.innerHTML = '👑 חצית את המוביל! +' + (score - leaderTgt).toLocaleString();
+        // Fire celebration ONCE.
+        if (!dynLeaderEl.dataset.celebrated) {
+          dynLeaderEl.dataset.celebrated = '1';
+          try { if (typeof soundMilestone === 'function') soundMilestone(6); } catch (e) {}
+          try { if (typeof buzz === 'function') buzz([60, 60, 60, 60, 100]); } catch (e) {}
+        }
+      }
+    }
     // Count-up animation: smoothly roll the displayed number to current score
     var displayedScore = parseInt((el.textContent || '0').replace(/[^\d]/g, ''), 10) || 0;
     if (displayedScore >= score) return; // already at or past target
@@ -12483,13 +12531,58 @@
             __isBoardBest = setBoardBest(__boardId, score, highestTier);
           }
         } catch (e) {}
+        // Fire the global per-board leaderboard submit + render the
+        // game-over screen optimistically. The fetch returns rank+total
+        // which we paint into the screen once it resolves (so the
+        // primary "🏆 שיא חדש" feedback is instant — leaderboard
+        // numbers slot in 200-400ms later, no jank).
+        var __submitPayload = {
+          deviceId: deviceToken && getDeviceId ? getDeviceId() : '',
+          token: typeof deviceToken !== 'undefined' ? deviceToken : null,
+          name: getPlayerName ? getPlayerName() : 'אנונימי',
+          score: score,
+          tier: highestTier,
+          drops: window.__bloomDropCount || 0,
+          country: (typeof getCountry === 'function') ? getCountry() : null
+        };
         render({
           over: true,
           isNewBest: isNewBest,
           boardBest: __prevBoardBest,
           isBoardBest: __isBoardBest,
-          activeBoard: window._activeDynamicBoard
+          activeBoard: window._activeDynamicBoard,
+          boardLeader: { pending: true }
         });
+        (function() {
+          try {
+            fetch('/api/boards/' + __boardId + '/score', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(__submitPayload)
+            })
+              .then(function(r) { return r.json(); })
+              .catch(function() { return null; })
+              .then(function(d) {
+                if (!d || !d.ok) return;
+                // Patch the rendered over screen with the rank pill in place
+                // — no full re-render, just inject the missing data.
+                var host = document.getElementById('over-board-rank-host');
+                if (!host) return;
+                var total = d.total | 0;
+                var rank = d.rank | 0;
+                if (!total || !rank) return;
+                var percentile = total > 1 ? Math.round(((total - rank) / (total - 1)) * 100) : 100;
+                var emoji = rank === 1 ? '👑' : rank <= 3 ? '🏆' : rank <= 10 ? '⭐' : '🎯';
+                var label;
+                if (rank === 1) label = emoji + ' מקום ראשון בלוח <strong>' + escapeHtml(window._activeDynamicBoard.name || 'לוח') + '</strong>!';
+                else if (total >= 5) label = emoji + ' #' + rank + ' מתוך ' + total + ' · עברת ' + percentile + '% מהשחקנים';
+                else label = emoji + ' #' + rank + ' מתוך ' + total;
+                host.innerHTML = label;
+                host.classList.add('over-board-rank-loaded');
+                if (rank === 1) host.classList.add('over-board-rank-king');
+              });
+          } catch (e) {}
+        })();
       } else {
         render({ over: true, isNewBest: isNewBest });
       }
@@ -13246,6 +13339,7 @@
           claimNameHtml +
           bestDeltaHtml +
           boardBestHtml +
+          (opts.boardLeader ? '<div class="over-board-rank" id="over-board-rank-host">⏳ מחשב דירוג בלוח…</div>' : '') +
           rankTierHtml +
           rivalHtml +
           continueHtml +

@@ -335,6 +335,20 @@
         } else {
           chips.push('<span class="dyn-boards-chip dyn-boards-chip-pioneer">🌱 חדש לך</span>');
         }
+        // Global per-board leader — the social half of the addiction loop.
+        // When you're #1: special crown chip. Otherwise: shows the leader's
+        // score as a clear target.
+        if (b.leader_name && b.leader_score) {
+          var imLeader = best && best.score >= b.leader_score;
+          if (imLeader) {
+            chips.push('<span class="dyn-boards-chip dyn-boards-chip-king">👑 אתה מוביל!</span>');
+          } else {
+            chips.push('<span class="dyn-boards-chip dyn-boards-chip-leader">👑 ' + escapeHtml(b.leader_name) + ': ' + formatBoardScore(b.leader_score) + '</span>');
+          }
+        }
+        if (b.players && b.players > 0) {
+          chips.push('<span class="dyn-boards-chip dyn-boards-chip-players">👥 ' + b.players + ' שיחקו</span>');
+        }
         var chipsHtml = chips.length ? ('<div class="dyn-boards-card-chips">' + chips.join('') + '</div>') : '';
         // Per-card urgency badge (Phase 6 LiveOps). data-board-id +
         // data-ends-at on the card so refreshPickerTimers() can re-paint

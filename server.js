@@ -2604,11 +2604,209 @@ app.get('/api/boards/available', async (_req, res) => {
         throw innerErr;
       }
     }
+    // Decorate each board with its current top scorer + player count.
+    // Done in a single ANY-array query so the response stays under 60ms
+    // even with 25 active boards. Single LATERAL join on the leaderboard
+    // table grouped by board_id. Soft-fails (returns the board sans
+    // leader fields) if dynamic_board_scores table doesn't exist yet.
+    if (rows.length > 0) {
+      try {
+        const ids = rows.map(function(r) { return r.id; });
+        const lbR = await pool.query(
+          `SELECT s.board_id,
+                  s.name AS leader_name,
+                  s.score AS leader_score,
+                  s.tier AS leader_tier,
+                  (SELECT COUNT(*) FROM dynamic_board_scores WHERE board_id = s.board_id) AS players
+             FROM dynamic_board_scores s
+             JOIN (
+               SELECT board_id, MAX(score) AS max_score
+                 FROM dynamic_board_scores
+                WHERE board_id = ANY($1::int[])
+                GROUP BY board_id
+             ) m ON m.board_id = s.board_id AND m.max_score = s.score
+            WHERE s.board_id = ANY($1::int[])`,
+          [ids]
+        );
+        const leaderByBoard = {};
+        for (let i = 0; i < lbR.rows.length; i++) {
+          const lr = lbR.rows[i];
+          // If a tie produces multiple rows per board, keep the first
+          // (alphabetical by name from the JOIN — deterministic enough).
+          if (!leaderByBoard[lr.board_id]) leaderByBoard[lr.board_id] = lr;
+        }
+        rows = rows.map(function(b) {
+          const lr = leaderByBoard[b.id];
+          if (lr) {
+            return Object.assign({}, b, {
+              leader_name: lr.leader_name,
+              leader_score: Number(lr.leader_score),
+              leader_tier: Number(lr.leader_tier),
+              players: Number(lr.players)
+            });
+          }
+          return Object.assign({}, b, { players: 0 });
+        });
+      } catch (lbErr) {
+        // Leaderboard table doesn't exist yet OR query failed — soft-fail.
+        if (!lbErr || lbErr.code !== '42P01') {
+          console.warn('boards leaderboard enrich failed', lbErr && lbErr.message);
+        }
+      }
+    }
     _boardsListCache = { value: rows, expiresAt: now + 60 * 1000 };
     res.json({ ok: true, boards: rows });
   } catch (e) {
     console.error('GET /api/boards/available', e);
     res.json({ ok: true, boards: [] });
+  }
+});
+
+// ============================================================
+// Per-board global leaderboard (May 2026)
+//
+// One row per (board_id, device_id) — best score that device has ever
+// posted on this specific dynamic board. Drives the "leaderboard chase"
+// half of the addiction loop. Personal-best lives in localStorage; this
+// surfaces "👑 דניאל: 89K" — a clear target on every picker card.
+// ============================================================
+app.post('/api/boards/:id/score', requireDeviceAuth, async (req, res) => {
+  try {
+    const boardId = parseInt(req.params.id, 10);
+    if (!Number.isFinite(boardId) || boardId <= 0) return res.status(400).json({ error: 'bad_board' });
+    const { deviceId, name, score, tier, drops, country } = req.body || {};
+    if (typeof deviceId !== 'string' || deviceId.length < 8 || deviceId.length > 64) {
+      return res.status(400).json({ error: 'bad_device' });
+    }
+    if (!checkRateLimit('board:score', deviceId, 60, 60 * 60 * 1000)) {
+      return res.status(429).json({ error: 'rate_limited' });
+    }
+    if (typeof score !== 'number' || !Number.isFinite(score) || score < 0 || score > 10_000_000) {
+      return res.status(400).json({ error: 'bad_score' });
+    }
+    if (typeof tier !== 'number' || tier < 1 || tier > 8) {
+      return res.status(400).json({ error: 'bad_tier' });
+    }
+    // Drops required — same anti-cheat door as /api/score.
+    const dropsN = typeof drops === 'number' && Number.isFinite(drops) && drops >= 0 ? Math.floor(drops) : null;
+    if (dropsN === null) {
+      return res.status(400).json({ error: 'missing_drops' });
+    }
+    if (challengeDropsImplausible(score, dropsN)) {
+      console.warn(`[anti-cheat] board score rejected (implausible): device=${deviceId} board=${boardId} score=${score} drops=${dropsN}`);
+      return res.status(400).json({ error: 'implausible_score' });
+    }
+    const safeName = cleanName(name);
+    const safeCountry = cleanCountry(country);
+    // Best-score-wins upsert. The board_id FK ensures we can't write a
+    // score for a board that's been deleted (or never existed).
+    try {
+      await pool.query(
+        `INSERT INTO dynamic_board_scores (board_id, device_id, name, score, tier, country, drops)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         ON CONFLICT (board_id, device_id) DO UPDATE
+           SET name = EXCLUDED.name,
+               score = EXCLUDED.score,
+               tier = EXCLUDED.tier,
+               country = COALESCE(EXCLUDED.country, dynamic_board_scores.country),
+               drops = EXCLUDED.drops,
+               updated_at = NOW()
+           WHERE dynamic_board_scores.score < EXCLUDED.score`,
+        [boardId, deviceId, safeName, Math.floor(score), Math.floor(tier), safeCountry, dropsN]
+      );
+    } catch (innerErr) {
+      // FK violation → board was deleted between game-start and submit. Soft-fail.
+      if (innerErr && innerErr.code === '23503') {
+        return res.json({ ok: true, skipped: 'board_missing' });
+      }
+      throw innerErr;
+    }
+    // Rank + total players for the over-screen "you beat X% of players" pill.
+    const rankRes = await pool.query(
+      `SELECT
+         (SELECT COUNT(*) FROM dynamic_board_scores WHERE board_id = $1) AS total,
+         (SELECT score FROM dynamic_board_scores WHERE board_id = $1 AND device_id = $2) AS my_score,
+         (SELECT 1 + COUNT(*) FROM dynamic_board_scores
+           WHERE board_id = $1
+             AND score > (SELECT score FROM dynamic_board_scores WHERE board_id = $1 AND device_id = $2)
+         ) AS rank`,
+      [boardId, deviceId]
+    );
+    const row = rankRes.rows[0] || {};
+    res.json({
+      ok: true,
+      rank: Number(row.rank) || null,
+      total: Number(row.total) || 0,
+      score: Number(row.my_score) || 0
+    });
+  } catch (e) {
+    console.error('POST /api/boards/:id/score', e);
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
+app.get('/api/boards/:id/leaderboard', async (req, res) => {
+  try {
+    const boardId = parseInt(req.params.id, 10);
+    if (!Number.isFinite(boardId) || boardId <= 0) return res.status(400).json({ error: 'bad_board' });
+    const deviceId = (req.query.deviceId || '').toString().slice(0, 64);
+    const limit = Math.min(50, Math.max(5, parseInt(req.query.limit, 10) || 20));
+    let rows = [];
+    try {
+      const r = await pool.query(
+        `SELECT device_id, name, score, tier, country, updated_at
+           FROM dynamic_board_scores
+          WHERE board_id = $1
+          ORDER BY score DESC, updated_at ASC
+          LIMIT $2`,
+        [boardId, limit]
+      );
+      rows = r.rows;
+    } catch (innerErr) {
+      if (innerErr && innerErr.code === '42P01') {
+        rows = [];
+      } else {
+        throw innerErr;
+      }
+    }
+    let total = 0, myRank = null, myScore = 0;
+    try {
+      const t = await pool.query(`SELECT COUNT(*)::int AS c FROM dynamic_board_scores WHERE board_id = $1`, [boardId]);
+      total = (t.rows[0] && t.rows[0].c) || 0;
+    } catch (e) {}
+    if (deviceId) {
+      try {
+        const m = await pool.query(
+          `SELECT score, (1 + (SELECT COUNT(*) FROM dynamic_board_scores
+                              WHERE board_id = $1 AND score > dbs.score)) AS rank
+             FROM dynamic_board_scores dbs
+            WHERE board_id = $1 AND device_id = $2`,
+          [boardId, deviceId]
+        );
+        if (m.rows[0]) {
+          myScore = Number(m.rows[0].score) || 0;
+          myRank = Number(m.rows[0].rank) || null;
+        }
+      } catch (e) {}
+    }
+    res.json({
+      ok: true,
+      list: rows.map(function(r) {
+        return {
+          name: r.name,
+          score: r.score,
+          tier: r.tier,
+          country: r.country,
+          you: deviceId && r.device_id === deviceId
+        };
+      }),
+      total,
+      myRank,
+      myScore
+    });
+  } catch (e) {
+    console.error('GET /api/boards/:id/leaderboard', e);
+    res.json({ ok: true, list: [], total: 0, myRank: null, myScore: 0 });
   }
 });
 

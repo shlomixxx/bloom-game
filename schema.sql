@@ -720,3 +720,37 @@ ALTER TABLE board_configurations
 ALTER TABLE duels
   ADD COLUMN IF NOT EXISTS board_multipliers JSONB,
   ADD COLUMN IF NOT EXISTS board_name TEXT;
+
+-- ============================================================
+-- Per-board global leaderboard (May 2026)
+--
+-- One row per (board_id, device_id) — best score that device has
+-- ever posted on that specific dynamic board. Mirrors the
+-- "best score wins" pattern of daily_scores: the upsert in
+-- /api/boards/:id/score uses WHERE score < EXCLUDED.score.
+--
+-- Why a separate table:
+--  - Dynamic boards already EXCLUDED from daily_scores by design
+--    (the "fair leaderboard" guard in src/11-game.js skips
+--    dynamic mode), so we need somewhere to put these scores.
+--  - Per-board scope means each board has its own competitive
+--    arena — a player who's #1 on Hanukkah may be #47 on
+--    Valentine. Highest replayability multiplier.
+--  - FK to board_configurations(id) keeps stale board rows
+--    cleaned up automatically when an admin deletes a board.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS dynamic_board_scores (
+  board_id   INTEGER NOT NULL REFERENCES board_configurations(id) ON DELETE CASCADE,
+  device_id  VARCHAR(64) NOT NULL,
+  name       VARCHAR(32) NOT NULL DEFAULT 'אנונימי',
+  score      INTEGER NOT NULL DEFAULT 0,
+  tier       INTEGER NOT NULL DEFAULT 1,
+  country    VARCHAR(2),
+  drops      INTEGER,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (board_id, device_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_dynamic_board_scores_board_score
+  ON dynamic_board_scores (board_id, score DESC);

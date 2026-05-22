@@ -1056,6 +1056,34 @@
   html[data-theme="dark"] .over-board-best-near { color: #FF9B8C; border-color: rgba(231,76,60,0.45); }
   html[data-theme="dark"] .over-board-best-target { color: #FFE9B0; border-color: rgba(250,199,117,0.4); }
 
+  /* ── Game-Over: Per-board GLOBAL rank pill (the "you beat X%" loop) ── */
+  .over-board-rank {
+    margin: 8px auto; padding: 9px 16px;
+    border-radius: var(--radius-md); font-size: 13px;
+    text-align: center; direction: rtl;
+    max-width: 340px;
+    background: rgba(186,117,23,0.06);
+    border: 1px dashed rgba(186,117,23,0.25);
+    color: #6F6E68;
+  }
+  .over-board-rank.over-board-rank-loaded {
+    background: linear-gradient(135deg, rgba(255,215,0,0.14), rgba(255,107,157,0.10));
+    border: 1px solid rgba(255,180,0,0.4);
+    color: #6B3D00;
+    animation: bestDeltaIn 0.5s cubic-bezier(.2,1.2,.4,1);
+  }
+  .over-board-rank.over-board-rank-king {
+    background: linear-gradient(135deg, #FFD86B, #FF6B9D);
+    border: 1px solid rgba(255,107,157,0.6);
+    color: #FFFFFF;
+    font-weight: 800;
+    box-shadow: 0 0 18px rgba(255,107,157,0.45);
+    animation: bestDeltaIn 0.5s cubic-bezier(.2,1.2,.4,1), boardBestPulse 1.6s ease-in-out 0.5s infinite;
+  }
+  .over-board-rank strong { font-weight: 800; }
+  html[data-theme="dark"] .over-board-rank.over-board-rank-loaded { color: #FFE9B0; }
+  html[data-theme="dark"] .over-board-rank.over-board-rank-king { color: #FFFFFF; }
+
   /* ── Game-Over: streak FOMO variants (§1.5) ── */
   .over-streak {
     margin: 10px auto;

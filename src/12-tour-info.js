@@ -605,6 +605,7 @@
           claimNameHtml +
           bestDeltaHtml +
           boardBestHtml +
+          (opts.boardLeader ? '<div class="over-board-rank" id="over-board-rank-host">⏳ מחשב דירוג בלוח…</div>' : '') +
           rankTierHtml +
           rivalHtml +
           continueHtml +
