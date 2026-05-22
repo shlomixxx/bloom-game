@@ -43,6 +43,64 @@
   // Mirror the server's SPECIAL_CELL_TYPES allowlist. Keep in sync.
   // (Defining here so the client doesn't import from the server module.)
   const CLIENT_SPECIAL_CELL_TYPES = ['gold', 'bonus', 'frozen', 'electric', 'locked', 'teleport'];
+
+  // Phase 5 board shapes — 1 = active cell, 0 = inactive (visual void
+  // + engine wall). Each shape is a 6-row × 4-col matrix in row-major
+  // top-to-bottom order matching the engine's grid[row][col] layout.
+  // Keep IDs in sync with the server allowlist in validateBoardDefinition.
+  const SHAPE_GEOMETRIES = {
+    // ❤️ Heart — tapered diamond bottom + rounded top (Valentine pair).
+    heart: [
+      [1, 0, 0, 1],   // row 0 — two top "humps" with a notch in the middle
+      [1, 1, 1, 1],
+      [1, 1, 1, 1],
+      [0, 1, 1, 0],
+      [0, 1, 1, 0],
+      [0, 0, 1, 0]
+    ],
+    // 💎 Diamond — wide middle, narrow top + bottom (Independence Day pair).
+    diamond: [
+      [0, 0, 1, 0],
+      [0, 1, 1, 1],
+      [1, 1, 1, 1],
+      [1, 1, 1, 1],
+      [0, 1, 1, 1],
+      [0, 0, 1, 0]
+    ],
+    // 🌲 Tree — narrow crown widens down to a 2-cell trunk (Hanukkah/Christmas).
+    tree: [
+      [0, 1, 1, 0],
+      [0, 1, 1, 0],
+      [1, 1, 1, 1],
+      [1, 1, 1, 1],
+      [1, 1, 1, 1],
+      [0, 1, 1, 0]
+    ],
+    // 🔺 Pyramid — narrow top widens to a full 4-cell base (Passover).
+    pyramid: [
+      [0, 0, 1, 0],
+      [0, 1, 1, 1],
+      [1, 1, 1, 1],
+      [1, 1, 1, 1],
+      [1, 1, 1, 1],
+      [1, 1, 1, 1]
+    ]
+  };
+
+  // Looks up the active board's shape and returns true if the cell is
+  // a "void" (not part of the playable area). False fast-path when no
+  // shape is active — zero overhead on vanilla play.
+  function isShapeInactiveAt(r, c) {
+    var board = window._activeSpecialBoard;
+    var shapeId = board && board.definition && board.definition.shape_id;
+    if (!shapeId) return false;
+    var geo = SHAPE_GEOMETRIES[shapeId];
+    if (!geo) return false;
+    if (r < 0 || r >= geo.length) return true;
+    var row = geo[r];
+    if (!row || c < 0 || c >= row.length) return true;
+    return row[c] === 0;
+  }
   function setSpecialCells(arr) {
     if (arr == null) { _specialCells = null; _specialCellsByPos = null; return true; }
     if (!Array.isArray(arr)) return false;

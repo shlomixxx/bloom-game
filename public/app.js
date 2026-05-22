@@ -43,6 +43,64 @@
   // Mirror the server's SPECIAL_CELL_TYPES allowlist. Keep in sync.
   // (Defining here so the client doesn't import from the server module.)
   const CLIENT_SPECIAL_CELL_TYPES = ['gold', 'bonus', 'frozen', 'electric', 'locked', 'teleport'];
+
+  // Phase 5 board shapes — 1 = active cell, 0 = inactive (visual void
+  // + engine wall). Each shape is a 6-row × 4-col matrix in row-major
+  // top-to-bottom order matching the engine's grid[row][col] layout.
+  // Keep IDs in sync with the server allowlist in validateBoardDefinition.
+  const SHAPE_GEOMETRIES = {
+    // ❤️ Heart — tapered diamond bottom + rounded top (Valentine pair).
+    heart: [
+      [1, 0, 0, 1],   // row 0 — two top "humps" with a notch in the middle
+      [1, 1, 1, 1],
+      [1, 1, 1, 1],
+      [0, 1, 1, 0],
+      [0, 1, 1, 0],
+      [0, 0, 1, 0]
+    ],
+    // 💎 Diamond — wide middle, narrow top + bottom (Independence Day pair).
+    diamond: [
+      [0, 0, 1, 0],
+      [0, 1, 1, 1],
+      [1, 1, 1, 1],
+      [1, 1, 1, 1],
+      [0, 1, 1, 1],
+      [0, 0, 1, 0]
+    ],
+    // 🌲 Tree — narrow crown widens down to a 2-cell trunk (Hanukkah/Christmas).
+    tree: [
+      [0, 1, 1, 0],
+      [0, 1, 1, 0],
+      [1, 1, 1, 1],
+      [1, 1, 1, 1],
+      [1, 1, 1, 1],
+      [0, 1, 1, 0]
+    ],
+    // 🔺 Pyramid — narrow top widens to a full 4-cell base (Passover).
+    pyramid: [
+      [0, 0, 1, 0],
+      [0, 1, 1, 1],
+      [1, 1, 1, 1],
+      [1, 1, 1, 1],
+      [1, 1, 1, 1],
+      [1, 1, 1, 1]
+    ]
+  };
+
+  // Looks up the active board's shape and returns true if the cell is
+  // a "void" (not part of the playable area). False fast-path when no
+  // shape is active — zero overhead on vanilla play.
+  function isShapeInactiveAt(r, c) {
+    var board = window._activeSpecialBoard;
+    var shapeId = board && board.definition && board.definition.shape_id;
+    if (!shapeId) return false;
+    var geo = SHAPE_GEOMETRIES[shapeId];
+    if (!geo) return false;
+    if (r < 0 || r >= geo.length) return true;
+    var row = geo[r];
+    if (!row || c < 0 || c >= row.length) return true;
+    return row[c] === 0;
+  }
   function setSpecialCells(arr) {
     if (arr == null) { _specialCells = null; _specialCellsByPos = null; return true; }
     if (!Array.isArray(arr)) return false;
@@ -11158,6 +11216,9 @@
       const k = r * getBoardCols() + c;
       if (visited.has(k)) continue;
       if (r < 0 || r >= getBoardRows() || c < 0 || c >= getBoardCols()) continue;
+      // Shape voids (phase 5) — inactive cells are walls; BFS can't
+      // cross them OR be seeded by them.
+      if (isShapeInactiveAt(r, c)) continue;
       if (grid[r][c] !== tier) continue;
       // Dynamic Boards — Frozen (phase 3D): tiles sitting on a frozen
       // special cell are inert. They count as "blocked" — the BFS treats
@@ -11194,6 +11255,12 @@
       // tiles stack ABOVE the anchor without overwriting.
       let w = getBoardRows() - 1;
       for (let r = getBoardRows() - 1; r >= 0; r--) {
+        // Shape voids (phase 5) — walls that block gravity downward.
+        // Snap the write cursor above them just like locked / frozen.
+        if (isShapeInactiveAt(r, c)) {
+          if (r - 1 < w) w = r - 1;
+          continue;
+        }
         // Locked cells are empty walls — block before checking grid.
         if (isLockedAt(r, c)) {
           if (r - 1 < w) w = r - 1;
@@ -11768,7 +11835,24 @@
   }
 
   function isGameOver() {
-    return grid[0].every(function(c) { return c !== 0; });
+    // Game-over when every column's topmost playable cell is filled.
+    // Shape voids in row 0 don't count — those columns are still
+    // playable as long as some lower row is empty + reachable. To
+    // keep this simple: for each column, find the first non-void
+    // row from the top; if it's filled (or locked), that column
+    // is full. If every column is full, game over.
+    var cols = getBoardCols();
+    var rows = getBoardRows();
+    for (var c = 0; c < cols; c++) {
+      var columnFull = true;
+      for (var r = 0; r < rows; r++) {
+        if (isShapeInactiveAt(r, c)) continue;  // skip voids
+        if (isLockedAt(r, c)) continue;          // skip walls
+        if (grid[r][c] === 0) { columnFull = false; break; }
+      }
+      if (!columnFull) return false;  // there's still a slot in this column
+    }
+    return true;
   }
 
   let queuedCol = -1; // next move queued while busy
@@ -11781,6 +11865,8 @@
     }
     let row = -1;
     for (let r = getBoardRows() - 1; r >= 0; r--) {
+      // Shape voids (phase 5) — not part of the playable area.
+      if (isShapeInactiveAt(r, col)) continue;
       // Locked cells block drops (treat as occupied) until unlocked.
       if (isLockedAt(r, col)) continue;
       if (grid[r][col] === 0) { row = r; break; }
@@ -13173,6 +13259,15 @@
         cell.className = 'cell';
         cell.dataset.r = r;
         cell.dataset.c = c;
+        // Phase 5 — shape voids. If this cell is masked off, paint it
+        // as void and skip everything else (no tile, no special ring,
+        // no events). The cell still occupies its grid slot so fitGrid
+        // dimensions stay rectangular, but visually disappears.
+        if (typeof isShapeInactiveAt === 'function' && isShapeInactiveAt(r, c)) {
+          cell.classList.add('shape-void');
+          gridEl.appendChild(cell);
+          continue;
+        }
         // Mark special cells BEFORE the tile-fill branch so the ring shows
         // even on empty squares (player needs to know where to aim).
         if (_specByPos) {

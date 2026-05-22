@@ -932,12 +932,25 @@
           <span>🎄 ערכת חג</span>
           <button class="tip-btn" data-tip-text="<strong>🎄 ערכת חג ויזואלית</strong><br>בחר ערכה והלוח יעטה את עצמו בצבעים + אמוג'ים מרחפים של החג. ניתן לשלב עם cells + multipliers (כן, גם תאים מיוחדים פעילים בערכה).<div class=&quot;tip-example&quot;>🕎 <strong>חנוכה</strong> — רקע כחול-לילה עם נרות בפינות, ✡️ מנצנצים, ציון בזהב.<br>💕 <strong>ולנטיין</strong> — ורוד חלום עם 🌹❤️ מרחפים, ציון אדום בוהק.<br>🇮🇱 <strong>יום העצמאות</strong> — דגל ישראל ברקע, ✡️ מנופפים בצדדים.<br>🍷 <strong>פסח</strong> — יין אדום עמוק עם 🍷🍞 מרחפים.<br><br>💡 <strong>שלב</strong>: ערכת חג + cells (זהב/בונוס/חשמלי/קרח/וכו׳) = חוויה שלמה. למשל: ולנטיין + 4 קרחים פינות + לבבות בונוס במרכז = ״לוח האהבה״.<br><br>📅 <strong>תזמון</strong>: סמן starts_at/ends_at לתקופת החג כדי שיופיע ויעלם אוטומטית.</div>">?</button>
         </div>
-        <select id="board-theme-id" style="width:100%;padding:9px 11px;border-radius:8px;background:#FFFFFF;color:#1C1A18;border:1px solid #FAC775;font-family:inherit;font-size:13px;font-weight:600">
+        <select id="board-theme-id" style="width:100%;padding:9px 11px;border-radius:8px;background:#FFFFFF;color:#1C1A18;border:1px solid #FAC775;font-family:inherit;font-size:13px;font-weight:600;margin-bottom:10px">
           <option value="">בלי ערכה ויזואלית (לוח רגיל)</option>
           <option value="hanukkah">🕎 חנוכה — כחול עם נרות</option>
           <option value="valentine">💕 ולנטיין — ורוד עם ❤️</option>
           <option value="yom_haatzmaut">🇮🇱 יום העצמאות — כחול-לבן</option>
           <option value="passover">🍷 פסח — יין אדום</option>
+        </select>
+
+        <!-- Phase 5 — Board shape picker -->
+        <div style="font-size:13px;font-weight:700;color:#BA7517;margin-bottom:6px;display:flex;align-items:center;gap:6px">
+          <span>🟦 צורת לוח</span>
+          <button class="tip-btn" data-tip-text="<strong>🟦 צורת לוח (Board Shape)</strong><br>חותך את ה-4×6 לצורה לא-מרובעת. תאים מחוץ לצורה הם ״ריקנות״ — לא ניתן להפיל עליהם, אריחים לא נופלים דרכם, ה-merge BFS מתעלם מהם.<div class=&quot;tip-example&quot;>❤ <strong>לב</strong> — מסגרת לב קלאסית. מתאים לוולנטיין. הלוח מצטמצם לטיפול אסטרטגי יותר.<br><br>💎 <strong>יהלום</strong> — אלכסון מרכזי רחב, פינות חתוכות. מתאים ליום העצמאות / לוחות VIP.<br><br>🌲 <strong>עץ</strong> — כתר צר למעלה, רחב למטה, גזע 2-תאים. מתאים לחנוכה/קריסמס.<br><br>🔺 <strong>פירמידה</strong> — קודקוד צר ובסיס רחב. מתאים לפסח.<br><br>💡 <strong>שילוב הכי ממכר</strong>: לב + ערכת ולנטיין = לוח חג שלם. או יהלום + יום העצמאות.<br><br>⚠ <strong>אסטרטגיה משחקית</strong>: צורות מצמצמות את שטח המשחק ל-15-20 תאים פעילים (במקום 24) — המשחק קצר יותר, אסטרטגי יותר. שלב עם קושי קל יותר כדי שלא יהיה תקוע מהר.</div>">?</button>
+        </div>
+        <select id="board-shape-id" style="width:100%;padding:9px 11px;border-radius:8px;background:#FFFFFF;color:#1C1A18;border:1px solid #FAC775;font-family:inherit;font-size:13px;font-weight:600">
+          <option value="">לוח מלא 4×6 (בלי צורה)</option>
+          <option value="heart">❤️ לב — Valentine pair</option>
+          <option value="diamond">💎 יהלום — Independence Day pair</option>
+          <option value="tree">🌲 עץ — Hanukkah/Christmas pair</option>
+          <option value="pyramid">🔺 פירמידה — Passover pair</option>
         </select>
       </div>
 
@@ -3008,6 +3021,8 @@
     if (relEl) relEl.value = 'static';
     var themeEl = document.getElementById('board-theme-id');
     if (themeEl) themeEl.value = '';
+    var shapeEl = document.getElementById('board-shape-id');
+    if (shapeEl) shapeEl.value = '';
     document.getElementById('board-starts-at').value = '';
     document.getElementById('board-ends-at').value = '';
     document.getElementById('board-audience').value = 'all';
@@ -3051,6 +3066,11 @@
         var themeSavedEl = document.getElementById('board-theme-id');
         if (themeSavedEl) {
           themeSavedEl.value = (b.definition && b.definition.theme_id) || '';
+        }
+        // Preload the saved shape_id (phase 5).
+        var shapeSavedEl = document.getElementById('board-shape-id');
+        if (shapeSavedEl) {
+          shapeSavedEl.value = (b.definition && b.definition.shape_id) || '';
         }
         if (b.starts_at) document.getElementById('board-starts-at').value = new Date(b.starts_at).toISOString().slice(0, 16);
         if (b.ends_at)   document.getElementById('board-ends-at').value   = new Date(b.ends_at).toISOString().slice(0, 16);
@@ -3507,103 +3527,93 @@
     },
     {
       key: 'theme-hanukkah',
-      name: '🕎 חנוכה — לוח החג',
+      name: '🕎 חנוכה — עץ נרות',
       bonusAmount: 800,
       relocate: 'on_chain',
       themeId: 'hanukkah',
-      description: '8 תאי זהב בצורת חנוכייה + 1 בונוס מרכזי = "נר השמש". רקע כחול לילה עם ✡️ מנצנצים, ציון בזהב חגיגי. דיילי של חנוכה.',
-      strategy: 'מותאם ל-8 ימי חנוכה. שלב + applies_to=daily + starts_at חנוכה → דיילי קסום למשך השבוע.',
+      shapeId: 'tree',
+      description: 'לוח בצורת 🌲 עץ + 2 בונוסים מרכזיים. רקע כחול לילה עם ✡ מנצנצים. דיילי קסום לחנוכה.',
+      strategy: 'הצורה מצמצמת ל-~18 תאים. שלב + applies_to=daily + starts_at חנוכה → דיילי שיגעון לשבוע.',
       preview: [
-        '⬜ ⬜ ⬜ ⬜',
-        '⬜ ✨ ✨ ⬜',
-        '✨ ⬜ ⬜ ✨',
-        '✨ 🪙 ⬜ ✨',
-        '⬜ ✨ ✨ ⬜',
-        '⬜ ⬜ ⬜ ⬜'
+        '⬛ 🕎 🕎 ⬛',
+        '⬛ 🕎 🕎 ⬛',
+        '🕎 🪙 🪙 🕎',
+        '🕎 🕎 🕎 🕎',
+        '🕎 🕎 🕎 🕎',
+        '⬛ 🕎 🕎 ⬛'
       ],
       cells: [
-        { row: 1, col: 1, type: 'gold' },
-        { row: 1, col: 2, type: 'gold' },
-        { row: 2, col: 0, type: 'gold' },
-        { row: 2, col: 3, type: 'gold' },
-        { row: 3, col: 0, type: 'gold' },
-        { row: 3, col: 1, type: 'bonus', amount: 800 },
-        { row: 3, col: 3, type: 'gold' },
-        { row: 4, col: 1, type: 'gold' },
-        { row: 4, col: 2, type: 'gold' }
+        { row: 2, col: 1, type: 'bonus', amount: 800 },
+        { row: 2, col: 2, type: 'bonus', amount: 800 }
       ]
     },
     {
       key: 'theme-valentine',
-      name: '💕 ולנטיין — לב מתוק',
+      name: '💕 ולנטיין — לב אמיתי',
       bonusAmount: 1400,
       relocate: 'on_chain',
       themeId: 'valentine',
-      description: 'תצורת לב: 4 קרחים מסגרת + 2 בונוסים גדולים במרכז (1400 ניקוד). רקע ורוד חלום עם ❤️🌹 מרחפים, ציון אדום בוהק.',
-      strategy: '"שבירת הלב" מטאפורי — שחקן צריך לפצח את הקרחים סביב הבונוסים. רגעי דרמה.',
+      shapeId: 'heart',
+      description: 'לוח בצורת ❤️ אמיתי + 2 בונוסים ענקיים (1400) במרכז הלב. רקע ורוד חלום עם 🌹 מרחפים. הצורה הזו לא קיימת בשום משחק אחר ב-BLOOM.',
+      strategy: 'הלב מצמצם את הלוח ל-~18 תאים פעילים — משחק קצר, אסטרטגי, מתגמל מאוד.',
       preview: [
-        '⬜ ❄️ ❄️ ⬜',
-        '❄️ 🪙 🪙 ❄️',
-        '⬜ ⬜ ⬜ ⬜',
-        '⬜ ⬜ ⬜ ⬜',
-        '⬜ ⬜ ⬜ ⬜',
-        '⬜ ⬜ ⬜ ⬜'
+        '❤️ ⬛ ⬛ ❤️',
+        '❤️ 🪙 🪙 ❤️',
+        '❤️ ❤️ ❤️ ❤️',
+        '⬛ ❤️ ❤️ ⬛',
+        '⬛ ❤️ ❤️ ⬛',
+        '⬛ ⬛ ❤️ ⬛'
       ],
       cells: [
-        { row: 0, col: 1, type: 'frozen' },
-        { row: 0, col: 2, type: 'frozen' },
-        { row: 1, col: 0, type: 'frozen' },
         { row: 1, col: 1, type: 'bonus', amount: 1400 },
-        { row: 1, col: 2, type: 'bonus', amount: 1400 },
-        { row: 1, col: 3, type: 'frozen' }
+        { row: 1, col: 2, type: 'bonus', amount: 1400 }
       ]
     },
     {
       key: 'theme-yom-haatzmaut',
-      name: '🇮🇱 יום העצמאות',
+      name: '🇮🇱 יום העצמאות — יהלום',
       bonusAmount: 1000,
       relocate: 'on_merge',
       themeId: 'yom_haatzmaut',
-      description: '2 חשמליים + 4 גולד פינות + 1 בונוס מרכזי. דגל ישראל ברקע, ✡️ מנופפים בצדדים. כל מיזוג מערבב — חגיגה.',
-      strategy: 'לוח חגיגה ליום העצמאות — קליל, מתגמל, מלא תזוזה. שלב עם starts_at של ה׳ באייר.',
+      shapeId: 'diamond',
+      description: 'לוח בצורת 💎 יהלום + 2 חשמליים + 2 בונוסים. דגל ישראל ברקע, ✡ מנופפים. כל מיזוג מערבב.',
+      strategy: 'הצורה מצמצמת את הלוח ל-~18 תאים — שרשרות חוצות-לוח מורגשות עוצמתיות בזכות החשמליים.',
       preview: [
-        '✨ ⬜ ⬜ ✨',
-        '⬜ ⚡ ⚡ ⬜',
-        '⬜ ⬜ ⬜ ⬜',
-        '⬜ ⬜ 🪙 ⬜',
-        '⬜ ⬜ ⬜ ⬜',
-        '✨ ⬜ ⬜ ✨'
+        '⬛ ⬛ 💎 ⬛',
+        '⬛ ⚡ ⚡ 💎',
+        '💎 💎 💎 💎',
+        '💎 🪙 🪙 💎',
+        '⬛ 💎 💎 💎',
+        '⬛ ⬛ 💎 ⬛'
       ],
       cells: [
-        { row: 0, col: 0, type: 'gold' },
-        { row: 0, col: 3, type: 'gold' },
         { row: 1, col: 1, type: 'electric' },
         { row: 1, col: 2, type: 'electric' },
-        { row: 3, col: 2, type: 'bonus', amount: 1000 },
-        { row: 5, col: 0, type: 'gold' },
-        { row: 5, col: 3, type: 'gold' }
+        { row: 3, col: 1, type: 'bonus', amount: 1000 },
+        { row: 3, col: 2, type: 'bonus', amount: 1000 }
       ]
     },
     {
       key: 'theme-passover',
-      name: '🍷 פסח — סדר',
+      name: '🍷 פסח — פירמידת מצרים',
       bonusAmount: 600,
       relocate: 'shatter',
       themeId: 'passover',
-      description: '4 קרחים מצה לאורך השורה האמצעית + 3 בונוסים גביעים. רקע יין אדום עמוק, 🍷🍞 מרחפים. פאזל מסורתי.',
-      strategy: '"לשבור את המצה" — כל מצה (קרח) דורש 3 מיזוגים צמודים. השגה הדרגתית.',
+      shapeId: 'pyramid',
+      description: 'לוח בצורת 🔺 פירמידה (קודקוד צר, בסיס רחב) + שורת קרחי-מצה באמצע + בונוסי גביע. רקע יין אדום עם 🍷🍞.',
+      strategy: 'הפירמידה יוצרת תחושת "עלייה" — שחקן בונה מלמטה לקודקוד. ה-3 קרחים שובר-המצה נדרשים לעבור.',
       preview: [
-        '⬜ ⬜ ⬜ ⬜',
-        '🪙 🪙 🪙 ⬜',
-        '⬜ ⬜ ⬜ ⬜',
+        '⬛ ⬛ 🍷 ⬛',
+        '⬛ 🪙 🪙 🪙',
+        '🍷 🍷 🍷 🍷',
         '❄️ ❄️ ❄️ ❄️',
-        '⬜ ⬜ ⬜ ⬜',
-        '⬜ ⬜ ⬜ ⬜'
+        '🍷 🍷 🍷 🍷',
+        '🍷 🍷 🍷 🍷'
       ],
       cells: [
-        { row: 1, col: 0, type: 'bonus', amount: 600 },
         { row: 1, col: 1, type: 'bonus', amount: 600 },
         { row: 1, col: 2, type: 'bonus', amount: 600 },
+        { row: 1, col: 3, type: 'bonus', amount: 600 },
         { row: 3, col: 0, type: 'frozen' },
         { row: 3, col: 1, type: 'frozen' },
         { row: 3, col: 2, type: 'frozen' },
@@ -3694,6 +3704,8 @@
     if (relEl) relEl.value = preset.relocate || 'static';
     var themeEl = document.getElementById('board-theme-id');
     if (themeEl) themeEl.value = preset.themeId || '';
+    var shapeEl = document.getElementById('board-shape-id');
+    if (shapeEl) shapeEl.value = preset.shapeId || '';
     var nameEl = document.getElementById('board-name');
     if (nameEl && !nameEl.value.trim()) {
       nameEl.value = preset.name;
@@ -3730,6 +3742,10 @@
         var themeSaveEl = document.getElementById('board-theme-id');
         var themeId = themeSaveEl ? themeSaveEl.value : '';
         if (themeId) definition.theme_id = themeId;
+        // Phase 5: shape_id — masks the playable area into a non-rect.
+        var shapeSaveEl = document.getElementById('board-shape-id');
+        var shapeId = shapeSaveEl ? shapeSaveEl.value : '';
+        if (shapeId) definition.shape_id = shapeId;
       }
     }
     const startsAtVal = document.getElementById('board-starts-at').value;

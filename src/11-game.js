@@ -1600,6 +1600,9 @@
       const k = r * getBoardCols() + c;
       if (visited.has(k)) continue;
       if (r < 0 || r >= getBoardRows() || c < 0 || c >= getBoardCols()) continue;
+      // Shape voids (phase 5) — inactive cells are walls; BFS can't
+      // cross them OR be seeded by them.
+      if (isShapeInactiveAt(r, c)) continue;
       if (grid[r][c] !== tier) continue;
       // Dynamic Boards — Frozen (phase 3D): tiles sitting on a frozen
       // special cell are inert. They count as "blocked" — the BFS treats
@@ -1636,6 +1639,12 @@
       // tiles stack ABOVE the anchor without overwriting.
       let w = getBoardRows() - 1;
       for (let r = getBoardRows() - 1; r >= 0; r--) {
+        // Shape voids (phase 5) — walls that block gravity downward.
+        // Snap the write cursor above them just like locked / frozen.
+        if (isShapeInactiveAt(r, c)) {
+          if (r - 1 < w) w = r - 1;
+          continue;
+        }
         // Locked cells are empty walls — block before checking grid.
         if (isLockedAt(r, c)) {
           if (r - 1 < w) w = r - 1;
@@ -2210,7 +2219,24 @@
   }
 
   function isGameOver() {
-    return grid[0].every(function(c) { return c !== 0; });
+    // Game-over when every column's topmost playable cell is filled.
+    // Shape voids in row 0 don't count — those columns are still
+    // playable as long as some lower row is empty + reachable. To
+    // keep this simple: for each column, find the first non-void
+    // row from the top; if it's filled (or locked), that column
+    // is full. If every column is full, game over.
+    var cols = getBoardCols();
+    var rows = getBoardRows();
+    for (var c = 0; c < cols; c++) {
+      var columnFull = true;
+      for (var r = 0; r < rows; r++) {
+        if (isShapeInactiveAt(r, c)) continue;  // skip voids
+        if (isLockedAt(r, c)) continue;          // skip walls
+        if (grid[r][c] === 0) { columnFull = false; break; }
+      }
+      if (!columnFull) return false;  // there's still a slot in this column
+    }
+    return true;
   }
 
   let queuedCol = -1; // next move queued while busy
@@ -2223,6 +2249,8 @@
     }
     let row = -1;
     for (let r = getBoardRows() - 1; r >= 0; r--) {
+      // Shape voids (phase 5) — not part of the playable area.
+      if (isShapeInactiveAt(r, col)) continue;
       // Locked cells block drops (treat as occupied) until unlocked.
       if (isLockedAt(r, col)) continue;
       if (grid[r][col] === 0) { row = r; break; }

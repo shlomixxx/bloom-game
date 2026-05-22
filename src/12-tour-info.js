@@ -970,6 +970,15 @@
         cell.className = 'cell';
         cell.dataset.r = r;
         cell.dataset.c = c;
+        // Phase 5 — shape voids. If this cell is masked off, paint it
+        // as void and skip everything else (no tile, no special ring,
+        // no events). The cell still occupies its grid slot so fitGrid
+        // dimensions stay rectangular, but visually disappears.
+        if (typeof isShapeInactiveAt === 'function' && isShapeInactiveAt(r, c)) {
+          cell.classList.add('shape-void');
+          gridEl.appendChild(cell);
+          continue;
+        }
         // Mark special cells BEFORE the tile-fill branch so the ring shows
         // even on empty squares (player needs to know where to aim).
         if (_specByPos) {

@@ -2459,6 +2459,17 @@ function validateBoardDefinition(type, definition) {
         return { ok: false, error: 'bad_theme_id' };
       }
     }
+    // Optional: shape_id (phase 5). Masks part of the 4×6 grid as
+    // "inactive" so the playable area takes a non-rectangular shape
+    // (heart, diamond, tree, pyramid). Engine treats inactive cells
+    // as permanent walls — gravity stops on them, drops skip them,
+    // BFS ignores them, game-over doesn't count them.
+    if (definition.shape_id !== undefined && definition.shape_id !== null) {
+      const validShapes = ['heart', 'diamond', 'tree', 'pyramid'];
+      if (!validShapes.includes(definition.shape_id)) {
+        return { ok: false, error: 'bad_shape_id' };
+      }
+    }
     // Optional: relocate_mode (phase 3D++ → 3D+++). Controls when and
     // how special cells reshuffle their positions during gameplay.
     //   'static'    → no movement (default)

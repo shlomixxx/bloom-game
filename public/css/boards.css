@@ -1245,3 +1245,33 @@ body.theme-hanukkah-active #score      { color: #FFD37A !important; text-shadow:
 body.theme-valentine-active #score     { color: #C2185B !important; text-shadow: 0 0 12px rgba(255, 107, 157, 0.5); }
 body.theme-yom-haatzmaut-active #score { color: #0044AA !important; text-shadow: 0 0 12px rgba(0, 68, 170, 0.4); }
 body.theme-passover-active #score      { color: #8B2540 !important; text-shadow: 0 0 12px rgba(180, 60, 90, 0.55); }
+
+/* ============================================================
+   Phase 5 — Board Shapes.
+   .cell.shape-void = grid slot that's NOT part of the playable area.
+   We keep the slot in the DOM (so the 4×6 grid layout stays rectangular)
+   but visually erase it: transparent, no border, no pointer events.
+   Engine treats it as a permanent wall (drops skip, gravity blocks,
+   BFS ignores, isGameOver doesn't count).
+   ============================================================ */
+.cell.shape-void {
+  background: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  border: none !important;
+  pointer-events: none !important;
+  opacity: 0;
+  animation: none !important;
+}
+.cell.shape-void::before,
+.cell.shape-void::after {
+  display: none !important;
+}
+
+/* Inside a themed board, the void cells get a tint that matches
+   the holiday — feels intentional, not "missing". Subtle so the
+   shape silhouette stays clear without competing with the active cells. */
+body.theme-valentine-active     .cell.shape-void { background: rgba(255, 200, 220, 0.18) !important; opacity: 1; }
+body.theme-hanukkah-active      .cell.shape-void { background: rgba(20, 50, 130, 0.12) !important; opacity: 1; }
+body.theme-yom-haatzmaut-active .cell.shape-void { background: rgba(0, 68, 170, 0.10) !important; opacity: 1; }
+body.theme-passover-active      .cell.shape-void { background: rgba(120, 30, 50, 0.15) !important; opacity: 1; }
