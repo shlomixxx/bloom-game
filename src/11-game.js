@@ -2609,15 +2609,15 @@
         try {
           if (typeof recordDynamicStreakDay === 'function') {
             __streakResult = recordDynamicStreakDay();
-            if (__streakResult && __streakResult.milestoneHit && __streakResult.reward) {
-              // Award via earnCredits with a synthetic action key so the
-              // existing dedup table (one earn per action+date) doesn't
-              // conflict with regular gift rewards.
+            if (__streakResult && __streakResult.milestoneHit) {
+              // Use the new dyn_streak_milestone action — server reads
+              // the reward from dyn_streak_reward_<N> config. Bypasses
+              // the event_gift clamp that was paying only ~10💎 instead
+              // of the configured 50/150/300/600/1000/2000.
               try {
                 if (typeof earnCredits === 'function') {
-                  earnCredits('event_gift', {
-                    amount: __streakResult.reward,
-                    streak_milestone: __streakResult.milestoneHit
+                  earnCredits('dyn_streak_milestone', {
+                    milestone: __streakResult.milestoneHit
                   });
                 }
               } catch (e) {}

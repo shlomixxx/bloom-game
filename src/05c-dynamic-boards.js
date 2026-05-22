@@ -567,10 +567,18 @@
       unlocked.push({ scope: 'cross', id: cach.id, icon: cach.icon, label: cach.label, reward: dynAchReward(cach.id) });
     }
     saveAchievementsState(state);
-    // Fire credits for each unlock.
+    // Fire credits for each unlock — uses the new dyn_ach action so the
+    // server reads the reward from dyn_ach_reward_<id>, bypassing the
+    // event_gift clamp.
     if (unlocked.length && typeof earnCredits === 'function') {
       unlocked.forEach(function(u) {
-        try { earnCredits('event_gift', { amount: u.reward, achievement_id: u.id, scope: u.scope, board: u.boardId || null }); } catch (e) {}
+        try {
+          earnCredits('dyn_ach', {
+            ach_id: u.id,
+            scope: u.scope,
+            board_id: u.boardId || undefined
+          });
+        } catch (e) {}
       });
     }
     // Smart push prompt — when a player FIRST unlocks ANY achievement,
@@ -882,7 +890,10 @@
     q.claimed = true;
     saveDailyQuests(state);
     if (typeof earnCredits === 'function') {
-      try { earnCredits('event_gift', { amount: q.reward, daily_quest_id: q.id }); } catch (e) {}
+      // Use the new dyn_quest action — server reads the reward from
+      // dyn_quest_reward_<id> config, bypassing the event_gift clamp
+      // that capped payouts at event_gift_credits_max (typically 10💎).
+      try { earnCredits('dyn_quest', { quest_id: q.id }); } catch (e) {}
     }
     return { ok: true, reward: q.reward };
   }

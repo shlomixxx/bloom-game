@@ -4736,7 +4736,16 @@ app.post('/api/player/earn', requireDeviceAuth, async (req, res) => {
       // tier (2-6, 7-29, 30+ days), so the client can't choose how
       // much. Dedup is via the standard action+date map below — one
       // comeback per day max.
-      'comeback': 'comeback_reward'
+      'comeback': 'comeback_reward',
+      // Dynamic-board reward actions (May 2026) — bypass the event_gift
+      // [min,max] clamp. Server reads the actual reward amount from
+      // dyn_*_reward_<id> config keys, validates the id against an
+      // allowlist (anti-cheat), and pays the full configured amount.
+      // Without these, a quest that promises +100💎 would silently get
+      // clamped to event_gift_credits_max (typically 10💎) in payment.
+      'dyn_quest': '_dyn_quest_',
+      'dyn_ach': '_dyn_ach_',
+      'dyn_streak_milestone': '_dyn_streak_milestone_'
     };
     const configKey = actionMap[action];
     if (!configKey) return res.json({ ok: false, reason: 'unknown_action' });
@@ -4768,12 +4777,44 @@ app.post('/api/player/earn', requireDeviceAuth, async (req, res) => {
       //   - That meta is validated against a fixed ALLOWED_MILESTONES list,
       //     so a cheater can't invent fake milestones to fan out the keyspace.
       //   - Everything else dedups purely on action+date.
-      const META_DEDUP_ACTIONS = new Set(['score_milestone']);
+      const META_DEDUP_ACTIONS = new Set(['score_milestone', 'dyn_quest', 'dyn_ach', 'dyn_streak_milestone']);
       let validatedMeta = null;
       if (action === 'score_milestone' && meta && typeof meta === 'object') {
         const m = parseInt(meta.milestone, 10);
         const ALLOWED_MILESTONES = [10000, 25000, 50000, 100000, 250000, 500000, 1000000];
         if (ALLOWED_MILESTONES.includes(m)) validatedMeta = { milestone: m };
+      }
+      // Dynamic quest dedup — one claim per quest per Asia/Jerusalem day.
+      if (action === 'dyn_quest' && meta && typeof meta === 'object') {
+        const ALLOWED_QUESTS = ['play2','play3','score10k','score30k','score75k','tier7','tier8','theme','shape','beatself','beatleader'];
+        const qid = typeof meta.quest_id === 'string' ? meta.quest_id : '';
+        if (ALLOWED_QUESTS.includes(qid)) validatedMeta = { quest_id: qid };
+      }
+      // Dynamic achievement dedup — once per achievement per scope. The
+      // achievement table includes per-board entries (scope='board') which
+      // can be unlocked per-board, so the dedup uses board_id too. Cross
+      // achievements (scope='cross') have a single global slot.
+      if (action === 'dyn_ach' && meta && typeof meta === 'object') {
+        const ALLOWED_PER_BOARD = ['played','crown','score10','score50','score100'];
+        const ALLOWED_CROSS = ['pioneer5','pioneer10','crown5','all_themes','all_shapes','leaderboard1'];
+        const aid = typeof meta.ach_id === 'string' ? meta.ach_id : '';
+        const scope = meta.scope === 'cross' ? 'cross' : 'board';
+        const bid = parseInt(meta.board_id, 10) || 0;
+        if (scope === 'cross' && ALLOWED_CROSS.includes(aid)) {
+          validatedMeta = { ach_id: aid, scope: 'cross' };
+        } else if (scope === 'board' && ALLOWED_PER_BOARD.includes(aid) && bid > 0) {
+          validatedMeta = { ach_id: aid, scope: 'board', board_id: bid };
+        }
+      }
+      // Dynamic streak milestone — once per milestone per streak run.
+      // Dedup key includes the milestone number so each of the 6 tiers
+      // can fire once per current streak. A new streak (after reset)
+      // clears milestonesClaimed on the client; the dedup expires per
+      // day so re-claiming on a fresh streak works after ≥1 day passes.
+      if (action === 'dyn_streak_milestone' && meta && typeof meta === 'object') {
+        const ALLOWED_MS = [3, 7, 14, 30, 60, 100];
+        const m = parseInt(meta.milestone, 10);
+        if (ALLOWED_MS.includes(m)) validatedMeta = { milestone: m };
       }
       const metaKey = META_DEDUP_ACTIONS.has(action) && validatedMeta
         ? ':' + JSON.stringify(validatedMeta)
@@ -4835,6 +4876,22 @@ app.post('/api/player/earn', requireDeviceAuth, async (req, res) => {
         r = parseInt((cfgRow.rows[0] || {}).value, 10) || 0;
       }
       reward = r;
+    } else if (action === 'dyn_quest' && validatedMeta) {
+      // Quest reward — server reads dyn_quest_reward_<id>. The client
+      // never names an amount; the id is validated against an allowlist
+      // in the dedup pass above. Bypasses the event_gift clamp entirely.
+      const r = await pool.query('SELECT value FROM game_config WHERE key = $1', ['dyn_quest_reward_' + validatedMeta.quest_id]);
+      reward = parseInt((r.rows[0] || {}).value, 10) || 0;
+    } else if (action === 'dyn_ach' && validatedMeta) {
+      // Achievement reward — same pattern. Cross + per-board share the
+      // dyn_ach_reward_<id> namespace because ach_ids are unique across
+      // the two scopes (per-board: played/crown/score10/... ; cross:
+      // pioneer5/all_themes/...).
+      const r = await pool.query('SELECT value FROM game_config WHERE key = $1', ['dyn_ach_reward_' + validatedMeta.ach_id]);
+      reward = parseInt((r.rows[0] || {}).value, 10) || 0;
+    } else if (action === 'dyn_streak_milestone' && validatedMeta) {
+      const r = await pool.query('SELECT value FROM game_config WHERE key = $1', ['dyn_streak_reward_' + validatedMeta.milestone]);
+      reward = parseInt((r.rows[0] || {}).value, 10) || 0;
     } else if (action === 'daily_login') {
       // Tiered by streak. Client passes meta.streak — capped to a sane
       // range so a forged streak can't inflate the payout to absurdity.

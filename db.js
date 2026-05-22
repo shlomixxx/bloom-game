@@ -42,6 +42,10 @@ export async function initDb() {
     `ALTER TABLE duels ADD COLUMN IF NOT EXISTS difficulty_label VARCHAR(20)`,
     `ALTER TABLE duels ADD COLUMN IF NOT EXISTS difficulty_weights VARCHAR(64)`,
     `ALTER TABLE duels ADD COLUMN IF NOT EXISTS difficulty_speed_pct INT`,
+    // Needed by the chest / comeback / streak-freeze UPDATEs added in May 2026.
+    // schema.sql also has this ALTER, but include here as belt-and-suspenders
+    // since several endpoints will 500 without it.
+    `ALTER TABLE player_profiles ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()`,
   ];
   for (const sql of migrations) {
     try { await pool.query(sql); } catch (e) {

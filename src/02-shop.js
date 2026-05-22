@@ -1499,6 +1499,38 @@
     html += '</div>';
     html += '<div class="ts-hint">🎲 = המערכת בוחרת · 🎯 = אתה בוחר · 👑 = פרימיום</div>';
 
+    // Section 3: Dynamic Boards extras — streak freezes + bonus chest.
+    // These are "meta" items that affect the dynamic-boards retention
+    // loop, not the current game. Only shown when the underlying systems
+    // are enabled (admin master toggles). Hides cleanly when both off.
+    var freezeOn = (typeof dynConfigBool === 'function') ? dynConfigBool('dyn_streak_freeze_enabled', true) : true;
+    var chestOn  = (typeof dynConfigBool === 'function') ? dynConfigBool('dyn_chest_enabled', true) : true;
+    if (freezeOn || chestOn) {
+      html += '<div class="ts-section-label">לוחות דינמיים</div>';
+      html += '<div class="ts-powerups">';
+      if (freezeOn) {
+        var freezePrice = (typeof dynConfigInt === 'function') ? dynConfigInt('dyn_streak_freeze_price', 200) : 200;
+        var freezeCount = (typeof getStreakFreezes === 'function') ? getStreakFreezes() : 0;
+        html += '<button class="ts-power" data-shop-action="dyn-freeze"' +
+          (playerBalance < freezePrice ? ' disabled' : '') + '>' +
+          '<span class="ts-power-icon">🛡</span>' +
+          '<span class="ts-power-name">הקפאת רצף<br><span style="font-size:9px;opacity:0.75">יש לך: ' + freezeCount + '</span></span>' +
+          '<span class="ts-power-price">' + freezePrice + ' 💎</span></button>';
+      }
+      if (chestOn) {
+        // Extra chest costs 100💎 — bypasses the daily cap and gives you
+        // an instant Skinner-box reveal without playing a game. Pure
+        // gambling, sold transparently.
+        html += '<button class="ts-power ts-power-premium" data-shop-action="bonus-chest"' +
+          (playerBalance < 100 ? ' disabled' : '') + '>' +
+          '<span class="ts-power-icon">🎁</span>' +
+          '<span class="ts-power-name">תיבת מסתורין<br>בונוס</span>' +
+          '<span class="ts-power-price">100 💎</span></button>';
+      }
+      html += '</div>';
+      html += '<div class="ts-hint">🛡 = הצל את הרצף שלך מיום שתפספס · 🎁 = פתח תיבה בלי לשחק</div>';
+    }
+
     modal.innerHTML = html;
     document.getElementById('grid-wrap').appendChild(modal);
 
@@ -1536,6 +1568,54 @@
     // Wire power-up buttons
     modal.querySelectorAll('.ts-power:not([disabled])').forEach(function(btn) {
       btn.onclick = function() {
+        // Special shop actions (streak freeze, bonus chest) — separate
+        // endpoints from the standard powerup buy.
+        var shopAction = this.getAttribute('data-shop-action');
+        if (shopAction === 'dyn-freeze') {
+          var fself = this;
+          fself.style.opacity = '0.5';
+          if (typeof buyStreakFreeze !== 'function') { fself.style.opacity = '1'; return; }
+          buyStreakFreeze().then(function(d) {
+            if (d && d.ok) {
+              modal.remove();
+              showCreditToast(-d.price, '🛡 הקפאת רצף');
+              trackEvent && trackEvent('purchase', { item: 'streak_freeze', cost: d.price });
+            } else {
+              fself.style.opacity = '1';
+              fself.querySelector('.ts-power-price').textContent = (d && d.reason === 'insufficient_funds') ? 'אין 💎' : 'שגיאה';
+            }
+          });
+          return;
+        }
+        if (shopAction === 'bonus-chest') {
+          var cself = this;
+          cself.style.opacity = '0.5';
+          // Buy a bonus chest: deduct 100💎 first, then open via the
+          // existing chest endpoint (which itself credits the reward).
+          // The deduction is part of the explicit shop interaction so
+          // it bypasses the chest endpoint's daily cap.
+          fetch(API_BASE + '/api/player/spend', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ deviceId: deviceId, token: deviceToken, amount: 100, reason: 'bonus_chest' })
+          })
+            .then(function(r) { return r.json(); })
+            .then(function(spendRes) {
+              if (!spendRes || !spendRes.ok) {
+                cself.style.opacity = '1';
+                return;
+              }
+              playerBalance = spendRes.newBalance;
+              try { localStorage.setItem(PLAYER_BALANCE_KEY, String(spendRes.newBalance)); } catch(e) {}
+              updateBalanceDisplay();
+              modal.remove();
+              if (typeof openMysteryChest === 'function') {
+                setTimeout(openMysteryChest, 250);
+              }
+              trackEvent && trackEvent('purchase', { item: 'bonus_chest', cost: 100 });
+            })
+            .catch(function() { cself.style.opacity = '1'; });
+          return;
+        }
         // Block double-buy
         if (activePowerup) {
           modal.remove();

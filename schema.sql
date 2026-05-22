@@ -489,6 +489,10 @@ CREATE TABLE IF NOT EXISTS referrals (
 -- ("עולמי" / "מדינתי") can filter without an extra JOIN. NULL = not chosen.
 ALTER TABLE player_profiles ADD COLUMN IF NOT EXISTS country VARCHAR(2);
 
+-- updated_at: needed by chest/comeback/streak-freeze UPDATEs added in
+-- May 2026. Idempotent ALTER so legacy DBs pick it up on the next boot.
+ALTER TABLE player_profiles ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+
 -- ============================================================
 -- Difficulty leaderboard (practice + duel best per device per difficulty)
 -- ============================================================
