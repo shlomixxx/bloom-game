@@ -549,6 +549,35 @@
         }
       }
 
+      // ──────────────────────────────────────────────────────────
+      // Dynamic-board personal best banner (separate from the
+      // global personal-best banner above). Drives "one more game
+      // on THIS specific board" — the strongest puzzle-game loop.
+      // ──────────────────────────────────────────────────────────
+      var boardBestHtml = '';
+      if (mode === 'dynamic' && opts.activeBoard) {
+        var bbName = escapeHtml(opts.activeBoard.name || 'לוח');
+        if (opts.isBoardBest) {
+          var prevBb = (opts.boardBest && opts.boardBest.score > 0) ? opts.boardBest.score : 0;
+          if (prevBb > 0) {
+            var bbDelta = score - prevBb;
+            boardBestHtml = '<div class="over-board-best over-board-best-up">🏆 שיא חדש ב<strong>' + bbName + '</strong>! +' + bbDelta.toLocaleString() + ' מעל ' + prevBb.toLocaleString() + '</div>';
+          } else {
+            boardBestHtml = '<div class="over-board-best over-board-best-up">🏆 הצבת את השיא הראשון שלך ב<strong>' + bbName + '</strong>!</div>';
+          }
+        } else if (opts.boardBest && opts.boardBest.score > 0) {
+          var bbMiss = opts.boardBest.score - score;
+          if (bbMiss > 0) {
+            var bbMissPct = score / opts.boardBest.score;
+            if (bbMissPct >= 0.85) {
+              boardBestHtml = '<div class="over-board-best over-board-best-near">😱 כמעט עברת את עצמך ב<strong>' + bbName + '</strong>! חסר ' + bbMiss.toLocaleString() + '</div>';
+            } else {
+              boardBestHtml = '<div class="over-board-best over-board-best-target">🎯 השיא שלך ב<strong>' + bbName + '</strong>: ' + opts.boardBest.score.toLocaleString() + ' · נסה שוב!</div>';
+            }
+          }
+        }
+      }
+
       // Gap to next TOP-N tier — uses the top-50 list we already have
       var rankTierHtml = '';
       if (dailyRank && leaderboard && leaderboard.length > 0) {
@@ -575,6 +604,7 @@
           rankPillHtml +
           claimNameHtml +
           bestDeltaHtml +
+          boardBestHtml +
           rankTierHtml +
           rivalHtml +
           continueHtml +

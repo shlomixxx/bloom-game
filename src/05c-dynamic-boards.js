@@ -152,6 +152,53 @@
   window.updateDynamicBoardsButton = updateDynamicBoardsButton;
   window.stopDynamicBoardsTick = stopFomoTick;
 
+  // ============================================================
+  // Per-board personal best — the "beat your score" addiction loop.
+  //
+  // Each board carries its own localStorage record so a player who
+  // hit 47K on the Valentine board sees that target every time the
+  // board appears in the picker, plus an in-game pill that tracks
+  // it live. Score chase is the single strongest engine in puzzle
+  // games — Wordle / Suika / Tetris all run on it.
+  //
+  // Keyed by board id (server-issued), not name, because two boards
+  // can share a display name across edits but the id is stable.
+  // ============================================================
+  function boardBestKey(boardId) { return 'bloom_board_best_' + boardId; }
+  function getBoardBest(boardId) {
+    if (boardId == null) return null;
+    try {
+      var raw = localStorage.getItem(boardBestKey(boardId));
+      if (!raw) return null;
+      var obj = JSON.parse(raw);
+      if (!obj || typeof obj.score !== 'number') return null;
+      return obj;
+    } catch (e) { return null; }
+  }
+  function setBoardBest(boardId, score, tier) {
+    if (boardId == null) return false;
+    var prev = getBoardBest(boardId);
+    if (prev && prev.score >= score) return false;
+    try {
+      localStorage.setItem(boardBestKey(boardId), JSON.stringify({
+        score: score | 0,
+        tier:  tier | 0,
+        ts:    Date.now()
+      }));
+    } catch (e) {}
+    return true;
+  }
+  function formatBoardScore(n) {
+    if (!Number.isFinite(n)) return String(n);
+    if (n >= 1000000) return (n / 1000000).toFixed(n >= 10000000 ? 0 : 1) + 'מ';
+    if (n >= 10000)   return Math.round(n / 1000) + 'K';
+    if (n >= 1000)    return (n / 1000).toFixed(1) + 'K';
+    return String(n);
+  }
+  window.getBoardBest        = getBoardBest;
+  window.setBoardBest        = setBoardBest;
+  window.formatBoardScore    = formatBoardScore;
+
   // Human-readable labels for themes / shapes so the player can tell the
   // boards apart before clicking — boring rectangular cards = no clicks.
   var THEME_LABELS = {
@@ -278,6 +325,15 @@
           Object.keys(byT).forEach(function(t) {
             chips.push('<span class="dyn-boards-chip dyn-boards-chip-cell">' + (CELL_TYPE_ICON[t] || '') + ' ×' + byT[t] + '</span>');
           });
+        }
+        // Personal-best chip — the most addictive item on the card.
+        // Empty record: gentle "🌱" pioneer chip (also drives "be the
+        // first" psychology). Has a record: gold "🏆" chip with score.
+        var best = getBoardBest(b.id);
+        if (best && best.score > 0) {
+          chips.push('<span class="dyn-boards-chip dyn-boards-chip-best">🏆 שיא ' + formatBoardScore(best.score) + '</span>');
+        } else {
+          chips.push('<span class="dyn-boards-chip dyn-boards-chip-pioneer">🌱 חדש לך</span>');
         }
         var chipsHtml = chips.length ? ('<div class="dyn-boards-card-chips">' + chips.join('') + '</div>') : '';
         // Per-card urgency badge (Phase 6 LiveOps). data-board-id +

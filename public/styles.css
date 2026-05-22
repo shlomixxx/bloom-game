@@ -3759,6 +3759,40 @@
   html[data-theme="dark"] .over-best-delta-up { color: var(--color-accent-soft); border-color: rgba(250,199,117,0.4); }
   html[data-theme="dark"] .over-best-delta-near { color: #F0A878; border-color: rgba(240,168,120,0.3); }
 
+  /* ── Game-Over: Per-board personal best (dynamic mode) ── */
+  .over-board-best {
+    margin: 8px auto; padding: 11px 18px;
+    border-radius: var(--radius-md); font-size: 14px;
+    text-align: center; direction: rtl;
+    max-width: 360px;
+    animation: bestDeltaIn 0.5s cubic-bezier(.2,1.2,.4,1);
+  }
+  .over-board-best strong { font-weight: 800; font-variant-numeric: tabular-nums; }
+  .over-board-best-up {
+    background: linear-gradient(135deg, rgba(255,180,0,0.22) 0%, rgba(255,107,157,0.18) 100%);
+    border: 1px solid rgba(255,140,0,0.5);
+    color: #6B3D00;
+    box-shadow: 0 0 14px rgba(255,140,0,0.25);
+    animation: boardBestPulse 1.6s ease-in-out infinite, bestDeltaIn 0.5s cubic-bezier(.2,1.2,.4,1);
+  }
+  .over-board-best-near {
+    background: linear-gradient(135deg, rgba(231,76,60,0.10) 0%, rgba(255,107,157,0.08) 100%);
+    border: 1px solid rgba(231,76,60,0.35);
+    color: #8B1A1A;
+  }
+  .over-board-best-target {
+    background: rgba(250,199,117,0.10);
+    border: 1px solid rgba(250,199,117,0.35);
+    color: #6B3D00;
+  }
+  @keyframes boardBestPulse {
+    0%, 100% { box-shadow: 0 0 14px rgba(255,140,0,0.25); }
+    50%      { box-shadow: 0 0 22px rgba(255,140,0,0.55); }
+  }
+  html[data-theme="dark"] .over-board-best-up { color: #FFE9B0; border-color: rgba(255,180,0,0.55); }
+  html[data-theme="dark"] .over-board-best-near { color: #FF9B8C; border-color: rgba(231,76,60,0.45); }
+  html[data-theme="dark"] .over-board-best-target { color: #FFE9B0; border-color: rgba(250,199,117,0.4); }
+
   /* ── Game-Over: streak FOMO variants (§1.5) ── */
   .over-streak {
     margin: 10px auto;
@@ -5936,6 +5970,18 @@
   border-color: rgba(4,52,44,0.3);
   color: #04342C;
 }
+.dyn-boards-chip-best {
+  background: linear-gradient(135deg,#FFE9A8,#FAC775);
+  border-color: rgba(186,117,23,0.5);
+  color: #6B3D00;
+  font-weight: 800;
+}
+.dyn-boards-chip-pioneer {
+  background: linear-gradient(135deg,#E6F5EE,#B5E5D2);
+  border-color: rgba(4,52,44,0.25);
+  color: #04342C;
+  font-style: normal;
+}
 
 /* ============================================================
    Phase 6 — LiveOps FOMO badges + pulses
@@ -6009,6 +6055,39 @@
   background: linear-gradient(135deg,#FFF1D6,#FFE3A8);
   border-color: rgba(255,138,61,0.45);
 }
+
+/* ============================================================
+   In-game target chip (dynamic mode "beat your score" loop)
+   ============================================================ */
+.dyn-target-chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 12px; font-weight: 700;
+  padding: 3px 11px; border-radius: 999px;
+  background: linear-gradient(135deg,#FFE9A8,#FAC775);
+  border: 1px solid rgba(186,117,23,0.5);
+  color: #6B3D00;
+  letter-spacing: 0.15px;
+}
+.dyn-target-chip strong { font-weight: 900; font-variant-numeric: tabular-nums; }
+.dyn-target-chip-pioneer {
+  background: linear-gradient(135deg,#E6F5EE,#B5E5D2);
+  border-color: rgba(4,52,44,0.25);
+  color: #04342C;
+}
+.dyn-target-chip-passed {
+  background: linear-gradient(135deg,#FFB95C,#FF6B9D);
+  border-color: rgba(255,107,157,0.6);
+  color: #FFFFFF;
+  box-shadow: 0 0 10px rgba(255,107,157,0.45);
+  animation: dynTargetPassed 1.4s ease-in-out infinite;
+}
+@keyframes dynTargetPassed {
+  0%, 100% { transform: scale(1);    box-shadow: 0 0 10px rgba(255,107,157,0.45); }
+  50%      { transform: scale(1.04); box-shadow: 0 0 18px rgba(255,107,157,0.75); }
+}
+html[data-theme="dark"] .dyn-target-chip { color: #FFE9B0; }
+html[data-theme="dark"] .dyn-target-chip-pioneer { color: #B5E5D2; }
+html[data-theme="dark"] .dyn-target-chip-passed { color: #FFFFFF; }
 
 .dyn-boards-empty {
   text-align: center;

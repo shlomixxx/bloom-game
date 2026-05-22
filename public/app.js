@@ -5582,6 +5582,53 @@
   window.updateDynamicBoardsButton = updateDynamicBoardsButton;
   window.stopDynamicBoardsTick = stopFomoTick;
 
+  // ============================================================
+  // Per-board personal best — the "beat your score" addiction loop.
+  //
+  // Each board carries its own localStorage record so a player who
+  // hit 47K on the Valentine board sees that target every time the
+  // board appears in the picker, plus an in-game pill that tracks
+  // it live. Score chase is the single strongest engine in puzzle
+  // games — Wordle / Suika / Tetris all run on it.
+  //
+  // Keyed by board id (server-issued), not name, because two boards
+  // can share a display name across edits but the id is stable.
+  // ============================================================
+  function boardBestKey(boardId) { return 'bloom_board_best_' + boardId; }
+  function getBoardBest(boardId) {
+    if (boardId == null) return null;
+    try {
+      var raw = localStorage.getItem(boardBestKey(boardId));
+      if (!raw) return null;
+      var obj = JSON.parse(raw);
+      if (!obj || typeof obj.score !== 'number') return null;
+      return obj;
+    } catch (e) { return null; }
+  }
+  function setBoardBest(boardId, score, tier) {
+    if (boardId == null) return false;
+    var prev = getBoardBest(boardId);
+    if (prev && prev.score >= score) return false;
+    try {
+      localStorage.setItem(boardBestKey(boardId), JSON.stringify({
+        score: score | 0,
+        tier:  tier | 0,
+        ts:    Date.now()
+      }));
+    } catch (e) {}
+    return true;
+  }
+  function formatBoardScore(n) {
+    if (!Number.isFinite(n)) return String(n);
+    if (n >= 1000000) return (n / 1000000).toFixed(n >= 10000000 ? 0 : 1) + 'מ';
+    if (n >= 10000)   return Math.round(n / 1000) + 'K';
+    if (n >= 1000)    return (n / 1000).toFixed(1) + 'K';
+    return String(n);
+  }
+  window.getBoardBest        = getBoardBest;
+  window.setBoardBest        = setBoardBest;
+  window.formatBoardScore    = formatBoardScore;
+
   // Human-readable labels for themes / shapes so the player can tell the
   // boards apart before clicking — boring rectangular cards = no clicks.
   var THEME_LABELS = {
@@ -5708,6 +5755,15 @@
           Object.keys(byT).forEach(function(t) {
             chips.push('<span class="dyn-boards-chip dyn-boards-chip-cell">' + (CELL_TYPE_ICON[t] || '') + ' ×' + byT[t] + '</span>');
           });
+        }
+        // Personal-best chip — the most addictive item on the card.
+        // Empty record: gentle "🌱" pioneer chip (also drives "be the
+        // first" psychology). Has a record: gold "🏆" chip with score.
+        var best = getBoardBest(b.id);
+        if (best && best.score > 0) {
+          chips.push('<span class="dyn-boards-chip dyn-boards-chip-best">🏆 שיא ' + formatBoardScore(best.score) + '</span>');
+        } else {
+          chips.push('<span class="dyn-boards-chip dyn-boards-chip-pioneer">🌱 חדש לך</span>');
         }
         var chipsHtml = chips.length ? ('<div class="dyn-boards-card-chips">' + chips.join('') + '</div>') : '';
         // Per-card urgency badge (Phase 6 LiveOps). data-board-id +
@@ -10229,6 +10285,20 @@
         ? ' · ' + duelDiffPreset.emoji + ' ' + duelDiffPreset.name
         : '';
       sub.textContent = 'vs ' + (window._duelOpponentName || 'יריב') + duelDiffStr;
+    } else if (mode === 'dynamic' && window._activeDynamicBoard) {
+      // Dynamic-board mode — surface the personal best as a target chip.
+      // The chip is the in-game half of the "beat your score" loop;
+      // when score exceeds the target it auto-swaps to a 👑 crown badge
+      // (handled in render() so it updates per drop).
+      bar.classList.add('practice');
+      var dbName = window._activeDynamicBoard.name || 'לוח דינמי';
+      title.textContent = '🎯 ' + dbName;
+      var bbRec = (typeof getBoardBest === 'function') ? getBoardBest(window._activeDynamicBoard.id) : null;
+      if (bbRec && bbRec.score > 0) {
+        sub.innerHTML = '<span class="dyn-target-chip" id="dyn-target-chip" data-target="' + bbRec.score + '">🏆 לעבור: <strong>' + bbRec.score.toLocaleString() + '</strong></span>';
+      } else {
+        sub.innerHTML = '<span class="dyn-target-chip dyn-target-chip-pioneer">🌱 הצב את השיא הראשון שלך</span>';
+      }
     } else {
       bar.classList.add('practice');
       title.textContent = 'משחק חופשי';
@@ -11731,6 +11801,23 @@
     el.classList.remove('bump');
     void el.offsetWidth;
     el.classList.add('bump');
+    // Dynamic-board target chip: when score crosses the previous best,
+    // swap the chip to a "👑 עברת את השיא" celebration so the player
+    // gets immediate feedback during gameplay, not just at game-over.
+    var dynTargetEl = document.getElementById('dyn-target-chip');
+    if (dynTargetEl) {
+      var tgt = parseInt(dynTargetEl.getAttribute('data-target') || '0', 10) || 0;
+      if (tgt > 0 && score > tgt && !dynTargetEl.classList.contains('dyn-target-chip-passed')) {
+        dynTargetEl.classList.add('dyn-target-chip-passed');
+        dynTargetEl.innerHTML = '👑 עברת את עצמך! +' + (score - tgt).toLocaleString();
+        // Audio reward — milestone tone + buzz so it feels earned.
+        try { if (typeof soundMilestone === 'function') soundMilestone(4); } catch (e) {}
+        try { if (typeof buzz === 'function') buzz([40, 40, 80]); } catch (e) {}
+      } else if (tgt > 0 && score > tgt && dynTargetEl.classList.contains('dyn-target-chip-passed')) {
+        // Keep updating the overage number live as score grows.
+        dynTargetEl.innerHTML = '👑 עברת את עצמך! +' + (score - tgt).toLocaleString();
+      }
+    }
     // Count-up animation: smoothly roll the displayed number to current score
     var displayedScore = parseInt((el.textContent || '0').replace(/[^\d]/g, ''), 10) || 0;
     if (displayedScore >= score) return; // already at or past target
@@ -12384,6 +12471,25 @@
           // Non-default practice or duel — feeds only the difficulty board.
           submitPracticeOrDuelScore();
         }
+      } else if (mode === 'dynamic' && window._activeDynamicBoard && !window.__bloomBotActive && !skinTrialMode) {
+        // Per-board personal best — the addictive "beat your own score" loop.
+        // Capture the previous record BEFORE the write so the over screen
+        // can show the delta (or the "you missed it by N" near-miss banner).
+        var __boardId = window._activeDynamicBoard.id;
+        var __prevBoardBest = (typeof getBoardBest === 'function') ? getBoardBest(__boardId) : null;
+        var __isBoardBest = false;
+        try {
+          if (typeof setBoardBest === 'function') {
+            __isBoardBest = setBoardBest(__boardId, score, highestTier);
+          }
+        } catch (e) {}
+        render({
+          over: true,
+          isNewBest: isNewBest,
+          boardBest: __prevBoardBest,
+          isBoardBest: __isBoardBest,
+          activeBoard: window._activeDynamicBoard
+        });
       } else {
         render({ over: true, isNewBest: isNewBest });
       }
@@ -13084,6 +13190,35 @@
         }
       }
 
+      // ──────────────────────────────────────────────────────────
+      // Dynamic-board personal best banner (separate from the
+      // global personal-best banner above). Drives "one more game
+      // on THIS specific board" — the strongest puzzle-game loop.
+      // ──────────────────────────────────────────────────────────
+      var boardBestHtml = '';
+      if (mode === 'dynamic' && opts.activeBoard) {
+        var bbName = escapeHtml(opts.activeBoard.name || 'לוח');
+        if (opts.isBoardBest) {
+          var prevBb = (opts.boardBest && opts.boardBest.score > 0) ? opts.boardBest.score : 0;
+          if (prevBb > 0) {
+            var bbDelta = score - prevBb;
+            boardBestHtml = '<div class="over-board-best over-board-best-up">🏆 שיא חדש ב<strong>' + bbName + '</strong>! +' + bbDelta.toLocaleString() + ' מעל ' + prevBb.toLocaleString() + '</div>';
+          } else {
+            boardBestHtml = '<div class="over-board-best over-board-best-up">🏆 הצבת את השיא הראשון שלך ב<strong>' + bbName + '</strong>!</div>';
+          }
+        } else if (opts.boardBest && opts.boardBest.score > 0) {
+          var bbMiss = opts.boardBest.score - score;
+          if (bbMiss > 0) {
+            var bbMissPct = score / opts.boardBest.score;
+            if (bbMissPct >= 0.85) {
+              boardBestHtml = '<div class="over-board-best over-board-best-near">😱 כמעט עברת את עצמך ב<strong>' + bbName + '</strong>! חסר ' + bbMiss.toLocaleString() + '</div>';
+            } else {
+              boardBestHtml = '<div class="over-board-best over-board-best-target">🎯 השיא שלך ב<strong>' + bbName + '</strong>: ' + opts.boardBest.score.toLocaleString() + ' · נסה שוב!</div>';
+            }
+          }
+        }
+      }
+
       // Gap to next TOP-N tier — uses the top-50 list we already have
       var rankTierHtml = '';
       if (dailyRank && leaderboard && leaderboard.length > 0) {
@@ -13110,6 +13245,7 @@
           rankPillHtml +
           claimNameHtml +
           bestDeltaHtml +
+          boardBestHtml +
           rankTierHtml +
           rivalHtml +
           continueHtml +

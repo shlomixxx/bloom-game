@@ -367,6 +367,20 @@
         ? ' · ' + duelDiffPreset.emoji + ' ' + duelDiffPreset.name
         : '';
       sub.textContent = 'vs ' + (window._duelOpponentName || 'יריב') + duelDiffStr;
+    } else if (mode === 'dynamic' && window._activeDynamicBoard) {
+      // Dynamic-board mode — surface the personal best as a target chip.
+      // The chip is the in-game half of the "beat your score" loop;
+      // when score exceeds the target it auto-swaps to a 👑 crown badge
+      // (handled in render() so it updates per drop).
+      bar.classList.add('practice');
+      var dbName = window._activeDynamicBoard.name || 'לוח דינמי';
+      title.textContent = '🎯 ' + dbName;
+      var bbRec = (typeof getBoardBest === 'function') ? getBoardBest(window._activeDynamicBoard.id) : null;
+      if (bbRec && bbRec.score > 0) {
+        sub.innerHTML = '<span class="dyn-target-chip" id="dyn-target-chip" data-target="' + bbRec.score + '">🏆 לעבור: <strong>' + bbRec.score.toLocaleString() + '</strong></span>';
+      } else {
+        sub.innerHTML = '<span class="dyn-target-chip dyn-target-chip-pioneer">🌱 הצב את השיא הראשון שלך</span>';
+      }
     } else {
       bar.classList.add('practice');
       title.textContent = 'משחק חופשי';
@@ -1869,6 +1883,23 @@
     el.classList.remove('bump');
     void el.offsetWidth;
     el.classList.add('bump');
+    // Dynamic-board target chip: when score crosses the previous best,
+    // swap the chip to a "👑 עברת את השיא" celebration so the player
+    // gets immediate feedback during gameplay, not just at game-over.
+    var dynTargetEl = document.getElementById('dyn-target-chip');
+    if (dynTargetEl) {
+      var tgt = parseInt(dynTargetEl.getAttribute('data-target') || '0', 10) || 0;
+      if (tgt > 0 && score > tgt && !dynTargetEl.classList.contains('dyn-target-chip-passed')) {
+        dynTargetEl.classList.add('dyn-target-chip-passed');
+        dynTargetEl.innerHTML = '👑 עברת את עצמך! +' + (score - tgt).toLocaleString();
+        // Audio reward — milestone tone + buzz so it feels earned.
+        try { if (typeof soundMilestone === 'function') soundMilestone(4); } catch (e) {}
+        try { if (typeof buzz === 'function') buzz([40, 40, 80]); } catch (e) {}
+      } else if (tgt > 0 && score > tgt && dynTargetEl.classList.contains('dyn-target-chip-passed')) {
+        // Keep updating the overage number live as score grows.
+        dynTargetEl.innerHTML = '👑 עברת את עצמך! +' + (score - tgt).toLocaleString();
+      }
+    }
     // Count-up animation: smoothly roll the displayed number to current score
     var displayedScore = parseInt((el.textContent || '0').replace(/[^\d]/g, ''), 10) || 0;
     if (displayedScore >= score) return; // already at or past target
@@ -2522,6 +2553,25 @@
           // Non-default practice or duel — feeds only the difficulty board.
           submitPracticeOrDuelScore();
         }
+      } else if (mode === 'dynamic' && window._activeDynamicBoard && !window.__bloomBotActive && !skinTrialMode) {
+        // Per-board personal best — the addictive "beat your own score" loop.
+        // Capture the previous record BEFORE the write so the over screen
+        // can show the delta (or the "you missed it by N" near-miss banner).
+        var __boardId = window._activeDynamicBoard.id;
+        var __prevBoardBest = (typeof getBoardBest === 'function') ? getBoardBest(__boardId) : null;
+        var __isBoardBest = false;
+        try {
+          if (typeof setBoardBest === 'function') {
+            __isBoardBest = setBoardBest(__boardId, score, highestTier);
+          }
+        } catch (e) {}
+        render({
+          over: true,
+          isNewBest: isNewBest,
+          boardBest: __prevBoardBest,
+          isBoardBest: __isBoardBest,
+          activeBoard: window._activeDynamicBoard
+        });
       } else {
         render({ over: true, isNewBest: isNewBest });
       }
