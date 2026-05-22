@@ -2449,6 +2449,16 @@ function validateBoardDefinition(type, definition) {
       if (seen.has(key)) return { ok: false, error: 'duplicate_cell_position' };
       seen.add(key);
     }
+    // Optional: theme_id (phase 4). Visual theming layer that paints
+    // the board with a holiday palette + decorative floating emojis.
+    // The allowlist is intentionally tight — adding a new theme means
+    // adding both server-side validation AND client CSS.
+    if (definition.theme_id !== undefined && definition.theme_id !== null) {
+      const validThemes = ['hanukkah', 'valentine', 'yom_haatzmaut', 'passover'];
+      if (!validThemes.includes(definition.theme_id)) {
+        return { ok: false, error: 'bad_theme_id' };
+      }
+    }
     // Optional: relocate_mode (phase 3D++ → 3D+++). Controls when and
     // how special cells reshuffle their positions during gameplay.
     //   'static'    → no movement (default)

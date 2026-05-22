@@ -1074,3 +1074,174 @@
   font-variant-numeric: tabular-nums;
   direction: ltr; text-align: right;
 }
+
+/* ============================================================
+   PHASE 4 — Themed Boards.
+   Each theme paints the .app shell with a holiday palette + a
+   layer of floating decorative emojis (pure CSS, no JS).
+   Themes attach via body.theme-{id}-active so the whole UI shifts
+   when a themed board is active; removing the class restores the
+   default look instantly.
+   ============================================================ */
+
+/* Shared decoration host — a fixed-position absolute layer that
+   sits BEHIND the game UI (.app uses position:relative + higher
+   z-index in base.css). Decorations are added via ::before/::after
+   on body so they exist only when the theme class is active.
+   pointer-events:none lets clicks pass through to the game. */
+body[class*="theme-"][class*="-active"]::before,
+body[class*="theme-"][class*="-active"]::after {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  content: '';
+}
+
+/* --- 🕎 חנוכה --- deep night blue with menorah glow + floating ✡️ */
+body.theme-hanukkah-active {
+  background:
+    radial-gradient(ellipse at top, rgba(20, 50, 130, 0.35) 0%, transparent 60%),
+    linear-gradient(180deg, #0E1F4A 0%, #1A3070 100%) !important;
+  color: #F2EFE9;
+}
+body.theme-hanukkah-active .app {
+  background: rgba(255, 255, 255, 0.92) !important;
+  box-shadow: 0 0 60px rgba(135, 178, 255, 0.45), 0 0 120px rgba(135, 178, 255, 0.25);
+}
+body.theme-hanukkah-active::before {
+  background:
+    radial-gradient(circle at 10% 90%, rgba(255, 215, 122, 0.20) 0%, transparent 25%),
+    radial-gradient(circle at 90% 90%, rgba(255, 215, 122, 0.20) 0%, transparent 25%);
+}
+body.theme-hanukkah-active::after {
+  /* Floating ✡️ stars — multiple via background-image stacking */
+  background-image:
+    radial-gradient(circle at 15% 20%, rgba(255, 215, 122, 0.5) 0%, transparent 1.5%),
+    radial-gradient(circle at 85% 35%, rgba(255, 215, 122, 0.5) 0%, transparent 1.5%),
+    radial-gradient(circle at 50% 15%, rgba(255, 215, 122, 0.5) 0%, transparent 1.5%),
+    radial-gradient(circle at 75% 75%, rgba(255, 215, 122, 0.5) 0%, transparent 1.5%),
+    radial-gradient(circle at 25% 70%, rgba(255, 215, 122, 0.5) 0%, transparent 1.5%);
+  animation: hanukkahTwinkle 4s ease-in-out infinite;
+}
+@keyframes hanukkahTwinkle {
+  0%, 100% { opacity: 0.6; }
+  50%      { opacity: 1.0; }
+}
+
+/* --- 💕 ולנטיין --- pink romantic with floating hearts */
+body.theme-valentine-active {
+  background:
+    radial-gradient(ellipse at top, rgba(255, 200, 220, 0.55) 0%, transparent 60%),
+    linear-gradient(180deg, #FFD3E2 0%, #FFA8C0 100%) !important;
+}
+body.theme-valentine-active .app {
+  background: rgba(255, 252, 254, 0.95) !important;
+  box-shadow: 0 0 50px rgba(255, 107, 157, 0.35), 0 0 100px rgba(255, 107, 157, 0.20);
+}
+body.theme-valentine-active::before {
+  /* Floating hearts in CSS — multiple ❤️ glyphs via text shadow trick */
+  content: '❤️ 🌹 ❤️ 💗 🌷 💕 🌹 ❤️';
+  position: fixed;
+  top: 5%; left: 0;
+  font-size: 14px;
+  color: rgba(255, 107, 157, 0.45);
+  letter-spacing: 80px;
+  word-spacing: 60px;
+  white-space: nowrap;
+  overflow: hidden;
+  width: 100vw;
+  animation: valentineFloat 12s linear infinite;
+  pointer-events: none;
+  z-index: 0;
+}
+@keyframes valentineFloat {
+  0%   { transform: translateX(0) translateY(0); opacity: 0.5; }
+  50%  { transform: translateX(-30px) translateY(20px); opacity: 0.8; }
+  100% { transform: translateX(0) translateY(0); opacity: 0.5; }
+}
+body.theme-valentine-active::after {
+  content: '💕 🌹 💗 ❤️ 💕 🌹 💗';
+  position: fixed;
+  bottom: 8%; left: 0;
+  font-size: 16px;
+  color: rgba(255, 80, 130, 0.40);
+  letter-spacing: 70px;
+  white-space: nowrap;
+  width: 100vw;
+  animation: valentineFloat 14s linear infinite reverse;
+  pointer-events: none;
+}
+
+/* --- 🇮🇱 יום העצמאות --- blue/white with subtle flag bars */
+body.theme-yom-haatzmaut-active {
+  background:
+    linear-gradient(180deg, #0044AA 0%, #1E5BB8 8%, #FFFFFF 8%, #FFFFFF 92%, #1E5BB8 92%, #0044AA 100%) !important;
+}
+body.theme-yom-haatzmaut-active .app {
+  background: rgba(255, 255, 255, 0.97) !important;
+  box-shadow: 0 0 40px rgba(0, 68, 170, 0.30), 0 0 80px rgba(0, 68, 170, 0.15);
+}
+body.theme-yom-haatzmaut-active::before {
+  background-image:
+    radial-gradient(circle at 5% 50%, rgba(0, 68, 170, 0.15) 0%, transparent 8%),
+    radial-gradient(circle at 95% 50%, rgba(0, 68, 170, 0.15) 0%, transparent 8%);
+}
+body.theme-yom-haatzmaut-active::after {
+  /* Floating ✡️ Stars of David along the edges */
+  content: '✡ ✡ ✡ ✡ ✡';
+  position: fixed;
+  top: 12%; left: 0;
+  font-size: 22px;
+  color: rgba(0, 68, 170, 0.45);
+  letter-spacing: 150px;
+  white-space: nowrap;
+  width: 100vw;
+  animation: israelStarsDrift 8s ease-in-out infinite alternate;
+  pointer-events: none;
+}
+@keyframes israelStarsDrift {
+  from { transform: translateX(-5px) scale(1); opacity: 0.5; }
+  to   { transform: translateX(15px) scale(1.1); opacity: 0.85; }
+}
+
+/* --- 🍷 פסח --- wine red with floating cups */
+body.theme-passover-active {
+  background:
+    radial-gradient(ellipse at top, rgba(120, 30, 50, 0.45) 0%, transparent 60%),
+    linear-gradient(180deg, #5C1426 0%, #8B2540 100%) !important;
+  color: #F5E8DC;
+}
+body.theme-passover-active .app {
+  background: rgba(252, 248, 238, 0.95) !important;
+  box-shadow: 0 0 50px rgba(180, 60, 90, 0.40), 0 0 100px rgba(120, 30, 50, 0.25);
+}
+body.theme-passover-active::before {
+  background-image:
+    radial-gradient(circle at 12% 25%, rgba(255, 195, 120, 0.30) 0%, transparent 12%),
+    radial-gradient(circle at 88% 65%, rgba(255, 195, 120, 0.30) 0%, transparent 12%);
+}
+body.theme-passover-active::after {
+  /* Floating cups + wine */
+  content: '🍷 🍞 🍷 🍞 🍷';
+  position: fixed;
+  top: 10%; left: 0;
+  font-size: 18px;
+  color: rgba(255, 195, 120, 0.5);
+  letter-spacing: 130px;
+  white-space: nowrap;
+  width: 100vw;
+  animation: passoverFloat 10s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes passoverFloat {
+  0%, 100% { transform: translateY(0); opacity: 0.5; }
+  50%      { transform: translateY(-8px); opacity: 0.85; }
+}
+
+/* Theme-aware score callout — each holiday shifts the score color
+   subtly to match. Picks up the existing #score element. */
+body.theme-hanukkah-active #score      { color: #FFD37A !important; text-shadow: 0 0 12px rgba(255, 215, 122, 0.6); }
+body.theme-valentine-active #score     { color: #C2185B !important; text-shadow: 0 0 12px rgba(255, 107, 157, 0.5); }
+body.theme-yom-haatzmaut-active #score { color: #0044AA !important; text-shadow: 0 0 12px rgba(0, 68, 170, 0.4); }
+body.theme-passover-active #score      { color: #8B2540 !important; text-shadow: 0 0 12px rgba(180, 60, 90, 0.55); }

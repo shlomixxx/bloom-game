@@ -919,12 +919,27 @@
       </label>
       <select id="board-type" style="width:100%;padding:9px 11px;border-radius:8px;background:#FAFAF6;color:#1C1A18;border:1px solid #E5E1D5;margin-bottom:14px;font-family:inherit;font-size:13px" onchange="onBoardTypeChange()">
         <option value="multipliers">🎯 מכפילי עמודות</option>
-        <option value="special_cells">🔮 תאים מיוחדים (זהב)</option>
+        <option value="special_cells">🔮 תאים מיוחדים</option>
+        <option value="themed">🎄 לוח חג (תמה ויזואלית)</option>
         <option value="shape" disabled>🟦 צורות (שלב 5 — בקרוב)</option>
-        <option value="themed" disabled>🎄 לוחות חגים (שלב 4 — בקרוב)</option>
         <option value="mode" disabled>⏱ וריאציות חוקים (עתידי)</option>
         <option value="vip" disabled>👑 בלעדי (עתידי)</option>
       </select>
+
+      <!-- Themed boards picker (phase 4) — visible only when type='themed' -->
+      <div id="board-editor-themed" style="display:none;background:linear-gradient(135deg,#FFF7E6,#FFE6D9);border:1px solid #FAC775;border-radius:10px;padding:12px;margin-bottom:14px">
+        <div style="font-size:13px;font-weight:700;color:#BA7517;margin-bottom:6px;display:flex;align-items:center;gap:6px">
+          <span>🎄 ערכת חג</span>
+          <button class="tip-btn" data-tip-text="<strong>🎄 ערכת חג ויזואלית</strong><br>בחר ערכה והלוח יעטה את עצמו בצבעים + אמוג'ים מרחפים של החג. ניתן לשלב עם cells + multipliers (כן, גם תאים מיוחדים פעילים בערכה).<div class=&quot;tip-example&quot;>🕎 <strong>חנוכה</strong> — רקע כחול-לילה עם נרות בפינות, ✡️ מנצנצים, ציון בזהב.<br>💕 <strong>ולנטיין</strong> — ורוד חלום עם 🌹❤️ מרחפים, ציון אדום בוהק.<br>🇮🇱 <strong>יום העצמאות</strong> — דגל ישראל ברקע, ✡️ מנופפים בצדדים.<br>🍷 <strong>פסח</strong> — יין אדום עמוק עם 🍷🍞 מרחפים.<br><br>💡 <strong>שלב</strong>: ערכת חג + cells (זהב/בונוס/חשמלי/קרח/וכו׳) = חוויה שלמה. למשל: ולנטיין + 4 קרחים פינות + לבבות בונוס במרכז = ״לוח האהבה״.<br><br>📅 <strong>תזמון</strong>: סמן starts_at/ends_at לתקופת החג כדי שיופיע ויעלם אוטומטית.</div>">?</button>
+        </div>
+        <select id="board-theme-id" style="width:100%;padding:9px 11px;border-radius:8px;background:#FFFFFF;color:#1C1A18;border:1px solid #FAC775;font-family:inherit;font-size:13px;font-weight:600">
+          <option value="">בלי ערכה ויזואלית (לוח רגיל)</option>
+          <option value="hanukkah">🕎 חנוכה — כחול עם נרות</option>
+          <option value="valentine">💕 ולנטיין — ורוד עם ❤️</option>
+          <option value="yom_haatzmaut">🇮🇱 יום העצמאות — כחול-לבן</option>
+          <option value="passover">🍷 פסח — יין אדום</option>
+        </select>
+      </div>
 
       <!-- Multipliers editor -->
       <div id="board-editor-multipliers" style="background:#FFF7E6;border:1px solid #FAC775;border-radius:10px;padding:12px;margin-bottom:14px">
@@ -2991,6 +3006,8 @@
     setSpecialCellsUI([]);  // reset grid editor
     var relEl = document.getElementById('board-relocate-mode');
     if (relEl) relEl.value = 'static';
+    var themeEl = document.getElementById('board-theme-id');
+    if (themeEl) themeEl.value = '';
     document.getElementById('board-starts-at').value = '';
     document.getElementById('board-ends-at').value = '';
     document.getElementById('board-audience').value = 'all';
@@ -3029,6 +3046,11 @@
         var relSavedEl = document.getElementById('board-relocate-mode');
         if (relSavedEl) {
           relSavedEl.value = (b.definition && b.definition.relocate_mode) || 'static';
+        }
+        // Preload the saved theme_id (phase 4) so re-opening shows it.
+        var themeSavedEl = document.getElementById('board-theme-id');
+        if (themeSavedEl) {
+          themeSavedEl.value = (b.definition && b.definition.theme_id) || '';
         }
         if (b.starts_at) document.getElementById('board-starts-at').value = new Date(b.starts_at).toISOString().slice(0, 16);
         if (b.ends_at)   document.getElementById('board-ends-at').value   = new Date(b.ends_at).toISOString().slice(0, 16);
@@ -3076,8 +3098,13 @@
   function onBoardTypeChange() {
     const t = document.getElementById('board-type').value;
     document.getElementById('board-editor-multipliers').style.display    = (t === 'multipliers')   ? 'block' : 'none';
-    document.getElementById('board-editor-special-cells').style.display  = (t === 'special_cells') ? 'block' : 'none';
-    if (t === 'special_cells') {
+    // Special-cells editor is also visible for 'themed' boards — themes
+    // can layer cells + theme palette together (the most addictive combo).
+    document.getElementById('board-editor-special-cells').style.display  = (t === 'special_cells' || t === 'themed') ? 'block' : 'none';
+    // Theme picker visible only for 'themed' boards.
+    var themedHost = document.getElementById('board-editor-themed');
+    if (themedHost) themedHost.style.display = (t === 'themed') ? 'block' : 'none';
+    if (t === 'special_cells' || t === 'themed') {
       // Rebuild the editor grid the first time it's needed (cheap, idempotent).
       ensureCellsGrid();
     }
@@ -3479,6 +3506,111 @@
       ]
     },
     {
+      key: 'theme-hanukkah',
+      name: '🕎 חנוכה — לוח החג',
+      bonusAmount: 800,
+      relocate: 'on_chain',
+      themeId: 'hanukkah',
+      description: '8 תאי זהב בצורת חנוכייה + 1 בונוס מרכזי = "נר השמש". רקע כחול לילה עם ✡️ מנצנצים, ציון בזהב חגיגי. דיילי של חנוכה.',
+      strategy: 'מותאם ל-8 ימי חנוכה. שלב + applies_to=daily + starts_at חנוכה → דיילי קסום למשך השבוע.',
+      preview: [
+        '⬜ ⬜ ⬜ ⬜',
+        '⬜ ✨ ✨ ⬜',
+        '✨ ⬜ ⬜ ✨',
+        '✨ 🪙 ⬜ ✨',
+        '⬜ ✨ ✨ ⬜',
+        '⬜ ⬜ ⬜ ⬜'
+      ],
+      cells: [
+        { row: 1, col: 1, type: 'gold' },
+        { row: 1, col: 2, type: 'gold' },
+        { row: 2, col: 0, type: 'gold' },
+        { row: 2, col: 3, type: 'gold' },
+        { row: 3, col: 0, type: 'gold' },
+        { row: 3, col: 1, type: 'bonus', amount: 800 },
+        { row: 3, col: 3, type: 'gold' },
+        { row: 4, col: 1, type: 'gold' },
+        { row: 4, col: 2, type: 'gold' }
+      ]
+    },
+    {
+      key: 'theme-valentine',
+      name: '💕 ולנטיין — לב מתוק',
+      bonusAmount: 1400,
+      relocate: 'on_chain',
+      themeId: 'valentine',
+      description: 'תצורת לב: 4 קרחים מסגרת + 2 בונוסים גדולים במרכז (1400 ניקוד). רקע ורוד חלום עם ❤️🌹 מרחפים, ציון אדום בוהק.',
+      strategy: '"שבירת הלב" מטאפורי — שחקן צריך לפצח את הקרחים סביב הבונוסים. רגעי דרמה.',
+      preview: [
+        '⬜ ❄️ ❄️ ⬜',
+        '❄️ 🪙 🪙 ❄️',
+        '⬜ ⬜ ⬜ ⬜',
+        '⬜ ⬜ ⬜ ⬜',
+        '⬜ ⬜ ⬜ ⬜',
+        '⬜ ⬜ ⬜ ⬜'
+      ],
+      cells: [
+        { row: 0, col: 1, type: 'frozen' },
+        { row: 0, col: 2, type: 'frozen' },
+        { row: 1, col: 0, type: 'frozen' },
+        { row: 1, col: 1, type: 'bonus', amount: 1400 },
+        { row: 1, col: 2, type: 'bonus', amount: 1400 },
+        { row: 1, col: 3, type: 'frozen' }
+      ]
+    },
+    {
+      key: 'theme-yom-haatzmaut',
+      name: '🇮🇱 יום העצמאות',
+      bonusAmount: 1000,
+      relocate: 'on_merge',
+      themeId: 'yom_haatzmaut',
+      description: '2 חשמליים + 4 גולד פינות + 1 בונוס מרכזי. דגל ישראל ברקע, ✡️ מנופפים בצדדים. כל מיזוג מערבב — חגיגה.',
+      strategy: 'לוח חגיגה ליום העצמאות — קליל, מתגמל, מלא תזוזה. שלב עם starts_at של ה׳ באייר.',
+      preview: [
+        '✨ ⬜ ⬜ ✨',
+        '⬜ ⚡ ⚡ ⬜',
+        '⬜ ⬜ ⬜ ⬜',
+        '⬜ ⬜ 🪙 ⬜',
+        '⬜ ⬜ ⬜ ⬜',
+        '✨ ⬜ ⬜ ✨'
+      ],
+      cells: [
+        { row: 0, col: 0, type: 'gold' },
+        { row: 0, col: 3, type: 'gold' },
+        { row: 1, col: 1, type: 'electric' },
+        { row: 1, col: 2, type: 'electric' },
+        { row: 3, col: 2, type: 'bonus', amount: 1000 },
+        { row: 5, col: 0, type: 'gold' },
+        { row: 5, col: 3, type: 'gold' }
+      ]
+    },
+    {
+      key: 'theme-passover',
+      name: '🍷 פסח — סדר',
+      bonusAmount: 600,
+      relocate: 'shatter',
+      themeId: 'passover',
+      description: '4 קרחים מצה לאורך השורה האמצעית + 3 בונוסים גביעים. רקע יין אדום עמוק, 🍷🍞 מרחפים. פאזל מסורתי.',
+      strategy: '"לשבור את המצה" — כל מצה (קרח) דורש 3 מיזוגים צמודים. השגה הדרגתית.',
+      preview: [
+        '⬜ ⬜ ⬜ ⬜',
+        '🪙 🪙 🪙 ⬜',
+        '⬜ ⬜ ⬜ ⬜',
+        '❄️ ❄️ ❄️ ❄️',
+        '⬜ ⬜ ⬜ ⬜',
+        '⬜ ⬜ ⬜ ⬜'
+      ],
+      cells: [
+        { row: 1, col: 0, type: 'bonus', amount: 600 },
+        { row: 1, col: 1, type: 'bonus', amount: 600 },
+        { row: 1, col: 2, type: 'bonus', amount: 600 },
+        { row: 3, col: 0, type: 'frozen' },
+        { row: 3, col: 1, type: 'frozen' },
+        { row: 3, col: 2, type: 'frozen' },
+        { row: 3, col: 3, type: 'frozen' }
+      ]
+    },
+    {
       key: 'chaos-everything',
       name: '🌟 הכל יחד — לוח מטורף',
       bonusAmount: 1000,
@@ -3551,22 +3683,21 @@
   function applyPatternPreset(key) {
     var preset = SPECIAL_PATTERN_PRESETS.find(function(p) { return p.key === key; });
     if (!preset) return;
-    // Switch the form to special_cells type if it's not already there.
+    // Switch type — themed presets carry a themeId; others stay special_cells.
+    var targetType = preset.themeId ? 'themed' : 'special_cells';
     var typeEl = document.getElementById('board-type');
-    if (typeEl) { typeEl.value = 'special_cells'; if (typeof onBoardTypeChange === 'function') onBoardTypeChange(); }
-    // Apply cells + bonus amount.
+    if (typeEl) { typeEl.value = targetType; if (typeof onBoardTypeChange === 'function') onBoardTypeChange(); }
     var amtEl = document.getElementById('board-bonus-amount');
     if (amtEl) amtEl.value = String(preset.bonusAmount || 500);
     setSpecialCellsUI(preset.cells);
-    // Apply recommended reshuffle mode.
     var relEl = document.getElementById('board-relocate-mode');
     if (relEl) relEl.value = preset.relocate || 'static';
-    // Auto-fill name if empty.
+    var themeEl = document.getElementById('board-theme-id');
+    if (themeEl) themeEl.value = preset.themeId || '';
     var nameEl = document.getElementById('board-name');
     if (nameEl && !nameEl.value.trim()) {
       nameEl.value = preset.name;
     }
-    // Provide instant feedback + close the guide.
     if (typeof toast === 'function') toast('✅ תבנית ״' + preset.name + '״ הוחלה — כעת סמן ״פעיל״ ושמור');
     closeSpecialCellsGuide();
   }
@@ -3580,19 +3711,26 @@
     let definition = {};
     if (type === 'multipliers') {
       definition = { multipliers: readMultipliers() };
-    } else if (type === 'special_cells') {
+    } else if (type === 'special_cells' || type === 'themed') {
       definition = { cells: readSpecialCellsUI() };
-      // Validate locally so user gets immediate feedback before the server round-trip.
-      if (!definition.cells.length) {
-        statusEl.textContent = '⚠ הוסף לפחות תא זהב אחד';
+      // For themed boards, cells are optional — admin might want a pure
+      // visual theme without special cells. For special_cells type,
+      // require at least one cell.
+      if (type === 'special_cells' && !definition.cells.length) {
+        statusEl.textContent = '⚠ הוסף לפחות תא מיוחד אחד';
         statusEl.style.color = '#E07A8E';
         return;
       }
-      // Phase 3D++: include relocate_mode (only meaningful when there
-      // are frozen cells, but the server accepts it on any board).
       var relSaveEl = document.getElementById('board-relocate-mode');
       var relMode = relSaveEl ? relSaveEl.value : 'static';
       if (relMode && relMode !== 'static') definition.relocate_mode = relMode;
+      // Phase 4: theme_id (only meaningful for type='themed' but the
+      // server accepts it on any board — visual layer is universal).
+      if (type === 'themed') {
+        var themeSaveEl = document.getElementById('board-theme-id');
+        var themeId = themeSaveEl ? themeSaveEl.value : '';
+        if (themeId) definition.theme_id = themeId;
+      }
     }
     const startsAtVal = document.getElementById('board-starts-at').value;
     const endsAtVal   = document.getElementById('board-ends-at').value;

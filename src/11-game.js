@@ -4,22 +4,64 @@
   // so daily/practice/duel/dynamic all use the same logic. Supports:
   //   - type 'multipliers' → setColumnMultipliers(def.multipliers)
   //   - type 'special_cells' → setSpecialCells(def.cells)
-  //   - future types: extend here, not at each callsite.
+  //   - definition.theme_id (any type) → applies a body class for
+  //     visual theming (phase 4: holiday backgrounds + floating decor)
   // ============================================================
+  // Phase 4 theme registry. Adding a new theme requires:
+  //   1. Add an entry here
+  //   2. Add server-side validation in validateBoardDefinition
+  //   3. Add CSS rules under body.theme-{id}-active in boards.css
+  var BOARD_THEMES = {
+    hanukkah:       { name: 'חנוכה',         emoji: '🕎', cls: 'theme-hanukkah-active' },
+    valentine:      { name: 'ולנטיין',       emoji: '💕', cls: 'theme-valentine-active' },
+    yom_haatzmaut:  { name: 'יום העצמאות',   emoji: '🇮🇱', cls: 'theme-yom-haatzmaut-active' },
+    passover:       { name: 'פסח',           emoji: '🍷', cls: 'theme-passover-active' }
+  };
+  function clearBoardThemeClasses() {
+    var body = document.body;
+    if (!body) return;
+    Object.keys(BOARD_THEMES).forEach(function(k) {
+      body.classList.remove(BOARD_THEMES[k].cls);
+    });
+  }
+  function applyBoardTheme(themeId) {
+    clearBoardThemeClasses();
+    if (!themeId) return;
+    var theme = BOARD_THEMES[themeId];
+    if (!theme || !document.body) return;
+    document.body.classList.add(theme.cls);
+  }
+
   function applyBoardToSession(board) {
-    if (!board || !board.definition || !board.type) return false;
+    if (!board || !board.definition || !board.type) {
+      clearBoardThemeClasses();
+      return false;
+    }
     var def = board.definition;
+    var ok = false;
     if (board.type === 'multipliers' && Array.isArray(def.multipliers)) {
       setColumnMultipliers(def.multipliers);
-      window._activeSpecialBoard = board;
-      return true;
+      ok = true;
     }
     if (board.type === 'special_cells' && Array.isArray(def.cells)) {
       setSpecialCells(def.cells);
-      window._activeSpecialBoard = board;
-      return true;
+      ok = true;
     }
-    return false;
+    // 'themed' boards can carry cells + multipliers + theme_id in one
+    // definition. We accept the type label and apply whatever's defined.
+    if (board.type === 'themed') {
+      if (Array.isArray(def.cells))       setSpecialCells(def.cells);
+      if (Array.isArray(def.multipliers)) setColumnMultipliers(def.multipliers);
+      ok = true;
+    }
+    if (!ok) {
+      clearBoardThemeClasses();
+      return false;
+    }
+    // Apply the visual theme last so it overlays everything.
+    applyBoardTheme(def.theme_id);
+    window._activeSpecialBoard = board;
+    return true;
   }
 
   function applyDuelBoardSnapshot(duelRow) {
@@ -56,11 +98,13 @@
     // a stuck modal over the board. clearTransientBanners is idempotent.
     if (typeof clearTransientBanners === 'function') clearTransientBanners();
     // Dynamic Boards (phase 3): clear ANY leftover board state at the top
-    // of every init (column multipliers + special cells). Each mode then
-    // re-applies its own board (if any) via the per-mode resolution below.
-    // Guarantees that going from one mode to another never leaks state.
+    // of every init (column multipliers + special cells + theme class).
+    // Each mode then re-applies its own board (if any) via the per-mode
+    // resolution below. Guarantees that going from one mode to another
+    // never leaks state.
     if (typeof setColumnMultipliers === 'function') setColumnMultipliers(null);
     if (typeof setSpecialCells === 'function') setSpecialCells(null);
+    if (typeof clearBoardThemeClasses === 'function') clearBoardThemeClasses();
     window._activeSpecialBoard = null;
     if (nextMode) mode = nextMode;
     dailyDate = todayInIsrael();
