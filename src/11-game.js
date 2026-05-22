@@ -1543,12 +1543,21 @@
                   var bCell = gridElB.children[bIdx];
                   if (bCell) {
                     var bRect = bCell.getBoundingClientRect();
+                    // Animated coin + bold "+N נקודות" badge. The coin is
+                    // a span we can CSS-spin independently; the parent badge
+                    // does the entry pop. Distinct from the 💎 credits emoji
+                    // (which is also tier-7 — triple-overloaded) so the
+                    // player never confuses bonus points with currency.
                     var bBadge = document.createElement('div');
-                    bBadge.className = 'float-score';
-                    bBadge.textContent = '💎 +' + __bonusCell.amount;
-                    bBadge.style.cssText = 'position:fixed;left:' + (bRect.left + bRect.width/2) + 'px;top:' + (bRect.top + 6) + 'px;background:linear-gradient(135deg,#9FE1CB,#4FBD8B);color:#04342C;font-weight:900;font-size:14px;padding:4px 10px;border-radius:12px;box-shadow:0 4px 14px rgba(79,189,139,0.45);pointer-events:none;z-index:9998';
+                    bBadge.className = 'bonus-burst';
+                    bBadge.style.left = (bRect.left + bRect.width / 2) + 'px';
+                    bBadge.style.top  = (bRect.top + bRect.height / 2 - 6) + 'px';
+                    bBadge.innerHTML =
+                      '<span class="bonus-coin">🪙</span>' +
+                      '<span class="bonus-amount">+' + __bonusCell.amount.toLocaleString() + '</span>' +
+                      '<span class="bonus-label">נקודות</span>';
                     document.body.appendChild(bBadge);
-                    setTimeout(function() { bBadge.remove(); }, 1100);
+                    setTimeout(function() { bBadge.remove(); }, 1400);
                   }
                 }
               } catch (e) {}

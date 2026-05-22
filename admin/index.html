@@ -971,18 +971,18 @@
       <div id="board-editor-special-cells" style="display:none;background:#FFF7E6;border:1px solid #FAC775;border-radius:10px;padding:12px;margin-bottom:14px">
         <div style="font-size:13px;font-weight:700;color:#BA7517;margin-bottom:6px;display:flex;align-items:center;gap:6px">
           <span>🔮 תאים מיוחדים על הלוח</span>
-          <button class="tip-btn" data-tip-text="<strong>תאים מיוחדים</strong><br>בחר ״צבע״ למעלה, ואז לחץ על תא ברשת כדי לצבוע אותו. לחיצה חוזרת מנקה אותו.<div class=&quot;tip-example&quot;>🟡 <strong>זהב</strong> — אריח שנוחת שם <em>עולה דרגה אחת אוטומטית</em>. הכי חזק. מומלץ 2-4 תאים.<br><br>💚 <strong>בונוס</strong> — כל מיזוג שהאריח השורד שלו על תא בונוס, מקבל +N נקודות נוספות (N מוגדר למעלה). מתאים ל-3-6 תאים.<br><br>🎯 <strong>טקטיקות אדמיניות</strong>:<br>• זהב בשורה תחתונה + בונוס באמצע = ״הצלת אריח חלש בתחתית, פיצוץ נקודות באמצע״.<br>• 4 פינות כולן בונוס עם 1000₪ = ״משחק של פינות״ — שחקן צריך לתכנן מיזוגים שמסתיימים בפינה.<br>• כל הלוח זהב = משחק מטורף, כל אריח נוחת ועולה דרגה. ניסיוני, מהיר מאוד.<br><br>🏆 <strong>אריח כתר על זהב</strong>: כתר נשאר כתר (אין דרגה 9).<br><br>⚠ עד 24 תאים. מומלץ סה״כ 4-8.</div>">?</button>
+          <button class="tip-btn" data-tip-text="<strong>תאים מיוחדים</strong><br>בחר ״צבע״ למעלה, ואז לחץ על תא ברשת כדי לצבוע אותו. לחיצה חוזרת מנקה אותו.<div class=&quot;tip-example&quot;>✨ <strong>זהב</strong> — אריח שנוחת שם <em>עולה דרגה אחת אוטומטית</em>. הכי חזק. מומלץ 2-4 תאים.<br><br>🪙 <strong>בונוס</strong> — כל מיזוג שהאריח השורד שלו על תא בונוס, מקבל <em>+N נקודות משחק</em> נוספות (לא קרדיטים! N מוגדר למעלה). מתאים ל-3-6 תאים.<br><br>🎯 <strong>טקטיקות אדמיניות</strong>:<br>• זהב בשורה תחתונה + בונוס באמצע = ״הצלת אריח חלש בתחתית, פיצוץ נקודות באמצע״.<br>• 4 פינות כולן בונוס עם 1000 נקודות = ״משחק של פינות״ — שחקן צריך לתכנן מיזוגים שמסתיימים בפינה.<br>• כל הלוח זהב = משחק מטורף, כל אריח נוחת ועולה דרגה. ניסיוני, מהיר מאוד.<br><br>🏆 <strong>אריח כתר על זהב</strong>: כתר נשאר כתר (אין דרגה 9).<br><br>⚠ עד 24 תאים. מומלץ סה״כ 4-8.</div>">?</button>
         </div>
 
         <!-- Paint mode + global bonus amount -->
         <div style="display:flex;align-items:center;gap:6px;justify-content:center;flex-wrap:wrap;margin-bottom:8px">
           <span style="font-size:11px;color:#6F6E68;font-weight:700">צבע נוכחי:</span>
           <button type="button" data-paint-mode="gold" class="paint-mode-btn paint-mode-active" style="font-size:11px;padding:5px 10px;border-radius:8px;cursor:pointer;font-weight:700;border:2px solid #BA7517;background:linear-gradient(135deg,#FFE9A8,#FAC775);color:#412402">✨ זהב</button>
-          <button type="button" data-paint-mode="bonus" class="paint-mode-btn" style="font-size:11px;padding:5px 10px;border-radius:8px;cursor:pointer;font-weight:700;border:2px solid transparent;background:#F4F1E8;color:#1C1A18">💎 בונוס</button>
+          <button type="button" data-paint-mode="bonus" class="paint-mode-btn" style="font-size:11px;padding:5px 10px;border-radius:8px;cursor:pointer;font-weight:700;border:2px solid transparent;background:#F4F1E8;color:#1C1A18">🪙 בונוס</button>
           <label style="font-size:11px;color:#6F6E68;display:inline-flex;align-items:center;gap:4px;font-weight:600">
             <span>סכום:</span>
             <input id="board-bonus-amount" type="number" min="50" max="10000" step="50" value="500" style="width:64px;padding:3px 6px;border-radius:6px;background:#FFFFFF;color:#1C1A18;border:1px solid #E5E1D5;text-align:center;font-weight:700">
-            <span>💎</span>
+            <span style="font-size:13px">🪙</span>
           </label>
         </div>
 
@@ -2951,7 +2951,7 @@
       shadow: '0 0 8px rgba(250,199,117,0.55)'
     },
     bonus: {
-      label: '💎',
+      label: '🪙',  /* coin — distinct from the in-game credits 💎 emoji */
       bg: 'linear-gradient(135deg,#D8F4E6 0%,#9FE1CB 100%)',
       border: '#04342C',
       shadow: '0 0 8px rgba(79,189,139,0.55)'
@@ -3065,7 +3065,7 @@
     var bonuses = cells.filter(function(c) { return c.type === 'bonus'; }).length;
     var parts = [];
     if (golds > 0)   parts.push('✨ ' + golds);
-    if (bonuses > 0) parts.push('💎 ' + bonuses);
+    if (bonuses > 0) parts.push('🪙 ' + bonuses);
     el.textContent = parts.length ? parts.join(' · ') : '0 תאים';
     el.style.color = cells.length === 0 ? '#6F6E68' : (cells.length > 8 ? '#E07A8E' : '#BA7517');
   }
