@@ -2681,6 +2681,12 @@
           achUnlocks: __achUnlocks,
           questsCompleted: __questsCompleted
         });
+        // 🎁 Mystery Chest — fire the Skinner-box reveal ~900ms after
+        // the game-over UI lands so the player has a beat to read the
+        // headline before the chest takes over. Server rolls the dice.
+        if (typeof openMysteryChest === 'function') {
+          setTimeout(function() { try { openMysteryChest(); } catch (e) {} }, 900);
+        }
         (function() {
           try {
             fetch('/api/boards/' + __boardId + '/score', {

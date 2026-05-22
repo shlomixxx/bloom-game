@@ -970,6 +970,192 @@
   window.showQuestsModal  = showQuestsModal;
   window.closeQuestsModal = closeQuestsModal;
 
+  // ============================================================
+  // Mystery Chest — variable-rarity reward after every dynamic
+  // game. The Skinner-box mechanic that makes slot machines
+  // addictive: anticipation + dramatic reveal + variable payout.
+  //
+  // Server rolls the dice (anti-cheat). Client only animates.
+  // Five tiers: common (white) / uncommon (green) / rare (blue) /
+  // legendary (gold) / mythic (rainbow). First N chests of day
+  // are "boosted" — guaranteed uncommon+ to avoid bad-first-3
+  // frustration.
+  // ============================================================
+  var CHEST_TIER_STYLE = {
+    common:    { label: 'רגיל',       color: '#B5B3AC', glow: 'rgba(181,179,172,0.4)', emoji: '📦' },
+    uncommon:  { label: 'נדיר',       color: '#4FBD8B', glow: 'rgba(79,189,139,0.5)',  emoji: '🎁' },
+    rare:      { label: 'נדיר מאוד',  color: '#3D8BFA', glow: 'rgba(61,139,250,0.55)', emoji: '💠' },
+    legendary: { label: 'אגדי',       color: '#FAC775', glow: 'rgba(255,180,0,0.65)',  emoji: '🌟' },
+    mythic:    { label: 'מיתי',       color: '#FF6B9D', glow: 'rgba(255,107,157,0.75)', emoji: '🔮' }
+  };
+  function chestEnabled() { return dynFeatureEnabled('chest') && dynConfigBool('dyn_chest_enabled', true); }
+  // Master toggle compatible with dynFeatureEnabled('chest') — readers
+  // can ask either via the dyn_chest_enabled key directly or via this
+  // helper which also respects an upstream "chest" feature flag.
+  function dynChestFeatureEnabled() {
+    return dynConfigBool('dyn_chest_enabled', true);
+  }
+  // Opens a chest by calling the server, then animates the reveal in
+  // a slot-machine overlay. Auto-dismisses 3.5s after the reveal
+  // (player can tap to dismiss earlier).
+  function openMysteryChest() {
+    if (!dynChestFeatureEnabled()) return Promise.resolve(null);
+    var deviceId = (typeof getDeviceId === 'function') ? getDeviceId() : '';
+    var token    = (typeof deviceToken !== 'undefined') ? deviceToken : null;
+    return fetch('/api/boards/chest/open', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ deviceId: deviceId, token: token })
+    })
+      .then(function(r) { return r.json(); })
+      .catch(function() { return null; })
+      .then(function(d) {
+        if (!d || !d.ok) return d;
+        showChestRevealAnimation(d);
+        // Reflect the new balance on the UI. The server already credited
+        // it atomically — we just need to repaint the home pill so the
+        // player sees the increase without a page refresh.
+        if (typeof d.newBalance === 'number') {
+          try { if (typeof playerBalance !== 'undefined') playerBalance = d.newBalance; } catch (e) {}
+          try { if (typeof updateBalanceDisplay === 'function') updateBalanceDisplay(); } catch (e) {}
+        }
+        return d;
+      });
+  }
+  // The reveal overlay — 5-stage choreography:
+  //   1) Chest icon appears, shakes (1s)
+  //   2) Lid pops open, light bursts (0.5s)
+  //   3) Slot-machine reel spins through tiers, decelerating (1.5s)
+  //   4) Lands on chosen tier with bounce + sound + confetti (0.3s)
+  //   5) Number counts up from 0 to amount (0.6s)
+  function showChestRevealAnimation(data) {
+    if (!data || !data.tier) return;
+    var tierStyle = CHEST_TIER_STYLE[data.tier] || CHEST_TIER_STYLE.common;
+    // Tear down any existing chest overlay (race-safety).
+    document.querySelectorAll('.dyn-chest-overlay').forEach(function(el) { el.remove(); });
+    var overlay = document.createElement('div');
+    overlay.className = 'dyn-chest-overlay';
+    overlay.innerHTML =
+      '<div class="dyn-chest-card" data-tier="' + data.tier + '" style="--tier-color:' + tierStyle.color + '; --tier-glow:' + tierStyle.glow + '">' +
+        '<div class="dyn-chest-stage dyn-chest-stage-shake">' +
+          '<div class="dyn-chest-icon">📦</div>' +
+        '</div>' +
+        '<div class="dyn-chest-stage dyn-chest-stage-reveal" style="display:none">' +
+          '<div class="dyn-chest-burst"></div>' +
+          '<div class="dyn-chest-emoji">' + tierStyle.emoji + '</div>' +
+          '<div class="dyn-chest-tier-label">' + tierStyle.label + '</div>' +
+          '<div class="dyn-chest-amount" id="dyn-chest-amount">0💎</div>' +
+        '</div>' +
+        '<div class="dyn-chest-meta" id="dyn-chest-meta">' +
+          (data.boosted ? '⭐ אריזה משופרת!' : '') +
+        '</div>' +
+        '<div class="dyn-chest-tap-dismiss">לחץ להמשך</div>' +
+      '</div>';
+    document.body.appendChild(overlay);
+    // Stage 1 → 2 → 3 → 4 → 5 timing.
+    var shakeMs  = 900;
+    var reelMs   = 1500;
+    var countMs  = 700;
+    // Play chest-shake sound up front (single short knock).
+    try { if (typeof playTone === 'function') playTone(140, 0.10, 0.04); } catch (e) {}
+    try { if (typeof buzz === 'function') buzz([30]); } catch (e) {}
+    setTimeout(function() {
+      var stage1 = overlay.querySelector('.dyn-chest-stage-shake');
+      var stage2 = overlay.querySelector('.dyn-chest-stage-reveal');
+      if (stage1) stage1.style.display = 'none';
+      if (stage2) stage2.style.display = '';
+      // Stage 3: reel spin through the tiers' colors before landing.
+      // We re-use the dyn-chest-emoji + tier-label as the reel face.
+      var emojiEl = overlay.querySelector('.dyn-chest-emoji');
+      var labelEl = overlay.querySelector('.dyn-chest-tier-label');
+      var tierOrder = CHEST_TIERS_ORDER.slice();
+      var ticks = 14;
+      var i = 0;
+      var t0 = performance.now();
+      // Pop sound at lid-open.
+      try { if (typeof playTone === 'function') playTone(420, 0.10, 0.05); } catch (e) {}
+      try { if (typeof buzz === 'function') buzz([40, 30, 40]); } catch (e) {}
+      function tick() {
+        var elapsed = performance.now() - t0;
+        var p = Math.min(1, elapsed / reelMs);
+        // Ease-out: ticks come faster early, slower near the end.
+        var eased = 1 - Math.pow(1 - p, 3);
+        var targetIdx = Math.floor(eased * ticks);
+        while (i < targetIdx) {
+          var idx = i % tierOrder.length;
+          var ts = CHEST_TIER_STYLE[tierOrder[idx]];
+          if (emojiEl) emojiEl.textContent = ts.emoji;
+          if (labelEl) labelEl.textContent = ts.label;
+          try { if (typeof playTone === 'function') playTone(280 + (i * 30) % 200, 0.025, 0.02); } catch (e) {}
+          i++;
+        }
+        if (p < 1) {
+          requestAnimationFrame(tick);
+        } else {
+          // Landing — paint the real tier + the gem amount counts up.
+          if (emojiEl) emojiEl.textContent = tierStyle.emoji;
+          if (labelEl) labelEl.textContent = tierStyle.label;
+          // Card upgrades its tier class so the glow ramps up.
+          var card = overlay.querySelector('.dyn-chest-card');
+          if (card) card.classList.add('dyn-chest-card-landed');
+          // Big landing sound — higher pitch for higher tier.
+          var landFreq = data.tier === 'mythic' ? 880 : data.tier === 'legendary' ? 700 : data.tier === 'rare' ? 560 : data.tier === 'uncommon' ? 440 : 320;
+          try { if (typeof playTone === 'function') { playTone(landFreq, 0.45, 0.15); setTimeout(function() { playTone(landFreq * 1.5, 0.35, 0.1); }, 80); } } catch (e) {}
+          try { if (typeof buzz === 'function') buzz([60, 40, 80]); } catch (e) {}
+          // Confetti for rare+ tiers — handled by CSS particle layer.
+          if (data.tier === 'rare' || data.tier === 'legendary' || data.tier === 'mythic') {
+            spawnChestConfetti(overlay, data.tier);
+          }
+          // Count-up amount.
+          var amtEl = overlay.querySelector('#dyn-chest-amount');
+          var t1 = performance.now();
+          (function countUp() {
+            var e2 = performance.now() - t1;
+            var q = Math.min(1, e2 / countMs);
+            var n = Math.round(q * data.amount);
+            if (amtEl) amtEl.textContent = '+' + n.toLocaleString() + '💎';
+            if (q < 1) requestAnimationFrame(countUp);
+          })();
+          // Auto-dismiss after a moment.
+          setTimeout(function() {
+            overlay.classList.add('dyn-chest-out');
+            setTimeout(function() { overlay.remove(); }, 350);
+          }, 3500);
+        }
+      }
+      requestAnimationFrame(tick);
+    }, shakeMs);
+    // Tap-anywhere to dismiss after the reveal stage.
+    overlay.addEventListener('click', function() {
+      overlay.classList.add('dyn-chest-out');
+      setTimeout(function() { overlay.remove(); }, 350);
+    });
+  }
+  var CHEST_TIERS_ORDER = ['common', 'uncommon', 'rare', 'legendary', 'mythic'];
+  // Confetti — 18 particles spawned with random keyframes.
+  function spawnChestConfetti(host, tier) {
+    var colors = tier === 'mythic'
+      ? ['#FF6B9D', '#FFD86B', '#3D8BFA', '#4FBD8B', '#FFFFFF']
+      : tier === 'legendary'
+        ? ['#FFD86B', '#FAC775', '#FFFFFF']
+        : ['#3D8BFA', '#9FE1CB'];
+    for (var i = 0; i < 22; i++) {
+      var c = document.createElement('div');
+      c.className = 'dyn-chest-particle';
+      var angle = (Math.PI * 2 * i) / 22;
+      var dist = 80 + Math.random() * 60;
+      var dx = Math.cos(angle) * dist;
+      var dy = Math.sin(angle) * dist - 20;
+      c.style.background = colors[i % colors.length];
+      c.style.setProperty('--dx', dx + 'px');
+      c.style.setProperty('--dy', dy + 'px');
+      c.style.animationDelay = (i * 12) + 'ms';
+      host.appendChild(c);
+    }
+  }
+  window.openMysteryChest          = openMysteryChest;
+  window.dynChestFeatureEnabled    = dynChestFeatureEnabled;
+
   // Human-readable labels for themes / shapes so the player can tell the
   // boards apart before clicking — boring rectangular cards = no clicks.
   var THEME_LABELS = {
@@ -1080,8 +1266,8 @@
         '<div class="dyn-streak-banner dyn-streak-banner-pioneer">' +
           '<div class="dyn-streak-banner-icon">🌱</div>' +
           '<div class="dyn-streak-banner-body">' +
-            '<div class="dyn-streak-banner-title">התחל רצף לוחות דינמיים היום</div>' +
-            '<div class="dyn-streak-banner-sub">סיים לוח אחד כל יום · יום 3 = ' + r3 + '💎, יום 7 = ' + r7 + '💎, יום 14 = ' + r14 + '💎, יום 30 = ' + r30 + '💎</div>' +
+            '<div class="dyn-streak-banner-title">סיים לוח אחד היום — והרצף שלך מתחיל</div>' +
+            '<div class="dyn-streak-banner-sub">3 ימים → ' + r3 + '💎 · 7 ימים → ' + r7 + '💎 · 14 ימים → ' + r14 + '💎 · 30 ימים → ' + r30 + '💎</div>' +
           '</div>' +
         '</div>';
     }
@@ -1135,7 +1321,7 @@
         '<div class="dyn-boards-head">' +
           '<button class="dyn-boards-close" aria-label="סגור">✕</button>' +
           '<div class="dyn-boards-title">🎯 לוחות דינמיים</div>' +
-          '<div class="dyn-boards-sub">בחר לוח לסשן חד-פעמי. הניקוד נשמר בלוח המובילים של הלוח הזה.</div>' +
+          '<div class="dyn-boards-sub">לוחות מיוחדים עם חוקים משלהם. כל לוח — לוח מובילים נפרד, שיא אישי משלך, ומשימות.</div>' +
           questsHeadlineHtml +
           achProgressHtml +
           streakBannerHtml +
@@ -1156,8 +1342,8 @@
       listEl.innerHTML =
         '<div class="dyn-boards-empty">' +
           '<div class="dyn-boards-empty-icon">🌱</div>' +
-          '<div class="dyn-boards-empty-title">אין לוחות זמינים כרגע</div>' +
-          '<div class="dyn-boards-empty-sub">המנהל לא הפעיל לוחות, או שכולם בתאריך עתידי. נסה שוב מאוחר יותר.</div>' +
+          '<div class="dyn-boards-empty-title">לוחות חדשים בקרוב</div>' +
+          '<div class="dyn-boards-empty-sub">אנחנו עובדים על לוחות חדשים — חזור לבדוק מאוחר יותר. בינתיים, נסה את האתגר היומי או תחרות חברים.</div>' +
         '</div>';
     } else {
       // Card backgrounds per theme — match css/boards.css body.theme-X-active
@@ -1201,7 +1387,7 @@
           if (best && best.score > 0) {
             chips.push('<span class="dyn-boards-chip dyn-boards-chip-best">🏆 שיא ' + formatBoardScore(best.score) + '</span>');
           } else {
-            chips.push('<span class="dyn-boards-chip dyn-boards-chip-pioneer">🌱 חדש לך</span>');
+            chips.push('<span class="dyn-boards-chip dyn-boards-chip-pioneer">🌱 בוא נתחיל</span>');
           }
         }
         // Global per-board leader — the social half of the addiction loop.

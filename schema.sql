@@ -735,6 +735,37 @@ INSERT INTO game_config (key, value) VALUES ('dyn_streak_reward_60',  '1000') ON
 INSERT INTO game_config (key, value) VALUES ('dyn_streak_reward_100', '2000') ON CONFLICT (key) DO NOTHING;
 
 -- ============================================================
+-- Dynamic Boards — Mystery Chest (May 2026)
+--
+-- The "Skinner box" layer. Every dynamic-board game-over rolls a
+-- random reward on the server (anti-cheat), reveals via a slot-
+-- machine animation on the client. Five rarity tiers, weights and
+-- amounts fully admin-controlled. First N chests of the day are
+-- "boosted" (uncommon+ guaranteed) to prevent early frustration.
+-- ============================================================
+INSERT INTO game_config (key, value) VALUES ('dyn_chest_enabled',          'true') ON CONFLICT (key) DO NOTHING;
+-- Rarity weights (relative, normalised on the server). Defaults sum to 100.
+INSERT INTO game_config (key, value) VALUES ('dyn_chest_weight_common',    '60') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('dyn_chest_weight_uncommon',  '25') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('dyn_chest_weight_rare',      '12') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('dyn_chest_weight_legendary', '2')  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('dyn_chest_weight_mythic',    '1')  ON CONFLICT (key) DO NOTHING;
+-- Min/max amounts per tier (server picks a uniform value within range).
+INSERT INTO game_config (key, value) VALUES ('dyn_chest_common_min',       '3')    ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('dyn_chest_common_max',       '10')   ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('dyn_chest_uncommon_min',     '15')   ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('dyn_chest_uncommon_max',     '30')   ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('dyn_chest_rare_min',         '50')   ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('dyn_chest_rare_max',         '100')  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('dyn_chest_legendary_min',    '200')  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('dyn_chest_legendary_max',    '400')  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('dyn_chest_mythic_min',       '800')  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('dyn_chest_mythic_max',       '1500') ON CONFLICT (key) DO NOTHING;
+-- Daily cap (counted server-side via dedup key) and "boosted first-N" pity.
+INSERT INTO game_config (key, value) VALUES ('dyn_chest_daily_cap',        '20') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('dyn_chest_boosted_count',    '3')  ON CONFLICT (key) DO NOTHING;
+
+-- ============================================================
 -- Dynamic Boards — phase 2 (May 2026)
 -- The board_configurations table backs admin-managed alternate
 -- boards (column multipliers, themed packs, future special cells

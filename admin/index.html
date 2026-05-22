@@ -2025,6 +2025,26 @@
     dyn_ach_reward_all_themes:   [400, 800, 1200, 1500],
     dyn_ach_reward_all_shapes:   [400, 800, 1200, 1500],
     dyn_ach_reward_leaderboard1: [500, 1000, 1500, 2000],
+    // Mystery Chest — weights (relative, normalised server-side)
+    dyn_chest_weight_common:     [0, 30, 50, 60, 75],
+    dyn_chest_weight_uncommon:   [10, 25, 35, 50],
+    dyn_chest_weight_rare:       [5, 12, 20, 30],
+    dyn_chest_weight_legendary:  [0, 1, 2, 5, 10],
+    dyn_chest_weight_mythic:     [0, 1, 2, 3, 5],
+    // Mystery Chest — amounts
+    dyn_chest_common_min:        [1, 3, 5, 10],
+    dyn_chest_common_max:        [5, 10, 15, 20, 30],
+    dyn_chest_uncommon_min:      [10, 15, 20, 30],
+    dyn_chest_uncommon_max:      [25, 30, 50, 75],
+    dyn_chest_rare_min:          [30, 50, 75, 100],
+    dyn_chest_rare_max:          [75, 100, 150, 200],
+    dyn_chest_legendary_min:     [100, 200, 300, 500],
+    dyn_chest_legendary_max:     [250, 400, 600, 800],
+    dyn_chest_mythic_min:        [500, 800, 1000, 1500],
+    dyn_chest_mythic_max:        [1000, 1500, 2000, 3000, 5000],
+    // Mystery Chest — caps
+    dyn_chest_daily_cap:         [5, 10, 20, 30, 50, 100],
+    dyn_chest_boosted_count:     [0, 1, 3, 5, 10],
     // Streak milestones
     dyn_streak_reward_3:   [25, 50, 100, 150],
     dyn_streak_reward_7:   [75, 150, 200, 300],
@@ -2233,6 +2253,26 @@
     dyn_ach_reward_all_themes:   'פרס להישג 🎄 "אספן חגים (4 themes)".<div class="tip-example">📊 ערכים: 400-1500💎. ברירת מחדל 800💎.<br>💡 דרושים hanukkah + valentine + yom_haatzmaut + passover. ה-collectible הכי גדול. תגמול גדול ראוי.</div>',
     dyn_ach_reward_all_shapes:   'פרס להישג 🟦 "אומן צורות (4 shapes)".<div class="tip-example">📊 ערכים: 400-1500💎. ברירת מחדל 800💎.<br>💡 דרושים heart + diamond + tree + pyramid. שתיים מתוך 4 מופיעות רק בלוחות חג, כך שהאספן רוב הזמן מאוחד עם dyn_ach_reward_all_themes.</div>',
     dyn_ach_reward_leaderboard1: 'פרס להישג 🥇 "מקום #1 באיזשהו לוח דינמי".<div class="tip-example">📊 ערכים: 500-2000💎. ברירת מחדל 1000💎.<br>💡 הכי קשה — דורש לעקוף את כל השחקנים בלוח ספציפי. תגמול גבוה מצדיק.</div>',
+
+    // ---- Mystery Chest ----
+    dyn_chest_enabled:           '🎁 <strong>מתג ראשי</strong> לתיבת המסתורין שנפתחת אחרי כל משחק בלוח דינמי.<div class="tip-example">✅ <code>true</code> (ברירת מחדל) — אנימציית סלוט-מכונה דרמטית אחרי כל game-over של לוח דינמי. 5 דרגות נדירות (רגיל / נדיר / נדיר מאוד / אגדי / מיתי).<br>❌ <code>false</code> — התיבה לא מופיעה. ה-game-over נראה רגיל.<br><br>💡 ה-Skinner Box של המשחק — המנגנון הכי ממכר ב-F2P. אל תכבה ללא סיבה. אם הכלכלה חמה — תוריד את המשקלים של הדרגות הגבוהות במקום.</div>',
+    dyn_chest_weight_common:     'משקל יחסי לדרגת "רגיל" (כסף לבן, 3-10💎).<div class="tip-example">📊 משקלים יחסיים — מנורמלים בשרת. ברירת מחדל 60. שילוב default = 60/25/12/2/1 (סה״כ 100).<br><br>💡 העלאת המשקל = יותר תיבות רגילות, פחות מיוחדות. לתיבת ש-90% רגילות תרגיש קמצנית.<br>💡 הורדה ל-0 = אין תיבות רגילות בכלל. כל תיבה מינימום uncommon.<br>⚠ "Boosted" — 3 התיבות הראשונות ביום מתעלמות מערך זה (תמיד uncommon+).</div>',
+    dyn_chest_weight_uncommon:   'משקל יחסי לדרגת "נדיר" (מנטה ירוקה, 15-30💎).<div class="tip-example">📊 ברירת מחדל 25. דרגת המרכז — צריכה להיות הכי שכיחה אחרי "רגיל".<br>💡 הגדלה ל-40 = השחקן יקבל הרבה תיבות "נדיר" ויראה ירוק לעיתים תכופות.</div>',
+    dyn_chest_weight_rare:       'משקל יחסי לדרגת "נדיר מאוד" (כחול, 50-100💎).<div class="tip-example">📊 ברירת מחדל 12. דרגת הביניים-עליונה. ~1 מתוך 8 תיבות.<br>💡 העלאה ל-20 = השחקן יראה כחול לעיתים יחסית קרובות (~1 מתוך 5).</div>',
+    dyn_chest_weight_legendary:  'משקל יחסי לדרגת "אגדי" (זהב, 200-400💎).<div class="tip-example">📊 ברירת מחדל 2 (~1 מתוך 50 תיבות).<br>💡 דרגה נדירה — שווה הרבה למשחקים שייצרו "וואו!" רגעים. אל תעלה מעל 5 בלי לאזן את הכלכלה.</div>',
+    dyn_chest_weight_mythic:     'משקל יחסי לדרגת "מיתי" (קשת בענן, 800-1500💎).<div class="tip-example">📊 ברירת מחדל 1 (~1 מתוך 100 תיבות).<br>💡 הדרגה הנדירה ביותר — נדירה במכוון. שחקן שיראה מיתי יזכור את זה לימים. אל תעלה מעל 3.</div>',
+    dyn_chest_common_min:        'מינימום מטבעות לתיבה רגילה.<div class="tip-example">📊 ברירת מחדל 3💎. מתאים ל"זוטא, אבל לא ריק".<br>💡 פחות מ-3 = השחקן ירגיש מוכה. יותר מ-15 = הדרגה "רגיל" מאבדת משמעות.</div>',
+    dyn_chest_common_max:        'מקסימום מטבעות לתיבה רגילה.<div class="tip-example">📊 ברירת מחדל 10💎. תמיד גדול יותר מ-min.<br>💡 ערכים סבירים: 8-20💎.</div>',
+    dyn_chest_uncommon_min:      'מינימום מטבעות לתיבה "נדיר".<div class="tip-example">📊 ברירת מחדל 15💎.</div>',
+    dyn_chest_uncommon_max:      'מקסימום מטבעות לתיבה "נדיר".<div class="tip-example">📊 ברירת מחדל 30💎.</div>',
+    dyn_chest_rare_min:          'מינימום מטבעות לתיבה "נדיר מאוד".<div class="tip-example">📊 ברירת מחדל 50💎.</div>',
+    dyn_chest_rare_max:          'מקסימום מטבעות לתיבה "נדיר מאוד".<div class="tip-example">📊 ברירת מחדל 100💎.</div>',
+    dyn_chest_legendary_min:     'מינימום מטבעות לתיבה "אגדי".<div class="tip-example">📊 ברירת מחדל 200💎. שווה לפעמיים ה-uncommon max.</div>',
+    dyn_chest_legendary_max:     'מקסימום מטבעות לתיבה "אגדי".<div class="tip-example">📊 ברירת מחדל 400💎.</div>',
+    dyn_chest_mythic_min:        'מינימום מטבעות לתיבה "מיתי".<div class="tip-example">📊 ברירת מחדל 800💎.<br>💡 "וואו!" רמה.</div>',
+    dyn_chest_mythic_max:        'מקסימום מטבעות לתיבה "מיתי".<div class="tip-example">📊 ברירת מחדל 1500💎.<br>💡 שווה ערך ל-10-15$ מהחנות. מצדיק את הנדירות 1:100.</div>',
+    dyn_chest_daily_cap:         'מקסימום תיבות שאפשר לפתוח ביום אחד פר-מכשיר.<div class="tip-example">📊 ברירת מחדל 20.<br>💡 חישוב: שחקן רגיל ישחק 3-5 לוחות ביום = 3-5 תיבות. רוב הזמן לא יגיע ל-20. ה-cap מגן רק מ-bot/spam.<br>📊 לאיזון יותר אגרסיבי: 10-15. לליברלי: 40-50.</div>',
+    dyn_chest_boosted_count:     'מספר התיבות הראשונות ביום שמדלגות על דרגת "רגיל" (Boosted).<div class="tip-example">📊 ברירת מחדל 3.<br>💡 Anti-frustration: שחקן שפתח 3 תיבות "רגיל" ברצף ישנא את המנגנון. ב-Boosted המשקל של "רגיל" = 0, אז דרגה מינימלית = "נדיר".<br>📊 ערכים: 0 (בלי boost), 3 (default), 5-10 (נדיב).</div>',
 
     // Streak milestone rewards (6)
     dyn_streak_reward_3:   'פרס למילסטון רצף של 3 ימים.<div class="tip-example">📊 ערכים: 25-150💎. ברירת מחדל 50💎.<br>💡 ה"hook" הראשון — שחקן שמתחיל רצף יראה כבר ביום השלישי שאפשר להמשיך. תגמול נמוך = יעד קל.</div>',

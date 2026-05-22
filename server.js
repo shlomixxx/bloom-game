@@ -2811,6 +2811,113 @@ app.get('/api/boards/:id/leaderboard', async (req, res) => {
 });
 
 // ============================================================
+// Dynamic Boards — Mystery Chest (May 2026)
+//
+// Server rolls the dice (anti-cheat: client never gets to pick).
+// Dedup + daily cap via game_config keys (TTL-purged by the
+// hourly cleanup that already handles _earn:* and _gift_rate:*).
+// "Boosted" pity: the first N chests each day skip the common tier
+// so new players don't open their first 3 chests for 5 gems each.
+// ============================================================
+const CHEST_TIERS = ['common', 'uncommon', 'rare', 'legendary', 'mythic'];
+function chestConfigInt(cfg, key, def) {
+  if (!cfg || cfg[key] == null || cfg[key] === '') return def;
+  const n = parseInt(cfg[key], 10);
+  return Number.isFinite(n) ? n : def;
+}
+async function loadCfgMap() {
+  // Tiny helper: pull the relevant chest keys in one query.
+  try {
+    const r = await pool.query(
+      `SELECT key, value FROM game_config WHERE key LIKE 'dyn_chest_%' OR key = 'dyn_chest_enabled'`
+    );
+    const out = {};
+    r.rows.forEach(row => { out[row.key] = row.value; });
+    return out;
+  } catch (e) { return {}; }
+}
+app.post('/api/boards/chest/open', requireDeviceAuth, async (req, res) => {
+  try {
+    const { deviceId } = req.body || {};
+    if (typeof deviceId !== 'string' || deviceId.length < 8 || deviceId.length > 64) {
+      return res.status(400).json({ error: 'bad_device' });
+    }
+    // Rate-limit: 30 chests/hour. A normal player completing one game per
+    // 2-3 minutes will never hit this; cheaters spamming will.
+    if (!checkRateLimit('dyn_chest', deviceId, 30, 60 * 60 * 1000)) {
+      return res.status(429).json({ error: 'rate_limited' });
+    }
+    const cfg = await loadCfgMap();
+    if (cfg.dyn_chest_enabled === 'false') {
+      return res.json({ ok: false, reason: 'disabled' });
+    }
+    const dailyCap = chestConfigInt(cfg, 'dyn_chest_daily_cap', 20);
+    const boostedCount = chestConfigInt(cfg, 'dyn_chest_boosted_count', 3);
+    // Per-day counter via game_config dedup row.
+    const today = new Date().toISOString().slice(0, 10);
+    const counterKey = `_chest:${deviceId}:${today}`;
+    let openedToday = 0;
+    try {
+      const r = await pool.query(`SELECT value FROM game_config WHERE key = $1`, [counterKey]);
+      if (r.rows[0]) openedToday = parseInt(r.rows[0].value, 10) || 0;
+    } catch (e) {}
+    if (openedToday >= dailyCap) {
+      return res.json({ ok: false, reason: 'daily_cap', dailyCap, openedToday });
+    }
+    // Roll tier — first N chests of the day are boosted (no common).
+    const weights = {
+      common:    chestConfigInt(cfg, 'dyn_chest_weight_common',    60),
+      uncommon:  chestConfigInt(cfg, 'dyn_chest_weight_uncommon',  25),
+      rare:      chestConfigInt(cfg, 'dyn_chest_weight_rare',      12),
+      legendary: chestConfigInt(cfg, 'dyn_chest_weight_legendary', 2),
+      mythic:    chestConfigInt(cfg, 'dyn_chest_weight_mythic',    1)
+    };
+    const isBoosted = openedToday < boostedCount;
+    if (isBoosted) weights.common = 0;
+    const totalW = Object.values(weights).reduce((a, b) => a + b, 0);
+    let roll = Math.random() * totalW;
+    let chosenTier = 'common';
+    for (const t of CHEST_TIERS) {
+      roll -= weights[t];
+      if (roll <= 0) { chosenTier = t; break; }
+    }
+    // Pick a uniform amount in the tier range.
+    const minV = chestConfigInt(cfg, `dyn_chest_${chosenTier}_min`, 0);
+    const maxV = chestConfigInt(cfg, `dyn_chest_${chosenTier}_max`, Math.max(minV, 1));
+    const amount = Math.floor(minV + Math.random() * Math.max(0, maxV - minV + 1));
+    // Atomic credit + counter bump (two queries, second is dedup-safe).
+    let newBalance = null;
+    try {
+      const credit = await pool.query(
+        `UPDATE player_profiles SET balance = balance + $1, updated_at = NOW()
+          WHERE device_id = $2 RETURNING balance`,
+        [amount, deviceId]
+      );
+      if (credit.rows[0]) newBalance = credit.rows[0].balance;
+    } catch (e) {
+      console.error('chest credit failed', e && e.message);
+    }
+    await pool.query(
+      `INSERT INTO game_config (key, value) VALUES ($1, $2)
+       ON CONFLICT (key) DO UPDATE SET value = $2, updated_at = NOW()`,
+      [counterKey, String(openedToday + 1)]
+    ).catch(err => console.warn('chest counter persist failed', err && err.message));
+    return res.json({
+      ok: true,
+      tier: chosenTier,
+      amount: amount,
+      boosted: isBoosted,
+      openedToday: openedToday + 1,
+      dailyCap: dailyCap,
+      newBalance: newBalance
+    });
+  } catch (e) {
+    console.error('POST /api/boards/chest/open', e);
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
+// ============================================================
 // ADMIN ROUTES (כל המסלולים מוגנים ב-requireAdmin)
 // ============================================================
 
