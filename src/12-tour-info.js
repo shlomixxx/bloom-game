@@ -629,6 +629,26 @@
               prog +
             '</div>';
           })() +
+          (function() {
+            // Achievement unlocks — gold-pink pulsing card per unlock.
+            // Stacked vertically when multiple fire at once (rare but
+            // possible: e.g. "score 10K" + "score 50K" on a big run).
+            var unlocks = opts.achUnlocks || [];
+            if (!unlocks.length) return '';
+            var html = '';
+            for (var i = 0; i < unlocks.length; i++) {
+              var u = unlocks[i];
+              html +=
+                '<div class="over-ach-banner">' +
+                  '<div class="over-ach-icon">' + (u.icon || '🏅') + '</div>' +
+                  '<div class="over-ach-body">' +
+                    '<div class="over-ach-title">הישג חדש! <strong>' + escapeHtml(u.label || '') + '</strong></div>' +
+                    '<div class="over-ach-reward">+' + (u.reward || 0) + '💎</div>' +
+                  '</div>' +
+                '</div>';
+            }
+            return html;
+          })() +
           rankTierHtml +
           rivalHtml +
           continueHtml +

@@ -2620,6 +2620,22 @@
             }
           }
         } catch (e) {}
+        // Achievements pass — grants every newly-earned per-board and
+        // cross-board achievement, returns the unlocks list for the
+        // over screen. Rank-1 detection runs separately after the
+        // leaderboard fetch resolves below.
+        var __achUnlocks = [];
+        try {
+          if (typeof checkAndGrantAchievements === 'function') {
+            __achUnlocks = checkAndGrantAchievements({
+              boardId: __boardId,
+              score: score,
+              tier: highestTier,
+              rank: null,
+              knownBoards: window._availableBoards || []
+            }) || [];
+          }
+        } catch (e) {}
         // Fire the global per-board leaderboard submit + render the
         // game-over screen optimistically. The fetch returns rank+total
         // which we paint into the screen once it resolves (so the
@@ -2641,7 +2657,8 @@
           isBoardBest: __isBoardBest,
           activeBoard: window._activeDynamicBoard,
           boardLeader: { pending: true },
-          streakResult: __streakResult
+          streakResult: __streakResult,
+          achUnlocks: __achUnlocks
         });
         (function() {
           try {
@@ -2670,6 +2687,22 @@
                 host.innerHTML = label;
                 host.classList.add('over-board-rank-loaded');
                 if (rank === 1) host.classList.add('over-board-rank-king');
+                // Second-pass achievement check now that we know the
+                // global rank. Fires the leaderboard1 cross-board ach.
+                if (rank === 1 && typeof checkAndGrantAchievements === 'function') {
+                  try {
+                    var post = checkAndGrantAchievements({
+                      boardId: __boardId,
+                      score: score,
+                      tier: highestTier,
+                      rank: 1,
+                      knownBoards: window._availableBoards || []
+                    });
+                    if (post && post.length && typeof renderAchievementUnlockToast === 'function') {
+                      post.forEach(function(u) { renderAchievementUnlockToast(u); });
+                    }
+                  } catch (e) {}
+                }
               });
           } catch (e) {}
         })();

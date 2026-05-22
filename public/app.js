@@ -5746,6 +5746,286 @@
   window.isStreakInDanger       = isStreakInDanger;
   window.DYN_STREAK_REWARDS     = DYN_STREAK_REWARDS;
 
+  // ============================================================
+  // Achievements — the completionist engine.
+  //
+  // Two flavors:
+  //   - PER-BOARD (one row per board): "played" / "crown" / "100K"
+  //   - CROSS-BOARD (single row): "5-board pioneer" / "all themes" /
+  //     "all shapes" / "5 crowns"
+  //
+  // Each achievement can be unlocked ONCE. On unlock: confetti toast
+  // + earnCredits reward. Stored together in localStorage so the
+  // picker can paint earned badges without a server round-trip.
+  // ============================================================
+  var DYN_ACH_KEY = 'bloom_dyn_achievements';
+
+  // Per-board achievements — checked against EACH board the player finishes.
+  // Each grants its reward exactly once per board id.
+  var ACH_PER_BOARD = [
+    { id: 'played',  icon: '🌱', label: 'הצטרפת',         reward:  25, check: function(ctx) { return true; } },
+    { id: 'crown',   icon: '👑', label: 'הגעת לכתר',      reward: 150, check: function(ctx) { return ctx.tier >= 8; } },
+    { id: 'score10', icon: '💎', label: 'שיא: 10K',        reward:  50, check: function(ctx) { return ctx.score >= 10000; } },
+    { id: 'score50', icon: '🏆', label: 'שיא: 50K',        reward: 150, check: function(ctx) { return ctx.score >= 50000; } },
+    { id: 'score100',icon: '💯', label: 'שיא: 100K',       reward: 300, check: function(ctx) { return ctx.score >= 100000; } }
+  ];
+  // Cross-board achievements — checked across ALL boards the player has
+  // touched. Use the aggregate state (per-board records + earned set).
+  var ACH_CROSS = [
+    { id: 'pioneer5',   icon: '🗺️', label: 'חלוץ — 5 לוחות שונים', reward: 200,
+      check: function(agg) { return agg.playedBoards >= 5; } },
+    { id: 'pioneer10',  icon: '🧭', label: 'חוקר — 10 לוחות שונים', reward: 500,
+      check: function(agg) { return agg.playedBoards >= 10; } },
+    { id: 'crown5',     icon: '👑', label: '5 כתרים בלוחות שונים', reward: 500,
+      check: function(agg) { return agg.crownBoards >= 5; } },
+    { id: 'all_themes', icon: '🎄', label: 'אספן חגים (4/4)', reward: 800,
+      check: function(agg) { return agg.themesPlayed >= 4; } },
+    { id: 'all_shapes', icon: '🟦', label: 'אומן צורות (4/4)', reward: 800,
+      check: function(agg) { return agg.shapesPlayed >= 4; } },
+    { id: 'leaderboard1', icon: '🥇', label: 'מקום #1 באיזשהו לוח', reward: 1000,
+      check: function(agg) { return agg.rankOnes >= 1; } }
+  ];
+
+  function getAchievementsState() {
+    try {
+      var raw = localStorage.getItem(DYN_ACH_KEY);
+      if (!raw) return { perBoard: {}, cross: {} };
+      var obj = JSON.parse(raw);
+      if (!obj || typeof obj !== 'object') return { perBoard: {}, cross: {} };
+      if (!obj.perBoard || typeof obj.perBoard !== 'object') obj.perBoard = {};
+      if (!obj.cross || typeof obj.cross !== 'object') obj.cross = {};
+      return obj;
+    } catch (e) { return { perBoard: {}, cross: {} }; }
+  }
+  function saveAchievementsState(st) {
+    try { localStorage.setItem(DYN_ACH_KEY, JSON.stringify(st)); } catch (e) {}
+  }
+  // True if the per-board achievement is already earned for this board id.
+  function hasPerBoard(state, boardId, achId) {
+    return !!(state.perBoard[boardId] && state.perBoard[boardId][achId]);
+  }
+  function grantPerBoard(state, boardId, achId) {
+    if (!state.perBoard[boardId]) state.perBoard[boardId] = {};
+    state.perBoard[boardId][achId] = Date.now();
+  }
+  function hasCross(state, achId) { return !!state.cross[achId]; }
+  function grantCross(state, achId) { state.cross[achId] = Date.now(); }
+
+  // Build the cross-board aggregate from the per-board state.
+  // Theme/shape membership is read from the boards we have records on
+  // (the picker passes the active boards in for theme/shape lookup).
+  function aggregateAchievementContext(state, knownBoards) {
+    var playedBoards = Object.keys(state.perBoard).length;
+    var crownBoards  = 0;
+    var rankOnes     = 0;
+    var themeSet     = {};
+    var shapeSet     = {};
+    var byId = {};
+    (knownBoards || []).forEach(function(b) { byId[b.id] = b; });
+    Object.keys(state.perBoard).forEach(function(bidStr) {
+      var bid = parseInt(bidStr, 10);
+      var entry = state.perBoard[bid] || {};
+      if (entry.crown) crownBoards++;
+      if (entry.rank1) rankOnes++;
+      var b = byId[bid];
+      if (b && b.definition) {
+        if (b.definition.theme_id) themeSet[b.definition.theme_id] = 1;
+        if (b.definition.shape_id) shapeSet[b.definition.shape_id] = 1;
+      }
+    });
+    return {
+      playedBoards: playedBoards,
+      crownBoards: crownBoards,
+      rankOnes: rankOnes,
+      themesPlayed: Object.keys(themeSet).length,
+      shapesPlayed: Object.keys(shapeSet).length
+    };
+  }
+
+  // Called from the dynamic-mode game-over branch. Returns the list of
+  // achievement objects unlocked this game (could be both per-board and
+  // cross-board). Each carries icon/label/reward — the over screen
+  // renders them. Also fires earnCredits for each unlocked achievement.
+  function checkAndGrantAchievements(ctx) {
+    if (!ctx || !ctx.boardId) return [];
+    var state = getAchievementsState();
+    var unlocked = [];
+    // Per-board pass
+    for (var i = 0; i < ACH_PER_BOARD.length; i++) {
+      var ach = ACH_PER_BOARD[i];
+      if (hasPerBoard(state, ctx.boardId, ach.id)) continue;
+      if (!ach.check(ctx)) continue;
+      grantPerBoard(state, ctx.boardId, ach.id);
+      unlocked.push({ scope: 'board', boardId: ctx.boardId, id: ach.id, icon: ach.icon, label: ach.label, reward: ach.reward });
+    }
+    // Also flag "crown" / "rank1" markers used by the cross-board aggregate.
+    if (ctx.tier >= 8 && state.perBoard[ctx.boardId] && !state.perBoard[ctx.boardId].crown) {
+      state.perBoard[ctx.boardId].crown = Date.now();
+    }
+    if (ctx.rank === 1 && state.perBoard[ctx.boardId] && !state.perBoard[ctx.boardId].rank1) {
+      state.perBoard[ctx.boardId].rank1 = Date.now();
+    }
+    // Cross-board pass (uses the freshly-updated state).
+    var agg = aggregateAchievementContext(state, ctx.knownBoards || window._availableBoards || []);
+    for (var j = 0; j < ACH_CROSS.length; j++) {
+      var cach = ACH_CROSS[j];
+      if (hasCross(state, cach.id)) continue;
+      if (!cach.check(agg)) continue;
+      grantCross(state, cach.id);
+      unlocked.push({ scope: 'cross', id: cach.id, icon: cach.icon, label: cach.label, reward: cach.reward });
+    }
+    saveAchievementsState(state);
+    // Fire credits for each unlock.
+    if (unlocked.length && typeof earnCredits === 'function') {
+      unlocked.forEach(function(u) {
+        try { earnCredits('event_gift', { amount: u.reward, achievement_id: u.id, scope: u.scope, board: u.boardId || null }); } catch (e) {}
+      });
+    }
+    return unlocked;
+  }
+  // Used by the picker to paint earned badge icons next to each board.
+  function getEarnedPerBoardIcons(boardId) {
+    var state = getAchievementsState();
+    var entry = state.perBoard[boardId] || {};
+    var icons = [];
+    ACH_PER_BOARD.forEach(function(a) { if (entry[a.id]) icons.push(a.icon); });
+    return icons;
+  }
+  // Used by the achievements modal.
+  function listAllAchievementsForUI(knownBoards) {
+    var state = getAchievementsState();
+    var agg = aggregateAchievementContext(state, knownBoards || window._availableBoards || []);
+    return {
+      cross: ACH_CROSS.map(function(a) {
+        return Object.assign({}, a, { earned: hasCross(state, a.id), progress: aggProgress(a, agg) });
+      }),
+      perBoard: ACH_PER_BOARD,
+      perBoardState: state.perBoard
+    };
+  }
+  function aggProgress(ach, agg) {
+    // Returns a small "x / y" string for progressive cross-board achievements.
+    if (ach.id === 'pioneer5')   return Math.min(agg.playedBoards, 5)  + ' / 5';
+    if (ach.id === 'pioneer10')  return Math.min(agg.playedBoards, 10) + ' / 10';
+    if (ach.id === 'crown5')     return Math.min(agg.crownBoards, 5)   + ' / 5';
+    if (ach.id === 'all_themes') return Math.min(agg.themesPlayed, 4)  + ' / 4';
+    if (ach.id === 'all_shapes') return Math.min(agg.shapesPlayed, 4)  + ' / 4';
+    if (ach.id === 'leaderboard1') return agg.rankOnes >= 1 ? '✓' : '0 / 1';
+    return null;
+  }
+  window.checkAndGrantAchievements = checkAndGrantAchievements;
+  window.getEarnedPerBoardIcons    = getEarnedPerBoardIcons;
+  window.listAllAchievementsForUI  = listAllAchievementsForUI;
+  window.DYN_ACH_PER_BOARD         = ACH_PER_BOARD;
+  window.DYN_ACH_CROSS             = ACH_CROSS;
+
+  // Late-fire achievement toast for unlocks that happen AFTER the
+  // initial game-over render (e.g. the rank-1 leaderboard achievement
+  // can only be confirmed once the /leaderboard fetch resolves).
+  // Floating top-of-viewport pill, auto-dismisses after 4s.
+  function renderAchievementUnlockToast(u) {
+    if (!u) return;
+    var t = document.createElement('div');
+    t.className = 'dyn-ach-toast';
+    t.innerHTML =
+      '<span class="dyn-ach-toast-icon">' + (u.icon || '🏅') + '</span>' +
+      '<span class="dyn-ach-toast-body">' +
+        '<strong>הישג חדש!</strong> ' + escapeHtml(u.label || '') +
+        '<span class="dyn-ach-toast-reward">+' + (u.reward || 0) + '💎</span>' +
+      '</span>';
+    document.body.appendChild(t);
+    setTimeout(function() { t.classList.add('dyn-ach-toast-out'); setTimeout(function() { t.remove(); }, 320); }, 4000);
+  }
+  window.renderAchievementUnlockToast = renderAchievementUnlockToast;
+
+  // ============================================================
+  // Achievements modal — full catalog. Earned ones glow gold,
+  // unearned ones are dimmed with their reward visible (creates
+  // explicit "what I can earn" loop).
+  // ============================================================
+  function closeAchievementsModal() {
+    var el = document.getElementById('dyn-ach-modal');
+    if (el) el.remove();
+  }
+  function showAchievementsModal() {
+    closeAchievementsModal();
+    var data = (typeof listAllAchievementsForUI === 'function')
+      ? listAllAchievementsForUI(window._availableBoards || [])
+      : { cross: [], perBoard: [], perBoardState: {} };
+    // Cross-board rows
+    var crossHtml = '';
+    (data.cross || []).forEach(function(a) {
+      var cls = a.earned ? 'dyn-ach-row earned' : 'dyn-ach-row locked';
+      crossHtml +=
+        '<div class="' + cls + '">' +
+          '<div class="dyn-ach-row-icon">' + a.icon + '</div>' +
+          '<div class="dyn-ach-row-body">' +
+            '<div class="dyn-ach-row-title">' + escapeHtml(a.label) + '</div>' +
+            '<div class="dyn-ach-row-sub">' + (a.earned ? '✓ הושג' : (a.progress || '')) + '</div>' +
+          '</div>' +
+          '<div class="dyn-ach-row-reward">+' + a.reward + '💎</div>' +
+        '</div>';
+    });
+    // Per-board rows — collapsed by board name. Shows per-board badge
+    // grid: each per-board achievement icon either solid (earned) or
+    // ghosted (locked).
+    var perBoardHtml = '';
+    var boards = window._availableBoards || [];
+    if (boards.length) {
+      boards.forEach(function(b) {
+        var entry = (data.perBoardState && data.perBoardState[b.id]) || {};
+        var earnedCt = 0;
+        var pbBadges = (data.perBoard || []).map(function(a) {
+          var earned = !!entry[a.id];
+          if (earned) earnedCt++;
+          return '<div class="dyn-ach-pb-badge' + (earned ? ' earned' : '') + '" title="' + escapeHtml(a.label) + ' (+' + a.reward + '💎)">' +
+                  '<div class="dyn-ach-pb-icon">' + a.icon + '</div>' +
+                  '<div class="dyn-ach-pb-label">' + escapeHtml(a.label) + '</div>' +
+                  '<div class="dyn-ach-pb-reward">+' + a.reward + '💎</div>' +
+                '</div>';
+        }).join('');
+        perBoardHtml +=
+          '<div class="dyn-ach-pb-board">' +
+            '<div class="dyn-ach-pb-board-head">' +
+              '<span class="dyn-ach-pb-board-name">' + escapeHtml(b.name || 'לוח') + '</span>' +
+              '<span class="dyn-ach-pb-board-count">' + earnedCt + ' / ' + (data.perBoard || []).length + '</span>' +
+            '</div>' +
+            '<div class="dyn-ach-pb-board-badges">' + pbBadges + '</div>' +
+          '</div>';
+      });
+    } else {
+      perBoardHtml = '<div class="dyn-ach-empty">אין לוחות זמינים כרגע</div>';
+    }
+    var overlay = document.createElement('div');
+    overlay.id = 'dyn-ach-modal';
+    overlay.className = 'dyn-ach-modal-overlay';
+    overlay.innerHTML =
+      '<div class="dyn-ach-modal-card">' +
+        '<div class="dyn-ach-modal-head">' +
+          '<button class="dyn-ach-modal-close" aria-label="סגור">✕</button>' +
+          '<div class="dyn-ach-modal-title">🏅 הישגים — לוחות דינמיים</div>' +
+          '<div class="dyn-ach-modal-sub">השלם הישגים → קבל 💎 + צ׳יפ זהב על כל לוח</div>' +
+        '</div>' +
+        '<div class="dyn-ach-modal-body">' +
+          '<div class="dyn-ach-section-title">🏆 הישגים כלליים</div>' +
+          (crossHtml || '<div class="dyn-ach-empty">אין הישגים כלליים</div>') +
+          '<div class="dyn-ach-section-title" style="margin-top:18px">🎯 הישגים פר לוח</div>' +
+          perBoardHtml +
+        '</div>' +
+        '<div class="dyn-ach-modal-foot">' +
+          '<button class="dyn-ach-modal-back">חזור</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(overlay);
+    overlay.querySelector('.dyn-ach-modal-close').onclick = closeAchievementsModal;
+    overlay.querySelector('.dyn-ach-modal-back').onclick = closeAchievementsModal;
+    overlay.addEventListener('click', function(e) {
+      if (e.target === overlay) closeAchievementsModal();
+    });
+  }
+  window.showAchievementsModal  = showAchievementsModal;
+  window.closeAchievementsModal = closeAchievementsModal;
+
   // Human-readable labels for themes / shapes so the player can tell the
   // boards apart before clicking — boring rectangular cards = no clicks.
   var THEME_LABELS = {
@@ -5857,6 +6137,29 @@
           '</div>' +
         '</div>';
     }
+    // Achievement progress headline — "X / Y total" pill that opens
+    // the achievements modal on click. Visible regardless of streak
+    // state since it's a separate completionist track.
+    var achState = (typeof listAllAchievementsForUI === 'function') ? listAllAchievementsForUI(boards) : null;
+    var achProgressHtml = '';
+    if (achState) {
+      var earnedCross = (achState.cross || []).filter(function(a) { return a.earned; }).length;
+      var totalCross = (achState.cross || []).length;
+      // Sum per-board earned across known boards.
+      var earnedPerBoard = 0;
+      var pbState = achState.perBoardState || {};
+      Object.keys(pbState).forEach(function(bid) {
+        var entry = pbState[bid] || {};
+        (achState.perBoard || []).forEach(function(a) { if (entry[a.id]) earnedPerBoard++; });
+      });
+      var totalPerBoard = (achState.perBoard || []).length * Math.max(boards.length, 1);
+      achProgressHtml =
+        '<button class="dyn-ach-progress-btn" id="dyn-ach-progress-btn">' +
+          '<span class="dyn-ach-progress-icon">🏅</span>' +
+          '<span class="dyn-ach-progress-text">הישגים: ' + (earnedCross + earnedPerBoard) + ' / ' + (totalCross + totalPerBoard) + '</span>' +
+          '<span class="dyn-ach-progress-arrow">›</span>' +
+        '</button>';
+    }
     var overlay = document.createElement('div');
     overlay.id = 'dynamic-boards-picker';
     overlay.className = 'dyn-boards-overlay';
@@ -5866,6 +6169,7 @@
           '<button class="dyn-boards-close" aria-label="סגור">✕</button>' +
           '<div class="dyn-boards-title">🎯 לוחות דינמיים</div>' +
           '<div class="dyn-boards-sub">בחר לוח לסשן חד-פעמי. הניקוד נשמר בלוח המובילים של הלוח הזה.</div>' +
+          achProgressHtml +
           streakBannerHtml +
         '</div>' +
         '<div class="dyn-boards-list" id="dyn-boards-list"></div>' +
@@ -5874,6 +6178,8 @@
         '</div>' +
       '</div>';
     document.body.appendChild(overlay);
+    var achBtn = document.getElementById('dyn-ach-progress-btn');
+    if (achBtn) achBtn.onclick = showAchievementsModal;
 
     var listEl = document.getElementById('dyn-boards-list');
     if (!boards.length) {
@@ -5939,6 +6245,14 @@
         }
         if (b.players && b.players > 0) {
           chips.push('<span class="dyn-boards-chip dyn-boards-chip-players">👥 ' + b.players + ' שיחקו</span>');
+        }
+        // Earned achievement badge stack — shows ONLY the icons of
+        // achievements the player has earned on THIS specific board.
+        // Visual gamification: "I have 3 badges on Hanukkah, can I get
+        // the missing 2?".
+        var earnedIcons = (typeof getEarnedPerBoardIcons === 'function') ? getEarnedPerBoardIcons(b.id) : [];
+        if (earnedIcons.length) {
+          chips.push('<span class="dyn-boards-chip dyn-boards-chip-badges">🏅 ' + earnedIcons.join(' ') + '</span>');
         }
         var chipsHtml = chips.length ? ('<div class="dyn-boards-card-chips">' + chips.join('') + '</div>') : '';
         // Per-card urgency badge (Phase 6 LiveOps). data-board-id +
@@ -12866,6 +13180,22 @@
             }
           }
         } catch (e) {}
+        // Achievements pass — grants every newly-earned per-board and
+        // cross-board achievement, returns the unlocks list for the
+        // over screen. Rank-1 detection runs separately after the
+        // leaderboard fetch resolves below.
+        var __achUnlocks = [];
+        try {
+          if (typeof checkAndGrantAchievements === 'function') {
+            __achUnlocks = checkAndGrantAchievements({
+              boardId: __boardId,
+              score: score,
+              tier: highestTier,
+              rank: null,
+              knownBoards: window._availableBoards || []
+            }) || [];
+          }
+        } catch (e) {}
         // Fire the global per-board leaderboard submit + render the
         // game-over screen optimistically. The fetch returns rank+total
         // which we paint into the screen once it resolves (so the
@@ -12887,7 +13217,8 @@
           isBoardBest: __isBoardBest,
           activeBoard: window._activeDynamicBoard,
           boardLeader: { pending: true },
-          streakResult: __streakResult
+          streakResult: __streakResult,
+          achUnlocks: __achUnlocks
         });
         (function() {
           try {
@@ -12916,6 +13247,22 @@
                 host.innerHTML = label;
                 host.classList.add('over-board-rank-loaded');
                 if (rank === 1) host.classList.add('over-board-rank-king');
+                // Second-pass achievement check now that we know the
+                // global rank. Fires the leaderboard1 cross-board ach.
+                if (rank === 1 && typeof checkAndGrantAchievements === 'function') {
+                  try {
+                    var post = checkAndGrantAchievements({
+                      boardId: __boardId,
+                      score: score,
+                      tier: highestTier,
+                      rank: 1,
+                      knownBoards: window._availableBoards || []
+                    });
+                    if (post && post.length && typeof renderAchievementUnlockToast === 'function') {
+                      post.forEach(function(u) { renderAchievementUnlockToast(u); });
+                    }
+                  } catch (e) {}
+                }
               });
           } catch (e) {}
         })();
@@ -13698,6 +14045,26 @@
               '🔥 רצף לוחות דינמיים: <strong>' + after + ' ימים</strong>' +
               prog +
             '</div>';
+          })() +
+          (function() {
+            // Achievement unlocks — gold-pink pulsing card per unlock.
+            // Stacked vertically when multiple fire at once (rare but
+            // possible: e.g. "score 10K" + "score 50K" on a big run).
+            var unlocks = opts.achUnlocks || [];
+            if (!unlocks.length) return '';
+            var html = '';
+            for (var i = 0; i < unlocks.length; i++) {
+              var u = unlocks[i];
+              html +=
+                '<div class="over-ach-banner">' +
+                  '<div class="over-ach-icon">' + (u.icon || '🏅') + '</div>' +
+                  '<div class="over-ach-body">' +
+                    '<div class="over-ach-title">הישג חדש! <strong>' + escapeHtml(u.label || '') + '</strong></div>' +
+                    '<div class="over-ach-reward">+' + (u.reward || 0) + '💎</div>' +
+                  '</div>' +
+                '</div>';
+            }
+            return html;
           })() +
           rankTierHtml +
           rivalHtml +
