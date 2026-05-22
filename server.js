@@ -2385,6 +2385,11 @@ function invalidateBoardCache() {
   _boardsListCache = { value: undefined, expiresAt: 0 };
 }
 
+// Allowed cell types for special_cells boards. Expand here as new types
+// land (frozen / electric / locked / teleport / bonus). Client code uses
+// the same list to decide what to render.
+const SPECIAL_CELL_TYPES = ['gold'];  // phase 3A: gold only
+
 function validateBoardDefinition(type, definition) {
   if (definition === null || typeof definition !== 'object' || Array.isArray(definition)) {
     return { ok: false, error: 'definition_not_object' };
@@ -2402,9 +2407,39 @@ function validateBoardDefinition(type, definition) {
     }
     return { ok: true };
   }
-  // Future types (special_cells / shape / themed / mode / vip) accept any
-  // object — validation is added per-phase. Today no client-side code
-  // applies them, so a bad definition is a no-op.
+  if (type === 'special_cells') {
+    const cells = definition.cells;
+    if (!Array.isArray(cells)) {
+      return { ok: false, error: 'cells_must_be_array' };
+    }
+    if (cells.length > 24) {
+      return { ok: false, error: 'too_many_cells' };  // max = full 4×6 board
+    }
+    // Dedupe on row,col so the same slot can't carry two types.
+    const seen = new Set();
+    for (const c of cells) {
+      if (!c || typeof c !== 'object') return { ok: false, error: 'cell_not_object' };
+      const row = Number(c.row);
+      const col = Number(c.col);
+      const ctype = String(c.type || '');
+      if (!Number.isInteger(row) || row < 0 || row > 5) {
+        return { ok: false, error: 'cell_row_out_of_range' };
+      }
+      if (!Number.isInteger(col) || col < 0 || col > 3) {
+        return { ok: false, error: 'cell_col_out_of_range' };
+      }
+      if (!SPECIAL_CELL_TYPES.includes(ctype)) {
+        return { ok: false, error: 'cell_type_unsupported' };
+      }
+      const key = row + ',' + col;
+      if (seen.has(key)) return { ok: false, error: 'duplicate_cell_position' };
+      seen.add(key);
+    }
+    return { ok: true };
+  }
+  // Future types (shape / themed / mode / vip) accept any object —
+  // validation is added per-phase. Today no client-side code applies
+  // them, so a bad definition is a no-op.
   return { ok: true };
 }
 

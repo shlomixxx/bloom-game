@@ -925,6 +925,18 @@
         console.warn('[render] ✓ gravity applied, new state grid=' + (typeof serializeGrid === 'function' ? serializeGrid() : '?'));
       }
     }
+    // Dynamic Boards — special-cell lookup (phase 3A). Build a quick
+    // map from row,col → cell so the per-tile render below can paint a
+    // gold ring. Null when no special-cells board is active.
+    var _specCells = (typeof getSpecialCells === 'function') ? getSpecialCells() : null;
+    var _specByPos = null;
+    if (_specCells && _specCells.length) {
+      _specByPos = {};
+      for (var sci = 0; sci < _specCells.length; sci++) {
+        var sc = _specCells[sci];
+        _specByPos[sc.row + ',' + sc.col] = sc;
+      }
+    }
     for (let r = 0; r < getBoardRows(); r++) {
       for (let c = 0; c < getBoardCols(); c++) {
         const t = grid[r][c];
@@ -932,6 +944,12 @@
         cell.className = 'cell';
         cell.dataset.r = r;
         cell.dataset.c = c;
+        // Mark special cells BEFORE the tile-fill branch so the ring shows
+        // even on empty squares (player needs to know where to aim).
+        if (_specByPos) {
+          var spec = _specByPos[r + ',' + c];
+          if (spec) cell.classList.add('special-' + spec.type);
+        }
         if (t > 0) {
           cell.classList.add('filled');
           // tier-N (1..8) class — used by Aurora CSS for per-tier shadows,

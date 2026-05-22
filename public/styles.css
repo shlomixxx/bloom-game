@@ -4986,6 +4986,46 @@
 .col-mult-bar { direction: ltr; }
 
 /* ============================================================
+   Special cells — phase 3A: Gold cell
+   A persistent gold ring around a cell that upgrades the tile by
+   one tier on landing. Visible even on empty squares so the player
+   knows where to aim. Uses inset box-shadow so the cell's normal
+   background + animations are untouched.
+   ============================================================ */
+.cell.special-gold {
+  box-shadow:
+    inset 0 0 0 2px #FAC775,
+    inset 0 0 14px rgba(250, 199, 117, 0.55),
+    0 0 8px rgba(250, 199, 117, 0.35);
+  background-image: radial-gradient(circle at center, rgba(255, 215, 122, 0.18) 0%, transparent 65%);
+  animation: goldCellPulse 2.2s ease-in-out infinite;
+  position: relative;
+}
+.cell.special-gold::after {
+  content: '✨';
+  position: absolute;
+  top: 2px; right: 3px;
+  font-size: 11px;
+  opacity: 0.85;
+  pointer-events: none;
+  filter: drop-shadow(0 1px 2px rgba(186, 117, 23, 0.5));
+}
+@keyframes goldCellPulse {
+  0%, 100% {
+    box-shadow:
+      inset 0 0 0 2px #FAC775,
+      inset 0 0 14px rgba(250, 199, 117, 0.55),
+      0 0 8px rgba(250, 199, 117, 0.35);
+  }
+  50% {
+    box-shadow:
+      inset 0 0 0 2px #FFD37A,
+      inset 0 0 22px rgba(255, 215, 122, 0.75),
+      0 0 16px rgba(250, 199, 117, 0.55);
+  }
+}
+
+/* ============================================================
    Home: "🎯 לוחות דינמיים" entry button (home v2)
    ============================================================ */
 .home-v2-boards {

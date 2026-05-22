@@ -915,11 +915,11 @@
 
       <label style="font-size:12px;color:#6F6E68;display:flex;align-items:center;gap:6px;margin-bottom:4px;font-weight:600">
         <span>סוג</span>
-        <button class="tip-btn" data-tip-text="<strong>סוג הלוח</strong><br>קובע איזה ״טוויסט״ מקבלים השחקנים בסשן שלהם.<div class=&quot;tip-example&quot;>🎯 <strong>מכפילי עמודות (פעיל)</strong>: כל עמודה נותנת מכפיל ניקוד שונה. שחקן בוחר אסטרטגית איפה להפיל.<br><br>🔮 <strong>תאים מיוחדים (שלב 3 - עתידי)</strong>: תאי זהב/קפוא/חשמלי/נעול/טלפורט/בונוס.<br><br>🟦 <strong>צורות (שלב 5)</strong>: לוח לא 4×6 (לב / עץ / מגן דוד / פירמידה).<br><br>🎄 <strong>חגים (שלב 4)</strong>: שילוב של כל הקודמים סביב תמה (חנוכה / פסח / ולנטיין).<br><br>⏱ <strong>וריאציות (עתידי)</strong>: speed mode / chain hunt / survival.<br><br>👑 <strong>בלעדי (עתידי)</strong>: VIP / Battle Pass / רמה 10+.<br><br>💡 כרגע רק <code>multipliers</code> מומש בקליינט. שאר הסוגים יחזרו 400 משרת אם תנסה ליצור.</div>">?</button>
+        <button class="tip-btn" data-tip-text="<strong>סוג הלוח</strong><br>קובע איזה ״טוויסט״ מקבלים השחקנים בסשן שלהם.<div class=&quot;tip-example&quot;>🎯 <strong>מכפילי עמודות</strong>: כל עמודה נותנת מכפיל ניקוד שונה. שחקן בוחר אסטרטגית איפה להפיל.<br><br>🔮 <strong>תאים מיוחדים (חדש!)</strong>: תאים מסוימים בלוח גורמים לאריח שנוחת שם <em>לעלות דרגה אוטומטית</em> (זהב). תאים נוספים יתווספו: קפוא / חשמלי / בונוס / טלפורט / נעול.<br><br>🟦 <strong>צורות (שלב 5)</strong>: לוח לא 4×6 (לב / עץ / מגן דוד / פירמידה).<br><br>🎄 <strong>חגים (שלב 4)</strong>: שילוב של כל הקודמים סביב תמה (חנוכה / פסח / ולנטיין).<br><br>⏱ <strong>וריאציות (עתידי)</strong>: speed mode / chain hunt / survival.<br><br>👑 <strong>בלעדי (עתידי)</strong>: VIP / Battle Pass / רמה 10+.<br><br>💡 שני הסוגים הראשונים זמינים לעריכה כרגע. שאר הסוגים מסומנים ״בקרוב״ ויחזרו 400 משרת.</div>">?</button>
       </label>
       <select id="board-type" style="width:100%;padding:9px 11px;border-radius:8px;background:#FAFAF6;color:#1C1A18;border:1px solid #E5E1D5;margin-bottom:14px;font-family:inherit;font-size:13px" onchange="onBoardTypeChange()">
         <option value="multipliers">🎯 מכפילי עמודות</option>
-        <option value="special_cells" disabled>🔮 תאים מיוחדים (שלב 3 — בקרוב)</option>
+        <option value="special_cells">🔮 תאים מיוחדים (זהב)</option>
         <option value="shape" disabled>🟦 צורות (שלב 5 — בקרוב)</option>
         <option value="themed" disabled>🎄 לוחות חגים (שלב 4 — בקרוב)</option>
         <option value="mode" disabled>⏱ וריאציות חוקים (עתידי)</option>
@@ -961,6 +961,27 @@
           <button type="button" onclick="setMultipliers([10,1,1,1])" style="font-size:11px;padding:6px 10px;background:#1C1A18;color:#FFF;border:none;border-radius:8px;cursor:pointer;font-weight:600" title="עמודה אחת קיצונית, חצי גורל">×10 ×1 ×1 ×1 (מהמר)</button>
           <button type="button" onclick="setMultipliers([1,3,3,1])" style="font-size:11px;padding:6px 10px;background:#1C1A18;color:#FFF;border:none;border-radius:8px;cursor:pointer;font-weight:600" title="עמודות אמצעיות מתגמלות">×1 ×3 ×3 ×1 (אמצע)</button>
           <button type="button" onclick="setMultipliers([1,1,1,1])" style="font-size:11px;padding:6px 10px;background:#F4F1E8;color:#1C1A18;border:1px solid #E5E1D5;border-radius:8px;cursor:pointer;font-weight:600" title="שווה ערך למשחק רגיל">×1 ×1 ×1 ×1 (אפס אפקט)</button>
+        </div>
+      </div>
+
+      <!-- Special-cells editor (phase 3A: gold only). Visible only when
+           board-type = special_cells. 4×6 grid where each cell can be
+           toggled gold by clicking it. -->
+      <div id="board-editor-special-cells" style="display:none;background:#FFF7E6;border:1px solid #FAC775;border-radius:10px;padding:12px;margin-bottom:14px">
+        <div style="font-size:13px;font-weight:700;color:#BA7517;margin-bottom:6px;display:flex;align-items:center;gap:6px">
+          <span>✨ תאי זהב על הלוח</span>
+          <button class="tip-btn" data-tip-text="<strong>תאי זהב</strong><br>לחץ על תא ברשת כדי להפוך אותו לזהב. אריח שנוחת על תא זהב <em>עולה דרגה אחת אוטומטית</em> (אבן→עלה, עלה→פרח, וכו׳ עד כתר).<div class=&quot;tip-example&quot;>🎯 <strong>טקטיקה אדמינית</strong>: 2-3 תאי זהב במיקום אסטרטגי = שדרוג חזק לחוויה. יותר מ-6 = המשחק נהיה שטוף-זהב ומאבד אתגר.<br><br>💡 <strong>איפה למקם</strong>?<br>• <strong>שורה תחתונה</strong>: הכי קל להגיע (drop=tier-up), הכי שכיח.<br>• <strong>פינות עליונות</strong>: קשה להגיע, מתגמל שחקן שמבחין.<br>• <strong>אמצע</strong>: מאלץ אסטרטגיית מילוי הפוכה מהרגיל.<br><br>🟨 <strong>וויזואל</strong>: התא מוקף ברינג זוהב נושם + ✨ פיניש. גלוי כשהתא ריק (השחקן יודע לאן לכוון).<br><br>🏆 <strong>אריח כתר על זהב</strong>: כתר הוא מקסימום — אם אריח כתר נוחת על זהב, הוא נשאר כתר (אין דרגה 9). שאר הדרגות עולות.<br><br>⚠ עד 24 תאים (כל הלוח). מומלץ 2-5.</div>">?</button>
+        </div>
+        <div style="font-size:11px;color:#6F6E68;margin-bottom:8px">לחץ על תא להפעיל/לכבות זהב. עמודה 1 = הימנית (לפי כיוון השחקן).</div>
+        <div id="board-cells-grid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:4px;max-width:240px;margin:0 auto 8px;direction:ltr">
+          <!-- 24 cells injected by JS, row-major order matching the engine -->
+        </div>
+        <div style="display:flex;gap:6px;align-items:center;justify-content:center;flex-wrap:wrap">
+          <button type="button" onclick="setCellsPreset('bottom-row')" style="font-size:11px;padding:5px 9px;background:#1C1A18;color:#FFF;border:none;border-radius:6px;cursor:pointer;font-weight:600">שורה תחתונה</button>
+          <button type="button" onclick="setCellsPreset('corners')" style="font-size:11px;padding:5px 9px;background:#1C1A18;color:#FFF;border:none;border-radius:6px;cursor:pointer;font-weight:600">4 פינות</button>
+          <button type="button" onclick="setCellsPreset('cross')" style="font-size:11px;padding:5px 9px;background:#1C1A18;color:#FFF;border:none;border-radius:6px;cursor:pointer;font-weight:600">צלב במרכז</button>
+          <button type="button" onclick="setCellsPreset('clear')" style="font-size:11px;padding:5px 9px;background:#F4F1E8;color:#1C1A18;border:1px solid #E5E1D5;border-radius:6px;cursor:pointer;font-weight:600">נקה הכל</button>
+          <span id="board-cells-count" style="font-size:11px;color:#6F6E68;font-weight:700">0 תאי זהב</span>
         </div>
       </div>
 
@@ -2792,6 +2813,7 @@
     document.getElementById('board-name').value = '';
     document.getElementById('board-type').value = 'multipliers';
     setMultipliers([1, 1, 1, 1]);
+    setSpecialCellsUI([]);  // reset grid editor
     document.getElementById('board-starts-at').value = '';
     document.getElementById('board-ends-at').value = '';
     document.getElementById('board-audience').value = 'all';
@@ -2820,6 +2842,11 @@
         document.getElementById('board-type').value = b.type || 'multipliers';
         if (b.definition && Array.isArray(b.definition.multipliers)) {
           setMultipliers(b.definition.multipliers);
+        }
+        if (b.definition && Array.isArray(b.definition.cells)) {
+          setSpecialCellsUI(b.definition.cells);
+        } else {
+          setSpecialCellsUI([]);
         }
         if (b.starts_at) document.getElementById('board-starts-at').value = new Date(b.starts_at).toISOString().slice(0, 16);
         if (b.ends_at)   document.getElementById('board-ends-at').value   = new Date(b.ends_at).toISOString().slice(0, 16);
@@ -2866,7 +2893,12 @@
 
   function onBoardTypeChange() {
     const t = document.getElementById('board-type').value;
-    document.getElementById('board-editor-multipliers').style.display = (t === 'multipliers') ? 'block' : 'none';
+    document.getElementById('board-editor-multipliers').style.display    = (t === 'multipliers')   ? 'block' : 'none';
+    document.getElementById('board-editor-special-cells').style.display  = (t === 'special_cells') ? 'block' : 'none';
+    if (t === 'special_cells') {
+      // Rebuild the editor grid the first time it's needed (cheap, idempotent).
+      ensureCellsGrid();
+    }
   }
 
   function setMultipliers(arr) {
@@ -2884,6 +2916,125 @@
     return arr;
   }
 
+  // ============================================================
+  // Special-cells editor (4×6 grid · phase 3A: gold only)
+  // ============================================================
+  var BOARD_ROWS = 6;
+  var BOARD_COLS = 4;
+  function ensureCellsGrid() {
+    const host = document.getElementById('board-cells-grid');
+    if (!host || host.children.length) return;  // already built
+    var html = '';
+    // Build row-major like the engine. Visually the grid editor displays
+    // 6 rows × 4 cols, top row first.
+    for (var r = 0; r < BOARD_ROWS; r++) {
+      for (var c = 0; c < BOARD_COLS; c++) {
+        html += '<button type="button" class="board-cell-btn" data-r="' + r + '" data-c="' + c +
+          '" style="aspect-ratio:1;background:#F5F2EC;border:1px solid #E5E1D5;border-radius:8px;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;padding:0;transition:transform 0.08s">' +
+          '</button>';
+      }
+    }
+    host.innerHTML = html;
+    host.addEventListener('click', function(e) {
+      var btn = e.target.closest('.board-cell-btn');
+      if (!btn) return;
+      var isGold = btn.classList.contains('on-gold');
+      if (isGold) {
+        btn.classList.remove('on-gold');
+        btn.textContent = '';
+        btn.style.background = '#F5F2EC';
+        btn.style.borderColor = '#E5E1D5';
+        btn.style.boxShadow = '';
+      } else {
+        btn.classList.add('on-gold');
+        btn.textContent = '✨';
+        btn.style.background = 'linear-gradient(135deg,#FFE9A8 0%,#FAC775 100%)';
+        btn.style.borderColor = '#BA7517';
+        btn.style.boxShadow = '0 0 8px rgba(250,199,117,0.55)';
+      }
+      updateCellsCount();
+    });
+  }
+
+  function setSpecialCellsUI(cells) {
+    ensureCellsGrid();
+    const host = document.getElementById('board-cells-grid');
+    if (!host) return;
+    const goldSet = new Set();
+    if (Array.isArray(cells)) {
+      cells.forEach(function(c) {
+        if (c && c.type === 'gold') goldSet.add(c.row + ',' + c.col);
+      });
+    }
+    Array.from(host.children).forEach(function(btn) {
+      var key = btn.dataset.r + ',' + btn.dataset.c;
+      var isGold = goldSet.has(key);
+      if (isGold) {
+        btn.classList.add('on-gold');
+        btn.textContent = '✨';
+        btn.style.background = 'linear-gradient(135deg,#FFE9A8 0%,#FAC775 100%)';
+        btn.style.borderColor = '#BA7517';
+        btn.style.boxShadow = '0 0 8px rgba(250,199,117,0.55)';
+      } else {
+        btn.classList.remove('on-gold');
+        btn.textContent = '';
+        btn.style.background = '#F5F2EC';
+        btn.style.borderColor = '#E5E1D5';
+        btn.style.boxShadow = '';
+      }
+    });
+    updateCellsCount();
+  }
+
+  function readSpecialCellsUI() {
+    const host = document.getElementById('board-cells-grid');
+    if (!host) return [];
+    const out = [];
+    Array.from(host.children).forEach(function(btn) {
+      if (btn.classList.contains('on-gold')) {
+        out.push({
+          row: parseInt(btn.dataset.r, 10),
+          col: parseInt(btn.dataset.c, 10),
+          type: 'gold'
+        });
+      }
+    });
+    return out;
+  }
+
+  function updateCellsCount() {
+    const el = document.getElementById('board-cells-count');
+    if (!el) return;
+    var n = readSpecialCellsUI().length;
+    el.textContent = n + ' תאי זהב';
+    el.style.color = n === 0 ? '#6F6E68' : (n > 6 ? '#E07A8E' : '#BA7517');
+  }
+
+  function setCellsPreset(name) {
+    var cells = [];
+    if (name === 'bottom-row') {
+      for (var c = 0; c < BOARD_COLS; c++) cells.push({ row: BOARD_ROWS - 1, col: c, type: 'gold' });
+    } else if (name === 'corners') {
+      cells = [
+        { row: 0, col: 0, type: 'gold' },
+        { row: 0, col: BOARD_COLS - 1, type: 'gold' },
+        { row: BOARD_ROWS - 1, col: 0, type: 'gold' },
+        { row: BOARD_ROWS - 1, col: BOARD_COLS - 1, type: 'gold' }
+      ];
+    } else if (name === 'cross') {
+      var midR = Math.floor(BOARD_ROWS / 2);
+      var midC = Math.floor(BOARD_COLS / 2);
+      cells = [
+        { row: midR - 1, col: midC, type: 'gold' },
+        { row: midR,     col: midC - 1, type: 'gold' },
+        { row: midR,     col: midC, type: 'gold' },
+        { row: midR + 1, col: midC, type: 'gold' }
+      ];
+    }
+    setSpecialCellsUI(cells);
+  }
+  window.setCellsPreset = setCellsPreset;
+
   async function saveBoard() {
     const name = document.getElementById('board-name').value.trim();
     const type = document.getElementById('board-type').value;
@@ -2892,6 +3043,14 @@
     let definition = {};
     if (type === 'multipliers') {
       definition = { multipliers: readMultipliers() };
+    } else if (type === 'special_cells') {
+      definition = { cells: readSpecialCellsUI() };
+      // Validate locally so user gets immediate feedback before the server round-trip.
+      if (!definition.cells.length) {
+        statusEl.textContent = '⚠ הוסף לפחות תא זהב אחד';
+        statusEl.style.color = '#E07A8E';
+        return;
+      }
     }
     const startsAtVal = document.getElementById('board-starts-at').value;
     const endsAtVal   = document.getElementById('board-ends-at').value;

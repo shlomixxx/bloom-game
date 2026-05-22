@@ -28,6 +28,45 @@
     return true;
   }
 
+  // Special cells (phase 3 of Dynamic Boards System, May 2026).
+  // Each cell is { row: 0..rows-1, col: 0..cols-1, type: 'gold'|... }.
+  // Stored as an array (not a 2D map) because most boards will have <12
+  // cells — array iteration is cheaper than a sparse grid. Lookup by
+  // position uses _specialCellsByPos for O(1) reads in the hot path.
+  let _specialCells = null;
+  let _specialCellsByPos = null;
+  function getSpecialCells() { return _specialCells; }
+  function getSpecialCellAt(row, col) {
+    if (!_specialCellsByPos) return null;
+    return _specialCellsByPos[row + ',' + col] || null;
+  }
+  function setSpecialCells(arr) {
+    if (arr == null) { _specialCells = null; _specialCellsByPos = null; return true; }
+    if (!Array.isArray(arr)) return false;
+    const sanitized = [];
+    const byPos = {};
+    const rows = getBoardRows();
+    const cols = getBoardCols();
+    for (let i = 0; i < arr.length; i++) {
+      const c = arr[i];
+      if (!c || typeof c !== 'object') continue;
+      const row = parseInt(c.row, 10);
+      const col = parseInt(c.col, 10);
+      const type = String(c.type || '');
+      if (!Number.isInteger(row) || row < 0 || row >= rows) continue;
+      if (!Number.isInteger(col) || col < 0 || col >= cols) continue;
+      if (type !== 'gold') continue;  // phase 3A: gold only
+      const key = row + ',' + col;
+      if (byPos[key]) continue;        // dedupe
+      const entry = { row: row, col: col, type: type };
+      sanitized.push(entry);
+      byPos[key] = entry;
+    }
+    _specialCells = sanitized.length ? sanitized : null;
+    _specialCellsByPos = sanitized.length ? byPos : null;
+    return true;
+  }
+
   const SVG = {
     circle:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/></svg>',
     leaf:    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21c.5-4.5 2.5-8 7-10"/><path d="M9 18c6.218 0 10.5-3.288 11-12v-2h-4.014c-9 0-11.986 4-12 9c0 1 0 3 2 5h3z"/></svg>',

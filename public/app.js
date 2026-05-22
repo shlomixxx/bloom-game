@@ -28,6 +28,45 @@
     return true;
   }
 
+  // Special cells (phase 3 of Dynamic Boards System, May 2026).
+  // Each cell is { row: 0..rows-1, col: 0..cols-1, type: 'gold'|... }.
+  // Stored as an array (not a 2D map) because most boards will have <12
+  // cells — array iteration is cheaper than a sparse grid. Lookup by
+  // position uses _specialCellsByPos for O(1) reads in the hot path.
+  let _specialCells = null;
+  let _specialCellsByPos = null;
+  function getSpecialCells() { return _specialCells; }
+  function getSpecialCellAt(row, col) {
+    if (!_specialCellsByPos) return null;
+    return _specialCellsByPos[row + ',' + col] || null;
+  }
+  function setSpecialCells(arr) {
+    if (arr == null) { _specialCells = null; _specialCellsByPos = null; return true; }
+    if (!Array.isArray(arr)) return false;
+    const sanitized = [];
+    const byPos = {};
+    const rows = getBoardRows();
+    const cols = getBoardCols();
+    for (let i = 0; i < arr.length; i++) {
+      const c = arr[i];
+      if (!c || typeof c !== 'object') continue;
+      const row = parseInt(c.row, 10);
+      const col = parseInt(c.col, 10);
+      const type = String(c.type || '');
+      if (!Number.isInteger(row) || row < 0 || row >= rows) continue;
+      if (!Number.isInteger(col) || col < 0 || col >= cols) continue;
+      if (type !== 'gold') continue;  // phase 3A: gold only
+      const key = row + ',' + col;
+      if (byPos[key]) continue;        // dedupe
+      const entry = { row: row, col: col, type: type };
+      sanitized.push(entry);
+      byPos[key] = entry;
+    }
+    _specialCells = sanitized.length ? sanitized : null;
+    _specialCellsByPos = sanitized.length ? byPos : null;
+    return true;
+  }
+
   const SVG = {
     circle:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/></svg>',
     leaf:    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21c.5-4.5 2.5-8 7-10"/><path d="M9 18c6.218 0 10.5-3.288 11-12v-2h-4.014c-9 0-11.986 4-12 9c0 1 0 3 2 5h3z"/></svg>',
@@ -1136,24 +1175,15 @@
       sessionDifficulty = null;
     }
     // Dynamic Boards (phase 3, May 2026): duel-snapshotted board.
-    // The server stored board_multipliers + board_name on the duel row at
-    // creation time (if a duel-board was active then). Both players read
-    // the same snapshot — guarantees fairness even if admin changes the
-    // active board mid-duel. Null = vanilla duel.
+    // The server stored board_multipliers (+ board_name) on the duel row
+    // at creation time. Both players read the same snapshot — guarantees
+    // fairness even if admin changes the active board mid-duel. Vanilla
+    // duel = no snapshot.
     if (typeof setColumnMultipliers === 'function') setColumnMultipliers(null);
+    if (typeof setSpecialCells === 'function') setSpecialCells(null);
     window._activeSpecialBoard = null;
-    if (duelRow && duelRow.board_multipliers) {
-      var duelMults = duelRow.board_multipliers;
-      if (typeof duelMults === 'string') {
-        try { duelMults = JSON.parse(duelMults); } catch (e) { duelMults = null; }
-      }
-      if (Array.isArray(duelMults) && typeof setColumnMultipliers === 'function') {
-        setColumnMultipliers(duelMults);
-        window._activeSpecialBoard = {
-          name: duelRow.board_name || 'דו-קרב מיוחד',
-          definition: { multipliers: duelMults }
-        };
-      }
+    if (duelRow && typeof applyDuelBoardSnapshot === 'function') {
+      applyDuelBoardSnapshot(duelRow);
     }
     grid = Array.from({length: getBoardRows()}, function() { return Array(getBoardCols()).fill(0); });
     score = 0; highestTier = 1; busy = false; dropsCount = 0;
@@ -9412,6 +9442,51 @@
     return new Date(iso).toLocaleDateString('he-IL');
   }
 
+  // ============================================================
+  // Dynamic Boards — apply helpers (phase 3)
+  // Centralises "given a board object, set up engine state for it"
+  // so daily/practice/duel/dynamic all use the same logic. Supports:
+  //   - type 'multipliers' → setColumnMultipliers(def.multipliers)
+  //   - type 'special_cells' → setSpecialCells(def.cells)
+  //   - future types: extend here, not at each callsite.
+  // ============================================================
+  function applyBoardToSession(board) {
+    if (!board || !board.definition || !board.type) return false;
+    var def = board.definition;
+    if (board.type === 'multipliers' && Array.isArray(def.multipliers)) {
+      setColumnMultipliers(def.multipliers);
+      window._activeSpecialBoard = board;
+      return true;
+    }
+    if (board.type === 'special_cells' && Array.isArray(def.cells)) {
+      setSpecialCells(def.cells);
+      window._activeSpecialBoard = board;
+      return true;
+    }
+    return false;
+  }
+
+  function applyDuelBoardSnapshot(duelRow) {
+    // Duels currently snapshot only board_multipliers (phase 3 server
+    // POST /api/duels). Special-cells duel snapshot lands in a future
+    // phase — until then, treat missing fields as a vanilla duel.
+    if (!duelRow) return false;
+    var mults = duelRow.board_multipliers;
+    if (typeof mults === 'string') {
+      try { mults = JSON.parse(mults); } catch (e) { mults = null; }
+    }
+    if (Array.isArray(mults)) {
+      setColumnMultipliers(mults);
+      window._activeSpecialBoard = {
+        name: duelRow.board_name || 'דו-קרב מיוחד',
+        type: 'multipliers',
+        definition: { multipliers: mults }
+      };
+      return true;
+    }
+    return false;
+  }
+
   async function init(nextMode, opts) {
     opts = opts || {};
     const fresh = !!opts.fresh;
@@ -9424,11 +9499,12 @@
     // setTimeout can be paused by tab-blur or skipped on page-hide, leaving
     // a stuck modal over the board. clearTransientBanners is idempotent.
     if (typeof clearTransientBanners === 'function') clearTransientBanners();
-    // Dynamic Boards (phase 3): clear ANY leftover multiplier at the top
-    // of every init. Each mode will then re-apply its own board (if any)
-    // via applyBoardForCurrentMode() below. This guarantees that going
-    // from one mode to another never leaks a stale board state.
+    // Dynamic Boards (phase 3): clear ANY leftover board state at the top
+    // of every init (column multipliers + special cells). Each mode then
+    // re-applies its own board (if any) via the per-mode resolution below.
+    // Guarantees that going from one mode to another never leaks state.
     if (typeof setColumnMultipliers === 'function') setColumnMultipliers(null);
+    if (typeof setSpecialCells === 'function') setSpecialCells(null);
     window._activeSpecialBoard = null;
     if (nextMode) mode = nextMode;
     dailyDate = todayInIsrael();
@@ -9591,54 +9667,33 @@
       }
     } else if (mode === 'dynamic') {
       // Dynamic Boards mode — practice-like but bound to a selected board.
-      // No leaderboard submit (different ruleset, can't compare). No state
-      // save (each board pick starts fresh). The board's multipliers were
-      // applied by the picker BEFORE calling init('dynamic'); we restore
-      // it here from window._activeDynamicBoard since the top-of-init
-      // setColumnMultipliers(null) wiped it.
-      if (window._activeDynamicBoard && window._activeDynamicBoard.definition &&
-          Array.isArray(window._activeDynamicBoard.definition.multipliers)) {
-        setColumnMultipliers(window._activeDynamicBoard.definition.multipliers);
-        window._activeSpecialBoard = window._activeDynamicBoard;
+      // The board was applied by the picker BEFORE calling init('dynamic');
+      // we restore it from window._activeDynamicBoard since the top-of-init
+      // wiped the state.
+      if (window._activeDynamicBoard) {
+        applyBoardToSession(window._activeDynamicBoard);
       }
     }
 
     // Per-mode board apply (phase 3). Daily / practice / duel may have an
-    // active board from the admin. Each branch resolves its source:
-    //   - daily: fetch /api/active-board/daily (server-side)
-    //   - practice (default difficulty, not duel): same for /practice
-    //   - duel: read snapshot from the duel row (passed via opts.duel)
+    // active board from the admin. Each branch resolves its source then
+    // hands off to applyBoardToSession which knows how to apply BOTH
+    // multipliers boards AND special_cells boards (and future types).
     // Fairness: practice + active board → submitPracticeOrDuelScore is
     // skipped by the leaderboard guard further down (see practiceFair...).
     try {
       if (mode === 'daily' && !dailySubmitted && typeof fetchBoardForMode === 'function') {
         const dailyBoard = await fetchBoardForMode('daily');
-        if (dailyBoard && dailyBoard.type === 'multipliers' &&
-            dailyBoard.definition && Array.isArray(dailyBoard.definition.multipliers)) {
-          setColumnMultipliers(dailyBoard.definition.multipliers);
-          window._activeSpecialBoard = dailyBoard;
-        }
+        if (dailyBoard) applyBoardToSession(dailyBoard);
       } else if (mode === 'practice' && !sessionDifficulty && !window._duelMode &&
                  typeof fetchBoardForMode === 'function') {
         const practiceBoard = await fetchBoardForMode('practice');
-        if (practiceBoard && practiceBoard.type === 'multipliers' &&
-            practiceBoard.definition && Array.isArray(practiceBoard.definition.multipliers)) {
-          setColumnMultipliers(practiceBoard.definition.multipliers);
-          window._activeSpecialBoard = practiceBoard;
-        }
-      } else if (mode === 'practice' && window._duelMode && opts.duel &&
-                 opts.duel.board_multipliers) {
-        // Duel snapshot: server stored the multipliers on the duel row at
-        // creation time. Use those directly — never re-fetch (would risk
+        if (practiceBoard) applyBoardToSession(practiceBoard);
+      } else if (mode === 'practice' && window._duelMode && opts.duel) {
+        // Duel snapshot: server stored the board on the duel row at
+        // creation time. Use that directly — never re-fetch (would risk
         // mid-duel divergence between players).
-        var duelMults = opts.duel.board_multipliers;
-        if (typeof duelMults === 'string') {
-          try { duelMults = JSON.parse(duelMults); } catch (parseErr) { duelMults = null; }
-        }
-        if (Array.isArray(duelMults)) {
-          setColumnMultipliers(duelMults);
-          window._activeSpecialBoard = { name: opts.duel.board_name || 'דו-קרב מיוחד', definition: { multipliers: duelMults } };
-        }
+        applyDuelBoardSnapshot(opts.duel);
       }
     } catch (boardErr) {
       // Board apply is best-effort. Failure = vanilla game (zero risk).
@@ -11148,6 +11203,43 @@
     grid[row][col] = nextPiece;
     if (nextPiece > highestTier) highestTier = nextPiece;
     if (window.__bloomEngineLog) console.log('[drop]', 'col=' + col, '→ row=' + row, 'piece=t' + nextPiece, 'grid(after)=' + serializeGrid());
+    // Dynamic Boards — Special Cell: Gold (phase 3A, May 2026).
+    // If the tile lands on a gold cell, upgrade it one tier (capped at
+    // MAX_TIER = crown). Fires before the appearing animation so the
+    // upgraded tile is what the player sees emerge. The gold ring stays
+    // (it's a permanent board property, not a one-shot consumable).
+    if (typeof getSpecialCellAt === 'function') {
+      var goldHit = getSpecialCellAt(row, col);
+      if (goldHit && goldHit.type === 'gold' && grid[row][col] < MAX_TIER) {
+        grid[row][col] = grid[row][col] + 1;
+        if (grid[row][col] > highestTier) highestTier = grid[row][col];
+        // Visual + audio feedback: a tier-up celebration without the
+        // big milestone banner (which is reserved for first-time-tier).
+        try {
+          soundMerge(grid[row][col]);
+          buzz([20, 40]);
+          if (typeof showFloatingScore === 'function') {
+            // No score awarded here (the upgrade is its own reward —
+            // the higher tier will score more in subsequent merges) —
+            // a "✨ זהב!" badge marks the moment.
+            var gridEl = document.getElementById('grid');
+            if (gridEl) {
+              var idx = row * getBoardCols() + col;
+              var cellEl = gridEl.children[idx];
+              if (cellEl) {
+                var rect = cellEl.getBoundingClientRect();
+                var badge = document.createElement('div');
+                badge.className = 'float-score';
+                badge.textContent = '✨ זהב!';
+                badge.style.cssText = 'position:fixed;left:' + (rect.left + rect.width/2) + 'px;top:' + (rect.top - 18) + 'px;background:linear-gradient(135deg,#FFD37A,#FAC775);color:#412402;font-weight:900;font-size:14px;padding:4px 10px;border-radius:12px;box-shadow:0 4px 14px rgba(250,199,117,0.55);pointer-events:none;z-index:9998';
+                document.body.appendChild(badge);
+                setTimeout(function() { badge.remove(); }, 1100);
+              }
+            }
+          }
+        } catch (goldFxErr) {}
+      }
+    }
     var pendingEvent = (activeEvent && activeEvent.col === col) ? activeEvent : null;
     dismissCoach();
     render({ appearing: [row, col] });
@@ -12293,6 +12385,18 @@
         console.warn('[render] ✓ gravity applied, new state grid=' + (typeof serializeGrid === 'function' ? serializeGrid() : '?'));
       }
     }
+    // Dynamic Boards — special-cell lookup (phase 3A). Build a quick
+    // map from row,col → cell so the per-tile render below can paint a
+    // gold ring. Null when no special-cells board is active.
+    var _specCells = (typeof getSpecialCells === 'function') ? getSpecialCells() : null;
+    var _specByPos = null;
+    if (_specCells && _specCells.length) {
+      _specByPos = {};
+      for (var sci = 0; sci < _specCells.length; sci++) {
+        var sc = _specCells[sci];
+        _specByPos[sc.row + ',' + sc.col] = sc;
+      }
+    }
     for (let r = 0; r < getBoardRows(); r++) {
       for (let c = 0; c < getBoardCols(); c++) {
         const t = grid[r][c];
@@ -12300,6 +12404,12 @@
         cell.className = 'cell';
         cell.dataset.r = r;
         cell.dataset.c = c;
+        // Mark special cells BEFORE the tile-fill branch so the ring shows
+        // even on empty squares (player needs to know where to aim).
+        if (_specByPos) {
+          var spec = _specByPos[r + ',' + c];
+          if (spec) cell.classList.add('special-' + spec.type);
+        }
         if (t > 0) {
           cell.classList.add('filled');
           // tier-N (1..8) class — used by Aurora CSS for per-tier shadows,
