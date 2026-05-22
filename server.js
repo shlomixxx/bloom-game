@@ -2375,10 +2375,13 @@ app.post('/api/ping', softDeviceAuth, async (req, res) => {
 // When no board is active OR the table doesn't exist yet, returns
 // { ok: true, board: null } — clients treat null as "vanilla mode".
 // ============================================================
-let _boardCache = { value: undefined, expiresAt: 0 };
+// Per-mode caches. Each mode (dynamic / practice / daily / duel / contest /
+// challenge) gets its own cache entry — invalidated together on any write.
+const BOARD_MODES = ['dynamic', 'practice', 'daily', 'duel', 'contest', 'challenge'];
+let _boardCacheByMode = {};   // mode -> { value, expiresAt }
 let _boardsListCache = { value: undefined, expiresAt: 0 };
 function invalidateBoardCache() {
-  _boardCache = { value: undefined, expiresAt: 0 };
+  _boardCacheByMode = {};
   _boardsListCache = { value: undefined, expiresAt: 0 };
 }
 
@@ -2405,44 +2408,93 @@ function validateBoardDefinition(type, definition) {
   return { ok: true };
 }
 
-// Returns the SINGLE highest-priority board. Kept for back-compat but no
-// longer used by the boot path — clients now use /api/boards/available
-// and let the player pick from the list.
-app.get('/api/active-board', async (_req, res) => {
+// Validate / sanitize applies_to. Returns clean string array (never null).
+// Defaults to ['dynamic'] (the original opt-in behavior).
+function sanitizeAppliesTo(raw) {
+  if (!Array.isArray(raw)) return ['dynamic'];
+  const out = [];
+  for (const m of raw) {
+    if (typeof m === 'string' && BOARD_MODES.includes(m) && !out.includes(m)) {
+      out.push(m);
+    }
+  }
+  return out.length ? out : ['dynamic'];
+}
+
+// Server helper: returns the row for the highest-priority active board
+// whose applies_to includes the given mode. Null if none. Used by both
+// the public endpoint and the duel/contest/challenge snapshot path.
+async function getActiveBoardForMode(mode) {
+  if (!BOARD_MODES.includes(mode)) return null;
+  try {
+    const r = await pool.query(
+      `SELECT id, name, type, definition, target_audience, starts_at, ends_at, applies_to
+         FROM board_configurations
+        WHERE is_active = true
+          AND $1 = ANY(applies_to)
+          AND (starts_at IS NULL OR starts_at <= NOW())
+          AND (ends_at   IS NULL OR ends_at   >= NOW())
+        ORDER BY priority DESC, id DESC
+        LIMIT 1`,
+      [mode]
+    );
+    return r.rows.length ? r.rows[0] : null;
+  } catch (err) {
+    if (err && err.code === '42P01') return null;  // table doesn't exist yet
+    throw err;
+  }
+}
+
+// Per-mode public endpoint. Each game mode resolves its board through
+// this. 60s in-memory cache, keyed by mode, invalidated on any admin
+// write to keep changes propagating fast.
+app.get('/api/active-board/:mode', async (req, res) => {
+  const mode = String(req.params.mode || '').toLowerCase();
+  if (!BOARD_MODES.includes(mode)) {
+    return res.status(400).json({ ok: false, error: 'bad_mode' });
+  }
   try {
     const now = Date.now();
-    if (_boardCache.value !== undefined && _boardCache.expiresAt > now) {
-      return res.json({ ok: true, board: _boardCache.value });
+    const cached = _boardCacheByMode[mode];
+    if (cached && cached.expiresAt > now) {
+      return res.json({ ok: true, mode, board: cached.value });
     }
-    let board = null;
-    try {
-      const r = await pool.query(
-        `SELECT id, name, type, definition, target_audience, starts_at, ends_at
-           FROM board_configurations
-          WHERE is_active = true
-            AND (starts_at IS NULL OR starts_at <= NOW())
-            AND (ends_at   IS NULL OR ends_at   >= NOW())
-          ORDER BY priority DESC, id DESC
-          LIMIT 1`
-      );
-      if (r.rows.length) board = r.rows[0];
-    } catch (innerErr) {
-      if (innerErr && innerErr.code === '42P01') {
-        board = null;
-      } else {
-        throw innerErr;
-      }
-    }
-    _boardCache = { value: board, expiresAt: now + 60 * 1000 };
-    res.json({ ok: true, board });
+    const board = await getActiveBoardForMode(mode);
+    _boardCacheByMode[mode] = { value: board, expiresAt: now + 60 * 1000 };
+    res.json({ ok: true, mode, board });
   } catch (e) {
+    console.error('GET /api/active-board/:mode', e);
+    res.json({ ok: true, mode, board: null });
+  }
+});
+
+// Legacy: returns the highest-priority active board across ALL modes.
+// Kept so older cached clients don't 404. The list endpoint and per-mode
+// endpoint above are the new contracts.
+app.get('/api/active-board', async (_req, res) => {
+  try {
+    const r = await pool.query(
+      `SELECT id, name, type, definition, target_audience, starts_at, ends_at, applies_to
+         FROM board_configurations
+        WHERE is_active = true
+          AND (starts_at IS NULL OR starts_at <= NOW())
+          AND (ends_at   IS NULL OR ends_at   >= NOW())
+        ORDER BY priority DESC, id DESC
+        LIMIT 1`
+    );
+    res.json({ ok: true, board: r.rows[0] || null });
+  } catch (e) {
+    if (e && e.code === '42P01') return res.json({ ok: true, board: null });
     console.error('GET /api/active-board', e);
     res.json({ ok: true, board: null });
   }
 });
 
-// Returns ALL active boards (filtered by schedule). Client uses this to
-// populate the dynamic-boards picker. Empty array = picker hidden.
+// Returns the available "dynamic" boards — the ones that show up in the
+// player's home picker. Boards that apply ONLY to non-dynamic modes (e.g.
+// admin set "this is the duel-of-the-day" without ticking dynamic) are
+// excluded from the picker so the player isn't confused by boards they
+// can't start manually.
 app.get('/api/boards/available', async (_req, res) => {
   try {
     const now = Date.now();
@@ -2452,9 +2504,10 @@ app.get('/api/boards/available', async (_req, res) => {
     let rows = [];
     try {
       const r = await pool.query(
-        `SELECT id, name, type, definition, priority
+        `SELECT id, name, type, definition, priority, applies_to
            FROM board_configurations
           WHERE is_active = true
+            AND 'dynamic' = ANY(applies_to)
             AND (starts_at IS NULL OR starts_at <= NOW())
             AND (ends_at   IS NULL OR ends_at   >= NOW())
           ORDER BY priority DESC, id DESC
@@ -3703,7 +3756,7 @@ if (ADMIN_PATH && ADMIN_PASSWORD) {
     try {
       const r = await pool.query(
         `SELECT id, name, type, definition, is_active, starts_at, ends_at,
-                target_audience, priority, created_at, updated_at
+                target_audience, priority, applies_to, created_at, updated_at
            FROM board_configurations
           ORDER BY is_active DESC, priority DESC, id DESC`
       );
@@ -3730,18 +3783,19 @@ if (ADMIN_PATH && ADMIN_PASSWORD) {
       const endsAt     = b.ends_at   ? new Date(b.ends_at)   : null;
       const audience   = String(b.target_audience || 'all').slice(0, 32);
       const priority   = Math.max(0, Math.min(1000, parseInt(b.priority || 0, 10) || 0));
+      const appliesTo  = sanitizeAppliesTo(b.applies_to);
       const r = await pool.query(
         `INSERT INTO board_configurations
-           (name, type, definition, is_active, starts_at, ends_at, target_audience, priority)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+           (name, type, definition, is_active, starts_at, ends_at, target_audience, priority, applies_to)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
          RETURNING *`,
-        [name, type, JSON.stringify(definition), isActive, startsAt, endsAt, audience, priority]
+        [name, type, JSON.stringify(definition), isActive, startsAt, endsAt, audience, priority, appliesTo]
       );
       invalidateBoardCache();
       await pool.query(
         `INSERT INTO admin_actions (action, target_type, target_id, details)
          VALUES ('board_create', 'board', $1, $2)`,
-        [String(r.rows[0].id), JSON.stringify({ name, type, isActive, priority })]
+        [String(r.rows[0].id), JSON.stringify({ name, type, isActive, priority, appliesTo })]
       ).catch(() => {});
       res.json({ ok: true, board: r.rows[0] });
     } catch (e) {
@@ -3767,6 +3821,7 @@ if (ADMIN_PATH && ADMIN_PASSWORD) {
         ends_at:         b.ends_at         !== undefined ? (b.ends_at   ? new Date(b.ends_at)   : null) : row.ends_at,
         target_audience: b.target_audience !== undefined ? String(b.target_audience).slice(0, 32)   : row.target_audience,
         priority:        b.priority        !== undefined ? Math.max(0, Math.min(1000, parseInt(b.priority, 10) || 0)) : row.priority,
+        applies_to:      b.applies_to      !== undefined ? sanitizeAppliesTo(b.applies_to)          : (row.applies_to || ['dynamic']),
       };
       const allowed = ['multipliers', 'special_cells', 'shape', 'themed', 'mode', 'vip'];
       if (!allowed.includes(patch.type)) return res.status(400).json({ error: 'bad_type' });
@@ -3776,11 +3831,11 @@ if (ADMIN_PATH && ADMIN_PASSWORD) {
         `UPDATE board_configurations
             SET name=$1, type=$2, definition=$3, is_active=$4,
                 starts_at=$5, ends_at=$6, target_audience=$7, priority=$8,
-                updated_at=NOW()
-          WHERE id=$9
+                applies_to=$9, updated_at=NOW()
+          WHERE id=$10
           RETURNING *`,
         [patch.name, patch.type, JSON.stringify(patch.definition), patch.is_active,
-         patch.starts_at, patch.ends_at, patch.target_audience, patch.priority, id]
+         patch.starts_at, patch.ends_at, patch.target_audience, patch.priority, patch.applies_to, id]
       );
       invalidateBoardCache();
       await pool.query(
@@ -4793,10 +4848,27 @@ app.post('/api/duels', requireDeviceAuth, async (req, res) => {
 
     const diff = resolveDifficulty(difficulty);
 
+    // Snapshot the active duel-board (if any) onto the duel row so both
+    // players play under identical multipliers, even if admin changes
+    // the active duel-board mid-duel. Same pattern as difficulty.
+    let boardMults = null;
+    let boardName  = null;
+    try {
+      const duelBoard = await getActiveBoardForMode('duel');
+      if (duelBoard && duelBoard.type === 'multipliers' &&
+          duelBoard.definition && Array.isArray(duelBoard.definition.multipliers)) {
+        boardMults = JSON.stringify(duelBoard.definition.multipliers);
+        boardName  = duelBoard.name || null;
+      }
+    } catch (boardErr) {
+      // Snapshot is best-effort. A failure here means the duel just runs
+      // vanilla — better than blocking duel creation on a board lookup.
+    }
+
     const r = await pool.query(
-      `INSERT INTO duels (challenger_device, challenger_name, challenger_code, opponent_code, opponent_device, opponent_name, amount, board_seed, expires_at, difficulty_label, difficulty_weights, difficulty_speed_pct)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING *`,
-      [deviceId, challenger.rows[0].display_name, challenger.rows[0].player_code, opponentCode, opponent.rows[0].device_id, opponent.rows[0].display_name, bet, seed, expiresAt, diff.label, diff.weights, diff.speed_pct]);
+      `INSERT INTO duels (challenger_device, challenger_name, challenger_code, opponent_code, opponent_device, opponent_name, amount, board_seed, expires_at, difficulty_label, difficulty_weights, difficulty_speed_pct, board_multipliers, board_name)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING *`,
+      [deviceId, challenger.rows[0].display_name, challenger.rows[0].player_code, opponentCode, opponent.rows[0].device_id, opponent.rows[0].display_name, bet, seed, expiresAt, diff.label, diff.weights, diff.speed_pct, boardMults, boardName]);
 
     // Return the FULL row so the challenger can start their game immediately
     // (Bug 3 fix). The frontend needs difficulty_weights, opponent_name, and

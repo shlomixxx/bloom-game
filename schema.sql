@@ -705,3 +705,18 @@ CREATE TABLE IF NOT EXISTS board_configurations (
 CREATE INDEX IF NOT EXISTS idx_board_configs_active
   ON board_configurations (priority DESC, id DESC)
   WHERE is_active = true;
+
+-- Phase 3 (May 2026): per-mode targeting. The admin can mark each board
+-- as applying to one or more game modes (dynamic / practice / daily /
+-- duel / contest / challenge). Default is ['dynamic'] = pure opt-in
+-- (the original phase-2 redesigned behavior). ALTER... DEFAULT applies
+-- to existing rows in PostgreSQL — so legacy boards stay opt-in.
+ALTER TABLE board_configurations
+  ADD COLUMN IF NOT EXISTS applies_to TEXT[] NOT NULL DEFAULT ARRAY['dynamic']::TEXT[];
+
+-- Duels snapshot the active duel-board AT CREATION TIME so both players
+-- always play the same board even if admin changes the active one mid-
+-- duel. NULL = no board (vanilla duel — current behavior).
+ALTER TABLE duels
+  ADD COLUMN IF NOT EXISTS board_multipliers JSONB,
+  ADD COLUMN IF NOT EXISTS board_name TEXT;

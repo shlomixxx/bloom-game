@@ -28,13 +28,15 @@
       .catch(function() {});
   })();
 
-  // Dynamic Boards (phase 2, redesigned May 2026) — boards are now OPT-IN.
-  // The boot path only FETCHES the list of available boards so the home
-  // screen can show a "🎯 לוחות דינמיים" mode button when at least one
-  // exists. It does NOT apply any board automatically — applying happens
-  // only when the player explicitly picks one from the picker, scoped to
-  // a single play session. Daily / contest / duel / challenge / default
-  // practice are never affected by admin board pushes.
+  // Dynamic Boards (phase 3 — per-mode targeting, May 2026)
+  //
+  // The boot path still fetches the dynamic-mode list to populate the
+  // home picker. Per-mode boards (practice/daily/duel) are fetched
+  // on-demand inside init() via fetchBoardForMode(mode) so the cache
+  // is always 60s fresh from the server, no stale-state issues.
+  //
+  // Daily / practice / duel are the per-mode candidates. Contest /
+  // challenge are NOT yet wired (planned for next round).
   var _availableBoards = [];
   window._availableBoards = _availableBoards;
   function refreshAvailableBoards() {
@@ -44,7 +46,6 @@
         if (!d || !d.ok) return;
         _availableBoards = Array.isArray(d.boards) ? d.boards : [];
         window._availableBoards = _availableBoards;
-        // Let the home screen show/hide its boards button if it's mounted.
         if (typeof updateDynamicBoardsButton === 'function') {
           try { updateDynamicBoardsButton(); } catch (e) {}
         }
@@ -58,6 +59,17 @@
       if (!document.hidden) refreshAvailableBoards();
     });
   })();
+
+  // fetchBoardForMode — returns the active board for a specific mode,
+  // or null if none. The server applies its 60s in-memory cache, so
+  // repeated calls in quick succession are cheap.
+  function fetchBoardForMode(mode) {
+    return fetch(API_BASE + '/api/active-board/' + encodeURIComponent(mode))
+      .then(function(r) { return r.json(); })
+      .then(function(d) { return (d && d.ok && d.board) ? d.board : null; })
+      .catch(function() { return null; });
+  }
+  window.fetchBoardForMode = fetchBoardForMode;
 
   // Per-game difficulty override. Populated by init() from the active
   // contest/duel row, or by practice mode from localStorage. When null,

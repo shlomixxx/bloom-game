@@ -1002,12 +1002,40 @@
         </div>
       </div>
 
-      <label style="display:flex;align-items:center;gap:10px;font-size:13px;color:#1C1A18;margin-bottom:6px;cursor:pointer;padding:10px 12px;background:#F0F8F0;border:1px solid #9FE1CB;border-radius:8px;font-weight:600">
+      <label style="display:flex;align-items:center;gap:10px;font-size:13px;color:#1C1A18;margin-bottom:12px;cursor:pointer;padding:10px 12px;background:#F0F8F0;border:1px solid #9FE1CB;border-radius:8px;font-weight:600">
         <input id="board-is-active" type="checkbox" style="width:18px;height:18px;cursor:pointer">
-        <span style="flex:1">✅ פעיל (זמין לבחירה בפיקר)</span>
-        <button class="tip-btn" data-tip-text="<strong>פעיל = ״זמין לבחירה בפיקר״</strong><br>חשוב: בארכיטקטורה הנוכחית (אחרי השיפוץ של 22.5), ״פעיל״ <em>לא</em> אומר ״כפוי על כל השחקנים״.<div class=&quot;tip-example&quot;>✅ <strong>פעיל = מופיע בפיקר</strong>: השחקן רואה את הלוח בכפתור ״🎯 לוחות דינמיים״ בבית ובוחר אותו רק אם הוא רוצה.<br><br>⚫ <strong>כבוי = מוסתר</strong>: שמור בDB אבל לא מופיע לאף שחקן.<br><br>🛡️ <strong>שום לוח לא נכפה</strong>: יומי / תחרות / דו-קרב / אתגר / practice ברירת מחדל — כל אלה תמיד שומרים על החוויה הסטנדרטית, ללא קשר ללוחות הפעילים.<br><br>📊 <strong>מטריקת שינוי</strong>: שינוי כאן נכנס לתוקף תוך 60-90 שניות (השרת מטמן ו-הקליינט מרענן כל 90 שניות).</div>">?</button>
+        <span style="flex:1">✅ פעיל (זמין לכל המצבים שסומנו למטה)</span>
+        <button class="tip-btn" data-tip-text="<strong>פעיל = ״שמור על״</strong><br>מתג ראשי. אם כבוי — הלוח לא משפיע על שום מצב, ולא מופיע באף מקום, גם אם תיבות ה-״חל על״ למטה מסומנות.<div class=&quot;tip-example&quot;>✅ <strong>פעיל + ״חל על״ מסומנים</strong>: הלוח נכנס לתוקף במצבים שבחרת.<br><br>⚫ <strong>כבוי</strong>: שמור בDB, לא מוצג, לא משפיע. תוכל להפעיל שוב מאוחר יותר.<br><br>📊 <strong>זמן תפוצה</strong>: שינוי נכנס לתוקף תוך 60-90 שניות (שרת מטמן + קליינט מרענן). דו-קרבות שנוצרו לפני השינוי שומרים את הלוח שהיה אצלם ברגע היצירה (snapshot).</div>">?</button>
       </label>
-      <div style="font-size:10px;color:#6F6E68;margin-bottom:16px;line-height:1.5">הלוח יופיע בכפתור ״🎯 לוחות דינמיים״ בבית. <strong>לא משפיע על</strong> יומי / תחרות / דו-קרב / אתגר / practice רגיל.</div>
+
+      <!-- Phase 3 (May 2026): Per-mode targeting -->
+      <div style="background:#FFF7E6;border:1px solid #FAC775;border-radius:10px;padding:12px;margin-bottom:16px">
+        <div style="font-size:13px;font-weight:700;color:#BA7517;margin-bottom:6px;display:flex;align-items:center;gap:6px">
+          <span>🎯 חל על מצבי משחק</span>
+          <button class="tip-btn" data-tip-text="<strong>איפה הלוח פעיל</strong><br>בחר באילו מצבי משחק הלוח הזה ישנה את החוויה. הלוח חייב להיות גם ״✅ פעיל״ למעלה כדי לפעול.<div class=&quot;tip-example&quot;>📐 <strong>מודל החשיבה</strong>: הלוח הוא ״חוקים״ — כל מצב בחר אם להחיל את החוקים האלה.<br><br>🎯 <strong>דינמי</strong> = מצב opt-in נפרד. השחקן בוחר ידנית מהבית. הכי בטוח — לא נוגע בלידרבורד ולא כופה כלום.<br><br>⚡ <strong>פרקטיס</strong> = משחק חופשי עם קושי ברירת-מחדל. אם הלוח פעיל פה, הפרקטיס יקבל אותו אבל <em>הניקוד לא ייכנס ללידרבורד</em> (לשמירה על הוגנות).<br><br>📅 <strong>דיילי יומי</strong> = ⚠ הכי חזק. כל השחקנים שמשחקים יומי יראו את הלוח הזה. כי כולם משחקים אותו דבר באותו יום, הלידרבורד היומי נשאר הוגן.<br><br>⚔️ <strong>דו-קרב</strong> = ברגע יצירת דו-קרב, הלוח הפעיל נצמד אוטומטית לדו-קרב הזה. שני השחקנים יקבלו את אותו לוח — גם אם תשנה את הלוח אחר כך.<br><br>💡 <strong>ברירת מחדל</strong>: רק ״🎯 דינמי״ מסומן — opt-in טהור. סמן עוד תיבות רק אם אתה רוצה לדחוף את הלוח לחווייה הסטנדרטית.<br><br>🔄 <strong>בלי שובר תיקו</strong>: אם שני לוחות חופפים על אותו מצב → ה-priority הגבוה יותר ינצח.</div>">?</button>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:#1C1A18;cursor:pointer;padding:8px 10px;background:#FFFFFF;border:1px solid #E5E1D5;border-radius:8px">
+            <input type="checkbox" id="board-apply-dynamic" data-mode="dynamic" checked style="width:16px;height:16px;cursor:pointer">
+            <span style="flex:1">🎯 <strong>דינמי</strong> — opt-in מהבית (הכי בטוח)</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:#1C1A18;cursor:pointer;padding:8px 10px;background:#FFFFFF;border:1px solid #E5E1D5;border-radius:8px">
+            <input type="checkbox" id="board-apply-practice" data-mode="practice" style="width:16px;height:16px;cursor:pointer">
+            <span style="flex:1">⚡ <strong>פרקטיס חופשי</strong> — ניקוד <em>לא</em> נשלח ללידרבורד</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:#1C1A18;cursor:pointer;padding:8px 10px;background:#FFFFFF;border:1px solid #E5E1D5;border-radius:8px">
+            <input type="checkbox" id="board-apply-duel" data-mode="duel" style="width:16px;height:16px;cursor:pointer">
+            <span style="flex:1">⚔️ <strong>דו-קרב</strong> — snapshot ברגע יצירה (שני השחקנים זהים)</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:#1C1A18;cursor:pointer;padding:8px 10px;background:#FFE9EC;border:1px solid #E07A8E;border-radius:8px">
+            <input type="checkbox" id="board-apply-daily" data-mode="daily" style="width:16px;height:16px;cursor:pointer">
+            <span style="flex:1">📅 <strong>דיילי יומי</strong> — ⚠ <em>חזק!</em> כל השחקנים יראו את הלוח היום</span>
+          </label>
+        </div>
+        <div style="font-size:10px;color:#6F6E68;margin-top:8px;line-height:1.5">
+          <strong>💡 טיפ אסטרטגי</strong>: לאירוע השקה — סמן ״דינמי + דיילי״ עם תאריך התחלה+סיום של 24 שעות. שחקנים יקבלו הפתעה ביומי + יוכלו לחזור אליו דרך הפיקר. אדרנלין מקסימלי.
+        </div>
+      </div>
 
       <div style="display:flex;gap:8px">
         <button type="button" onclick="closeBoardEditor()" style="flex:1;background:#F4F1E8;color:#1C1A18;border:1px solid #E5E1D5;padding:11px;border-radius:10px;font-weight:600;cursor:pointer;font-family:inherit" title="סגור את העורך בלי לשמור. שינויים שעשית יאבדו.">ביטול</button>
@@ -2704,11 +2732,23 @@
       const schedSummary = b.starts_at || b.ends_at
         ? '🗓 ' + (b.starts_at ? new Date(b.starts_at).toLocaleString('he-IL') : 'מיידי') + ' → ' + (b.ends_at ? new Date(b.ends_at).toLocaleString('he-IL') : 'ללא סיום')
         : '⏰ פעיל תמיד';
+      // Per-mode badges so the admin sees at a glance where each board kicks in.
+      const modeIcons = { dynamic: '🎯', practice: '⚡', duel: '⚔️', daily: '📅', contest: '🏆', challenge: '🎁' };
+      const modeNames = { dynamic: 'דינמי', practice: 'פרקטיס', duel: 'דו-קרב', daily: 'דיילי', contest: 'תחרות', challenge: 'אתגר' };
+      const appliesTo = Array.isArray(b.applies_to) && b.applies_to.length ? b.applies_to : ['dynamic'];
+      const appliesBadges = appliesTo.map(function(m) {
+        var icon = modeIcons[m] || '•';
+        var name = modeNames[m] || m;
+        var bg = (m === 'daily') ? '#FFE9EC' : (m === 'duel' ? '#FFF7E6' : (m === 'practice' ? '#F0F8F0' : '#F4F1E8'));
+        var fg = (m === 'daily') ? '#7A1D2A' : '#1C1A18';
+        return '<span style="background:' + bg + ';color:' + fg + ';padding:2px 6px;border-radius:6px;font-size:10px;font-weight:700;margin-left:3px">' + icon + ' ' + escHtml(name) + '</span>';
+      }).join('');
       return '<div style="padding:10px 12px;background:#FAFAF6;border-radius:8px;border:1px solid #E5E1D5;display:flex;align-items:center;gap:10px;flex-wrap:wrap">' +
         '<div style="flex:1;min-width:160px">' +
           '<div style="font-weight:700;color:#1C1A18;margin-bottom:2px">' + escHtml(b.name) + ' ' + statusBadge + '</div>' +
           '<div style="font-size:11px;color:#6F6E68">' + typeLabel + (defSummary ? ' · ' + defSummary : '') + '</div>' +
-          '<div style="font-size:10px;color:#6F6E68;margin-top:2px">' + schedSummary + ' · עדיפות ' + b.priority + '</div>' +
+          '<div style="margin-top:4px">' + appliesBadges + '</div>' +
+          '<div style="font-size:10px;color:#6F6E68;margin-top:3px">' + schedSummary + ' · עדיפות ' + b.priority + '</div>' +
         '</div>' +
         '<div style="display:flex;gap:4px;flex-wrap:wrap">' +
           (b.is_active
@@ -2746,6 +2786,8 @@
     document.getElementById('board-audience').value = 'all';
     document.getElementById('board-priority').value = '0';
     document.getElementById('board-is-active').checked = false;
+    // Default applies_to: dynamic only (opt-in, the safest default).
+    setBoardAppliesTo(['dynamic']);
     document.getElementById('board-editor-status').textContent = '';
     if (boardId) {
       // Fetch the row to pre-fill — single GET /boards already cached client-side
@@ -2762,11 +2804,31 @@
         document.getElementById('board-audience').value = b.target_audience || 'all';
         document.getElementById('board-priority').value = String(b.priority || 0);
         document.getElementById('board-is-active').checked = !!b.is_active;
+        setBoardAppliesTo(b.applies_to || ['dynamic']);
         onBoardTypeChange();
       });
     }
     onBoardTypeChange();
     document.getElementById('board-editor-overlay').style.display = 'flex';
+  }
+
+  function setBoardAppliesTo(modes) {
+    var set = new Set(Array.isArray(modes) ? modes : []);
+    ['dynamic', 'practice', 'duel', 'daily'].forEach(function(m) {
+      var el = document.getElementById('board-apply-' + m);
+      if (el) el.checked = set.has(m);
+    });
+  }
+
+  function readBoardAppliesTo() {
+    var out = [];
+    ['dynamic', 'practice', 'duel', 'daily'].forEach(function(m) {
+      var el = document.getElementById('board-apply-' + m);
+      if (el && el.checked) out.push(m);
+    });
+    // Server defaults to ['dynamic'] when empty — match here so the
+    // admin's intent is preserved (no accidental "applies to nothing").
+    return out.length ? out : ['dynamic'];
   }
 
   function closeBoardEditor() {
@@ -2805,15 +2867,27 @@
     }
     const startsAtVal = document.getElementById('board-starts-at').value;
     const endsAtVal   = document.getElementById('board-ends-at').value;
+    const appliesTo   = readBoardAppliesTo();
+    const isActive    = document.getElementById('board-is-active').checked;
+    // Safety: if admin is activating a board that applies to daily, demand
+    // explicit confirm — daily changes affect every player playing today.
+    if (isActive && appliesTo.indexOf('daily') !== -1) {
+      if (!confirm('⚠ הלוח הזה יחול על הדיילי היומי. כל שחקני היומי יראו את המכפילים האלה היום. להמשיך?')) {
+        statusEl.textContent = 'הפעולה בוטלה';
+        statusEl.style.color = '#6F6E68';
+        return;
+      }
+    }
     const body = {
       name: name,
       type: type,
       definition: definition,
-      is_active: document.getElementById('board-is-active').checked,
+      is_active: isActive,
       starts_at: startsAtVal ? new Date(startsAtVal).toISOString() : null,
       ends_at:   endsAtVal   ? new Date(endsAtVal).toISOString()   : null,
       target_audience: document.getElementById('board-audience').value,
-      priority: parseInt(document.getElementById('board-priority').value, 10) || 0
+      priority: parseInt(document.getElementById('board-priority').value, 10) || 0,
+      applies_to: appliesTo
     };
     statusEl.textContent = '⏳ שומר...';
     statusEl.style.color = '#6F6E68';

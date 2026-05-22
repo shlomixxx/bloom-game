@@ -1135,6 +1135,26 @@
     } else {
       sessionDifficulty = null;
     }
+    // Dynamic Boards (phase 3, May 2026): duel-snapshotted board.
+    // The server stored board_multipliers + board_name on the duel row at
+    // creation time (if a duel-board was active then). Both players read
+    // the same snapshot — guarantees fairness even if admin changes the
+    // active board mid-duel. Null = vanilla duel.
+    if (typeof setColumnMultipliers === 'function') setColumnMultipliers(null);
+    window._activeSpecialBoard = null;
+    if (duelRow && duelRow.board_multipliers) {
+      var duelMults = duelRow.board_multipliers;
+      if (typeof duelMults === 'string') {
+        try { duelMults = JSON.parse(duelMults); } catch (e) { duelMults = null; }
+      }
+      if (Array.isArray(duelMults) && typeof setColumnMultipliers === 'function') {
+        setColumnMultipliers(duelMults);
+        window._activeSpecialBoard = {
+          name: duelRow.board_name || 'דו-קרב מיוחד',
+          definition: { multipliers: duelMults }
+        };
+      }
+    }
     grid = Array.from({length: getBoardRows()}, function() { return Array(getBoardCols()).fill(0); });
     score = 0; highestTier = 1; busy = false; dropsCount = 0;
     window.__bloomGameOver = false; // duel = active game
@@ -1151,6 +1171,10 @@
     nextPiece = pickPiece();
     updateModeBar();
     render();
+    // Toast for special-board duels — "this duel has bonus columns!"
+    if (window._activeSpecialBoard && typeof showSpecialBoardToast === 'function') {
+      try { showSpecialBoardToast(window._activeSpecialBoard); } catch (e) {}
+    }
     playMusic('game');
     ensureAudio();
     startEventSystem();
@@ -2272,13 +2296,15 @@
       .catch(function() {});
   })();
 
-  // Dynamic Boards (phase 2, redesigned May 2026) — boards are now OPT-IN.
-  // The boot path only FETCHES the list of available boards so the home
-  // screen can show a "🎯 לוחות דינמיים" mode button when at least one
-  // exists. It does NOT apply any board automatically — applying happens
-  // only when the player explicitly picks one from the picker, scoped to
-  // a single play session. Daily / contest / duel / challenge / default
-  // practice are never affected by admin board pushes.
+  // Dynamic Boards (phase 3 — per-mode targeting, May 2026)
+  //
+  // The boot path still fetches the dynamic-mode list to populate the
+  // home picker. Per-mode boards (practice/daily/duel) are fetched
+  // on-demand inside init() via fetchBoardForMode(mode) so the cache
+  // is always 60s fresh from the server, no stale-state issues.
+  //
+  // Daily / practice / duel are the per-mode candidates. Contest /
+  // challenge are NOT yet wired (planned for next round).
   var _availableBoards = [];
   window._availableBoards = _availableBoards;
   function refreshAvailableBoards() {
@@ -2288,7 +2314,6 @@
         if (!d || !d.ok) return;
         _availableBoards = Array.isArray(d.boards) ? d.boards : [];
         window._availableBoards = _availableBoards;
-        // Let the home screen show/hide its boards button if it's mounted.
         if (typeof updateDynamicBoardsButton === 'function') {
           try { updateDynamicBoardsButton(); } catch (e) {}
         }
@@ -2302,6 +2327,17 @@
       if (!document.hidden) refreshAvailableBoards();
     });
   })();
+
+  // fetchBoardForMode — returns the active board for a specific mode,
+  // or null if none. The server applies its 60s in-memory cache, so
+  // repeated calls in quick succession are cheap.
+  function fetchBoardForMode(mode) {
+    return fetch(API_BASE + '/api/active-board/' + encodeURIComponent(mode))
+      .then(function(r) { return r.json(); })
+      .then(function(d) { return (d && d.ok && d.board) ? d.board : null; })
+      .catch(function() { return null; });
+  }
+  window.fetchBoardForMode = fetchBoardForMode;
 
   // Per-game difficulty override. Populated by init() from the active
   // contest/duel row, or by practice mode from localStorage. When null,
@@ -5336,6 +5372,57 @@
 
   window.showDynamicBoardsPicker  = showDynamicBoardsPicker;
   window.closeDynamicBoardsPicker = closeDynamicBoardsPicker;
+  window.clearDynamicBoardSession = clearDynamicBoardSession;
+
+  // ============================================================
+  // showSpecialBoardToast — fired by init() when a board (daily /
+  // practice / duel / dynamic) is active for this session. The "wow"
+  // moment that turns a routine daily into "today is different!".
+  // De-duped per board id so a quick replay doesn't spam.
+  // ============================================================
+  var _lastToastedBoardId = null;
+  function showSpecialBoardToast(board) {
+    if (!board) return;
+    var boardKey = (board.id != null) ? board.id : (board.name || JSON.stringify(board.definition || {}));
+    if (_lastToastedBoardId === boardKey) return;
+    _lastToastedBoardId = boardKey;
+    var mults = (board.definition && Array.isArray(board.definition.multipliers))
+      ? board.definition.multipliers.map(function(m) {
+          return '×' + (Number.isInteger(m) ? m : Number(m).toFixed(1));
+        }).join(' · ')
+      : '';
+    // Clean up any prior banner with the same tag.
+    document.querySelectorAll('.special-board-toast').forEach(function(el) { el.remove(); });
+    var toast = document.createElement('div');
+    toast.className = 'special-board-toast';
+    toast.innerHTML =
+      '<div class="sb-toast-icon">🎯</div>' +
+      '<div class="sb-toast-body">' +
+        '<div class="sb-toast-title">לוח מיוחד פעיל</div>' +
+        '<div class="sb-toast-name">' + escapeHtml(board.name || 'לוח') + '</div>' +
+        (mults ? '<div class="sb-toast-mults">' + mults + '</div>' : '') +
+      '</div>';
+    document.body.appendChild(toast);
+    // Auto-remove after the slide-in + 3s display + fade.
+    setTimeout(function() {
+      toast.classList.add('sb-toast-out');
+      setTimeout(function() { toast.remove(); }, 350);
+    }, 3200);
+    // Tap to dismiss early.
+    toast.addEventListener('click', function() {
+      toast.classList.add('sb-toast-out');
+      setTimeout(function() { toast.remove(); }, 350);
+    });
+  }
+  window.showSpecialBoardToast = showSpecialBoardToast;
+
+  // Reset the toast dedup when leaving home/changing modes so the next
+  // game can re-trigger. clearDynamicBoardSession already runs on home.
+  var _origClear = clearDynamicBoardSession;
+  clearDynamicBoardSession = function() {
+    _lastToastedBoardId = null;
+    return _origClear.apply(this, arguments);
+  };
   window.clearDynamicBoardSession = clearDynamicBoardSession;
   function hideContestScreens() {
     stopContestRefresh();
@@ -9337,12 +9424,12 @@
     // setTimeout can be paused by tab-blur or skipped on page-hide, leaving
     // a stuck modal over the board. clearTransientBanners is idempotent.
     if (typeof clearTransientBanners === 'function') clearTransientBanners();
-    // Dynamic Boards safety: if the new mode is anything OTHER than
-    // 'dynamic', wipe any column multiplier the player picked earlier
-    // so daily/contest/duel/challenge/practice stay vanilla.
-    if (nextMode && nextMode !== 'dynamic' && typeof clearDynamicBoardSession === 'function') {
-      clearDynamicBoardSession();
-    }
+    // Dynamic Boards (phase 3): clear ANY leftover multiplier at the top
+    // of every init. Each mode will then re-apply its own board (if any)
+    // via applyBoardForCurrentMode() below. This guarantees that going
+    // from one mode to another never leaks a stale board state.
+    if (typeof setColumnMultipliers === 'function') setColumnMultipliers(null);
+    window._activeSpecialBoard = null;
     if (nextMode) mode = nextMode;
     dailyDate = todayInIsrael();
     // Resolve per-game difficulty BEFORE the first board paint. Daily stays
@@ -9506,14 +9593,65 @@
       // Dynamic Boards mode — practice-like but bound to a selected board.
       // No leaderboard submit (different ruleset, can't compare). No state
       // save (each board pick starts fresh). The board's multipliers were
-      // applied by the picker BEFORE calling init('dynamic'); init does
-      // not touch setColumnMultipliers so a refresh keeps the chosen board.
-      // If somehow getColumnMultipliers() returns null at this point, fall
-      // back to practice behavior — the bar will simply not render.
+      // applied by the picker BEFORE calling init('dynamic'); we restore
+      // it here from window._activeDynamicBoard since the top-of-init
+      // setColumnMultipliers(null) wiped it.
+      if (window._activeDynamicBoard && window._activeDynamicBoard.definition &&
+          Array.isArray(window._activeDynamicBoard.definition.multipliers)) {
+        setColumnMultipliers(window._activeDynamicBoard.definition.multipliers);
+        window._activeSpecialBoard = window._activeDynamicBoard;
+      }
     }
+
+    // Per-mode board apply (phase 3). Daily / practice / duel may have an
+    // active board from the admin. Each branch resolves its source:
+    //   - daily: fetch /api/active-board/daily (server-side)
+    //   - practice (default difficulty, not duel): same for /practice
+    //   - duel: read snapshot from the duel row (passed via opts.duel)
+    // Fairness: practice + active board → submitPracticeOrDuelScore is
+    // skipped by the leaderboard guard further down (see practiceFair...).
+    try {
+      if (mode === 'daily' && !dailySubmitted && typeof fetchBoardForMode === 'function') {
+        const dailyBoard = await fetchBoardForMode('daily');
+        if (dailyBoard && dailyBoard.type === 'multipliers' &&
+            dailyBoard.definition && Array.isArray(dailyBoard.definition.multipliers)) {
+          setColumnMultipliers(dailyBoard.definition.multipliers);
+          window._activeSpecialBoard = dailyBoard;
+        }
+      } else if (mode === 'practice' && !sessionDifficulty && !window._duelMode &&
+                 typeof fetchBoardForMode === 'function') {
+        const practiceBoard = await fetchBoardForMode('practice');
+        if (practiceBoard && practiceBoard.type === 'multipliers' &&
+            practiceBoard.definition && Array.isArray(practiceBoard.definition.multipliers)) {
+          setColumnMultipliers(practiceBoard.definition.multipliers);
+          window._activeSpecialBoard = practiceBoard;
+        }
+      } else if (mode === 'practice' && window._duelMode && opts.duel &&
+                 opts.duel.board_multipliers) {
+        // Duel snapshot: server stored the multipliers on the duel row at
+        // creation time. Use those directly — never re-fetch (would risk
+        // mid-duel divergence between players).
+        var duelMults = opts.duel.board_multipliers;
+        if (typeof duelMults === 'string') {
+          try { duelMults = JSON.parse(duelMults); } catch (parseErr) { duelMults = null; }
+        }
+        if (Array.isArray(duelMults)) {
+          setColumnMultipliers(duelMults);
+          window._activeSpecialBoard = { name: opts.duel.board_name || 'דו-קרב מיוחד', definition: { multipliers: duelMults } };
+        }
+      }
+    } catch (boardErr) {
+      // Board apply is best-effort. Failure = vanilla game (zero risk).
+    }
+
     if (!restoredContestState) nextPiece = pickPiece();
     updateModeBar();
     render();
+    // Toast at game start when a special board is active — the "wow"
+    // moment that turns a routine daily into "today is different!".
+    if (window._activeSpecialBoard && typeof showSpecialBoardToast === 'function') {
+      try { showSpecialBoardToast(window._activeSpecialBoard); } catch (e) {}
+    }
     // Watch for opponents passing my score while I'm mid-game in a contest.
     // The contest live HUD shares the same lifecycle — both mount on
     // contest-init and tear down on any other mode.
@@ -10941,7 +11079,12 @@
         // and must NOT be submitted (fairness). Personal-best in localStorage
         // is still tracked above. Duels also run inside the practice mode
         // engine — never submit those to the daily leaderboard either.
-        var practiceFairForLeaderboard = (mode === 'practice') && !sessionDifficulty && !window._duelMode;
+        // Phase 3 (May 2026): a practice-board with multipliers also breaks
+        // comparability — skip leaderboard submit when one is active.
+        var practiceFairForLeaderboard = (mode === 'practice') &&
+                                          !sessionDifficulty &&
+                                          !window._duelMode &&
+                                          !window._activeSpecialBoard;
         if (((mode === 'daily') || practiceFairForLeaderboard) && !dailySubmitted) {
           if (mode === 'daily') {
             dailySubmitted = true;
@@ -12087,22 +12230,18 @@
     // Size the grid to fit the available area on BOTH axes (CSS aspect-ratio
     // alone can't constrain by both width and height cross-browser).
     fitGrid();
-    // Dynamic Boards (phase 2 redesigned, May 2026) — column multiplier
-    // pills, ONLY shown when:
-    //   (a) the game is running in 'dynamic' mode (an opt-in mode that
-    //       the player chose from the boards picker), AND
-    //   (b) a multiplier is actually configured.
-    // The bar is mounted as a SIBLING of #grid-wrap (under #tier-bar in
-    // the page flow) — width-matched to the grid so the pills line up
-    // exactly with the columns below. Daily / contest / duel / challenge
-    // / default-practice never see this bar because they never set
-    // mode='dynamic'.
+    // Dynamic Boards (phase 3, May 2026) — column multiplier pills.
+    // The bar is shown whenever there's an active column multiplier,
+    // regardless of mode. The per-mode `init()` branch decides whether
+    // to apply a board (daily/practice/duel/dynamic); if it did,
+    // getColumnMultipliers() returns non-null and the bar renders here.
+    // Otherwise the bar is invisible — same as it was before phase 3.
+    // Mounted as a sibling of #grid-wrap, width-matched to the grid.
     (function syncColumnMultiplierBar() {
       var mults = (typeof getColumnMultipliers === 'function') ? getColumnMultipliers() : null;
       var pageHost = wrap.parentNode;
       var existing = pageHost && pageHost.querySelector('.col-mult-bar');
-      var isDynamicMode = (typeof mode !== 'undefined') && mode === 'dynamic';
-      if (!pageHost || !mults || !isDynamicMode || opts.over) {
+      if (!pageHost || !mults || opts.over) {
         if (existing) existing.remove();
         return;
       }

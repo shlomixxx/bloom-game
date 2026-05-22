@@ -148,3 +148,54 @@
   window.showDynamicBoardsPicker  = showDynamicBoardsPicker;
   window.closeDynamicBoardsPicker = closeDynamicBoardsPicker;
   window.clearDynamicBoardSession = clearDynamicBoardSession;
+
+  // ============================================================
+  // showSpecialBoardToast — fired by init() when a board (daily /
+  // practice / duel / dynamic) is active for this session. The "wow"
+  // moment that turns a routine daily into "today is different!".
+  // De-duped per board id so a quick replay doesn't spam.
+  // ============================================================
+  var _lastToastedBoardId = null;
+  function showSpecialBoardToast(board) {
+    if (!board) return;
+    var boardKey = (board.id != null) ? board.id : (board.name || JSON.stringify(board.definition || {}));
+    if (_lastToastedBoardId === boardKey) return;
+    _lastToastedBoardId = boardKey;
+    var mults = (board.definition && Array.isArray(board.definition.multipliers))
+      ? board.definition.multipliers.map(function(m) {
+          return '×' + (Number.isInteger(m) ? m : Number(m).toFixed(1));
+        }).join(' · ')
+      : '';
+    // Clean up any prior banner with the same tag.
+    document.querySelectorAll('.special-board-toast').forEach(function(el) { el.remove(); });
+    var toast = document.createElement('div');
+    toast.className = 'special-board-toast';
+    toast.innerHTML =
+      '<div class="sb-toast-icon">🎯</div>' +
+      '<div class="sb-toast-body">' +
+        '<div class="sb-toast-title">לוח מיוחד פעיל</div>' +
+        '<div class="sb-toast-name">' + escapeHtml(board.name || 'לוח') + '</div>' +
+        (mults ? '<div class="sb-toast-mults">' + mults + '</div>' : '') +
+      '</div>';
+    document.body.appendChild(toast);
+    // Auto-remove after the slide-in + 3s display + fade.
+    setTimeout(function() {
+      toast.classList.add('sb-toast-out');
+      setTimeout(function() { toast.remove(); }, 350);
+    }, 3200);
+    // Tap to dismiss early.
+    toast.addEventListener('click', function() {
+      toast.classList.add('sb-toast-out');
+      setTimeout(function() { toast.remove(); }, 350);
+    });
+  }
+  window.showSpecialBoardToast = showSpecialBoardToast;
+
+  // Reset the toast dedup when leaving home/changing modes so the next
+  // game can re-trigger. clearDynamicBoardSession already runs on home.
+  var _origClear = clearDynamicBoardSession;
+  clearDynamicBoardSession = function() {
+    _lastToastedBoardId = null;
+    return _origClear.apply(this, arguments);
+  };
+  window.clearDynamicBoardSession = clearDynamicBoardSession;

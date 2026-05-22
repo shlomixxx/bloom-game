@@ -692,6 +692,26 @@
     } else {
       sessionDifficulty = null;
     }
+    // Dynamic Boards (phase 3, May 2026): duel-snapshotted board.
+    // The server stored board_multipliers + board_name on the duel row at
+    // creation time (if a duel-board was active then). Both players read
+    // the same snapshot — guarantees fairness even if admin changes the
+    // active board mid-duel. Null = vanilla duel.
+    if (typeof setColumnMultipliers === 'function') setColumnMultipliers(null);
+    window._activeSpecialBoard = null;
+    if (duelRow && duelRow.board_multipliers) {
+      var duelMults = duelRow.board_multipliers;
+      if (typeof duelMults === 'string') {
+        try { duelMults = JSON.parse(duelMults); } catch (e) { duelMults = null; }
+      }
+      if (Array.isArray(duelMults) && typeof setColumnMultipliers === 'function') {
+        setColumnMultipliers(duelMults);
+        window._activeSpecialBoard = {
+          name: duelRow.board_name || 'דו-קרב מיוחד',
+          definition: { multipliers: duelMults }
+        };
+      }
+    }
     grid = Array.from({length: getBoardRows()}, function() { return Array(getBoardCols()).fill(0); });
     score = 0; highestTier = 1; busy = false; dropsCount = 0;
     window.__bloomGameOver = false; // duel = active game
@@ -708,6 +728,10 @@
     nextPiece = pickPiece();
     updateModeBar();
     render();
+    // Toast for special-board duels — "this duel has bonus columns!"
+    if (window._activeSpecialBoard && typeof showSpecialBoardToast === 'function') {
+      try { showSpecialBoardToast(window._activeSpecialBoard); } catch (e) {}
+    }
     playMusic('game');
     ensureAudio();
     startEventSystem();

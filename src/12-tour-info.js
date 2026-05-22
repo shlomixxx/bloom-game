@@ -862,22 +862,18 @@
     // Size the grid to fit the available area on BOTH axes (CSS aspect-ratio
     // alone can't constrain by both width and height cross-browser).
     fitGrid();
-    // Dynamic Boards (phase 2 redesigned, May 2026) — column multiplier
-    // pills, ONLY shown when:
-    //   (a) the game is running in 'dynamic' mode (an opt-in mode that
-    //       the player chose from the boards picker), AND
-    //   (b) a multiplier is actually configured.
-    // The bar is mounted as a SIBLING of #grid-wrap (under #tier-bar in
-    // the page flow) — width-matched to the grid so the pills line up
-    // exactly with the columns below. Daily / contest / duel / challenge
-    // / default-practice never see this bar because they never set
-    // mode='dynamic'.
+    // Dynamic Boards (phase 3, May 2026) — column multiplier pills.
+    // The bar is shown whenever there's an active column multiplier,
+    // regardless of mode. The per-mode `init()` branch decides whether
+    // to apply a board (daily/practice/duel/dynamic); if it did,
+    // getColumnMultipliers() returns non-null and the bar renders here.
+    // Otherwise the bar is invisible — same as it was before phase 3.
+    // Mounted as a sibling of #grid-wrap, width-matched to the grid.
     (function syncColumnMultiplierBar() {
       var mults = (typeof getColumnMultipliers === 'function') ? getColumnMultipliers() : null;
       var pageHost = wrap.parentNode;
       var existing = pageHost && pageHost.querySelector('.col-mult-bar');
-      var isDynamicMode = (typeof mode !== 'undefined') && mode === 'dynamic';
-      if (!pageHost || !mults || !isDynamicMode || opts.over) {
+      if (!pageHost || !mults || opts.over) {
         if (existing) existing.remove();
         return;
       }
