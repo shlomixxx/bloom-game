@@ -5788,19 +5788,31 @@
         var startsAttr = b.starts_at ? (' data-starts-at="' + escapeHtml(b.starts_at) + '"') : '';
         var classExtra = (u === 'critical' || u === 'new' || u === 'soon') ? (' fomo-' + u) : '';
         html +=
-          '<button class="dyn-boards-card' + classExtra + '" data-board-id="' + b.id + '"' + endsAttr + startsAttr + extraStyle + '>' +
-            '<div class="dyn-boards-card-icon">' + badge.icon + '</div>' +
-            '<div class="dyn-boards-card-body">' +
-              '<div class="dyn-boards-card-name">' + escapeHtml(b.name || 'לוח') + '</div>' +
-              '<div class="dyn-boards-card-type">' + badge.label + (desc && b.type === 'multipliers' ? ' · ' + desc : '') + '</div>' +
-              chipsHtml +
-              '<div class="dyn-boards-card-fomo" data-fomo-host="1">' + renderFomoBadge(b) + '</div>' +
-            '</div>' +
-            '<div class="dyn-boards-card-cta">שחק ←</div>' +
-          '</button>';
+          '<div class="dyn-boards-card-wrap">' +
+            '<button class="dyn-boards-card' + classExtra + '" data-board-id="' + b.id + '" data-action="play"' + endsAttr + startsAttr + extraStyle + '>' +
+              '<div class="dyn-boards-card-icon">' + badge.icon + '</div>' +
+              '<div class="dyn-boards-card-body">' +
+                '<div class="dyn-boards-card-name">' + escapeHtml(b.name || 'לוח') + '</div>' +
+                '<div class="dyn-boards-card-type">' + badge.label + (desc && b.type === 'multipliers' ? ' · ' + desc : '') + '</div>' +
+                chipsHtml +
+                '<div class="dyn-boards-card-fomo" data-fomo-host="1">' + renderFomoBadge(b) + '</div>' +
+              '</div>' +
+              '<div class="dyn-boards-card-cta">שחק ←</div>' +
+            '</button>' +
+            // Trophy button — independent action, opens the per-board top-50.
+            '<button class="dyn-boards-trophy-btn" data-board-id="' + b.id + '" data-action="trophy" aria-label="לוח מובילים">🏆</button>' +
+          '</div>';
       }
       listEl.innerHTML = html;
       listEl.addEventListener('click', function(e) {
+        // Trophy button is checked FIRST so it doesn't fall through to play.
+        var trophyBtn = e.target.closest('.dyn-boards-trophy-btn');
+        if (trophyBtn) {
+          var tbId = parseInt(trophyBtn.getAttribute('data-board-id'), 10);
+          var tBoard = boards.find(function(x) { return x.id === tbId; });
+          if (tBoard) showBoardLeaderboard(tBoard);
+          return;
+        }
         var card = e.target.closest('.dyn-boards-card');
         if (!card) return;
         var id = parseInt(card.getAttribute('data-board-id'), 10);
@@ -5862,6 +5874,147 @@
     var el = document.getElementById('dynamic-boards-picker');
     if (el) el.remove();
   }
+
+  // ============================================================
+  // Per-board leaderboard modal — top 50 + my rank with explicit
+  // gap-to-next-rank target. Sits on top of the picker (doesn't
+  // close it) so the player can flip between boards quickly.
+  // Live refresh every 30s while open.
+  // ============================================================
+  var _boardLbRefreshHandle = null;
+  var _boardLbCurrentBoard = null;
+  function closeBoardLeaderboard() {
+    var el = document.getElementById('board-lb-overlay');
+    if (el) el.remove();
+    if (_boardLbRefreshHandle) { clearInterval(_boardLbRefreshHandle); _boardLbRefreshHandle = null; }
+    _boardLbCurrentBoard = null;
+  }
+  function showBoardLeaderboard(board) {
+    if (!board || !board.id) return;
+    closeBoardLeaderboard();
+    _boardLbCurrentBoard = board;
+    var deviceId = (typeof getDeviceId === 'function') ? getDeviceId() : '';
+    var theme = THEME_LABELS[board.definition && board.definition.theme_id];
+    var shape = SHAPE_LABELS[board.definition && board.definition.shape_id];
+    var hero = '';
+    if (theme) hero = theme.icon + ' ' + theme.label;
+    if (shape) hero += (hero ? ' · ' : '') + shape.icon + ' ' + shape.label;
+    var overlay = document.createElement('div');
+    overlay.id = 'board-lb-overlay';
+    overlay.className = 'board-lb-overlay';
+    overlay.innerHTML =
+      '<div class="board-lb-modal">' +
+        '<div class="board-lb-head">' +
+          '<button class="board-lb-close" aria-label="סגור">✕</button>' +
+          '<div class="board-lb-title">🏆 לוח מובילים</div>' +
+          '<div class="board-lb-board-name">' + escapeHtml(board.name || 'לוח') + (hero ? ' <span class="board-lb-hero-meta">· ' + hero + '</span>' : '') + '</div>' +
+        '</div>' +
+        '<div class="board-lb-body" id="board-lb-body">' +
+          '<div class="board-lb-loading">⏳ טוען מובילים…</div>' +
+        '</div>' +
+        '<div class="board-lb-foot">' +
+          '<button class="board-lb-back">← חזור</button>' +
+          '<button class="board-lb-play">▶ שחק עכשיו</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(overlay);
+    overlay.querySelector('.board-lb-close').onclick = closeBoardLeaderboard;
+    overlay.querySelector('.board-lb-back').onclick = closeBoardLeaderboard;
+    overlay.querySelector('.board-lb-play').onclick = function() {
+      var b = _boardLbCurrentBoard;
+      closeBoardLeaderboard();
+      if (b) startDynamicBoard(b);
+    };
+    overlay.addEventListener('click', function(e) {
+      if (e.target === overlay) closeBoardLeaderboard();
+    });
+    function paint(data) {
+      var body = document.getElementById('board-lb-body');
+      if (!body || _boardLbCurrentBoard !== board) return;
+      var list = (data && data.list) || [];
+      var total = (data && data.total) | 0;
+      var myRank = (data && data.myRank) | 0;
+      var myScore = (data && data.myScore) | 0;
+      if (!list.length) {
+        body.innerHTML = '<div class="board-lb-empty">🌱 עדיין אין מובילים<br><span class="board-lb-empty-sub">היה הראשון להתעלף עם השיא!</span></div>';
+        return;
+      }
+      var rows = '';
+      var leaderScore = list[0].score;
+      for (var i = 0; i < list.length; i++) {
+        var p = list[i];
+        var rank = i + 1;
+        var rankBadge = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : '#' + rank;
+        var youCls = p.you ? ' board-lb-row-you' : '';
+        var topCls = rank <= 3 ? (' board-lb-row-top board-lb-row-top-' + rank) : '';
+        var flagHtml = '<span class="board-lb-flag"></span>';
+        if (p.country) {
+          try {
+            var cc = String(p.country).toUpperCase();
+            if (cc.length === 2) {
+              flagHtml = '<span class="board-lb-flag">' +
+                String.fromCodePoint(0x1F1E6 + cc.charCodeAt(0) - 65) +
+                String.fromCodePoint(0x1F1E6 + cc.charCodeAt(1) - 65) +
+                '</span>';
+            }
+          } catch (e) {}
+        }
+        rows +=
+          '<div class="board-lb-row' + youCls + topCls + '">' +
+            '<span class="board-lb-rank">' + rankBadge + '</span>' +
+            flagHtml +
+            '<span class="board-lb-name">' + escapeHtml(p.name || 'אנונימי') + (p.you ? ' (אתה)' : '') + '</span>' +
+            '<span class="board-lb-score">' + (p.score || 0).toLocaleString() + '</span>' +
+          '</div>';
+      }
+      // Footer "your rank" pill — only when player has a score AND isn't
+      // already on the visible top-50.
+      var myRankHtml = '';
+      if (myRank && myScore && myRank > list.length) {
+        // Off-list (>50). Show their position separately.
+        myRankHtml =
+          '<div class="board-lb-row board-lb-row-you board-lb-row-off">' +
+            '<span class="board-lb-rank">#' + myRank + '</span>' +
+            '<span class="board-lb-flag"></span>' +
+            '<span class="board-lb-name">אתה</span>' +
+            '<span class="board-lb-score">' + myScore.toLocaleString() + '</span>' +
+          '</div>';
+      }
+      // Persistent "beat the next player" target — strongest single hook.
+      // Computed against the row directly above the player.
+      var nextTargetHtml = '';
+      if (myScore && myRank && myRank > 1) {
+        var aboveScore = 0, aboveName = '';
+        if (myRank <= list.length && list[myRank - 2]) {
+          aboveScore = list[myRank - 2].score;
+          aboveName = list[myRank - 2].name;
+        }
+        if (aboveScore > myScore) {
+          var gap = aboveScore - myScore;
+          nextTargetHtml =
+            '<div class="board-lb-next-target">' +
+              '⚔️ עוד <strong>' + gap.toLocaleString() + '</strong> נקודות כדי לעקוף את <strong>' + escapeHtml(aboveName || 'הבא בתור') + '</strong>' +
+            '</div>';
+        }
+      } else if (myScore && myRank === 1) {
+        nextTargetHtml = '<div class="board-lb-next-target board-lb-next-target-king">👑 אתה המוביל! · המקום השני: ' + (list[1] ? list[1].score.toLocaleString() : '—') + '</div>';
+      }
+      var totalHtml = '<div class="board-lb-total">סה״כ ' + total + ' שחקנים · המוביל: ' + (leaderScore || 0).toLocaleString() + '</div>';
+      body.innerHTML = totalHtml + nextTargetHtml + '<div class="board-lb-list">' + rows + myRankHtml + '</div>';
+    }
+    function load() {
+      var url = '/api/boards/' + board.id + '/leaderboard?limit=50' + (deviceId ? '&deviceId=' + encodeURIComponent(deviceId) : '');
+      fetch(url, { cache: 'no-store' })
+        .then(function(r) { return r.json(); })
+        .catch(function() { return null; })
+        .then(function(d) { paint(d); });
+    }
+    load();
+    // 30s live refresh while open. Cleared in closeBoardLeaderboard.
+    _boardLbRefreshHandle = setInterval(load, 30 * 1000);
+  }
+  window.showBoardLeaderboard = showBoardLeaderboard;
+  window.closeBoardLeaderboard = closeBoardLeaderboard;
 
   function startDynamicBoard(board) {
     if (!board || !board.definition) return;
