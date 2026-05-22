@@ -4994,10 +4994,10 @@
    ============================================================ */
 .cell.special-gold {
   box-shadow:
-    inset 0 0 0 2px #FAC775,
-    inset 0 0 14px rgba(250, 199, 117, 0.55),
-    0 0 8px rgba(250, 199, 117, 0.35);
-  background-image: radial-gradient(circle at center, rgba(255, 215, 122, 0.18) 0%, transparent 65%);
+    inset 0 0 0 2px #E89B1F,                    /* warm amber — distinct from electric's pure yellow */
+    inset 0 0 14px rgba(232, 155, 31, 0.50),
+    0 2px 8px rgba(232, 155, 31, 0.35);
+  background-image: radial-gradient(circle at center, rgba(255, 195, 100, 0.20) 0%, transparent 65%);
   animation: goldCellPulse 2.2s ease-in-out infinite;
   position: relative;
 }
@@ -5005,23 +5005,43 @@
   content: '✨';
   position: absolute;
   top: 2px; right: 3px;
-  font-size: 11px;
-  opacity: 0.85;
+  font-size: 12px;
+  opacity: 0.88;
   pointer-events: none;
-  filter: drop-shadow(0 1px 2px rgba(186, 117, 23, 0.5));
+  filter: drop-shadow(0 1px 2px rgba(186, 117, 23, 0.6));
+  transition: font-size 0.2s, transform 0.2s;
+}
+/* Soften the ring when a tile occupies the cell — tile becomes the
+   focal point, ring sits in the background. Corner emoji jumps up
+   above the cell so it still reads at a glance. */
+.cell.special-gold.filled {
+  box-shadow:
+    inset 0 0 0 2px rgba(232, 155, 31, 0.65),
+    inset 0 0 8px rgba(232, 155, 31, 0.20),
+    0 2px 8px rgba(232, 155, 31, 0.30);
+  animation: none;  /* the tile already has its own animation */
+}
+.cell.special-gold.filled::after {
+  font-size: 15px;
+  top: -2px; right: -2px;
+  background: radial-gradient(circle, rgba(255, 215, 122, 0.95) 0%, rgba(255, 215, 122, 0) 75%);
+  border-radius: 50%;
+  width: 18px; height: 18px;
+  display: flex; align-items: center; justify-content: center;
+  z-index: 4;
 }
 @keyframes goldCellPulse {
   0%, 100% {
     box-shadow:
-      inset 0 0 0 2px #FAC775,
-      inset 0 0 14px rgba(250, 199, 117, 0.55),
-      0 0 8px rgba(250, 199, 117, 0.35);
+      inset 0 0 0 2px #E89B1F,
+      inset 0 0 14px rgba(232, 155, 31, 0.50),
+      0 2px 8px rgba(232, 155, 31, 0.35);
   }
   50% {
     box-shadow:
-      inset 0 0 0 2px #FFD37A,
-      inset 0 0 22px rgba(255, 215, 122, 0.75),
-      0 0 16px rgba(250, 199, 117, 0.55);
+      inset 0 0 0 2px #FFB94A,
+      inset 0 0 22px rgba(255, 185, 74, 0.75),
+      0 2px 16px rgba(232, 155, 31, 0.55);
   }
 }
 
@@ -5042,12 +5062,29 @@
   content: '🪙';                       /* coin = score points (not credits) */
   position: absolute;
   top: 2px; right: 3px;
-  font-size: 11px;
+  font-size: 12px;
   opacity: 0.9;
   pointer-events: none;
   filter: drop-shadow(0 1px 2px rgba(4, 52, 44, 0.5));
   animation: bonusCornerBob 2.6s ease-in-out infinite;
   transform-origin: center;
+  transition: font-size 0.2s, transform 0.2s;
+}
+.cell.special-bonus.filled {
+  box-shadow:
+    inset 0 0 0 2px rgba(79, 189, 139, 0.65),
+    inset 0 0 8px rgba(79, 189, 139, 0.25),
+    0 2px 8px rgba(79, 189, 139, 0.30);
+  animation: none;
+}
+.cell.special-bonus.filled::after {
+  font-size: 15px;
+  top: -2px; right: -2px;
+  background: radial-gradient(circle, rgba(159, 225, 203, 0.95) 0%, rgba(159, 225, 203, 0) 75%);
+  border-radius: 50%;
+  width: 18px; height: 18px;
+  display: flex; align-items: center; justify-content: center;
+  z-index: 4;
 }
 @keyframes bonusCornerBob {
   0%, 100% { transform: translateY(0) rotate(-6deg); }
@@ -5085,11 +5122,23 @@
   content: '❄️';
   position: absolute;
   top: 2px; right: 3px;
-  font-size: 11px;
+  font-size: 12px;
   opacity: 0.95;
   pointer-events: none;
   filter: drop-shadow(0 1px 2px rgba(4, 44, 83, 0.4));
   animation: frozenCornerDrift 4s ease-in-out infinite;
+  transition: font-size 0.2s, transform 0.2s;
+}
+.cell.special-frozen.filled .cell-noop-target {}
+.cell.special-frozen.filled::after {
+  font-size: 15px;
+  top: -2px; right: -2px;
+  background: radial-gradient(circle, rgba(181, 212, 244, 0.95) 0%, rgba(181, 212, 244, 0) 75%);
+  border-radius: 50%;
+  width: 18px; height: 18px;
+  display: flex; align-items: center; justify-content: center;
+  z-index: 4;
+  animation: none;  /* keep static when tile is stuck */
 }
 /* When a tile is ON a frozen cell, paint frost over the SVG so the
    player can see at a glance "this tile is stuck". Uses ::before to
@@ -5128,33 +5177,29 @@
 }
 
 /* Frozen SHADOW — empty cells below a frozen anchor in the same column.
-   The frozen tile blocks gravity downward, leaving these cells unfillable.
-   Tinting them ice-blue with a small ❄️ marker makes the visual intent
-   crystal clear: "this is blocked by ice from above, not a bug". */
+   The frozen tile blocks gravity downward. Soft icy gradient (instead
+   of the old diagonal stripes which looked rough) communicates
+   "blocked by ice from above, not a bug". */
 .cell.frozen-shadow {
   background-image:
-    repeating-linear-gradient(
-      45deg,
-      rgba(181, 212, 244, 0.18) 0px,
-      rgba(181, 212, 244, 0.18) 4px,
-      rgba(255, 255, 255, 0.10) 4px,
-      rgba(255, 255, 255, 0.10) 8px
-    );
+    radial-gradient(ellipse at top, rgba(181, 212, 244, 0.40) 0%, rgba(181, 212, 244, 0.10) 60%, transparent 100%);
   position: relative;
+  box-shadow: inset 0 1px 0 rgba(181, 212, 244, 0.35);  /* subtle "ice melt" highlight from above */
 }
 .cell.frozen-shadow::after {
   content: '❄️';
   position: absolute;
   top: 50%; left: 50%;
   transform: translate(-50%, -50%);
-  font-size: 14px;
-  opacity: 0.35;
+  font-size: 16px;
+  opacity: 0.40;
   pointer-events: none;
-  animation: frozenShadowDrift 4s ease-in-out infinite;
+  filter: drop-shadow(0 1px 2px rgba(111, 183, 224, 0.4));
+  animation: frozenShadowDrift 3.5s ease-in-out infinite;
 }
 @keyframes frozenShadowDrift {
-  0%, 100% { transform: translate(-50%, -50%) translateY(0); opacity: 0.35; }
-  50%      { transform: translate(-50%, -50%) translateY(2px); opacity: 0.5; }
+  0%, 100% { transform: translate(-50%, -50%) translateY(0) rotate(-5deg); opacity: 0.35; }
+  50%      { transform: translate(-50%, -50%) translateY(2px) rotate(5deg); opacity: 0.55; }
 }
 
 /* Frozen CRACK frames (1/2/3) — visible cracks on a frozen tile as
@@ -5379,18 +5424,20 @@
 }
 
 /* ============================================================
-   Electric cell (phase 3E). A neon-yellow ring with a ⚡ corner.
-   When a merge group includes this cell, the BFS in engine pulls
-   in same-tier tiles within radius 2 + diagonals — cross-board
-   chains. Visual on merge: every group cell flashes yellow + 8
-   ⚡ emojis burst outward from the electric cell.
+   Electric cell (phase 3E). PURE bright yellow + electric-blue
+   inner accents — visually distinct from gold's warm amber so the
+   admin and player can tell them apart at a glance even when both
+   are on the same board.
    ============================================================ */
 .cell.special-electric {
   box-shadow:
-    inset 0 0 0 2px #F5C400,
-    inset 0 0 14px rgba(245, 196, 0, 0.55),
-    0 0 8px rgba(245, 196, 0, 0.45);
-  background-image: radial-gradient(circle at center, rgba(255, 230, 90, 0.22) 0%, transparent 65%);
+    inset 0 0 0 2px #FFD000,
+    inset 0 0 14px rgba(255, 208, 0, 0.50),
+    inset 0 0 0 5px rgba(135, 206, 235, 0.20),  /* faint sky-blue inner ring */
+    0 2px 8px rgba(255, 208, 0, 0.40);
+  background-image:
+    radial-gradient(circle at center, rgba(255, 235, 100, 0.20) 0%, transparent 60%),
+    linear-gradient(135deg, transparent 45%, rgba(135, 206, 235, 0.08) 50%, transparent 55%);
   animation: electricCellPulse 1.4s ease-in-out infinite;
   position: relative;
 }
@@ -5398,24 +5445,44 @@
   content: '⚡';
   position: absolute;
   top: 2px; right: 3px;
-  font-size: 12px;
+  font-size: 13px;
   opacity: 0.95;
   pointer-events: none;
-  filter: drop-shadow(0 1px 2px rgba(120, 80, 0, 0.5));
+  filter: drop-shadow(0 1px 3px rgba(120, 80, 0, 0.6)) drop-shadow(0 0 4px rgba(255, 208, 0, 0.7));
   animation: electricCornerCrackle 0.9s ease-in-out infinite;
+  transition: font-size 0.2s, transform 0.2s;
+}
+/* When a tile sits on the electric cell, the ring softens and the
+   corner emoji jumps up so it's still readable over the tile. */
+.cell.special-electric.filled {
+  box-shadow:
+    inset 0 0 0 2px rgba(255, 208, 0, 0.7),
+    inset 0 0 8px rgba(255, 208, 0, 0.25),
+    0 2px 8px rgba(255, 208, 0, 0.30);
+}
+.cell.special-electric.filled::after {
+  font-size: 16px;
+  top: -2px; right: -2px;
+  background: radial-gradient(circle, rgba(255, 235, 100, 0.95) 0%, rgba(255, 235, 100, 0) 75%);
+  border-radius: 50%;
+  width: 18px; height: 18px;
+  display: flex; align-items: center; justify-content: center;
+  z-index: 4;
 }
 @keyframes electricCellPulse {
   0%, 100% {
     box-shadow:
-      inset 0 0 0 2px #F5C400,
-      inset 0 0 14px rgba(245, 196, 0, 0.55),
-      0 0 8px rgba(245, 196, 0, 0.45);
+      inset 0 0 0 2px #FFD000,
+      inset 0 0 14px rgba(255, 208, 0, 0.50),
+      inset 0 0 0 5px rgba(135, 206, 235, 0.20),
+      0 2px 8px rgba(255, 208, 0, 0.40);
   }
   50% {
     box-shadow:
-      inset 0 0 0 2px #FFE65A,
-      inset 0 0 22px rgba(255, 230, 90, 0.85),
-      0 0 18px rgba(245, 196, 0, 0.7);
+      inset 0 0 0 2px #FFEC4D,
+      inset 0 0 22px rgba(255, 235, 100, 0.80),
+      inset 0 0 0 5px rgba(135, 206, 235, 0.35),
+      0 2px 14px rgba(255, 208, 0, 0.65);
   }
 }
 @keyframes electricCornerCrackle {
@@ -5491,9 +5558,10 @@
       #4A4640 10px
     ) !important;
   box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.15),   /* slight highlight at top — "raised stone" feel */
     inset 0 0 0 2px #3C3832,
     inset 0 0 14px rgba(0, 0, 0, 0.4),
-    0 0 6px rgba(0, 0, 0, 0.3);
+    0 3px 6px rgba(0, 0, 0, 0.4);                /* drop shadow for elevation */
   position: relative;
   cursor: not-allowed;
 }
@@ -5587,10 +5655,26 @@
   content: '🌀';
   position: absolute;
   top: 2px; right: 3px;
-  font-size: 12px;
+  font-size: 13px;
   pointer-events: none;
-  filter: drop-shadow(0 1px 2px rgba(60, 20, 100, 0.5));
+  filter: drop-shadow(0 1px 2px rgba(60, 20, 100, 0.55)) drop-shadow(0 0 4px rgba(164, 99, 229, 0.6));
   animation: teleportCornerSpin 1.8s linear infinite;
+  transition: font-size 0.2s, transform 0.2s;
+}
+.cell.special-teleport.filled {
+  box-shadow:
+    inset 0 0 0 2px rgba(164, 99, 229, 0.65),
+    inset 0 0 8px rgba(164, 99, 229, 0.25),
+    0 2px 8px rgba(164, 99, 229, 0.30);
+}
+.cell.special-teleport.filled::after {
+  font-size: 16px;
+  top: -2px; right: -2px;
+  background: radial-gradient(circle, rgba(228, 200, 250, 0.95) 0%, rgba(228, 200, 250, 0) 75%);
+  border-radius: 50%;
+  width: 20px; height: 20px;
+  display: flex; align-items: center; justify-content: center;
+  z-index: 4;
 }
 @keyframes teleportCellSwirl {
   0%   { background-position: 0 0, 0 0; }
