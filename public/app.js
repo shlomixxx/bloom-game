@@ -42,7 +42,7 @@
   }
   // Mirror the server's SPECIAL_CELL_TYPES allowlist. Keep in sync.
   // (Defining here so the client doesn't import from the server module.)
-  const CLIENT_SPECIAL_CELL_TYPES = ['gold', 'bonus', 'frozen'];
+  const CLIENT_SPECIAL_CELL_TYPES = ['gold', 'bonus', 'frozen', 'electric'];
   function setSpecialCells(arr) {
     if (arr == null) { _specialCells = null; _specialCellsByPos = null; return true; }
     if (!Array.isArray(arr)) return false;
@@ -10596,6 +10596,69 @@
     var sc = getSpecialCellAt(r, c);
     return !!(sc && sc.type === 'frozen');
   }
+  function isElectricAt(r, c) {
+    if (typeof getSpecialCellAt !== 'function') return false;
+    var sc = getSpecialCellAt(r, c);
+    return !!(sc && sc.type === 'electric');
+  }
+
+  // Electric flash + bolt burst (phase 3E).
+  // Fired after every merge whose group included at least one tile on an
+  // electric special cell. All cells in the group flash yellow; from each
+  // electric cell, 8 ⚡ emojis shoot outward in cardinal + diagonal
+  // directions for a "lightning strike" feel. The bigger the group, the
+  // more dramatic the visual.
+  function triggerElectricFlash(groupCells) {
+    if (!groupCells || !groupCells.length) return;
+    var gridEl = document.getElementById('grid');
+    if (!gridEl) return;
+    var cols = getBoardCols();
+    var electricSeeds = [];
+    // Flash every cell in the merge group with a yellow electric pulse.
+    for (var i = 0; i < groupCells.length; i++) {
+      var p = groupCells[i];
+      var idx = p[0] * cols + p[1];
+      var cellEl = gridEl.children[idx];
+      if (cellEl) {
+        cellEl.classList.add('electric-flash');
+        // self-cleanup: the animation is 500ms; remove right after so a
+        // subsequent merge can flash the same cell again.
+        (function(el) {
+          setTimeout(function() { el.classList.remove('electric-flash'); }, 520);
+        })(cellEl);
+      }
+      if (isElectricAt(p[0], p[1])) electricSeeds.push(p);
+    }
+    // Burst ⚡ emojis from each electric cell — 8 directions per cell.
+    var DIRECTIONS = ['n', 'ne', 'e', 'se', 's', 'sw', 'w', 'nw'];
+    for (var i = 0; i < electricSeeds.length; i++) {
+      var p = electricSeeds[i];
+      var idx = p[0] * cols + p[1];
+      var cellEl = gridEl.children[idx];
+      if (!cellEl) continue;
+      var rect = cellEl.getBoundingClientRect();
+      var cx = rect.left + rect.width / 2;
+      var cy = rect.top + rect.height / 2;
+      for (var d = 0; d < DIRECTIONS.length; d++) {
+        var bolt = document.createElement('div');
+        bolt.className = 'electric-bolt electric-bolt-' + DIRECTIONS[d];
+        bolt.textContent = '⚡';
+        bolt.style.left = cx + 'px';
+        bolt.style.top = cy + 'px';
+        document.body.appendChild(bolt);
+        (function(b) {
+          setTimeout(function() { b.remove(); }, 720);
+        })(bolt);
+      }
+    }
+    // Audio: at least a chain-style zap if the helper exists.
+    try {
+      if (electricSeeds.length && typeof soundChain === 'function') {
+        soundChain(Math.min(4, groupCells.length));
+      }
+      if (typeof buzz === 'function') buzz([20, 30, 20]);
+    } catch (e) {}
+  }
 
   // Frozen-cell adjacent-thaw mechanic (phase 3D+).
   // When a merge happens at (mergeRow, mergeCol), any frozen-with-tile
@@ -10885,6 +10948,19 @@
       visited.add(k);
       group.push([r, c]);
       stack.push([r-1,c], [r+1,c], [r,c-1], [r,c+1]);
+      // Dynamic Boards — Electric (phase 3E): when the BFS visits a
+      // tile on an electric cell, it ALSO queues 8 extra positions —
+      // the 4 diagonals + the 4 orthogonals at radius 2. This means an
+      // electric cell can absorb same-tier tiles that aren't directly
+      // adjacent, producing cross-board mega-merges. visited keeps the
+      // BFS bounded (each cell processed once even if multiple electric
+      // cells reach it).
+      if (isElectricAt(r, c)) {
+        stack.push(
+          [r-2, c], [r+2, c], [r, c-2], [r, c+2],          // radius-2 orthogonals
+          [r-1, c-1], [r-1, c+1], [r+1, c-1], [r+1, c+1]   // diagonals
+        );
+      }
     }
     return group;
   }
@@ -11402,6 +11478,17 @@
               // unstick frozen tiles via skill instead of waiting for a
               // random bomb event.
               try { checkFrozenThawAdjacent(kr, kc); } catch (e) {}
+              // Electric flash: if any cell in the merge group was on an
+              // electric special cell, fire the lightning visual. The
+              // BFS extension above already pulled in radius-2 cells, so
+              // the group itself contains the extended cells.
+              try {
+                var hasElectric = false;
+                for (var __ei = 0; __ei < group.length; __ei++) {
+                  if (isElectricAt(group[__ei][0], group[__ei][1])) { hasElectric = true; break; }
+                }
+                if (hasElectric) triggerElectricFlash(group);
+              } catch (e) {}
               if (group.length >= 3) showMultiMergeBadge(group.length);
               if (chainCount > currentGameMaxChain) currentGameMaxChain = chainCount;
               bumpLifetimeMax(BEST_CHAIN_KEY, chainCount);

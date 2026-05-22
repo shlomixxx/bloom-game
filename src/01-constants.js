@@ -42,7 +42,7 @@
   }
   // Mirror the server's SPECIAL_CELL_TYPES allowlist. Keep in sync.
   // (Defining here so the client doesn't import from the server module.)
-  const CLIENT_SPECIAL_CELL_TYPES = ['gold', 'bonus', 'frozen'];
+  const CLIENT_SPECIAL_CELL_TYPES = ['gold', 'bonus', 'frozen', 'electric'];
   function setSpecialCells(arr) {
     if (arr == null) { _specialCells = null; _specialCellsByPos = null; return true; }
     if (!Array.isArray(arr)) return false;

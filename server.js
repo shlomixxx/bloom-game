@@ -2388,7 +2388,7 @@ function invalidateBoardCache() {
 // Allowed cell types for special_cells boards. Expand here as new types
 // land (frozen / electric / locked / teleport). Client code uses the
 // same list to decide what to render.
-const SPECIAL_CELL_TYPES = ['gold', 'bonus', 'frozen'];  // 3B: gold, 3C: bonus, 3D: frozen
+const SPECIAL_CELL_TYPES = ['gold', 'bonus', 'frozen', 'electric'];  // 3B/C/D/E
 
 function validateBoardDefinition(type, definition) {
   if (definition === null || typeof definition !== 'object' || Array.isArray(definition)) {
