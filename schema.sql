@@ -792,6 +792,11 @@ INSERT INTO game_config (key, value) VALUES ('dyn_comeback_reward',      '150') 
 -- Bonus boost when comeback player ALSO has a freeze ready to apply.
 INSERT INTO game_config (key, value) VALUES ('dyn_comeback_freeze_gift', '1')    ON CONFLICT (key) DO NOTHING;
 
+-- Push notifications: master toggle. The push_subscriptions table
+-- is defined earlier in this file (line ~410); we only need the
+-- master toggle here so the admin can disable broadcasts globally.
+INSERT INTO game_config (key, value) VALUES ('push_enabled', 'true') ON CONFLICT (key) DO NOTHING;
+
 -- ============================================================
 -- Dynamic Boards — phase 2 (May 2026)
 -- The board_configurations table backs admin-managed alternate

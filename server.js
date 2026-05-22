@@ -4369,6 +4369,122 @@ if (ADMIN_PATH && ADMIN_PASSWORD) {
     }
   });
 
+  // ============================================================
+  // Push notifications — admin broadcast (May 2026)
+  //
+  // Three endpoints:
+  //   GET  /api/push/status     — current subscriber count + configured?
+  //   POST /api/push/test       — send a test push to a single device
+  //   POST /api/push/broadcast  — send to all subscribed devices
+  //
+  // The broadcast endpoint iterates push_subscriptions in chunks of
+  // 200 to avoid huge memory spikes on big lists. Stale endpoints
+  // are removed by the existing sendPushToDevice cleanup logic
+  // (410 Gone responses delete the row).
+  // ============================================================
+  adminRouter.get('/api/push/status', async (_req, res) => {
+    try {
+      const r = await pool.query(`SELECT COUNT(*)::int AS c FROM push_subscriptions`);
+      const cfg = await pool.query(`SELECT value FROM game_config WHERE key = 'push_enabled'`);
+      res.json({
+        ok: true,
+        configured: _webpushConfigured,
+        enabled: !cfg.rows[0] || cfg.rows[0].value !== 'false',
+        subscriberCount: (r.rows[0] && r.rows[0].c) || 0,
+        vapidPublic: _webpushConfigured ? VAPID_PUBLIC_KEY : null
+      });
+    } catch (e) {
+      console.error('admin push/status', e.message);
+      res.status(500).json({ error: 'server' });
+    }
+  });
+
+  adminRouter.post('/api/push/test', async (req, res) => {
+    try {
+      if (!_webpushConfigured) return res.json({ ok: false, reason: 'not_configured' });
+      const { deviceId, title, body, url } = req.body || {};
+      if (!deviceId) return res.status(400).json({ error: 'missing_device' });
+      const payload = {
+        title: String(title || '🧪 בדיקת התראה').slice(0, 80),
+        body:  String(body  || 'אם אתה רואה את זה — התראות עובדות!').slice(0, 200),
+        data: { url: url || '/' }
+      };
+      const sent = await sendPushToDevice(deviceId, payload);
+      res.json({ ok: true, attempted: !!sent });
+    } catch (e) {
+      console.error('admin push/test', e.message);
+      res.status(500).json({ error: 'server' });
+    }
+  });
+
+  adminRouter.post('/api/push/broadcast', async (req, res) => {
+    try {
+      if (!_webpushConfigured) return res.json({ ok: false, reason: 'not_configured' });
+      const cfg = await pool.query(`SELECT value FROM game_config WHERE key = 'push_enabled'`);
+      if (cfg.rows[0] && cfg.rows[0].value === 'false') {
+        return res.json({ ok: false, reason: 'disabled' });
+      }
+      const { title, body, url, tag, requireInteraction } = req.body || {};
+      const cleanTitle = String(title || '').trim().slice(0, 80);
+      const cleanBody  = String(body  || '').trim().slice(0, 200);
+      if (!cleanTitle || !cleanBody) {
+        return res.status(400).json({ error: 'missing_title_or_body' });
+      }
+      const cleanUrl = (url && typeof url === 'string') ? url.slice(0, 200) : '/';
+      const cleanTag = (tag && typeof tag === 'string') ? tag.slice(0, 50) : 'bloom-admin-' + Date.now();
+      // Pull subscribers in batches so memory stays bounded.
+      const batchSize = 200;
+      let totalAttempted = 0;
+      let totalSucceeded = 0;
+      let totalFailed = 0;
+      let offset = 0;
+      while (true) {
+        const batch = await pool.query(
+          `SELECT DISTINCT device_id FROM push_subscriptions
+           ORDER BY device_id LIMIT $1 OFFSET $2`,
+          [batchSize, offset]
+        );
+        if (!batch.rows.length) break;
+        // Fire pushes in parallel within the batch.
+        const promises = batch.rows.map(function(row) {
+          return sendPushToDevice(row.device_id, {
+            title: cleanTitle,
+            body: cleanBody,
+            tag: cleanTag,
+            requireInteraction: !!requireInteraction,
+            data: { url: cleanUrl }
+          })
+            .then(function() { totalSucceeded++; })
+            .catch(function() { totalFailed++; });
+        });
+        await Promise.all(promises);
+        totalAttempted += batch.rows.length;
+        offset += batchSize;
+        if (batch.rows.length < batchSize) break;
+      }
+      // Audit trail.
+      try {
+        await pool.query(
+          `INSERT INTO admin_actions (action, details, created_at)
+           VALUES ($1, $2, NOW())`,
+          ['push_broadcast', JSON.stringify({
+            title: cleanTitle, body: cleanBody, url: cleanUrl,
+            attempted: totalAttempted, succeeded: totalSucceeded, failed: totalFailed
+          })]
+        );
+      } catch (e) {}
+      res.json({
+        ok: true,
+        attempted: totalAttempted,
+        succeeded: totalSucceeded,
+        failed: totalFailed
+      });
+    } catch (e) {
+      console.error('admin push/broadcast', e.message);
+      res.status(500).json({ error: 'server' });
+    }
+  });
+
   app.use(ADMIN_PATH, adminRouter);
   console.log('[admin] mounted at ' + ADMIN_PATH);
 } else {

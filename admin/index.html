@@ -753,6 +753,59 @@
     </div>
   </details>
 
+  <!-- Push notifications — send broadcast to all subscribers -->
+  <section id="push-section" style="margin-top:14px;background:var(--card);border-radius:12px;padding:14px 16px;border:1px solid rgba(61,139,250,0.25)">
+    <h2 style="margin:0 0 6px 0;display:flex;align-items:center;gap:8px">
+      🔔 התראות Push
+      <button class="tip-btn" data-tip-text="<strong>🔔 התראות Push (Web Push Notifications)</strong><br>שולחים התראה לכל השחקנים שאישרו התראות בדפדפן, גם כשהמשחק סגור.<div class=&quot;tip-example&quot;>💡 <strong>מתי להשתמש</strong>:<br>• השקת לוח חג חדש: 'השקת לוח חנוכה היום! 🕎 +750💎'<br>• משימת FOMO: 'רק היום: כפל פרסים בכל הלוחות 🔥'<br>• הזמנת חזרה: 'דניאל שובר את השיא שלך — חזור ועקוף אותו'<br><br>📊 <strong>סטטיסטיקה</strong>: שיעור פתיחה של push בעברית = 8-15% (מקובל ב-mobile games). 1,000 משתמשים מנויים → 100-150 חזרות מכל broadcast.<br><br>⚠ <strong>אל תשלח יותר מ-1 פעם ביום</strong>. שחקנים בורחים מ-push spam.<br><br>🔒 דורש <code>VAPID_PUBLIC_KEY</code> + <code>VAPID_PRIVATE_KEY</code> ב-env vars של Railway.</div>">?</button>
+    </h2>
+    <div id="push-status" style="font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.6">⏳ טוען...</div>
+    <div id="push-composer" style="display:none">
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div>
+          <label style="display:block;font-size:12px;font-weight:700;margin-bottom:4px;color:var(--gold)">כותרת (עד 80 תווים)</label>
+          <input id="push-title" type="text" maxlength="80" placeholder="לדוגמה: 🎄 לוח חנוכה היום!" style="width:100%;padding:9px 11px;border-radius:8px;background:#FAFAF6;color:#1C1A18;border:1px solid #E5E1D5;font-family:inherit;font-size:13px">
+        </div>
+        <div>
+          <label style="display:block;font-size:12px;font-weight:700;margin-bottom:4px;color:var(--gold)">תוכן (עד 200 תווים)</label>
+          <textarea id="push-body" maxlength="200" rows="3" placeholder="לוח חנוכה פעיל היום — כתר את הלוח וקבל +750💎" style="width:100%;padding:9px 11px;border-radius:8px;background:#FAFAF6;color:#1C1A18;border:1px solid #E5E1D5;font-family:inherit;font-size:13px;resize:vertical"></textarea>
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <div style="flex:1;min-width:120px">
+            <label style="display:block;font-size:12px;font-weight:700;margin-bottom:4px;color:var(--gold)">URL לפתיחה</label>
+            <input id="push-url" type="text" value="/" placeholder="/" style="width:100%;padding:9px 11px;border-radius:8px;background:#FAFAF6;color:#1C1A18;border:1px solid #E5E1D5;font-family:inherit;font-size:13px">
+          </div>
+          <div style="flex:1;min-width:120px">
+            <label style="display:block;font-size:12px;font-weight:700;margin-bottom:4px;color:var(--gold)">תג (אופציונלי)</label>
+            <input id="push-tag" type="text" maxlength="50" placeholder="dynamic-board-launch" style="width:100%;padding:9px 11px;border-radius:8px;background:#FAFAF6;color:#1C1A18;border:1px solid #E5E1D5;font-family:inherit;font-size:13px">
+          </div>
+        </div>
+        <label style="display:flex;align-items:center;gap:8px;font-size:12px;font-weight:600;color:var(--text);cursor:pointer">
+          <input id="push-require-interaction" type="checkbox">
+          <span>דרוש אינטראקציה (ההתראה לא נעלמת לבד)</span>
+        </label>
+
+        <!-- Pre-built templates -->
+        <div style="margin-top:6px">
+          <div style="font-size:12px;font-weight:700;color:var(--gold);margin-bottom:6px">תבניות מהירות</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap" id="push-templates">
+            <button type="button" class="btn sm push-template" data-title="🎄 לוח חג חדש פעיל!" data-body="הלוח של היום מסתיים בעוד 12 שעות — תכף יוחלף. שחק עכשיו!">🎄 לוח חג</button>
+            <button type="button" class="btn sm push-template" data-title="🔥 הרצף שלך בסכנה!" data-body="לא שיחקת היום — שמור על הרצף עם משחק אחד בלוח דינמי">🔥 רצף בסכנה</button>
+            <button type="button" class="btn sm push-template" data-title="🎁 פרס משימה ממתין" data-body="השלמת משימה אתמול ולא קיבלת את הפרס — קח אותו לפני חצות">🎁 פרס ממתין</button>
+            <button type="button" class="btn sm push-template" data-title="💎 כפל פרסים — היום בלבד!" data-body="כל תיבת מסתורין שתפתח היום מכפילה ניקוד. אל תפספס!">💎 אירוע פרסים</button>
+          </div>
+        </div>
+
+        <!-- Send buttons -->
+        <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+          <button id="btn-push-test" class="btn sm" style="background:#3D8BFA;color:#FFF" type="button">🧪 שלח בדיקה אליי</button>
+          <button id="btn-push-broadcast" class="btn" style="background:#FF6B9D;color:#FFF;flex:1;min-width:160px" type="button">🚀 שלח לכל המנויים</button>
+        </div>
+        <div id="push-result" style="margin-top:8px;font-size:12px;padding:8px;border-radius:8px;display:none"></div>
+      </div>
+    </div>
+  </section>
+
   <!-- Privacy: manual PII purge for challenge winners (90d) -->
   <section id="privacy-section" style="margin-top:14px;background:var(--card);border-radius:12px;padding:14px 16px;border:1px solid rgba(250,199,117,0.18)">
     <h2 style="margin:0 0 6px 0;display:flex;align-items:center;gap:8px">🔒 פרטיות</h2>
@@ -4400,6 +4453,113 @@
       toast('שגיאת רשת');
     }
   }
+
+  // ====== PUSH NOTIFICATIONS ======
+  // Composer + status panel + broadcast.
+  (async function initPushPanel() {
+    var statusEl = $('push-status');
+    var composer = $('push-composer');
+    if (!statusEl || !composer) return;
+    try {
+      var s = await api('/push/status');
+      if (!s) throw new Error('no_response');
+      if (!s.configured) {
+        statusEl.innerHTML = '⚠ <strong>Push לא מוגדר.</strong> הגדר משתני סביבה ב-Railway:<br>' +
+          '<code style="display:block;background:#1A1816;padding:8px;border-radius:6px;margin-top:6px;font-size:11px">' +
+          'VAPID_PUBLIC_KEY=...<br>VAPID_PRIVATE_KEY=...<br>VAPID_SUBJECT=mailto:you@example.com</code>' +
+          '<div style="margin-top:6px">צור מפתחות: <code>npx web-push generate-vapid-keys</code></div>';
+        return;
+      }
+      statusEl.innerHTML = '✅ Push מוגדר · <strong>' + (s.subscriberCount || 0) + '</strong> מנויים פעילים' +
+        (s.enabled ? '' : ' · <span style="color:#C97A7A">⚠ מתג <code>push_enabled</code> כבוי — broadcasts ידחו</span>');
+      composer.style.display = '';
+    } catch (e) {
+      statusEl.innerHTML = '❌ שגיאה בטעינת מצב Push: ' + (e && e.message);
+    }
+  })();
+
+  // Push templates — fill the title + body with one click.
+  document.querySelectorAll('.push-template').forEach(function(btn) {
+    btn.onclick = function() {
+      var titleEl = $('push-title');
+      var bodyEl  = $('push-body');
+      if (titleEl) titleEl.value = btn.getAttribute('data-title') || '';
+      if (bodyEl)  bodyEl.value  = btn.getAttribute('data-body')  || '';
+    };
+  });
+
+  function pushResultShow(html, isError) {
+    var out = $('push-result');
+    if (!out) return;
+    out.style.display = '';
+    out.style.background = isError ? '#3A1818' : '#183A18';
+    out.style.color = isError ? '#FFB0A0' : '#9FE1CB';
+    out.innerHTML = html;
+  }
+  function readPushPayload() {
+    return {
+      title: ($('push-title') && $('push-title').value || '').trim(),
+      body:  ($('push-body')  && $('push-body').value  || '').trim(),
+      url:   ($('push-url')   && $('push-url').value   || '/').trim(),
+      tag:   ($('push-tag')   && $('push-tag').value   || '').trim(),
+      requireInteraction: $('push-require-interaction') ? $('push-require-interaction').checked : false
+    };
+  }
+
+  // Test push — send to a single device. Uses the admin's own device
+  // id if available via prompt (admin has to grant push themselves).
+  var testBtn = $('btn-push-test');
+  if (testBtn) testBtn.onclick = async function() {
+    var payload = readPushPayload();
+    if (!payload.title || !payload.body) {
+      pushResultShow('⚠ חסר כותרת או תוכן.', true);
+      return;
+    }
+    var deviceId = prompt('Device ID של מי שאתה רוצה לשלוח (השאר ריק לשלוח אליך — נקבע מ-/api/me-לא-זמין כרגע):');
+    if (!deviceId) { pushResultShow('⚠ צריך Device ID לבדיקה.', true); return; }
+    testBtn.disabled = true;
+    try {
+      var r = await api('/push/test', { method: 'POST', body: JSON.stringify({
+        deviceId: deviceId, title: payload.title, body: payload.body, url: payload.url
+      }) });
+      if (r && r.ok) {
+        pushResultShow('✅ נשלח! בדוק את המכשיר.', false);
+      } else {
+        pushResultShow('❌ ' + (r && r.reason || 'שגיאה'), true);
+      }
+    } catch (e) {
+      pushResultShow('❌ שגיאת רשת: ' + (e && e.message), true);
+    } finally {
+      testBtn.disabled = false;
+    }
+  };
+
+  // Broadcast — send to all subscribers. With confirmation.
+  var broadcastBtn = $('btn-push-broadcast');
+  if (broadcastBtn) broadcastBtn.onclick = async function() {
+    var payload = readPushPayload();
+    if (!payload.title || !payload.body) {
+      pushResultShow('⚠ חסר כותרת או תוכן.', true);
+      return;
+    }
+    if (!confirm('לשלוח לכל המנויים?\n\nכותרת: ' + payload.title + '\nתוכן: ' + payload.body)) return;
+    broadcastBtn.disabled = true;
+    broadcastBtn.innerHTML = '⏳ שולח...';
+    try {
+      var r = await api('/push/broadcast', { method: 'POST', body: JSON.stringify(payload) });
+      if (r && r.ok) {
+        pushResultShow('✅ נשלח · ' + r.attempted + ' ניסיונות · ' + r.succeeded + ' הצליחו · ' + r.failed + ' נכשלו', false);
+        toast && toast('Push broadcast נשלח: ' + r.succeeded + '/' + r.attempted);
+      } else {
+        pushResultShow('❌ ' + (r && r.reason || 'שגיאה'), true);
+      }
+    } catch (e) {
+      pushResultShow('❌ שגיאת רשת: ' + (e && e.message), true);
+    } finally {
+      broadcastBtn.disabled = false;
+      broadcastBtn.innerHTML = '🚀 שלח לכל המנויים';
+    }
+  };
 
   // Privacy: manual PII purge button.
   var purgeBtn = $('btn-privacy-purge');

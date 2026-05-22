@@ -380,6 +380,13 @@
       milestoneHit = after;
       st.milestonesClaimed = (st.milestonesClaimed || []).concat([after]);
       setDynamicStreak(st);
+      // Smart push prompt — first 3-day streak is the best moment to
+      // ask for notifications. Player is invested + earning rewards.
+      if (after === 3 && typeof window.__bloomMaybeAskPush === 'function') {
+        setTimeout(function() {
+          try { window.__bloomMaybeAskPush('🔥 כל יום שתשחק לוח דינמי, נשמור על הרצף שלך. נשלח לך תזכורת חברית בערב אם שכחת — והרצף ניצל.'); } catch (e) {}
+        }, 3500);
+      }
     }
     return {
       streakBefore: before,
@@ -565,6 +572,20 @@
       unlocked.forEach(function(u) {
         try { earnCredits('event_gift', { amount: u.reward, achievement_id: u.id, scope: u.scope, board: u.boardId || null }); } catch (e) {}
       });
+    }
+    // Smart push prompt — when a player FIRST unlocks ANY achievement,
+    // the dopamine spike is the perfect moment to ask for notifications.
+    // The internal cooldown (3 days) prevents over-asking.
+    if (unlocked.length && typeof window.__bloomMaybeAskPush === 'function') {
+      var totalEarned = Object.keys(state.perBoard || {}).reduce(function(acc, bid) {
+        return acc + Object.keys(state.perBoard[bid] || {}).length;
+      }, 0) + Object.keys(state.cross || {}).length;
+      // First achievement EVER → ask. After that the cooldown handles dedup.
+      if (totalEarned <= 2) {
+        setTimeout(function() {
+          try { window.__bloomMaybeAskPush('🏅 פתחת הישג ראשון! הפעל התראות כדי לדעת מתי הישגים חדשים זמינים — וכשמשהו ממכר קורה.'); } catch (e) {}
+        }, 4500);
+      }
     }
     return unlocked;
   }
@@ -1269,6 +1290,13 @@
           // Refresh balance UI.
           try { if (typeof playerBalance !== 'undefined' && typeof d.newBalance === 'number') playerBalance = d.newBalance; } catch (e) {}
           try { if (typeof updateBalanceDisplay === 'function') updateBalanceDisplay(); } catch (e) {}
+          // Smart push prompt — comeback claimer is a high-intent player
+          // returning after absence. Ask now so they don't lapse again.
+          if (typeof window.__bloomMaybeAskPush === 'function') {
+            setTimeout(function() {
+              try { window.__bloomMaybeAskPush('👋 ברוך שובך! הפעל התראות כדי שלא תפספס שוב — נזכיר לך בערב אם הרצף בסכנה.'); } catch (e) {}
+            }, 2500);
+          }
         }
         return d;
       });
