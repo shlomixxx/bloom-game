@@ -2020,6 +2020,9 @@
   // Numeric / enum presets per key — rendered as chips below the input. Click
   // = auto-save. Admin can still type a custom value into the input field.
   var PRESETS_PER_KEY = {
+    // Stage 15 — Daily Special
+    daily_special_xp_mult: [1.5, 2, 3, 4, 5],
+    daily_special_reward_mult: [1.5, 2, 2.5, 3],
     // String enums
     merge_mode: ['anchor', 'classic', 'smart'],
     leaderboard_default_tab: ['world', 'country', 'difficulty'],
@@ -2426,6 +2429,12 @@
     dyn_comeback_min_streak: 'מינימום רצף שהיה לשחקן לפני שאיבד אותו, כדי להיות זכאי ל-comeback.<div class="tip-example">📊 ברירת מחדל 3.<br>💡 רצוי לא להוריד מתחת ל-3 — אחרת כל חזרה תהפוך ל-comeback, מה שמדלל את הטקס.<br>💡 ערך 7 = רק שחקנים שכבר היו loyal יראו comeback. רוצה לתת רק לבזבזני-זמן.</div>',
     dyn_comeback_reward:     'פרס ה-💎 שנותן ה-comeback overlay.<div class="tip-example">📊 ברירת מחדל 150💎.<br>💡 גדול מספיק כדי שירגיש משמעותי, קטן מספיק כדי שלא יהיה אטרקציה לפנות-חוץ-בעצמך.<br>📊 ערכים: 50 (קמצני), 150 (default), 300 (נדיב, למתחילים), 500 (אגרסיבי).</div>',
     dyn_comeback_freeze_gift: 'מספר הקפאות חינם שנותנים עם ה-comeback bonus.<div class="tip-example">📊 ברירת מחדל 1.<br>💡 השילוב 150💎 + 1 הקפאה = "ברוך שובך + אנחנו נשמור עליך לא לנפול שוב". פסיכולוגית חזק.<br>📊 ערך 0 = רק 💎, ערך 2 = "פרמיום" comeback. ערך 3+ = ייצור הקפאות בחינם דרך win-back farming, אל תעלה מעל 1-2.</div>',
+
+    // ---- Daily Special Board (stage 15) ----
+    daily_special_enabled: 'הפעלת מערכת הלוח של היום (Stage 15).<div class="tip-example">📊 ברירת מחדל פעיל. כאשר מופעל, לוח דינמי אחד נבחר אוטומטית כל יום (לפי תאריך שעון ישראל) ומקבל סטטוס מיוחד עם ×3 XP + ×2 פרסים.<br>💡 זה ה-#1 daily-return hook במשחק. מלמד את השחקן "לפתוח את האפליקציה כל בוקר לראות מה היום". רוטציה אוטומטית = גיוון.<br>⚠ כיבוי מוריד את ה-banner הזהוב מראש ה-picker.</div>',
+    daily_special_xp_mult: 'כפל ה-XP על משחק בלוח של היום.<div class="tip-example">📊 ברירת מחדל 3. ערכים: 1.5 (מתון), 2 (סולידי), 3 (default, אגרסיבי), 5 (חיגיגה).<br>💡 ה-XP מוכפל על כל המשחק (base finish + crown bonus + per-10K score). שחקן ירגיש "צריך לשחק היום!".<br>📊 cap סופי: <code>season_xp_max_per_game × mult</code>. עם default 100 × 3 = עד 300 XP במשחק יחיד.</div>',
+    daily_special_reward_mult: 'כפל פרסי המשימות על הלוח של היום.<div class="tip-example">📊 ברירת מחדל 2. ערכים: 1.5-3.<br>💡 פעיל על משימות שהושלמו במשחק על הלוח של היום. שחקן יצבור משימות "בכוונה" על הלוח הזה לחטוף את הכפל.<br>⚠ אל תגדיר יותר מ-3 — משימות גדולות כבר משלמות 250💎 (×3 = 750💎/יום, יותר מדי).</div>',
+    daily_special_override_id: 'override ידני של הלוח של היום (id מספרי).<div class="tip-example">📊 ריק = ברירת המחדל (בחירה אוטומטית לפי תאריך).<br>💡 מתי להשתמש: 1) השקת לוח חדש, רוצים להבטיח שכולם יראו אותו ביום מסויים; 2) חופשה/חג ספציפי, רוצים לקבע לוח רלוונטי (וולנטיין ב-14/2).<br>📊 הזן רק את המספר (id) מטבלת board_configurations. אם הלוח לא קיים/לא פעיל, המערכת חוזרת לבחירה האוטומטית.</div>',
 
     // ---- Daily Login Multiplier Stack (stage 14) ----
     daily_login_mult_dyn_streak_pct: 'בונוס אחוזי לרצף לוחות דינמיים בבונוס היומי.<div class="tip-example">📊 ברירת מחדל 25%.<br>💡 שחקן עם רצף לוחות דינמיים ≥ <code>daily_login_mult_dyn_streak_min</code> ימים יקבל בונוס נוסף על-גבי ה-base. שילוב עם רצף יומי ×3 (7 ימים) + dyn streak 5 ימים = base × 3 × 1.25 = +275% מעל הסכום הבסיסי.<br>📊 ערכים מומלצים: 15-40%.</div>',

@@ -1568,3 +1568,62 @@
     .contest-hud-label { font-size: 8px; }
     .contest-hud-expand { width: 22px; height: 22px; font-size: 12px; }
   }
+
+  /* ============================================================
+     Stage 15 — Daily Special game-over banner
+     Gold-pink pulsing card that tells the player "you grabbed
+     today's biggest reward". Bigger and louder than other banners
+     because daily-special is the strongest daily-return hook.
+     ============================================================ */
+  .over-daily-special-banner {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 14px auto 0;
+    padding: 14px 16px;
+    border: 2px solid rgba(186,117,23,0.55);
+    border-radius: 16px;
+    background: linear-gradient(135deg, #FFF4CC 0%, #FFD3E2 50%, #FFB8D0 100%);
+    box-shadow: 0 6px 20px rgba(186,117,23,0.3);
+    max-width: 340px;
+    text-align: right;
+    direction: rtl;
+    animation: overDailySpecialBanner 2.4s ease-in-out infinite;
+  }
+  .over-daily-special-icon {
+    font-size: 38px;
+    flex-shrink: 0;
+    filter: drop-shadow(0 0 8px rgba(255, 220, 80, 0.7));
+    animation: overDailySpecialStar 1.8s ease-in-out infinite;
+  }
+  .over-daily-special-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+  .over-daily-special-title {
+    font-size: 16px;
+    font-weight: 900;
+    color: #6B3D00;
+    letter-spacing: -0.2px;
+  }
+  .over-daily-special-perks {
+    font-size: 13px;
+    font-weight: 700;
+    color: #5A3000;
+  }
+  .over-daily-special-perks strong {
+    font-weight: 900;
+    color: #BA7517;
+  }
+  @keyframes overDailySpecialBanner {
+    0%, 100% { box-shadow: 0 6px 20px rgba(186,117,23,0.3); }
+    50%      { box-shadow: 0 8px 28px rgba(255, 117, 200, 0.5); }
+  }
+  @keyframes overDailySpecialStar {
+    0%, 100% { transform: scale(1) rotate(0deg); }
+    50%      { transform: scale(1.2) rotate(15deg); }
+  }
+  html[data-theme="dark"] .over-daily-special-banner {
+    background: linear-gradient(135deg, #4D3520 0%, #4D2840 50%, #4D2030 100%);
+    border-color: rgba(255, 220, 120, 0.55);
+  }
+  html[data-theme="dark"] .over-daily-special-title { color: #FFD9A8; }
+  html[data-theme="dark"] .over-daily-special-perks { color: #FFC890; }
+  html[data-theme="dark"] .over-daily-special-perks strong { color: #FFD93D; }

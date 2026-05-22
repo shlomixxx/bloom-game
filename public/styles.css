@@ -4305,6 +4305,65 @@
     .contest-hud-label { font-size: 8px; }
     .contest-hud-expand { width: 22px; height: 22px; font-size: 12px; }
   }
+
+  /* ============================================================
+     Stage 15 — Daily Special game-over banner
+     Gold-pink pulsing card that tells the player "you grabbed
+     today's biggest reward". Bigger and louder than other banners
+     because daily-special is the strongest daily-return hook.
+     ============================================================ */
+  .over-daily-special-banner {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 14px auto 0;
+    padding: 14px 16px;
+    border: 2px solid rgba(186,117,23,0.55);
+    border-radius: 16px;
+    background: linear-gradient(135deg, #FFF4CC 0%, #FFD3E2 50%, #FFB8D0 100%);
+    box-shadow: 0 6px 20px rgba(186,117,23,0.3);
+    max-width: 340px;
+    text-align: right;
+    direction: rtl;
+    animation: overDailySpecialBanner 2.4s ease-in-out infinite;
+  }
+  .over-daily-special-icon {
+    font-size: 38px;
+    flex-shrink: 0;
+    filter: drop-shadow(0 0 8px rgba(255, 220, 80, 0.7));
+    animation: overDailySpecialStar 1.8s ease-in-out infinite;
+  }
+  .over-daily-special-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+  .over-daily-special-title {
+    font-size: 16px;
+    font-weight: 900;
+    color: #6B3D00;
+    letter-spacing: -0.2px;
+  }
+  .over-daily-special-perks {
+    font-size: 13px;
+    font-weight: 700;
+    color: #5A3000;
+  }
+  .over-daily-special-perks strong {
+    font-weight: 900;
+    color: #BA7517;
+  }
+  @keyframes overDailySpecialBanner {
+    0%, 100% { box-shadow: 0 6px 20px rgba(186,117,23,0.3); }
+    50%      { box-shadow: 0 8px 28px rgba(255, 117, 200, 0.5); }
+  }
+  @keyframes overDailySpecialStar {
+    0%, 100% { transform: scale(1) rotate(0deg); }
+    50%      { transform: scale(1.2) rotate(15deg); }
+  }
+  html[data-theme="dark"] .over-daily-special-banner {
+    background: linear-gradient(135deg, #4D3520 0%, #4D2840 50%, #4D2030 100%);
+    border-color: rgba(255, 220, 120, 0.55);
+  }
+  html[data-theme="dark"] .over-daily-special-title { color: #FFD9A8; }
+  html[data-theme="dark"] .over-daily-special-perks { color: #FFC890; }
+  html[data-theme="dark"] .over-daily-special-perks strong { color: #FFD93D; }
   /* ── Home: Streak hero ── */
   .home-streak {
     display: flex; align-items: center; justify-content: center; gap: 10px;
@@ -8612,6 +8671,135 @@ body.theme-valentine-active     .cell.shape-void { background: rgba(255, 200, 22
 body.theme-hanukkah-active      .cell.shape-void { background: rgba(20, 50, 130, 0.12) !important; opacity: 1; }
 body.theme-yom-haatzmaut-active .cell.shape-void { background: rgba(0, 68, 170, 0.10) !important; opacity: 1; }
 body.theme-passover-active      .cell.shape-void { background: rgba(120, 30, 50, 0.15) !important; opacity: 1; }
+
+/* ============================================================
+   Stage 15 — Daily Special Board (Daily mini-event boards)
+   "🌟 הלוח של היום" — pulsing gold-pink gradient at the top of
+   the picker header + matching gold border on the special card +
+   chip showing the multipliers. The loudest visual element in the
+   picker because this is the #1 daily-return hook in the app.
+   ============================================================ */
+
+/* Home button — gold-pink gradient with breathing border */
+.home-v2-boards.fomo-daily-special {
+  background: linear-gradient(135deg, #FFF4CC 0%, #FFD3E2 100%);
+  border-color: rgba(186,117,23,0.45);
+  animation: dynBoardCardCritical 2s ease-in-out infinite;
+}
+html[data-theme="dark"] .home-v2-boards.fomo-daily-special {
+  background: linear-gradient(135deg, #3D2A1E 0%, #3D2030 100%);
+  border-color: rgba(255, 211, 226, 0.4);
+}
+
+/* Picker header banner — top of the modal */
+.dyn-daily-special-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  margin-top: 10px;
+  padding: 12px 14px;
+  border: 2px solid rgba(186,117,23,0.45);
+  border-radius: 14px;
+  background: linear-gradient(135deg, #FFF4CC 0%, #FFD3E2 50%, #FFB8D0 100%);
+  box-shadow: 0 4px 14px rgba(186,117,23,0.25);
+  cursor: pointer;
+  text-align: right;
+  direction: rtl;
+  font-family: inherit;
+  animation: dailySpecialBannerPulse 2.4s ease-in-out infinite;
+}
+.dyn-daily-special-banner:hover { filter: brightness(1.05); }
+.dyn-daily-special-banner:active { transform: scale(0.99); }
+.dyn-daily-special-banner-icon {
+  font-size: 32px;
+  flex-shrink: 0;
+  line-height: 1;
+  filter: drop-shadow(0 0 6px rgba(255, 220, 80, 0.7));
+  animation: dailySpecialStar 1.8s ease-in-out infinite;
+}
+.dyn-daily-special-banner-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.dyn-daily-special-banner-title {
+  font-size: 14px;
+  font-weight: 800;
+  color: #6B3D00;
+  letter-spacing: -0.2px;
+}
+.dyn-daily-special-banner-title strong { font-size: 16px; font-weight: 900; }
+.dyn-daily-special-banner-perks {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.dyn-daily-special-perk {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 9px;
+  background: rgba(255,255,255,0.55);
+  color: #6B3D00;
+  font-size: 11px;
+  font-weight: 800;
+  border: 1px solid rgba(186,117,23,0.3);
+}
+.dyn-daily-special-perk-cta {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 9px;
+  background: #BA7517;
+  color: #FFF4CC;
+  font-size: 11px;
+  font-weight: 900;
+  margin-right: auto;
+}
+@keyframes dailySpecialBannerPulse {
+  0%, 100% { box-shadow: 0 4px 14px rgba(186,117,23,0.25); }
+  50%      { box-shadow: 0 6px 22px rgba(255, 117, 200, 0.45); }
+}
+@keyframes dailySpecialStar {
+  0%, 100% { transform: scale(1) rotate(0deg); }
+  50%      { transform: scale(1.18) rotate(12deg); }
+}
+
+/* Special board card — gold border + breathing glow */
+.dyn-boards-card.daily-special {
+  border: 2px solid #BA7517 !important;
+  box-shadow: 0 0 18px rgba(255, 200, 80, 0.5);
+  animation: dailySpecialCardGlow 2.6s ease-in-out infinite;
+}
+@keyframes dailySpecialCardGlow {
+  0%, 100% { box-shadow: 0 0 12px rgba(255, 200, 80, 0.35); }
+  50%      { box-shadow: 0 0 26px rgba(255, 180, 100, 0.7); }
+}
+
+/* Daily Special chip on the card */
+.dyn-boards-chip.dyn-boards-chip-daily-special {
+  background: linear-gradient(135deg, #FFD93D 0%, #FF8FAE 100%);
+  color: #5A2A00;
+  border-color: rgba(186, 117, 23, 0.55);
+  font-weight: 900;
+  animation: dailySpecialChipPulse 2s ease-in-out infinite;
+}
+@keyframes dailySpecialChipPulse {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.04); }
+}
+
+/* Dark theme overrides */
+html[data-theme="dark"] .dyn-daily-special-banner {
+  background: linear-gradient(135deg, #4D3520 0%, #4D2840 50%, #4D2030 100%);
+  border-color: rgba(255, 220, 120, 0.5);
+}
+html[data-theme="dark"] .dyn-daily-special-banner-title { color: #FFD9A8; }
+html[data-theme="dark"] .dyn-daily-special-perk { background: rgba(0,0,0,0.3); color: #FFD9A8; border-color: rgba(255, 220, 120, 0.4); }
+html[data-theme="dark"] .dyn-daily-special-perk-cta { background: #FFD9A8; color: #4D2820; }
+html[data-theme="dark"] .dyn-boards-card.daily-special {
+  border-color: #FFD9A8 !important;
+}
+html[data-theme="dark"] .dyn-boards-chip.dyn-boards-chip-daily-special {
+  background: linear-gradient(135deg, #FFD93D 0%, #FF8FAE 100%);
+  color: #2A1500;
+}
   /* ============================================================
      DARK MODE
      ============================================================

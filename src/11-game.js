@@ -2694,9 +2694,21 @@
         if (typeof grantSeasonXpForGame === 'function') {
           try {
             var __sessionGameId = (typeof getCurrentGameId === 'function') ? getCurrentGameId() : 'dyn-' + __boardId + '-' + Date.now();
-            grantSeasonXpForGame(__sessionGameId, score, highestTier);
+            // Pass boardId so the server can apply the Daily Special XP multiplier.
+            grantSeasonXpForGame(__sessionGameId, score, highestTier, __boardId);
           } catch (e) {}
         }
+        // Stage 15 — mark today's special as played if this game was the
+        // special board. Drives the home FOMO label to switch off.
+        try {
+          var __ds = window._dailySpecial;
+          if (__ds && __ds.enabled && __ds.id === __boardId && typeof markDailySpecialPlayed === 'function') {
+            markDailySpecialPlayed(__ds.date, __boardId);
+            if (typeof updateDynamicBoardsButton === 'function') {
+              try { updateDynamicBoardsButton(); } catch (e) {}
+            }
+          }
+        } catch (e) {}
         // 🏆 Live Tournament — if there's a tournament currently in its
         // window, auto-submit this score. Server best-score-wins.
         if (typeof submitTournamentScoreFromGame === 'function') {

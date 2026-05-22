@@ -607,6 +607,26 @@
           boardBestHtml +
           (opts.boardLeader ? '<div class="over-board-rank" id="over-board-rank-host">⏳ מחשב דירוג בלוח…</div>' : '') +
           (function() {
+            // Stage 15 — Daily Special banner. Gold-pink pulsing card that
+            // tells the player "you grabbed today's biggest reward". Only
+            // renders for dynamic mode where boardId matches today's special.
+            try {
+              var ds = window._dailySpecial;
+              if (!ds || !ds.enabled || !ds.id) return '';
+              var br = window._activeDynamicBoard;
+              if (!br || br.id !== ds.id) return '';
+              var xpL = (ds.xpMult % 1 === 0) ? ds.xpMult + '×' : ds.xpMult.toFixed(1) + '×';
+              var rwL = (ds.rewardMult % 1 === 0) ? ds.rewardMult + '×' : ds.rewardMult.toFixed(1) + '×';
+              return '<div class="over-daily-special-banner">' +
+                '<div class="over-daily-special-icon">🌟</div>' +
+                '<div class="over-daily-special-body">' +
+                  '<div class="over-daily-special-title">שיחקת את הלוח של היום!</div>' +
+                  '<div class="over-daily-special-perks">קיבלת <strong>' + xpL + ' XP</strong> + <strong>' + rwL + ' פרסים</strong> על המשחק הזה</div>' +
+                '</div>' +
+              '</div>';
+            } catch (e) { return ''; }
+          })() +
+          (function() {
             var sr = opts.streakResult;
             if (!sr || sr.alreadyToday) return '';
             var after = sr.streakAfter | 0;

@@ -171,6 +171,12 @@
     // (a free 💎 sitting unclaimed is louder than any FOMO countdown).
     var qHomeSum = (typeof questsSummary === 'function') ? questsSummary() : null;
     var questClaimable = !!(qHomeSum && qHomeSum.claimable > 0);
+    // Stage 15 — Daily Special check. Highest-positive-opportunity signal.
+    // Shown only when the player hasn't played today's special yet.
+    var dsHome = window._dailySpecial;
+    var dailySpecialBoard = (dsHome && dsHome.enabled && dsHome.id)
+      ? boards.find(function(bb) { return bb.id === dsHome.id; }) : null;
+    var dailySpecialUnplayed = !!(dailySpecialBoard && !hasPlayedDailySpecialToday(dsHome.date, dsHome.id));
     if (countEl) {
       // Default label
       var defaultLabel = boards.length + ' ' + (boards.length === 1 ? 'לוח זמין' : 'לוחות זמינים');
@@ -179,10 +185,16 @@
       if (questClaimable) {
         label = '🎁 ' + qHomeSum.claimable + ' פרס' + (qHomeSum.claimable === 1 ? '' : 'ים') + ' של משימה ממתינים לך — לחץ!';
       }
-      // Streak-in-danger overrides FOMO countdowns because losing a
-      // streak is a stronger signal than missing a single special board.
+      // Streak-in-danger overrides everything except quest-claimable —
+      // losing a streak is the strongest negative-loss signal.
       else if (streakDanger) {
         label = '🔥 הרצף שלך בסכנה! ' + streakSt.count + ' ימים — שחק היום';
+      }
+      // Daily Special unplayed — the "what's special today?" hook. Strongest
+      // positive signal because it changes daily, teaching open-app habit.
+      else if (dailySpecialUnplayed) {
+        var xpML = (dsHome.xpMult % 1 === 0) ? dsHome.xpMult + '×' : dsHome.xpMult.toFixed(1) + '×';
+        label = '🌟 הלוח של היום: ' + (dailySpecialBoard.name || 'לוח') + ' · ' + xpML + ' XP מחכים!';
       } else if (focus && fomoEnabled) {
         var u = boardUrgency(focus);
         var endsIn = boardEndsInMs(focus);
@@ -207,17 +219,40 @@
       countEl.textContent = label;
     }
     // Add urgency CSS class to the button so we can pulse it for critical.
-    btn.classList.remove('fomo-critical', 'fomo-new', 'fomo-soon', 'fomo-streak-danger', 'fomo-quest-claim');
+    btn.classList.remove('fomo-critical', 'fomo-new', 'fomo-soon', 'fomo-streak-danger', 'fomo-quest-claim', 'fomo-daily-special');
     if (questClaimable) {
       btn.classList.add('fomo-quest-claim');
     } else if (streakDanger) {
       btn.classList.add('fomo-streak-danger');
+    } else if (dailySpecialUnplayed) {
+      btn.classList.add('fomo-daily-special');
     } else if (focus && fomoEnabled) {
       var fu = boardUrgency(focus);
       if (fu === 'critical' || fu === 'new' || fu === 'soon') btn.classList.add('fomo-' + fu);
     }
     startFomoTick();
   }
+
+  // Stage 15 — Daily Special "played today" tracker. localStorage keyed by
+  // date so it auto-resets at midnight. Marked via markDailySpecialPlayed()
+  // from the game-over flow when boardId matches today's special.
+  var DAILY_SPECIAL_PLAYED_KEY = 'bloom_dyn_daily_special_played';
+  function hasPlayedDailySpecialToday(date, boardId) {
+    if (!date || !boardId) return false;
+    try {
+      var raw = localStorage.getItem(DAILY_SPECIAL_PLAYED_KEY);
+      if (!raw) return false;
+      var obj = JSON.parse(raw);
+      return !!(obj && obj.date === date && obj.boardId === boardId);
+    } catch (e) { return false; }
+  }
+  function markDailySpecialPlayed(date, boardId) {
+    if (!date || !boardId) return;
+    try {
+      localStorage.setItem(DAILY_SPECIAL_PLAYED_KEY, JSON.stringify({ date: date, boardId: boardId }));
+    } catch (e) {}
+  }
+  window.markDailySpecialPlayed = markDailySpecialPlayed;
 
   // Expose so the audio-module fetch can poke us.
   window.updateDynamicBoardsButton = updateDynamicBoardsButton;
@@ -893,7 +928,11 @@
       // Use the new dyn_quest action — server reads the reward from
       // dyn_quest_reward_<id> config, bypassing the event_gift clamp
       // that capped payouts at event_gift_credits_max (typically 10💎).
-      try { earnCredits('dyn_quest', { quest_id: q.id }); } catch (e) {}
+      // Pass boardId so the server can apply the Daily Special 2× multiplier
+      // when the quest was completed on today's special board.
+      var lastBoard = window._activeSpecialBoard || window._activeDynamicBoard || null;
+      var bidForQuest = lastBoard && lastBoard.id ? lastBoard.id : 0;
+      try { earnCredits('dyn_quest', { quest_id: q.id, boardId: bidForQuest }); } catch (e) {}
     }
     return { ok: true, reward: q.reward };
   }
@@ -1403,7 +1442,7 @@
   // Grant XP from a dynamic-board game finish. Called from 11-game.js
   // after the chest reveal. Idempotent via gameId. Refreshes the
   // status cache so the picker shows the new XP/tier immediately.
-  function grantSeasonXpForGame(gameId, score, tier) {
+  function grantSeasonXpForGame(gameId, score, tier, boardId) {
     if (!dynConfigBool('season_pass_enabled', true)) return Promise.resolve(null);
     var deviceId = (typeof getDeviceId === 'function') ? getDeviceId() : '';
     var token    = (typeof deviceToken !== 'undefined') ? deviceToken : null;
@@ -1416,7 +1455,7 @@
         token: token,
         gameId: gameId,
         source: 'dyn_game_finish',
-        meta: { score: score, tier: tier }
+        meta: { score: score, tier: tier, boardId: boardId || 0 }
       })
     })
       .then(function(r) { return r.json(); })
@@ -2267,9 +2306,33 @@
         '</button>';
     }
 
-    // Live Tournament banner — sits at the absolute TOP of the header
-    // when a tournament is live or about to start. Highest-priority
-    // surface because tournaments are time-limited community moments.
+    // Daily Special banner — Stage 15. Sits at the ABSOLUTE top of the
+    // header because it's the #1 daily-return hook. Pulsing gold-pink
+    // gradient screams "today is different". Only renders when the
+    // server confirms a special board is live.
+    var dailySpecialBannerHtml = (function() {
+      var ds = window._dailySpecial;
+      if (!ds || !ds.enabled || !ds.id) return '';
+      var specialBoard = boards.find(function(b) { return b.id === ds.id; });
+      if (!specialBoard) return '';
+      var xpMultLabel = (ds.xpMult % 1 === 0) ? ds.xpMult + '×' : ds.xpMult.toFixed(1) + '×';
+      var rewardMultLabel = (ds.rewardMult % 1 === 0) ? ds.rewardMult + '×' : ds.rewardMult.toFixed(1) + '×';
+      return '<button class="dyn-daily-special-banner" id="dyn-daily-special-banner" data-board-id="' + specialBoard.id + '">' +
+        '<span class="dyn-daily-special-banner-icon">🌟</span>' +
+        '<span class="dyn-daily-special-banner-body">' +
+          '<span class="dyn-daily-special-banner-title">הלוח של היום: <strong>' + escapeHtml(specialBoard.name || 'לוח') + '</strong></span>' +
+          '<span class="dyn-daily-special-banner-perks">' +
+            '<span class="dyn-daily-special-perk">' + xpMultLabel + ' XP</span>' +
+            '<span class="dyn-daily-special-perk">' + rewardMultLabel + ' פרסים</span>' +
+            '<span class="dyn-daily-special-perk-cta">שחק עכשיו ←</span>' +
+          '</span>' +
+        '</span>' +
+      '</button>';
+    })();
+
+    // Live Tournament banner — sits below the Daily Special banner.
+    // Highest-priority community surface, but daily-special wins because
+    // it changes every day (vs tournaments which fire less frequently).
     var tournamentBannerHtml = renderTournamentBannerHtml();
 
     // Season Pass headline — sits at the very top of the header.
@@ -2352,6 +2415,7 @@
           '<button class="dyn-boards-close" aria-label="סגור">✕</button>' +
           '<div class="dyn-boards-title">🎯 לוחות דינמיים</div>' +
           '<div class="dyn-boards-sub">לוחות מיוחדים עם חוקים משלהם. כל לוח — לוח מובילים נפרד, שיא אישי משלך, ומשימות.</div>' +
+          dailySpecialBannerHtml +
           tournamentBannerHtml +
           friendsHeadlineHtml +
           seasonHeadlineHtml +
@@ -2394,6 +2458,16 @@
     };
     var fBtn = document.getElementById('dyn-friends-headline');
     if (fBtn) fBtn.onclick = showFriendsModal;
+    // Daily Special banner click — start the special board immediately.
+    var dsBnr = document.getElementById('dyn-daily-special-banner');
+    if (dsBnr) dsBnr.onclick = function() {
+      var bid = parseInt(dsBnr.getAttribute('data-board-id'), 10);
+      if (!Number.isFinite(bid)) return;
+      var target = boards.find(function(b) { return b.id === bid; });
+      if (!target) return;
+      closeDynamicBoardsPicker();
+      try { startDynamicBoard(target); } catch (e) {}
+    };
     // Fire a background fetch on every picker open so the cache stays
     // fresh for the NEXT open. The current render uses whatever is in
     // the cache (which may be from a previous game-over's XP grant).
@@ -2502,6 +2576,15 @@
         if (earnedIcons.length) {
           chips.push('<span class="dyn-boards-chip dyn-boards-chip-badges">🏅 ' + earnedIcons.join(' ') + '</span>');
         }
+        // Stage 15 — Daily Special chip. Loudest chip on the card.
+        // Pulsing gradient so the eye can't miss "today's the day".
+        var ds15 = window._dailySpecial;
+        var isDailySpecialBoard = !!(ds15 && ds15.enabled && ds15.id === b.id);
+        if (isDailySpecialBoard) {
+          var xpL = (ds15.xpMult % 1 === 0) ? ds15.xpMult + '×' : ds15.xpMult.toFixed(1) + '×';
+          var rwL = (ds15.rewardMult % 1 === 0) ? ds15.rewardMult + '×' : ds15.rewardMult.toFixed(1) + '×';
+          chips.unshift('<span class="dyn-boards-chip dyn-boards-chip-daily-special">🌟 הלוח של היום · ' + xpL + ' XP · ' + rwL + ' פרסים</span>');
+        }
         var chipsHtml = chips.length ? ('<div class="dyn-boards-card-chips">' + chips.join('') + '</div>') : '';
         // Per-card urgency badge (Phase 6 LiveOps). data-board-id +
         // data-ends-at on the card so refreshPickerTimers() can re-paint
@@ -2510,6 +2593,7 @@
         var endsAttr = b.ends_at ? (' data-ends-at="' + escapeHtml(b.ends_at) + '"') : '';
         var startsAttr = b.starts_at ? (' data-starts-at="' + escapeHtml(b.starts_at) + '"') : '';
         var classExtra = (u === 'critical' || u === 'new' || u === 'soon') ? (' fomo-' + u) : '';
+        if (isDailySpecialBoard) classExtra += ' daily-special';
         var trophyHtml = dynFeatureEnabled('global_lb')
           ? '<button class="dyn-boards-trophy-btn" data-board-id="' + b.id + '" data-action="trophy" aria-label="לוח מובילים">🏆</button>'
           : '';
