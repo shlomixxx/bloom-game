@@ -42,7 +42,7 @@
   }
   // Mirror the server's SPECIAL_CELL_TYPES allowlist. Keep in sync.
   // (Defining here so the client doesn't import from the server module.)
-  const CLIENT_SPECIAL_CELL_TYPES = ['gold', 'bonus', 'frozen', 'electric'];
+  const CLIENT_SPECIAL_CELL_TYPES = ['gold', 'bonus', 'frozen', 'electric', 'locked', 'teleport'];
   function setSpecialCells(arr) {
     if (arr == null) { _specialCells = null; _specialCellsByPos = null; return true; }
     if (!Array.isArray(arr)) return false;
@@ -62,11 +62,19 @@
       const key = row + ',' + col;
       if (byPos[key]) continue;        // dedupe
       const entry = { row: row, col: col, type: type };
-      // Per-type fields. Bonus carries an `amount` (50-10000).
+      // Per-type fields. Bonus carries `amount`; locked carries
+      // `unlock_after` (and an `unlocked` runtime flag we mirror so
+      // restoring a saved board keeps the unlocked state).
       if (type === 'bonus') {
         const amt = Number(c.amount);
         if (!Number.isFinite(amt) || amt < 50 || amt > 10000) continue;  // drop bad bonus cells
         entry.amount = amt;
+      }
+      if (type === 'locked') {
+        const unlock = parseInt(c.unlock_after, 10);
+        if (!Number.isInteger(unlock) || unlock < 1 || unlock > 30) continue;
+        entry.unlock_after = unlock;
+        entry.unlocked = !!c.unlocked;  // runtime flag — false on fresh game
       }
       sanitized.push(entry);
       byPos[key] = entry;

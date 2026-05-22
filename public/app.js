@@ -42,7 +42,7 @@
   }
   // Mirror the server's SPECIAL_CELL_TYPES allowlist. Keep in sync.
   // (Defining here so the client doesn't import from the server module.)
-  const CLIENT_SPECIAL_CELL_TYPES = ['gold', 'bonus', 'frozen', 'electric'];
+  const CLIENT_SPECIAL_CELL_TYPES = ['gold', 'bonus', 'frozen', 'electric', 'locked', 'teleport'];
   function setSpecialCells(arr) {
     if (arr == null) { _specialCells = null; _specialCellsByPos = null; return true; }
     if (!Array.isArray(arr)) return false;
@@ -62,11 +62,19 @@
       const key = row + ',' + col;
       if (byPos[key]) continue;        // dedupe
       const entry = { row: row, col: col, type: type };
-      // Per-type fields. Bonus carries an `amount` (50-10000).
+      // Per-type fields. Bonus carries `amount`; locked carries
+      // `unlock_after` (and an `unlocked` runtime flag we mirror so
+      // restoring a saved board keeps the unlocked state).
       if (type === 'bonus') {
         const amt = Number(c.amount);
         if (!Number.isFinite(amt) || amt < 50 || amt > 10000) continue;  // drop bad bonus cells
         entry.amount = amt;
+      }
+      if (type === 'locked') {
+        const unlock = parseInt(c.unlock_after, 10);
+        if (!Number.isInteger(unlock) || unlock < 1 || unlock > 30) continue;
+        entry.unlock_after = unlock;
+        entry.unlocked = !!c.unlocked;  // runtime flag — false on fresh game
       }
       sanitized.push(entry);
       byPos[key] = entry;
@@ -10601,6 +10609,91 @@
     var sc = getSpecialCellAt(r, c);
     return !!(sc && sc.type === 'electric');
   }
+  // Locked: blocks drops + gravity until gameTotalMerges reaches its
+  // unlock_after threshold, at which point the cell becomes regular
+  // (unlocked flag set on the entry). The check returns true ONLY for
+  // still-locked cells — open cells behave as plain empty squares.
+  function isLockedAt(r, c) {
+    if (typeof getSpecialCellAt !== 'function') return false;
+    var sc = getSpecialCellAt(r, c);
+    return !!(sc && sc.type === 'locked' && !sc.unlocked);
+  }
+  function isTeleportAt(r, c) {
+    if (typeof getSpecialCellAt !== 'function') return false;
+    var sc = getSpecialCellAt(r, c);
+    return !!(sc && sc.type === 'teleport');
+  }
+
+  // Teleport spiral animation (phase 3G).
+  // A purple spiral at the OLD position (tile vanishes) + matching
+  // spiral at the NEW position (tile materializes). Fires before/after
+  // the actual grid mutation in the drop handler.
+  function triggerTeleportAnimation(fromR, fromC, toR, toC) {
+    var gridEl = document.getElementById('grid');
+    if (!gridEl) return;
+    var cols = getBoardCols();
+    var fromCell = gridEl.children[fromR * cols + fromC];
+    var toCell = gridEl.children[toR * cols + toC];
+    function spawnSpiral(rect, kind) {
+      var spiral = document.createElement('div');
+      spiral.className = 'teleport-spiral teleport-spiral-' + kind;
+      spiral.style.left = (rect.left + rect.width / 2) + 'px';
+      spiral.style.top  = (rect.top + rect.height / 2) + 'px';
+      spiral.textContent = '🌀';
+      document.body.appendChild(spiral);
+      setTimeout(function() { spiral.remove(); }, 600);
+    }
+    if (fromCell) spawnSpiral(fromCell.getBoundingClientRect(), 'out');
+    if (toCell) {
+      var toRect = toCell.getBoundingClientRect();
+      setTimeout(function() { spawnSpiral(toRect, 'in'); }, 220);
+    }
+    if (typeof soundDrop === 'function') {
+      try { soundDrop(); } catch (e) {}
+    }
+  }
+
+  // Locked-cell unlock check (phase 3F).
+  // After each merge, scan locked cells: if gameTotalMerges has reached
+  // the cell's unlock_after threshold, flip its unlocked flag. The cell
+  // visually transforms from a 🔒 wall to a regular empty square — the
+  // unlock burst is fired here too.
+  function checkLockedUnlocks() {
+    if (typeof getSpecialCells !== 'function') return;
+    var cells = getSpecialCells();
+    if (!cells || !cells.length) return;
+    for (var i = 0; i < cells.length; i++) {
+      var sc = cells[i];
+      if (sc.type !== 'locked' || sc.unlocked) continue;
+      if (gameTotalMerges < (sc.unlock_after | 0)) continue;
+      sc.unlocked = true;
+      try { triggerUnlockBurst(sc.row, sc.col); } catch (e) {}
+    }
+  }
+
+  function triggerUnlockBurst(r, c) {
+    var gridEl = document.getElementById('grid');
+    if (!gridEl) return;
+    var cell = gridEl.children[r * getBoardCols() + c];
+    if (!cell) return;
+    var rect = cell.getBoundingClientRect();
+    var burst = document.createElement('div');
+    burst.className = 'unlock-burst';
+    burst.style.left = (rect.left + rect.width / 2) + 'px';
+    burst.style.top  = (rect.top + rect.height / 2) + 'px';
+    burst.innerHTML =
+      '<span class="ub-icon">🔓</span>' +
+      '<span class="ub-flash"></span>' +
+      '<span class="ub-label">נפתח!</span>';
+    document.body.appendChild(burst);
+    setTimeout(function() { burst.remove(); }, 900);
+    if (typeof soundMilestone === 'function') {
+      try { soundMilestone(3); } catch (e) {}
+    }
+    if (typeof buzz === 'function') buzz([30, 50, 30]);
+    // Re-render so the cell loses its locked class immediately.
+    if (typeof render === 'function') render();
+  }
 
   // Electric flash + bolt burst (phase 3E).
   // Fired after every merge whose group included at least one tile on an
@@ -10786,20 +10879,27 @@
     var rows = getBoardRows(), cols = getBoardCols();
 
     // Only cells without a tile on them are eligible for reshuffle.
+    // Locked cells are also pinned — their position is the contract
+    // between board state and player expectation ("close until N merges").
     var shuffleable = [];
     for (var i = 0; i < cells.length; i++) {
       var sc = cells[i];
+      if (sc.type === 'locked' && !sc.unlocked) continue;   // locked stays
       if (grid[sc.row][sc.col] === 0) {
+        // Preserve per-type fields when shuffling. The mover only
+        // mutates row/col on the same entry object.
         shuffleable.push({ row: sc.row, col: sc.col, type: sc.type });
       }
     }
     if (!shuffleable.length) return;
 
     // Enumerate empty non-special positions as candidate targets.
+    // Locked cells aren't empty in the gameplay sense — exclude them.
     var targets = [];
     for (var r = 0; r < rows; r++) {
       for (var c = 0; c < cols; c++) {
         if (getSpecialCellAt(r, c)) continue;
+        if (isLockedAt(r, c)) continue;
         if (grid[r][c] !== 0) continue;
         targets.push([r, c]);
       }
@@ -10968,17 +11068,20 @@
   function applyGravity() {
     var moves = 0;
     for (let c = 0; c < getBoardCols(); c++) {
-      // Walk bottom-up. Frozen-cell tiles act as ANCHORS: they don't
-      // move themselves, and tiles above them stack on top normally.
-      // Implementation: when we hit a frozen tile, snap the write
-      // cursor to that row-1 (the next empty slot ABOVE the anchor)
-      // so subsequent falling tiles stack above it without overwriting.
+      // Walk bottom-up. Anchors block gravity:
+      //   - frozen tiles (cell + tile combo) — phase 3D
+      //   - locked cells (empty but closed) — phase 3F
+      // Both snap the write cursor to row-1 so subsequent falling
+      // tiles stack ABOVE the anchor without overwriting.
       let w = getBoardRows() - 1;
       for (let r = getBoardRows() - 1; r >= 0; r--) {
+        // Locked cells are empty walls — block before checking grid.
+        if (isLockedAt(r, c)) {
+          if (r - 1 < w) w = r - 1;
+          continue;
+        }
         if (grid[r][c] === 0) continue;
         if (isFrozenAt(r, c)) {
-          // Frozen tile stays. The write cursor jumps to just above
-          // this anchor so tiles falling from higher rows land on top.
           if (r - 1 < w) w = r - 1;
           continue;
         }
@@ -11478,6 +11581,10 @@
               // unstick frozen tiles via skill instead of waiting for a
               // random bomb event.
               try { checkFrozenThawAdjacent(kr, kc); } catch (e) {}
+              // Locked-cell unlock: walks all locked cells, opens any
+              // whose unlock_after threshold has been reached. Fires
+              // the 🔓 burst + soundMilestone for each newly-opened.
+              try { checkLockedUnlocks(); } catch (e) {}
               // Electric flash: if any cell in the merge group was on an
               // electric special cell, fire the lightning visual. The
               // BFS extension above already pulled in radius-2 cells, so
@@ -11555,6 +11662,8 @@
     }
     let row = -1;
     for (let r = getBoardRows() - 1; r >= 0; r--) {
+      // Locked cells block drops (treat as occupied) until unlocked.
+      if (isLockedAt(r, col)) continue;
       if (grid[r][col] === 0) { row = r; break; }
     }
     if (row === -1) {
@@ -11699,6 +11808,39 @@
             }
           }
         } catch (goldFxErr) {}
+      }
+    }
+    // Dynamic Boards — Teleport (phase 3G): if the tile landed on a
+    // teleport cell, relocate it to a random empty non-special non-locked
+    // cell. The tile vanishes with a purple spiral at the old position
+    // and materializes at the new one. The teleport cell itself stays
+    // put (the next tile that lands here teleports too). All subsequent
+    // chain processing uses the NEW (row, col).
+    if (isTeleportAt(row, col)) {
+      var rowsT = getBoardRows(), colsT = getBoardCols();
+      var candidatesT = [];
+      for (var rr = 0; rr < rowsT; rr++) {
+        for (var cc = 0; cc < colsT; cc++) {
+          if (rr === row && cc === col) continue;
+          if (grid[rr][cc] !== 0) continue;
+          if (isLockedAt(rr, cc)) continue;
+          if (getSpecialCellAt(rr, cc)) continue;  // skip other specials
+          candidatesT.push([rr, cc]);
+        }
+      }
+      if (candidatesT.length) {
+        var pickT = candidatesT[Math.floor(Math.random() * candidatesT.length)];
+        var tileT = grid[row][col];
+        grid[row][col] = 0;
+        try { triggerTeleportAnimation(row, col, pickT[0], pickT[1]); } catch (e) {}
+        // Show the tile vanish first, then re-place at new position.
+        render();
+        await gsleep(280);
+        grid[pickT[0]][pickT[1]] = tileT;
+        row = pickT[0];
+        col = pickT[1];
+        render({ appearing: [row, col] });
+        await gsleep(200);
       }
     }
     var pendingEvent = (activeEvent && activeEvent.col === col) ? activeEvent : null;

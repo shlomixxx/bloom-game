@@ -982,10 +982,17 @@
           <button type="button" data-paint-mode="bonus" class="paint-mode-btn" style="font-size:11px;padding:5px 10px;border-radius:8px;cursor:pointer;font-weight:700;border:2px solid transparent;background:#F4F1E8;color:#1C1A18">🪙 בונוס</button>
           <button type="button" data-paint-mode="frozen" class="paint-mode-btn" style="font-size:11px;padding:5px 10px;border-radius:8px;cursor:pointer;font-weight:700;border:2px solid transparent;background:#F4F1E8;color:#1C1A18">❄️ קפוא</button>
           <button type="button" data-paint-mode="electric" class="paint-mode-btn" style="font-size:11px;padding:5px 10px;border-radius:8px;cursor:pointer;font-weight:700;border:2px solid transparent;background:#F4F1E8;color:#1C1A18">⚡ חשמלי</button>
+          <button type="button" data-paint-mode="locked" class="paint-mode-btn" style="font-size:11px;padding:5px 10px;border-radius:8px;cursor:pointer;font-weight:700;border:2px solid transparent;background:#F4F1E8;color:#1C1A18">🔒 נעול</button>
+          <button type="button" data-paint-mode="teleport" class="paint-mode-btn" style="font-size:11px;padding:5px 10px;border-radius:8px;cursor:pointer;font-weight:700;border:2px solid transparent;background:#F4F1E8;color:#1C1A18">🌀 טלפורט</button>
           <label style="font-size:11px;color:#6F6E68;display:inline-flex;align-items:center;gap:4px;font-weight:600">
             <span>סכום:</span>
             <input id="board-bonus-amount" type="number" min="50" max="10000" step="50" value="500" style="width:64px;padding:3px 6px;border-radius:6px;background:#FFFFFF;color:#1C1A18;border:1px solid #E5E1D5;text-align:center;font-weight:700">
             <span style="font-size:13px">🪙</span>
+          </label>
+          <label style="font-size:11px;color:#6F6E68;display:inline-flex;align-items:center;gap:4px;font-weight:600">
+            <span>נעילה עד:</span>
+            <input id="board-unlock-after" type="number" min="1" max="30" step="1" value="5" style="width:48px;padding:3px 6px;border-radius:6px;background:#FFFFFF;color:#1C1A18;border:1px solid #E5E1D5;text-align:center;font-weight:700">
+            <span style="font-size:11px">מיזוגים</span>
           </label>
         </div>
 
@@ -1107,23 +1114,31 @@
         <button onclick="closeSpecialCellsGuide()" style="background:#F4F1E8;border:none;color:#6F6E68;font-size:18px;cursor:pointer;width:30px;height:30px;border-radius:8px;line-height:1">✕</button>
       </div>
 
-      <!-- Quick overview cards 2×2 -->
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:18px">
+      <!-- Quick overview cards 3×2 — all 6 cell types -->
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:18px">
         <div style="padding:10px;background:linear-gradient(135deg,#FFE9A8,#FAC775);border-radius:10px;border:2px solid #BA7517">
-          <div style="font-size:18px;font-weight:900;color:#412402">✨ זהב</div>
-          <div style="font-size:12px;color:#412402;line-height:1.4;margin-top:4px"><strong>שדרוג אוטומטי</strong> — אריח שנוחת על תא זהב עולה דרגה אחת מיד.</div>
+          <div style="font-size:16px;font-weight:900;color:#412402">✨ זהב</div>
+          <div style="font-size:11px;color:#412402;line-height:1.4;margin-top:4px"><strong>שדרוג אוטומטי</strong> — אריח שנוחת עולה דרגה.</div>
         </div>
         <div style="padding:10px;background:linear-gradient(135deg,#D8F4E6,#9FE1CB);border-radius:10px;border:2px solid #04342C">
-          <div style="font-size:18px;font-weight:900;color:#04342C">🪙 בונוס</div>
-          <div style="font-size:12px;color:#04342C;line-height:1.4;margin-top:4px"><strong>נקודות נוספות</strong> — כל מיזוג שמסתיים על תא בונוס = +N נקודות.</div>
+          <div style="font-size:16px;font-weight:900;color:#04342C">🪙 בונוס</div>
+          <div style="font-size:11px;color:#04342C;line-height:1.4;margin-top:4px"><strong>נקודות</strong> — מיזוג עליו = +N.</div>
         </div>
         <div style="padding:10px;background:linear-gradient(135deg,#E6F0FA,#B5D4F4);border-radius:10px;border:2px solid #0E4D7E">
-          <div style="font-size:18px;font-weight:900;color:#04335C">❄️ קפוא</div>
-          <div style="font-size:12px;color:#04335C;line-height:1.4;margin-top:4px"><strong>פאזל</strong> — אריח נתפס. 3 מיזוגים צמודים → 💥 שבר + 200 נקודות.</div>
+          <div style="font-size:16px;font-weight:900;color:#04335C">❄️ קפוא</div>
+          <div style="font-size:11px;color:#04335C;line-height:1.4;margin-top:4px"><strong>פאזל</strong> — 3 מיזוגים = שבר.</div>
         </div>
         <div style="padding:10px;background:linear-gradient(135deg,#FFF4B3,#F5C400);border-radius:10px;border:2px solid #7A6100">
-          <div style="font-size:18px;font-weight:900;color:#412402">⚡ חשמלי</div>
-          <div style="font-size:12px;color:#412402;line-height:1.4;margin-top:4px"><strong>שרשרת מטורפת</strong> — merge מתרחב לרדיוס 2 + אלכסונים.</div>
+          <div style="font-size:16px;font-weight:900;color:#412402">⚡ חשמלי</div>
+          <div style="font-size:11px;color:#412402;line-height:1.4;margin-top:4px"><strong>רדיוס 2</strong> — מיזוגים חוצי לוח.</div>
+        </div>
+        <div style="padding:10px;background:repeating-linear-gradient(45deg,#5C5852 0 5px,#4A4640 5px 10px);border-radius:10px;border:2px solid #1C1A18;color:#FFF">
+          <div style="font-size:16px;font-weight:900;color:#FFD37A">🔒 נעול</div>
+          <div style="font-size:11px;color:#F2EFE9;line-height:1.4;margin-top:4px"><strong>נפתח אחרי N מיזוגים</strong> — קיר זמני.</div>
+        </div>
+        <div style="padding:10px;background:linear-gradient(135deg,#E4C8FA,#A463E5);border-radius:10px;border:2px solid #5E1FA0">
+          <div style="font-size:16px;font-weight:900;color:#2D0D5C">🌀 טלפורט</div>
+          <div style="font-size:11px;color:#2D0D5C;line-height:1.4;margin-top:4px"><strong>קופץ</strong> — אריח נוחת = מיקום אקראי.</div>
         </div>
       </div>
 
@@ -1174,6 +1189,24 @@
 ⬜ 4️⃣ ⬜ ⬜    ← נצרף!</pre>
           <div>מיזוג של <strong>7+ אריחים</strong> במכה אחת = ניקוד מטורף + 8 ⚡ עפים מהתא לכל הכיוונים.</div>
           <div style="margin-top:6px;color:#7A6100"><strong>💡 טיפ:</strong> 1-2 תאים בלבד. ⚡ הוא "הגדול" — שמור אותו ללוחות VIP / דיילי-של-יום-שישי.</div>
+        </div>
+      </details>
+
+      <details style="margin-bottom:10px;background:#F4F1E8;border:1px solid #1C1A18;border-radius:10px;padding:12px">
+        <summary style="font-size:14px;font-weight:800;color:#1C1A18;cursor:pointer">🔒 נעול — קיר זמני</summary>
+        <div style="margin-top:10px;font-size:12.5px;color:#1C1A18;line-height:1.6">
+          <div><strong>מה זה עושה:</strong> תא נעול = קיר. אריחים לא יכולים לנחות עליו, ולא יכולים ליפול דרכו (חוסם גרוויטציה כמו קרח-עם-אריח). אחרי שמספר המיזוגים במשחק מגיע ל-N (קביעת אדמין: 1-30), התא <em>נפתח</em>: 🔓 burst + צליל milestone + הופך לתא רגיל.</div>
+          <div style="margin-top:6px"><strong>דוגמה</strong>: נעילה עד 5 מיזוגים. שחקן רואה 🔒 — לא יכול לכוון לשם. אחרי שעשה 5 מיזוגים בכל מקום בלוח → 🔓 נפתח, "נפתח!" toast קופץ, התא הופך לזמין.</div>
+          <div style="margin-top:6px;color:#1C1A18"><strong>💡 טיפ:</strong> השתמש כדי <em>להגביל</em> את הלוח בתחילת המשחק: נעל את כל השורה התחתונה עד 10 מיזוגים → שחקן חייב לעבוד למעלה קודם. unlock מאוחר = "פתיחת רמה חדשה" feel.</div>
+        </div>
+      </details>
+
+      <details style="margin-bottom:14px;background:#F5EAFA;border:1px solid #5E1FA0;border-radius:10px;padding:12px">
+        <summary style="font-size:14px;font-weight:800;color:#5E1FA0;cursor:pointer">🌀 טלפורט — קפיצה אקראית</summary>
+        <div style="margin-top:10px;font-size:12.5px;color:#1C1A18;line-height:1.6">
+          <div><strong>מה זה עושה:</strong> אריח שנוחת על תא טלפורט מקבל אנימציית ספירלה סגולה ומ-קופץ מיד למיקום אקראי על הלוח. התא נשאר באותו מקום — האריח <em>הבא</em> שיפול עליו יקבל גם הוא טלפורט.</div>
+          <div style="margin-top:6px"><strong>דוגמה</strong>: טלפורט בשורה תחתונה. שחקן זורק אריח אבן → ספירלה ✨ במקום הטלפורט + ספירלה חדשה בפינה אקראית → האריח שם.</div>
+          <div style="margin-top:6px;color:#5E1FA0"><strong>💡 טיפ:</strong> שלב 1-2 טלפורטים בלוח עם הרבה זהב/בונוס בפינות — האריחים "יפזרו" עצמם לפינות המתגמלות. chaos אבל מתגמל. או: טלפורט אחד בשורה תחתונה + סדר חזק מעליו — כל אריח שמגיע לתחתית קופץ למקום חדש.</div>
         </div>
       </details>
 
@@ -3102,6 +3135,18 @@
       bg: 'linear-gradient(135deg,#FFF4B3 0%,#F5C400 100%)',
       border: '#7A6100',
       shadow: '0 0 8px rgba(245,196,0,0.6)'
+    },
+    locked: {
+      label: '🔒',
+      bg: 'repeating-linear-gradient(45deg,#5C5852 0 5px,#4A4640 5px 10px)',
+      border: '#1C1A18',
+      shadow: '0 0 6px rgba(0,0,0,0.4)'
+    },
+    teleport: {
+      label: '🌀',
+      bg: 'linear-gradient(135deg,#E4C8FA 0%,#A463E5 100%)',
+      border: '#5E1FA0',
+      shadow: '0 0 8px rgba(164,99,229,0.6)'
     }
   };
   function paintCellAs(btn, type) {
@@ -3147,7 +3192,7 @@
     });
     // Wire paint-mode selector buttons (once).
     // Active-mode border color per type. Keep in sync with CELL_PAINT_STYLES.
-    var PAINT_BORDER = { gold: '#BA7517', bonus: '#04342C', frozen: '#0E4D7E', electric: '#7A6100' };
+    var PAINT_BORDER = { gold: '#BA7517', bonus: '#04342C', frozen: '#0E4D7E', electric: '#7A6100', locked: '#1C1A18', teleport: '#5E1FA0' };
     document.querySelectorAll('.paint-mode-btn').forEach(function(modeBtn) {
       modeBtn.onclick = function() {
         _paintMode = modeBtn.getAttribute('data-paint-mode');
@@ -3169,12 +3214,16 @@
     if (!host) return;
     const byPos = {};
     var bonusAmt = null;
+    var unlockN = null;
     if (Array.isArray(cells)) {
       cells.forEach(function(c) {
         if (!c || !c.type) return;
         byPos[c.row + ',' + c.col] = c.type;
         if (c.type === 'bonus' && Number.isFinite(Number(c.amount)) && bonusAmt == null) {
           bonusAmt = Number(c.amount);
+        }
+        if (c.type === 'locked' && Number.isInteger(parseInt(c.unlock_after, 10)) && unlockN == null) {
+          unlockN = parseInt(c.unlock_after, 10);
         }
       });
     }
@@ -3186,6 +3235,10 @@
       var amtEl = document.getElementById('board-bonus-amount');
       if (amtEl) amtEl.value = String(bonusAmt);
     }
+    if (unlockN != null) {
+      var unlockEl = document.getElementById('board-unlock-after');
+      if (unlockEl) unlockEl.value = String(unlockN);
+    }
     updateCellsCount();
   }
 
@@ -3194,6 +3247,8 @@
     if (!host) return [];
     const amtEl = document.getElementById('board-bonus-amount');
     const bonusAmt = amtEl ? Math.max(50, Math.min(10000, parseInt(amtEl.value, 10) || 500)) : 500;
+    const unlockEl = document.getElementById('board-unlock-after');
+    const unlockN = unlockEl ? Math.max(1, Math.min(30, parseInt(unlockEl.value, 10) || 5)) : 5;
     const out = [];
     Array.from(host.children).forEach(function(btn) {
       var type = currentTypeOf(btn);
@@ -3203,7 +3258,8 @@
         col: parseInt(btn.dataset.c, 10),
         type: type
       };
-      if (type === 'bonus') entry.amount = bonusAmt;
+      if (type === 'bonus')  entry.amount = bonusAmt;
+      if (type === 'locked') entry.unlock_after = unlockN;
       out.push(entry);
     });
     return out;
@@ -3217,11 +3273,15 @@
     var bonuses = cells.filter(function(c) { return c.type === 'bonus'; }).length;
     var frozen = cells.filter(function(c) { return c.type === 'frozen'; }).length;
     var electric = cells.filter(function(c) { return c.type === 'electric'; }).length;
+    var locked = cells.filter(function(c) { return c.type === 'locked'; }).length;
+    var teleport = cells.filter(function(c) { return c.type === 'teleport'; }).length;
     var parts = [];
     if (golds > 0)    parts.push('✨ ' + golds);
     if (bonuses > 0)  parts.push('🪙 ' + bonuses);
     if (frozen > 0)   parts.push('❄️ ' + frozen);
     if (electric > 0) parts.push('⚡ ' + electric);
+    if (locked > 0)   parts.push('🔒 ' + locked);
+    if (teleport > 0) parts.push('🌀 ' + teleport);
     el.textContent = parts.length ? parts.join(' · ') : '0 תאים';
     el.style.color = cells.length === 0 ? '#6F6E68' : (cells.length > 8 ? '#E07A8E' : '#BA7517');
     // Show the relocate row whenever there's at least one special cell
@@ -3255,9 +3315,12 @@
       ];
     }
     // For 'clear', positions stays empty → setSpecialCellsUI([]) clears everything.
+    var unlockEl = document.getElementById('board-unlock-after');
+    var unlockN = unlockEl ? (parseInt(unlockEl.value, 10) || 5) : 5;
     var cells = positions.map(function(p) {
       var c = { row: p[0], col: p[1], type: type };
-      if (type === 'bonus') c.amount = amount;
+      if (type === 'bonus')  c.amount = amount;
+      if (type === 'locked') c.unlock_after = unlockN;
       return c;
     });
     setSpecialCellsUI(cells);
@@ -3365,6 +3428,54 @@
         { row: 1, col: 1, type: 'electric' },
         { row: 2, col: 1, type: 'frozen' },
         { row: 2, col: 2, type: 'frozen' }
+      ]
+    },
+    {
+      key: 'locked-tier-progression',
+      name: 'נעילה הדרגתית — שלבים',
+      bonusAmount: 500,
+      relocate: 'static',
+      description: 'שורה שנייה מלמטה נעולה עד 8 מיזוגים. שורה ראשונה זהב. שחקן נאלץ לעבוד למעלה תחילה, מקבל "פתיחת רמה" אחרי 8 מיזוגים.',
+      strategy: 'יוצר תחושת התקדמות — כמו ב-roguelite. השחקן מרגיש שהוא "מתקדם" בלוח, לא רק צובר נקודות.',
+      preview: [
+        '⬜ ⬜ ⬜ ⬜',
+        '⬜ ⬜ ⬜ ⬜',
+        '⬜ ⬜ ⬜ ⬜',
+        '⬜ ⬜ ⬜ ⬜',
+        '🔒 🔒 🔒 🔒',
+        '✨ ⬜ ⬜ ✨'
+      ],
+      cells: [
+        { row: 4, col: 0, type: 'locked', unlock_after: 8 },
+        { row: 4, col: 1, type: 'locked', unlock_after: 8 },
+        { row: 4, col: 2, type: 'locked', unlock_after: 8 },
+        { row: 4, col: 3, type: 'locked', unlock_after: 8 },
+        { row: 5, col: 0, type: 'gold' },
+        { row: 5, col: 3, type: 'gold' }
+      ]
+    },
+    {
+      key: 'teleport-roulette',
+      name: 'רולטת טלפורט',
+      bonusAmount: 1000,
+      relocate: 'on_chain',
+      description: '2 טלפורטים בשורה תחתונה + 2 בונוסים בפינות עליונות + 2 זהב באמצע. כל אריח שנוחת בתחתית קופץ אקראית — לפעמים נוחת על בונוס/זהב.',
+      strategy: 'כל drop = הימור. שחקן לא יודע איפה האריח יסיים — אבל אם זה זהב או בונוס, פיצוץ ניקוד. ממכר כי כל זריקה היא הפתעה.',
+      preview: [
+        '🪙 ⬜ ⬜ 🪙',
+        '⬜ ⬜ ⬜ ⬜',
+        '⬜ ✨ ✨ ⬜',
+        '⬜ ⬜ ⬜ ⬜',
+        '⬜ ⬜ ⬜ ⬜',
+        '⬜ 🌀 🌀 ⬜'
+      ],
+      cells: [
+        { row: 0, col: 0, type: 'bonus', amount: 1000 },
+        { row: 0, col: 3, type: 'bonus', amount: 1000 },
+        { row: 2, col: 1, type: 'gold' },
+        { row: 2, col: 2, type: 'gold' },
+        { row: 5, col: 1, type: 'teleport' },
+        { row: 5, col: 2, type: 'teleport' }
       ]
     },
     {

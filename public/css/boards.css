@@ -560,6 +560,156 @@
 @keyframes ebFlyNW { 0% { transform: translate(-50%, -50%) scale(0.3) rotate(0deg);  opacity: 0; } 30% { opacity: 1; } 100% { transform: translate(-320%, -300%) scale(1.1) rotate(-40deg); opacity: 0; } }
 
 /* ============================================================
+   Locked cell (phase 3F). A grey-stone wall the player can't drop on,
+   carrying a 🔒 icon. Opens after N total merges. Visual states:
+     .cell.special-locked            — still locked
+     .cell.special-locked.unlocked   — opened, will render as regular
+       on the next paint (admin's setSpecialCells preserves the flag).
+   ============================================================ */
+.cell.special-locked {
+  background:
+    repeating-linear-gradient(
+      45deg,
+      #5C5852 0px,
+      #5C5852 5px,
+      #4A4640 5px,
+      #4A4640 10px
+    ) !important;
+  box-shadow:
+    inset 0 0 0 2px #3C3832,
+    inset 0 0 14px rgba(0, 0, 0, 0.4),
+    0 0 6px rgba(0, 0, 0, 0.3);
+  position: relative;
+  cursor: not-allowed;
+}
+.cell.special-locked::after {
+  content: '🔒';
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 22px;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.6));
+  pointer-events: none;
+  animation: lockedShake 4s ease-in-out infinite;
+}
+@keyframes lockedShake {
+  0%, 100%   { transform: translate(-50%, -50%) rotate(0deg); }
+  47%, 53%   { transform: translate(-50%, -50%) rotate(-8deg); }
+  50%        { transform: translate(-50%, -50%) rotate(8deg); }
+}
+
+/* Unlock burst — fires when a locked cell crosses its merge threshold.
+   Big 🔓 scales up + a yellow flash radiates + "נפתח!" label floats up. */
+.unlock-burst {
+  position: fixed;
+  z-index: 9099;
+  pointer-events: none;
+  width: 0; height: 0;
+  transform: translate(-50%, -50%);
+}
+.unlock-burst .ub-icon {
+  position: absolute;
+  top: 0; left: 0;
+  font-size: 30px;
+  transform: translate(-50%, -50%) scale(0.4);
+  filter: drop-shadow(0 0 14px rgba(255, 230, 90, 0.9));
+  animation: ubIcon 0.85s cubic-bezier(0.2, 1.4, 0.3, 1) forwards;
+}
+.unlock-burst .ub-flash {
+  position: absolute;
+  top: 0; left: 0;
+  width: 50px; height: 50px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255,230,90,0.85) 0%, rgba(255,230,90,0) 70%);
+  transform: translate(-50%, -50%) scale(0.4);
+  animation: ubFlash 0.7s ease-out forwards;
+}
+.unlock-burst .ub-label {
+  position: absolute;
+  top: 0; left: 0;
+  background: linear-gradient(135deg, #FFE65A, #F5C400);
+  color: #412402;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-weight: 900;
+  font-size: 13px;
+  white-space: nowrap;
+  transform: translate(-50%, -50%) scale(0);
+  animation: ubLabel 0.9s ease-out forwards;
+  box-shadow: 0 4px 14px rgba(245, 196, 0, 0.5);
+}
+@keyframes ubIcon {
+  0%   { transform: translate(-50%, -50%) scale(0.4) rotate(-30deg); opacity: 0; }
+  30%  { transform: translate(-50%, -50%) scale(1.4) rotate(15deg); opacity: 1; }
+  100% { transform: translate(-50%, -180%) scale(1.0) rotate(0deg); opacity: 0; }
+}
+@keyframes ubFlash {
+  0%   { transform: translate(-50%, -50%) scale(0.4); opacity: 1; }
+  100% { transform: translate(-50%, -50%) scale(3.5); opacity: 0; }
+}
+@keyframes ubLabel {
+  0%   { transform: translate(-50%, -50%) scale(0); opacity: 0; }
+  35%  { transform: translate(-50%, -130%) scale(1.15); opacity: 1; }
+  100% { transform: translate(-50%, -260%) scale(1.0); opacity: 0; }
+}
+
+/* ============================================================
+   Teleport cell (phase 3G). Purple swirl ring with a 🌀 marker.
+   Tiles landing here are relocated by triggerTeleportAnimation.
+   ============================================================ */
+.cell.special-teleport {
+  box-shadow:
+    inset 0 0 0 2px #A463E5,
+    inset 0 0 14px rgba(164, 99, 229, 0.55),
+    0 0 8px rgba(164, 99, 229, 0.45);
+  background-image:
+    radial-gradient(circle at center, rgba(228, 200, 250, 0.22) 0%, transparent 60%),
+    conic-gradient(from 0deg at 50% 50%, rgba(164,99,229,0.0), rgba(164,99,229,0.25), rgba(164,99,229,0.0));
+  animation: teleportCellSwirl 3s linear infinite;
+  position: relative;
+}
+.cell.special-teleport::after {
+  content: '🌀';
+  position: absolute;
+  top: 2px; right: 3px;
+  font-size: 12px;
+  pointer-events: none;
+  filter: drop-shadow(0 1px 2px rgba(60, 20, 100, 0.5));
+  animation: teleportCornerSpin 1.8s linear infinite;
+}
+@keyframes teleportCellSwirl {
+  0%   { background-position: 0 0, 0 0; }
+  100% { background-position: 0 0, 0 0; transform: none; }
+}
+@keyframes teleportCornerSpin {
+  to { transform: rotate(360deg); }
+}
+
+/* Teleport spiral overlay — fires at source and destination of a teleport. */
+.teleport-spiral {
+  position: fixed;
+  z-index: 9099;
+  pointer-events: none;
+  font-size: 26px;
+  transform: translate(-50%, -50%) scale(0.4);
+  color: #A463E5;
+  text-shadow: 0 0 14px rgba(228, 200, 250, 0.9), 0 0 28px rgba(164, 99, 229, 0.7);
+  filter: drop-shadow(0 0 8px rgba(164, 99, 229, 0.7));
+}
+.teleport-spiral-out { animation: telSpiralOut 0.42s ease-in forwards; }
+.teleport-spiral-in  { animation: telSpiralIn  0.42s ease-out forwards; }
+@keyframes telSpiralOut {
+  0%   { transform: translate(-50%, -50%) scale(0.4) rotate(0deg);  opacity: 0; }
+  20%  { opacity: 1; }
+  100% { transform: translate(-50%, -50%) scale(2.5) rotate(720deg); opacity: 0; }
+}
+@keyframes telSpiralIn {
+  0%   { transform: translate(-50%, -50%) scale(2.2) rotate(-720deg); opacity: 0; }
+  30%  { opacity: 1; }
+  100% { transform: translate(-50%, -50%) scale(0.6) rotate(0deg);    opacity: 0; }
+}
+
+/* ============================================================
    Bonus burst — the "+N נקודות" celebration that fires when a
    merge survivor lands on a bonus cell. Built for maximum dopamine:
    a spinning coin, a chunky pulsing amount, and a soft "נקודות"

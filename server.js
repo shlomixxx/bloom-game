@@ -2388,7 +2388,7 @@ function invalidateBoardCache() {
 // Allowed cell types for special_cells boards. Expand here as new types
 // land (frozen / electric / locked / teleport). Client code uses the
 // same list to decide what to render.
-const SPECIAL_CELL_TYPES = ['gold', 'bonus', 'frozen', 'electric'];  // 3B/C/D/E
+const SPECIAL_CELL_TYPES = ['gold', 'bonus', 'frozen', 'electric', 'locked', 'teleport'];  // 3B-3G
 
 function validateBoardDefinition(type, definition) {
   if (definition === null || typeof definition !== 'object' || Array.isArray(definition)) {
@@ -2432,11 +2432,17 @@ function validateBoardDefinition(type, definition) {
         return { ok: false, error: 'cell_type_unsupported' };
       }
       // Per-type required fields. Bonus needs an `amount` (50-10000).
-      // Gold has no extra fields. Future types add their own checks.
+      // Locked needs an `unlock_after` (1-30). Others have no extras.
       if (ctype === 'bonus') {
         const amt = Number(c.amount);
         if (!Number.isFinite(amt) || amt < 50 || amt > 10000) {
           return { ok: false, error: 'bonus_amount_out_of_range' };
+        }
+      }
+      if (ctype === 'locked') {
+        const unlock = Number(c.unlock_after);
+        if (!Number.isInteger(unlock) || unlock < 1 || unlock > 30) {
+          return { ok: false, error: 'locked_unlock_after_out_of_range' };
         }
       }
       const key = row + ',' + col;
