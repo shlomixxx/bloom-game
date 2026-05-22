@@ -286,6 +286,9 @@
 
   function hideHomeV2() {
     stopHomeV2LivePulse();
+    // Stop the dynamic-boards FOMO tick so we don't keep updating a
+    // detached DOM node every minute.
+    if (typeof window.stopDynamicBoardsTick === 'function') window.stopDynamicBoardsTick();
     const h = document.getElementById('home-screen');
     if (h) h.remove();
     const app = document.querySelector('.app');

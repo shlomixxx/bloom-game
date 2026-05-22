@@ -2586,7 +2586,8 @@ app.get('/api/boards/available', async (_req, res) => {
     let rows = [];
     try {
       const r = await pool.query(
-        `SELECT id, name, type, definition, priority, applies_to
+        `SELECT id, name, type, definition, priority, applies_to,
+                starts_at, ends_at
            FROM board_configurations
           WHERE is_active = true
             AND 'dynamic' = ANY(applies_to)

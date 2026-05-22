@@ -12,24 +12,145 @@
   // (column multiplier = null when nothing is selected).
   // ============================================================
 
+  // ============================================================
+  // FOMO time helpers (Phase 6 — LiveOps urgency layer).
+  //
+  // Boards can carry starts_at + ends_at timestamps. We use them
+  // to create scarcity: "💕 ולנטיין מסתיים בעוד 4ש 12ד" forces
+  // the player to return to the home screen to check what's
+  // available before it disappears. Wordle-style daily reset
+  // psychology applied to special boards.
+  // ============================================================
+  function boardEndsInMs(board) {
+    if (!board || !board.ends_at) return Infinity;
+    var t = Date.parse(board.ends_at);
+    if (!Number.isFinite(t)) return Infinity;
+    return t - Date.now();
+  }
+  function boardJustStarted(board) {
+    if (!board || !board.starts_at) return false;
+    var t = Date.parse(board.starts_at);
+    if (!Number.isFinite(t)) return false;
+    var age = Date.now() - t;
+    return age >= 0 && age < 24 * 3600 * 1000;
+  }
+  // Urgency tier: 'new' (just started <24h) / 'critical' (<4h ends) /
+  // 'soon' (<24h ends) / 'normal' (>24h or no ends_at).
+  function boardUrgency(board) {
+    var endsIn = boardEndsInMs(board);
+    if (endsIn !== Infinity && endsIn <= 0) return 'expired';
+    if (endsIn !== Infinity && endsIn < 4 * 3600 * 1000)   return 'critical';
+    if (endsIn !== Infinity && endsIn < 24 * 3600 * 1000)  return 'soon';
+    if (boardJustStarted(board))                            return 'new';
+    return 'normal';
+  }
+  function fmtCountdown(ms) {
+    if (!Number.isFinite(ms) || ms < 0) return '';
+    var totalMin = Math.floor(ms / 60000);
+    var d = Math.floor(totalMin / (60 * 24));
+    var h = Math.floor((totalMin % (60 * 24)) / 60);
+    var m = totalMin % 60;
+    if (d > 0) return d + 'י ' + h + 'ש';
+    if (h > 0) return h + 'ש ' + (m < 10 ? '0' : '') + m + 'ד';
+    return m + ' דקות';
+  }
+  function shortDate(iso) {
+    if (!iso) return '';
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
+    var dd = d.getDate();
+    var mm = d.getMonth() + 1;
+    return dd + '/' + mm;
+  }
+  // Pick the board the player should care about MOST right now: a critical
+  // one wins over a new one, which wins over a soon one. Returns null if
+  // every board is "normal" (no FOMO to surface).
+  function pickFocusBoard(boards) {
+    if (!Array.isArray(boards) || !boards.length) return null;
+    var byUrgency = { critical: [], new: [], soon: [] };
+    for (var i = 0; i < boards.length; i++) {
+      var u = boardUrgency(boards[i]);
+      if (byUrgency[u]) byUrgency[u].push(boards[i]);
+    }
+    if (byUrgency.critical.length) {
+      // Closest-to-ending first
+      return byUrgency.critical.sort(function(a, b) { return boardEndsInMs(a) - boardEndsInMs(b); })[0];
+    }
+    if (byUrgency.new.length) return byUrgency.new[0];
+    if (byUrgency.soon.length) {
+      return byUrgency.soon.sort(function(a, b) { return boardEndsInMs(a) - boardEndsInMs(b); })[0];
+    }
+    return null;
+  }
+  function urgencyEmoji(u) {
+    return u === 'critical' ? '🔥' : u === 'new' ? '🆕' : u === 'soon' ? '⏰' : '';
+  }
+
+  // 60s tick that updates every visible countdown — home button + picker
+  // cards. Started by updateDynamicBoardsButton, torn down when boards
+  // disappear from the home (e.g., player navigated away).
+  var _fomoTickHandle = null;
+  function startFomoTick() {
+    if (_fomoTickHandle) return;
+    _fomoTickHandle = setInterval(function() {
+      updateDynamicBoardsButton();
+      // Re-render picker cards if open — countdowns roll.
+      var pickerOpen = document.getElementById('dynamic-boards-picker');
+      if (pickerOpen && typeof refreshPickerTimers === 'function') refreshPickerTimers();
+    }, 60 * 1000);
+  }
+  function stopFomoTick() {
+    if (_fomoTickHandle) { clearInterval(_fomoTickHandle); _fomoTickHandle = null; }
+  }
+
   // Called by the audio module after /api/boards/available resolves.
   // Toggles the home button's visibility. Safe to call when home isn't
   // mounted yet — it just no-ops.
   function updateDynamicBoardsButton() {
     var btn = document.getElementById('home-v2-boards');
     if (!btn) return;
-    var boards = (window._availableBoards && window._availableBoards.length) || 0;
-    if (boards > 0) {
-      btn.style.display = '';
-      var countEl = btn.querySelector('.home-v2-boards-count');
-      if (countEl) countEl.textContent = boards + ' ' + (boards === 1 ? 'לוח זמין' : 'לוחות זמינים');
-    } else {
+    var boards = Array.isArray(window._availableBoards) ? window._availableBoards : [];
+    if (!boards.length) {
       btn.style.display = 'none';
+      stopFomoTick();
+      return;
     }
+    btn.style.display = '';
+    var countEl = btn.querySelector('.home-v2-boards-count');
+    var focus = pickFocusBoard(boards);
+    if (countEl) {
+      // Default label
+      var defaultLabel = boards.length + ' ' + (boards.length === 1 ? 'לוח זמין' : 'לוחות זמינים');
+      if (focus) {
+        var u = boardUrgency(focus);
+        var endsIn = boardEndsInMs(focus);
+        var label = '';
+        if (u === 'critical') {
+          label = '🔥 ' + (focus.name || 'לוח') + ' מסתיים בעוד ' + fmtCountdown(endsIn);
+        } else if (u === 'new') {
+          label = '🆕 ' + (focus.name || 'לוח') + ' — חדש היום';
+        } else if (u === 'soon') {
+          label = '⏰ ' + (focus.name || 'לוח') + ' — נשאר ' + fmtCountdown(endsIn);
+        } else {
+          label = defaultLabel;
+        }
+        countEl.textContent = label;
+      } else {
+        countEl.textContent = defaultLabel;
+      }
+    }
+    // Add urgency CSS class to the button so we can pulse it for critical.
+    btn.classList.remove('fomo-critical', 'fomo-new', 'fomo-soon');
+    if (focus) {
+      var fu = boardUrgency(focus);
+      if (fu === 'critical' || fu === 'new' || fu === 'soon') btn.classList.add('fomo-' + fu);
+    }
+    startFomoTick();
   }
 
   // Expose so the audio-module fetch can poke us.
   window.updateDynamicBoardsButton = updateDynamicBoardsButton;
+  window.stopDynamicBoardsTick = stopFomoTick;
 
   // Human-readable labels for themes / shapes so the player can tell the
   // boards apart before clicking — boring rectangular cards = no clicks.
@@ -159,13 +280,21 @@
           });
         }
         var chipsHtml = chips.length ? ('<div class="dyn-boards-card-chips">' + chips.join('') + '</div>') : '';
+        // Per-card urgency badge (Phase 6 LiveOps). data-board-id +
+        // data-ends-at on the card so refreshPickerTimers() can re-paint
+        // without a full re-render every minute.
+        var u = boardUrgency(b);
+        var endsAttr = b.ends_at ? (' data-ends-at="' + escapeHtml(b.ends_at) + '"') : '';
+        var startsAttr = b.starts_at ? (' data-starts-at="' + escapeHtml(b.starts_at) + '"') : '';
+        var classExtra = (u === 'critical' || u === 'new' || u === 'soon') ? (' fomo-' + u) : '';
         html +=
-          '<button class="dyn-boards-card" data-board-id="' + b.id + '"' + extraStyle + '>' +
+          '<button class="dyn-boards-card' + classExtra + '" data-board-id="' + b.id + '"' + endsAttr + startsAttr + extraStyle + '>' +
             '<div class="dyn-boards-card-icon">' + badge.icon + '</div>' +
             '<div class="dyn-boards-card-body">' +
               '<div class="dyn-boards-card-name">' + escapeHtml(b.name || 'לוח') + '</div>' +
               '<div class="dyn-boards-card-type">' + badge.label + (desc && b.type === 'multipliers' ? ' · ' + desc : '') + '</div>' +
               chipsHtml +
+              '<div class="dyn-boards-card-fomo" data-fomo-host="1">' + renderFomoBadge(b) + '</div>' +
             '</div>' +
             '<div class="dyn-boards-card-cta">שחק ←</div>' +
           '</button>';
@@ -186,6 +315,48 @@
       if (e.target === overlay) closeDynamicBoardsPicker();
     });
   }
+
+  // Renders the per-card FOMO badge — pure function of the board's
+  // urgency tier. Empty string when nothing's urgent (keeps the card
+  // clean for the boring case).
+  function renderFomoBadge(board) {
+    var u = boardUrgency(board);
+    var endsIn = boardEndsInMs(board);
+    if (u === 'critical') {
+      return '<span class="dyn-fomo-pill dyn-fomo-pill-critical">🔥 מסתיים בעוד ' + fmtCountdown(endsIn) + '</span>';
+    }
+    if (u === 'new') {
+      var endStr = board.ends_at ? (' · עד ' + shortDate(board.ends_at)) : '';
+      return '<span class="dyn-fomo-pill dyn-fomo-pill-new">🆕 חדש היום' + endStr + '</span>';
+    }
+    if (u === 'soon') {
+      return '<span class="dyn-fomo-pill dyn-fomo-pill-soon">⏰ נשאר ' + fmtCountdown(endsIn) + '</span>';
+    }
+    if (board.ends_at) {
+      return '<span class="dyn-fomo-pill dyn-fomo-pill-cal">📅 עד ' + shortDate(board.ends_at) + '</span>';
+    }
+    return '';
+  }
+
+  // 60s tick callback when picker is open. Re-renders ONLY the badge
+  // hosts — keeps focus / scroll position intact.
+  function refreshPickerTimers() {
+    var boards = Array.isArray(window._availableBoards) ? window._availableBoards : [];
+    var byId = {};
+    boards.forEach(function(b) { byId[b.id] = b; });
+    document.querySelectorAll('#dyn-boards-list .dyn-boards-card').forEach(function(card) {
+      var id = parseInt(card.getAttribute('data-board-id'), 10);
+      var b = byId[id];
+      if (!b) return;
+      var host = card.querySelector('[data-fomo-host]');
+      if (host) host.innerHTML = renderFomoBadge(b);
+      // Re-apply urgency class — it may have changed tier (e.g. soon→critical).
+      card.classList.remove('fomo-critical', 'fomo-new', 'fomo-soon');
+      var u = boardUrgency(b);
+      if (u === 'critical' || u === 'new' || u === 'soon') card.classList.add('fomo-' + u);
+    });
+  }
+  window.refreshPickerTimers = refreshPickerTimers;
 
   function closeDynamicBoardsPicker() {
     var el = document.getElementById('dynamic-boards-picker');

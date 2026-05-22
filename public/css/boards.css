@@ -1022,6 +1022,79 @@
   color: #04342C;
 }
 
+/* ============================================================
+   Phase 6 — LiveOps FOMO badges + pulses
+   ============================================================ */
+.dyn-boards-card-fomo { margin-top: 6px; }
+.dyn-fomo-pill {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 11px; font-weight: 800;
+  padding: 3px 9px; border-radius: 999px;
+  border: 1px solid rgba(0,0,0,0.08);
+  letter-spacing: 0.2px;
+}
+.dyn-fomo-pill-critical {
+  background: linear-gradient(135deg,#FF6B6B,#E74C3C);
+  color: #FFF;
+  box-shadow: 0 0 8px rgba(231,76,60,0.45);
+  animation: dynFomoPulseCritical 1.4s ease-in-out infinite;
+}
+.dyn-fomo-pill-new {
+  background: linear-gradient(135deg,#4FBD8B,#04342C);
+  color: #FFF;
+  box-shadow: 0 0 8px rgba(79,189,139,0.4);
+  animation: dynFomoPulseNew 2s ease-in-out infinite;
+}
+.dyn-fomo-pill-soon {
+  background: linear-gradient(135deg,#FFB95C,#FF8A3D);
+  color: #1C1A18;
+  box-shadow: 0 0 6px rgba(255,138,61,0.35);
+}
+.dyn-fomo-pill-cal {
+  background: #FAFAF6;
+  color: #6F6E68;
+  border-color: #E5E1D5;
+}
+
+@keyframes dynFomoPulseCritical {
+  0%, 100% { transform: scale(1);   box-shadow: 0 0 8px rgba(231,76,60,0.45); }
+  50%      { transform: scale(1.06); box-shadow: 0 0 16px rgba(231,76,60,0.7); }
+}
+@keyframes dynFomoPulseNew {
+  0%, 100% { transform: scale(1);   box-shadow: 0 0 8px rgba(79,189,139,0.4); }
+  50%      { transform: scale(1.04); box-shadow: 0 0 14px rgba(79,189,139,0.65); }
+}
+
+/* Whole-card breathing for critical boards — pulls the eye even if the
+   player isn't reading the pill. Subtle on the wrap, loud on the pill. */
+.dyn-boards-card.fomo-critical {
+  border-color: rgba(231,76,60,0.55);
+  animation: dynBoardCardCritical 2.2s ease-in-out infinite;
+}
+.dyn-boards-card.fomo-new {
+  border-color: rgba(79,189,139,0.55);
+}
+@keyframes dynBoardCardCritical {
+  0%, 100% { box-shadow: 0 0 0 rgba(231,76,60,0); }
+  50%      { box-shadow: 0 0 14px rgba(231,76,60,0.35); }
+}
+
+/* Home button FOMO state — same urgency vocabulary applied to the
+   single home-screen entry point. */
+.home-v2-boards.fomo-critical {
+  background: linear-gradient(135deg,#FFD7D2,#FFEDEA);
+  border-color: rgba(231,76,60,0.55);
+  animation: dynBoardCardCritical 2.2s ease-in-out infinite;
+}
+.home-v2-boards.fomo-new {
+  background: linear-gradient(135deg,#D8F4E6,#FFF7E6);
+  border-color: rgba(79,189,139,0.5);
+}
+.home-v2-boards.fomo-soon {
+  background: linear-gradient(135deg,#FFF1D6,#FFE3A8);
+  border-color: rgba(255,138,61,0.45);
+}
+
 .dyn-boards-empty {
   text-align: center;
   padding: 32px 20px;
