@@ -994,6 +994,33 @@
   background: #FFF7E6; padding: 5px 10px; border-radius: 8px;
   white-space: nowrap;
 }
+.dyn-boards-card-chips {
+  display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px;
+}
+.dyn-boards-chip {
+  display: inline-flex; align-items: center; gap: 3px;
+  font-size: 10.5px; font-weight: 700;
+  padding: 2px 7px; border-radius: 999px;
+  background: rgba(255,255,255,0.85);
+  border: 1px solid rgba(0,0,0,0.08);
+  color: #1C1A18;
+  white-space: nowrap;
+}
+.dyn-boards-chip-theme {
+  background: linear-gradient(135deg,#FFE6F0,#FFD1DC);
+  border-color: rgba(255,107,157,0.4);
+  color: #9C1844;
+}
+.dyn-boards-chip-shape {
+  background: linear-gradient(135deg,#FFF1D6,#FFE3A8);
+  border-color: rgba(186,117,23,0.4);
+  color: #BA7517;
+}
+.dyn-boards-chip-cell {
+  background: linear-gradient(135deg,#E6F5EE,#D0F0E0);
+  border-color: rgba(4,52,44,0.3);
+  color: #04342C;
+}
 
 .dyn-boards-empty {
   text-align: center;

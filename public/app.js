@@ -5458,13 +5458,55 @@
   // Expose so the audio-module fetch can poke us.
   window.updateDynamicBoardsButton = updateDynamicBoardsButton;
 
+  // Human-readable labels for themes / shapes so the player can tell the
+  // boards apart before clicking — boring rectangular cards = no clicks.
+  var THEME_LABELS = {
+    hanukkah:      { icon: '🕎', label: 'חנוכה' },
+    valentine:     { icon: '💕', label: 'ולנטיין' },
+    yom_haatzmaut: { icon: '🇮🇱', label: 'יום העצמאות' },
+    passover:      { icon: '🍷', label: 'פסח' }
+  };
+  var SHAPE_LABELS = {
+    heart:   { icon: '❤️', label: 'לב' },
+    diamond: { icon: '💎', label: 'יהלום' },
+    tree:    { icon: '🌲', label: 'עץ' },
+    pyramid: { icon: '🔺', label: 'פירמידה' }
+  };
+  // Per-cell-type label for the "special cells preview" line.
+  var CELL_TYPE_ICON = {
+    gold: '✨', bonus: '🪙', frozen: '❄️',
+    electric: '⚡', locked: '🔒', teleport: '🌀'
+  };
   function describeBoard(board) {
     if (!board || !board.definition) return '';
-    if (board.type === 'multipliers' && Array.isArray(board.definition.multipliers)) {
-      return board.definition.multipliers.map(function(m) {
+    var def = board.definition;
+    if (board.type === 'multipliers' && Array.isArray(def.multipliers)) {
+      return def.multipliers.map(function(m) {
         var v = Number(m);
         return '×' + (Number.isInteger(v) ? v : v.toFixed(1));
       }).join(' · ');
+    }
+    if (board.type === 'special_cells' || board.type === 'themed') {
+      var parts = [];
+      if (def.theme_id && THEME_LABELS[def.theme_id]) {
+        parts.push(THEME_LABELS[def.theme_id].icon + ' ' + THEME_LABELS[def.theme_id].label);
+      }
+      if (def.shape_id && SHAPE_LABELS[def.shape_id]) {
+        parts.push(SHAPE_LABELS[def.shape_id].icon + ' ' + SHAPE_LABELS[def.shape_id].label);
+      }
+      var cells = Array.isArray(def.cells) ? def.cells : [];
+      if (cells.length) {
+        var byType = {};
+        cells.forEach(function(c) {
+          if (!c || !c.type) return;
+          byType[c.type] = (byType[c.type] || 0) + 1;
+        });
+        var cellSummary = Object.keys(byType).map(function(t) {
+          return (CELL_TYPE_ICON[t] || '') + '×' + byType[t];
+        }).join(' ');
+        if (cellSummary) parts.push(cellSummary);
+      }
+      return parts.join(' · ');
     }
     return '';
   }
@@ -5510,17 +5552,47 @@
           '<div class="dyn-boards-empty-sub">המנהל לא הפעיל לוחות, או שכולם בתאריך עתידי. נסה שוב מאוחר יותר.</div>' +
         '</div>';
     } else {
+      // Card backgrounds per theme — match css/boards.css body.theme-X-active
+      // hue so the picker already feels like the board you're about to enter.
+      var THEME_TINTS = {
+        hanukkah:      'linear-gradient(135deg, rgba(14,42,91,0.18), rgba(30,79,170,0.12))',
+        valentine:     'linear-gradient(135deg, rgba(255,122,168,0.18), rgba(255,209,220,0.18))',
+        yom_haatzmaut: 'linear-gradient(135deg, rgba(11,124,196,0.20), rgba(232,243,255,0.14))',
+        passover:      'linear-gradient(135deg, rgba(122,26,26,0.22), rgba(192,57,43,0.12))'
+      };
       var html = '';
       for (var i = 0; i < boards.length; i++) {
         var b = boards[i];
         var badge = boardTypeBadge(b.type);
         var desc = describeBoard(b);
+        var def = b.definition || {};
+        var tint = (def.theme_id && THEME_TINTS[def.theme_id]) ? THEME_TINTS[def.theme_id] : '';
+        var extraStyle = tint ? (' style="background:' + tint + '"') : '';
+        // Pretty chip row — themed boards add an extra row of visual identity
+        // pills so the player can see what they're picking before tapping.
+        var chips = [];
+        if (def.theme_id && THEME_LABELS[def.theme_id]) {
+          chips.push('<span class="dyn-boards-chip dyn-boards-chip-theme">' + THEME_LABELS[def.theme_id].icon + ' ' + THEME_LABELS[def.theme_id].label + '</span>');
+        }
+        if (def.shape_id && SHAPE_LABELS[def.shape_id]) {
+          chips.push('<span class="dyn-boards-chip dyn-boards-chip-shape">' + SHAPE_LABELS[def.shape_id].icon + ' ' + SHAPE_LABELS[def.shape_id].label + '</span>');
+        }
+        var cells = Array.isArray(def.cells) ? def.cells : [];
+        if (cells.length) {
+          var byT = {};
+          cells.forEach(function(c) { if (c && c.type) byT[c.type] = (byT[c.type] || 0) + 1; });
+          Object.keys(byT).forEach(function(t) {
+            chips.push('<span class="dyn-boards-chip dyn-boards-chip-cell">' + (CELL_TYPE_ICON[t] || '') + ' ×' + byT[t] + '</span>');
+          });
+        }
+        var chipsHtml = chips.length ? ('<div class="dyn-boards-card-chips">' + chips.join('') + '</div>') : '';
         html +=
-          '<button class="dyn-boards-card" data-board-id="' + b.id + '">' +
+          '<button class="dyn-boards-card" data-board-id="' + b.id + '"' + extraStyle + '>' +
             '<div class="dyn-boards-card-icon">' + badge.icon + '</div>' +
             '<div class="dyn-boards-card-body">' +
               '<div class="dyn-boards-card-name">' + escapeHtml(b.name || 'לוח') + '</div>' +
-              '<div class="dyn-boards-card-type">' + badge.label + (desc ? ' · ' + desc : '') + '</div>' +
+              '<div class="dyn-boards-card-type">' + badge.label + (desc && b.type === 'multipliers' ? ' · ' + desc : '') + '</div>' +
+              chipsHtml +
             '</div>' +
             '<div class="dyn-boards-card-cta">שחק ←</div>' +
           '</button>';

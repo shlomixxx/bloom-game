@@ -911,7 +911,7 @@
         <span>שם</span>
         <button class="tip-btn" data-tip-text="<strong>שם הלוח</strong><br>איך הלוח יוצג לשחקנים בפיקר ״🎯 לוחות דינמיים״ בעמוד הבית.<div class=&quot;tip-example&quot;>💡 <strong>טיפים לשמות טובים</strong>:<br>🎯 ״מכפילי ×6-×4-×2-×1״ — תיאורי, השחקן מבין מיד מה זה<br>🔥 ״ערב יום חמישי – פיצוץ ×10!״ — שיווקי, יוצר urgency<br>🎄 ״אקסטרא חגיגה – חנוכה 5786״ — קושר לאירוע<br><br>⚠ עד 80 תווים. אפשר אימוג'ים. נשמר בDB כ-TEXT, מועבר ללקוח כל 60 שניות.</div>">?</button>
       </label>
-      <input id="board-name" type="text" placeholder="לדוגמה: מכפילי ×6-×4-×2-×1" style="width:100%;padding:9px 11px;border-radius:8px;background:#FAFAF6;color:#1C1A18;border:1px solid #E5E1D5;margin-bottom:12px;font-family:inherit;font-size:13px">
+      <input id="board-name" type="text" placeholder="לדוגמה: מכפילי ×6-×4-×2-×1" style="width:100%;padding:9px 11px;border-radius:8px;background:#FAFAF6;color:#1C1A18;border:1px solid #E5E1D5;margin-bottom:12px;font-family:inherit;font-size:13px" oninput="if(typeof refreshThemedPreview==='function')refreshThemedPreview()">
 
       <label style="font-size:12px;color:#6F6E68;display:flex;align-items:center;gap:6px;margin-bottom:4px;font-weight:600">
         <span>סוג</span>
@@ -932,7 +932,7 @@
           <span>🎄 ערכת חג</span>
           <button class="tip-btn" data-tip-text="<strong>🎄 ערכת חג ויזואלית</strong><br>בחר ערכה והלוח יעטה את עצמו בצבעים + אמוג'ים מרחפים של החג. ניתן לשלב עם cells + multipliers (כן, גם תאים מיוחדים פעילים בערכה).<div class=&quot;tip-example&quot;>🕎 <strong>חנוכה</strong> — רקע כחול-לילה עם נרות בפינות, ✡️ מנצנצים, ציון בזהב.<br>💕 <strong>ולנטיין</strong> — ורוד חלום עם 🌹❤️ מרחפים, ציון אדום בוהק.<br>🇮🇱 <strong>יום העצמאות</strong> — דגל ישראל ברקע, ✡️ מנופפים בצדדים.<br>🍷 <strong>פסח</strong> — יין אדום עמוק עם 🍷🍞 מרחפים.<br><br>💡 <strong>שלב</strong>: ערכת חג + cells (זהב/בונוס/חשמלי/קרח/וכו׳) = חוויה שלמה. למשל: ולנטיין + 4 קרחים פינות + לבבות בונוס במרכז = ״לוח האהבה״.<br><br>📅 <strong>תזמון</strong>: סמן starts_at/ends_at לתקופת החג כדי שיופיע ויעלם אוטומטית.</div>">?</button>
         </div>
-        <select id="board-theme-id" style="width:100%;padding:9px 11px;border-radius:8px;background:#FFFFFF;color:#1C1A18;border:1px solid #FAC775;font-family:inherit;font-size:13px;font-weight:600;margin-bottom:10px">
+        <select id="board-theme-id" style="width:100%;padding:9px 11px;border-radius:8px;background:#FFFFFF;color:#1C1A18;border:1px solid #FAC775;font-family:inherit;font-size:13px;font-weight:600;margin-bottom:10px" onchange="refreshThemedPreview()">
           <option value="">בלי ערכה ויזואלית (לוח רגיל)</option>
           <option value="hanukkah">🕎 חנוכה — כחול עם נרות</option>
           <option value="valentine">💕 ולנטיין — ורוד עם ❤️</option>
@@ -945,13 +945,14 @@
           <span>🟦 צורת לוח</span>
           <button class="tip-btn" data-tip-text="<strong>🟦 צורת לוח (Board Shape)</strong><br>חותך את ה-4×6 לצורה לא-מרובעת. תאים מחוץ לצורה הם ״ריקנות״ — לא ניתן להפיל עליהם, אריחים לא נופלים דרכם, ה-merge BFS מתעלם מהם.<div class=&quot;tip-example&quot;>❤ <strong>לב</strong> — מסגרת לב קלאסית. מתאים לוולנטיין. הלוח מצטמצם לטיפול אסטרטגי יותר.<br><br>💎 <strong>יהלום</strong> — אלכסון מרכזי רחב, פינות חתוכות. מתאים ליום העצמאות / לוחות VIP.<br><br>🌲 <strong>עץ</strong> — כתר צר למעלה, רחב למטה, גזע 2-תאים. מתאים לחנוכה/קריסמס.<br><br>🔺 <strong>פירמידה</strong> — קודקוד צר ובסיס רחב. מתאים לפסח.<br><br>💡 <strong>שילוב הכי ממכר</strong>: לב + ערכת ולנטיין = לוח חג שלם. או יהלום + יום העצמאות.<br><br>⚠ <strong>אסטרטגיה משחקית</strong>: צורות מצמצמות את שטח המשחק ל-15-20 תאים פעילים (במקום 24) — המשחק קצר יותר, אסטרטגי יותר. שלב עם קושי קל יותר כדי שלא יהיה תקוע מהר.</div>">?</button>
         </div>
-        <select id="board-shape-id" style="width:100%;padding:9px 11px;border-radius:8px;background:#FFFFFF;color:#1C1A18;border:1px solid #FAC775;font-family:inherit;font-size:13px;font-weight:600">
+        <select id="board-shape-id" style="width:100%;padding:9px 11px;border-radius:8px;background:#FFFFFF;color:#1C1A18;border:1px solid #FAC775;font-family:inherit;font-size:13px;font-weight:600" onchange="refreshThemedPreview()">
           <option value="">לוח מלא 4×6 (בלי צורה)</option>
           <option value="heart">❤️ לב — Valentine pair</option>
           <option value="diamond">💎 יהלום — Independence Day pair</option>
           <option value="tree">🌲 עץ — Hanukkah/Christmas pair</option>
           <option value="pyramid">🔺 פירמידה — Passover pair</option>
         </select>
+        <div id="board-themed-preview" style="display:none;margin-top:14px"></div>
       </div>
 
       <!-- Multipliers editor -->
@@ -3088,6 +3089,7 @@
       });
     }
     onBoardTypeChange();
+    if (typeof refreshThemedPreview === 'function') refreshThemedPreview();
     document.getElementById('board-editor-overlay').style.display = 'flex';
   }
 
@@ -3128,7 +3130,113 @@
       // Rebuild the editor grid the first time it's needed (cheap, idempotent).
       ensureCellsGrid();
     }
+    // UX safety net for themed: if the admin switched to ‘themed’ and didn’t
+    // pick a theme or shape yet, default to valentine so the home picker
+    // gets a visible board immediately instead of a no-op empty config.
+    if (t === 'themed') {
+      var themeEl = document.getElementById('board-theme-id');
+      if (themeEl && !themeEl.value) themeEl.value = 'valentine';
+    }
+    // Refresh the live preview (no-op if not yet built).
+    if (typeof refreshThemedPreview === 'function') refreshThemedPreview();
   }
+
+  // ============================================================
+  // Themed-board live preview — a 4×6 mini-grid that re-renders
+  // on every theme / shape / cells change so the admin can see
+  // EXACTLY what the player will see before clicking save.
+  // ============================================================
+  var THEME_PREVIEW_PALETTES = {
+    hanukkah:      { bg: 'linear-gradient(135deg,#0E2A5B 0%,#1E4FAA 100%)', deco: '🕎', ink: '#FFD86B' },
+    valentine:     { bg: 'linear-gradient(135deg,#FFD1DC 0%,#FF7AA8 100%)', deco: '💕', ink: '#9C1844' },
+    yom_haatzmaut: { bg: 'linear-gradient(135deg,#E8F3FF 0%,#0B7CC4 100%)', deco: '🇮🇱', ink: '#0B3A6B' },
+    passover:      { bg: 'linear-gradient(135deg,#7A1A1A 0%,#C0392B 100%)', deco: '🍷', ink: '#FFE9B0' }
+  };
+  // Shape geometries mirror src/01-constants.js SHAPE_GEOMETRIES. 1 = active, 0 = void.
+  var THEME_PREVIEW_SHAPES = {
+    heart: [
+      [0,1,1,0],
+      [1,1,1,1],
+      [1,1,1,1],
+      [1,1,1,1],
+      [0,1,1,0],
+      [0,0,1,0]
+    ],
+    diamond: [
+      [0,1,1,0],
+      [1,1,1,1],
+      [1,1,1,1],
+      [1,1,1,1],
+      [1,1,1,1],
+      [0,1,1,0]
+    ],
+    tree: [
+      [0,1,1,0],
+      [0,1,1,0],
+      [1,1,1,1],
+      [1,1,1,1],
+      [0,1,1,0],
+      [0,1,1,0]
+    ],
+    pyramid: [
+      [0,1,1,0],
+      [0,1,1,0],
+      [1,1,1,1],
+      [1,1,1,1],
+      [1,1,1,1],
+      [1,1,1,1]
+    ]
+  };
+  function refreshThemedPreview() {
+    var host = document.getElementById('board-themed-preview');
+    if (!host) return;
+    var t = document.getElementById('board-type').value;
+    if (t !== 'themed') { host.style.display = 'none'; return; }
+    host.style.display = 'block';
+    var themeId = (document.getElementById('board-theme-id') || {}).value || '';
+    var shapeId = (document.getElementById('board-shape-id') || {}).value || '';
+    var palette = THEME_PREVIEW_PALETTES[themeId] || { bg: '#F4F1E8', deco: '', ink: '#1C1A18' };
+    var shape   = THEME_PREVIEW_SHAPES[shapeId] || null;
+    var cells   = (typeof readSpecialCellsUI === 'function') ? readSpecialCellsUI() : [];
+    // Index cells by r,c → {type, amount}
+    var byRC = {};
+    cells.forEach(function(c) { byRC[c.r + ',' + c.c] = c; });
+    var EMOJI = { gold:'✨', bonus:'🪙', frozen:'❄️', electric:'⚡', locked:'🔒', teleport:'🌀' };
+    var grid = '';
+    for (var r = 0; r < 6; r++) {
+      for (var c = 0; c < 4; c++) {
+        var isVoid = shape && !shape[r][c];
+        var sc = byRC[r + ',' + c];
+        var content = '';
+        var bg = 'rgba(255,255,255,0.18)';
+        var border = '1px solid rgba(255,255,255,0.35)';
+        if (isVoid) {
+          bg = 'transparent';
+          border = '1px dashed rgba(255,255,255,0.15)';
+        } else if (sc) {
+          content = EMOJI[sc.type] || '';
+          bg = 'rgba(255,255,255,0.5)';
+          border = '1px solid rgba(255,255,255,0.7)';
+        }
+        grid += '<div style="background:' + bg + ';border:' + border + ';border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:16px;color:' + palette.ink + ';font-weight:700">' + content + '</div>';
+      }
+    }
+    var nm = (document.getElementById('board-name').value || '').trim() || 'לוח חג';
+    var summary = [];
+    if (themeId) summary.push('ערכה: ' + (themeId === 'valentine' ? '💕 ולנטיין' : themeId === 'hanukkah' ? '🕎 חנוכה' : themeId === 'yom_haatzmaut' ? '🇮🇱 יום העצמאות' : themeId === 'passover' ? '🍷 פסח' : themeId));
+    if (shapeId) summary.push('צורה: ' + (shapeId === 'heart' ? '❤️ לב' : shapeId === 'diamond' ? '💎 יהלום' : shapeId === 'tree' ? '🌲 עץ' : shapeId === 'pyramid' ? '🔺 פירמידה' : shapeId));
+    if (cells.length) summary.push(cells.length + ' תאים מיוחדים');
+    if (!summary.length) summary.push('⚠ עדיין ריק — בחר ערכה / צורה / תאים');
+    host.innerHTML =
+      '<div style="font-size:12px;color:#BA7517;font-weight:700;margin-bottom:8px;display:flex;align-items:center;gap:6px"><span>👁 תצוגה מקדימה — איך השחקן יראה</span></div>' +
+      '<div style="position:relative;border-radius:14px;padding:14px 12px 16px;background:' + palette.bg + ';overflow:hidden;box-shadow:0 4px 14px rgba(0,0,0,0.15)">' +
+        (palette.deco ? '<div style="position:absolute;top:4px;right:8px;font-size:22px;opacity:0.55">' + palette.deco + '</div><div style="position:absolute;bottom:4px;left:8px;font-size:22px;opacity:0.45">' + palette.deco + '</div>' : '') +
+        '<div style="font-size:11px;color:#FFFFFF;text-shadow:0 1px 2px rgba(0,0,0,0.4);font-weight:700;margin-bottom:8px;text-align:center">' + escHtml(nm) + '</div>' +
+        '<div style="display:grid;grid-template-columns:repeat(4,1fr);grid-template-rows:repeat(6,28px);gap:4px;max-width:160px;margin:0 auto">' + grid + '</div>' +
+      '</div>' +
+      '<div style="font-size:11px;color:#6F6E68;margin-top:6px;text-align:center">' + summary.join(' · ') + '</div>';
+  }
+  window.refreshThemedPreview = refreshThemedPreview;
 
   function setMultipliers(arr) {
     for (let i = 0; i < 4; i++) {
@@ -3236,6 +3344,7 @@
       // Same brush as current → clear. Different brush → replace.
       paintCellAs(btn, current === _paintMode ? '' : _paintMode);
       updateCellsCount();
+      if (typeof refreshThemedPreview === 'function') refreshThemedPreview();
     });
     // Wire paint-mode selector buttons (once).
     // Active-mode border color per type. Keep in sync with CELL_PAINT_STYLES.
@@ -3746,6 +3855,15 @@
         var shapeSaveEl = document.getElementById('board-shape-id');
         var shapeId = shapeSaveEl ? shapeSaveEl.value : '';
         if (shapeId) definition.shape_id = shapeId;
+        // Hard guard: a 'themed' board with no theme + no shape + no cells
+        // is a no-op for the player — they'll click it and see nothing
+        // change. Refuse to save it; this was the root cause of the
+        // "I clicked the board name and got no emojis or backgrounds" bug.
+        if (!definition.theme_id && !definition.shape_id && !definition.cells.length) {
+          statusEl.textContent = '⚠ לוח חג ריק — בחר לפחות ערכה / צורה / תאים מיוחדים';
+          statusEl.style.color = '#E07A8E';
+          return;
+        }
       }
     }
     const startsAtVal = document.getElementById('board-starts-at').value;
