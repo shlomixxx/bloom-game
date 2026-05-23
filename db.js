@@ -72,6 +72,15 @@ export async function initDb() {
       created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )`,
+    // Stage 16 — Achievement-driven Cross-Leaderboard (full CREATE in schema.sql).
+    `CREATE TABLE IF NOT EXISTS player_achievements (
+      id              BIGSERIAL PRIMARY KEY,
+      device_id       VARCHAR(64) NOT NULL,
+      achievement_key VARCHAR(120) NOT NULL,
+      unlocked_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_player_achievements_uniq
+       ON player_achievements (device_id, achievement_key)`,
     // Stage 25 — Limited-time Bundles (full CREATE + seed in schema.sql).
     `CREATE TABLE IF NOT EXISTS limited_bundles (
       id                      SERIAL PRIMARY KEY,

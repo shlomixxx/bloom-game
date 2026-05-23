@@ -6389,3 +6389,185 @@ html[data-theme="dark"] .pet-levelup-sub { color: #ECFCCB; }
 /* Dark theme overrides — bundle banner already uses theme-color so
    it's resilient. The modal card uses theme-color too, so dark looks
    identical (intentional — bundles should pop the same regardless). */
+
+/* ============================================================
+   Stage 16 — Achievement-driven Cross-Leaderboard
+   Gold-yellow theme to evoke medals. Tile is compact (lower priority
+   than time-limited stuff) but the modal is full-featured.
+   ============================================================ */
+
+.ach-lb-home-tile {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  background: linear-gradient(135deg, #FEF3C7, #FDE68A);
+  border: 2px solid #D97706;
+  border-radius: 14px;
+  box-shadow: 0 3px 10px rgba(217, 119, 6, 0.25);
+  cursor: pointer;
+  direction: rtl;
+  text-align: right;
+  font-family: inherit;
+  color: #78350F;
+  transition: transform 0.12s, box-shadow 0.18s;
+}
+.ach-lb-home-tile:hover { transform: translateY(-1px); box-shadow: 0 5px 14px rgba(217, 119, 6, 0.4); }
+.ach-lb-home-tile:active { transform: scale(0.98); }
+.ach-lb-tile-icon {
+  font-size: 32px;
+  filter: drop-shadow(0 0 4px rgba(252, 211, 77, 0.6));
+  flex-shrink: 0;
+}
+.ach-lb-tile-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.ach-lb-tile-title {
+  font-size: 13px;
+  font-weight: 900;
+  color: #78350F;
+}
+.ach-lb-tile-rank {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 2px 7px;
+  background: #D97706;
+  color: #FFF;
+  border-radius: 7px;
+  font-size: 11px;
+  font-weight: 900;
+}
+.ach-lb-tile-sub {
+  font-size: 11px;
+  font-weight: 700;
+  color: #92400E;
+}
+.ach-lb-tile-arrow { font-size: 18px; color: #92400E; flex-shrink: 0; }
+
+/* Modal */
+.ach-lb-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.78);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100001;
+  padding: 14px;
+  animation: spOverlayFade 0.3s ease-out;
+}
+.ach-lb-modal-card {
+  background: linear-gradient(180deg, #FEF3C7 0%, #FFF 25%);
+  border: 3px solid #D97706;
+  border-radius: 22px;
+  padding: 22px 18px;
+  max-width: 380px;
+  width: 100%;
+  max-height: 92vh;
+  overflow-y: auto;
+  text-align: center;
+  direction: rtl;
+  position: relative;
+  box-shadow: 0 24px 70px rgba(0,0,0,0.5);
+  animation: spModalPop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.ach-lb-modal-close {
+  position: absolute;
+  top: 10px;
+  left: 12px;
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: rgba(0,0,0,0.15);
+  color: #78350F;
+  border-radius: 50%;
+  font-size: 18px;
+  cursor: pointer;
+  line-height: 1;
+  font-family: inherit;
+}
+.ach-lb-modal-icon {
+  font-size: 56px;
+  margin-bottom: 4px;
+  filter: drop-shadow(0 0 12px rgba(252, 211, 77, 0.7));
+}
+.ach-lb-modal-title {
+  font-size: 22px;
+  font-weight: 900;
+  color: #78350F;
+  margin-bottom: 4px;
+}
+.ach-lb-modal-sub {
+  font-size: 12px;
+  font-weight: 700;
+  color: #92400E;
+  margin-bottom: 14px;
+}
+.ach-lb-modal-me {
+  margin-bottom: 14px;
+  padding: 10px;
+  background: linear-gradient(135deg, rgba(217,119,6,0.18), rgba(252,211,77,0.18));
+  border: 1px solid #D97706;
+  border-radius: 10px;
+}
+.ach-lb-modal-me-pill {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.ach-lb-modal-list { display: flex; flex-direction: column; gap: 4px; }
+.ach-lb-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: rgba(0,0,0,0.04);
+  border-radius: 10px;
+  font-size: 13px;
+}
+.ach-lb-row-rank {
+  width: 36px;
+  font-weight: 900;
+  font-size: 14px;
+  color: #78350F;
+  text-align: center;
+  flex-shrink: 0;
+}
+.ach-lb-row-name { flex: 1; min-width: 0; font-weight: 700; color: #1F2937; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ach-lb-row-count { font-weight: 900; color: #D97706; flex-shrink: 0; font-variant-numeric: tabular-nums; }
+.ach-lb-row-gold {
+  background: linear-gradient(90deg, #FEF3C7, rgba(254,243,199,0.4));
+  border: 1px solid #FBBF24;
+}
+.ach-lb-row-silver { background: linear-gradient(90deg, #F1F5F9, rgba(241,245,249,0.4)); border: 1px solid #94A3B8; }
+.ach-lb-row-bronze { background: linear-gradient(90deg, #FED7AA, rgba(254,215,170,0.4)); border: 1px solid #FB923C; }
+.ach-lb-row-me {
+  background: linear-gradient(90deg, rgba(217,119,6,0.18), rgba(252,211,77,0.18));
+  border: 2px solid #D97706;
+  box-shadow: 0 2px 8px rgba(217, 119, 6, 0.25);
+}
+.ach-lb-row-gold .ach-lb-row-rank, .ach-lb-row-gold .ach-lb-row-count { font-size: 16px; }
+
+/* Dark theme */
+html[data-theme="dark"] .ach-lb-home-tile {
+  background: linear-gradient(135deg, #3D2810, #4A3018);
+  border-color: #FBBF24;
+  color: #FDE68A;
+}
+html[data-theme="dark"] .ach-lb-tile-title { color: #FDE68A; }
+html[data-theme="dark"] .ach-lb-tile-sub { color: #FCD34D; }
+html[data-theme="dark"] .ach-lb-modal-card {
+  background: linear-gradient(180deg, #2A1F0D, #1F2937 25%);
+  border-color: #FBBF24;
+}
+html[data-theme="dark"] .ach-lb-modal-title { color: #FDE68A; }
+html[data-theme="dark"] .ach-lb-modal-sub { color: #FCD34D; }
+html[data-theme="dark"] .ach-lb-row { background: rgba(255,255,255,0.05); }
+html[data-theme="dark"] .ach-lb-row-name { color: #F3F4F6; }
+html[data-theme="dark"] .ach-lb-row-gold { background: linear-gradient(90deg, rgba(252,211,77,0.2), rgba(252,211,77,0.05)); }
+html[data-theme="dark"] .ach-lb-row-silver { background: linear-gradient(90deg, rgba(148,163,184,0.2), rgba(148,163,184,0.05)); }
+html[data-theme="dark"] .ach-lb-row-bronze { background: linear-gradient(90deg, rgba(251,146,60,0.2), rgba(251,146,60,0.05)); }
+html[data-theme="dark"] .ach-lb-row-me {
+  background: linear-gradient(90deg, rgba(252,211,77,0.25), rgba(252,211,77,0.1));
+  border-color: #FBBF24;
+}

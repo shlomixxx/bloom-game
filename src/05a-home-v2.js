@@ -274,6 +274,12 @@
       setTimeout(function() { try { maybeShowBundleBanners(); } catch (e) {} }, 1800);
     }
 
+    // Stage 16 — Achievement-driven Cross-Leaderboard tile.
+    // Syncs localStorage achievements to server + mounts tile if 3+ unlocked.
+    if (typeof maybeShowAchLbTile === 'function') {
+      setTimeout(function() { try { maybeShowAchLbTile(); } catch (e) {} }, 2000);
+    }
+
     // Tier-icons tap → reveal stats bubble (same behaviour as v1)
     var iconsTap = document.getElementById('home-icons-tap');
     if (iconsTap) {

@@ -5456,6 +5456,217 @@ app.post('/api/bundles/buy', requireDeviceAuth, async (req, res) => {
 });
 
 // ============================================================
+// Stage 16 — Achievement-driven Cross-Leaderboard
+// Global ranking by # achievements unlocked, not by score.
+// Rewards completionists / breadth-players.
+// ============================================================
+async function _loadAchLbConfig() {
+  try {
+    const r = await pool.query(`SELECT key, value FROM game_config WHERE key LIKE 'ach_leaderboard_%'`);
+    const out = {};
+    r.rows.forEach(row => { out[row.key] = row.value; });
+    return out;
+  } catch (e) { return {}; }
+}
+
+// Unlock one achievement (idempotent — UNIQUE index handles dupes).
+app.post('/api/achievements/unlock', requireDeviceAuth, async (req, res) => {
+  try {
+    const { deviceId, key } = req.body || {};
+    if (typeof deviceId !== 'string' || deviceId.length < 8 || deviceId.length > 64) {
+      return res.status(400).json({ error: 'bad_device' });
+    }
+    const cleanKey = String(key || '').slice(0, 120);
+    if (!cleanKey || !/^[a-z0-9_:-]+$/i.test(cleanKey)) {
+      return res.status(400).json({ error: 'bad_key' });
+    }
+    if (!checkRateLimit('ach_unlock', deviceId, 200, 60 * 60 * 1000)) {
+      return res.status(429).json({ error: 'rate_limited' });
+    }
+    // INSERT ... ON CONFLICT DO NOTHING — idempotent.
+    const r = await pool.query(
+      `INSERT INTO player_achievements (device_id, achievement_key)
+           VALUES ($1, $2)
+       ON CONFLICT (device_id, achievement_key) DO NOTHING
+       RETURNING id`,
+      [deviceId, cleanKey]
+    );
+    res.json({ ok: true, key: cleanKey, isNew: r.rows.length > 0 });
+  } catch (e) {
+    console.error('POST /api/achievements/unlock', e);
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
+// Bulk sync — client sends ALL its localStorage achievements on boot.
+// Server upserts all (UNIQUE index dedups). Used to backfill old players
+// who unlocked achievements before this stage shipped.
+app.post('/api/achievements/sync', requireDeviceAuth, async (req, res) => {
+  try {
+    const { deviceId, keys } = req.body || {};
+    if (typeof deviceId !== 'string' || deviceId.length < 8 || deviceId.length > 64) {
+      return res.status(400).json({ error: 'bad_device' });
+    }
+    if (!Array.isArray(keys) || keys.length === 0) {
+      return res.json({ ok: true, synced: 0 });
+    }
+    if (!checkRateLimit('ach_sync', deviceId, 10, 60 * 60 * 1000)) {
+      return res.status(429).json({ error: 'rate_limited' });
+    }
+    // Filter + clamp.
+    const clean = keys
+      .map(k => String(k || '').slice(0, 120))
+      .filter(k => k && /^[a-z0-9_:-]+$/i.test(k))
+      .slice(0, 500);  // cap to 500 keys per sync
+    if (!clean.length) return res.json({ ok: true, synced: 0 });
+    // Bulk insert with ON CONFLICT.
+    const values = clean.map((_, i) => `($1, $${i + 2})`).join(', ');
+    const params = [deviceId, ...clean];
+    await pool.query(
+      `INSERT INTO player_achievements (device_id, achievement_key)
+           VALUES ${values}
+       ON CONFLICT (device_id, achievement_key) DO NOTHING`,
+      params
+    );
+    res.json({ ok: true, synced: clean.length });
+  } catch (e) {
+    console.error('POST /api/achievements/sync', e);
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
+// Leaderboard — top N players by achievement count.
+app.get('/api/achievements/leaderboard', async (req, res) => {
+  try {
+    const cfg = await _loadAchLbConfig();
+    if (cfg.ach_leaderboard_enabled === 'false') return res.json({ ok: true, enabled: false });
+    const limit = Math.min(100, Math.max(10, parseInt(req.query.limit || '50', 10) || 50));
+    const deviceId = (req.query.deviceId || '').toString().slice(0, 64);
+    // Aggregate count + last-unlocked for sort.
+    const r = await pool.query(
+      `SELECT pa.device_id,
+              COUNT(*) AS ach_count,
+              MAX(pa.unlocked_at) AS last_unlocked_at,
+              COALESCE(pp.display_name, ds.name, 'אנונימי') AS name,
+              pp.country AS country,
+              pp.player_code AS player_code
+         FROM player_achievements pa
+         LEFT JOIN player_profiles pp ON pp.device_id = pa.device_id
+         LEFT JOIN LATERAL (
+           SELECT name FROM daily_scores
+            WHERE device_id = pa.device_id
+            ORDER BY date DESC LIMIT 1
+         ) ds ON true
+         GROUP BY pa.device_id, pp.display_name, ds.name, pp.country, pp.player_code
+         ORDER BY ach_count DESC, last_unlocked_at ASC
+         LIMIT $1`,
+      [limit]
+    );
+    let myRow = null;
+    let myRank = null;
+    if (deviceId && deviceId.length >= 8) {
+      // My count.
+      const meR = await pool.query(
+        `SELECT COUNT(*) AS cnt FROM player_achievements WHERE device_id = $1`,
+        [deviceId]
+      );
+      const myCount = parseInt(meR.rows[0].cnt, 10) || 0;
+      if (myCount > 0) {
+        // My rank = number of players with MORE achievements + 1.
+        const rankR = await pool.query(
+          `SELECT COUNT(*) + 1 AS rank
+             FROM (
+               SELECT device_id, COUNT(*) AS c
+                 FROM player_achievements
+                 GROUP BY device_id
+                 HAVING COUNT(*) > $1
+             ) sub`,
+          [myCount]
+        );
+        myRank = parseInt(rankR.rows[0].rank, 10) || null;
+        const meDetails = await pool.query(
+          `SELECT COALESCE(pp.display_name, ds.name, 'אנונימי') AS name,
+                  pp.country, pp.player_code,
+                  MAX(pa.unlocked_at) AS last_unlocked_at
+             FROM player_achievements pa
+             LEFT JOIN player_profiles pp ON pp.device_id = pa.device_id
+             LEFT JOIN LATERAL (
+               SELECT name FROM daily_scores
+                WHERE device_id = pa.device_id
+                ORDER BY date DESC LIMIT 1
+             ) ds ON true
+            WHERE pa.device_id = $1
+            GROUP BY pp.display_name, ds.name, pp.country, pp.player_code`,
+          [deviceId]
+        );
+        if (meDetails.rows[0]) {
+          myRow = {
+            ach_count: myCount,
+            rank: myRank,
+            name: meDetails.rows[0].name,
+            country: meDetails.rows[0].country,
+            player_code: meDetails.rows[0].player_code,
+            last_unlocked_at: meDetails.rows[0].last_unlocked_at,
+            is_me: true
+          };
+        }
+      }
+    }
+    res.json({
+      ok: true,
+      enabled: true,
+      list: r.rows.map((row, idx) => ({
+        rank: idx + 1,
+        ach_count: parseInt(row.ach_count, 10),
+        name: row.name,
+        country: row.country,
+        player_code: row.player_code,
+        last_unlocked_at: row.last_unlocked_at,
+        is_me: row.device_id === deviceId
+      })),
+      myRank,
+      me: myRow,
+      total: r.rows.length
+    });
+  } catch (e) {
+    console.error('GET /api/achievements/leaderboard', e);
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
+// My count summary (for the home tile).
+app.get('/api/achievements/me', async (req, res) => {
+  try {
+    const deviceId = (req.query.deviceId || '').toString().slice(0, 64);
+    if (!deviceId || deviceId.length < 8) return res.json({ ok: true, count: 0 });
+    const r = await pool.query(
+      `SELECT COUNT(*) AS cnt, MAX(unlocked_at) AS last_unlocked_at
+         FROM player_achievements WHERE device_id = $1`,
+      [deviceId]
+    );
+    const count = parseInt(r.rows[0].cnt, 10) || 0;
+    let rank = null;
+    if (count > 0) {
+      const rankR = await pool.query(
+        `SELECT COUNT(*) + 1 AS rank
+           FROM (
+             SELECT device_id, COUNT(*) AS c
+               FROM player_achievements
+               GROUP BY device_id
+               HAVING COUNT(*) > $1
+           ) sub`,
+        [count]
+      );
+      rank = parseInt(rankR.rows[0].rank, 10) || null;
+    }
+    res.json({ ok: true, count, rank, lastUnlockedAt: r.rows[0].last_unlocked_at });
+  } catch (e) {
+    console.error('GET /api/achievements/me', e);
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
+// ============================================================
 // Live Tournaments — stage 12 (May 2026)
 //
 // Scheduled prime-time events with a fixed window + top-N prize

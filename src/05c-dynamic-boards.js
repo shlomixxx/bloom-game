@@ -532,9 +532,27 @@
   function grantPerBoard(state, boardId, achId) {
     if (!state.perBoard[boardId]) state.perBoard[boardId] = {};
     state.perBoard[boardId][achId] = Date.now();
+    // Stage 16 — mirror to server for the cross-leaderboard.
+    serverUnlockAchievement('board:' + boardId + ':' + achId);
   }
   function hasCross(state, achId) { return !!state.cross[achId]; }
-  function grantCross(state, achId) { state.cross[achId] = Date.now(); }
+  function grantCross(state, achId) {
+    state.cross[achId] = Date.now();
+    serverUnlockAchievement('cross:' + achId);
+  }
+
+  // Stage 16 — fire-and-forget POST to mirror unlocks to server.
+  // Server uses ON CONFLICT DO NOTHING so duplicate sends are safe.
+  function serverUnlockAchievement(key) {
+    var deviceId = (typeof getDeviceId === 'function') ? getDeviceId() : '';
+    var token = (typeof deviceToken !== 'undefined') ? deviceToken : null;
+    if (!deviceId) return;
+    fetch('/api/achievements/unlock', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ deviceId: deviceId, token: token, key: key })
+    }).catch(function() {});
+  }
 
   // Build the cross-board aggregate from the per-board state.
   // Theme/shape membership is read from the boards we have records on

@@ -1165,6 +1165,38 @@ CREATE INDEX IF NOT EXISTS idx_skin_configurations_sort
   ON skin_configurations (sort_order, id);
 
 -- ============================================================
+-- Achievement-driven Cross-Leaderboard (Stage 16, May 2026)
+-- New competitive axis: rank by NUMBER of achievements unlocked,
+-- not by score. Rewards completionists / breadth-players over
+-- single-board grinders. Until now achievements lived only in
+-- localStorage — this brings them server-side so we can build the
+-- global leaderboard.
+--
+-- Achievement keys are strings like:
+--  - "cross:pioneer5"     → played 5 different boards
+--  - "cross:all_themes"   → played all 4 themed boards
+--  - "board:42:crown"     → reached crown tile on board #42
+--  - "board:42:score10"   → score ≥10K on board #42
+-- The naming is opaque to the server; client controls the namespace.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS player_achievements (
+  id              BIGSERIAL PRIMARY KEY,
+  device_id       VARCHAR(64) NOT NULL,
+  achievement_key VARCHAR(120) NOT NULL,
+  unlocked_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_player_achievements_uniq
+  ON player_achievements (device_id, achievement_key);
+CREATE INDEX IF NOT EXISTS idx_player_achievements_device
+  ON player_achievements (device_id);
+CREATE INDEX IF NOT EXISTS idx_player_achievements_recent
+  ON player_achievements (unlocked_at DESC);
+
+-- 2 config keys.
+INSERT INTO game_config (key, value) VALUES ('ach_leaderboard_enabled', 'true') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('ach_leaderboard_show_on_home', 'true') ON CONFLICT (key) DO NOTHING;
+
+-- ============================================================
 -- Limited-time Bundles (Stage 25 — themed event packs, May 2026)
 -- Multi-day premium bundles tied to specific events (Hanukkah, Valentine,
 -- Black Friday, etc.). Stronger FOMO than Daily Deals because: (a) bigger
