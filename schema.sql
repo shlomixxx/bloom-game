@@ -1165,6 +1165,75 @@ CREATE INDEX IF NOT EXISTS idx_skin_configurations_sort
   ON skin_configurations (sort_order, id);
 
 -- ============================================================
+-- Guilds / Clans (Stage 27, May 2026)
+-- Peer-pressure retention: shared daily goal + per-member contribution
+-- tracking + shared reward. Industry data: clan members play 3.4× more
+-- per day than soloists, +35% D30 retention.
+-- v1 scope: create/join/leave + daily crown goal + reward claim.
+-- Skipped (v2): chat, clan wars, leagues.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS guilds (
+  id                  SERIAL PRIMARY KEY,
+  code                VARCHAR(8) UNIQUE NOT NULL,
+  name                VARCHAR(60) NOT NULL,
+  emoji               VARCHAR(10),
+  description         TEXT,
+  creator_device_id   VARCHAR(64) NOT NULL,
+  member_count        INT NOT NULL DEFAULT 1,
+  total_score_alltime BIGINT NOT NULL DEFAULT 0,
+  is_public           BOOLEAN NOT NULL DEFAULT TRUE,
+  max_members         INT NOT NULL DEFAULT 30,
+  created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_guilds_score
+  ON guilds (total_score_alltime DESC);
+CREATE INDEX IF NOT EXISTS idx_guilds_public
+  ON guilds (is_public, member_count) WHERE is_public = TRUE;
+
+CREATE TABLE IF NOT EXISTS guild_members (
+  guild_id            INT NOT NULL REFERENCES guilds(id) ON DELETE CASCADE,
+  device_id           VARCHAR(64) NOT NULL,
+  role                VARCHAR(20) NOT NULL DEFAULT 'member',
+  joined_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  total_score_contrib BIGINT NOT NULL DEFAULT 0,
+  total_crowns_contrib INT NOT NULL DEFAULT 0,
+  PRIMARY KEY (guild_id, device_id)
+);
+CREATE INDEX IF NOT EXISTS idx_guild_members_device
+  ON guild_members (device_id);
+CREATE INDEX IF NOT EXISTS idx_guild_members_contrib
+  ON guild_members (guild_id, total_score_contrib DESC);
+
+-- One row per (guild, day) — tracks daily collective progress.
+CREATE TABLE IF NOT EXISTS guild_daily_progress (
+  guild_id           INT NOT NULL REFERENCES guilds(id) ON DELETE CASCADE,
+  date               DATE NOT NULL,
+  goal_target        INT NOT NULL DEFAULT 30,
+  goal_progress      INT NOT NULL DEFAULT 0,
+  is_complete        BOOLEAN NOT NULL DEFAULT FALSE,
+  completed_at       TIMESTAMPTZ,
+  PRIMARY KEY (guild_id, date)
+);
+
+-- Per-member claim tracking — atomic dedup for the daily reward.
+CREATE TABLE IF NOT EXISTS guild_member_claims (
+  guild_id      INT NOT NULL,
+  device_id     VARCHAR(64) NOT NULL,
+  date          DATE NOT NULL,
+  reward_gems   INT NOT NULL,
+  claimed_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (guild_id, device_id, date)
+);
+
+-- 5 config keys.
+INSERT INTO game_config (key, value) VALUES ('guild_enabled',                 'true') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('guild_create_cost_gems',        '500')  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('guild_max_members',             '30')   ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('guild_daily_goal_crowns',       '30')   ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('guild_daily_reward_per_member', '200')  ON CONFLICT (key) DO NOTHING;
+
+-- ============================================================
 -- Replay Sharing (Stage 32, May 2026)
 -- After high-score games, generate a share card (canvas → PNG) with
 -- the player's score + branding + game URL. Big "📤 share" button

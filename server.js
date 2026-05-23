@@ -6466,6 +6466,452 @@ app.post('/api/replay/track-share', requireDeviceAuth, async (req, res) => {
 });
 
 // ============================================================
+// Stage 27 — Guilds / Clans
+// Peer-pressure retention. Daily collective goal + shared reward.
+// 6-char code-based join (similar to contests).
+// ============================================================
+async function _loadGuildConfig() {
+  try {
+    const r = await pool.query(`SELECT key, value FROM game_config WHERE key LIKE 'guild_%'`);
+    const out = {};
+    r.rows.forEach(row => { out[row.key] = row.value; });
+    return out;
+  } catch (e) { return {}; }
+}
+
+function _genGuildCode() {
+  // 6 chars, alphanumeric uppercase. Easy to share verbally.
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let s = '';
+  for (let i = 0; i < 6; i++) s += chars[Math.floor(Math.random() * chars.length)];
+  return s;
+}
+
+// Create a guild — costs gems (anti-spam).
+app.post('/api/guilds/create', requireDeviceAuth, async (req, res) => {
+  try {
+    const { deviceId, name, emoji, description } = req.body || {};
+    if (typeof deviceId !== 'string' || deviceId.length < 8 || deviceId.length > 64) {
+      return res.status(400).json({ error: 'bad_device' });
+    }
+    const cleanName = String(name || '').trim().slice(0, 60);
+    if (cleanName.length < 2) return res.status(400).json({ error: 'name_too_short' });
+    if (!checkRateLimit('guild_create', deviceId, 3, 24 * 60 * 60 * 1000)) {
+      return res.status(429).json({ error: 'rate_limited' });
+    }
+    const cfg = await _loadGuildConfig();
+    if (cfg.guild_enabled === 'false') return res.json({ ok: false, reason: 'disabled' });
+    const cost = parseInt(cfg.guild_create_cost_gems || '500', 10) || 500;
+    const maxMembers = parseInt(cfg.guild_max_members || '30', 10) || 30;
+    // Already in a guild?
+    const existR = await pool.query(`SELECT guild_id FROM guild_members WHERE device_id = $1`, [deviceId]);
+    if (existR.rows.length) return res.json({ ok: false, reason: 'already_in_guild' });
+    // Generate unique code (retry on collision).
+    let code = null;
+    for (let i = 0; i < 5; i++) {
+      const candidate = _genGuildCode();
+      const checkR = await pool.query(`SELECT 1 FROM guilds WHERE code = $1`, [candidate]);
+      if (!checkR.rows.length) { code = candidate; break; }
+    }
+    if (!code) return res.status(500).json({ error: 'code_gen_failed' });
+    // Atomic: deduct gems + create guild + add creator as leader.
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const debit = await client.query(
+        `UPDATE player_profiles SET balance = balance - $1, updated_at = NOW()
+          WHERE device_id = $2 AND balance >= $1 RETURNING balance`,
+        [cost, deviceId]
+      );
+      if (!debit.rows[0]) {
+        await client.query('ROLLBACK');
+        const balR = await pool.query(`SELECT balance FROM player_profiles WHERE device_id = $1`, [deviceId]);
+        const bal = balR.rows[0] ? Number(balR.rows[0].balance) : 0;
+        return res.json({ ok: false, reason: 'insufficient_funds', price: cost, balance: bal });
+      }
+      const gR = await client.query(
+        `INSERT INTO guilds (code, name, emoji, description, creator_device_id, member_count, max_members)
+             VALUES ($1, $2, $3, $4, $5, 1, $6) RETURNING *`,
+        [code, cleanName, (emoji || '🛡').toString().slice(0, 10),
+         (description || '').toString().slice(0, 300), deviceId, maxMembers]
+      );
+      await client.query(
+        `INSERT INTO guild_members (guild_id, device_id, role) VALUES ($1, $2, 'leader')`,
+        [gR.rows[0].id, deviceId]
+      );
+      await client.query('COMMIT');
+      res.json({
+        ok: true,
+        guild: gR.rows[0],
+        newBalance: Number(debit.rows[0].balance)
+      });
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  } catch (e) {
+    console.error('POST /api/guilds/create', e);
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
+// Join a guild by code.
+app.post('/api/guilds/join', requireDeviceAuth, async (req, res) => {
+  try {
+    const { deviceId, code } = req.body || {};
+    if (typeof deviceId !== 'string' || deviceId.length < 8 || deviceId.length > 64) {
+      return res.status(400).json({ error: 'bad_device' });
+    }
+    const cleanCode = String(code || '').toUpperCase().trim().slice(0, 8);
+    if (cleanCode.length < 4) return res.status(400).json({ error: 'bad_code' });
+    if (!checkRateLimit('guild_join', deviceId, 10, 60 * 60 * 1000)) {
+      return res.status(429).json({ error: 'rate_limited' });
+    }
+    // Already in a guild?
+    const existR = await pool.query(`SELECT guild_id FROM guild_members WHERE device_id = $1`, [deviceId]);
+    if (existR.rows.length) return res.json({ ok: false, reason: 'already_in_guild' });
+    // Find guild + check capacity.
+    const gR = await pool.query(`SELECT id, member_count, max_members FROM guilds WHERE code = $1`, [cleanCode]);
+    if (!gR.rows[0]) return res.json({ ok: false, reason: 'guild_not_found' });
+    if (gR.rows[0].member_count >= gR.rows[0].max_members) {
+      return res.json({ ok: false, reason: 'guild_full' });
+    }
+    // Atomic: insert + bump member_count.
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(
+        `INSERT INTO guild_members (guild_id, device_id) VALUES ($1, $2)
+         ON CONFLICT (guild_id, device_id) DO NOTHING`,
+        [gR.rows[0].id, deviceId]
+      );
+      await client.query(
+        `UPDATE guilds SET member_count = member_count + 1, updated_at = NOW()
+          WHERE id = $1 AND member_count < max_members`,
+        [gR.rows[0].id]
+      );
+      await client.query('COMMIT');
+      res.json({ ok: true, guildId: gR.rows[0].id });
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  } catch (e) {
+    console.error('POST /api/guilds/join', e);
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
+// Leave the guild.
+app.post('/api/guilds/leave', requireDeviceAuth, async (req, res) => {
+  try {
+    const { deviceId } = req.body || {};
+    if (typeof deviceId !== 'string' || deviceId.length < 8 || deviceId.length > 64) {
+      return res.status(400).json({ error: 'bad_device' });
+    }
+    if (!checkRateLimit('guild_leave', deviceId, 5, 60 * 60 * 1000)) {
+      return res.status(429).json({ error: 'rate_limited' });
+    }
+    const memR = await pool.query(`SELECT guild_id, role FROM guild_members WHERE device_id = $1`, [deviceId]);
+    if (!memR.rows[0]) return res.json({ ok: false, reason: 'not_in_guild' });
+    const guildId = memR.rows[0].guild_id;
+    const isLeader = memR.rows[0].role === 'leader';
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(`DELETE FROM guild_members WHERE guild_id = $1 AND device_id = $2`, [guildId, deviceId]);
+      const remR = await client.query(`SELECT COUNT(*) AS c FROM guild_members WHERE guild_id = $1`, [guildId]);
+      const remaining = parseInt(remR.rows[0].c, 10) || 0;
+      if (remaining === 0) {
+        // Last member out — delete the guild.
+        await client.query(`DELETE FROM guilds WHERE id = $1`, [guildId]);
+      } else {
+        await client.query(
+          `UPDATE guilds SET member_count = $1, updated_at = NOW() WHERE id = $2`,
+          [remaining, guildId]
+        );
+        // If the leader left, promote oldest member to leader.
+        if (isLeader) {
+          await client.query(
+            `UPDATE guild_members SET role = 'leader'
+              WHERE guild_id = $1 AND device_id = (
+                SELECT device_id FROM guild_members WHERE guild_id = $1
+                  ORDER BY joined_at ASC LIMIT 1
+              )`,
+            [guildId]
+          );
+        }
+      }
+      await client.query('COMMIT');
+      res.json({ ok: true });
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  } catch (e) {
+    console.error('POST /api/guilds/leave', e);
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
+// Get my guild state — members + today's progress + my claim status.
+app.get('/api/guilds/mine', async (req, res) => {
+  try {
+    const deviceId = (req.query.deviceId || '').toString().slice(0, 64);
+    const cfg = await _loadGuildConfig();
+    if (cfg.guild_enabled === 'false') return res.json({ ok: true, enabled: false });
+    if (!deviceId || deviceId.length < 8) return res.json({ ok: true, enabled: true, guild: null });
+    const memR = await pool.query(
+      `SELECT g.*, gm.role, gm.total_score_contrib, gm.total_crowns_contrib
+         FROM guild_members gm
+         JOIN guilds g ON g.id = gm.guild_id
+        WHERE gm.device_id = $1`,
+      [deviceId]
+    );
+    if (!memR.rows[0]) return res.json({ ok: true, enabled: true, guild: null });
+    const g = memR.rows[0];
+    // Get all members.
+    const membersR = await pool.query(
+      `SELECT gm.device_id, gm.role, gm.joined_at, gm.total_score_contrib, gm.total_crowns_contrib,
+              COALESCE(pp.display_name, 'אנונימי') AS name, pp.country, pp.player_code
+         FROM guild_members gm
+         LEFT JOIN player_profiles pp ON pp.device_id = gm.device_id
+        WHERE gm.guild_id = $1
+        ORDER BY gm.total_score_contrib DESC LIMIT 50`,
+      [g.id]
+    );
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' });
+    // Ensure today's progress row exists.
+    const goalTarget = parseInt(cfg.guild_daily_goal_crowns || '30', 10) || 30;
+    await pool.query(
+      `INSERT INTO guild_daily_progress (guild_id, date, goal_target) VALUES ($1, $2, $3)
+       ON CONFLICT (guild_id, date) DO NOTHING`,
+      [g.id, today, goalTarget]
+    );
+    const progR = await pool.query(
+      `SELECT goal_target, goal_progress, is_complete, completed_at
+         FROM guild_daily_progress WHERE guild_id = $1 AND date = $2::date`,
+      [g.id, today]
+    );
+    const progress = progR.rows[0] || { goal_target: goalTarget, goal_progress: 0, is_complete: false };
+    // My claim status.
+    const claimR = await pool.query(
+      `SELECT reward_gems FROM guild_member_claims
+        WHERE guild_id = $1 AND device_id = $2 AND date = $3::date`,
+      [g.id, deviceId, today]
+    );
+    const myClaimed = claimR.rows.length > 0;
+    res.json({
+      ok: true,
+      enabled: true,
+      guild: {
+        id: g.id, code: g.code, name: g.name, emoji: g.emoji, description: g.description,
+        memberCount: g.member_count, maxMembers: g.max_members,
+        totalScoreAlltime: g.total_score_alltime,
+        myRole: g.role,
+        myScoreContrib: g.total_score_contrib,
+        myCrownsContrib: g.total_crowns_contrib
+      },
+      members: membersR.rows.map(m => ({
+        deviceId: m.device_id, name: m.name, role: m.role, country: m.country,
+        playerCode: m.player_code, joinedAt: m.joined_at,
+        scoreContrib: parseInt(m.total_score_contrib, 10) || 0,
+        crownsContrib: parseInt(m.total_crowns_contrib, 10) || 0,
+        isMe: m.device_id === deviceId
+      })),
+      todayProgress: {
+        target: parseInt(progress.goal_target, 10) || goalTarget,
+        progress: parseInt(progress.goal_progress, 10) || 0,
+        isComplete: !!progress.is_complete,
+        canClaim: !!progress.is_complete && !myClaimed,
+        claimed: myClaimed,
+        rewardPerMember: parseInt(cfg.guild_daily_reward_per_member || '200', 10) || 200
+      }
+    });
+  } catch (e) {
+    console.error('GET /api/guilds/mine', e);
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
+// Auto-contribute from game-over when player reaches crown (tier 8).
+// Server validates membership; client just sends the score+crowns.
+app.post('/api/guilds/contribute', requireDeviceAuth, async (req, res) => {
+  try {
+    const { deviceId, score, crowns } = req.body || {};
+    if (typeof deviceId !== 'string' || deviceId.length < 8 || deviceId.length > 64) {
+      return res.status(400).json({ error: 'bad_device' });
+    }
+    const sc = parseInt(score, 10) || 0;
+    const cr = parseInt(crowns, 10) || 0;
+    if (cr < 0 || cr > 24) return res.status(400).json({ error: 'bad_crowns' });
+    if (sc < 0 || sc > 10000000) return res.status(400).json({ error: 'bad_score' });
+    if (!checkRateLimit('guild_contribute', deviceId, 100, 60 * 60 * 1000)) {
+      return res.status(429).json({ error: 'rate_limited' });
+    }
+    const memR = await pool.query(`SELECT guild_id FROM guild_members WHERE device_id = $1`, [deviceId]);
+    if (!memR.rows[0]) return res.json({ ok: false, reason: 'not_in_guild' });
+    const guildId = memR.rows[0].guild_id;
+    const cfg = await _loadGuildConfig();
+    const goalTarget = parseInt(cfg.guild_daily_goal_crowns || '30', 10) || 30;
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' });
+    // Atomic: bump member counters + bump daily progress + bump guild alltime.
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(
+        `UPDATE guild_members
+            SET total_score_contrib = total_score_contrib + $1,
+                total_crowns_contrib = total_crowns_contrib + $2
+          WHERE guild_id = $3 AND device_id = $4`,
+        [sc, cr, guildId, deviceId]
+      );
+      await client.query(
+        `UPDATE guilds SET total_score_alltime = total_score_alltime + $1, updated_at = NOW()
+          WHERE id = $2`,
+        [sc, guildId]
+      );
+      // Bump daily progress (insert if missing).
+      await client.query(
+        `INSERT INTO guild_daily_progress (guild_id, date, goal_target, goal_progress)
+             VALUES ($1, $2, $3, $4)
+         ON CONFLICT (guild_id, date) DO UPDATE
+            SET goal_progress = guild_daily_progress.goal_progress + $4`,
+        [guildId, today, goalTarget, cr]
+      );
+      // Check if just completed.
+      const progR = await client.query(
+        `SELECT goal_target, goal_progress, is_complete
+           FROM guild_daily_progress WHERE guild_id = $1 AND date = $2::date`,
+        [guildId, today]
+      );
+      let justCompleted = false;
+      if (progR.rows[0] && !progR.rows[0].is_complete &&
+          progR.rows[0].goal_progress >= progR.rows[0].goal_target) {
+        await client.query(
+          `UPDATE guild_daily_progress
+              SET is_complete = TRUE, completed_at = NOW()
+            WHERE guild_id = $1 AND date = $2::date`,
+          [guildId, today]
+        );
+        justCompleted = true;
+      }
+      await client.query('COMMIT');
+      res.json({
+        ok: true,
+        guildId,
+        newProgress: progR.rows[0] ? progR.rows[0].goal_progress : cr,
+        goal: progR.rows[0] ? progR.rows[0].goal_target : goalTarget,
+        justCompleted
+      });
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  } catch (e) {
+    console.error('POST /api/guilds/contribute', e);
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
+// Claim the daily completion reward (atomic, once per member per day).
+app.post('/api/guilds/claim-daily', requireDeviceAuth, async (req, res) => {
+  try {
+    const { deviceId } = req.body || {};
+    if (typeof deviceId !== 'string' || deviceId.length < 8 || deviceId.length > 64) {
+      return res.status(400).json({ error: 'bad_device' });
+    }
+    if (!checkRateLimit('guild_claim', deviceId, 10, 60 * 60 * 1000)) {
+      return res.status(429).json({ error: 'rate_limited' });
+    }
+    const cfg = await _loadGuildConfig();
+    if (cfg.guild_enabled === 'false') return res.json({ ok: false, reason: 'disabled' });
+    const memR = await pool.query(`SELECT guild_id FROM guild_members WHERE device_id = $1`, [deviceId]);
+    if (!memR.rows[0]) return res.json({ ok: false, reason: 'not_in_guild' });
+    const guildId = memR.rows[0].guild_id;
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' });
+    // Verify daily goal is complete server-side.
+    const progR = await pool.query(
+      `SELECT is_complete FROM guild_daily_progress WHERE guild_id = $1 AND date = $2::date`,
+      [guildId, today]
+    );
+    if (!progR.rows[0] || !progR.rows[0].is_complete) {
+      return res.json({ ok: false, reason: 'goal_not_complete' });
+    }
+    const reward = parseInt(cfg.guild_daily_reward_per_member || '200', 10) || 200;
+    // Atomic claim.
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const insertR = await client.query(
+        `INSERT INTO guild_member_claims (guild_id, device_id, date, reward_gems)
+             VALUES ($1, $2, $3::date, $4)
+         ON CONFLICT (guild_id, device_id, date) DO NOTHING
+         RETURNING id`,
+        [guildId, deviceId, today, reward]
+      );
+      if (!insertR.rows[0]) {
+        await client.query('ROLLBACK');
+        return res.json({ ok: false, reason: 'already_claimed' });
+      }
+      const credit = await client.query(
+        `UPDATE player_profiles SET balance = balance + $1, total_earned = total_earned + $1, updated_at = NOW()
+          WHERE device_id = $2 RETURNING balance`,
+        [reward, deviceId]
+      );
+      await client.query('COMMIT');
+      res.json({ ok: true, reward, newBalance: credit.rows[0] ? Number(credit.rows[0].balance) : null });
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  } catch (e) {
+    console.error('POST /api/guilds/claim-daily', e);
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
+// Top guilds leaderboard — by all-time total score.
+app.get('/api/guilds/leaderboard', async (req, res) => {
+  try {
+    const cfg = await _loadGuildConfig();
+    if (cfg.guild_enabled === 'false') return res.json({ ok: true, enabled: false });
+    const limit = Math.min(50, Math.max(10, parseInt(req.query.limit || '20', 10) || 20));
+    const r = await pool.query(
+      `SELECT id, code, name, emoji, member_count, max_members, total_score_alltime
+         FROM guilds
+        WHERE is_public = TRUE
+        ORDER BY total_score_alltime DESC, member_count DESC
+        LIMIT $1`,
+      [limit]
+    );
+    res.json({
+      ok: true,
+      enabled: true,
+      guilds: r.rows.map((g, idx) => ({
+        rank: idx + 1,
+        id: g.id, code: g.code, name: g.name, emoji: g.emoji,
+        memberCount: g.member_count, maxMembers: g.max_members,
+        totalScoreAlltime: parseInt(g.total_score_alltime, 10) || 0
+      }))
+    });
+  } catch (e) {
+    console.error('GET /api/guilds/leaderboard', e);
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
+// ============================================================
 // Live Tournaments — stage 12 (May 2026)
 //
 // Scheduled prime-time events with a fixed window + top-N prize
@@ -9136,6 +9582,42 @@ if (ADMIN_PATH && ADMIN_PASSWORD) {
       });
     } catch (e) {
       console.error('GET admin/replay/stats', e);
+      res.status(500).json({ error: 'internal' });
+    }
+  });
+
+  // ============================================================
+  // Admin: Guilds list + stats + force-delete (stage 27)
+  // ============================================================
+  adminRouter.get('/api/guilds', async (_req, res) => {
+    try {
+      const r = await pool.query(
+        `SELECT g.*,
+                (SELECT COALESCE(SUM(goal_progress), 0) FROM guild_daily_progress WHERE guild_id = g.id) AS total_progress_alltime,
+                (SELECT COUNT(*) FROM guild_daily_progress WHERE guild_id = g.id AND is_complete = TRUE) AS days_complete
+           FROM guilds g
+          ORDER BY g.total_score_alltime DESC LIMIT 100`
+      );
+      res.json({ ok: true, guilds: r.rows });
+    } catch (e) {
+      console.error('GET admin/guilds', e);
+      res.status(500).json({ error: 'internal' });
+    }
+  });
+
+  adminRouter.delete('/api/guilds/:id', async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      const r = await pool.query(`DELETE FROM guilds WHERE id = $1 RETURNING name`, [id]);
+      if (!r.rows[0]) return res.status(404).json({ error: 'not_found' });
+      await pool.query(
+        `INSERT INTO admin_actions (action, target_type, target_id, details)
+           VALUES ('guild_delete', 'guild', $1, $2)`,
+        [String(id), JSON.stringify({ name: r.rows[0].name })]
+      ).catch(() => {});
+      res.json({ ok: true });
+    } catch (e) {
+      console.error('DELETE admin/guilds/:id', e);
       res.status(500).json({ error: 'internal' });
     }
   });

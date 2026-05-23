@@ -12455,6 +12455,387 @@ html[data-theme="dark"] .replay-share-btn-native .replay-share-btn-label { color
 html[data-theme="dark"] .replay-share-btn-copy .replay-share-btn-label { color: #D1D5DB; }
 html[data-theme="dark"] .replay-share-btn-save .replay-share-btn-label { color: #FCD34D; }
 html[data-theme="dark"] .replay-share-text-preview { background: rgba(255,255,255,0.06); color: #F3F4F6; }
+
+/* ============================================================
+   Stage 27 — Guilds / Clans
+   Royal blue + gold theme. Daily goal progress bar + member
+   contribution leaderboard. The peer-pressure retention engine.
+   ============================================================ */
+
+.guild-home-tile {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  background: linear-gradient(135deg, #1E3A8A, #3730A3);
+  border: 2px solid #FBBF24;
+  border-radius: 14px;
+  box-shadow: 0 3px 12px rgba(30, 58, 138, 0.4);
+  cursor: pointer;
+  direction: rtl;
+  text-align: right;
+  font-family: inherit;
+  color: #FEF3C7;
+  transition: transform 0.12s, box-shadow 0.18s;
+}
+.guild-home-tile:hover { transform: translateY(-1px); box-shadow: 0 5px 16px rgba(251, 191, 36, 0.4); }
+.guild-home-tile:active { transform: scale(0.98); }
+.guild-home-tile.can-claim {
+  border-color: #FCD34D;
+  box-shadow: 0 0 0 2px rgba(252, 211, 77, 0.4), 0 5px 20px rgba(252, 211, 77, 0.5);
+  animation: lifetimePrestigeReady 1.5s ease-in-out infinite;
+}
+.guild-tile-icon {
+  font-size: 32px;
+  filter: drop-shadow(0 0 6px rgba(252, 211, 77, 0.6));
+  flex-shrink: 0;
+}
+.guild-tile-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.guild-tile-title {
+  font-size: 13px;
+  font-weight: 900;
+  color: #FEF3C7;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.guild-tile-claim {
+  display: inline-block;
+  padding: 2px 8px;
+  background: #FCD34D;
+  color: #1E3A8A;
+  border-radius: 7px;
+  font-size: 11px;
+  font-weight: 900;
+  animation: spRibbonPulse 1.4s ease-in-out infinite;
+}
+.guild-tile-bar {
+  display: block;
+  height: 6px;
+  background: rgba(0,0,0,0.4);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.guild-tile-bar-fill {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #3B82F6, #FCD34D);
+  border-radius: 3px;
+  transition: width 0.4s ease-out;
+}
+.guild-tile-sub { font-size: 11px; font-weight: 700; color: #FDE68A; }
+.guild-tile-arrow { font-size: 18px; color: #FDE68A; flex-shrink: 0; }
+
+/* Join/Create modal */
+.guild-modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.82);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 100001; padding: 14px;
+  animation: spOverlayFade 0.3s ease-out;
+}
+.guild-modal-card {
+  background: linear-gradient(180deg, #FFF, #EEF2FF);
+  border: 3px solid #1E3A8A;
+  border-radius: 22px;
+  padding: 22px 18px;
+  max-width: 420px;
+  width: 100%;
+  max-height: 92vh;
+  overflow-y: auto;
+  text-align: center;
+  direction: rtl;
+  position: relative;
+  color: #1E3A8A;
+  box-shadow: 0 24px 70px rgba(0,0,0,0.5);
+  animation: spModalPop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.guild-modal-card-mine {
+  background: linear-gradient(180deg, #1E3A8A 0%, #3730A3 100%);
+  border-color: #FBBF24;
+  color: #FEF3C7;
+}
+.guild-modal-close {
+  position: absolute; top: 10px; left: 12px;
+  width: 32px; height: 32px; border: none;
+  background: rgba(0,0,0,0.18); color: inherit;
+  border-radius: 50%; font-size: 18px; cursor: pointer;
+  line-height: 1; font-family: inherit;
+}
+.guild-modal-icon { font-size: 56px; filter: drop-shadow(0 0 10px rgba(251, 191, 36, 0.5)); margin-bottom: 4px; }
+.guild-modal-title { font-size: 22px; font-weight: 900; margin-bottom: 4px; }
+.guild-modal-sub { font-size: 12px; font-weight: 700; opacity: 0.85; margin-bottom: 14px; }
+
+/* Mine header */
+.guild-modal-header {
+  background: rgba(0,0,0,0.25);
+  border-radius: 14px;
+  padding: 14px;
+  margin-bottom: 12px;
+}
+.guild-modal-emoji {
+  font-size: 56px;
+  margin-bottom: 4px;
+  filter: drop-shadow(0 0 10px rgba(252, 211, 77, 0.6));
+}
+.guild-modal-name { font-size: 22px; font-weight: 900; color: #FCD34D; margin-bottom: 4px; }
+.guild-modal-code { font-size: 12px; color: #FDE68A; margin-bottom: 4px; font-family: monospace; }
+.guild-modal-code strong { color: #FFF; letter-spacing: 2px; font-size: 14px; }
+.guild-modal-stats { font-size: 11px; color: #FDE68A; }
+
+/* Daily goal */
+.guild-modal-goal {
+  background: rgba(0,0,0,0.25);
+  border: 1px solid rgba(252, 211, 77, 0.3);
+  border-radius: 14px;
+  padding: 14px;
+  margin-bottom: 12px;
+}
+.guild-modal-goal-title { font-size: 14px; font-weight: 900; color: #FCD34D; margin-bottom: 8px; }
+.guild-modal-goal-bar {
+  height: 12px;
+  background: rgba(0,0,0,0.4);
+  border-radius: 6px;
+  overflow: hidden;
+  margin-bottom: 10px;
+}
+.guild-modal-goal-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #3B82F6, #FCD34D);
+  border-radius: 6px;
+  transition: width 0.5s ease-out;
+}
+.guild-claim-btn {
+  padding: 12px 22px;
+  background: linear-gradient(135deg, #FCD34D, #F59E0B);
+  color: #1E3A8A;
+  border: none;
+  border-radius: 12px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 900;
+  cursor: pointer;
+  width: 100%;
+  box-shadow: 0 4px 14px rgba(252, 211, 77, 0.5);
+  animation: lifetimePrestigeReady 1.4s ease-in-out infinite;
+}
+.guild-claim-btn:hover { filter: brightness(1.1); }
+.guild-claim-btn:active { transform: scale(0.97); }
+.guild-claim-done { font-size: 13px; font-weight: 800; color: #6EE7B7; padding: 8px; }
+.guild-claim-locked { font-size: 12px; font-weight: 700; color: #FDE68A; padding: 8px; opacity: 0.85; }
+
+/* Section titles */
+.guild-modal-section-title {
+  font-size: 13px;
+  font-weight: 900;
+  color: #FCD34D;
+  margin: 12px 0 8px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid rgba(252, 211, 77, 0.25);
+  text-align: right;
+}
+
+/* Members list */
+.guild-modal-members {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-align: right;
+  margin-bottom: 14px;
+}
+.guild-member-row {
+  display: grid;
+  grid-template-columns: 36px 1fr auto;
+  gap: 10px;
+  padding: 6px 10px;
+  background: rgba(0,0,0,0.2);
+  border-radius: 8px;
+  align-items: center;
+  font-size: 12px;
+}
+.guild-member-row.guild-member-me {
+  background: linear-gradient(90deg, rgba(252,211,77,0.25), rgba(252,211,77,0.05));
+  border: 1px solid rgba(252, 211, 77, 0.5);
+}
+.guild-member-rank { font-weight: 900; color: #FCD34D; text-align: center; }
+.guild-member-name { font-weight: 700; color: #FFF; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.guild-member-role {
+  display: inline-block;
+  padding: 1px 6px;
+  background: rgba(252, 211, 77, 0.3);
+  color: #FCD34D;
+  border-radius: 5px;
+  font-size: 10px;
+  margin-right: 4px;
+}
+.guild-member-stats { font-size: 11px; color: #FDE68A; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* Foot actions */
+.guild-modal-foot {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  margin-top: 10px;
+}
+.guild-modal-share {
+  padding: 10px 14px;
+  background: rgba(0,0,0,0.3);
+  color: #FCD34D;
+  border: 1px solid #FBBF24;
+  border-radius: 10px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.guild-modal-leave {
+  padding: 10px 14px;
+  background: transparent;
+  color: #FCA5A5;
+  border: 1px solid rgba(252, 165, 165, 0.4);
+  border-radius: 10px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+/* Join/Create sections (light card) */
+.guild-jc-section {
+  background: rgba(30, 58, 138, 0.06);
+  border-radius: 12px;
+  padding: 14px;
+  margin-bottom: 12px;
+}
+.guild-jc-section-title {
+  font-size: 13px;
+  font-weight: 900;
+  color: #1E3A8A;
+  margin-bottom: 8px;
+}
+.guild-jc-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+}
+.guild-jc-row input {
+  padding: 10px 12px;
+  background: #FFF;
+  border: 2px solid #C7D2FE;
+  border-radius: 10px;
+  font-family: inherit;
+  font-size: 14px;
+  color: #1E3A8A;
+  text-align: right;
+  direction: rtl;
+}
+.guild-jc-row input:focus { outline: none; border-color: #1E3A8A; }
+.guild-jc-btn-join {
+  padding: 10px 16px;
+  background: #1E3A8A;
+  color: #FFF;
+  border: none;
+  border-radius: 10px;
+  font-family: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+.guild-jc-divider {
+  text-align: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: #6B7280;
+  margin: 8px 0;
+}
+.guild-jc-create-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.guild-jc-create-fields input,
+.guild-jc-create-fields textarea {
+  padding: 10px 12px;
+  background: #FFF;
+  border: 2px solid #C7D2FE;
+  border-radius: 10px;
+  font-family: inherit;
+  font-size: 14px;
+  color: #1E3A8A;
+  text-align: right;
+  direction: rtl;
+}
+.guild-jc-create-fields input:focus,
+.guild-jc-create-fields textarea:focus { outline: none; border-color: #1E3A8A; }
+.guild-jc-btn-create {
+  padding: 12px;
+  background: linear-gradient(135deg, #FCD34D, #F59E0B);
+  color: #1E3A8A;
+  border: none;
+  border-radius: 12px;
+  font-family: inherit;
+  font-weight: 900;
+  font-size: 15px;
+  cursor: pointer;
+}
+.guild-jc-btn-create:hover { filter: brightness(1.08); }
+.guild-jc-status {
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+  margin-top: 8px;
+  min-height: 16px;
+}
+
+/* Toasts */
+.guild-toast {
+  position: fixed;
+  top: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  background: linear-gradient(135deg, #1E3A8A, #3730A3);
+  border: 2px solid #FBBF24;
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(30, 58, 138, 0.5);
+  color: #FEF3C7;
+  font-weight: 800;
+  font-size: 13px;
+  z-index: 100002;
+  animation: petLevelupSlide 0.4s ease-out, petLevelupOut 0.4s ease-in 2.6s forwards;
+  direction: rtl;
+}
+.guild-toast-complete {
+  background: linear-gradient(135deg, #FCD34D, #F59E0B);
+  color: #1E3A8A;
+  animation: petLevelupSlide 0.5s ease-out, petLevelupOut 0.5s ease-in 5.5s forwards;
+}
+.guild-toast-icon { font-size: 22px; }
+
+/* Dark theme — mine card stays dark, jc stays light */
+html[data-theme="dark"] .guild-modal-card:not(.guild-modal-card-mine) {
+  background: linear-gradient(180deg, #1F2937, #1E1B4B 50%);
+  border-color: #FBBF24;
+  color: #E0E7FF;
+}
+html[data-theme="dark"] .guild-modal-card:not(.guild-modal-card-mine) .guild-modal-title,
+html[data-theme="dark"] .guild-modal-card:not(.guild-modal-card-mine) .guild-modal-sub { color: #FEF3C7; }
+html[data-theme="dark"] .guild-jc-section {
+  background: rgba(99, 102, 241, 0.15);
+}
+html[data-theme="dark"] .guild-jc-section-title { color: #C7D2FE; }
+html[data-theme="dark"] .guild-jc-row input,
+html[data-theme="dark"] .guild-jc-create-fields input,
+html[data-theme="dark"] .guild-jc-create-fields textarea {
+  background: rgba(0,0,0,0.3);
+  color: #E0E7FF;
+  border-color: #6366F1;
+}
+html[data-theme="dark"] .guild-jc-btn-join { background: #6366F1; }
   /* ============================================================
      DARK MODE
      ============================================================

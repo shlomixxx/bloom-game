@@ -290,6 +290,11 @@
       setTimeout(function() { try { maybeShowLifetimeTile(); } catch (e) {} }, 2400);
     }
 
+    // Stage 27 — Guild tile (clan with daily goal).
+    if (typeof maybeShowGuildTile === 'function') {
+      setTimeout(function() { try { maybeShowGuildTile(); } catch (e) {} }, 2600);
+    }
+
     // Tier-icons tap → reveal stats bubble (same behaviour as v1)
     var iconsTap = document.getElementById('home-icons-tap');
     if (iconsTap) {

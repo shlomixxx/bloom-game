@@ -72,6 +72,47 @@ export async function initDb() {
       created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )`,
+    // Stage 27 — Guilds (full CREATE in schema.sql).
+    `CREATE TABLE IF NOT EXISTS guilds (
+      id                  SERIAL PRIMARY KEY,
+      code                VARCHAR(8) UNIQUE NOT NULL,
+      name                VARCHAR(60) NOT NULL,
+      emoji               VARCHAR(10),
+      description         TEXT,
+      creator_device_id   VARCHAR(64) NOT NULL,
+      member_count        INT NOT NULL DEFAULT 1,
+      total_score_alltime BIGINT NOT NULL DEFAULT 0,
+      is_public           BOOLEAN NOT NULL DEFAULT TRUE,
+      max_members         INT NOT NULL DEFAULT 30,
+      created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`,
+    `CREATE TABLE IF NOT EXISTS guild_members (
+      guild_id            INT NOT NULL,
+      device_id           VARCHAR(64) NOT NULL,
+      role                VARCHAR(20) NOT NULL DEFAULT 'member',
+      joined_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      total_score_contrib BIGINT NOT NULL DEFAULT 0,
+      total_crowns_contrib INT NOT NULL DEFAULT 0,
+      PRIMARY KEY (guild_id, device_id)
+    )`,
+    `CREATE TABLE IF NOT EXISTS guild_daily_progress (
+      guild_id           INT NOT NULL,
+      date               DATE NOT NULL,
+      goal_target        INT NOT NULL DEFAULT 30,
+      goal_progress      INT NOT NULL DEFAULT 0,
+      is_complete        BOOLEAN NOT NULL DEFAULT FALSE,
+      completed_at       TIMESTAMPTZ,
+      PRIMARY KEY (guild_id, date)
+    )`,
+    `CREATE TABLE IF NOT EXISTS guild_member_claims (
+      guild_id      INT NOT NULL,
+      device_id     VARCHAR(64) NOT NULL,
+      date          DATE NOT NULL,
+      reward_gems   INT NOT NULL,
+      claimed_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (guild_id, device_id, date)
+    )`,
     // Stage 32 — Replay Sharing (full CREATE in schema.sql).
     `CREATE TABLE IF NOT EXISTS replay_shares (
       id              BIGSERIAL PRIMARY KEY,

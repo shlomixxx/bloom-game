@@ -1605,6 +1605,29 @@
     </div>
   </section>
 
+  <!-- 🛡 Guilds / Clans (stage 27) -->
+  <section id="guilds-section" style="margin-bottom:12px">
+    <h2>🛡 קלאנים / Guilds <button class="tip-btn" data-tip-text="<strong>🛡 Guilds / Clans</strong><br>Peer-pressure retention.<div class=&quot;tip-example&quot;>💡 <strong>למה זה ממכר</strong>: שחקנים בקלאן משחקים פי 3.4 יותר מסולואיים, +35% D30 retention. ה-pattern: יעד יומי משותף (30 כתרים) + פרס לכל מי שתורם כשהיעד מושג. שחקן שלא תורם מרגיש שהוא עוצר את הקבוצה.<br><br>📊 <strong>v1 scope</strong>: create/join/leave + יעד יומי + claim per-member + leaderboard. <strong>Skipped</strong>: chat, wars, leagues.<br><br>📊 יצירת קלאן עולה 500💎 (anti-spam). הצטרפות חינמית. תרומה אוטומטית מ-game-over כשתופסים כתר.</div>">?</button></h2>
+    <div style="padding:12px 16px;background:var(--card);border-radius:10px;margin-top:8px">
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+        <div class="rewards-grid" data-keys="guild_enabled,guild_create_cost_gems"></div>
+        <div class="rewards-grid" data-keys="guild_max_members,guild_daily_goal_crowns,guild_daily_reward_per_member"></div>
+      </div>
+
+      <div style="margin-bottom:8px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <div style="font-size:13px;font-weight:700;color:var(--gold)">🏆 Top 50 קלאנים (לפי ניקוד כולל)</div>
+          <button id="guild-refresh" class="btn-secondary" style="padding:6px 12px;font-size:11px">↻ רענן</button>
+        </div>
+        <div id="guilds-admin-list" style="display:flex;flex-direction:column;gap:6px;font-size:12px;max-height:400px;overflow-y:auto">
+          <div style="color:var(--muted);padding:10px;text-align:center">⏳ טוען...</div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
   <!-- 📔 Tile Collection Album (stage 29) -->
   <section id="album-section" style="margin-bottom:12px">
     <h2>📔 אלבום אריחים <button class="tip-btn" data-tip-text="<strong>📔 Tile Collection Album</strong><br>Genshin-style — אוסף ויזואלי של 8 דרגות × כל הלוחות הדינמיים.<div class=&quot;tip-example&quot;>💡 <strong>למה זה ממכר</strong>: completionist drive חזק. שחקן רואה אלבום עם הרבה תאים, רוצה למלא את כולם. מסכי "אוסף שלם" עם פרסים נדיבים — כל זה השפיע על מיליארדי דולרים ב-Genshin.<br><br>📊 <strong>2 סוגי פרסים</strong>:<br>1. השלמת לוח (8 דרגות על לוח אחד) → 500💎<br>2. השלמת דרגה (אותה דרגה על כל הלוחות) → 200💎<br><br>📊 כל game-over מקליט אוטומטית את ה-tier הגבוה שהשחקן הגיע אליו על לוח דינמי.</div>">?</button></h2>
@@ -2796,6 +2819,13 @@
     lifetime_xp_per_level: 'XP לדרגה.<div class="tip-example">📊 ברירת מחדל 500. ערכים: 200-2000.<br>💡 500 = שחקן ממוצע (50 משחקים) יגיע לדרגה ~1-2. שחקן ותיק (500 משחקים + הישגים + פרסים) יגיע לדרגה ~30-40 מיידית.<br>📊 לדרגה 100 (פרסטיג\') צריך 50,000 XP. עם xp_per_level=500.</div>',
     lifetime_prestige_reward: 'פרס 💎 לפעולת פרסטיג\' (דרגה 100 → ⭐ + reset).<div class="tip-example">📊 ברירת מחדל 5,000💎. ערכים: 2000-15000.<br>💡 צריך להיות פרס משמעותי — מספיק לקנות Premium BP (1500) + עוד הרבה. השקעה של חודשי משחק ראויה לפרס גדול.<br>📊 שחקן שיגיע ל-10 ⭐ יקבל 50,000💎 מצטברים — שווה ערך ל-$30+ בIAP.</div>',
 
+    // ---- Guilds / Clans (stage 27) ----
+    guild_enabled: 'הפעלת מערכת הקלאנים.<div class="tip-example">📊 ברירת מחדל פעיל. <strong>peer-pressure retention</strong>: שחקנים בקלאן משחקים פי 3.4 יותר מסולואיים, +35% D30 retention.<br>💡 שחקן בקלאן רואה <strong>"היעד היומי שלנו: 18/30 כתרים"</strong> — מרגיש שהוא חלק ממשהו, מרגיש אחריות לתרום, מקבל פרס כשהקבוצה משיגה.<br>⚠ כיבוי = כל הקלאנים הקיימים נשארים בDB, רק ה-UI נעלם. הפעלה מחדש מחזירה הכל.</div>',
+    guild_create_cost_gems: 'מחיר יצירת קלאן ב-💎.<div class="tip-example">📊 ברירת מחדל 500💎. ערכים: 200-2000.<br>💡 <strong>אנטי-spam</strong>: מונע יצירת קלאנים ריקים על-ידי שחקנים שמשתעממים. 500💎 = משחק רציני (כמה ימי משחק) — סינון טבעי.<br>📊 שחקנים שמשקיעים 500💎 ביצירה — בדרך כלל ישקיעו גם בהזמנת חברים.</div>',
+    guild_max_members: 'מקסימום חברים בקלאן.<div class="tip-example">📊 ברירת מחדל 30. ערכים: 10-100.<br>💡 30 = Clash Royale standard. נמוך מדי (10) = קשה להשלים את היעד היומי. גבוה מדי (100) = שחקנים לא מכירים אחד את השני, אין identity.<br>📊 30 הוא ה-sweet spot — מספיק חברים כדי להשלים יעדים גם אם חצי לא פעילים, ומספיק קטן ש-"כולם תורמים" מרגיש משמעותי.</div>',
+    guild_daily_goal_crowns: 'יעד יומי בכתרים (tier 8) לכל הקלאן יחד.<div class="tip-example">📊 ברירת מחדל 30 כתרים. ערכים: 10-100.<br>💡 צריך להיות אפשרי-בלי-קל. עם 30 חברים שכל אחד תופס 1 כתר ביום = 30 — מושלם!<br>📊 נמוך מדי (10) = משיגים תוך 1-2 שעות, אין fomo. גבוה מדי (100) = רוב הימים לא משיגים, התסכול הורג.</div>',
+    guild_daily_reward_per_member: 'פרס 💎 לכל חבר כשהיעד היומי הושלם.<div class="tip-example">📊 ברירת מחדל 200💎. ערכים: 100-500.<br>💡 צריך להיות פרס משמעותי מספיק שהשחקן יחזור לקחת אותו. 200 = שחקן פעיל מרוויח 6,000💎/חודש מפרסי קלאן בלבד — סופר משתלם.<br>📊 שחקן ב-3 קלאנים שונים (אם נאפשר ב-v2) יכול להרוויח 600💎/יום מקלאנים בלבד. v1 מאפשר רק קלאן אחד.</div>',
+
     // ---- Tile Collection Album (stage 29) ----
     album_enabled: 'הפעלת אלבום האריחים.<div class="tip-example">📊 ברירת מחדל פעיל. <strong>completionist drive</strong> חזק — מסך אוסף ויזואלי עם פרסים על השלמות.<br>💡 כל game-over על לוח דינמי מקליט אוטומטית את הtier הגבוה ביותר. השחקן רואה גרידים מתמלאים והפרסים מחכים בקצוות.</div>',
     album_show_on_home: 'הצגת ה-tile של האלבום בבית.<div class="tip-example">📊 ברירת מחדל פעיל. ה-tile מציג את אחוז ההשלמה + תגית עם מספר הפרסים המחכים.<br>💡 כיבוי = ה-data ימשיך להיאסף, רק הtile מוסתר.</div>',
@@ -3649,6 +3679,53 @@
     loadAchLb();
     loadSmartPush();
     loadReplayStats();
+    loadGuildsAdmin();
+  }
+
+  // ============================================================
+  // 🛡 Guilds admin (list + force-delete)
+  // ============================================================
+  async function loadGuildsAdmin() {
+    var host = document.getElementById('guilds-admin-list');
+    if (!host) return;
+    try {
+      var r = await fetch('/' + ADMIN_PATH + '/api/guilds').then(function(r){return r.json();});
+      var guilds = (r && r.guilds) || [];
+      if (!guilds.length) {
+        host.innerHTML = '<div style="color:var(--muted);padding:10px;text-align:center">אין עדיין קלאנים</div>';
+      } else {
+        host.innerHTML = guilds.map(function(g, idx) {
+          var medal = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : ('#' + (idx + 1));
+          return '<div style="display:grid;grid-template-columns:50px auto 1fr auto auto auto;gap:10px;padding:8px 12px;background:var(--bg);border-radius:8px;align-items:center">' +
+            '<div style="font-weight:900;text-align:center;color:var(--gold)">' + medal + '</div>' +
+            '<div style="font-size:22px">' + (g.emoji || '🛡') + '</div>' +
+            '<div style="min-width:0">' +
+              '<div style="font-weight:700;color:var(--fg)">' + g.name + ' <span style="font-family:monospace;font-size:10px;color:var(--muted);background:rgba(0,0,0,0.05);padding:1px 6px;border-radius:4px">' + g.code + '</span></div>' +
+              '<div style="font-size:10px;color:var(--muted);margin-top:2px">' +
+                '👥 ' + g.member_count + '/' + g.max_members + ' · ' +
+                '🏆 ' + (parseInt(g.total_score_alltime, 10) || 0).toLocaleString() + ' · ' +
+                '✅ ' + (g.days_complete || 0) + ' ימי השלמה' +
+              '</div>' +
+            '</div>' +
+            '<div style="font-size:11px;color:var(--muted)">נוצר: ' + new Date(g.created_at).toLocaleDateString('he-IL', {day:'2-digit',month:'2-digit'}) + '</div>' +
+            '<button class="btn-danger" data-guild-delete="' + g.id + '" style="padding:4px 10px;font-size:11px">🗑</button>' +
+          '</div>';
+        }).join('');
+        host.querySelectorAll('[data-guild-delete]').forEach(function(b) {
+          b.onclick = async function() {
+            var id = parseInt(b.getAttribute('data-guild-delete'), 10);
+            var g = guilds.find(function(x) { return x.id === id; });
+            if (!confirm('למחוק את "' + (g && g.name) + '" + כל החברים? זו פעולה הרסנית.')) return;
+            await fetch('/' + ADMIN_PATH + '/api/guilds/' + id, { method: 'DELETE' });
+            loadGuildsAdmin();
+          };
+        });
+      }
+    } catch (e) {
+      host.innerHTML = '<div style="color:var(--danger);padding:10px">שגיאה: ' + e.message + '</div>';
+    }
+    var refresh = document.getElementById('guild-refresh');
+    if (refresh) refresh.onclick = function() { loadGuildsAdmin(); };
   }
 
   // ============================================================

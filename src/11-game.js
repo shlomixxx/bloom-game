@@ -2350,6 +2350,23 @@
             grantPetXpForGame(__gid);
           } catch (e) {}
         }
+        // Stage 27 — Guild contribution. Count crowns (tier-8 tiles) on the
+        // final grid. Server validates membership; safe no-op if not in a guild.
+        if (!skinTrialMode && !window.__bloomBotActive && typeof contributeToGuild === 'function') {
+          try {
+            var __crowns = 0;
+            try {
+              if (typeof grid !== 'undefined') {
+                for (var __cr = 0; __cr < grid.length; __cr++) {
+                  for (var __cc = 0; __cc < (grid[__cr] || []).length; __cc++) {
+                    if (grid[__cr][__cc] === 8) __crowns++;
+                  }
+                }
+              }
+            } catch (e) {}
+            contributeToGuild(score, __crowns);
+          } catch (e) {}
+        }
         soundGameOver();
         buzz([60, 80, 100]);
         playMusic('fail');
