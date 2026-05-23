@@ -124,6 +124,29 @@ export async function initDb() {
       reward_gems         INT NOT NULL,
       PRIMARY KEY (war_id, device_id)
     )`,
+    // Stage 38 — Trophy Road (full CREATE in schema.sql).
+    `CREATE TABLE IF NOT EXISTS player_trophies (
+      device_id            VARCHAR(64) PRIMARY KEY,
+      trophies             INT NOT NULL DEFAULT 0,
+      trophies_lifetime    BIGINT NOT NULL DEFAULT 0,
+      highest_trophies     INT NOT NULL DEFAULT 0,
+      current_arena_id     VARCHAR(30) NOT NULL DEFAULT 'sprout',
+      claimed_milestones   JSONB NOT NULL DEFAULT '[]'::jsonb,
+      total_games          INT NOT NULL DEFAULT 0,
+      total_wins           INT NOT NULL DEFAULT 0,
+      last_change          INT NOT NULL DEFAULT 0,
+      last_change_at       TIMESTAMPTZ
+    )`,
+    `CREATE TABLE IF NOT EXISTS trophy_history (
+      id                 BIGSERIAL PRIMARY KEY,
+      device_id          VARCHAR(64) NOT NULL,
+      change_amount      INT NOT NULL,
+      before_trophies    INT NOT NULL,
+      after_trophies     INT NOT NULL,
+      reason             VARCHAR(40) NOT NULL,
+      meta               JSONB,
+      created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`,
     // Stage 33 — Rivalry System (full CREATE in schema.sql).
     `CREATE TABLE IF NOT EXISTS player_rivalries (
       id                BIGSERIAL PRIMARY KEY,

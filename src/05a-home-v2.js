@@ -315,6 +315,11 @@
       setTimeout(function() { try { maybeShowWarTile(); } catch (e) {} }, 3200);
     }
 
+    // Stage 38 — Trophy Road tile (always visible — universal progression).
+    if (typeof maybeShowTrophyTile === 'function') {
+      setTimeout(function() { try { maybeShowTrophyTile(); } catch (e) {} }, 450);
+    }
+
     // Tier-icons tap → reveal stats bubble (same behaviour as v1)
     var iconsTap = document.getElementById('home-icons-tap');
     if (iconsTap) {

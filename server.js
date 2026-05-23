@@ -6915,6 +6915,292 @@ app.get('/api/guilds/leaderboard', async (req, res) => {
 });
 
 // ============================================================
+// Stage 38 — Trophy Road (May 2026)
+// Clash Royale pattern. Trophies go UP on good plays, DOWN on
+// bad ones (with a configurable floor + new-player protection).
+// Player progresses through visual "arenas" + claims milestone
+// rewards at specific trophy thresholds (one-time per device).
+// ============================================================
+async function _loadTrophyConfig() {
+  const r = await pool.query(
+    `SELECT key, value FROM game_config WHERE key LIKE 'trophies_%'`
+  );
+  const cfg = {};
+  for (const row of r.rows) cfg[row.key] = row.value;
+  return cfg;
+}
+
+// Server-authoritative arena ladder. Same id/emoji/label as the
+// client-side mirror in src/34-trophy-road.js — keep in sync.
+const TROPHY_ARENAS = [
+  { id: 'sprout',   minTrophies: 0,     emoji: '🌱', label: 'נבט',           color: '#7EC9B0' },
+  { id: 'forest',   minTrophies: 50,    emoji: '🌳', label: 'יער הקסם',       color: '#5A8F3A' },
+  { id: 'village',  minTrophies: 200,   emoji: '🏘',  label: 'הכפר',          color: '#C9A56F' },
+  { id: 'castle',   minTrophies: 600,   emoji: '🏰', label: 'הטירה',         color: '#9C7BD8' },
+  { id: 'volcano',  minTrophies: 1500,  emoji: '🌋', label: 'הר הגעש',       color: '#E04A2E' },
+  { id: 'ice',      minTrophies: 3000,  emoji: '❄️', label: 'היכל הקרח',     color: '#5FAEE0' },
+  { id: 'galaxy',   minTrophies: 6000,  emoji: '🌌', label: 'הגלקסיה',       color: '#7A4FC9' },
+  { id: 'legend',   minTrophies: 12000, emoji: '⚡', label: 'היכל האגדה',    color: '#FFD93D' }
+];
+
+function _trophyArenaFor(trophies) {
+  let curr = TROPHY_ARENAS[0];
+  for (const a of TROPHY_ARENAS) {
+    if (trophies >= a.minTrophies) curr = a;
+    else break;
+  }
+  return curr;
+}
+
+function _trophyMilestones(cfg) {
+  const out = [];
+  for (let i = 1; i <= 10; i++) {
+    const at = parseInt(cfg['trophies_milestone_' + i + '_at'], 10);
+    const gems = parseInt(cfg['trophies_milestone_' + i + '_gems'], 10);
+    if (Number.isFinite(at) && Number.isFinite(gems) && at > 0) {
+      out.push({ index: i, at, gems });
+    }
+  }
+  return out.sort((a, b) => a.at - b.at);
+}
+
+// Calculate trophy delta for a finished game. Read-only.
+function _calcTrophyChange(opts, cfg) {
+  // opts: { score, tier, isNewBest, isPracticeOrDaily, currentTrophies }
+  const minGain = parseInt(cfg.trophies_min_score_to_gain || '500', 10);
+  const minLose = parseInt(cfg.trophies_min_score_to_lose || '100', 10);
+  const winBase = parseInt(cfg.trophies_per_win_base || '15', 10);
+  const lossBase = parseInt(cfg.trophies_per_loss_base || '-8', 10);
+  const crownBonus = parseInt(cfg.trophies_per_crown_bonus || '40', 10);
+  const pbBonus = parseInt(cfg.trophies_per_personal_best || '25', 10);
+  const protectUnder = parseInt(cfg.trophies_protect_under || '50', 10);
+  const safeFloor = parseInt(cfg.trophies_safe_floor || '0', 10);
+  const score = opts.score | 0;
+  const tier = opts.tier | 0;
+  const breakdown = [];
+  let delta = 0;
+  if (score >= minGain) {
+    delta += winBase; breakdown.push({ reason: 'win', amount: winBase });
+    if (tier >= 8) { delta += crownBonus; breakdown.push({ reason: 'crown', amount: crownBonus }); }
+    if (opts.isNewBest) { delta += pbBonus; breakdown.push({ reason: 'personal_best', amount: pbBonus }); }
+  } else if (score < minLose) {
+    // Loss-protection: new players (under N trophies) don't lose.
+    if (opts.currentTrophies < protectUnder) {
+      breakdown.push({ reason: 'loss_protected', amount: 0 });
+    } else {
+      delta += lossBase; breakdown.push({ reason: 'loss', amount: lossBase });
+    }
+  } else {
+    breakdown.push({ reason: 'neutral', amount: 0 });
+  }
+  // Clamp: never drop below safeFloor.
+  const projected = opts.currentTrophies + delta;
+  if (projected < safeFloor) delta = safeFloor - opts.currentTrophies;
+  return { delta, breakdown };
+}
+
+app.get('/api/trophies/state', async (req, res) => {
+  try {
+    const deviceId = String(req.query.deviceId || '').slice(0, 64);
+    if (deviceId.length < 8) return res.status(400).json({ error: 'bad_device' });
+    const cfg = await _loadTrophyConfig();
+    if (cfg.trophies_enabled === 'false') return res.json({ ok: true, enabled: false });
+    const r = await pool.query(
+      `SELECT trophies, trophies_lifetime, highest_trophies, current_arena_id, claimed_milestones,
+              total_games, total_wins, last_change, last_change_at
+         FROM player_trophies WHERE device_id = $1`,
+      [deviceId]
+    );
+    const row = r.rows[0] || { trophies: 0, trophies_lifetime: 0, highest_trophies: 0, current_arena_id: 'sprout', claimed_milestones: [], total_games: 0, total_wins: 0, last_change: 0, last_change_at: null };
+    const arena = _trophyArenaFor(row.trophies);
+    // Next arena
+    const nextArena = TROPHY_ARENAS.find(a => a.minTrophies > row.trophies) || null;
+    const milestones = _trophyMilestones(cfg);
+    const claimed = Array.isArray(row.claimed_milestones) ? row.claimed_milestones : [];
+    const unclaimedMilestones = milestones.filter(m => row.trophies >= m.at && claimed.indexOf(m.index) < 0);
+    res.json({
+      ok: true,
+      enabled: true,
+      trophies: row.trophies,
+      lifetime: Number(row.trophies_lifetime),
+      highest: row.highest_trophies,
+      arena: arena,
+      nextArena: nextArena ? { ...nextArena, gap: nextArena.minTrophies - row.trophies } : null,
+      arenas: TROPHY_ARENAS,
+      milestones: milestones.map(m => ({ ...m, claimed: claimed.indexOf(m.index) >= 0, ready: row.trophies >= m.at })),
+      claimedCount: claimed.length,
+      unclaimedCount: unclaimedMilestones.length,
+      stats: {
+        games: row.total_games, wins: row.total_wins,
+        winrate: row.total_games > 0 ? Math.round(row.total_wins / row.total_games * 100) : 0
+      },
+      lastChange: row.last_change, lastChangeAt: row.last_change_at
+    });
+  } catch (e) {
+    console.error('GET /api/trophies/state', e);
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
+// Granted automatically when /api/score (daily) or /api/score/practice
+// fires — see hooks below. Also a direct endpoint so admin / future
+// modes can call it explicitly with a custom reason.
+app.post('/api/trophies/grant-from-game', requireDeviceAuth, async (req, res) => {
+  try {
+    const deviceId = req.deviceId;
+    if (!checkRateLimit('trophy_grant', deviceId, 200, 60 * 60 * 1000)) {
+      return res.status(429).json({ error: 'rate_limited' });
+    }
+    const cfg = await _loadTrophyConfig();
+    if (cfg.trophies_enabled === 'false') return res.json({ ok: false, reason: 'disabled' });
+    const { score, tier, isNewBest, source, gameId } = req.body || {};
+    const result = await _trophyGrantFromGame(deviceId, {
+      score: parseInt(score, 10) || 0,
+      tier: parseInt(tier, 10) || 0,
+      isNewBest: !!isNewBest,
+      source: String(source || 'unknown').slice(0, 30),
+      gameId: String(gameId || '').slice(0, 64)
+    }, cfg);
+    res.json(result);
+  } catch (e) {
+    console.error('POST /api/trophies/grant-from-game', e);
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
+// Shared helper — called by the explicit endpoint AND inline from /api/score.
+// Returns { ok, delta, before, after, arena, leveledArena, breakdown }.
+// Per-game dedup via _trophy:<deviceId>:<gameId> game_config key so a
+// repeat submit (network retry, multi-mode write) doesn't double-grant.
+async function _trophyGrantFromGame(deviceId, opts, cfg) {
+  // Skip on bot/skin-trial — we never set their trophies.
+  if (opts.gameId) {
+    const dedupKey = '_trophy:' + deviceId + ':' + opts.gameId;
+    const dr = await pool.query(`SELECT value FROM game_config WHERE key = $1`, [dedupKey]);
+    if (dr.rows[0]) return { ok: false, reason: 'already_granted' };
+  }
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    // Lazy insert
+    await client.query(
+      `INSERT INTO player_trophies (device_id) VALUES ($1) ON CONFLICT (device_id) DO NOTHING`,
+      [deviceId]
+    );
+    const sr = await client.query(
+      `SELECT trophies, current_arena_id FROM player_trophies WHERE device_id = $1 FOR UPDATE`,
+      [deviceId]
+    );
+    const cur = sr.rows[0];
+    const before = cur.trophies;
+    const calc = _calcTrophyChange({ ...opts, currentTrophies: before }, cfg);
+    const after = before + calc.delta;
+    const newArenaObj = _trophyArenaFor(after);
+    const leveledArena = newArenaObj.id !== cur.current_arena_id;
+    const isWin = calc.delta > 0;
+    await client.query(
+      `UPDATE player_trophies
+          SET trophies = $2,
+              trophies_lifetime = trophies_lifetime + GREATEST(0, $3),
+              highest_trophies = GREATEST(highest_trophies, $2),
+              current_arena_id = $4,
+              total_games = total_games + 1,
+              total_wins = total_wins + $5,
+              last_change = $3,
+              last_change_at = NOW()
+        WHERE device_id = $1`,
+      [deviceId, after, calc.delta, newArenaObj.id, isWin ? 1 : 0]
+    );
+    await client.query(
+      `INSERT INTO trophy_history (device_id, change_amount, before_trophies, after_trophies, reason, meta)
+       VALUES ($1, $2, $3, $4, $5, $6::jsonb)`,
+      [deviceId, calc.delta, before, after, opts.source, JSON.stringify({ score: opts.score, tier: opts.tier, breakdown: calc.breakdown })]
+    );
+    // Mark dedup key (best-effort)
+    if (opts.gameId) {
+      try {
+        await client.query(
+          `INSERT INTO game_config (key, value) VALUES ($1, $2)
+           ON CONFLICT (key) DO NOTHING`,
+          ['_trophy:' + deviceId + ':' + opts.gameId, '1']
+        );
+      } catch (e) {}
+    }
+    await client.query('COMMIT');
+    return {
+      ok: true,
+      delta: calc.delta,
+      before,
+      after,
+      arena: newArenaObj,
+      leveledArena,
+      breakdown: calc.breakdown
+    };
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+app.post('/api/trophies/claim-milestone', requireDeviceAuth, async (req, res) => {
+  try {
+    const deviceId = req.deviceId;
+    const { milestoneIndex } = req.body || {};
+    const idx = parseInt(milestoneIndex, 10);
+    if (!idx || idx < 1 || idx > 10) return res.status(400).json({ error: 'bad_milestone' });
+    if (!checkRateLimit('trophy_claim', deviceId, 20, 60 * 60 * 1000)) {
+      return res.status(429).json({ error: 'rate_limited' });
+    }
+    const cfg = await _loadTrophyConfig();
+    if (cfg.trophies_enabled === 'false') return res.json({ ok: false, reason: 'disabled' });
+    const milestones = _trophyMilestones(cfg);
+    const milestone = milestones.find(m => m.index === idx);
+    if (!milestone) return res.json({ ok: false, reason: 'unknown_milestone' });
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const sr = await client.query(
+        `SELECT trophies, claimed_milestones FROM player_trophies WHERE device_id = $1 FOR UPDATE`,
+        [deviceId]
+      );
+      if (!sr.rows[0]) { await client.query('ROLLBACK'); return res.json({ ok: false, reason: 'no_state' }); }
+      const cur = sr.rows[0];
+      if (cur.trophies < milestone.at) {
+        await client.query('ROLLBACK');
+        return res.json({ ok: false, reason: 'not_reached', needed: milestone.at, have: cur.trophies });
+      }
+      const claimed = Array.isArray(cur.claimed_milestones) ? cur.claimed_milestones : [];
+      if (claimed.indexOf(idx) >= 0) {
+        await client.query('ROLLBACK');
+        return res.json({ ok: false, reason: 'already_claimed' });
+      }
+      claimed.push(idx);
+      await client.query(
+        `UPDATE player_trophies SET claimed_milestones = $2::jsonb WHERE device_id = $1`,
+        [deviceId, JSON.stringify(claimed)]
+      );
+      const cr = await client.query(
+        `UPDATE player_profiles SET balance = balance + $1, total_earned = total_earned + $1, updated_at = NOW()
+          WHERE device_id = $2 RETURNING balance`,
+        [milestone.gems, deviceId]
+      );
+      await client.query('COMMIT');
+      res.json({ ok: true, reward: milestone.gems, newBalance: cr.rows[0] ? Number(cr.rows[0].balance) : null, milestone });
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  } catch (e) {
+    console.error('POST /api/trophies/claim-milestone', e);
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
+// ============================================================
 // Stage 37 — Guild Wars (clan-vs-clan competition, May 2026)
 // Auto-matched weekly head-to-head between two guilds. Every
 // game played by a member contributes to their guild's war pool.
@@ -10677,6 +10963,34 @@ if (ADMIN_PATH && ADMIN_PASSWORD) {
       res.json({ ok: true });
     } catch (e) {
       console.error('POST admin/guild-wars/finalize', e);
+      res.status(500).json({ error: 'internal' });
+    }
+  });
+
+  // ============================================================
+  // 🏆 Stage 38 — Trophy Road stats
+  // ============================================================
+  adminRouter.get('/api/trophies/stats', async (_req, res) => {
+    try {
+      const overR = await pool.query(
+        `SELECT
+           COUNT(*) AS players,
+           COALESCE(MAX(trophies), 0) AS max_trophies,
+           COALESCE(AVG(trophies)::int, 0) AS avg_trophies,
+           COALESCE(SUM(total_games), 0) AS total_games,
+           COALESCE(SUM(total_wins), 0) AS total_wins
+         FROM player_trophies WHERE trophies > 0`
+      );
+      const topR = await pool.query(
+        `SELECT pt.device_id, pt.trophies, pt.current_arena_id, pt.total_games, pt.total_wins,
+                COALESCE(pp.display_name, 'אנונימי') AS name
+           FROM player_trophies pt
+           LEFT JOIN player_profiles pp ON pp.device_id = pt.device_id
+          ORDER BY pt.trophies DESC LIMIT 30`
+      );
+      res.json({ ok: true, stats: overR.rows[0], leaderboard: topR.rows });
+    } catch (e) {
+      console.error('GET admin/trophies/stats', e);
       res.status(500).json({ error: 'internal' });
     }
   });

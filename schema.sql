@@ -2052,3 +2052,71 @@ INSERT INTO game_config (key, value) VALUES ('guild_wars_min_members_active', '3
 INSERT INTO game_config (key, value) VALUES ('guild_wars_winner_reward_per_member', '500')  ON CONFLICT (key) DO NOTHING;
 INSERT INTO game_config (key, value) VALUES ('guild_wars_loser_reward_per_member',  '100')  ON CONFLICT (key) DO NOTHING;
 INSERT INTO game_config (key, value) VALUES ('guild_wars_min_games_to_claim', '1')    ON CONFLICT (key) DO NOTHING;
+
+-- ============================================================
+-- Trophy Road (Stage 38 — Clash Royale pattern, May 2026)
+-- The #1 retention mechanism in mobile games. Trophies go UP on
+-- good plays, DOWN on bad ones. Fear of losing = grind dopamine.
+-- Visual progression through "arenas" + milestone rewards every
+-- N trophies (claimable per-tier, never resets unlike Battle Pass).
+-- ============================================================
+CREATE TABLE IF NOT EXISTS player_trophies (
+  device_id            VARCHAR(64) PRIMARY KEY,
+  trophies             INT NOT NULL DEFAULT 0,
+  trophies_lifetime    BIGINT NOT NULL DEFAULT 0,
+  highest_trophies     INT NOT NULL DEFAULT 0,
+  current_arena_id     VARCHAR(30) NOT NULL DEFAULT 'sprout',
+  claimed_milestones   JSONB NOT NULL DEFAULT '[]'::jsonb,
+  total_games          INT NOT NULL DEFAULT 0,
+  total_wins           INT NOT NULL DEFAULT 0,
+  last_change          INT NOT NULL DEFAULT 0,
+  last_change_at       TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_player_trophies_count ON player_trophies (trophies DESC);
+
+CREATE TABLE IF NOT EXISTS trophy_history (
+  id                 BIGSERIAL PRIMARY KEY,
+  device_id          VARCHAR(64) NOT NULL,
+  change_amount      INT NOT NULL,
+  before_trophies    INT NOT NULL,
+  after_trophies     INT NOT NULL,
+  reason             VARCHAR(40) NOT NULL,
+  meta               JSONB,
+  created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_trophy_history_device ON trophy_history (device_id, created_at DESC);
+
+-- Master toggles + tunables
+INSERT INTO game_config (key, value) VALUES ('trophies_enabled',                'true') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('trophies_show_on_home',           'true') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('trophies_min_score_to_gain',      '500')  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('trophies_min_score_to_lose',      '100')  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('trophies_per_win_base',           '15')   ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('trophies_per_loss_base',          '-8')   ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('trophies_per_crown_bonus',        '40')   ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('trophies_per_personal_best',      '25')   ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('trophies_safe_floor',             '0')    ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('trophies_protect_under',          '50')   ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('trophies_celebrate_threshold',    '20')   ON CONFLICT (key) DO NOTHING;
+
+-- 10 milestones: trophies → reward gems (admin can tune freely)
+INSERT INTO game_config (key, value) VALUES ('trophies_milestone_1_at',     '50')     ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('trophies_milestone_1_gems',   '50')     ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('trophies_milestone_2_at',     '150')    ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('trophies_milestone_2_gems',   '100')    ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('trophies_milestone_3_at',     '300')    ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('trophies_milestone_3_gems',   '200')    ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('trophies_milestone_4_at',     '600')    ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('trophies_milestone_4_gems',   '400')    ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('trophies_milestone_5_at',     '1000')   ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('trophies_milestone_5_gems',   '800')    ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('trophies_milestone_6_at',     '1800')   ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('trophies_milestone_6_gems',   '1500')   ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('trophies_milestone_7_at',     '3000')   ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('trophies_milestone_7_gems',   '2500')   ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('trophies_milestone_8_at',     '5000')   ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('trophies_milestone_8_gems',   '4000')   ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('trophies_milestone_9_at',     '8000')   ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('trophies_milestone_9_gems',   '6000')   ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('trophies_milestone_10_at',    '15000')  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('trophies_milestone_10_gems',  '15000')  ON CONFLICT (key) DO NOTHING;

@@ -1694,6 +1694,37 @@
     </div>
   </section>
 
+  <!-- 🏆 Trophy Road (stage 38) -->
+  <section id="trophy-road-section" style="margin-bottom:12px">
+    <h2>🏆 מסלול הגביעים / Trophy Road <button class="tip-btn" data-tip-text="<strong>🏆 Trophy Road</strong><br>Clash Royale pattern — #1 retention mechanism במשחקים מובילים.<div class=&quot;tip-example&quot;>💡 <strong>למה זה ממכר</strong>: בניגוד ל-League/Battle Pass, ה-trophies <strong>יכולים לרדת</strong> אם השחקן מפסיד. הפחד מאיבוד מה שבנית הוא ה-#1 retention driver בכל המשחקים. שחקנים יחזרו לשחק רק כדי לא לאבד trophies.<br><br>📊 <strong>איך זה עובד</strong>:<br>• משחק טוב (≥500 נק׳) = +15 🏆<br>• הגעה לכתר (tier 8) = +40 🏆 בונוס<br>• שיא אישי חדש = +25 🏆 בונוס<br>• משחק רע (≤100 נק׳) = −8 🏆<br>• חדשים (עד 50 🏆) לא יורדים (protection)<br>• Floor: 0 (לא יכול לרדת מתחת)<br><br>📊 <strong>10 milestones</strong> ב-trophies שונים → פרסי 💎. ה-milestones לא מתאפסים לעולם (בניגוד ל-Battle Pass).<br><br>📊 <strong>8 ארנות ויזואליות</strong>: נבט (0) → יער (50) → כפר (200) → טירה (600) → געש (1500) → קרח (3000) → גלקסיה (6000) → אגדה (12000).<br><br>📊 ערוך כל הקבועים ב-game_config: <code>trophies_per_win_base</code>, <code>trophies_per_crown_bonus</code>, וכו׳.</div>">?</button></h2>
+    <div style="padding:12px 16px;background:var(--card);border-radius:10px;margin-top:8px">
+      <div style="font-size:11px;color:var(--muted);margin-bottom:10px">מערכת trophy-grind. כל משחק מקנה/מוריד גביעים אוטומטית לפי הציון.</div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px">
+        <div style="padding:10px;background:var(--bg);border-radius:8px;border:1px solid var(--border)">
+          <div style="font-size:11px;opacity:0.7">שחקנים פעילים</div>
+          <div id="trophy-stat-players" style="font-size:18px;font-weight:800;color:var(--gold)">—</div>
+        </div>
+        <div style="padding:10px;background:var(--bg);border-radius:8px;border:1px solid var(--border)">
+          <div style="font-size:11px;opacity:0.7">שיא משחק</div>
+          <div id="trophy-stat-max" style="font-size:18px;font-weight:800;color:var(--gold)">—</div>
+        </div>
+        <div style="padding:10px;background:var(--bg);border-radius:8px;border:1px solid var(--border)">
+          <div style="font-size:11px;opacity:0.7">ממוצע</div>
+          <div id="trophy-stat-avg" style="font-size:18px;font-weight:800;color:var(--gold)">—</div>
+        </div>
+        <div style="padding:10px;background:var(--bg);border-radius:8px;border:1px solid var(--border)">
+          <div style="font-size:11px;opacity:0.7">סך משחקים</div>
+          <div id="trophy-stat-games" style="font-size:18px;font-weight:800;color:var(--gold)">—</div>
+        </div>
+      </div>
+      <div style="font-size:13px;font-weight:700;color:var(--gold);margin-bottom:6px">🥇 Top 30 שחקנים</div>
+      <div id="trophy-leaderboard" style="display:flex;flex-direction:column;gap:4px;font-size:12px;max-height:300px;overflow-y:auto;margin-bottom:10px">
+        <div style="color:var(--muted);padding:10px;text-align:center">⏳ טוען...</div>
+      </div>
+      <div style="font-size:12px;color:var(--muted)">📋 ערוך פרסי milestone / trophy curves בלשונית 🎮 משחק → "כל ההגדרות" → מפתחות <code>trophies_*</code>.</div>
+    </div>
+  </section>
+
   <!-- 🛡⚔️ Guild Wars (stage 37) -->
   <section id="guild-wars-section" style="margin-bottom:12px">
     <h2>🛡⚔️ מלחמות קלאנים / Guild Wars <button class="tip-btn" data-tip-text="<strong>🛡⚔️ Guild Wars</strong><br>Clash Royale pattern — clan-vs-clan weekly war.<div class=&quot;tip-example&quot;>💡 <strong>למה זה ממכר</strong>: שני קלאנים מותאמים אוטומטית כל ~7 ימים. כל משחק שכל החברים משחקים במהלך השבוע = ציון לקלאן. בסוף השבוע — הקלאן עם הציון הגבוה זוכה ב-500💎 לחבר, המפסיד מקבל 100💎 (פרס נחמה).<br><br>📊 <strong>השפעה אמיתית</strong> (Clash Royale): boosted clan retention 3-5x at launch. המנגנון של ״הקלאן שלי תלוי בי״ הופך solo casual לאיש team חיוני.<br><br>📊 <strong>איך זה עובד</strong>:<br>• matchmaker רץ כל 6 שעות, מזווג קלאנים עם 3+ חברים פעילים שאין להם כרגע מלחמה<br>• כל <code>/api/guilds/contribute</code> אוטומטית מוסיף גם לציון המלחמה<br>• ב-end-at, פונקציית finalize מסיימת + push notif לכל החברים<br>• השחקן רואה אריח 🛡⚔️ בבית רק כשיש מלחמה פעילה או פרס לאסוף<br><br>📊 ערוך 6 keys ב-game_config: <code>guild_wars_enabled</code>, <code>guild_wars_duration_days</code>, <code>guild_wars_min_members_active</code>, <code>guild_wars_winner_reward_per_member</code>, <code>guild_wars_loser_reward_per_member</code>, <code>guild_wars_min_games_to_claim</code>.</div>">?</button></h2>
@@ -3828,6 +3859,33 @@
     loadHomeVariant();
     loadSpinStats();
     loadGuildWars();
+    loadTrophyStats();
+  }
+
+  async function loadTrophyStats() {
+    var lbHost = $('trophy-leaderboard');
+    if (!lbHost) return;
+    try {
+      var d = await api('/trophies/stats');
+      if (!d || !d.ok) { lbHost.innerHTML = '<div style="color:var(--muted);padding:10px;text-align:center">שגיאת טעינה</div>'; return; }
+      var s = d.stats || {};
+      $('trophy-stat-players').textContent = (s.players || 0).toLocaleString();
+      $('trophy-stat-max').textContent = (s.max_trophies || 0).toLocaleString();
+      $('trophy-stat-avg').textContent = (s.avg_trophies || 0).toLocaleString();
+      $('trophy-stat-games').textContent = (s.total_games || 0).toLocaleString();
+      var rows = d.leaderboard || [];
+      if (!rows.length) { lbHost.innerHTML = '<div style="color:var(--muted);padding:10px;text-align:center">אין שחקנים עדיין</div>'; return; }
+      lbHost.innerHTML = rows.map(function(r, i) {
+        var medal = i === 0 ? '🥇' : (i === 1 ? '🥈' : (i === 2 ? '🥉' : '#' + (i + 1)));
+        var winrate = r.total_games > 0 ? Math.round(r.total_wins / r.total_games * 100) : 0;
+        return '<div style="display:grid;grid-template-columns:auto 1fr auto auto;gap:10px;align-items:center;padding:6px 10px;background:var(--bg);border-radius:6px;border:1px solid var(--border)">' +
+          '<span style="font-size:14px;min-width:28px">' + medal + '</span>' +
+          '<span style="font-weight:700">' + r.name + '</span>' +
+          '<span style="color:var(--gold);font-weight:800">🏆 ' + r.trophies.toLocaleString() + '</span>' +
+          '<span style="font-size:10px;opacity:0.65">' + winrate + '% (' + r.total_games + ' מ׳)</span>' +
+        '</div>';
+      }).join('');
+    } catch (e) { lbHost.innerHTML = '<div style="color:var(--muted);padding:10px;text-align:center">שגיאת רשת</div>'; }
   }
 
   // ============================================================

@@ -2367,6 +2367,21 @@
             contributeToGuild(score, __crowns);
           } catch (e) {}
         }
+        // Stage 38 — Trophy Road grant. Server-rolled trophy delta based on
+        // score + tier + isNewBest. Fire-and-forget; toast + arena celebration
+        // are rendered by the trophy module's own response handler.
+        if (!skinTrialMode && !window.__bloomBotActive && typeof grantTrophiesForGame === 'function') {
+          try {
+            var __gid2 = (typeof getCurrentGameId === 'function') ? getCurrentGameId() : '';
+            var __isNewBest = (score > 0 && score === best);
+            grantTrophiesForGame({
+              score: score, tier: highestTier,
+              isNewBest: __isNewBest,
+              source: mode || 'game',
+              gameId: __gid2
+            });
+          } catch (e) {}
+        }
         soundGameOver();
         buzz([60, 80, 100]);
         playMusic('fail');

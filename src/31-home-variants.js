@@ -28,6 +28,7 @@
   var SECONDARY_TILE_SELECTORS = [
     '#spin-home-tile',
     '#guild-war-home-tile',
+    '#trophy-home-tile',
     '#home-v2-boards',
     '#home-v2-season-pass',
     '#league-home-tile',
@@ -131,6 +132,11 @@
     } else if (gwTile) {
       out.push({ action: 'guildwar', icon: '🛡⚔️', title: 'מלחמת קלאנים', sub: 'מלחמה פעילה — תרום עכשיו', cls: '' });
     }
+    // Trophy Road — high priority when there's unclaimed milestone.
+    var trophyTile = document.getElementById('trophy-home-tile');
+    if (trophyTile && trophyTile.classList.contains('has-claim')) {
+      out.push({ action: 'trophy', icon: '🏆', title: 'מסלול גביעים', sub: '🎁 פרס דרך ממתין!', cls: 'hot' });
+    }
     var sp = document.getElementById('home-v2-season-pass');
     if (sp && sp.style.display !== 'none') {
       var claim = sp.querySelector('#home-v2-sp-claim');
@@ -185,6 +191,7 @@
     var map = {
       spin: '#spin-home-tile',
       guildwar: '#guild-war-home-tile',
+      trophy: '#trophy-home-tile',
       season: '#home-v2-season-pass',
       league: '#league-home-tile',
       rival: '#rival-home-tile',
@@ -258,6 +265,11 @@
     var gwTile = document.getElementById('guild-war-home-tile');
     if (gwTile && gwTile.classList.contains('has-claim')) {
       return { icon: '🛡⚔️', title: 'פרס מלחמת קלאנים!', sub: 'הקלאן השלים מלחמה — אסוף את הפרס', cta: '🎁 קבל את הפרס', sel: '#guild-war-home-tile', cls: 'hero-reward' };
+    }
+    // Trophy milestone unclaimed reward — high emotion.
+    var trophyTile = document.getElementById('trophy-home-tile');
+    if (trophyTile && trophyTile.classList.contains('has-claim')) {
+      return { icon: '🏆', title: 'פרס מסלול גביעים ממתין!', sub: 'הגעת ל-Trophy milestone — קבל את הפרס', cta: '🎁 קבל פרס', sel: '#trophy-home-tile', cls: 'hero-reward' };
     }
     var league = document.getElementById('league-home-tile');
     if (league && league.querySelector('.league-tile-reward')) {
