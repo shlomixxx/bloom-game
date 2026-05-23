@@ -6128,6 +6128,282 @@ app.post('/api/lifetime/prestige', requireDeviceAuth, async (req, res) => {
 });
 
 // ============================================================
+// Stage 31 — Smart Notifications scheduler
+// Periodic scan: for each subscribed device, compute the highest-
+// priority "send now?" signal. Send ONE personalized push if
+// cooldown elapsed AND current hour is in the allowed window
+// (Asia/Jerusalem). 8 possible reasons, ranked by emotional impact.
+// ============================================================
+async function _loadSmartPushConfig() {
+  try {
+    const r = await pool.query(`SELECT key, value FROM game_config WHERE key LIKE 'smart_push_%'`);
+    const out = {};
+    r.rows.forEach(row => { out[row.key] = row.value; });
+    return out;
+  } catch (e) { return {}; }
+}
+
+// Build a personalized push for ONE device. Returns null when there's
+// nothing pressing to send.
+async function _pickSmartPushFor(deviceId, cfg) {
+  // Pull a few aggregate signals in parallel.
+  const queries = await Promise.allSettled([
+    // 0. Player profile + display name
+    pool.query(`SELECT pp.display_name, pp.balance FROM player_profiles pp WHERE pp.device_id = $1`, [deviceId]),
+    // 1. Pet mood
+    pool.query(`SELECT pet_name, level, last_visited_at FROM player_pet WHERE device_id = $1`, [deviceId]),
+    // 2. Streak (read from daily_scores last play date — proxy)
+    pool.query(`SELECT MAX(date) AS last_date FROM daily_scores WHERE device_id = $1`, [deviceId]),
+    // 3. Season pass unclaimed tiers count
+    pool.query(`SELECT xp, claimed_tiers FROM player_season_progress WHERE device_id = $1`, [deviceId]),
+    // 4. Friends played today, you didn't
+    pool.query(
+      `SELECT pp.display_name AS friend_name
+         FROM friendships f
+         JOIN player_daily_dyn_activity a ON
+           a.device_id = CASE WHEN f.device_a = $1 THEN f.device_b ELSE f.device_a END
+           AND a.played_date = (NOW() AT TIME ZONE 'Asia/Jerusalem')::date
+         LEFT JOIN player_profiles pp ON pp.device_id = a.device_id
+        WHERE ($1 = f.device_a OR $1 = f.device_b)
+          AND NOT EXISTS (SELECT 1 FROM player_daily_dyn_activity my
+                         WHERE my.device_id = $1
+                           AND my.played_date = (NOW() AT TIME ZONE 'Asia/Jerusalem')::date)
+        LIMIT 1`,
+      [deviceId]
+    ),
+    // 5. Tournament ending in 1-3 hours
+    pool.query(
+      `SELECT name FROM tournaments
+        WHERE status = 'live'
+          AND ends_at BETWEEN NOW() AND NOW() + INTERVAL '3 hours'
+        LIMIT 1`
+    ),
+    // 6. Daily Special not played today (we know if dynamic_board_scores has nothing for today)
+    // We just signal "play today's special" if hasn't played any dynamic game today.
+    pool.query(
+      `SELECT 1 FROM dynamic_board_scores
+        WHERE device_id = $1
+          AND updated_at >= (NOW() AT TIME ZONE 'Asia/Jerusalem')::date
+        LIMIT 1`,
+      [deviceId]
+    ),
+    // 7. Days since last play (for comeback detection)
+    pool.query(
+      `SELECT GREATEST(
+         COALESCE(EXTRACT(EPOCH FROM (NOW() - MAX(date)::timestamp))::int / 86400, 999),
+         0
+       ) AS days_since FROM daily_scores WHERE device_id = $1`,
+      [deviceId]
+    )
+  ]);
+  const [profileR, petR, streakR, seasonR, friendR, tourneyR, todayPlayR, comebackR] = queries;
+  const profile = (profileR.status === 'fulfilled' && profileR.value.rows[0]) || {};
+  const playerName = (profile.display_name || '').toString().slice(0, 20);
+  // Ranked signals — pick the highest-emotion ONE.
+  // Priority order: pet crying > streak danger > tournament > friend > comeback > BP > daily special > daily play
+  // 1. Pet crying (highest emotion — guilt)
+  if (petR.status === 'fulfilled' && petR.value.rows[0]) {
+    const pet = petR.value.rows[0];
+    const hoursAgo = pet.last_visited_at
+      ? (Date.now() - new Date(pet.last_visited_at).getTime()) / 3600000
+      : 999;
+    if (hoursAgo >= 48) {
+      const petName = (pet.pet_name || 'הפרח שלך').toString().slice(0, 20);
+      return {
+        reason: 'pet_crying',
+        title: '😢 ' + petName + ' עצוב',
+        body: petName + ' מחכה לך כבר ' + Math.floor(hoursAgo / 24) + ' ימים. בוא לבקר!',
+        url: '/'
+      };
+    }
+  }
+  // 2. Tournament ending soon
+  if (tourneyR.status === 'fulfilled' && tourneyR.value.rows[0]) {
+    return {
+      reason: 'tournament_ending',
+      title: '🏆 ' + tourneyR.value.rows[0].name + ' נגמר בקרוב!',
+      body: 'הטורניר מסתיים תוך 3 שעות — תפוס מקום בעוד מאוחר מדי',
+      url: '/'
+    };
+  }
+  // 3. Friend played today, you didn't
+  if (friendR.status === 'fulfilled' && friendR.value.rows[0]) {
+    const friendName = (friendR.value.rows[0].friend_name || 'חבר שלך').toString().slice(0, 20);
+    return {
+      reason: 'friend_played',
+      title: '👥 ' + friendName + ' שיחק היום',
+      body: 'שחק היום כדי שתקבלו את הבונוס המשותף — 100💎 לשניכם',
+      url: '/'
+    };
+  }
+  // 4. Streak danger (last play yesterday, not today)
+  if (streakR.status === 'fulfilled' && streakR.value.rows[0]) {
+    const lastDate = streakR.value.rows[0].last_date;
+    if (lastDate) {
+      const lastIso = lastDate.toISOString().slice(0, 10);
+      const todayIsr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' });
+      const yesterdayIsr = (function() {
+        const d = new Date();
+        d.setDate(d.getDate() - 1);
+        return d.toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' });
+      })();
+      if (lastIso === yesterdayIsr) {
+        return {
+          reason: 'streak_danger',
+          title: '🔥 שמור על הרצף שלך!',
+          body: (playerName ? playerName + ', שיחקת אתמול אבל עוד לא היום' : 'שיחקת אתמול אבל עוד לא היום') + ' — אל תאבד את הרצף',
+          url: '/'
+        };
+      }
+    }
+  }
+  // 5. BP unclaimed tiers (5+ rewards waiting)
+  if (seasonR.status === 'fulfilled' && seasonR.value.rows[0]) {
+    const sxp = parseInt(seasonR.value.rows[0].xp, 10) || 0;
+    const claimedArr = Array.isArray(seasonR.value.rows[0].claimed_tiers) ? seasonR.value.rows[0].claimed_tiers : [];
+    // Approximate current tier from xp (rough, won't be exact but close enough).
+    const approxTier = Math.min(20, Math.floor(Math.sqrt(sxp / 40)));
+    const unclaimed = approxTier - claimedArr.length;
+    if (unclaimed >= 5) {
+      return {
+        reason: 'bp_unclaimed',
+        title: '🎖 יש לך ' + unclaimed + ' פרסי Battle Pass לקבל',
+        body: 'תפתח את האפליקציה ותאסוף את כל הפרסים שמחכים לך',
+        url: '/'
+      };
+    }
+  }
+  // 6. Comeback (3+ days away)
+  if (comebackR.status === 'fulfilled' && comebackR.value.rows[0]) {
+    const daysSince = parseInt(comebackR.value.rows[0].days_since, 10) || 0;
+    if (daysSince >= 3 && daysSince <= 30) {
+      return {
+        reason: 'comeback',
+        title: '👋 ברוך שובך!',
+        body: 'שמחים לראות אותך חזרה. יש לוחות חדשים + פרסי קאמבק ממתינים',
+        url: '/'
+      };
+    }
+  }
+  // 7. Daily special not played today (after 14:00 Israel time)
+  if (todayPlayR.status === 'fulfilled' && !todayPlayR.value.rows.length) {
+    const israelHour = parseInt(new Date().toLocaleString('en-US', { timeZone: 'Asia/Jerusalem', hour: '2-digit', hour12: false }), 10);
+    if (israelHour >= 14) {
+      return {
+        reason: 'daily_special',
+        title: '🌟 הלוח של היום מחכה',
+        body: 'משחק אחד = ×3 XP. תפיסה מהירה לפני שהיום נגמר',
+        url: '/'
+      };
+    }
+  }
+  // Nothing pressing to send.
+  return null;
+}
+
+// Periodic scheduler: scan all subscribed devices, pick + send one push each.
+async function _runSmartPushScan() {
+  try {
+    const cfg = await _loadSmartPushConfig();
+    if (cfg.smart_push_enabled === 'false') return;
+    // Hour gate (Asia/Jerusalem).
+    const startHour = parseInt(cfg.smart_push_hour_start || '9', 10) || 9;
+    const endHour = parseInt(cfg.smart_push_hour_end || '22', 10) || 22;
+    const israelHour = parseInt(new Date().toLocaleString('en-US', { timeZone: 'Asia/Jerusalem', hour: '2-digit', hour12: false }), 10);
+    if (israelHour < startHour || israelHour >= endHour) {
+      // Quiet hours — skip this scan.
+      return;
+    }
+    const cooldownHours = parseInt(cfg.smart_push_cooldown_hours || '12', 10) || 12;
+    const batchSize = Math.min(2000, parseInt(cfg.smart_push_batch_size || '500', 10) || 500);
+    // Find subscribed devices whose last push was more than cooldown hours ago
+    // (or never had a push sent). Skip ones we tried in the last 30 min.
+    const candidatesR = await pool.query(
+      `SELECT DISTINCT ps.device_id
+         FROM push_subscriptions ps
+         LEFT JOIN player_push_state pps ON pps.device_id = ps.device_id
+        WHERE (pps.last_sent_at IS NULL OR pps.last_sent_at < NOW() - ($1 || ' hours')::interval)
+          AND (pps.last_scan_at IS NULL OR pps.last_scan_at < NOW() - INTERVAL '25 minutes')
+        LIMIT $2`,
+      [String(cooldownHours), batchSize]
+    ).catch(() => ({ rows: [] }));
+    const candidates = candidatesR.rows;
+    if (!candidates.length) return;
+    let sentCount = 0;
+    let scannedCount = 0;
+    for (const c of candidates) {
+      scannedCount++;
+      try {
+        const push = await _pickSmartPushFor(c.device_id, cfg);
+        // Always mark as scanned to spread the load on next tick.
+        await pool.query(
+          `INSERT INTO player_push_state (device_id, last_scan_at) VALUES ($1, NOW())
+           ON CONFLICT (device_id) DO UPDATE SET last_scan_at = NOW(), updated_at = NOW()`,
+          [c.device_id]
+        );
+        if (!push) continue;
+        await sendPushToDevice(c.device_id, {
+          title: push.title,
+          body: push.body,
+          tag: 'smart-' + push.reason,
+          data: { url: push.url || '/', reason: push.reason }
+        });
+        await pool.query(
+          `UPDATE player_push_state
+              SET last_sent_at = NOW(),
+                  last_send_reason = $1,
+                  total_sent = total_sent + 1,
+                  updated_at = NOW()
+            WHERE device_id = $2`,
+          [push.reason, c.device_id]
+        );
+        sentCount++;
+      } catch (e) {
+        // Per-device failures don't abort the scan.
+      }
+    }
+    if (sentCount > 0) {
+      console.log(`[smart-push] scan: ${sentCount}/${scannedCount} sent`);
+    }
+  } catch (e) {
+    console.error('[smart-push] scan error', e.message);
+  }
+}
+
+// Start the scheduler on boot. Runs every smart_push_scan_minutes minutes.
+function _startSmartPushScheduler() {
+  // Initial delay 60s so server fully boots before first scan.
+  setTimeout(async function tick() {
+    try {
+      const cfg = await _loadSmartPushConfig();
+      const scanMin = Math.max(10, parseInt(cfg.smart_push_scan_minutes || '30', 10) || 30);
+      await _runSmartPushScan();
+      setTimeout(tick, scanMin * 60 * 1000);
+    } catch (e) {
+      // On error, retry in 30 min.
+      setTimeout(tick, 30 * 60 * 1000);
+    }
+  }, 60 * 1000);
+  console.log('[smart-push] scheduler started — first scan in 60s');
+}
+// Kick it off (web-push must already be configured; if not, sends become no-ops).
+_startSmartPushScheduler();
+
+// Admin/debug endpoint: preview what would be sent for a device right now.
+app.get('/api/smart-push/preview', async (req, res) => {
+  try {
+    const deviceId = (req.query.deviceId || '').toString().slice(0, 64);
+    if (!deviceId || deviceId.length < 8) return res.status(400).json({ error: 'bad_device' });
+    const cfg = await _loadSmartPushConfig();
+    const push = await _pickSmartPushFor(deviceId, cfg);
+    res.json({ ok: true, push: push || null });
+  } catch (e) {
+    console.error('GET /api/smart-push/preview', e);
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
+// ============================================================
 // Live Tournaments — stage 12 (May 2026)
 //
 // Scheduled prime-time events with a fixed window + top-N prize
@@ -8707,6 +8983,57 @@ if (ADMIN_PATH && ADMIN_PASSWORD) {
       res.json({ ok: true });
     } catch (e) {
       console.error('DELETE admin/bundles/:id', e);
+      res.status(500).json({ error: 'internal' });
+    }
+  });
+
+  // ============================================================
+  // Admin: Smart Push status + recent sends + manual scan trigger (stage 31)
+  // ============================================================
+  adminRouter.get('/api/smart-push/status', async (_req, res) => {
+    try {
+      const r = await pool.query(
+        `SELECT
+           (SELECT COUNT(*) FROM player_push_state WHERE last_sent_at IS NOT NULL) AS total_devices_ever,
+           (SELECT COUNT(*) FROM player_push_state WHERE last_sent_at > NOW() - INTERVAL '24 hours') AS sent_24h,
+           (SELECT COUNT(*) FROM player_push_state WHERE last_sent_at > NOW() - INTERVAL '7 days') AS sent_7d,
+           (SELECT COUNT(*) FROM push_subscriptions) AS subscribers`
+      );
+      const recentR = await pool.query(
+        `SELECT pps.device_id, pps.last_send_reason, pps.last_sent_at, pps.total_sent,
+                COALESCE(pp.display_name, 'אנונימי') AS name
+           FROM player_push_state pps
+           LEFT JOIN player_profiles pp ON pp.device_id = pps.device_id
+          WHERE pps.last_sent_at IS NOT NULL
+          ORDER BY pps.last_sent_at DESC LIMIT 30`
+      );
+      const reasonStatsR = await pool.query(
+        `SELECT last_send_reason AS reason, COUNT(*) AS cnt
+           FROM player_push_state
+           WHERE last_send_reason IS NOT NULL
+             AND last_sent_at > NOW() - INTERVAL '7 days'
+           GROUP BY last_send_reason
+           ORDER BY cnt DESC`
+      );
+      res.json({
+        ok: true,
+        stats: r.rows[0],
+        recent: recentR.rows,
+        reasonBreakdown: reasonStatsR.rows
+      });
+    } catch (e) {
+      console.error('GET admin/smart-push/status', e);
+      res.status(500).json({ error: 'internal' });
+    }
+  });
+
+  adminRouter.post('/api/smart-push/scan-now', async (_req, res) => {
+    try {
+      // Fire-and-forget manual scan.
+      _runSmartPushScan().catch(() => {});
+      res.json({ ok: true, message: 'Scan triggered in background' });
+    } catch (e) {
+      console.error('POST admin/smart-push/scan-now', e);
       res.status(500).json({ error: 'internal' });
     }
   });

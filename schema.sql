@@ -1165,6 +1165,42 @@ CREATE INDEX IF NOT EXISTS idx_skin_configurations_sort
   ON skin_configurations (sort_order, id);
 
 -- ============================================================
+-- Smart Notifications (Stage 31, May 2026)
+-- Server-side scheduler that picks WHO to push, WHEN to push, and
+-- WHY. Each scan: iterate subscribed devices → compute the highest-
+-- emotional-priority signal for that device → send ONE personalized
+-- push if the cooldown has elapsed.
+--
+-- Differs from Stage 10 (which is admin broadcast): this is auto-
+-- triggered + personalized per-device. Stage 10 still works for
+-- "send to everyone" announcements.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS player_push_state (
+  device_id           VARCHAR(64) PRIMARY KEY,
+  last_sent_at        TIMESTAMPTZ,
+  last_send_reason    VARCHAR(40),
+  total_sent          INT NOT NULL DEFAULT 0,
+  -- Tracks last-attempt-but-skipped time so we don't recompute too often.
+  last_scan_at        TIMESTAMPTZ,
+  created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_player_push_state_sent
+  ON player_push_state (last_sent_at DESC);
+
+-- 6 config keys.
+INSERT INTO game_config (key, value) VALUES ('smart_push_enabled',          'true') ON CONFLICT (key) DO NOTHING;
+-- Cooldown hours between auto-pushes per device.
+INSERT INTO game_config (key, value) VALUES ('smart_push_cooldown_hours',   '12')   ON CONFLICT (key) DO NOTHING;
+-- Allowed hours (Asia/Jerusalem) — don't spam at 3am.
+INSERT INTO game_config (key, value) VALUES ('smart_push_hour_start',       '9')    ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('smart_push_hour_end',         '22')   ON CONFLICT (key) DO NOTHING;
+-- Scan interval in minutes (server-side timer).
+INSERT INTO game_config (key, value) VALUES ('smart_push_scan_minutes',     '30')   ON CONFLICT (key) DO NOTHING;
+-- Max devices to scan per tick (cap to avoid scan stampedes at large scale).
+INSERT INTO game_config (key, value) VALUES ('smart_push_batch_size',       '500')  ON CONFLICT (key) DO NOTHING;
+
+-- ============================================================
 -- Lifetime Progression (Stage 30, May 2026)
 -- Call-of-Duty prestige pattern. NEVER resets between seasons.
 -- Levels 1-100, then "prestige" → reset to 1 with a ⭐ star.

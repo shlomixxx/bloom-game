@@ -72,6 +72,16 @@ export async function initDb() {
       created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )`,
+    // Stage 31 — Smart Notifications (full CREATE in schema.sql).
+    `CREATE TABLE IF NOT EXISTS player_push_state (
+      device_id           VARCHAR(64) PRIMARY KEY,
+      last_sent_at        TIMESTAMPTZ,
+      last_send_reason    VARCHAR(40),
+      total_sent          INT NOT NULL DEFAULT 0,
+      last_scan_at        TIMESTAMPTZ,
+      created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`,
     // Stage 30 — Lifetime Progression (full CREATE in schema.sql).
     `CREATE TABLE IF NOT EXISTS player_lifetime_state (
       device_id            VARCHAR(64) PRIMARY KEY,
