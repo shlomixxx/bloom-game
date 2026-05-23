@@ -1694,6 +1694,29 @@
     </div>
   </section>
 
+  <!-- 🛡⚔️ Guild Wars (stage 37) -->
+  <section id="guild-wars-section" style="margin-bottom:12px">
+    <h2>🛡⚔️ מלחמות קלאנים / Guild Wars <button class="tip-btn" data-tip-text="<strong>🛡⚔️ Guild Wars</strong><br>Clash Royale pattern — clan-vs-clan weekly war.<div class=&quot;tip-example&quot;>💡 <strong>למה זה ממכר</strong>: שני קלאנים מותאמים אוטומטית כל ~7 ימים. כל משחק שכל החברים משחקים במהלך השבוע = ציון לקלאן. בסוף השבוע — הקלאן עם הציון הגבוה זוכה ב-500💎 לחבר, המפסיד מקבל 100💎 (פרס נחמה).<br><br>📊 <strong>השפעה אמיתית</strong> (Clash Royale): boosted clan retention 3-5x at launch. המנגנון של ״הקלאן שלי תלוי בי״ הופך solo casual לאיש team חיוני.<br><br>📊 <strong>איך זה עובד</strong>:<br>• matchmaker רץ כל 6 שעות, מזווג קלאנים עם 3+ חברים פעילים שאין להם כרגע מלחמה<br>• כל <code>/api/guilds/contribute</code> אוטומטית מוסיף גם לציון המלחמה<br>• ב-end-at, פונקציית finalize מסיימת + push notif לכל החברים<br>• השחקן רואה אריח 🛡⚔️ בבית רק כשיש מלחמה פעילה או פרס לאסוף<br><br>📊 ערוך 6 keys ב-game_config: <code>guild_wars_enabled</code>, <code>guild_wars_duration_days</code>, <code>guild_wars_min_members_active</code>, <code>guild_wars_winner_reward_per_member</code>, <code>guild_wars_loser_reward_per_member</code>, <code>guild_wars_min_games_to_claim</code>.</div>">?</button></h2>
+    <div style="padding:12px 16px;background:var(--card);border-radius:10px;margin-top:8px">
+      <div style="font-size:11px;color:var(--muted);margin-bottom:10px">מערכת מלחמות אוטומטית בין קלאנים. matchmaker רץ כל 6 שעות. <strong>שינוי הגדרות → רענן את האפליקציה במכשיר אחר → השחקנים רואים מיד.</strong></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+        <div class="rewards-grid" data-keys="guild_wars_enabled,guild_wars_duration_days,guild_wars_min_members_active"></div>
+        <div class="rewards-grid" data-keys="guild_wars_winner_reward_per_member,guild_wars_loser_reward_per_member,guild_wars_min_games_to_claim"></div>
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:10px;align-items:center">
+        <button id="guild-wars-match-now" class="btn sm" style="flex:1;background:#9FE1CB;color:#1C1A18;font-weight:700">🔄 צור זיווגי מלחמה עכשיו</button>
+        <button id="guild-wars-refresh" class="btn-secondary" style="padding:6px 12px;font-size:11px">↻ רענן רשימה</button>
+      </div>
+      <div id="guild-wars-status" style="font-size:11px;color:var(--muted);margin-bottom:10px;min-height:18px"></div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+        <div style="font-size:13px;font-weight:700;color:var(--gold)">⚔️ מלחמות (100 אחרונות)</div>
+      </div>
+      <div id="guild-wars-list" style="display:flex;flex-direction:column;gap:6px;font-size:12px;max-height:400px;overflow-y:auto">
+        <div style="color:var(--muted);padding:10px;text-align:center">⏳ טוען...</div>
+      </div>
+    </div>
+  </section>
+
   <!-- 📔 Tile Collection Album (stage 29) -->
   <section id="album-section" style="margin-bottom:12px">
     <h2>📔 אלבום אריחים <button class="tip-btn" data-tip-text="<strong>📔 Tile Collection Album</strong><br>Genshin-style — אוסף ויזואלי של 8 דרגות × כל הלוחות הדינמיים.<div class=&quot;tip-example&quot;>💡 <strong>למה זה ממכר</strong>: completionist drive חזק. שחקן רואה אלבום עם הרבה תאים, רוצה למלא את כולם. מסכי "אוסף שלם" עם פרסים נדיבים — כל זה השפיע על מיליארדי דולרים ב-Genshin.<br><br>📊 <strong>2 סוגי פרסים</strong>:<br>1. השלמת לוח (8 דרגות על לוח אחד) → 500💎<br>2. השלמת דרגה (אותה דרגה על כל הלוחות) → 200💎<br><br>📊 כל game-over מקליט אוטומטית את ה-tier הגבוה שהשחקן הגיע אליו על לוח דינמי.</div>">?</button></h2>
@@ -2939,6 +2962,14 @@
     guild_daily_goal_crowns: 'יעד יומי בכתרים (tier 8) לכל הקלאן יחד.<div class="tip-example">📊 ברירת מחדל 30 כתרים. ערכים: 10-100.<br>💡 צריך להיות אפשרי-בלי-קל. עם 30 חברים שכל אחד תופס 1 כתר ביום = 30 — מושלם!<br>📊 נמוך מדי (10) = משיגים תוך 1-2 שעות, אין fomo. גבוה מדי (100) = רוב הימים לא משיגים, התסכול הורג.</div>',
     guild_daily_reward_per_member: 'פרס 💎 לכל חבר כשהיעד היומי הושלם.<div class="tip-example">📊 ברירת מחדל 200💎. ערכים: 100-500.<br>💡 צריך להיות פרס משמעותי מספיק שהשחקן יחזור לקחת אותו. 200 = שחקן פעיל מרוויח 6,000💎/חודש מפרסי קלאן בלבד — סופר משתלם.<br>📊 שחקן ב-3 קלאנים שונים (אם נאפשר ב-v2) יכול להרוויח 600💎/יום מקלאנים בלבד. v1 מאפשר רק קלאן אחד.</div>',
 
+    // ---- Guild Wars (stage 37) ----
+    guild_wars_enabled: 'הפעלת מערכת מלחמות קלאנים.<div class="tip-example">📊 ברירת מחדל פעיל. Clash Royale pattern — clan-vs-clan שבועי. boosted retention 3-5x.<br>💡 כיבוי = matchmaker עוצר, מלחמות פעילות לא מסתיימות אוטומטית (אבל הן יישבירו ב-finalize ידני). שחקנים לא יראו את האריח 🛡⚔️.</div>',
+    guild_wars_duration_days: 'אורך מלחמה בימים.<div class="tip-example">📊 ברירת מחדל 7 ימים (שבוע). ערכים: 3-14.<br>💡 7 ימים = ה-standard ב-Clash Royale. נמוך מדי (3) = שחקנים שלא משחקים יומיים מפסידים. גבוה מדי (14) = נמשך מדי, FOMO דועך.<br>📊 3 ימים = ספרינט אינטנסיבי, מומלץ ל-events. 7 ימים = מרתון חברי, ה-default.</div>',
+    guild_wars_min_members_active: 'מינימום חברים כדי לזכות בהשתתפות במלחמה.<div class="tip-example">📊 ברירת מחדל 3 חברים. ערכים: 2-10.<br>💡 נמוך מדי (1) = קלאן יחיד יוכל להתחרות, חוסר איזון. גבוה מדי (10) = קלאנים קטנים לא יראו מלחמות לעולם.<br>📊 3 = sweet spot, מבטיח שיש לפחות תחרות מינימלית.</div>',
+    guild_wars_winner_reward_per_member: 'פרס 💎 לכל חבר בקלאן המנצח.<div class="tip-example">📊 ברירת מחדל 500💎. ערכים: 200-2000.<br>💡 צריך להיות פרס מספיק גדול שניצחון מרגיש משמעותי. 500💎 = שחקן פעיל בקלאן חזק מרוויח 2,000💎/חודש בנוסף ליעדים יומיים.<br>📊 גבוה מדי = inflation של 💎 בכלכלה. 500 הוא איזון טוב.</div>',
+    guild_wars_loser_reward_per_member: 'פרס 💎 לכל חבר בקלאן המפסיד (פרס נחמה).<div class="tip-example">📊 ברירת מחדל 100💎. ערכים: 50-500.<br>💡 חייב להיות משהו — אחרת שחקנים שמפסידים מרגישים שזרקו את הזמן. עדיין צריך להיות נמוך משמעותית מפרס הניצחון כדי שהמוטיבציה לנצח תישאר.<br>📊 5:1 יחס מנצח:מפסיד הוא standard. 500:100 = 5:1, מומלץ.</div>',
+    guild_wars_min_games_to_claim: 'מינימום משחקים שהשחקן צריך לשחק במלחמה כדי לקבל פרס.<div class="tip-example">📊 ברירת מחדל 1 משחק. ערכים: 0-10.<br>💡 0 = כל מי שהיה בקלאן יקבל, גם אם לא תרם — גרוע (פסיביים מנצלים פעילים). גבוה מדי (10) = שחקנים מזדמנים לא יקבלו, מתסכל.<br>📊 1 משחק = "תרמת משהו" — סף סביר. 3-5 = "תרמת באמת" — דורש פעילות יומית.</div>',
+
     // ---- Tile Collection Album (stage 29) ----
     album_enabled: 'הפעלת אלבום האריחים.<div class="tip-example">📊 ברירת מחדל פעיל. <strong>completionist drive</strong> חזק — מסך אוסף ויזואלי עם פרסים על השלמות.<br>💡 כל game-over על לוח דינמי מקליט אוטומטית את הtier הגבוה ביותר. השחקן רואה גרידים מתמלאים והפרסים מחכים בקצוות.</div>',
     album_show_on_home: 'הצגת ה-tile של האלבום בבית.<div class="tip-example">📊 ברירת מחדל פעיל. ה-tile מציג את אחוז ההשלמה + תגית עם מספר הפרסים המחכים.<br>💡 כיבוי = ה-data ימשיך להיאסף, רק הtile מוסתר.</div>',
@@ -3796,7 +3827,80 @@
     loadRivalryStats();
     loadHomeVariant();
     loadSpinStats();
+    loadGuildWars();
   }
+
+  // ============================================================
+  // 🛡⚔️ Stage 37 — Guild Wars admin
+  // ============================================================
+  async function loadGuildWars() {
+    var host = $('guild-wars-list');
+    if (!host) return;
+    try {
+      var d = await api('/guild-wars');
+      if (!d || !d.ok) { host.innerHTML = '<div style="color:var(--muted);padding:10px;text-align:center">שגיאת טעינה</div>'; return; }
+      var wars = d.wars || [];
+      if (!wars.length) { host.innerHTML = '<div style="color:var(--muted);padding:10px;text-align:center">אין מלחמות עדיין</div>'; return; }
+      host.innerHTML = wars.map(function(w) {
+        var statusBadge = '';
+        if (w.status === 'active') statusBadge = '<span style="padding:2px 8px;background:#9FE1CB;color:#1C1A18;border-radius:6px;font-size:10px;font-weight:700">⚔️ פעיל</span>';
+        else if (w.status === 'finalized') statusBadge = '<span style="padding:2px 8px;background:#FAC775;color:#1C1A18;border-radius:6px;font-size:10px;font-weight:700">✓ הסתיים</span>';
+        else statusBadge = '<span style="padding:2px 8px;background:rgba(255,255,255,0.1);color:var(--muted);border-radius:6px;font-size:10px">' + w.status + '</span>';
+        var winnerStr = '';
+        if (w.winner_guild_id === w.guild_a_id) winnerStr = ' · 🏆 ' + (w.guild_a_emoji || '') + ' ' + w.guild_a_name;
+        else if (w.winner_guild_id === w.guild_b_id) winnerStr = ' · 🏆 ' + (w.guild_b_emoji || '') + ' ' + w.guild_b_name;
+        else if (w.status === 'finalized') winnerStr = ' · 🤝 תיקו';
+        var actionBtn = w.status === 'active'
+          ? '<button class="btn sm" style="font-size:10px;padding:4px 8px" onclick="finalizeWar(' + w.id + ')">💰 סיים עכשיו</button>'
+          : '';
+        return '<div style="padding:10px;background:var(--bg);border-radius:8px;border:1px solid var(--border)">' +
+          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">' +
+            '<div style="font-weight:700">#' + w.id + ' ' + statusBadge + winnerStr + '</div>' +
+            actionBtn +
+          '</div>' +
+          '<div style="font-size:11px">' +
+            (w.guild_a_emoji || '🛡') + ' <strong>' + w.guild_a_name + '</strong>: ' + Number(w.guild_a_score).toLocaleString() + ' נק׳ (' + w.guild_a_games + ' מ׳)' +
+            ' &nbsp;⚔️ ' +
+            (w.guild_b_emoji || '⚔️') + ' <strong>' + w.guild_b_name + '</strong>: ' + Number(w.guild_b_score).toLocaleString() + ' נק׳ (' + w.guild_b_games + ' מ׳)' +
+          '</div>' +
+          '<div style="font-size:10px;opacity:0.6;margin-top:2px">' + new Date(w.starts_at).toLocaleString('he-IL') + ' → ' + new Date(w.ends_at).toLocaleString('he-IL') + '</div>' +
+        '</div>';
+      }).join('');
+    } catch (e) {
+      host.innerHTML = '<div style="color:var(--muted);padding:10px;text-align:center">שגיאת רשת</div>';
+    }
+    var refresh = $('guild-wars-refresh');
+    if (refresh) refresh.onclick = function() { loadGuildWars(); };
+    var matchBtn = $('guild-wars-match-now');
+    if (matchBtn && !matchBtn.dataset.wired) {
+      matchBtn.dataset.wired = '1';
+      matchBtn.onclick = async function() {
+        matchBtn.disabled = true;
+        var prev = matchBtn.textContent;
+        matchBtn.textContent = '⏳ מזווג...';
+        try {
+          var r = await api('/guild-wars/match-now', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+          var status = $('guild-wars-status');
+          if (status) status.textContent = (r && r.ok) ? ('✓ נוצרו ' + r.matched + ' מלחמות חדשות') : '⚠ שגיאה';
+          loadGuildWars();
+        } catch (e) {
+          var status2 = $('guild-wars-status');
+          if (status2) status2.textContent = '⚠ שגיאת רשת';
+        } finally {
+          matchBtn.disabled = false;
+          matchBtn.textContent = prev;
+        }
+      };
+    }
+  }
+  window.finalizeWar = async function(warId) {
+    if (!confirm('לסיים את המלחמה עכשיו? כל החברים שתרמו יקבלו את הפרס שלהם.')) return;
+    try {
+      var r = await api('/guild-wars/' + warId + '/finalize', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+      if (r && r.ok) loadGuildWars();
+      else alert('שגיאה');
+    } catch (e) { alert('שגיאת רשת'); }
+  };
 
   async function loadSpinStats() {
     var totEl = $('spin-stat-total');

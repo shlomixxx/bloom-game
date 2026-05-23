@@ -6802,13 +6802,16 @@ app.post('/api/guilds/contribute', requireDeviceAuth, async (req, res) => {
         );
         justCompleted = true;
       }
+      // Stage 37 — Guild Wars contribution (best-effort, same txn).
+      const warContribId = await _maybeContributeToWar(guildId, deviceId, sc, client);
       await client.query('COMMIT');
       res.json({
         ok: true,
         guildId,
         newProgress: progR.rows[0] ? progR.rows[0].goal_progress : cr,
         goal: progR.rows[0] ? progR.rows[0].goal_target : goalTarget,
-        justCompleted
+        justCompleted,
+        warContribId
       });
     } catch (err) {
       await client.query('ROLLBACK');
@@ -6910,6 +6913,321 @@ app.get('/api/guilds/leaderboard', async (req, res) => {
     res.status(500).json({ error: 'internal' });
   }
 });
+
+// ============================================================
+// Stage 37 — Guild Wars (clan-vs-clan competition, May 2026)
+// Auto-matched weekly head-to-head between two guilds. Every
+// game played by a member contributes to their guild's war pool.
+// Winner takes the larger gem reward; loser still gets consolation.
+// Clash Royale pattern — boosted guild retention 3-5x.
+// ============================================================
+async function _activeWarForGuild(guildId) {
+  // Returns the active war row for a guild, or null.
+  const r = await pool.query(
+    `SELECT * FROM guild_wars
+      WHERE (guild_a_id = $1 OR guild_b_id = $1)
+        AND status = 'active'
+        AND ends_at > NOW()
+      ORDER BY id DESC LIMIT 1`,
+    [guildId]
+  );
+  return r.rows[0] || null;
+}
+
+async function _maybeContributeToWar(guildId, deviceId, score, client) {
+  // Called inside the existing /guilds/contribute transaction so we never
+  // pay out without recording activity. Best-effort — if no active war,
+  // silently no-ops. Uses the supplied client so we stay in the same txn.
+  try {
+    const warR = await client.query(
+      `SELECT id, guild_a_id, guild_b_id, ends_at
+         FROM guild_wars
+        WHERE (guild_a_id = $1 OR guild_b_id = $1)
+          AND status = 'active'
+          AND ends_at > NOW()
+        ORDER BY id DESC LIMIT 1
+        FOR UPDATE`,
+      [guildId]
+    );
+    if (!warR.rows[0]) return null;
+    const war = warR.rows[0];
+    const isA = (war.guild_a_id === guildId);
+    const scoreCol = isA ? 'guild_a_score' : 'guild_b_score';
+    const gamesCol = isA ? 'guild_a_games' : 'guild_b_games';
+    await client.query(
+      `UPDATE guild_wars SET ${scoreCol} = ${scoreCol} + $1, ${gamesCol} = ${gamesCol} + 1 WHERE id = $2`,
+      [score, war.id]
+    );
+    await client.query(
+      `INSERT INTO guild_war_contributions (war_id, device_id, guild_id, score_contribution, games_count, last_contrib_at)
+       VALUES ($1, $2, $3, $4, 1, NOW())
+       ON CONFLICT (war_id, device_id) DO UPDATE
+         SET score_contribution = guild_war_contributions.score_contribution + EXCLUDED.score_contribution,
+             games_count = guild_war_contributions.games_count + 1,
+             last_contrib_at = NOW()`,
+      [war.id, deviceId, guildId, score]
+    );
+    return war.id;
+  } catch (e) {
+    console.warn('[guild war contribute] silent fail', e.message);
+    return null;
+  }
+}
+
+async function _finalizeGuildWar(warId) {
+  // Idempotent. Picks winner, credits each contributing member.
+  try {
+    const r = await pool.query(
+      `SELECT * FROM guild_wars WHERE id = $1`,
+      [warId]
+    );
+    const war = r.rows[0];
+    if (!war || war.status === 'finalized') return;
+    if (war.ends_at > new Date()) return; // not ended yet
+    const cfg = await _loadGuildConfig();
+    const winnerReward = parseInt(cfg.guild_wars_winner_reward_per_member || '500', 10) || 500;
+    const loserReward = parseInt(cfg.guild_wars_loser_reward_per_member || '100', 10) || 100;
+    const minGames = parseInt(cfg.guild_wars_min_games_to_claim || '1', 10) || 1;
+    // Winner determination
+    let winnerId = null;
+    if (Number(war.guild_a_score) > Number(war.guild_b_score)) winnerId = war.guild_a_id;
+    else if (Number(war.guild_b_score) > Number(war.guild_a_score)) winnerId = war.guild_b_id;
+    // Tie → both get loser reward (no winner)
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(
+        `UPDATE guild_wars SET status = 'finalized', winner_guild_id = $1, finalized_at = NOW()
+          WHERE id = $2 AND status = 'active'`,
+        [winnerId, warId]
+      );
+      await client.query('COMMIT');
+    } finally {
+      client.release();
+    }
+    // Send push notifications to all contributing members (best-effort, async).
+    setImmediate(async () => {
+      try {
+        const contribs = await pool.query(
+          `SELECT device_id, guild_id, games_count FROM guild_war_contributions WHERE war_id = $1 AND games_count >= $2`,
+          [warId, minGames]
+        );
+        for (const c of contribs.rows) {
+          const isWinner = winnerId && (c.guild_id === winnerId);
+          const reward = isWinner ? winnerReward : loserReward;
+          const title = isWinner ? '🏆 ניצחתם במלחמת קלאנים!' : '⚔️ מלחמת הקלאנים הסתיימה';
+          const body = isWinner ? `הקלאן שלך ניצח! +${reward}💎 מחכים לאסוף.` : `+${reward}💎 פרס נחמה מחכה לאסוף.`;
+          try { sendPushToDevice(c.device_id, { title, body, url: '/?action=guild', tag: 'guild-war-' + warId }); } catch (e) {}
+        }
+      } catch (e) { console.warn('[guild war push]', e.message); }
+    });
+  } catch (e) {
+    console.error('_finalizeGuildWar', e);
+  }
+}
+
+async function _runGuildWarMatchmaker() {
+  // Pair active guilds into wars. Triggered weekly (Sunday 00:00 Asia/Jerusalem)
+  // OR on-demand via admin endpoint.
+  try {
+    const cfg = await _loadGuildConfig();
+    if (cfg.guild_wars_enabled === 'false') return { matched: 0 };
+    const minActive = parseInt(cfg.guild_wars_min_members_active || '3', 10) || 3;
+    const durationDays = parseInt(cfg.guild_wars_duration_days || '7', 10) || 7;
+    // Find all guilds that DON'T have an active war + have enough active members.
+    const gR = await pool.query(
+      `SELECT g.id, g.member_count, g.total_score_alltime
+         FROM guilds g
+         LEFT JOIN guild_wars w ON (
+           (w.guild_a_id = g.id OR w.guild_b_id = g.id) AND w.status = 'active' AND w.ends_at > NOW()
+         )
+        WHERE w.id IS NULL
+          AND g.member_count >= $1
+        ORDER BY g.total_score_alltime DESC`,
+      [minActive]
+    );
+    const eligible = gR.rows;
+    if (eligible.length < 2) return { matched: 0 };
+    // Pair adjacent guilds (similar power level → fair matches).
+    let matched = 0;
+    const starts = new Date();
+    const ends = new Date(starts.getTime() + durationDays * 86400000);
+    for (let i = 0; i + 1 < eligible.length; i += 2) {
+      const a = eligible[i];
+      const b = eligible[i + 1];
+      await pool.query(
+        `INSERT INTO guild_wars (guild_a_id, guild_b_id, starts_at, ends_at)
+         VALUES ($1, $2, $3, $4)`,
+        [a.id, b.id, starts.toISOString(), ends.toISOString()]
+      );
+      matched++;
+    }
+    return { matched };
+  } catch (e) {
+    console.error('_runGuildWarMatchmaker', e);
+    return { matched: 0 };
+  }
+}
+
+app.get('/api/guilds/war', async (req, res) => {
+  try {
+    const deviceId = String(req.query.deviceId || '').slice(0, 64);
+    if (deviceId.length < 8) return res.status(400).json({ error: 'bad_device' });
+    const cfg = await _loadGuildConfig();
+    if (cfg.guild_wars_enabled === 'false') return res.json({ ok: true, enabled: false });
+    const memR = await pool.query(`SELECT guild_id FROM guild_members WHERE device_id = $1`, [deviceId]);
+    if (!memR.rows[0]) return res.json({ ok: true, enabled: true, inGuild: false });
+    const guildId = memR.rows[0].guild_id;
+    // Auto-finalize any expired wars for this guild before reading state.
+    const expiredR = await pool.query(
+      `SELECT id FROM guild_wars
+        WHERE (guild_a_id = $1 OR guild_b_id = $1) AND status = 'active' AND ends_at <= NOW()`,
+      [guildId]
+    );
+    for (const row of expiredR.rows) await _finalizeGuildWar(row.id);
+    // Active war
+    const war = await _activeWarForGuild(guildId);
+    let activeWar = null;
+    if (war) {
+      const otherGuildId = (war.guild_a_id === guildId) ? war.guild_b_id : war.guild_a_id;
+      const otherR = await pool.query(`SELECT id, code, name, emoji, member_count FROM guilds WHERE id = $1`, [otherGuildId]);
+      const myR = await pool.query(`SELECT id, code, name, emoji, member_count FROM guilds WHERE id = $1`, [guildId]);
+      const myContribR = await pool.query(
+        `SELECT score_contribution, games_count FROM guild_war_contributions WHERE war_id = $1 AND device_id = $2`,
+        [war.id, deviceId]
+      );
+      const myContrib = myContribR.rows[0] || { score_contribution: 0, games_count: 0 };
+      // Top contributors
+      const topR = await pool.query(
+        `SELECT gwc.device_id, gwc.score_contribution, gwc.games_count,
+                COALESCE(pp.display_name, 'אנונימי') AS name
+           FROM guild_war_contributions gwc
+           LEFT JOIN player_profiles pp ON pp.device_id = gwc.device_id
+          WHERE gwc.war_id = $1 AND gwc.guild_id = $2
+          ORDER BY gwc.score_contribution DESC LIMIT 10`,
+        [war.id, guildId]
+      );
+      activeWar = {
+        id: war.id,
+        myGuild: { ...myR.rows[0], score: Number(war.guild_a_id === guildId ? war.guild_a_score : war.guild_b_score), games: war.guild_a_id === guildId ? war.guild_a_games : war.guild_b_games },
+        otherGuild: { ...otherR.rows[0], score: Number(war.guild_a_id === guildId ? war.guild_b_score : war.guild_a_score), games: war.guild_a_id === guildId ? war.guild_b_games : war.guild_a_games },
+        startsAt: war.starts_at,
+        endsAt: war.ends_at,
+        msLeft: Math.max(0, new Date(war.ends_at).getTime() - Date.now()),
+        myContribution: { score: Number(myContrib.score_contribution), games: myContrib.games_count },
+        topContributors: topR.rows.map(r => ({ deviceId: r.device_id, name: r.name, score: Number(r.score_contribution), games: r.games_count }))
+      };
+    }
+    // Unclaimed reward — most recent finalized war I haven't claimed
+    const unclaimedR = await pool.query(
+      `SELECT gw.id, gw.winner_guild_id, gw.guild_a_id, gw.guild_b_id, gw.finalized_at, gwc.games_count, gwc.guild_id
+         FROM guild_wars gw
+         JOIN guild_war_contributions gwc ON gwc.war_id = gw.id
+         LEFT JOIN guild_war_claims gcl ON gcl.war_id = gw.id AND gcl.device_id = $1
+        WHERE gw.status = 'finalized'
+          AND gwc.device_id = $1
+          AND gwc.games_count >= COALESCE((SELECT value::int FROM game_config WHERE key='guild_wars_min_games_to_claim'), 1)
+          AND gcl.war_id IS NULL
+        ORDER BY gw.finalized_at DESC LIMIT 1`,
+      [deviceId]
+    );
+    let unclaimed = null;
+    if (unclaimedR.rows[0]) {
+      const u = unclaimedR.rows[0];
+      const isWinner = u.winner_guild_id && (u.guild_id === u.winner_guild_id);
+      const rewardKey = isWinner ? 'guild_wars_winner_reward_per_member' : 'guild_wars_loser_reward_per_member';
+      const reward = parseInt(cfg[rewardKey] || (isWinner ? '500' : '100'), 10);
+      unclaimed = { warId: u.id, isWinner, reward, finalizedAt: u.finalized_at };
+    }
+    res.json({ ok: true, enabled: true, inGuild: true, activeWar, unclaimed });
+  } catch (e) {
+    console.error('GET /api/guilds/war', e);
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
+app.post('/api/guilds/war/claim', requireDeviceAuth, async (req, res) => {
+  try {
+    const deviceId = req.deviceId;
+    const { warId } = req.body || {};
+    const wid = parseInt(warId, 10);
+    if (!wid) return res.status(400).json({ error: 'bad_war_id' });
+    if (!checkRateLimit('guild_war_claim', deviceId, 10, 60 * 60 * 1000)) {
+      return res.status(429).json({ error: 'rate_limited' });
+    }
+    const cfg = await _loadGuildConfig();
+    const minGames = parseInt(cfg.guild_wars_min_games_to_claim || '1', 10) || 1;
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      // Verify eligibility: war finalized + I contributed enough games + haven't claimed.
+      const eligR = await client.query(
+        `SELECT gw.winner_guild_id, gw.guild_a_id, gw.guild_b_id, gwc.games_count, gwc.guild_id
+           FROM guild_wars gw
+           JOIN guild_war_contributions gwc ON gwc.war_id = gw.id
+          WHERE gw.id = $1 AND gw.status = 'finalized' AND gwc.device_id = $2
+          FOR UPDATE`,
+        [wid, deviceId]
+      );
+      if (!eligR.rows[0]) {
+        await client.query('ROLLBACK');
+        return res.json({ ok: false, reason: 'not_eligible' });
+      }
+      const e = eligR.rows[0];
+      if (e.games_count < minGames) {
+        await client.query('ROLLBACK');
+        return res.json({ ok: false, reason: 'min_games' });
+      }
+      const isWinner = e.winner_guild_id && (e.guild_id === e.winner_guild_id);
+      const reward = isWinner
+        ? (parseInt(cfg.guild_wars_winner_reward_per_member || '500', 10) || 500)
+        : (parseInt(cfg.guild_wars_loser_reward_per_member || '100', 10) || 100);
+      // Atomic claim insert + balance credit. Insert-or-fail handles double-claim.
+      const insR = await client.query(
+        `INSERT INTO guild_war_claims (war_id, device_id, claimed_at, reward_gems)
+           VALUES ($1, $2, NOW(), $3)
+         ON CONFLICT (war_id, device_id) DO NOTHING
+         RETURNING device_id`,
+        [wid, deviceId, reward]
+      );
+      if (!insR.rows[0]) {
+        await client.query('ROLLBACK');
+        return res.json({ ok: false, reason: 'already_claimed' });
+      }
+      const crR = await client.query(
+        `UPDATE player_profiles SET balance = balance + $1, total_earned = total_earned + $1, updated_at = NOW()
+          WHERE device_id = $2 RETURNING balance`,
+        [reward, deviceId]
+      );
+      await client.query('COMMIT');
+      res.json({ ok: true, isWinner, reward, newBalance: crR.rows[0] ? Number(crR.rows[0].balance) : null });
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  } catch (e) {
+    console.error('POST /api/guilds/war/claim', e);
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
+// Periodic matchmaker — runs every 6 hours, opportunistically pairs eligible guilds.
+// The "Sunday only" rule is approximated: we just keep pairing whenever fresh guilds
+// exist without an active war. This is simpler than scheduling exact day-of-week
+// and naturally handles cohorts created later in the week.
+let _guildWarMatchmakerStarted = false;
+function _startGuildWarMatchmaker() {
+  if (_guildWarMatchmakerStarted) return;
+  _guildWarMatchmakerStarted = true;
+  setInterval(async () => {
+    try { await _runGuildWarMatchmaker(); } catch (e) {}
+  }, 6 * 60 * 60 * 1000);
+  // Initial run after a short delay so DB is ready.
+  setTimeout(() => { _runGuildWarMatchmaker().catch(() => {}); }, 90 * 1000);
+}
+_startGuildWarMatchmaker();
 
 // ============================================================
 // Stage 33 — Rivalry System
@@ -10311,6 +10629,54 @@ if (ADMIN_PATH && ADMIN_PASSWORD) {
       res.json({ ok: true, message: 'Matchmaker triggered in background' });
     } catch (e) {
       console.error('POST admin/rivalries/match-now', e);
+      res.status(500).json({ error: 'internal' });
+    }
+  });
+
+  // ============================================================
+  // 🛡⚔️ Stage 37 — Guild Wars admin
+  // ============================================================
+  adminRouter.get('/api/guild-wars', async (_req, res) => {
+    try {
+      const r = await pool.query(
+        `SELECT gw.id, gw.status, gw.starts_at, gw.ends_at, gw.guild_a_score, gw.guild_b_score,
+                gw.guild_a_games, gw.guild_b_games, gw.winner_guild_id, gw.finalized_at,
+                ga.name AS guild_a_name, ga.emoji AS guild_a_emoji,
+                gb.name AS guild_b_name, gb.emoji AS guild_b_emoji
+           FROM guild_wars gw
+           JOIN guilds ga ON ga.id = gw.guild_a_id
+           JOIN guilds gb ON gb.id = gw.guild_b_id
+          ORDER BY
+            CASE gw.status WHEN 'active' THEN 0 ELSE 1 END,
+            gw.created_at DESC
+          LIMIT 100`
+      );
+      res.json({ ok: true, wars: r.rows });
+    } catch (e) {
+      console.error('GET admin/guild-wars', e);
+      res.status(500).json({ error: 'internal' });
+    }
+  });
+  adminRouter.post('/api/guild-wars/match-now', async (_req, res) => {
+    try {
+      const result = await _runGuildWarMatchmaker();
+      res.json({ ok: true, matched: result.matched });
+    } catch (e) {
+      console.error('POST admin/guild-wars/match-now', e);
+      res.status(500).json({ error: 'internal' });
+    }
+  });
+  adminRouter.post('/api/guild-wars/:id/finalize', async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (!id) return res.status(400).json({ error: 'bad_id' });
+      // Force-end early then finalize.
+      await pool.query(`UPDATE guild_wars SET ends_at = NOW() WHERE id = $1 AND status = 'active'`, [id]);
+      await _finalizeGuildWar(id);
+      await logAdminAction('guild_war.finalize', 'guild_wars', String(id), {});
+      res.json({ ok: true });
+    } catch (e) {
+      console.error('POST admin/guild-wars/finalize', e);
       res.status(500).json({ error: 'internal' });
     }
   });

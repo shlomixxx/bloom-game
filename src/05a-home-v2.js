@@ -310,6 +310,11 @@
       setTimeout(function() { try { maybeShowSpinTile(); } catch (e) {} }, 500);
     }
 
+    // Stage 37 — Guild Wars tile (only mounts if in guild + active war OR unclaimed reward).
+    if (typeof maybeShowWarTile === 'function') {
+      setTimeout(function() { try { maybeShowWarTile(); } catch (e) {} }, 3200);
+    }
+
     // Tier-icons tap → reveal stats bubble (same behaviour as v1)
     var iconsTap = document.getElementById('home-icons-tap');
     if (iconsTap) {

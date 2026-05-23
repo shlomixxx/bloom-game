@@ -2002,3 +2002,53 @@ INSERT INTO game_config (key, value) VALUES ('daily_spin_seg_12_type',   'jackpo
 INSERT INTO game_config (key, value) VALUES ('daily_spin_seg_12_amount', '5000')     ON CONFLICT (key) DO NOTHING;
 INSERT INTO game_config (key, value) VALUES ('daily_spin_seg_12_weight', '0.1')      ON CONFLICT (key) DO NOTHING;
 INSERT INTO game_config (key, value) VALUES ('daily_spin_seg_12_color',  '#FFD93D')  ON CONFLICT (key) DO NOTHING;
+
+-- ============================================================
+-- Guild Wars (Stage 37 — clan-vs-clan competition, May 2026)
+-- Auto-matched weekly competition between two guilds. Each game
+-- contributes to your guild's war score. Winner takes the pool.
+-- Clash Royale pattern — boosted guild retention 3-5x at launch.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS guild_wars (
+  id                  BIGSERIAL PRIMARY KEY,
+  guild_a_id          INT NOT NULL REFERENCES guilds(id) ON DELETE CASCADE,
+  guild_b_id          INT NOT NULL REFERENCES guilds(id) ON DELETE CASCADE,
+  starts_at           TIMESTAMPTZ NOT NULL,
+  ends_at             TIMESTAMPTZ NOT NULL,
+  guild_a_score       BIGINT NOT NULL DEFAULT 0,
+  guild_b_score       BIGINT NOT NULL DEFAULT 0,
+  guild_a_games       INT NOT NULL DEFAULT 0,
+  guild_b_games       INT NOT NULL DEFAULT 0,
+  status              VARCHAR(20) NOT NULL DEFAULT 'active',  -- 'active', 'ended', 'finalized'
+  winner_guild_id     INT,
+  finalized_at        TIMESTAMPTZ,
+  created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_guild_wars_active ON guild_wars (status, ends_at);
+CREATE INDEX IF NOT EXISTS idx_guild_wars_guild_a ON guild_wars (guild_a_id, status);
+CREATE INDEX IF NOT EXISTS idx_guild_wars_guild_b ON guild_wars (guild_b_id, status);
+
+CREATE TABLE IF NOT EXISTS guild_war_contributions (
+  war_id              BIGINT NOT NULL REFERENCES guild_wars(id) ON DELETE CASCADE,
+  device_id           VARCHAR(64) NOT NULL,
+  guild_id            INT NOT NULL,
+  score_contribution  BIGINT NOT NULL DEFAULT 0,
+  games_count         INT NOT NULL DEFAULT 0,
+  last_contrib_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (war_id, device_id)
+);
+
+CREATE TABLE IF NOT EXISTS guild_war_claims (
+  war_id              BIGINT NOT NULL REFERENCES guild_wars(id) ON DELETE CASCADE,
+  device_id           VARCHAR(64) NOT NULL,
+  claimed_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  reward_gems         INT NOT NULL,
+  PRIMARY KEY (war_id, device_id)
+);
+
+INSERT INTO game_config (key, value) VALUES ('guild_wars_enabled',            'true') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('guild_wars_duration_days',      '7')    ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('guild_wars_min_members_active', '3')    ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('guild_wars_winner_reward_per_member', '500')  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('guild_wars_loser_reward_per_member',  '100')  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('guild_wars_min_games_to_claim', '1')    ON CONFLICT (key) DO NOTHING;

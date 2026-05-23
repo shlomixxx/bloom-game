@@ -92,6 +92,38 @@ export async function initDb() {
       last_reward      JSONB,
       last_spin_at     TIMESTAMPTZ
     )`,
+    // Stage 37 — Guild Wars (full CREATE in schema.sql).
+    `CREATE TABLE IF NOT EXISTS guild_wars (
+      id              BIGSERIAL PRIMARY KEY,
+      guild_a_id      INT NOT NULL,
+      guild_b_id      INT NOT NULL,
+      starts_at       TIMESTAMPTZ NOT NULL,
+      ends_at         TIMESTAMPTZ NOT NULL,
+      guild_a_score   BIGINT NOT NULL DEFAULT 0,
+      guild_b_score   BIGINT NOT NULL DEFAULT 0,
+      guild_a_games   INT NOT NULL DEFAULT 0,
+      guild_b_games   INT NOT NULL DEFAULT 0,
+      status          VARCHAR(20) NOT NULL DEFAULT 'active',
+      winner_guild_id INT,
+      finalized_at    TIMESTAMPTZ,
+      created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`,
+    `CREATE TABLE IF NOT EXISTS guild_war_contributions (
+      war_id              BIGINT NOT NULL,
+      device_id           VARCHAR(64) NOT NULL,
+      guild_id            INT NOT NULL,
+      score_contribution  BIGINT NOT NULL DEFAULT 0,
+      games_count         INT NOT NULL DEFAULT 0,
+      last_contrib_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (war_id, device_id)
+    )`,
+    `CREATE TABLE IF NOT EXISTS guild_war_claims (
+      war_id              BIGINT NOT NULL,
+      device_id           VARCHAR(64) NOT NULL,
+      claimed_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      reward_gems         INT NOT NULL,
+      PRIMARY KEY (war_id, device_id)
+    )`,
     // Stage 33 — Rivalry System (full CREATE in schema.sql).
     `CREATE TABLE IF NOT EXISTS player_rivalries (
       id                BIGSERIAL PRIMARY KEY,

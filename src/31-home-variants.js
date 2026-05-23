@@ -27,6 +27,7 @@
   // load-bearing for the addiction loop and must stay visible in every variant.
   var SECONDARY_TILE_SELECTORS = [
     '#spin-home-tile',
+    '#guild-war-home-tile',
     '#home-v2-boards',
     '#home-v2-season-pass',
     '#league-home-tile',
@@ -123,6 +124,13 @@
     if (spinTile && spinTile.classList.contains('has-spin')) {
       out.push({ action: 'spin', icon: '🎡', title: 'גלגל יומי חינם', sub: '🎁 ספין חינם זמין עכשיו!', cls: 'hot' });
     }
+    // Guild War — second priority when there's an unclaimed reward.
+    var gwTile = document.getElementById('guild-war-home-tile');
+    if (gwTile && gwTile.classList.contains('has-claim')) {
+      out.push({ action: 'guildwar', icon: '🛡⚔️', title: 'מלחמת קלאנים', sub: '🎁 פרס מלחמה ממתין לאיסוף', cls: 'hot' });
+    } else if (gwTile) {
+      out.push({ action: 'guildwar', icon: '🛡⚔️', title: 'מלחמת קלאנים', sub: 'מלחמה פעילה — תרום עכשיו', cls: '' });
+    }
     var sp = document.getElementById('home-v2-season-pass');
     if (sp && sp.style.display !== 'none') {
       var claim = sp.querySelector('#home-v2-sp-claim');
@@ -176,6 +184,7 @@
     // Each action triggers a click on the underlying tile to reuse its logic.
     var map = {
       spin: '#spin-home-tile',
+      guildwar: '#guild-war-home-tile',
       season: '#home-v2-season-pass',
       league: '#league-home-tile',
       rival: '#rival-home-tile',
@@ -244,6 +253,11 @@
     var spinTile = document.getElementById('spin-home-tile');
     if (spinTile && spinTile.classList.contains('has-spin')) {
       return { icon: '🎡', title: 'גלגל יומי חינם!', sub: 'סובב פעם ביום וזכה בפרס משתנה', cta: '🎁 סובב עכשיו', sel: '#spin-home-tile', cls: 'hero-reward' };
+    }
+    // Guild War unclaimed reward — high emotion.
+    var gwTile = document.getElementById('guild-war-home-tile');
+    if (gwTile && gwTile.classList.contains('has-claim')) {
+      return { icon: '🛡⚔️', title: 'פרס מלחמת קלאנים!', sub: 'הקלאן השלים מלחמה — אסוף את הפרס', cta: '🎁 קבל את הפרס', sel: '#guild-war-home-tile', cls: 'hero-reward' };
     }
     var league = document.getElementById('league-home-tile');
     if (league && league.querySelector('.league-tile-reward')) {
