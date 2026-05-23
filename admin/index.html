@@ -1605,6 +1605,30 @@
     </div>
   </section>
 
+  <!-- 🥊 Rivalry System (stage 33) -->
+  <section id="rivalries-section" style="margin-bottom:12px">
+    <h2>🥊 יריבויות / Rivalries <button class="tip-btn" data-tip-text="<strong>🥊 Rivalry System</strong><br>Auto-pairs players close in lifetime XP for 24h personal competition.<div class=&quot;tip-example&quot;>💡 <strong>למה זה ממכר</strong>: שונה מ-leaderboard גלובלי — זה personal. השחקן רואה <strong>שם ספציפי</strong> (לא מספר), <strong>delta קטנה</strong> ('עוד 320 לעקוף'), <strong>דדליין</strong> (24h). שלושת אלה ביחד = engagement מקסימלי.<br><br>📊 ה-scheduler רץ כל 4 שעות. בוחר 200 שחקנים אקטיביים, ממיין לפי best score, יוצר ביניהם זוגות שכנים אם ה-delta < 10%. כל פעם עד 50 זוגות נוצרים. שני הצדדים מקבלים rivalry reciprocal.<br><br>📊 פרס לזוכה: 150💎. הזוכה הוא מי שצבר יותר Lifetime XP במהלך 24 השעות. ניצחון לפני התפוגה (לעקוף בכוונה) מסתיים מיד.</div>">?</button></h2>
+    <div style="padding:12px 16px;background:var(--card);border-radius:10px;margin-top:8px">
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+        <div class="rewards-grid" data-keys="rival_enabled,rival_threshold_pct"></div>
+        <div class="rewards-grid" data-keys="rival_duration_hours,rival_win_reward_gems"></div>
+      </div>
+
+      <div id="rivalry-stats" style="font-size:12px;color:var(--muted);padding:8px;background:var(--bg);border-radius:8px;margin-bottom:10px">⏳ טוען...</div>
+
+      <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+        <button id="rivalry-match-now" class="btn-primary" style="padding:8px 14px;font-size:12px">🔄 צור זיווגים עכשיו</button>
+        <button id="rivalry-refresh" class="btn-secondary" style="padding:8px 14px;font-size:12px">↻ רענן סטטיסטיקה</button>
+      </div>
+
+      <div style="font-size:13px;font-weight:700;color:var(--gold);margin-bottom:6px">📜 30 היריבויות האחרונות</div>
+      <div id="rivalry-recent" style="display:flex;flex-direction:column;gap:4px;font-size:11px;max-height:300px;overflow-y:auto">
+        <div style="color:var(--muted);padding:10px;text-align:center">טוען...</div>
+      </div>
+    </div>
+  </section>
+
   <!-- 🛡 Guilds / Clans (stage 27) -->
   <section id="guilds-section" style="margin-bottom:12px">
     <h2>🛡 קלאנים / Guilds <button class="tip-btn" data-tip-text="<strong>🛡 Guilds / Clans</strong><br>Peer-pressure retention.<div class=&quot;tip-example&quot;>💡 <strong>למה זה ממכר</strong>: שחקנים בקלאן משחקים פי 3.4 יותר מסולואיים, +35% D30 retention. ה-pattern: יעד יומי משותף (30 כתרים) + פרס לכל מי שתורם כשהיעד מושג. שחקן שלא תורם מרגיש שהוא עוצר את הקבוצה.<br><br>📊 <strong>v1 scope</strong>: create/join/leave + יעד יומי + claim per-member + leaderboard. <strong>Skipped</strong>: chat, wars, leagues.<br><br>📊 יצירת קלאן עולה 500💎 (anti-spam). הצטרפות חינמית. תרומה אוטומטית מ-game-over כשתופסים כתר.</div>">?</button></h2>
@@ -2819,6 +2843,12 @@
     lifetime_xp_per_level: 'XP לדרגה.<div class="tip-example">📊 ברירת מחדל 500. ערכים: 200-2000.<br>💡 500 = שחקן ממוצע (50 משחקים) יגיע לדרגה ~1-2. שחקן ותיק (500 משחקים + הישגים + פרסים) יגיע לדרגה ~30-40 מיידית.<br>📊 לדרגה 100 (פרסטיג\') צריך 50,000 XP. עם xp_per_level=500.</div>',
     lifetime_prestige_reward: 'פרס 💎 לפעולת פרסטיג\' (דרגה 100 → ⭐ + reset).<div class="tip-example">📊 ברירת מחדל 5,000💎. ערכים: 2000-15000.<br>💡 צריך להיות פרס משמעותי — מספיק לקנות Premium BP (1500) + עוד הרבה. השקעה של חודשי משחק ראויה לפרס גדול.<br>📊 שחקן שיגיע ל-10 ⭐ יקבל 50,000💎 מצטברים — שווה ערך ל-$30+ בIAP.</div>',
 
+    // ---- Rivalry System (stage 33) ----
+    rival_enabled: 'הפעלת מערכת היריבויות האוטומטית.<div class="tip-example">📊 ברירת מחדל פעיל. <strong>השאילתה הכי personal-engagement שיש</strong>: אחת ל-4 שעות, השרת מצרף בין שחקנים קרובים ב-Lifetime XP ויוצר ביניהם יריבות של 24 שעות.<br>💡 השחקן מקבל הודעה "רוני קרוב אליך — עוד 320 נקודות לעקוף!" + home tile + push notification. דירוג גלובלי הוא abstract — יריבות אישית עם שם ספציפי = engagement חזק פי-3.<br>⚠ כיבוי = שתי-yarivuyot פעילות יסתיימו ב-תפוגה הטבעית. אחרי כן לא ייווצרו חדשות.</div>',
+    rival_threshold_pct: 'אחוז סף — שחקנים בטווח X% אחד מהשני זכאים להיווצר כיריבים.<div class="tip-example">📊 ברירת מחדל 10. ערכים: 5-30.<br>💡 נמוך מדי (5%) = לא מספיק זיווגים נוצרים. גבוה מדי (30%) = הסיכון לעקוף הופך לא ריאלי. 10% = sweet spot שמרגיש "אפשרי".<br>📊 דוגמה: שחקן עם 10,000 XP יזווג רק עם שחקנים בטווח 9,000-11,000 XP.</div>',
+    rival_duration_hours: 'משך היריבות בשעות.<div class="tip-example">📊 ברירת מחדל 24 שעות. ערכים: 12-72.<br>💡 24 שעות = הזדמנות נוחה לכל שחקן לראות + להגיב. קצר מדי (6h) = שחקנים שלא נכנסים מפספסים. ארוך מדי (72h) = ה-urgency נשבר.<br>📊 24 הוא ה-standard ב-Clash Royale ו-Brawl Stars.</div>',
+    rival_win_reward_gems: 'פרס 💎 לזוכה ביריבות.<div class="tip-example">📊 ברירת מחדל 150💎. ערכים: 50-500.<br>💡 צריך להיות גדול מספיק שיהיה כדאי להתאמץ אבל לא גדול מדי שיהפוך ל-economy crusher. שחקן שמנצח 5 יריבויות בשבוע = 750💎/שבוע מבונוס לבד.<br>📊 ביריבות "תיקו" אף אחד לא מקבל פרס — מעודד שחקן ליצור delta ברור.</div>',
+
     // ---- Guilds / Clans (stage 27) ----
     guild_enabled: 'הפעלת מערכת הקלאנים.<div class="tip-example">📊 ברירת מחדל פעיל. <strong>peer-pressure retention</strong>: שחקנים בקלאן משחקים פי 3.4 יותר מסולואיים, +35% D30 retention.<br>💡 שחקן בקלאן רואה <strong>"היעד היומי שלנו: 18/30 כתרים"</strong> — מרגיש שהוא חלק ממשהו, מרגיש אחריות לתרום, מקבל פרס כשהקבוצה משיגה.<br>⚠ כיבוי = כל הקלאנים הקיימים נשארים בDB, רק ה-UI נעלם. הפעלה מחדש מחזירה הכל.</div>',
     guild_create_cost_gems: 'מחיר יצירת קלאן ב-💎.<div class="tip-example">📊 ברירת מחדל 500💎. ערכים: 200-2000.<br>💡 <strong>אנטי-spam</strong>: מונע יצירת קלאנים ריקים על-ידי שחקנים שמשתעממים. 500💎 = משחק רציני (כמה ימי משחק) — סינון טבעי.<br>📊 שחקנים שמשקיעים 500💎 ביצירה — בדרך כלל ישקיעו גם בהזמנת חברים.</div>',
@@ -3680,6 +3710,64 @@
     loadSmartPush();
     loadReplayStats();
     loadGuildsAdmin();
+    loadRivalryStats();
+  }
+
+  // ============================================================
+  // 🥊 Rivalry admin
+  // ============================================================
+  async function loadRivalryStats() {
+    var statsHost = document.getElementById('rivalry-stats');
+    var recentHost = document.getElementById('rivalry-recent');
+    if (!statsHost || !recentHost) return;
+    try {
+      var r = await fetch('/' + ADMIN_PATH + '/api/rivalries/stats').then(function(r){return r.json();});
+      var s = (r && r.stats) || {};
+      var recent = (r && r.recent) || [];
+      statsHost.innerHTML =
+        '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px">' +
+          '<div style="text-align:center"><div style="font-size:18px;font-weight:900;color:var(--gold)">' + (s.total_ever || 0) + '</div><div style="font-size:10px">בסך הכל</div></div>' +
+          '<div style="text-align:center"><div style="font-size:18px;font-weight:900;color:#10B981">' + (s.active_now || 0) + '</div><div style="font-size:10px">פעילות עכשיו</div></div>' +
+          '<div style="text-align:center"><div style="font-size:18px;font-weight:900;color:#FCD34D">' + (s.wins_7d || 0) + '</div><div style="font-size:10px">ניצחונות (7י)</div></div>' +
+          '<div style="text-align:center"><div style="font-size:18px;font-weight:900;color:#FCA5A5">' + (s.losses_7d || 0) + '</div><div style="font-size:10px">הפסדים (7י)</div></div>' +
+          '<div style="text-align:center"><div style="font-size:18px;font-weight:900;color:#A78BFA">' + (s.ties_7d || 0) + '</div><div style="font-size:10px">תיקו (7י)</div></div>' +
+        '</div>';
+      if (!recent.length) {
+        recentHost.innerHTML = '<div style="color:var(--muted);padding:10px;text-align:center">עדיין לא נוצרו יריבויות</div>';
+      } else {
+        recentHost.innerHTML = recent.map(function(row) {
+          var outcomeEmoji = !row.resolved ? '🔵' : row.outcome === 'won' ? '🏆' : row.outcome === 'lost' ? '❌' : '⚖️';
+          var outcomeText = !row.resolved ? 'פעיל' : row.outcome === 'won' ? 'ניצחון' : row.outcome === 'lost' ? 'הפסד' : 'תיקו';
+          var when = new Date(row.declared_at).toLocaleString('he-IL', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+          return '<div style="display:grid;grid-template-columns:32px 1fr auto auto;gap:8px;padding:6px 10px;background:var(--bg);border-radius:6px;align-items:center">' +
+            '<div style="font-size:18px;text-align:center">' + outcomeEmoji + '</div>' +
+            '<div style="font-weight:700;color:var(--fg);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + row.my_name + ' VS ' + row.rival_name + '</div>' +
+            '<div style="font-size:10px;color:var(--muted)">' + outcomeText + '</div>' +
+            '<div style="font-size:10px;color:var(--muted)">' + when + '</div>' +
+          '</div>';
+        }).join('');
+      }
+    } catch (e) {
+      statsHost.innerHTML = '<div style="color:var(--danger)">שגיאה: ' + e.message + '</div>';
+    }
+    var matchBtn = document.getElementById('rivalry-match-now');
+    if (matchBtn) matchBtn.onclick = async function() {
+      matchBtn.disabled = true;
+      matchBtn.innerHTML = '⏳ מצרף...';
+      try {
+        await fetch('/' + ADMIN_PATH + '/api/rivalries/match-now', { method: 'POST' });
+        setTimeout(function() {
+          matchBtn.disabled = false;
+          matchBtn.innerHTML = '🔄 צור זיווגים עכשיו';
+          loadRivalryStats();
+        }, 3000);
+      } catch (e) {
+        matchBtn.disabled = false;
+        matchBtn.innerHTML = '🔄 צור זיווגים עכשיו';
+      }
+    };
+    var refreshBtn = document.getElementById('rivalry-refresh');
+    if (refreshBtn) refreshBtn.onclick = function() { loadRivalryStats(); };
   }
 
   // ============================================================

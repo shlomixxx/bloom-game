@@ -6912,6 +6912,248 @@ app.get('/api/guilds/leaderboard', async (req, res) => {
 });
 
 // ============================================================
+// Stage 33 — Rivalry System
+// Auto-pairs players close in lifetime XP into 24h rivalries.
+// Personal competition with named opponent + deadline = high engagement.
+// ============================================================
+async function _loadRivalConfig() {
+  try {
+    const r = await pool.query(`SELECT key, value FROM game_config WHERE key LIKE 'rival_%'`);
+    const out = {};
+    r.rows.forEach(row => { out[row.key] = row.value; });
+    return out;
+  } catch (e) { return {}; }
+}
+
+// Scheduler tick — finds players close in lifetime XP, creates rivalries.
+async function _runRivalryMatchmaker() {
+  try {
+    const cfg = await _loadRivalConfig();
+    if (cfg.rival_enabled === 'false') return;
+    const thresholdPct = parseFloat(cfg.rival_threshold_pct || '10') || 10;
+    const durationHours = parseInt(cfg.rival_duration_hours || '24', 10) || 24;
+    // Find recent active players (have played in last 7 days) WITHOUT an
+    // active rivalry. Lifetime XP is computed per-call; here we approximate
+    // via daily_scores (cheaper than recomputing for everyone).
+    // Pull candidates: top 200 players ordered by best score recently.
+    const candidatesR = await pool.query(
+      `SELECT DISTINCT ds.device_id,
+              (SELECT MAX(score) FROM daily_scores WHERE device_id = ds.device_id) AS best_score
+         FROM daily_scores ds
+        WHERE ds.date > NOW() - INTERVAL '7 days'
+          AND NOT EXISTS (
+            SELECT 1 FROM player_rivalries pr
+             WHERE pr.device_id = ds.device_id
+               AND pr.resolved = FALSE
+               AND pr.expires_at > NOW()
+          )
+        ORDER BY best_score DESC NULLS LAST
+        LIMIT 200`
+    ).catch(() => ({ rows: [] }));
+    const candidates = candidatesR.rows.filter(c => c.best_score && c.best_score > 0);
+    if (candidates.length < 2) return;
+    // Pair adjacent players in the sorted list — closest by score = potential rivalry.
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + durationHours * 60 * 60 * 1000);
+    let pairsCreated = 0;
+    for (let i = 0; i < candidates.length - 1; i++) {
+      const me = candidates[i];
+      const them = candidates[i + 1];
+      if (!them) break;
+      const myScore = Number(me.best_score) || 0;
+      const theirScore = Number(them.best_score) || 0;
+      if (myScore <= 0 || theirScore <= 0) continue;
+      // Within threshold %?
+      const delta = Math.abs(myScore - theirScore);
+      const pct = (delta / Math.max(myScore, theirScore)) * 100;
+      if (pct > thresholdPct) continue;
+      // Compute lifetime XP for both (cheap aggregate — reuses stage 30 logic).
+      const myXp = await _computeLifetimeXp(me.device_id);
+      const theirXp = await _computeLifetimeXp(them.device_id);
+      // Create RECIPROCAL rivalries (both sides see each other).
+      try {
+        await pool.query(
+          `INSERT INTO player_rivalries (device_id, rival_device_id, my_xp_at_decl, rival_xp_at_decl, expires_at)
+             VALUES ($1, $2, $3, $4, $5), ($2, $1, $4, $3, $5)`,
+          [me.device_id, them.device_id, myXp, theirXp, expiresAt]
+        );
+        pairsCreated++;
+        // Skip the next iteration so we don't double-pair them.
+        i++;
+      } catch (insErr) {
+        // Race or constraint — skip.
+      }
+      if (pairsCreated >= 50) break; // cap per scan
+    }
+    if (pairsCreated > 0) console.log(`[rivalry] matchmaker: ${pairsCreated} pairs created`);
+  } catch (e) {
+    console.error('[rivalry] matchmaker error', e.message);
+  }
+}
+
+// Start scheduler — runs every 4 hours.
+function _startRivalryScheduler() {
+  setTimeout(async function tick() {
+    try {
+      await _runRivalryMatchmaker();
+      setTimeout(tick, 4 * 60 * 60 * 1000);
+    } catch (e) {
+      setTimeout(tick, 30 * 60 * 1000);
+    }
+  }, 90 * 1000); // first tick after 90s boot delay
+  console.log('[rivalry] scheduler started — first match in 90s');
+}
+_startRivalryScheduler();
+
+// Get my active rivalry — fresh XP for both me + my rival.
+app.get('/api/rival/state', async (req, res) => {
+  try {
+    const cfg = await _loadRivalConfig();
+    if (cfg.rival_enabled === 'false') return res.json({ ok: true, enabled: false });
+    const deviceId = (req.query.deviceId || '').toString().slice(0, 64);
+    if (!deviceId || deviceId.length < 8) return res.json({ ok: true, enabled: true, rivalry: null });
+    // Find newest unresolved unexpired rivalry.
+    const r = await pool.query(
+      `SELECT id, rival_device_id, my_xp_at_decl, rival_xp_at_decl,
+              declared_at, expires_at, viewed_by_player
+         FROM player_rivalries
+        WHERE device_id = $1 AND resolved = FALSE AND expires_at > NOW()
+        ORDER BY declared_at DESC LIMIT 1`,
+      [deviceId]
+    );
+    if (!r.rows[0]) return res.json({ ok: true, enabled: true, rivalry: null });
+    const rivalry = r.rows[0];
+    // Get rival's name + country.
+    const rivalProfileR = await pool.query(
+      `SELECT COALESCE(pp.display_name, ds.name, 'יריב אנונימי') AS name,
+              pp.country, pp.player_code
+         FROM (SELECT $1::text AS device_id) x
+         LEFT JOIN player_profiles pp ON pp.device_id = x.device_id
+         LEFT JOIN LATERAL (
+           SELECT name FROM daily_scores
+            WHERE device_id = x.device_id
+            ORDER BY date DESC LIMIT 1
+         ) ds ON true`,
+      [rivalry.rival_device_id]
+    );
+    const rivalProfile = rivalProfileR.rows[0] || { name: 'יריב אנונימי' };
+    // Compute fresh lifetime XP for both.
+    const [myXp, rivalXp] = await Promise.all([
+      _computeLifetimeXp(deviceId),
+      _computeLifetimeXp(rivalry.rival_device_id)
+    ]);
+    const delta = myXp - rivalXp;  // positive = I'm ahead
+    // Auto-mark as viewed.
+    if (!rivalry.viewed_by_player) {
+      await pool.query(
+        `UPDATE player_rivalries SET viewed_by_player = TRUE WHERE id = $1`,
+        [rivalry.id]
+      ).catch(() => {});
+    }
+    res.json({
+      ok: true,
+      enabled: true,
+      rivalry: {
+        id: rivalry.id,
+        rivalName: rivalProfile.name,
+        rivalCountry: rivalProfile.country,
+        rivalCode: rivalProfile.player_code,
+        myXp,
+        rivalXp,
+        delta,
+        myXpAtDecl: Number(rivalry.my_xp_at_decl) || 0,
+        rivalXpAtDecl: Number(rivalry.rival_xp_at_decl) || 0,
+        xpGainSinceDecl: myXp - (Number(rivalry.my_xp_at_decl) || 0),
+        rivalXpGainSinceDecl: rivalXp - (Number(rivalry.rival_xp_at_decl) || 0),
+        declaredAt: rivalry.declared_at,
+        expiresAt: rivalry.expires_at,
+        msUntilExpiry: Math.max(0, new Date(rivalry.expires_at).getTime() - Date.now()),
+        isNew: !rivalry.viewed_by_player
+      },
+      winReward: parseInt(cfg.rival_win_reward_gems || '150', 10) || 150
+    });
+  } catch (e) {
+    console.error('GET /api/rival/state', e);
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
+// Auto-resolve expired or completed rivalries. Called from client on
+// home mount or game-over. Server-side check is the source of truth.
+app.post('/api/rival/resolve', requireDeviceAuth, async (req, res) => {
+  try {
+    const { deviceId } = req.body || {};
+    if (typeof deviceId !== 'string' || deviceId.length < 8 || deviceId.length > 64) {
+      return res.status(400).json({ error: 'bad_device' });
+    }
+    if (!checkRateLimit('rival_resolve', deviceId, 30, 60 * 60 * 1000)) {
+      return res.status(429).json({ error: 'rate_limited' });
+    }
+    const cfg = await _loadRivalConfig();
+    const winReward = parseInt(cfg.rival_win_reward_gems || '150', 10) || 150;
+    // Find unresolved rivalries for this device.
+    const r = await pool.query(
+      `SELECT id, rival_device_id, my_xp_at_decl, rival_xp_at_decl, expires_at
+         FROM player_rivalries
+        WHERE device_id = $1 AND resolved = FALSE`,
+      [deviceId]
+    );
+    let resolved = [];
+    for (const row of r.rows) {
+      const expired = new Date(row.expires_at).getTime() < Date.now();
+      const myXp = await _computeLifetimeXp(deviceId);
+      const rivalXp = await _computeLifetimeXp(row.rival_device_id);
+      const myGain = myXp - (Number(row.my_xp_at_decl) || 0);
+      const rivalGain = rivalXp - (Number(row.rival_xp_at_decl) || 0);
+      let outcome = null;
+      let rewardGranted = 0;
+      if (expired) {
+        // Pick winner by XP gain since declaration.
+        if (myGain > rivalGain) outcome = 'won';
+        else if (myGain < rivalGain) outcome = 'lost';
+        else outcome = 'tied';
+      } else {
+        // Early-resolve only if I OVERTOOK my rival (myXp > rivalXp + 0 buffer
+        // AND I gained more than they did). This rewards proactive play.
+        if (myGain > rivalGain && myGain >= 200) {
+          outcome = 'won';
+        }
+      }
+      if (!outcome) continue;
+      // Atomic: mark resolved + grant reward if won.
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        await client.query(
+          `UPDATE player_rivalries SET resolved = TRUE, outcome = $1, resolved_at = NOW()
+            WHERE id = $2 AND resolved = FALSE`,
+          [outcome, row.id]
+        );
+        if (outcome === 'won') {
+          await client.query(
+            `UPDATE player_profiles SET balance = balance + $1, total_earned = total_earned + $1, updated_at = NOW()
+              WHERE device_id = $2`,
+            [winReward, deviceId]
+          );
+          rewardGranted = winReward;
+        }
+        await client.query('COMMIT');
+      } catch (err) {
+        await client.query('ROLLBACK');
+        throw err;
+      } finally {
+        client.release();
+      }
+      resolved.push({ id: row.id, outcome, rewardGranted });
+    }
+    res.json({ ok: true, resolved });
+  } catch (e) {
+    console.error('POST /api/rival/resolve', e);
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
+// ============================================================
 // Live Tournaments — stage 12 (May 2026)
 //
 // Scheduled prime-time events with a fixed window + top-N prize
@@ -9618,6 +9860,46 @@ if (ADMIN_PATH && ADMIN_PASSWORD) {
       res.json({ ok: true });
     } catch (e) {
       console.error('DELETE admin/guilds/:id', e);
+      res.status(500).json({ error: 'internal' });
+    }
+  });
+
+  // ============================================================
+  // Admin: Rivalry stats + manual matchmaker (stage 33)
+  // ============================================================
+  adminRouter.get('/api/rivalries/stats', async (_req, res) => {
+    try {
+      const overallR = await pool.query(
+        `SELECT
+           COUNT(*) AS total_ever,
+           COUNT(*) FILTER (WHERE resolved = FALSE AND expires_at > NOW()) AS active_now,
+           COUNT(*) FILTER (WHERE resolved = TRUE AND outcome = 'won' AND resolved_at > NOW() - INTERVAL '7 days') AS wins_7d,
+           COUNT(*) FILTER (WHERE resolved = TRUE AND outcome = 'lost' AND resolved_at > NOW() - INTERVAL '7 days') AS losses_7d,
+           COUNT(*) FILTER (WHERE resolved = TRUE AND outcome = 'tied' AND resolved_at > NOW() - INTERVAL '7 days') AS ties_7d
+         FROM player_rivalries`
+      );
+      const recentR = await pool.query(
+        `SELECT pr.declared_at, pr.outcome, pr.resolved,
+                COALESCE(pp1.display_name, 'אנונימי') AS my_name,
+                COALESCE(pp2.display_name, 'אנונימי') AS rival_name
+           FROM player_rivalries pr
+           LEFT JOIN player_profiles pp1 ON pp1.device_id = pr.device_id
+           LEFT JOIN player_profiles pp2 ON pp2.device_id = pr.rival_device_id
+          ORDER BY pr.declared_at DESC LIMIT 30`
+      );
+      res.json({ ok: true, stats: overallR.rows[0], recent: recentR.rows });
+    } catch (e) {
+      console.error('GET admin/rivalries/stats', e);
+      res.status(500).json({ error: 'internal' });
+    }
+  });
+
+  adminRouter.post('/api/rivalries/match-now', async (_req, res) => {
+    try {
+      _runRivalryMatchmaker().catch(() => {});
+      res.json({ ok: true, message: 'Matchmaker triggered in background' });
+    } catch (e) {
+      console.error('POST admin/rivalries/match-now', e);
       res.status(500).json({ error: 'internal' });
     }
   });

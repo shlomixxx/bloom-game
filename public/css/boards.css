@@ -7684,3 +7684,294 @@ html[data-theme="dark"] .guild-jc-create-fields textarea {
   border-color: #6366F1;
 }
 html[data-theme="dark"] .guild-jc-btn-join { background: #6366F1; }
+
+/* ============================================================
+   Stage 33 — Rivalry System
+   Boxing-glove vibe. Red theme when behind (urgency), gold when
+   ahead (winning). Big VS card in modal showing me vs them.
+   ============================================================ */
+
+.rival-home-tile {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  background: linear-gradient(135deg, #FEE2E2, #FECACA);
+  border: 2px solid #DC2626;
+  border-radius: 14px;
+  box-shadow: 0 3px 10px rgba(220, 38, 38, 0.25);
+  cursor: pointer;
+  direction: rtl;
+  text-align: right;
+  font-family: inherit;
+  color: #991B1B;
+  transition: transform 0.12s, box-shadow 0.18s;
+}
+.rival-home-tile.rival-tile-behind {
+  animation: rivalBehindPulse 1.8s ease-in-out infinite;
+}
+@keyframes rivalBehindPulse {
+  0%, 100% { box-shadow: 0 3px 10px rgba(220, 38, 38, 0.35); }
+  50%      { box-shadow: 0 6px 22px rgba(220, 38, 38, 0.6); }
+}
+.rival-home-tile:hover { transform: translateY(-1px); box-shadow: 0 5px 14px rgba(220, 38, 38, 0.4); }
+.rival-home-tile:active { transform: scale(0.98); }
+.rival-tile-icon {
+  font-size: 32px;
+  filter: drop-shadow(0 0 4px rgba(220, 38, 38, 0.5));
+  flex-shrink: 0;
+  animation: rivalIconBounce 2s ease-in-out infinite;
+}
+@keyframes rivalIconBounce {
+  0%, 100% { transform: rotate(-8deg); }
+  50%      { transform: rotate(8deg); }
+}
+.rival-tile-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.rival-tile-title {
+  font-size: 13px;
+  font-weight: 900;
+  color: #991B1B;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.rival-tile-new {
+  display: inline-block;
+  padding: 1px 7px;
+  background: #FBBF24;
+  color: #78350F;
+  border-radius: 6px;
+  font-size: 10px;
+  font-weight: 900;
+  animation: spRibbonPulse 1.2s ease-in-out infinite;
+}
+.rival-tile-status {
+  font-size: 12px;
+  font-weight: 800;
+}
+.rival-tile-body.rival-ahead .rival-tile-status { color: #B45309; }
+.rival-tile-body.rival-behind .rival-tile-status { color: #DC2626; }
+.rival-tile-body.rival-tied .rival-tile-status { color: #7C3AED; }
+.rival-tile-countdown {
+  font-size: 11px;
+  font-weight: 700;
+  color: #991B1B;
+  font-variant-numeric: tabular-nums;
+}
+.rival-tile-arrow { font-size: 18px; color: #991B1B; flex-shrink: 0; }
+
+/* Modal */
+.rival-modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.82);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 100001; padding: 14px;
+  animation: spOverlayFade 0.3s ease-out;
+}
+.rival-modal-card {
+  background: linear-gradient(180deg, #FFF, #FEF2F2);
+  border: 3px solid #DC2626;
+  border-radius: 22px;
+  padding: 22px 18px;
+  max-width: 420px;
+  width: 100%;
+  max-height: 92vh;
+  overflow-y: auto;
+  text-align: center;
+  direction: rtl;
+  position: relative;
+  color: #1F2937;
+  box-shadow: 0 24px 70px rgba(0,0,0,0.5);
+  animation: spModalPop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.rival-modal-close {
+  position: absolute; top: 10px; left: 12px;
+  width: 32px; height: 32px; border: none;
+  background: rgba(0,0,0,0.15); color: #1F2937;
+  border-radius: 50%; font-size: 18px; cursor: pointer;
+  line-height: 1; font-family: inherit;
+}
+.rival-modal-icon { font-size: 64px; margin-bottom: 4px; animation: rivalIconBounce 1.6s ease-in-out infinite; }
+.rival-modal-title { font-size: 22px; font-weight: 900; color: #991B1B; margin-bottom: 14px; }
+
+/* VS card */
+.rival-vs-card {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 14px;
+}
+.rival-vs-side {
+  padding: 14px 10px;
+  background: rgba(0,0,0,0.04);
+  border-radius: 14px;
+  border: 2px solid transparent;
+  text-align: center;
+}
+.rival-vs-side.rival-vs-winning {
+  background: linear-gradient(135deg, #FEF3C7, #FCD34D);
+  border-color: #F59E0B;
+  box-shadow: 0 4px 12px rgba(252, 211, 77, 0.4);
+}
+.rival-vs-label { font-size: 12px; font-weight: 800; color: #4B5563; margin-bottom: 4px; }
+.rival-vs-side.rival-vs-winning .rival-vs-label { color: #92400E; }
+.rival-vs-xp {
+  font-size: 26px;
+  font-weight: 900;
+  color: #1F2937;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+  margin-bottom: 4px;
+}
+.rival-vs-side.rival-vs-winning .rival-vs-xp { color: #78350F; }
+.rival-vs-gain {
+  font-size: 11px;
+  font-weight: 700;
+  color: #10B981;
+}
+.rival-vs-gain.rival-vs-gain-zero { color: #DC2626; }
+.rival-vs-divider {
+  font-size: 22px;
+  font-weight: 900;
+  color: #DC2626;
+  text-shadow: 0 2px 4px rgba(220, 38, 38, 0.3);
+}
+
+/* Status banner */
+.rival-status-banner {
+  padding: 12px 14px;
+  margin-bottom: 12px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 900;
+  text-align: center;
+}
+.rival-status-ahead {
+  background: linear-gradient(135deg, #FEF3C7, #FCD34D);
+  color: #92400E;
+  border: 1px solid #F59E0B;
+}
+.rival-status-tied {
+  background: linear-gradient(135deg, #F3E8FF, #DDD6FE);
+  color: #5B21B6;
+  border: 1px solid #A855F7;
+}
+.rival-status-behind {
+  background: linear-gradient(135deg, #FEE2E2, #FECACA);
+  color: #991B1B;
+  border: 1px solid #DC2626;
+  animation: rivalBehindPulse 1.6s ease-in-out infinite;
+}
+
+.rival-countdown-row {
+  font-size: 14px;
+  font-weight: 800;
+  text-align: center;
+  margin-bottom: 14px;
+  color: #4B5563;
+}
+.rival-countdown-row strong { color: #DC2626; font-variant-numeric: tabular-nums; }
+
+/* Reward card */
+.rival-reward-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: rgba(252, 211, 77, 0.15);
+  border: 1px solid #F59E0B;
+  border-radius: 12px;
+  margin-bottom: 14px;
+}
+.rival-reward-icon { font-size: 32px; flex-shrink: 0; }
+.rival-reward-body { flex: 1; min-width: 0; text-align: right; }
+.rival-reward-title { font-size: 14px; font-weight: 900; color: #92400E; }
+.rival-reward-sub { font-size: 11px; font-weight: 700; color: #B45309; margin-top: 2px; }
+
+/* Tips list */
+.rival-tips {
+  padding: 10px 12px;
+  background: rgba(99, 102, 241, 0.08);
+  border-radius: 10px;
+  text-align: right;
+}
+.rival-tips-title { font-size: 12px; font-weight: 900; color: #4338CA; margin-bottom: 6px; }
+.rival-tips-list {
+  margin: 0;
+  padding: 0 14px 0 0;
+  list-style: none;
+  font-size: 11px;
+  font-weight: 700;
+  color: #4B5563;
+}
+.rival-tips-list li { padding: 2px 0; }
+
+/* Win celebration */
+.rival-win-celebration {
+  position: fixed; inset: 0;
+  background: radial-gradient(circle at center, rgba(245, 158, 11, 0.4), rgba(0,0,0,0.9));
+  display: flex; align-items: center; justify-content: center;
+  z-index: 100003; padding: 14px;
+  animation: spOverlayFade 0.4s ease-out;
+}
+.rival-win-card {
+  background: linear-gradient(135deg, #FBBF24 0%, #F59E0B 50%, #DC2626 100%);
+  border: 5px solid #FEF3C7;
+  border-radius: 24px;
+  padding: 36px 30px;
+  max-width: 320px;
+  text-align: center;
+  direction: rtl;
+  box-shadow: 0 24px 80px rgba(0,0,0,0.7);
+  animation: spWelcomePop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.rival-win-icon {
+  font-size: 84px;
+  margin-bottom: 14px;
+  filter: drop-shadow(0 0 18px rgba(252, 211, 77, 0.9));
+  animation: spWelcomeGiftSpin 1.3s ease-out;
+}
+.rival-win-title { font-size: 24px; font-weight: 900; color: #FFF; margin-bottom: 8px; text-shadow: 0 2px 4px rgba(0,0,0,0.4); }
+.rival-win-sub { font-size: 32px; font-weight: 900; color: #FEF3C7; margin-bottom: 20px; text-shadow: 0 2px 4px rgba(0,0,0,0.3); }
+.rival-win-btn {
+  padding: 14px 30px;
+  background: #1F2937;
+  color: #FCD34D;
+  border: none;
+  border-radius: 14px;
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+/* Dark theme */
+html[data-theme="dark"] .rival-home-tile {
+  background: linear-gradient(135deg, #4A1E1E, #5A2424);
+  border-color: #DC2626;
+  color: #FECACA;
+}
+html[data-theme="dark"] .rival-tile-title { color: #FECACA; }
+html[data-theme="dark"] .rival-tile-countdown { color: #FCA5A5; }
+html[data-theme="dark"] .rival-modal-card {
+  background: linear-gradient(180deg, #1F2937, #3F1F1F 50%);
+  border-color: #DC2626;
+  color: #FECACA;
+}
+html[data-theme="dark"] .rival-modal-title { color: #FECACA; }
+html[data-theme="dark"] .rival-vs-side { background: rgba(255,255,255,0.06); }
+html[data-theme="dark"] .rival-vs-label { color: #D1D5DB; }
+html[data-theme="dark"] .rival-vs-xp { color: #E5E7EB; }
+html[data-theme="dark"] .rival-status-ahead { background: linear-gradient(135deg, #78350F, #92400E); color: #FEF3C7; }
+html[data-theme="dark"] .rival-status-tied { background: linear-gradient(135deg, #4C1D95, #5B21B6); color: #E0E7FF; }
+html[data-theme="dark"] .rival-status-behind { background: linear-gradient(135deg, #4A1E1E, #6B1B1B); color: #FECACA; }
+html[data-theme="dark"] .rival-countdown-row { color: #D1D5DB; }
+html[data-theme="dark"] .rival-reward-card { background: rgba(252, 211, 77, 0.15); }
+html[data-theme="dark"] .rival-reward-title { color: #FDE68A; }
+html[data-theme="dark"] .rival-reward-sub { color: #FCD34D; }
+html[data-theme="dark"] .rival-tips { background: rgba(99, 102, 241, 0.18); }
+html[data-theme="dark"] .rival-tips-title { color: #C7D2FE; }
+html[data-theme="dark"] .rival-tips-list { color: #D1D5DB; }

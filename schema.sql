@@ -1165,6 +1165,43 @@ CREATE INDEX IF NOT EXISTS idx_skin_configurations_sort
   ON skin_configurations (sort_order, id);
 
 -- ============================================================
+-- Rivalry System (Stage 33, May 2026)
+-- Auto-pairs players close in lifetime XP into 24-hour "rivalries".
+-- Personal competition with a specific named opponent + deadline +
+-- close-enough delta to feel "I can catch them". The Clash Royale
+-- pattern that converts passive ranking into active engagement.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS player_rivalries (
+  id                BIGSERIAL PRIMARY KEY,
+  device_id         VARCHAR(64) NOT NULL,
+  rival_device_id   VARCHAR(64) NOT NULL,
+  -- XP snapshots at declaration time.
+  my_xp_at_decl     BIGINT NOT NULL,
+  rival_xp_at_decl  BIGINT NOT NULL,
+  declared_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  expires_at        TIMESTAMPTZ NOT NULL,
+  resolved          BOOLEAN NOT NULL DEFAULT FALSE,
+  -- 'won' / 'lost' / 'tied' / 'expired'.
+  outcome           VARCHAR(20),
+  resolved_at       TIMESTAMPTZ,
+  -- True if this player viewed the rivalry (controls "new!" badge).
+  viewed_by_player  BOOLEAN NOT NULL DEFAULT FALSE
+);
+CREATE INDEX IF NOT EXISTS idx_rivalries_active_lookup
+  ON player_rivalries (device_id, expires_at DESC) WHERE NOT resolved;
+CREATE INDEX IF NOT EXISTS idx_rivalries_recent
+  ON player_rivalries (declared_at DESC);
+
+-- 3 config keys.
+INSERT INTO game_config (key, value) VALUES ('rival_enabled',          'true') ON CONFLICT (key) DO NOTHING;
+-- Percent threshold — 2 players within this % of each other's XP are eligible.
+INSERT INTO game_config (key, value) VALUES ('rival_threshold_pct',    '10')   ON CONFLICT (key) DO NOTHING;
+-- Hours the rivalry stays active.
+INSERT INTO game_config (key, value) VALUES ('rival_duration_hours',   '24')   ON CONFLICT (key) DO NOTHING;
+-- Reward for winning a rivalry (overtaking the rival within the window).
+INSERT INTO game_config (key, value) VALUES ('rival_win_reward_gems',  '150')  ON CONFLICT (key) DO NOTHING;
+
+-- ============================================================
 -- Guilds / Clans (Stage 27, May 2026)
 -- Peer-pressure retention: shared daily goal + per-member contribution
 -- tracking + shared reward. Industry data: clan members play 3.4× more

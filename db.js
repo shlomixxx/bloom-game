@@ -72,6 +72,20 @@ export async function initDb() {
       created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )`,
+    // Stage 33 — Rivalry System (full CREATE in schema.sql).
+    `CREATE TABLE IF NOT EXISTS player_rivalries (
+      id                BIGSERIAL PRIMARY KEY,
+      device_id         VARCHAR(64) NOT NULL,
+      rival_device_id   VARCHAR(64) NOT NULL,
+      my_xp_at_decl     BIGINT NOT NULL,
+      rival_xp_at_decl  BIGINT NOT NULL,
+      declared_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      expires_at        TIMESTAMPTZ NOT NULL,
+      resolved          BOOLEAN NOT NULL DEFAULT FALSE,
+      outcome           VARCHAR(20),
+      resolved_at       TIMESTAMPTZ,
+      viewed_by_player  BOOLEAN NOT NULL DEFAULT FALSE
+    )`,
     // Stage 27 — Guilds (full CREATE in schema.sql).
     `CREATE TABLE IF NOT EXISTS guilds (
       id                  SERIAL PRIMARY KEY,

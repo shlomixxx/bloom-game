@@ -295,6 +295,11 @@
       setTimeout(function() { try { maybeShowGuildTile(); } catch (e) {} }, 2600);
     }
 
+    // Stage 33 — Rival tile (auto-paired 24h personal competition).
+    if (typeof maybeShowRivalTile === 'function') {
+      setTimeout(function() { try { maybeShowRivalTile(); } catch (e) {} }, 2800);
+    }
+
     // Tier-icons tap → reveal stats bubble (same behaviour as v1)
     var iconsTap = document.getElementById('home-icons-tap');
     if (iconsTap) {
