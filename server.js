@@ -4006,113 +4006,9 @@ app.post('/api/daily-deals/buy', requireDeviceAuth, async (req, res) => {
   }
 });
 
-// ============================================================
-// Admin: Daily Deals CRUD
-// ============================================================
-adminRouter.get('/api/daily-deals', async (_req, res) => {
-  try {
-    const r = await pool.query(
-      `SELECT d.*,
-              (SELECT COUNT(*) FROM daily_deal_purchases WHERE deal_id = d.id) AS total_purchases,
-              (SELECT COUNT(*) FROM daily_deal_purchases WHERE deal_id = d.id AND purchase_date = (NOW() AT TIME ZONE 'Asia/Jerusalem')::date) AS today_purchases
-         FROM daily_deals d
-        ORDER BY sort_order, id`
-    );
-    res.json({ ok: true, deals: r.rows });
-  } catch (e) {
-    console.error('GET admin/daily-deals', e);
-    res.status(500).json({ error: 'internal' });
-  }
-});
-
-adminRouter.post('/api/daily-deals', async (req, res) => {
-  try {
-    const { slug, name, description, emoji, price_gems, original_value, contents, category, is_enabled, sort_order } = req.body || {};
-    if (!slug || !name || !Number.isFinite(parseInt(price_gems, 10))) {
-      return res.status(400).json({ error: 'missing_fields' });
-    }
-    const r = await pool.query(
-      `INSERT INTO daily_deals (slug, name, description, emoji, price_gems, original_value, contents, category, is_enabled, sort_order)
-         VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9, $10)
-       RETURNING *`,
-      [
-        slug.toLowerCase().replace(/[^a-z0-9_]/g, '_').slice(0, 40),
-        String(name).slice(0, 80),
-        description || null,
-        emoji || null,
-        parseInt(price_gems, 10),
-        original_value ? parseInt(original_value, 10) : null,
-        JSON.stringify(contents || {}),
-        category || null,
-        is_enabled !== false,
-        parseInt(sort_order, 10) || 100
-      ]
-    );
-    await pool.query(
-      `INSERT INTO admin_actions (action, target_type, target_id, details)
-         VALUES ('daily_deal_create', 'daily_deal', $1, $2)`,
-      [String(r.rows[0].id), JSON.stringify({ slug: r.rows[0].slug, name })]
-    ).catch(() => {});
-    res.json({ ok: true, deal: r.rows[0] });
-  } catch (e) {
-    if (e.code === '23505') return res.status(400).json({ error: 'slug_exists' });
-    console.error('POST admin/daily-deals', e);
-    res.status(500).json({ error: 'internal' });
-  }
-});
-
-adminRouter.patch('/api/daily-deals/:id', async (req, res) => {
-  try {
-    const id = parseInt(req.params.id, 10);
-    const { name, description, emoji, price_gems, original_value, contents, category, is_enabled, sort_order } = req.body || {};
-    const updates = [];
-    const vals = [];
-    let p = 1;
-    if (name !== undefined)           { updates.push(`name = $${p++}`); vals.push(String(name).slice(0, 80)); }
-    if (description !== undefined)    { updates.push(`description = $${p++}`); vals.push(description); }
-    if (emoji !== undefined)          { updates.push(`emoji = $${p++}`); vals.push(emoji); }
-    if (price_gems !== undefined)     { updates.push(`price_gems = $${p++}`); vals.push(parseInt(price_gems, 10)); }
-    if (original_value !== undefined) { updates.push(`original_value = $${p++}`); vals.push(original_value ? parseInt(original_value, 10) : null); }
-    if (contents !== undefined)       { updates.push(`contents = $${p++}::jsonb`); vals.push(JSON.stringify(contents)); }
-    if (category !== undefined)       { updates.push(`category = $${p++}`); vals.push(category); }
-    if (is_enabled !== undefined)     { updates.push(`is_enabled = $${p++}`); vals.push(!!is_enabled); }
-    if (sort_order !== undefined)     { updates.push(`sort_order = $${p++}`); vals.push(parseInt(sort_order, 10) || 100); }
-    if (!updates.length) return res.json({ ok: false, reason: 'no_changes' });
-    updates.push(`updated_at = NOW()`);
-    vals.push(id);
-    const r = await pool.query(
-      `UPDATE daily_deals SET ${updates.join(', ')} WHERE id = $${p} RETURNING *`,
-      vals
-    );
-    if (!r.rows[0]) return res.status(404).json({ error: 'not_found' });
-    await pool.query(
-      `INSERT INTO admin_actions (action, target_type, target_id, details)
-         VALUES ('daily_deal_patch', 'daily_deal', $1, $2)`,
-      [String(id), JSON.stringify({ fields: Object.keys(req.body || {}) })]
-    ).catch(() => {});
-    res.json({ ok: true, deal: r.rows[0] });
-  } catch (e) {
-    console.error('PATCH admin/daily-deals/:id', e);
-    res.status(500).json({ error: 'internal' });
-  }
-});
-
-adminRouter.delete('/api/daily-deals/:id', async (req, res) => {
-  try {
-    const id = parseInt(req.params.id, 10);
-    const r = await pool.query(`DELETE FROM daily_deals WHERE id = $1 RETURNING slug`, [id]);
-    if (!r.rows[0]) return res.status(404).json({ error: 'not_found' });
-    await pool.query(
-      `INSERT INTO admin_actions (action, target_type, target_id, details)
-         VALUES ('daily_deal_delete', 'daily_deal', $1, $2)`,
-      [String(id), JSON.stringify({ slug: r.rows[0].slug })]
-    ).catch(() => {});
-    res.json({ ok: true });
-  } catch (e) {
-    console.error('DELETE admin/daily-deals/:id', e);
-    res.status(500).json({ error: 'internal' });
-  }
-});
+// Admin Daily Deals CRUD endpoints live inside the
+// `if (ADMIN_PATH && ADMIN_PASSWORD)` block further down in this file
+// (the adminRouter is defined there).
 
 // ============================================================
 // Live Tournaments — stage 12 (May 2026)
@@ -6296,6 +6192,114 @@ if (ADMIN_PATH && ADMIN_PASSWORD) {
     } catch (e) {
       console.error('admin push/broadcast', e.message);
       res.status(500).json({ error: 'server' });
+    }
+  });
+
+  // ============================================================
+  // Admin: Daily Deals CRUD (stage 21)
+  // ============================================================
+  adminRouter.get('/api/daily-deals', async (_req, res) => {
+    try {
+      const r = await pool.query(
+        `SELECT d.*,
+                (SELECT COUNT(*) FROM daily_deal_purchases WHERE deal_id = d.id) AS total_purchases,
+                (SELECT COUNT(*) FROM daily_deal_purchases WHERE deal_id = d.id AND purchase_date = (NOW() AT TIME ZONE 'Asia/Jerusalem')::date) AS today_purchases
+           FROM daily_deals d
+          ORDER BY sort_order, id`
+      );
+      res.json({ ok: true, deals: r.rows });
+    } catch (e) {
+      console.error('GET admin/daily-deals', e);
+      res.status(500).json({ error: 'internal' });
+    }
+  });
+
+  adminRouter.post('/api/daily-deals', async (req, res) => {
+    try {
+      const { slug, name, description, emoji, price_gems, original_value, contents, category, is_enabled, sort_order } = req.body || {};
+      if (!slug || !name || !Number.isFinite(parseInt(price_gems, 10))) {
+        return res.status(400).json({ error: 'missing_fields' });
+      }
+      const r = await pool.query(
+        `INSERT INTO daily_deals (slug, name, description, emoji, price_gems, original_value, contents, category, is_enabled, sort_order)
+           VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9, $10)
+         RETURNING *`,
+        [
+          slug.toLowerCase().replace(/[^a-z0-9_]/g, '_').slice(0, 40),
+          String(name).slice(0, 80),
+          description || null,
+          emoji || null,
+          parseInt(price_gems, 10),
+          original_value ? parseInt(original_value, 10) : null,
+          JSON.stringify(contents || {}),
+          category || null,
+          is_enabled !== false,
+          parseInt(sort_order, 10) || 100
+        ]
+      );
+      await pool.query(
+        `INSERT INTO admin_actions (action, target_type, target_id, details)
+           VALUES ('daily_deal_create', 'daily_deal', $1, $2)`,
+        [String(r.rows[0].id), JSON.stringify({ slug: r.rows[0].slug, name })]
+      ).catch(() => {});
+      res.json({ ok: true, deal: r.rows[0] });
+    } catch (e) {
+      if (e.code === '23505') return res.status(400).json({ error: 'slug_exists' });
+      console.error('POST admin/daily-deals', e);
+      res.status(500).json({ error: 'internal' });
+    }
+  });
+
+  adminRouter.patch('/api/daily-deals/:id', async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      const { name, description, emoji, price_gems, original_value, contents, category, is_enabled, sort_order } = req.body || {};
+      const updates = [];
+      const vals = [];
+      let p = 1;
+      if (name !== undefined)           { updates.push(`name = $${p++}`); vals.push(String(name).slice(0, 80)); }
+      if (description !== undefined)    { updates.push(`description = $${p++}`); vals.push(description); }
+      if (emoji !== undefined)          { updates.push(`emoji = $${p++}`); vals.push(emoji); }
+      if (price_gems !== undefined)     { updates.push(`price_gems = $${p++}`); vals.push(parseInt(price_gems, 10)); }
+      if (original_value !== undefined) { updates.push(`original_value = $${p++}`); vals.push(original_value ? parseInt(original_value, 10) : null); }
+      if (contents !== undefined)       { updates.push(`contents = $${p++}::jsonb`); vals.push(JSON.stringify(contents)); }
+      if (category !== undefined)       { updates.push(`category = $${p++}`); vals.push(category); }
+      if (is_enabled !== undefined)     { updates.push(`is_enabled = $${p++}`); vals.push(!!is_enabled); }
+      if (sort_order !== undefined)     { updates.push(`sort_order = $${p++}`); vals.push(parseInt(sort_order, 10) || 100); }
+      if (!updates.length) return res.json({ ok: false, reason: 'no_changes' });
+      updates.push(`updated_at = NOW()`);
+      vals.push(id);
+      const r = await pool.query(
+        `UPDATE daily_deals SET ${updates.join(', ')} WHERE id = $${p} RETURNING *`,
+        vals
+      );
+      if (!r.rows[0]) return res.status(404).json({ error: 'not_found' });
+      await pool.query(
+        `INSERT INTO admin_actions (action, target_type, target_id, details)
+           VALUES ('daily_deal_patch', 'daily_deal', $1, $2)`,
+        [String(id), JSON.stringify({ fields: Object.keys(req.body || {}) })]
+      ).catch(() => {});
+      res.json({ ok: true, deal: r.rows[0] });
+    } catch (e) {
+      console.error('PATCH admin/daily-deals/:id', e);
+      res.status(500).json({ error: 'internal' });
+    }
+  });
+
+  adminRouter.delete('/api/daily-deals/:id', async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      const r = await pool.query(`DELETE FROM daily_deals WHERE id = $1 RETURNING slug`, [id]);
+      if (!r.rows[0]) return res.status(404).json({ error: 'not_found' });
+      await pool.query(
+        `INSERT INTO admin_actions (action, target_type, target_id, details)
+           VALUES ('daily_deal_delete', 'daily_deal', $1, $2)`,
+        [String(id), JSON.stringify({ slug: r.rows[0].slug })]
+      ).catch(() => {});
+      res.json({ ok: true });
+    } catch (e) {
+      console.error('DELETE admin/daily-deals/:id', e);
+      res.status(500).json({ error: 'internal' });
     }
   });
 
