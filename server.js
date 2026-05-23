@@ -4011,6 +4011,385 @@ app.post('/api/daily-deals/buy', requireDeviceAuth, async (req, res) => {
 // (the adminRouter is defined there).
 
 // ============================================================
+// Stage 18 — Skin Gacha (variable-reward Skinner box)
+//
+// 5 rarity tiers (common 60% / uncommon 25% / rare 12% / legendary
+// 2.5% / mythic 0.5%) — admin-tunable. Pity system guarantees
+// legendary+ at gacha_pity_threshold pulls. Daily free pull. 10x
+// pull bundle with 10% discount. Featured item boosts rate within
+// its rarity.
+//
+// Anti-cheat: server picks rarity + reward entirely. Client never
+// suggests anything. All rolls logged to gacha_pulls_history for
+// audit + future ML-driven balance tweaks.
+// ============================================================
+async function _loadGachaConfig() {
+  try {
+    const r = await pool.query(`SELECT key, value FROM game_config WHERE key LIKE 'gacha_%'`);
+    const out = {};
+    r.rows.forEach(row => { out[row.key] = row.value; });
+    return out;
+  } catch (e) { return {}; }
+}
+
+async function _gachaResolveOnePull(cfg, pityCounter, isFreePull) {
+  // Returns { rarity, reward, wasPity, wasFeatured }.
+  // reward = { type, amount, skinId, displayName, emoji, poolId }
+  const pityThreshold = parseInt(cfg.gacha_pity_threshold || '50', 10) || 50;
+  const pityHit = pityCounter + 1 >= pityThreshold;
+  // Pick rarity.
+  let rarity;
+  if (pityHit) {
+    // Guaranteed legendary+, but still rolls between legendary/mythic
+    // weighted by their relative weights.
+    const wLeg = parseFloat(cfg.gacha_weight_legendary || '2.5') || 2.5;
+    const wMyth = parseFloat(cfg.gacha_weight_mythic || '0.5') || 0.5;
+    const rand = Math.random() * (wLeg + wMyth);
+    rarity = rand < wMyth ? 'mythic' : 'legendary';
+  } else {
+    const weights = {
+      common:    parseFloat(cfg.gacha_weight_common    || '60')  || 60,
+      uncommon:  parseFloat(cfg.gacha_weight_uncommon  || '25')  || 25,
+      rare:      parseFloat(cfg.gacha_weight_rare      || '12')  || 12,
+      legendary: parseFloat(cfg.gacha_weight_legendary || '2.5') || 2.5,
+      mythic:    parseFloat(cfg.gacha_weight_mythic    || '0.5') || 0.5
+    };
+    const total = Object.values(weights).reduce((a, b) => a + b, 0);
+    let roll = Math.random() * total;
+    rarity = 'common';
+    for (const [r, w] of Object.entries(weights)) {
+      if (roll < w) { rarity = r; break; }
+      roll -= w;
+    }
+  }
+  // Pick a reward from the pool at this rarity.
+  const featuredId = parseInt(cfg.gacha_featured_id || '', 10);
+  const featuredBoostPct = parseFloat(cfg.gacha_featured_boost_pct || '30') || 30;
+  const poolR = await pool.query(
+    `SELECT * FROM gacha_pool WHERE rarity = $1 AND is_enabled = TRUE`,
+    [rarity]
+  );
+  let candidates = poolR.rows;
+  if (!candidates.length) {
+    // Fallback — if rarity is empty, return some gems.
+    return {
+      rarity,
+      reward: { type: 'gems', amount: 50, displayName: '50 יהלומים', emoji: '💎', poolId: null },
+      wasPity: pityHit,
+      wasFeatured: false
+    };
+  }
+  // Apply featured boost.
+  let wasFeaturedOut = false;
+  const adjusted = candidates.map(c => {
+    let w = c.weight || 100;
+    if (Number.isFinite(featuredId) && c.id === featuredId) {
+      w = Math.round(w * (1 + featuredBoostPct / 100));
+    }
+    return { row: c, weight: w };
+  });
+  const total = adjusted.reduce((a, b) => a + b.weight, 0);
+  let roll = Math.random() * total;
+  let pick = adjusted[0];
+  for (const c of adjusted) {
+    if (roll < c.weight) { pick = c; break; }
+    roll -= c.weight;
+  }
+  if (Number.isFinite(featuredId) && pick.row.id === featuredId) wasFeaturedOut = true;
+  return {
+    rarity,
+    reward: {
+      type: pick.row.reward_type,
+      amount: pick.row.amount,
+      skinId: pick.row.skin_id,
+      displayName: pick.row.display_name,
+      emoji: pick.row.emoji,
+      poolId: pick.row.id
+    },
+    wasPity: pityHit,
+    wasFeatured: wasFeaturedOut
+  };
+}
+
+async function _gachaGrantReward(client, deviceId, reward) {
+  // Applies the reward atomically. Caller is responsible for BEGIN/COMMIT.
+  // Returns { duplicateConverted } when a skin was already owned.
+  const t = reward.type;
+  if (t === 'gems') {
+    await client.query(
+      `UPDATE player_profiles SET balance = balance + $1, total_earned = total_earned + $1, updated_at = NOW() WHERE device_id = $2`,
+      [reward.amount, deviceId]
+    );
+    return {};
+  } else if (t === 'skin') {
+    // Check if already owned — convert to gems if so.
+    const owned = await client.query(
+      `SELECT 1 FROM player_skins WHERE device_id = $1 AND skin_id = $2`,
+      [deviceId, reward.skinId]
+    );
+    if (owned.rows.length) {
+      // Duplicate — convert to gems at config-driven percentage.
+      const cfgR = await client.query(`SELECT value FROM game_config WHERE key = 'gacha_dups_to_gems_pct'`);
+      const pct = parseFloat((cfgR.rows[0] && cfgR.rows[0].value) || '50') || 50;
+      // Estimate skin "value" from existing skin price config — fall back to a flat 200.
+      const skinPriceR = await client.query(`SELECT price FROM skin_configurations WHERE skin_id = $1`, [reward.skinId]).catch(() => ({ rows: [] }));
+      const skinPrice = skinPriceR.rows[0] ? Number(skinPriceR.rows[0].price) || 200 : 200;
+      const gems = Math.max(20, Math.round(skinPrice * pct / 100));
+      await client.query(
+        `UPDATE player_profiles SET balance = balance + $1, total_earned = total_earned + $1, updated_at = NOW() WHERE device_id = $2`,
+        [gems, deviceId]
+      );
+      return { duplicateConverted: true, gems };
+    }
+    await client.query(
+      `INSERT INTO player_skins (device_id, skin_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+      [deviceId, reward.skinId]
+    );
+    return {};
+  } else if (t === 'bp_tier') {
+    // Boost player's season XP by N tier-worth.
+    const cfgR = await client.query(`SELECT key, value FROM game_config WHERE key LIKE 'season_tier_%_xp'`);
+    const tierXp = {};
+    cfgR.rows.forEach(r => {
+      const m = r.key.match(/^season_tier_(\d+)_xp$/);
+      if (m) tierXp[parseInt(m[1], 10)] = parseInt(r.value, 10);
+    });
+    const seasonId = 'S1';
+    const curR = await client.query(
+      `SELECT xp FROM player_season_progress WHERE device_id = $1 AND season_id = $2`,
+      [deviceId, seasonId]
+    );
+    const curXp = curR.rows[0] ? (Number(curR.rows[0].xp) || 0) : 0;
+    let curTier = 0;
+    for (let t2 = 1; t2 <= 20; t2++) {
+      if (tierXp[t2] && curXp >= tierXp[t2]) curTier = t2;
+    }
+    const targetTier = Math.min(20, curTier + (reward.amount || 1));
+    const xpBoost = Math.max(0, (tierXp[targetTier] || curXp) - curXp);
+    if (xpBoost > 0) {
+      await client.query(
+        `INSERT INTO player_season_progress (device_id, season_id, xp) VALUES ($1, $2, $3)
+         ON CONFLICT (device_id, season_id) DO UPDATE SET xp = player_season_progress.xp + $3, updated_at = NOW()`,
+        [deviceId, seasonId, xpBoost]
+      );
+    }
+    return { xpBoost };
+  } else if (t === 'chest' || t === 'freeze') {
+    // Stored as a counter on player_profiles (or we credit gems if no counter exists).
+    // For v1 — credit equivalent gems. Future: actual chest/freeze inventory.
+    const gems = (t === 'chest' ? 50 : 100) * (reward.amount || 1);
+    await client.query(
+      `UPDATE player_profiles SET balance = balance + $1, total_earned = total_earned + $1, updated_at = NOW() WHERE device_id = $2`,
+      [gems, deviceId]
+    );
+    return { convertedToGems: gems };
+  }
+  return {};
+}
+
+app.get('/api/gacha/state', async (req, res) => {
+  try {
+    const deviceId = (req.query.deviceId || '').toString().slice(0, 64);
+    const cfg = await _loadGachaConfig();
+    if (cfg.gacha_enabled === 'false') return res.json({ ok: true, enabled: false });
+    const enabled = true;
+    let state = { total_pulls: 0, pity_counter: 0, free_pull_claimed_date: null };
+    if (deviceId && deviceId.length >= 8) {
+      await pool.query(
+        `INSERT INTO player_gacha_state (device_id) VALUES ($1) ON CONFLICT DO NOTHING`,
+        [deviceId]
+      );
+      const r = await pool.query(
+        `SELECT total_pulls, pity_counter, free_pull_claimed_date FROM player_gacha_state WHERE device_id = $1`,
+        [deviceId]
+      );
+      if (r.rows[0]) state = r.rows[0];
+    }
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' });
+    const freeAvailable = (cfg.gacha_free_pull_enabled !== 'false') &&
+      (!state.free_pull_claimed_date || state.free_pull_claimed_date.toISOString().slice(0, 10) !== today);
+    // Pool composition + featured info.
+    const poolR = await pool.query(
+      `SELECT id, rarity, reward_type, amount, skin_id, display_name, emoji, is_featured, weight FROM gacha_pool WHERE is_enabled = TRUE ORDER BY
+       CASE rarity WHEN 'mythic' THEN 1 WHEN 'legendary' THEN 2 WHEN 'rare' THEN 3 WHEN 'uncommon' THEN 4 ELSE 5 END, id`
+    );
+    const featuredId = parseInt(cfg.gacha_featured_id || '', 10);
+    const featured = Number.isFinite(featuredId) ? poolR.rows.find(p => p.id === featuredId) : null;
+    res.json({
+      ok: true,
+      enabled,
+      name: cfg.gacha_name || '🎰 גאצ׳ה',
+      priceSingle: parseInt(cfg.gacha_price_single || '100', 10) || 100,
+      priceTen: parseInt(cfg.gacha_price_ten || '900', 10) || 900,
+      pityThreshold: parseInt(cfg.gacha_pity_threshold || '50', 10) || 50,
+      pityCounter: state.pity_counter | 0,
+      pityRemaining: Math.max(0, (parseInt(cfg.gacha_pity_threshold || '50', 10) || 50) - (state.pity_counter | 0)),
+      totalPulls: state.total_pulls | 0,
+      freeAvailable,
+      featured: featured ? {
+        id: featured.id, rarity: featured.rarity,
+        rewardType: featured.reward_type, amount: featured.amount, skinId: featured.skin_id,
+        displayName: featured.display_name, emoji: featured.emoji
+      } : null,
+      pool: poolR.rows,
+      weights: {
+        common: parseFloat(cfg.gacha_weight_common || '60') || 60,
+        uncommon: parseFloat(cfg.gacha_weight_uncommon || '25') || 25,
+        rare: parseFloat(cfg.gacha_weight_rare || '12') || 12,
+        legendary: parseFloat(cfg.gacha_weight_legendary || '2.5') || 2.5,
+        mythic: parseFloat(cfg.gacha_weight_mythic || '0.5') || 0.5
+      },
+      showOnHome: cfg.gacha_show_on_home !== 'false'
+    });
+  } catch (e) {
+    console.error('GET /api/gacha/state', e);
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
+async function _doGachaPull(deviceId, multiplier, isFree) {
+  // Internal: runs a pull (or N pulls) atomically. Returns { ok, results, newBalance, pullsLeft }.
+  const cfg = await _loadGachaConfig();
+  if (cfg.gacha_enabled === 'false') return { ok: false, reason: 'disabled' };
+  const priceSingle = parseInt(cfg.gacha_price_single || '100', 10) || 100;
+  const priceTen = parseInt(cfg.gacha_price_ten || '900', 10) || 900;
+  const totalPrice = isFree ? 0 : (multiplier === 10 ? priceTen : priceSingle * multiplier);
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    // Ensure state row.
+    await client.query(
+      `INSERT INTO player_gacha_state (device_id) VALUES ($1) ON CONFLICT DO NOTHING`,
+      [deviceId]
+    );
+    // Free-pull dedup.
+    if (isFree) {
+      const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' });
+      const checkR = await client.query(
+        `SELECT free_pull_claimed_date FROM player_gacha_state WHERE device_id = $1`,
+        [deviceId]
+      );
+      const lastDate = checkR.rows[0] && checkR.rows[0].free_pull_claimed_date
+        ? checkR.rows[0].free_pull_claimed_date.toISOString().slice(0, 10)
+        : null;
+      if (lastDate === today) {
+        await client.query('ROLLBACK');
+        return { ok: false, reason: 'free_already_claimed' };
+      }
+    } else if (totalPrice > 0) {
+      // Atomic balance debit.
+      const debit = await client.query(
+        `UPDATE player_profiles SET balance = balance - $1, updated_at = NOW()
+          WHERE device_id = $2 AND balance >= $1 RETURNING balance`,
+        [totalPrice, deviceId]
+      );
+      if (!debit.rows[0]) {
+        await client.query('ROLLBACK');
+        const balR = await pool.query(`SELECT balance FROM player_profiles WHERE device_id = $1`, [deviceId]);
+        const bal = balR.rows[0] ? Number(balR.rows[0].balance) : 0;
+        return { ok: false, reason: 'insufficient_funds', price: totalPrice, balance: bal };
+      }
+    }
+    // Read current pity counter.
+    const stateR = await client.query(
+      `SELECT pity_counter, total_pulls FROM player_gacha_state WHERE device_id = $1`,
+      [deviceId]
+    );
+    let pity = stateR.rows[0] ? (stateR.rows[0].pity_counter | 0) : 0;
+    let totalPulls = stateR.rows[0] ? (stateR.rows[0].total_pulls | 0) : 0;
+    const results = [];
+    for (let i = 0; i < multiplier; i++) {
+      const roll = await _gachaResolveOnePull(cfg, pity, isFree);
+      const wasLegendaryOrMythic = roll.rarity === 'legendary' || roll.rarity === 'mythic';
+      pity = wasLegendaryOrMythic ? 0 : pity + 1;
+      totalPulls += 1;
+      const grantInfo = await _gachaGrantReward(client, deviceId, roll.reward);
+      // Insert pull history.
+      await client.query(
+        `INSERT INTO gacha_pulls_history (device_id, pull_index, rarity, reward_type, amount, skin_id, display_name, emoji, was_pity, was_featured, was_free)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+        [deviceId, totalPulls, roll.rarity, roll.reward.type, roll.reward.amount, roll.reward.skinId,
+         roll.reward.displayName, roll.reward.emoji, roll.wasPity, roll.wasFeatured, !!isFree]
+      );
+      results.push({
+        rarity: roll.rarity,
+        reward: roll.reward,
+        wasPity: roll.wasPity,
+        wasFeatured: roll.wasFeatured,
+        ...grantInfo
+      });
+    }
+    // Save updated state.
+    if (isFree) {
+      await client.query(
+        `UPDATE player_gacha_state
+            SET total_pulls = $1, pity_counter = $2, free_pull_claimed_date = (NOW() AT TIME ZONE 'Asia/Jerusalem')::date, last_pull_at = NOW(), updated_at = NOW()
+          WHERE device_id = $3`,
+        [totalPulls, pity, deviceId]
+      );
+    } else {
+      await client.query(
+        `UPDATE player_gacha_state
+            SET total_pulls = $1, pity_counter = $2, last_pull_at = NOW(), updated_at = NOW()
+          WHERE device_id = $3`,
+        [totalPulls, pity, deviceId]
+      );
+    }
+    await client.query('COMMIT');
+    const balR = await pool.query(`SELECT balance FROM player_profiles WHERE device_id = $1`, [deviceId]);
+    const newBalance = balR.rows[0] ? Number(balR.rows[0].balance) : null;
+    return {
+      ok: true,
+      results,
+      newBalance,
+      pityCounter: pity,
+      pityRemaining: Math.max(0, (parseInt(cfg.gacha_pity_threshold || '50', 10) || 50) - pity),
+      totalPulls
+    };
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+app.post('/api/gacha/pull', requireDeviceAuth, async (req, res) => {
+  try {
+    const { deviceId, count, free } = req.body || {};
+    if (typeof deviceId !== 'string' || deviceId.length < 8 || deviceId.length > 64) {
+      return res.status(400).json({ error: 'bad_device' });
+    }
+    const n = count === 10 ? 10 : 1;
+    const isFree = !!free && n === 1;  // free pull only valid for single
+    if (!checkRateLimit('gacha_pull', deviceId, 60, 60 * 60 * 1000)) {
+      return res.status(429).json({ error: 'rate_limited' });
+    }
+    const result = await _doGachaPull(deviceId, n, isFree);
+    res.json(result);
+  } catch (e) {
+    console.error('POST /api/gacha/pull', e);
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
+app.get('/api/gacha/history', async (req, res) => {
+  try {
+    const deviceId = (req.query.deviceId || '').toString().slice(0, 64);
+    if (!deviceId || deviceId.length < 8) return res.json({ ok: true, history: [] });
+    const r = await pool.query(
+      `SELECT pull_index, rarity, reward_type, amount, skin_id, display_name, emoji, was_pity, was_featured, was_free, pulled_at
+         FROM gacha_pulls_history WHERE device_id = $1 ORDER BY pulled_at DESC LIMIT 50`,
+      [deviceId]
+    );
+    res.json({ ok: true, history: r.rows });
+  } catch (e) {
+    console.error('GET /api/gacha/history', e);
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
+// ============================================================
 // Live Tournaments — stage 12 (May 2026)
 //
 // Scheduled prime-time events with a fixed window + top-N prize
@@ -6299,6 +6678,108 @@ if (ADMIN_PATH && ADMIN_PASSWORD) {
       res.json({ ok: true });
     } catch (e) {
       console.error('DELETE admin/daily-deals/:id', e);
+      res.status(500).json({ error: 'internal' });
+    }
+  });
+
+  // ============================================================
+  // Admin: Skin Gacha pool CRUD (stage 18)
+  // ============================================================
+  adminRouter.get('/api/gacha/pool', async (_req, res) => {
+    try {
+      const r = await pool.query(
+        `SELECT g.*,
+                (SELECT COUNT(*) FROM gacha_pulls_history WHERE
+                  (g.skin_id IS NOT NULL AND skin_id = g.skin_id)
+                  OR (g.skin_id IS NULL AND reward_type = g.reward_type AND amount = g.amount)
+                ) AS total_pulled
+           FROM gacha_pool g
+          ORDER BY
+            CASE rarity WHEN 'mythic' THEN 1 WHEN 'legendary' THEN 2 WHEN 'rare' THEN 3 WHEN 'uncommon' THEN 4 ELSE 5 END,
+            id`
+      );
+      const stats = await pool.query(
+        `SELECT rarity, COUNT(*) AS cnt FROM gacha_pulls_history GROUP BY rarity`
+      );
+      const statsMap = {};
+      stats.rows.forEach(r => { statsMap[r.rarity] = parseInt(r.cnt, 10); });
+      res.json({ ok: true, pool: r.rows, stats: statsMap });
+    } catch (e) {
+      console.error('GET admin/gacha/pool', e);
+      res.status(500).json({ error: 'internal' });
+    }
+  });
+
+  adminRouter.post('/api/gacha/pool', async (req, res) => {
+    try {
+      const { rarity, reward_type, amount, skin_id, display_name, emoji, weight, is_enabled } = req.body || {};
+      const allowedRarity = ['common', 'uncommon', 'rare', 'legendary', 'mythic'];
+      if (!allowedRarity.includes(rarity)) return res.status(400).json({ error: 'bad_rarity' });
+      if (!reward_type) return res.status(400).json({ error: 'missing_reward_type' });
+      const r = await pool.query(
+        `INSERT INTO gacha_pool (rarity, reward_type, amount, skin_id, display_name, emoji, weight, is_enabled)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+        [rarity, reward_type, amount || null, skin_id || null, display_name || null, emoji || null,
+         parseInt(weight, 10) || 100, is_enabled !== false]
+      );
+      await pool.query(
+        `INSERT INTO admin_actions (action, target_type, target_id, details)
+           VALUES ('gacha_pool_create', 'gacha_pool', $1, $2)`,
+        [String(r.rows[0].id), JSON.stringify({ rarity, reward_type })]
+      ).catch(() => {});
+      res.json({ ok: true, entry: r.rows[0] });
+    } catch (e) {
+      console.error('POST admin/gacha/pool', e);
+      res.status(500).json({ error: 'internal' });
+    }
+  });
+
+  adminRouter.patch('/api/gacha/pool/:id', async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      const fields = ['rarity', 'reward_type', 'amount', 'skin_id', 'display_name', 'emoji', 'weight', 'is_enabled'];
+      const updates = [];
+      const vals = [];
+      let p = 1;
+      fields.forEach(f => {
+        if (req.body[f] !== undefined) {
+          updates.push(`${f} = $${p++}`);
+          vals.push(req.body[f]);
+        }
+      });
+      if (!updates.length) return res.json({ ok: false, reason: 'no_changes' });
+      updates.push(`updated_at = NOW()`);
+      vals.push(id);
+      const r = await pool.query(
+        `UPDATE gacha_pool SET ${updates.join(', ')} WHERE id = $${p} RETURNING *`,
+        vals
+      );
+      if (!r.rows[0]) return res.status(404).json({ error: 'not_found' });
+      await pool.query(
+        `INSERT INTO admin_actions (action, target_type, target_id, details)
+           VALUES ('gacha_pool_patch', 'gacha_pool', $1, $2)`,
+        [String(id), JSON.stringify({ fields: Object.keys(req.body || {}) })]
+      ).catch(() => {});
+      res.json({ ok: true, entry: r.rows[0] });
+    } catch (e) {
+      console.error('PATCH admin/gacha/pool/:id', e);
+      res.status(500).json({ error: 'internal' });
+    }
+  });
+
+  adminRouter.delete('/api/gacha/pool/:id', async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      const r = await pool.query(`DELETE FROM gacha_pool WHERE id = $1 RETURNING rarity`, [id]);
+      if (!r.rows[0]) return res.status(404).json({ error: 'not_found' });
+      await pool.query(
+        `INSERT INTO admin_actions (action, target_type, target_id, details)
+           VALUES ('gacha_pool_delete', 'gacha_pool', $1, $2)`,
+        [String(id), JSON.stringify({ rarity: r.rows[0].rarity })]
+      ).catch(() => {});
+      res.json({ ok: true });
+    } catch (e) {
+      console.error('DELETE admin/gacha/pool/:id', e);
       res.status(500).json({ error: 'internal' });
     }
   });

@@ -245,6 +245,12 @@
       setTimeout(function() { try { maybeShowDailyDealBanner(); } catch (e) {} }, 1200);
     }
 
+    // Stage 18 — Skin Gacha banner. Last in priority chain — gacha is
+    // always-available so it doesn't out-rank time-limited surfaces.
+    if (typeof maybeShowGachaBanner === 'function') {
+      setTimeout(function() { try { maybeShowGachaBanner(); } catch (e) {} }, 1600);
+    }
+
     // Tier-icons tap → reveal stats bubble (same behaviour as v1)
     var iconsTap = document.getElementById('home-icons-tap');
     if (iconsTap) {

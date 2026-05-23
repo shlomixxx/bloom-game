@@ -1165,6 +1165,114 @@ CREATE INDEX IF NOT EXISTS idx_skin_configurations_sort
   ON skin_configurations (sort_order, id);
 
 -- ============================================================
+-- Skin Gacha (Stage 18 — variable-reward Skinner box, May 2026)
+-- The Genshin/Apex pattern that drives $4B/year in cosmetics revenue.
+-- 5 rarity tiers with admin-tunable weights. Pity system guarantees
+-- legendary+ at threshold. Daily free pull drives daily return.
+-- 10x bundle creates "ענק" purchase psychology.
+--
+-- Pool is admin-managed: each row = one possible reward at a given
+-- rarity. Weights are relative within the rarity (e.g. inside the
+-- "uncommon" tier with 3 entries weighted 100/50/25 → 57%/29%/14%).
+-- ============================================================
+CREATE TABLE IF NOT EXISTS gacha_pool (
+  id           SERIAL PRIMARY KEY,
+  rarity       VARCHAR(20) NOT NULL,  -- common/uncommon/rare/legendary/mythic
+  reward_type  VARCHAR(40) NOT NULL,  -- gems/skin/bp_tier/chest/freeze
+  amount       INT,                   -- for gems/bp_tier/chest/freeze
+  skin_id      VARCHAR(40),           -- for skin
+  display_name VARCHAR(80),           -- shown on the reveal card
+  emoji        VARCHAR(10),
+  weight       INT NOT NULL DEFAULT 100,
+  is_featured  BOOLEAN NOT NULL DEFAULT FALSE,
+  is_enabled   BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_gacha_pool_rarity
+  ON gacha_pool (rarity, is_enabled);
+
+CREATE TABLE IF NOT EXISTS player_gacha_state (
+  device_id              VARCHAR(64) PRIMARY KEY,
+  total_pulls            INT NOT NULL DEFAULT 0,
+  -- pity_counter resets to 0 every time the player pulls legendary OR mythic.
+  -- When it reaches gacha_pity_threshold, the next pull is FORCED to be at
+  -- least legendary — the "guaranteed" mechanic that keeps players grinding.
+  pity_counter           INT NOT NULL DEFAULT 0,
+  free_pull_claimed_date DATE,
+  last_pull_at           TIMESTAMPTZ,
+  created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at             TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS gacha_pulls_history (
+  id           BIGSERIAL PRIMARY KEY,
+  device_id    VARCHAR(64) NOT NULL,
+  pull_index   INT NOT NULL,
+  rarity       VARCHAR(20) NOT NULL,
+  reward_type  VARCHAR(40) NOT NULL,
+  amount       INT,
+  skin_id      VARCHAR(40),
+  display_name VARCHAR(80),
+  emoji        VARCHAR(10),
+  was_pity     BOOLEAN NOT NULL DEFAULT FALSE,
+  was_featured BOOLEAN NOT NULL DEFAULT FALSE,
+  was_free     BOOLEAN NOT NULL DEFAULT FALSE,
+  pulled_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_gacha_pulls_device
+  ON gacha_pulls_history (device_id, pulled_at DESC);
+
+-- Master config keys (15 total).
+INSERT INTO game_config (key, value) VALUES ('gacha_enabled',            'true') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('gacha_name',               '🎰 גאצ׳ה סקינים') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('gacha_price_single',       '100')  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('gacha_price_ten',          '900')  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('gacha_pity_threshold',     '50')   ON CONFLICT (key) DO NOTHING;
+-- Rarity weights — sum to 100. Tweak to make the game more/less generous.
+INSERT INTO game_config (key, value) VALUES ('gacha_weight_common',      '60')   ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('gacha_weight_uncommon',    '25')   ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('gacha_weight_rare',        '12')   ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('gacha_weight_legendary',   '2.5')  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('gacha_weight_mythic',      '0.5')  ON CONFLICT (key) DO NOTHING;
+-- Daily free pull — the daily-return hook.
+INSERT INTO game_config (key, value) VALUES ('gacha_free_pull_enabled',  'true') ON CONFLICT (key) DO NOTHING;
+-- Featured: admin picks ONE pool item to "feature" (boosted rate within its rarity).
+INSERT INTO game_config (key, value) VALUES ('gacha_featured_id',        '')     ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('gacha_featured_boost_pct', '30')   ON CONFLICT (key) DO NOTHING;
+-- Discount for 10-pull: 900 instead of 1000 (10% off) by default.
+-- Set to same as 10*single to disable the discount.
+INSERT INTO game_config (key, value) VALUES ('gacha_show_on_home',       'true') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('gacha_dups_to_gems_pct',   '50')   ON CONFLICT (key) DO NOTHING;
+
+-- Seed the pool with 17 entries (covers all 5 rarities, all reward types).
+-- Admin can edit/disable/add via the panel.
+INSERT INTO gacha_pool (rarity, reward_type, amount, skin_id, display_name, emoji, weight) VALUES
+  -- Common (60%): small payouts so consolation prizes feel ok
+  ('common',    'gems',  20,  NULL,      '20 יהלומים',         '💎',  100),
+  ('common',    'gems',  30,  NULL,      '30 יהלומים',         '💎',  60),
+  ('common',    'gems',  50,  NULL,      '50 יהלומים',         '💎',  30),
+  -- Uncommon (25%): useful consumables
+  ('uncommon',  'gems',  100, NULL,      '100 יהלומים',        '💎',  100),
+  ('uncommon',  'chest', 1,   NULL,      'תיבת הפתעה',          '🎁',  60),
+  ('uncommon',  'freeze',1,   NULL,      'הקפאת רצף',           '🛡',  40),
+  -- Rare (12%): bigger items
+  ('rare',      'gems',  300, NULL,      '300 יהלומים',        '💎',  80),
+  ('rare',      'chest', 3,   NULL,      '3 תיבות הפתעה',       '🎁',  60),
+  ('rare',      'bp_tier',1,  NULL,      'דרגת Battle Pass',    '🎖',  40),
+  ('rare',      'skin',  NULL,'fire',    'סקין: אש',           '🔥',  20),
+  -- Legendary (2.5%): the dopamine hits
+  ('legendary', 'gems',  1500,NULL,      '1500 יהלומים',       '💎',  60),
+  ('legendary', 'bp_tier',3,  NULL,      '3 דרגות Battle Pass', '🎖',  40),
+  ('legendary', 'skin',  NULL,'space',   'סקין: חלל',          '🚀',  30),
+  ('legendary', 'skin',  NULL,'gold',    'סקין: זהב',          '👑',  25),
+  -- Mythic (0.5%): the rare-mention moments. Players remember these for years.
+  ('mythic',    'gems',  5000,NULL,      '5000 יהלומים',       '💎',  50),
+  ('mythic',    'skin',  NULL,'aurora',  'סקין: זוהר',         '✨',  30),
+  ('mythic',    'bp_tier',10, NULL,      '10 דרגות Battle Pass','🎖',  20)
+ON CONFLICT DO NOTHING;
+
+-- ============================================================
 -- Daily Deals (Stage 21 — rotating daily offer, May 2026)
 -- One deal per day (Asia/Jerusalem), deterministic pick from the
 -- pool. 50-70% discount creates anchoring psychology. 24h countdown

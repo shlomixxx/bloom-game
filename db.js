@@ -63,6 +63,45 @@ export async function initDb() {
       created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )`,
+    // Stage 18 — Skin Gacha tables (full CREATE + seed in schema.sql).
+    `CREATE TABLE IF NOT EXISTS gacha_pool (
+      id           SERIAL PRIMARY KEY,
+      rarity       VARCHAR(20) NOT NULL,
+      reward_type  VARCHAR(40) NOT NULL,
+      amount       INT,
+      skin_id      VARCHAR(40),
+      display_name VARCHAR(80),
+      emoji        VARCHAR(10),
+      weight       INT NOT NULL DEFAULT 100,
+      is_featured  BOOLEAN NOT NULL DEFAULT FALSE,
+      is_enabled   BOOLEAN NOT NULL DEFAULT TRUE,
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`,
+    `CREATE TABLE IF NOT EXISTS player_gacha_state (
+      device_id              VARCHAR(64) PRIMARY KEY,
+      total_pulls            INT NOT NULL DEFAULT 0,
+      pity_counter           INT NOT NULL DEFAULT 0,
+      free_pull_claimed_date DATE,
+      last_pull_at           TIMESTAMPTZ,
+      created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at             TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`,
+    `CREATE TABLE IF NOT EXISTS gacha_pulls_history (
+      id           BIGSERIAL PRIMARY KEY,
+      device_id    VARCHAR(64) NOT NULL,
+      pull_index   INT NOT NULL,
+      rarity       VARCHAR(20) NOT NULL,
+      reward_type  VARCHAR(40) NOT NULL,
+      amount       INT,
+      skin_id      VARCHAR(40),
+      display_name VARCHAR(80),
+      emoji        VARCHAR(10),
+      was_pity     BOOLEAN NOT NULL DEFAULT FALSE,
+      was_featured BOOLEAN NOT NULL DEFAULT FALSE,
+      was_free     BOOLEAN NOT NULL DEFAULT FALSE,
+      pulled_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`,
     // Stage 21 — Daily Deals tables (full CREATE + seed in schema.sql).
     `CREATE TABLE IF NOT EXISTS daily_deals (
       id            SERIAL PRIMARY KEY,

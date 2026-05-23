@@ -1542,6 +1542,45 @@
     </div>
   </section>
 
+  <!-- 🎰 Skin Gacha (stage 18) -->
+  <section id="skin-gacha-section" style="margin-bottom:12px">
+    <h2>🎰 Skin Gacha — קופסת הפתעה <button class="tip-btn" data-tip-text="<strong>🎰 Skin Gacha</strong><br>הפטרן של Genshin/Apex — $4B/year cosmetics revenue.<div class=&quot;tip-example&quot;>💡 <strong>איך זה עובד</strong>:<br>1. 5 רמות נדירות (common/uncommon/rare/legendary/mythic).<br>2. שקלולים מוגדרים ב-game_config (default 60/25/12/2.5/0.5%).<br>3. <strong>Pity system</strong>: כל N פולים (default 50) מובטח legendary+.<br>4. <strong>פול חינמי יומי</strong> = daily-return hook.<br>5. 10x פול ב-10% הנחה.<br>6. <strong>Featured item</strong>: בחר אחד מהמאגר ל-+30% סיכוי בתוך ה-rarity שלו.<br>7. כפלים → מומרים אוטומטית ל-💎 (50% מהמחיר).<br><br>📊 ניהול: הוסף/ערוך/מחק פריטים במאגר. כל פריט: rarity, סוג פרס, כמות/skin_id, weight בתוך ה-rarity.</div>">?</button></h2>
+    <div style="padding:12px 16px;background:var(--card);border-radius:10px;margin-top:8px">
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+        <div class="rewards-grid" data-keys="gacha_enabled,gacha_show_on_home"></div>
+        <div class="rewards-grid" data-keys="gacha_name,gacha_pity_threshold"></div>
+      </div>
+
+      <div style="margin-bottom:12px">
+        <div style="font-size:13px;font-weight:700;color:var(--gold);margin-bottom:6px">💰 מחירים</div>
+        <div class="rewards-grid" data-keys="gacha_price_single,gacha_price_ten,gacha_free_pull_enabled,gacha_dups_to_gems_pct"></div>
+      </div>
+
+      <div style="margin-bottom:12px">
+        <div style="font-size:13px;font-weight:700;color:var(--gold);margin-bottom:6px">🎲 שקלולי Rarity (חייב לסכום ל-100)</div>
+        <div class="rewards-grid" data-keys="gacha_weight_common,gacha_weight_uncommon,gacha_weight_rare,gacha_weight_legendary,gacha_weight_mythic"></div>
+      </div>
+
+      <div style="margin-bottom:12px">
+        <div style="font-size:13px;font-weight:700;color:var(--gold);margin-bottom:6px">⭐ Featured (איזה פריט במאגר מקבל בוסט)</div>
+        <div class="rewards-grid" data-keys="gacha_featured_id,gacha_featured_boost_pct"></div>
+      </div>
+
+      <div style="margin-bottom:8px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <div style="font-size:13px;font-weight:700;color:var(--gold)">📦 מאגר הפרסים</div>
+          <button id="gacha-add-btn" class="btn-primary" style="padding:6px 14px;font-size:12px">+ הוסף פריט</button>
+        </div>
+        <div id="gacha-pool-list" style="display:flex;flex-direction:column;gap:6px;font-size:12px">
+          <div style="color:var(--muted);padding:10px;text-align:center">⏳ טוען...</div>
+        </div>
+      </div>
+
+      <div id="gacha-status" style="font-size:11px;color:var(--muted);text-align:center;margin-top:8px"></div>
+    </div>
+  </section>
+
   <!-- 🔥 Daily Deals (stage 21) -->
   <section id="daily-deals-section" style="margin-bottom:12px">
     <h2>🔥 Daily Deals — דיל היום <button class="tip-btn" data-tip-text="<strong>🔥 Daily Deals</strong><br>הצעה אחת ביום, נבחרת אוטומטית מהמאגר. 50-70% הנחה.<div class=&quot;tip-example&quot;>💡 <strong>איך זה עובד</strong>:<br>1. בחצות שעון ישראל, השרת בוחר אחד מהמודלים הפעילים לפי hash של התאריך — דטרמיניסטי, כולם רואים את אותו הdeal היום, מתחלף מחר.<br>2. השחקן רואה banner ב-banner בבית + modal עם כפתור קנייה + countdown.<br>3. שחקן יכול לקנות פעם אחת ביום (per deal).<br>4. ב-24:00 בחצות שעון ישראל מתאפס — דיל חדש מופיע.<br><br>📊 <strong>Override</strong>: בחר deal ספציפי למטה כדי להכריח אותו להיום (למשל לחגים).<br>⚠ <strong>אנטי cheat</strong>: השרת מוודא ש-dealId שהקלינט שולח הוא אכן הdeal של היום (לא יקבל קנייה לdeal של מחר/אתמול).</div>">?</button></h2>
@@ -2546,6 +2585,23 @@
     dyn_comeback_reward:     'פרס ה-💎 שנותן ה-comeback overlay.<div class="tip-example">📊 ברירת מחדל 150💎.<br>💡 גדול מספיק כדי שירגיש משמעותי, קטן מספיק כדי שלא יהיה אטרקציה לפנות-חוץ-בעצמך.<br>📊 ערכים: 50 (קמצני), 150 (default), 300 (נדיב, למתחילים), 500 (אגרסיבי).</div>',
     dyn_comeback_freeze_gift: 'מספר הקפאות חינם שנותנים עם ה-comeback bonus.<div class="tip-example">📊 ברירת מחדל 1.<br>💡 השילוב 150💎 + 1 הקפאה = "ברוך שובך + אנחנו נשמור עליך לא לנפול שוב". פסיכולוגית חזק.<br>📊 ערך 0 = רק 💎, ערך 2 = "פרמיום" comeback. ערך 3+ = ייצור הקפאות בחינם דרך win-back farming, אל תעלה מעל 1-2.</div>',
 
+    // ---- Skin Gacha (stage 18) ----
+    gacha_enabled: 'הפעלת מערכת Gacha.<div class="tip-example">📊 ברירת מחדל פעיל. <strong>זה ה-pattern של Genshin/Apex</strong> שעושה $4B/שנה.<br>💡 השחקן רואה banner קוסמי-סגול בבית + יכול לפתוח modal לפול. נדירים מובטחים מ-pity system כל N פולים.<br>⚠ כיבוי = מסתיר לחלוטין את ה-UI. שחקנים שכבר פתחו פולים ישמרו את הפרסים.</div>',
+    gacha_show_on_home: 'הצגת ה-banner של Gacha בבית.<div class="tip-example">📊 ברירת מחדל פעיל. כיבוי = מסתיר את ה-banner בלבד (ה-modal עדיין נגיש דרך admin/קוד אחר אם יש).</div>',
+    gacha_name: 'שם המערכת שמוצג לשחקן.<div class="tip-example">📊 ברירת מחדל "🎰 גאצ׳ה סקינים". ערכים: "🎁 קופסת ההפתעה", "🎰 קזינו הפרסים", "✨ מתנות מיתיות".</div>',
+    gacha_pity_threshold: 'כמה פולים לפני שlegendary+ מובטח.<div class="tip-example">📊 ברירת מחדל 50. ערכים: 30-100.<br>💡 <strong>Pity system קריטי</strong>: בלי זה השחקנים מתייאשים. עם זה הם יודעים "אם אעשה עוד X פולים אקבל בטוח משהו טוב" — וזה דוחף להמשיך לקנות.<br>📊 ערך נמוך (30) = שחקן מקבל legendary פעמיים בחודש. גבוה (100) = פעם בחודש. Genshin/Apex משתמשים ב-80-90.</div>',
+    gacha_price_single: 'מחיר פול בודד.<div class="tip-example">📊 ברירת מחדל 100💎. ערכים: 50-300.<br>💡 צריך להיות נמוך מספיק שזה מרגיש "סביר" (חלק מהתקציב היומי שהשחקן יכול להרוויח) אבל גבוה מספיק שיתר על הגירוי.</div>',
+    gacha_price_ten: 'מחיר 10 פולים.<div class="tip-example">📊 ברירת מחדל 900💎 = הנחה של 10% מהמחיר היחיד (100 × 10).<br>💡 <strong>מאוד חשוב למוניטיזציה</strong>: רוב הGacha money בא מ-10-pulls. ההנחה דוחפת לקנייה גדולה במקום בודדת.<br>📊 ערכים: 0% הנחה (1000), 10% (900 — תעשייה), 15% (850 — אגרסיבי).</div>',
+    gacha_free_pull_enabled: 'פול חינמי יומי.<div class="tip-example">📊 ברירת מחדל פעיל. <strong>זה Daily-return hook חזק מאוד</strong>: שחקנים פותחים את האפליקציה כל יום לקבל את הפול החינם, ואז (אם אהבו) קונים עוד.<br>⚠ כיבוי יוריד את ה-DAU. מומלץ להשאיר.</div>',
+    gacha_weight_common: 'אחוז סיכוי לפול common.<div class="tip-example">📊 ברירת מחדל 60%. <strong>חמשת השקלולים חייבים לסכום ל-100%</strong>.<br>💡 common צריך להיות הגבוה ביותר כדי שלmajority של פולים יהיו "consolation". טווח: 50-70%.</div>',
+    gacha_weight_uncommon: 'אחוז סיכוי ל-uncommon.<div class="tip-example">📊 ברירת מחדל 25%. ערכים: 20-30%.</div>',
+    gacha_weight_rare: 'אחוז סיכוי ל-rare.<div class="tip-example">📊 ברירת מחדל 12%. ערכים: 8-15%.<br>💡 זה ה-"מצוין!" הסטנדרטי שהשחקן מקבל פעם בכמה פולים.</div>',
+    gacha_weight_legendary: 'אחוז סיכוי ל-legendary.<div class="tip-example">📊 ברירת מחדל 2.5%. ערכים: 1-5%.<br>💡 ה-dopamine hit הגדול. עם 2.5% × pity=50, שחקן יקבל legendary בערך פעם ב-30-40 פולים.</div>',
+    gacha_weight_mythic: 'אחוז סיכוי ל-mythic.<div class="tip-example">📊 ברירת מחדל 0.5% (1 ל-200 פולים). ערכים: 0.1-1%.<br>💡 <strong>מיתיים זה ה"רגעים שזוכרים"</strong>. הם נדירים בכוונה. שחקן שיקבל mythic ידבר עליו לחברים = ויראליות.</div>',
+    gacha_featured_id: 'ID של פריט במאגר שיקבל בוסט.<div class="tip-example">📊 ריק = ללא featured. הזן id מספרי של פריט מהמאגר → יקבל +30% משקל בתוך ה-rarity שלו.<br>💡 שימוש: לרוטציה שבועית של "סקין השבוע" — שחקנים יודעים שעכשיו זה הזמן לקנות פולים אם הם רוצים את הסקין הזה.</div>',
+    gacha_featured_boost_pct: 'אחוז הבוסט ל-featured.<div class="tip-example">📊 ברירת מחדל 30%. ערכים: 20-100%.<br>💡 100% = הסיכוי לקבל את הפריט הזה בתוך ה-rarity מוכפל. ערכים גבוהים מדי גורמים ל-rarity להיות כמעט גרירני (deterministic).</div>',
+    gacha_dups_to_gems_pct: 'אחוז המרת כפלים ל-💎.<div class="tip-example">📊 ברירת מחדל 50%. ערכים: 30-100%.<br>💡 כשהשחקן מקבל סקין שכבר יש לו, אנחנו ממירים אוטומטית ל-💎. הערך כאן הוא אחוז ממחיר הסקין המקורי. 50% = הוגן. 100% = גנרי.</div>',
+
     // ---- Daily Deals (stage 21) ----
     daily_deals_enabled: 'הפעלת מערכת Daily Deals.<div class="tip-example">📊 ברירת מחדל פעיל. כאשר מופעל, כל יום בחצות שעון ישראל נבחר deal אחד מהמאגר ומוצג בbanner הבית + modal.<br>💡 <strong>זה Daily-return hook חזק</strong>: שחקנים יפתחו את האפליקציה כל יום כדי "לראות מה היום". 30-40% מהשחקנים שיראו את הbanner ילחצו עליו, 10-20% יקנו.<br>⚠ כיבוי מסתיר לחלוטין את הbanner. דילים פעילים במאגר נשארים — מחכים להפעלה מחדש.</div>',
     daily_deals_show_on_home: 'הצגת ה-banner בראש המסך הראשי.<div class="tip-example">📊 ברירת מחדל פעיל. כיבוי = הdeal עדיין יבחר על-ידי השרת, אבל לא יוצג ב-banner. ה-modal עדיין יהיה נגיש דרך admin/API.<br>💡 כיבוי מתאים לA/B test — חצי מהשחקנים רואים banner, חצי לא.</div>',
@@ -3339,6 +3395,154 @@
     loadSeasonPassTiers();
     loadDailySpecialPicker();
     loadDailyDeals();
+    loadGachaPool();
+  }
+
+  // ============================================================
+  // 🎰 Gacha pool admin
+  // ============================================================
+  var GACHA_RARITY_COLORS = {
+    common:    '#9CA3AF', uncommon: '#10B981', rare: '#3B82F6',
+    legendary: '#A855F7', mythic:   '#F59E0B'
+  };
+  async function loadGachaPool() {
+    var host = document.getElementById('gacha-pool-list');
+    if (!host) return;
+    try {
+      var r = await fetch('/' + ADMIN_PATH + '/api/gacha/pool').then(function(r){return r.json();});
+      var entries = (r && r.pool) || [];
+      if (!entries.length) {
+        host.innerHTML = '<div style="color:var(--muted);padding:10px;text-align:center">המאגר ריק — הוסף פריט ראשון</div>';
+      } else {
+        host.innerHTML = entries.map(function(e) {
+          var color = GACHA_RARITY_COLORS[e.rarity] || '#999';
+          var statusPill = e.is_enabled
+            ? '<span style="display:inline-block;padding:2px 6px;background:rgba(159,225,203,0.4);color:#04342C;border-radius:6px;font-size:10px;font-weight:700">✓ פעיל</span>'
+            : '<span style="display:inline-block;padding:2px 6px;background:rgba(0,0,0,0.15);color:var(--muted);border-radius:6px;font-size:10px;font-weight:700">⏸ כבוי</span>';
+          var contentStr = e.skin_id ? ('🎨 ' + e.skin_id) :
+            (e.reward_type === 'gems' ? ('💎 ' + e.amount) :
+             e.reward_type === 'bp_tier' ? ('🎖 ' + e.amount + ' דרגות') :
+             e.reward_type === 'chest' ? ('🎁 ' + e.amount + ' תיבות') :
+             e.reward_type === 'freeze' ? ('🛡 ' + e.amount + ' הקפאות') : e.reward_type);
+          return '<div style="display:grid;grid-template-columns:auto auto 1fr auto auto;gap:10px;padding:10px 12px;background:var(--bg);border-radius:8px;align-items:center;border-right:4px solid ' + color + '">' +
+            '<div style="font-size:20px">' + (e.emoji || '🎁') + '</div>' +
+            '<div style="font-size:11px;font-weight:700;color:' + color + ';padding:3px 8px;background:rgba(0,0,0,0.04);border-radius:6px">' + e.rarity + '</div>' +
+            '<div style="min-width:0">' +
+              '<div style="font-weight:700;color:var(--fg);font-size:12px">' + (e.display_name || '(ללא שם)') + ' ' + statusPill + '</div>' +
+              '<div style="font-size:10px;color:var(--muted);margin-top:2px">' + contentStr + ' · weight ' + e.weight + ' · נפלו: ' + (e.total_pulled || 0) + '</div>' +
+            '</div>' +
+            '<button class="btn-secondary" data-gacha-edit="' + e.id + '" style="padding:4px 10px;font-size:11px">✏️</button>' +
+            '<button class="btn-danger" data-gacha-delete="' + e.id + '" style="padding:4px 10px;font-size:11px">🗑</button>' +
+          '</div>';
+        }).join('');
+        host.querySelectorAll('[data-gacha-edit]').forEach(function(b) {
+          b.onclick = function() {
+            var id = parseInt(b.getAttribute('data-gacha-edit'), 10);
+            var entry = entries.find(function(e) { return e.id === id; });
+            if (entry) openGachaEditor(entry);
+          };
+        });
+        host.querySelectorAll('[data-gacha-delete]').forEach(function(b) {
+          b.onclick = async function() {
+            var id = parseInt(b.getAttribute('data-gacha-delete'), 10);
+            var entry = entries.find(function(e) { return e.id === id; });
+            if (!confirm('למחוק את "' + (entry && entry.display_name) + '"?')) return;
+            await fetch('/' + ADMIN_PATH + '/api/gacha/pool/' + id, { method: 'DELETE' });
+            loadGachaPool();
+          };
+        });
+      }
+    } catch (e) {
+      host.innerHTML = '<div style="color:var(--danger);padding:10px">שגיאה: ' + e.message + '</div>';
+    }
+    var addBtn = document.getElementById('gacha-add-btn');
+    if (addBtn) addBtn.onclick = function() { openGachaEditor(null); };
+  }
+
+  function openGachaEditor(entry) {
+    var isEdit = !!entry;
+    var e = entry || {
+      rarity: 'common', reward_type: 'gems', amount: 50,
+      skin_id: '', display_name: '50 יהלומים', emoji: '💎',
+      weight: 100, is_enabled: true
+    };
+    var ov = document.createElement('div');
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:9999;padding:14px';
+    ov.innerHTML =
+      '<div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:20px;max-width:440px;width:100%;max-height:92vh;overflow-y:auto;direction:rtl;text-align:right">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">' +
+          '<h3 style="margin:0;color:var(--fg)">' + (isEdit ? '✏️ ערוך פריט' : '+ פריט חדש') + '</h3>' +
+          '<button id="gacha-edit-close" style="border:none;background:none;font-size:20px;cursor:pointer;color:var(--muted)">×</button>' +
+        '</div>' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
+          '<label style="font-size:12px;color:var(--muted)">Rarity' +
+            '<select id="ge-rarity" style="width:100%;padding:6px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--fg);margin-top:4px">' +
+              ['common','uncommon','rare','legendary','mythic'].map(function(r) {
+                return '<option value="' + r + '"' + (e.rarity === r ? ' selected' : '') + '>' + r + '</option>';
+              }).join('') +
+            '</select></label>' +
+          '<label style="font-size:12px;color:var(--muted)">סוג פרס' +
+            '<select id="ge-type" style="width:100%;padding:6px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--fg);margin-top:4px">' +
+              ['gems','skin','bp_tier','chest','freeze'].map(function(t) {
+                return '<option value="' + t + '"' + (e.reward_type === t ? ' selected' : '') + '>' + t + '</option>';
+              }).join('') +
+            '</select></label>' +
+        '</div>' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px">' +
+          '<label style="font-size:12px;color:var(--muted)">כמות (לgems/bp/chest/freeze)<input id="ge-amount" type="number" value="' + (e.amount || '') + '" style="width:100%;padding:6px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--fg);margin-top:4px"></label>' +
+          '<label style="font-size:12px;color:var(--muted)">skin_id (לskin)<input id="ge-skin" value="' + escapeAttr(e.skin_id || '') + '" placeholder="fire/aurora/space" style="width:100%;padding:6px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--fg);margin-top:4px"></label>' +
+        '</div>' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px">' +
+          '<label style="font-size:12px;color:var(--muted)">שם תצוגה<input id="ge-name" value="' + escapeAttr(e.display_name || '') + '" style="width:100%;padding:6px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--fg);margin-top:4px"></label>' +
+          '<label style="font-size:12px;color:var(--muted)">אימוג\'י<input id="ge-emoji" value="' + escapeAttr(e.emoji || '💎') + '" maxlength="4" style="width:100%;padding:6px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--fg);margin-top:4px;text-align:center;font-size:18px"></label>' +
+        '</div>' +
+        '<label style="font-size:12px;color:var(--muted);display:block;margin-top:10px">משקל (יחסי לפריטים אחרים באותה rarity)<input id="ge-weight" type="number" value="' + (e.weight || 100) + '" style="width:100%;padding:6px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--fg);margin-top:4px"></label>' +
+        '<label style="font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px;margin-top:10px"><input id="ge-enabled" type="checkbox" ' + (e.is_enabled ? 'checked' : '') + '> פעיל (יכול ליפול בפול)</label>' +
+        '<div style="display:flex;gap:10px;margin-top:16px">' +
+          '<button id="ge-save" class="btn-primary" style="flex:1;padding:10px">💾 שמור</button>' +
+          '<button id="ge-cancel" class="btn-secondary" style="padding:10px 16px">ביטול</button>' +
+        '</div>' +
+        '<div id="ge-status" style="font-size:11px;color:var(--muted);text-align:center;margin-top:8px"></div>' +
+      '</div>';
+    document.body.appendChild(ov);
+    var close = function() { try { ov.remove(); } catch (e) {} };
+    document.getElementById('gacha-edit-close').onclick = close;
+    document.getElementById('ge-cancel').onclick = close;
+    ov.addEventListener('click', function(ev) { if (ev.target === ov) close(); });
+    document.getElementById('ge-save').onclick = async function() {
+      var status = document.getElementById('ge-status');
+      var body = {
+        rarity: document.getElementById('ge-rarity').value,
+        reward_type: document.getElementById('ge-type').value,
+        amount: parseInt(document.getElementById('ge-amount').value, 10) || null,
+        skin_id: document.getElementById('ge-skin').value.trim() || null,
+        display_name: document.getElementById('ge-name').value,
+        emoji: document.getElementById('ge-emoji').value,
+        weight: parseInt(document.getElementById('ge-weight').value, 10) || 100,
+        is_enabled: document.getElementById('ge-enabled').checked
+      };
+      try {
+        var url = '/' + ADMIN_PATH + '/api/gacha/pool' + (isEdit ? '/' + entry.id : '');
+        var method = isEdit ? 'PATCH' : 'POST';
+        var r = await fetch(url, {
+          method: method,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+        var resp = await r.json();
+        if (resp.ok) {
+          status.textContent = '✓ נשמר';
+          status.style.color = 'var(--success)';
+          setTimeout(function() { close(); loadGachaPool(); }, 500);
+        } else {
+          status.textContent = '✗ ' + (resp.error || 'שגיאה');
+          status.style.color = 'var(--danger)';
+        }
+      } catch (e) {
+        status.textContent = '✗ ' + e.message;
+        status.style.color = 'var(--danger)';
+      }
+    };
   }
 
   // ============================================================
