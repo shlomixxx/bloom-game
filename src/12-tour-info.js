@@ -704,6 +704,16 @@
           continueHtml +
           // PRIMARY CTA — right after score
           '<button class="btn over-again-btn" id="again">' + againLabel + '</button>' +
+          // Stage 32 — Replay Share button. Only when score crosses threshold.
+          // Pulsing pink-purple to draw the eye. Most addictive viral surface.
+          (function() {
+            try {
+              if (typeof shouldOfferReplayShare === 'function' && shouldOfferReplayShare(score)) {
+                return '<button class="btn over-replay-share-btn" id="over-replay-share">📤 שתף את הניצחון שלך</button>';
+              }
+            } catch (e) {}
+            return '';
+          })() +
           watchAdHtml +
           (function() {
             if (mode !== 'daily' && mode !== 'practice') return '';
@@ -833,6 +843,23 @@
         if (isContestOver) init('contest', { fresh: true });
         else init('practice', { fresh: true });
       };
+      // Stage 32 — Replay share button (only present when score crossed threshold).
+      var replayBtn = document.getElementById('over-replay-share');
+      if (replayBtn && typeof showReplayShareModal === 'function') {
+        replayBtn.onclick = function() {
+          try {
+            var playerName = '';
+            try { playerName = (localStorage.getItem(NAME_KEY) || '').trim(); } catch (e) {}
+            showReplayShareModal({
+              score: score,
+              tier: highestTier,
+              mode: mode,
+              isNewBest: !!opts.isNewBest,
+              playerName: playerName
+            });
+          } catch (e) {}
+        };
+      }
 
       // §1.6 — already-played-today funnel CTAs. Only present when the
       // game-over is the "you've already played daily" variant.

@@ -1568,6 +1568,30 @@
     </div>
   </section>
 
+  <!-- 📤 Replay Sharing (stage 32) -->
+  <section id="replay-share-section" style="margin-bottom:12px">
+    <h2>📤 שיתוף Replay / ויראליות <button class="tip-btn" data-tip-text="<strong>📤 Replay Sharing</strong><br>K-factor הגדול ביותר במשחקי מובייל.<div class=&quot;tip-example&quot;>💡 <strong>איך זה עובד</strong>: כשהשחקן מקבל ציון גבוה (מעל min_score), כפתור גדול ופועם 'שתף את הניצחון שלך' מופיע ב-game-over. לחיצה → modal עם PNG מעוצב + 4 כפתורי שיתוף (WhatsApp, native, copy, save).<br><br>📊 <strong>למה זה חזק</strong>: כל replay מסופר ל-WhatsApp = הזדמנות שחבר ילחץ על ה-link וייכנס למשחק. Genshin / Clash Royale מדווחים שזה מקור #1 ל-organic acquisition.<br><br>📊 <strong>טקסט ה-share</strong>: ניתן לעריכה כאן. תומך placeholders: <code>{score}</code>, <code>{tier}</code>, <code>{url}</code>. הטקסט הnormal: 'נסה לשבור אותי' = challenge psychology.</div>">?</button></h2>
+    <div style="padding:12px 16px;background:var(--card);border-radius:10px;margin-top:8px">
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+        <div class="rewards-grid" data-keys="replay_share_enabled,replay_share_min_score"></div>
+      </div>
+
+      <div style="margin-bottom:12px">
+        <div style="font-size:13px;font-weight:700;color:var(--gold);margin-bottom:6px">✏️ טקסט השיתוף + Branding</div>
+        <div class="rewards-grid" data-keys="replay_share_text_hebrew,replay_share_brand_text,replay_share_game_url"></div>
+      </div>
+
+      <div id="replay-share-stats" style="font-size:12px;color:var(--muted);padding:8px;background:var(--bg);border-radius:8px;margin-bottom:10px">⏳ טוען סטטוס...</div>
+
+      <div style="font-size:13px;font-weight:700;color:var(--gold);margin-bottom:6px">🏆 Top 20 משתפים (30 ימים)</div>
+      <div id="replay-share-top" style="display:flex;flex-direction:column;gap:4px;font-size:11px;max-height:300px;overflow-y:auto">
+        <div style="color:var(--muted);padding:10px;text-align:center">טוען...</div>
+      </div>
+
+    </div>
+  </section>
+
   <!-- ⭐ Lifetime Progression / Prestige (stage 30) -->
   <section id="lifetime-section" style="margin-bottom:12px">
     <h2>⭐ פרוגרס חיים / Prestige <button class="tip-btn" data-tip-text="<strong>⭐ Lifetime Progression</strong><br>Call of Duty Prestige pattern — לעולם לא מתאפס.<div class=&quot;tip-example&quot;>💡 <strong>למה זה ממכר</strong>: שלא כמו BP שמתאפס כל עונה, ה-progress החיים נשמר לעולם. ⭐ על הפרופיל = יוקרה משחקית קבועה. מעודד שחקנים לשחק <strong>חודשים</strong> לגרינדינג.<br><br>📊 ה-XP מחושב אוטומטית מ-aggregate של פעילות קיימת: משחקים×10, הישגים×75, יהלומים÷2, תאי אלבום×25, פולי גאצ\'ה×5, דרגת פרח×50, דרגת BP×100, חברים×200.<br><br>📊 בהגיע לדרגה 100 → פרסטיג\' (⭐ + 5,000💎). מקסימום 10 ⭐ — אגדה.</div>">?</button></h2>
@@ -2751,6 +2775,13 @@
     dyn_comeback_reward:     'פרס ה-💎 שנותן ה-comeback overlay.<div class="tip-example">📊 ברירת מחדל 150💎.<br>💡 גדול מספיק כדי שירגיש משמעותי, קטן מספיק כדי שלא יהיה אטרקציה לפנות-חוץ-בעצמך.<br>📊 ערכים: 50 (קמצני), 150 (default), 300 (נדיב, למתחילים), 500 (אגרסיבי).</div>',
     dyn_comeback_freeze_gift: 'מספר הקפאות חינם שנותנים עם ה-comeback bonus.<div class="tip-example">📊 ברירת מחדל 1.<br>💡 השילוב 150💎 + 1 הקפאה = "ברוך שובך + אנחנו נשמור עליך לא לנפול שוב". פסיכולוגית חזק.<br>📊 ערך 0 = רק 💎, ערך 2 = "פרמיום" comeback. ערך 3+ = ייצור הקפאות בחינם דרך win-back farming, אל תעלה מעל 1-2.</div>',
 
+    // ---- Replay Sharing (stage 32) ----
+    replay_share_enabled: 'הפעלת מערכת שיתוף Replay.<div class="tip-example">📊 ברירת מחדל פעיל. <strong>K-factor הגדול ביותר במשחקי מובייל</strong> — כל replay מסופר ל-WhatsApp = הזדמנות שחבר ילחץ ויירשם.<br>💡 הכפתור מופיע ב-game-over רק לציונים גבוהים (מעל min_score). שחקנים עם ציון נמוך לא יקבלו הצעה — מונע ספאם של "ציון אפסי" לחברים.<br>📊 Genshin/Clash Royale מדווחים שזה מקור #1 ל-organic acquisition.</div>',
+    replay_share_min_score: 'הציון המינימלי להצגת כפתור השיתוף.<div class="tip-example">📊 ברירת מחדל 10,000. ערכים: 5,000-50,000.<br>💡 נמוך מדי → שחקנים חדשים ישתפו ציונים נמוכים שלא ירשימו. גבוה מדי → רוב השחקנים לעולם לא יראו את הכפתור.<br>📊 10,000 = ~20% מהמשחקים → נקודת איזון טובה.</div>',
+    replay_share_text_hebrew: 'הטקסט שמסופר ב-WhatsApp.<div class="tip-example">📊 ברירת מחדל: "🌸 שברתי שיא ב-BLOOM! הגעתי ל-{score} נקודות. נסה לשבור אותי 👉 {url}"<br>💡 <strong>placeholders</strong>: <code>{score}</code>, <code>{tier}</code>, <code>{url}</code>.<br>📊 ה-"נסה לשבור אותי" = challenge psychology — דוחף חברים ללחוץ. אם תשנה — תשמור על challenge tone.</div>',
+    replay_share_brand_text: 'טקסט branding תחתון בכרטיס ה-share.<div class="tip-example">📊 ברירת מחדל "BLOOM · משחק מיזוג ממכר".<br>💡 מי שמסתכל ב-WhatsApp יראה את זה מתחת לציון. השאר קצר וקליט.</div>',
+    replay_share_game_url: 'ה-URL שמסופר כל פעם.<div class="tip-example">📊 ברירת מחדל: ה-URL של Railway (https://bloom-web-production-f3bd.up.railway.app).<br>💡 כשתעבור לדומיין משלך (bloom-game.co.il), שנה כאן. ה-URL נצרך גם ב-PNG וגם בטקסט ה-WhatsApp.<br>⚠ אם תשנה ל-URL לא חוקי → שחקנים שיקליקו לא יגיעו לאף מקום.</div>',
+
     // ---- Smart Notifications (stage 31) ----
     smart_push_enabled: 'הפעלת ה-scheduler האוטומטי של ההתראות החכמות.<div class="tip-example">📊 ברירת מחדל פעיל.<br>💡 שונה מ-Broadcast (שולח לכולם את אותה הודעה) — Scheduler זה <strong>בוחר למי לשלוח, מתי, ולמה</strong> באופן אישי.<br>📊 8 סיגנלים מדורגים: 😢 פרח בוכה > 🏆 טורניר נגמר > 👥 חבר שיחק > 🔥 רצף בסכנה > 🎖 BP unclaimed > 👋 קאמבק > 🌟 daily special.<br>⚠ כיבוי = מערכת הBroadcast לא מושפעת. רק ה-auto-personal מושבת.</div>',
     smart_push_cooldown_hours: 'מינימום שעות בין הודעה להודעה לאותו device.<div class="tip-example">📊 ברירת מחדל 12. ערכים: 6-48.<br>💡 שחקן שמקבל יותר מ-2 push ביום ימחק את האפליקציה. 12 שעות = max 2 הודעות ביום במקרה הכי-חזק. 24 שעות = max 1.</div>',
@@ -3617,6 +3648,58 @@
     loadBundles();
     loadAchLb();
     loadSmartPush();
+    loadReplayStats();
+  }
+
+  // ============================================================
+  // 📤 Replay Sharing admin (telemetry only — no CRUD)
+  // ============================================================
+  var REPLAY_VIA_LABELS = {
+    whatsapp:   { emoji: '💬', label: 'WhatsApp' },
+    native:     { emoji: '📤', label: 'Native' },
+    twitter:    { emoji: '🐦', label: 'Twitter' },
+    copy_link:  { emoji: '📋', label: 'Copy' },
+    save_image: { emoji: '💾', label: 'Save' }
+  };
+  async function loadReplayStats() {
+    var statsHost = document.getElementById('replay-share-stats');
+    var topHost = document.getElementById('replay-share-top');
+    if (!statsHost || !topHost) return;
+    try {
+      var r = await fetch('/' + ADMIN_PATH + '/api/replay/stats').then(function(r){return r.json();});
+      var s = (r && r.stats) || {};
+      var via = (r && r.viaBreakdown) || [];
+      var top = (r && r.topSharers) || [];
+      var viaHtml = via.length
+        ? via.map(function(v) {
+            var l = REPLAY_VIA_LABELS[v.via] || { emoji: '📤', label: v.via };
+            return '<span style="display:inline-block;margin:0 4px;padding:2px 8px;background:rgba(168,85,247,0.15);border-radius:6px">' + l.emoji + ' ' + l.label + ': ' + v.cnt + '</span>';
+          }).join('')
+        : '<span style="opacity:0.6">עדיין אין שיתופים</span>';
+      statsHost.innerHTML =
+        '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px">' +
+          '<div style="text-align:center"><div style="font-size:18px;font-weight:900;color:var(--gold)">' + (s.total_shares || 0) + '</div><div style="font-size:10px">בסך הכל</div></div>' +
+          '<div style="text-align:center"><div style="font-size:18px;font-weight:900;color:var(--gold)">' + (s.shares_24h || 0) + '</div><div style="font-size:10px">24 שעות</div></div>' +
+          '<div style="text-align:center"><div style="font-size:18px;font-weight:900;color:var(--gold)">' + (s.shares_7d || 0) + '</div><div style="font-size:10px">7 ימים</div></div>' +
+          '<div style="text-align:center"><div style="font-size:18px;font-weight:900;color:var(--gold)">' + (s.unique_sharers || 0) + '</div><div style="font-size:10px">משתפים</div></div>' +
+        '</div>' +
+        '<div style="font-size:11px;text-align:right">פילוח לפי ערוץ (7 ימים): ' + viaHtml + '</div>';
+      if (!top.length) {
+        topHost.innerHTML = '<div style="color:var(--muted);padding:10px;text-align:center">עדיין לא היו שיתופים</div>';
+      } else {
+        topHost.innerHTML = top.map(function(p, i) {
+          var medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : ('#' + (i + 1));
+          return '<div style="display:grid;grid-template-columns:50px 1fr auto auto;gap:10px;padding:6px 10px;background:var(--bg);border-radius:6px;align-items:center">' +
+            '<div style="font-weight:900;text-align:center;color:var(--gold)">' + medal + '</div>' +
+            '<div style="font-weight:700;color:var(--fg);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + p.name + '</div>' +
+            '<div style="font-size:10px;color:var(--muted)">שיא: ' + (p.best_shared_score || 0).toLocaleString() + '</div>' +
+            '<div style="font-weight:900;color:var(--gold)">📤 ' + p.share_count + '</div>' +
+          '</div>';
+        }).join('');
+      }
+    } catch (e) {
+      statsHost.innerHTML = '<div style="color:var(--danger)">שגיאה: ' + e.message + '</div>';
+    }
   }
 
   // ============================================================

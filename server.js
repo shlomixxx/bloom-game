@@ -6404,6 +6404,68 @@ app.get('/api/smart-push/preview', async (req, res) => {
 });
 
 // ============================================================
+// Stage 32 — Replay Sharing
+// Returns share config (threshold + brand text + URL) and logs
+// share events for viral telemetry.
+// ============================================================
+async function _loadReplayConfig() {
+  try {
+    const r = await pool.query(`SELECT key, value FROM game_config WHERE key LIKE 'replay_share_%'`);
+    const out = {};
+    r.rows.forEach(row => { out[row.key] = row.value; });
+    return out;
+  } catch (e) { return {}; }
+}
+
+app.get('/api/replay/config', async (_req, res) => {
+  try {
+    const cfg = await _loadReplayConfig();
+    if (cfg.replay_share_enabled === 'false') return res.json({ ok: true, enabled: false });
+    res.json({
+      ok: true,
+      enabled: true,
+      minScore: parseInt(cfg.replay_share_min_score || '10000', 10) || 10000,
+      shareText: cfg.replay_share_text_hebrew || '🌸 שברתי שיא ב-BLOOM! הגעתי ל-{score} נקודות. נסה לשבור אותי 👉 {url}',
+      brandText: cfg.replay_share_brand_text || 'BLOOM · משחק מיזוג ממכר',
+      gameUrl: cfg.replay_share_game_url || 'https://bloom-web-production-f3bd.up.railway.app'
+    });
+  } catch (e) {
+    console.error('GET /api/replay/config', e);
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
+app.post('/api/replay/track-share', requireDeviceAuth, async (req, res) => {
+  try {
+    const { deviceId, score, tier, mode, sharedVia, isNewBest } = req.body || {};
+    if (typeof deviceId !== 'string' || deviceId.length < 8 || deviceId.length > 64) {
+      return res.status(400).json({ error: 'bad_device' });
+    }
+    const sc = parseInt(score, 10);
+    if (!Number.isFinite(sc) || sc < 0 || sc > 10000000) {
+      return res.status(400).json({ error: 'bad_score' });
+    }
+    const ALLOWED_VIA = ['whatsapp', 'native', 'twitter', 'copy_link', 'save_image'];
+    if (sharedVia && !ALLOWED_VIA.includes(sharedVia)) {
+      return res.status(400).json({ error: 'bad_via' });
+    }
+    if (!checkRateLimit('replay_track', deviceId, 30, 60 * 60 * 1000)) {
+      return res.status(429).json({ error: 'rate_limited' });
+    }
+    await pool.query(
+      `INSERT INTO replay_shares (device_id, score, tier, mode, shared_via, is_new_best)
+           VALUES ($1, $2, $3, $4, $5, $6)`,
+      [deviceId, sc, parseInt(tier, 10) || null, (mode || '').toString().slice(0, 20),
+       sharedVia || null, !!isNewBest]
+    );
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('POST /api/replay/track-share', e);
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
+// ============================================================
 // Live Tournaments — stage 12 (May 2026)
 //
 // Scheduled prime-time events with a fixed window + top-N prize
@@ -9034,6 +9096,46 @@ if (ADMIN_PATH && ADMIN_PASSWORD) {
       res.json({ ok: true, message: 'Scan triggered in background' });
     } catch (e) {
       console.error('POST admin/smart-push/scan-now', e);
+      res.status(500).json({ error: 'internal' });
+    }
+  });
+
+  // ============================================================
+  // Admin: Replay Sharing telemetry (stage 32)
+  // ============================================================
+  adminRouter.get('/api/replay/stats', async (_req, res) => {
+    try {
+      const overallR = await pool.query(
+        `SELECT
+           COUNT(*) AS total_shares,
+           COUNT(*) FILTER (WHERE shared_at > NOW() - INTERVAL '24 hours') AS shares_24h,
+           COUNT(*) FILTER (WHERE shared_at > NOW() - INTERVAL '7 days') AS shares_7d,
+           COUNT(DISTINCT device_id) AS unique_sharers
+         FROM replay_shares`
+      );
+      const viaR = await pool.query(
+        `SELECT shared_via AS via, COUNT(*) AS cnt
+           FROM replay_shares
+           WHERE shared_at > NOW() - INTERVAL '7 days' AND shared_via IS NOT NULL
+           GROUP BY shared_via ORDER BY cnt DESC`
+      );
+      const topSharersR = await pool.query(
+        `SELECT rs.device_id, COUNT(*) AS share_count, MAX(rs.score) AS best_shared_score,
+                COALESCE(pp.display_name, 'אנונימי') AS name
+           FROM replay_shares rs
+           LEFT JOIN player_profiles pp ON pp.device_id = rs.device_id
+          WHERE rs.shared_at > NOW() - INTERVAL '30 days'
+          GROUP BY rs.device_id, pp.display_name
+          ORDER BY share_count DESC LIMIT 20`
+      );
+      res.json({
+        ok: true,
+        stats: overallR.rows[0],
+        viaBreakdown: viaR.rows,
+        topSharers: topSharersR.rows
+      });
+    } catch (e) {
+      console.error('GET admin/replay/stats', e);
       res.status(500).json({ error: 'internal' });
     }
   });

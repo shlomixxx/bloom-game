@@ -72,6 +72,17 @@ export async function initDb() {
       created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )`,
+    // Stage 32 — Replay Sharing (full CREATE in schema.sql).
+    `CREATE TABLE IF NOT EXISTS replay_shares (
+      id              BIGSERIAL PRIMARY KEY,
+      device_id       VARCHAR(64) NOT NULL,
+      score           INT NOT NULL,
+      tier            INT,
+      mode            VARCHAR(20),
+      shared_via      VARCHAR(20),
+      is_new_best     BOOLEAN DEFAULT FALSE,
+      shared_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`,
     // Stage 31 — Smart Notifications (full CREATE in schema.sql).
     `CREATE TABLE IF NOT EXISTS player_push_state (
       device_id           VARCHAR(64) PRIMARY KEY,

@@ -1165,6 +1165,43 @@ CREATE INDEX IF NOT EXISTS idx_skin_configurations_sort
   ON skin_configurations (sort_order, id);
 
 -- ============================================================
+-- Replay Sharing (Stage 32, May 2026)
+-- After high-score games, generate a share card (canvas → PNG) with
+-- the player's score + branding + game URL. Big "📤 share" button
+-- opens WhatsApp/native share with pre-filled challenge text.
+-- The strongest K-factor lever in mobile games — every shared replay
+-- = potential new user via friend.
+--
+-- We track shares for telemetry: who shares most → admin can reward
+-- top sharers (future viral lever).
+-- ============================================================
+CREATE TABLE IF NOT EXISTS replay_shares (
+  id              BIGSERIAL PRIMARY KEY,
+  device_id       VARCHAR(64) NOT NULL,
+  score           INT NOT NULL,
+  tier            INT,
+  mode            VARCHAR(20),
+  shared_via      VARCHAR(20),  -- 'whatsapp' / 'native' / 'twitter' / 'copy_link' / 'save_image'
+  is_new_best     BOOLEAN DEFAULT FALSE,
+  shared_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_replay_shares_device
+  ON replay_shares (device_id, shared_at DESC);
+CREATE INDEX IF NOT EXISTS idx_replay_shares_recent
+  ON replay_shares (shared_at DESC);
+
+-- 5 config keys.
+INSERT INTO game_config (key, value) VALUES ('replay_share_enabled',         'true') ON CONFLICT (key) DO NOTHING;
+-- Minimum score to trigger the share prompt (lower = more shares but more noise).
+INSERT INTO game_config (key, value) VALUES ('replay_share_min_score',       '10000') ON CONFLICT (key) DO NOTHING;
+-- Pre-filled text for WhatsApp share — supports placeholders {score} {tier} {url}.
+INSERT INTO game_config (key, value) VALUES ('replay_share_text_hebrew',     '🌸 שברתי שיא ב-BLOOM! הגעתי ל-{score} נקודות. נסה לשבור אותי 👉 {url}') ON CONFLICT (key) DO NOTHING;
+-- Brand/footer text on the share card.
+INSERT INTO game_config (key, value) VALUES ('replay_share_brand_text',      'BLOOM · משחק מיזוג ממכר') ON CONFLICT (key) DO NOTHING;
+-- Game URL appended to all share text.
+INSERT INTO game_config (key, value) VALUES ('replay_share_game_url',        'https://bloom-web-production-f3bd.up.railway.app') ON CONFLICT (key) DO NOTHING;
+
+-- ============================================================
 -- Smart Notifications (Stage 31, May 2026)
 -- Server-side scheduler that picks WHO to push, WHEN to push, and
 -- WHY. Each scan: iterate subscribed devices → compute the highest-
