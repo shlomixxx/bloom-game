@@ -21,8 +21,17 @@ export async function initDb() {
     return;
   }
   const schema = await readFile(new URL('./schema.sql', import.meta.url), 'utf8');
-  await pool.query(schema);
-  console.log('[db] schema ready');
+  try {
+    await pool.query(schema);
+    console.log('[db] schema ready');
+  } catch (e) {
+    // If schema.sql has any syntax error, the WHOLE query throws and no
+    // tables get created. By isolating the schema attempt from the migrations
+    // below, we ensure the migration array's CREATE TABLE IF NOT EXISTS
+    // backup statements still run — so a typo in a seed INSERT doesn't take
+    // down new feature tables that the migrations array also defines.
+    console.error('[db] schema.sql failed (will rely on migration backups):', e.message);
+  }
 
   // Auto-migrations: add columns that may be missing from older tables.
   // Each ALTER TABLE IF NOT EXISTS is safe to re-run.

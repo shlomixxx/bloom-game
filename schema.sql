@@ -1241,7 +1241,7 @@ INSERT INTO game_config (key, value) VALUES ('calendar_show_days',       '30')  
 -- Note: dates intentionally in the future so they show up immediately.
 INSERT INTO calendar_events (event_date, title, description, emoji, category, sort_order) VALUES
   ((NOW() AT TIME ZONE 'Asia/Jerusalem')::date + INTERVAL '2 days', 'יום שישי משולש פרסים', 'כל המשחקים מקנים 3× XP — סוף שבוע מיוחד', '🎉', 'weekend', 1),
-  ((NOW() AT TIME ZONE 'Asia/Jerusalem')::date + INTERVAL '7 days', 'שבוע סקינים בלעדי', 'סקין zוהר זמין בגאצ\'ה לזמן מוגבל', '✨', 'gacha', 2),
+  ((NOW() AT TIME ZONE 'Asia/Jerusalem')::date + INTERVAL '7 days', 'שבוע סקינים בלעדי', 'סקין זוהר זמין בגאצה לזמן מוגבל', '✨', 'gacha', 2),
   ((NOW() AT TIME ZONE 'Asia/Jerusalem')::date + INTERVAL '14 days', 'סוף עונה — Battle Pass', 'אסוף את כל הדרגות שמגיעות לך', '🎖', 'battle_pass', 3)
 ON CONFLICT DO NOTHING;
 
