@@ -52,23 +52,38 @@ Quick-scan map of the addiction-loop work. **Update this table whenever a stage 
 | **37** | **Guild Wars** 🛡⚔️ | Clash Royale pattern — clan-vs-clan weekly competition. Boosted guild retention 3-5x at Supercell's launch. Auto-matchmaker runs every 6h, pairs eligible guilds (3+ members, no active war) by power level. 7-day war period. Every member's game score contributes to their guild's war pool via the existing `/guilds/contribute` endpoint (zero client wiring — extended server-side). End of war: lazy-finalize on next state read → winner gets 500💎/member + push notification, loser gets 100💎/member consolation. Min 1 game played to claim. Home tile (purple gradient → gold when reward unclaimed) only mounts when in-guild + has active war OR unclaimed reward. Modal: VS card with both teams' scores + progress bar + countdown, top-10 contributors leaderboard, my-contribution stats. Atomic gem credit + claim-dedup transaction. |
 | **38** | **Trophy Road** 🏆 | The #1 retention mechanism in mobile games (Clash Royale, Brawl Stars). Unlike League/BP, **trophies can GO DOWN**. Win (≥500 score) = +15🏆 (+40 crown / +25 PB bonus). Lose (<100 score) = −8🏆. New-player protection: under 50🏆 = no loss. Safe floor at 0. 8 visual arenas (🌱 sprout → ⚡ legend at 12000) + 10 admin-tunable gem milestones (50→15000💎). Atomic server transaction with per-game dedup. Game-over hook fires automatically with score+tier+isNewBest → server returns delta + arena change. Client renders trophy toast (+15🏆 fly-in) + full-screen arena-promotion overlay when crossing arena boundary. Home tile in dark-blue→gold gradient with breathing pulse when milestone unclaimed. |
 
-### 🚧 In progress
-| # | Stage | Why this is next (addiction impact) |
+### 🚧 In progress (none — awaiting user direction)
+| # | Stage | Why this is next |
 |---|---|---|
-| **17b** | **Stripe IAP integration** | Real USD path — currently all monetization is gems-only. |
+| — | (User picking which stage to test from 35-38 first) | Live to verify the addiction loop |
 
-### 📋 Backlog (ranked by addiction impact / revenue impact, highest first)
+### 📋 Backlog — PURE ADDICTION (no real money needed — ready to ship)
+| Rank | Stage | What it does | Effort | Impact |
+|---|---|---|---|---|
+| **A1** | **Notification Inbox 📬** | Red-badge counter at top-right of home. List of all "new since last visit" events (push history + friend activity + achievement unlocks + tournament results). The single most-tapped UI element in Clash Royale / Brawl Stars / Royal Match. Solves home-discoverability problem. | Med (1-2d) | ★★★★★ |
+| **A2** | **Friend Challenges 🎯** | "אני מאתגר אותך לעבור 67K בלוח X" — direct push to a specific friend with deep-link to the board. Reciprocal: when they finish, you get push with their score. K-factor viral lever. | Med (1-2d) | ★★★★★ |
+| **A3** | **Trophy Chests 🎁** | Unlock physical "chests" at trophy milestones — chest opens after a real-time delay (4h / 8h / 24h). Player must come back to open. Coin Master + Clash Royale pattern — drives 2-3× DAU. | Med (1-2d) | ★★★★★ |
+| **A4** | **Weekly Recap / "BLOOM Wrapped" 📊** | Every Sunday: full-screen summary of the past week (games played / best score / trophies gained / friends played with / hours). Spotify Wrapped pattern. One-time share-ready image. | Small (1d) | ★★★★ |
+| **A5** | **Live PvP Race ⚡** | Real-time 1v1 — both players see the same board seed, race to highest score in 60 seconds. Pure adrenaline. Requires WebSocket. | Large (3-4d) | ★★★★★ |
+| **A6** | **Skill-based duel matchmaking 🎚** | Currently duels are friend-to-friend by code. Add auto-matchmaking for random opponents in the same trophy range. Brings duels to solo players. | Small (1d) | ★★★★ |
+| **A7** | **Daily 7-day Login Calendar 📅** | Visual 7-day grid where each day grants escalating bonus (50→100→200→500→1000💎). Miss a day → start over. Stronger than current single-line daily login. Genshin pattern. | Small (1d) | ★★★ |
+| **A8** | **Squad Tournaments 🏟** | Extends Live Tournaments to be guild-based — 4 guilds compete in a bracket weekend. Massive social pull. | Med (2d) | ★★★★ |
+| **A9** | **Ghost Mode 👻** | While playing, see a faint overlay of a friend's tile placements on the same board (replay data). "Beat their ghost" mechanic. | Med (2d) | ★★★ |
+| **A10** | **Compound interest gem bank 💰** | "Deposit" 💎 in the bank, earn 1%/day passive interest. Players hoard, but exit costs 5%. Behavioral economics hook. | Small (1d) | ★★★ |
+
+### 📋 Backlog — MONETIZATION (real money, needs Stripe + legal)
 | # | Stage | What it does |
 |---|---|---|
-| 22 | **VIP subscription** | $4.99/mo auto-renew. Stable MRR. |
-| 23 | **Real-money cosmetic shop** | IAP-only premium skins. Collector targeting. |
-| 24 | **Wager / RM tournaments** | $1 entry, 70% prize pool. Legal cert needed. |
+| 17b | **Stripe IAP integration** | Real USD path — currently all monetization is gems-only. ~3-4 days. |
+| 22 | **VIP subscription** | $4.99/mo auto-renew. Stable MRR. Needs 17b first. |
+| 23 | **Real-money cosmetic shop** | IAP-only premium skins. Collector targeting. Needs 17b. |
+| 24 | **Wager / RM tournaments** | $1 entry, 70% prize pool. Legal certification needed. |
 
-### 🚫 Out of scope (manual / external)
-- Domain (bloom-game.co.il)
-- App Store listing
-- GA4 measurement ID
-- Landing page
+### 🚫 Out of scope (manual / external — user's domain)
+- Domain purchase (bloom-game.co.il)
+- App Store listing (PWA wrapper)
+- GA4 measurement ID activation
+- Landing page / SEO marketing
 
 ---
 
