@@ -3180,8 +3180,12 @@ function buildSeasonTiers(cfg) {
   for (let i = 1; i <= 20; i++) {
     const xp = parseInt(cfg['season_tier_' + i + '_xp'], 10);
     const reward = parseInt(cfg['season_tier_' + i + '_reward'], 10);
+    // Premium reward — fall back to 2× the free reward when the key
+    // is missing (the schema seed values match this fallback exactly).
+    let premiumReward = parseInt(cfg['season_tier_' + i + '_premium_reward'], 10);
+    if (!Number.isFinite(premiumReward)) premiumReward = (Number.isFinite(reward) ? reward * 2 : 0);
     if (Number.isFinite(xp) && Number.isFinite(reward)) {
-      tiers.push({ tier: i, xpRequired: xp, reward: reward });
+      tiers.push({ tier: i, xpRequired: xp, reward: reward, premiumReward: premiumReward });
     }
   }
   return tiers;
@@ -3206,10 +3210,13 @@ app.get('/api/player/season/status', async (req, res) => {
     }
     const seasonId = cfg.season_pass_season_id || 'S1';
     const tiers = buildSeasonTiers(cfg);
-    let row = { xp: 0, claimed_tiers: [] };
+    const premiumEnabled = cfg.season_pass_premium_enabled !== 'false';
+    const premiumPriceGems = parseInt(cfg.season_pass_premium_price_gems || '1500', 10) || 1500;
+    const premiumPriceUsd = cfg.season_pass_premium_price_usd || '4.99';
+    let row = { xp: 0, claimed_tiers: [], is_premium: false, claimed_premium_tiers: [] };
     try {
       const r = await pool.query(
-        `SELECT xp, claimed_tiers FROM player_season_progress
+        `SELECT xp, claimed_tiers, is_premium, claimed_premium_tiers FROM player_season_progress
           WHERE device_id = $1 AND season_id = $2`,
         [deviceId, seasonId]
       );
@@ -3217,7 +3224,14 @@ app.get('/api/player/season/status', async (req, res) => {
     } catch (e) {}
     const xp = Number(row.xp) || 0;
     const claimed = Array.isArray(row.claimed_tiers) ? row.claimed_tiers : [];
+    const isPremium = !!row.is_premium;
+    const claimedPremium = Array.isArray(row.claimed_premium_tiers) ? row.claimed_premium_tiers : [];
     const currentTier = seasonTierIndexForXP(tiers, xp);
+    // Unclaimed count includes premium when the player owns the track.
+    let unclaimedCount = tiers.filter(t => t.tier <= currentTier && !claimed.includes(t.tier)).length;
+    if (isPremium) {
+      unclaimedCount += tiers.filter(t => t.tier <= currentTier && !claimedPremium.includes(t.tier)).length;
+    }
     res.json({
       ok: true,
       enabled: true,
@@ -3227,11 +3241,16 @@ app.get('/api/player/season/status', async (req, res) => {
       xp,
       currentTier,
       claimedTiers: claimed,
-      // Number of unclaimed-but-unlocked tiers (drives the "🎁 N לקבל"
-      // badge on the picker / home).
-      unclaimedCount: tiers
-        .filter(t => t.tier <= currentTier && !claimed.includes(t.tier))
-        .length,
+      // Premium track state.
+      isPremium,
+      claimedPremiumTiers: claimedPremium,
+      premiumEnabled,
+      premiumPriceGems,
+      premiumPriceUsd,
+      // Number of unclaimed-but-unlocked rewards. When premium is owned
+      // this counts BOTH free and premium per tier — so a player who
+      // crossed tier 5 with premium and claimed nothing sees 10 🎁.
+      unclaimedCount,
       tiers
     });
   } catch (e) {
@@ -3344,7 +3363,7 @@ app.post('/api/player/season/grant-xp', requireDeviceAuth, async (req, res) => {
 
 app.post('/api/player/season/claim-tier', requireDeviceAuth, async (req, res) => {
   try {
-    const { deviceId, tier } = req.body || {};
+    const { deviceId, tier, track } = req.body || {};
     if (typeof deviceId !== 'string' || deviceId.length < 8 || deviceId.length > 64) {
       return res.status(400).json({ error: 'bad_device' });
     }
@@ -3352,7 +3371,9 @@ app.post('/api/player/season/claim-tier', requireDeviceAuth, async (req, res) =>
     if (!Number.isFinite(tierN) || tierN < 1 || tierN > 20) {
       return res.status(400).json({ error: 'bad_tier' });
     }
-    if (!checkRateLimit('season_claim', deviceId, 30, 60 * 60 * 1000)) {
+    // 'track' is optional — defaults to 'free' for back-compat with old clients.
+    const trackKind = (track === 'premium') ? 'premium' : 'free';
+    if (!checkRateLimit('season_claim', deviceId, 60, 60 * 60 * 1000)) {
       return res.status(429).json({ error: 'rate_limited' });
     }
     const cfg = await loadSeasonConfig();
@@ -3361,43 +3382,54 @@ app.post('/api/player/season/claim-tier', requireDeviceAuth, async (req, res) =>
     const tiers = buildSeasonTiers(cfg);
     const tierObj = tiers.find(t => t.tier === tierN);
     if (!tierObj) return res.json({ ok: false, reason: 'tier_not_found' });
-    // Read state.
+    // Read state — now includes is_premium + claimed_premium_tiers for the dual-track.
     const cur = await pool.query(
-      `SELECT xp, claimed_tiers FROM player_season_progress
+      `SELECT xp, claimed_tiers, is_premium, claimed_premium_tiers FROM player_season_progress
         WHERE device_id = $1 AND season_id = $2`,
       [deviceId, seasonId]
     );
     if (!cur.rows[0]) return res.json({ ok: false, reason: 'no_progress' });
     const xp = Number(cur.rows[0].xp) || 0;
     const claimed = Array.isArray(cur.rows[0].claimed_tiers) ? cur.rows[0].claimed_tiers : [];
-    if (claimed.includes(tierN)) return res.json({ ok: false, reason: 'already_claimed' });
+    const isPremium = !!cur.rows[0].is_premium;
+    const claimedPremium = Array.isArray(cur.rows[0].claimed_premium_tiers) ? cur.rows[0].claimed_premium_tiers : [];
     if (xp < tierObj.xpRequired) return res.json({ ok: false, reason: 'not_unlocked', xpRequired: tierObj.xpRequired, xp });
-    // Atomic: append tier to claimed_tiers + credit the reward in one
-    // transaction. If anything fails, both roll back.
+    // Premium-track gating.
+    if (trackKind === 'premium' && !isPremium) {
+      return res.json({ ok: false, reason: 'premium_required' });
+    }
+    // Per-track dedup.
+    const targetList = trackKind === 'premium' ? claimedPremium : claimed;
+    if (targetList.includes(tierN)) return res.json({ ok: false, reason: 'already_claimed' });
+    const rewardAmt = trackKind === 'premium' ? tierObj.premiumReward : tierObj.reward;
+    // Atomic: append tier to the right list + credit the reward.
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
-      const newClaimed = claimed.concat([tierN]);
+      const newList = targetList.concat([tierN]);
+      const updateCol = trackKind === 'premium' ? 'claimed_premium_tiers' : 'claimed_tiers';
       await client.query(
         `UPDATE player_season_progress
-            SET claimed_tiers = $1::jsonb, updated_at = NOW()
+            SET ${updateCol} = $1::jsonb, updated_at = NOW()
           WHERE device_id = $2 AND season_id = $3`,
-        [JSON.stringify(newClaimed), deviceId, seasonId]
+        [JSON.stringify(newList), deviceId, seasonId]
       );
       const credit = await client.query(
         `UPDATE player_profiles
             SET balance = balance + $1, total_earned = total_earned + $1, updated_at = NOW()
           WHERE device_id = $2 RETURNING balance`,
-        [tierObj.reward, deviceId]
+        [rewardAmt, deviceId]
       );
       await client.query('COMMIT');
       const newBalance = credit.rows[0] ? credit.rows[0].balance : null;
       return res.json({
         ok: true,
         tier: tierN,
-        reward: tierObj.reward,
+        track: trackKind,
+        reward: rewardAmt,
         newBalance,
-        claimedTiers: newClaimed
+        claimedTiers: trackKind === 'free' ? newList : claimed,
+        claimedPremiumTiers: trackKind === 'premium' ? newList : claimedPremium
       });
     } catch (err) {
       await client.query('ROLLBACK');
@@ -3407,6 +3439,81 @@ app.post('/api/player/season/claim-tier', requireDeviceAuth, async (req, res) =>
     }
   } catch (e) {
     console.error('POST /api/player/season/claim-tier', e);
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
+// ============================================================
+// Stage 17 — Premium Battle Pass purchase
+// Atomic: deduct balance + flip is_premium in ONE transaction.
+// Insufficient funds returns 200 with reason — UI shows "buy gems" hint.
+// Already-premium returns 200 with reason — idempotent.
+// ============================================================
+app.post('/api/player/season/buy-premium', requireDeviceAuth, async (req, res) => {
+  try {
+    const { deviceId } = req.body || {};
+    if (typeof deviceId !== 'string' || deviceId.length < 8 || deviceId.length > 64) {
+      return res.status(400).json({ error: 'bad_device' });
+    }
+    if (!checkRateLimit('season_buy_premium', deviceId, 10, 60 * 60 * 1000)) {
+      return res.status(429).json({ error: 'rate_limited' });
+    }
+    const cfg = await loadSeasonConfig();
+    if (cfg.season_pass_enabled === 'false') return res.json({ ok: false, reason: 'disabled' });
+    if (cfg.season_pass_premium_enabled === 'false') return res.json({ ok: false, reason: 'premium_disabled' });
+    const seasonId = cfg.season_pass_season_id || 'S1';
+    const price = parseInt(cfg.season_pass_premium_price_gems || '1500', 10) || 1500;
+    // Make sure the progress row exists.
+    await pool.query(
+      `INSERT INTO player_season_progress (device_id, season_id) VALUES ($1, $2)
+       ON CONFLICT (device_id, season_id) DO NOTHING`,
+      [deviceId, seasonId]
+    );
+    // Already-premium check.
+    const cur = await pool.query(
+      `SELECT is_premium FROM player_season_progress WHERE device_id = $1 AND season_id = $2`,
+      [deviceId, seasonId]
+    );
+    if (cur.rows[0] && cur.rows[0].is_premium) {
+      return res.json({ ok: false, reason: 'already_premium' });
+    }
+    // Atomic: deduct + flip in a transaction.
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const debit = await client.query(
+        `UPDATE player_profiles
+            SET balance = balance - $1, updated_at = NOW()
+          WHERE device_id = $2 AND balance >= $1 RETURNING balance`,
+        [price, deviceId]
+      );
+      if (!debit.rows[0]) {
+        await client.query('ROLLBACK');
+        // Read current balance so the UI can show "you have N, need M".
+        const balR = await pool.query(`SELECT balance FROM player_profiles WHERE device_id = $1`, [deviceId]);
+        const bal = balR.rows[0] ? Number(balR.rows[0].balance) : 0;
+        return res.json({ ok: false, reason: 'insufficient_funds', price, balance: bal });
+      }
+      await client.query(
+        `UPDATE player_season_progress
+            SET is_premium = TRUE, premium_purchased_at = NOW(), updated_at = NOW()
+          WHERE device_id = $1 AND season_id = $2`,
+        [deviceId, seasonId]
+      );
+      await client.query('COMMIT');
+      return res.json({
+        ok: true,
+        price,
+        newBalance: Number(debit.rows[0].balance)
+      });
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  } catch (e) {
+    console.error('POST /api/player/season/buy-premium', e);
     res.status(500).json({ error: 'internal' });
   }
 });

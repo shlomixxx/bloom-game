@@ -7127,7 +7127,10 @@
       ? Math.max(0, Math.min(100, Math.round(((sXp - prevTierXp) / (nextXp - prevTierXp)) * 100)))
       : 100;
     var titleEl = document.getElementById('home-v2-sp-title');
-    if (titleEl) titleEl.textContent = '🎖 Battle Pass · דרגה ' + sTier;
+    if (titleEl) {
+      var premiumBadge = cached.isPremium ? ' <span class="home-v2-sp-prem">✨ Premium</span>' : '';
+      titleEl.innerHTML = '🎖 Battle Pass · דרגה ' + sTier + premiumBadge;
+    }
     var fill = document.getElementById('home-v2-sp-bar-fill');
     if (fill) fill.style.width = pct + '%';
     var meta = document.getElementById('home-v2-sp-meta');
@@ -7224,13 +7227,18 @@
     var xp = d.xp | 0;
     var currentTier = d.currentTier | 0;
     var claimed = d.claimedTiers || [];
+    var claimedPremium = d.claimedPremiumTiers || [];
     var tiers = d.tiers || [];
+    var isPremium = !!d.isPremium;
+    var premiumEnabled = d.premiumEnabled !== false;
+    var premiumPriceGems = d.premiumPriceGems || 1500;
     if (sub) {
       var unclaimed = d.unclaimedCount | 0;
-      sub.innerHTML = escapeHtml(d.seasonName || '') +
+      var premiumPill = isPremium ? ' <span class="dyn-season-premium-pill">✨ Premium</span>' : '';
+      sub.innerHTML = escapeHtml(d.seasonName || '') + premiumPill +
         (unclaimed > 0 ? ' · <span class="dyn-season-unclaimed-pill">' + unclaimed + ' 🎁 לקבל</span>' : '');
     }
-    // Progress bar to the next unlocked tier (or to tier 20 if maxed).
+    // Progress bar.
     var nextTier = tiers.find(function(t) { return t.tier > currentTier; });
     var prevTierXp = currentTier > 0 ? (tiers.find(function(t) { return t.tier === currentTier; }) || {}).xpRequired || 0 : 0;
     var nextXp = nextTier ? nextTier.xpRequired : (tiers[tiers.length - 1] || {}).xpRequired || 1;
@@ -7241,43 +7249,99 @@
     if (barLabel) {
       barLabel.textContent = nextTier
         ? (xp - prevTierXp).toLocaleString() + ' / ' + (nextXp - prevTierXp).toLocaleString() + ' XP'
-        : (xp.toLocaleString() + ' XP · עוונה הושלמה');
+        : (xp.toLocaleString() + ' XP · עונה הושלמה');
+    }
+    var html = '';
+    // Premium banner — the loudest CTA in the modal. Pulsing gold.
+    if (premiumEnabled && !isPremium) {
+      // Compute total locked-but-earned premium gems — the loss-aversion punch.
+      var lockedPremiumGems = 0;
+      var lockedPremiumTiersCount = 0;
+      for (var pi = 0; pi < tiers.length; pi++) {
+        if (currentTier >= tiers[pi].tier) {
+          lockedPremiumGems += tiers[pi].premiumReward || 0;
+          lockedPremiumTiersCount++;
+        }
+      }
+      var totalPremiumGems = tiers.reduce(function(acc, t) { return acc + (t.premiumReward || 0); }, 0);
+      var lockedHint = lockedPremiumTiersCount > 0
+        ? '<div class="dyn-season-buy-locked">🎁 <strong>' + lockedPremiumGems.toLocaleString() + '💎</strong> ב-' + lockedPremiumTiersCount + ' דרגות שכבר חצית — מחכים לך!</div>'
+        : '';
+      html +=
+        '<div class="dyn-season-buy-banner">' +
+          '<div class="dyn-season-buy-head">' +
+            '<div class="dyn-season-buy-icon">✨</div>' +
+            '<div class="dyn-season-buy-titles">' +
+              '<div class="dyn-season-buy-title">שדרג ל-Premium Battle Pass</div>' +
+              '<div class="dyn-season-buy-sub">×2 פרס בכל דרגה · סך הכל ' + totalPremiumGems.toLocaleString() + '💎 לכל העונה</div>' +
+            '</div>' +
+          '</div>' +
+          lockedHint +
+          '<button class="dyn-season-buy-btn" id="dyn-season-buy-btn">🔓 שדרג עכשיו · ' + premiumPriceGems.toLocaleString() + '💎</button>' +
+          '<div class="dyn-season-buy-foot">תקף לעונה הנוכחית בלבד · ' + (d.premiumPriceUsd || '4.99') + ' $ דרך IAP (בקרוב)</div>' +
+        '</div>';
+    } else if (isPremium) {
+      html +=
+        '<div class="dyn-season-premium-owned-banner">' +
+          '✨ <strong>Premium Battle Pass פעיל</strong> — כל הפרסים הזהובים פתוחים לך' +
+        '</div>';
     }
     // Tier cards
-    var html = '';
     for (var i = 0; i < tiers.length; i++) {
       var t = tiers[i];
       var isUnlocked = currentTier >= t.tier;
-      var isClaimed = claimed.indexOf(t.tier) !== -1;
-      var stateCls = isClaimed ? 'claimed' : (isUnlocked ? 'unclocked' : 'locked');
-      var stateLabel = isClaimed ? '✓ נאסף' : (isUnlocked ? '🎁 קבל' : '🔒');
-      var ctaHtml = '';
-      if (isClaimed) {
-        ctaHtml = '<div class="dyn-season-tier-cta dyn-season-tier-cta-claimed">' + stateLabel + '</div>';
+      var freeClaimed = claimed.indexOf(t.tier) !== -1;
+      var premiumClaimed = claimedPremium.indexOf(t.tier) !== -1;
+      var stateCls = (freeClaimed && (!isPremium || premiumClaimed)) ? 'claimed' : (isUnlocked ? 'unclocked' : 'locked');
+      // Free track button
+      var freeCta = '';
+      if (freeClaimed) {
+        freeCta = '<div class="dyn-season-track-cta dyn-season-track-cta-claimed">✓</div>';
       } else if (isUnlocked) {
-        ctaHtml = '<button class="dyn-season-tier-cta dyn-season-tier-cta-claim" data-claim-tier="' + t.tier + '">' + stateLabel + ' +' + t.reward + '💎</button>';
+        freeCta = '<button class="dyn-season-track-cta dyn-season-track-cta-claim" data-claim-tier="' + t.tier + '" data-claim-track="free">🎁 +' + t.reward + '💎</button>';
       } else {
-        ctaHtml = '<div class="dyn-season-tier-cta dyn-season-tier-cta-locked">+' + t.reward + '💎</div>';
+        freeCta = '<div class="dyn-season-track-cta dyn-season-track-cta-locked">+' + t.reward + '💎</div>';
+      }
+      // Premium track button — visually gated when not owned
+      var premCta = '';
+      if (!premiumEnabled) {
+        // Premium disabled by admin — don't show the second column at all.
+        premCta = '';
+      } else if (premiumClaimed) {
+        premCta = '<div class="dyn-season-track-cta dyn-season-track-cta-claimed dyn-season-track-prem">✓</div>';
+      } else if (isUnlocked && isPremium) {
+        premCta = '<button class="dyn-season-track-cta dyn-season-track-cta-claim dyn-season-track-prem" data-claim-tier="' + t.tier + '" data-claim-track="premium">🎁 +' + t.premiumReward + '💎</button>';
+      } else if (isUnlocked && !isPremium) {
+        // Player crossed the XP threshold but doesn't own premium — show
+        // the locked reward to drive loss-aversion.
+        premCta = '<div class="dyn-season-track-cta dyn-season-track-cta-locked dyn-season-track-prem dyn-season-track-tease">🔒 +' + t.premiumReward + '💎</div>';
+      } else {
+        premCta = '<div class="dyn-season-track-cta dyn-season-track-cta-locked dyn-season-track-prem">+' + t.premiumReward + '💎</div>';
       }
       html +=
-        '<div class="dyn-season-tier-card dyn-season-tier-' + stateCls + '">' +
+        '<div class="dyn-season-tier-card dyn-season-tier-' + stateCls + (premiumEnabled ? ' has-premium' : '') + '">' +
           '<div class="dyn-season-tier-num">' + t.tier + '</div>' +
           '<div class="dyn-season-tier-body">' +
             '<div class="dyn-season-tier-xp">' + t.xpRequired.toLocaleString() + ' XP</div>' +
-            '<div class="dyn-season-tier-reward">+' + t.reward + '💎</div>' +
+            '<div class="dyn-season-tier-tracks">' +
+              freeCta +
+              premCta +
+            '</div>' +
           '</div>' +
-          ctaHtml +
         '</div>';
     }
     body.innerHTML = html;
     body.querySelectorAll('[data-claim-tier]').forEach(function(btn) {
       btn.onclick = function() {
         var tn = parseInt(btn.getAttribute('data-claim-tier'), 10);
-        claimSeasonTier(tn, btn);
+        var tr = btn.getAttribute('data-claim-track') || 'free';
+        claimSeasonTier(tn, tr, btn);
       };
     });
+    var buyBtn = document.getElementById('dyn-season-buy-btn');
+    if (buyBtn) buyBtn.onclick = function() { confirmAndBuyPremium(buyBtn); };
   }
-  function claimSeasonTier(tierN, btnEl) {
+  function claimSeasonTier(tierN, track, btnEl) {
     var deviceId = (typeof getDeviceId === 'function') ? getDeviceId() : '';
     var token    = (typeof deviceToken !== 'undefined') ? deviceToken : null;
     if (!deviceId) return;
@@ -7285,33 +7349,107 @@
     fetch('/api/player/season/claim-tier', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ deviceId: deviceId, token: token, tier: tierN })
+      body: JSON.stringify({ deviceId: deviceId, token: token, tier: tierN, track: track || 'free' })
     })
       .then(function(r) { return r.json(); })
       .catch(function() { return null; })
       .then(function(d) {
         if (d && d.ok) {
-          // Update local cache + balance UI.
           if (_seasonCache.data) {
-            _seasonCache.data.claimedTiers = d.claimedTiers || [];
-            var tiers = _seasonCache.data.tiers || [];
-            var currentTier = _seasonCache.data.currentTier | 0;
-            _seasonCache.data.unclaimedCount = tiers
-              .filter(function(t) { return t.tier <= currentTier && (d.claimedTiers || []).indexOf(t.tier) === -1; })
-              .length;
+            if (d.claimedTiers) _seasonCache.data.claimedTiers = d.claimedTiers;
+            if (d.claimedPremiumTiers) _seasonCache.data.claimedPremiumTiers = d.claimedPremiumTiers;
+            var tiersC = _seasonCache.data.tiers || [];
+            var ct = _seasonCache.data.currentTier | 0;
+            var cl = _seasonCache.data.claimedTiers || [];
+            var clp = _seasonCache.data.claimedPremiumTiers || [];
+            var u = tiersC.filter(function(t) { return t.tier <= ct && cl.indexOf(t.tier) === -1; }).length;
+            if (_seasonCache.data.isPremium) {
+              u += tiersC.filter(function(t) { return t.tier <= ct && clp.indexOf(t.tier) === -1; }).length;
+            }
+            _seasonCache.data.unclaimedCount = u;
           }
           if (typeof d.newBalance === 'number') {
             try { if (typeof playerBalance !== 'undefined') playerBalance = d.newBalance; } catch (e) {}
             try { if (typeof updateBalanceDisplay === 'function') updateBalanceDisplay(); } catch (e) {}
           }
-          try { if (typeof soundMilestone === 'function') soundMilestone(4); } catch (e) {}
+          try { if (typeof soundMilestone === 'function') soundMilestone(track === 'premium' ? 5 : 4); } catch (e) {}
           try { if (typeof buzz === 'function') buzz([40, 40, 60]); } catch (e) {}
-          // Re-render the modal body so the just-claimed tier flips to ✓ נאסף.
           renderSeasonModalBody(_seasonCache.data);
+          if (typeof updateHomeSeasonPassTile === 'function') {
+            try { updateHomeSeasonPassTile(); } catch (e) {}
+          }
         } else {
           if (btnEl) { btnEl.disabled = false; btnEl.innerHTML = (d && d.reason) || 'שגיאה'; }
         }
       });
+  }
+  // Premium purchase flow — confirmation dialog → POST /buy-premium → re-render.
+  function confirmAndBuyPremium(btnEl) {
+    var s = _seasonCache.data || {};
+    var price = s.premiumPriceGems || 1500;
+    var bal = (typeof playerBalance !== 'undefined') ? playerBalance : 0;
+    var totalPremiumGems = (s.tiers || []).reduce(function(acc, t) { return acc + (t.premiumReward || 0); }, 0);
+    var msg = '✨ שדרג ל-Premium Battle Pass\n\n' +
+              'מחיר: ' + price.toLocaleString() + '💎 (יתרה: ' + bal.toLocaleString() + '💎)\n' +
+              'תקבל: ' + totalPremiumGems.toLocaleString() + '💎 לאורך 20 הדרגות (×2 מהtrack החינמי)\n\n' +
+              'תקף לעונה הנוכחית בלבד. להמשיך?';
+    if (!confirm(msg)) return;
+    if (btnEl) { btnEl.disabled = true; btnEl.innerHTML = '⏳ מעבד...'; }
+    var deviceId = (typeof getDeviceId === 'function') ? getDeviceId() : '';
+    var token    = (typeof deviceToken !== 'undefined') ? deviceToken : null;
+    fetch('/api/player/season/buy-premium', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ deviceId: deviceId, token: token })
+    })
+      .then(function(r) { return r.json(); })
+      .catch(function() { return null; })
+      .then(function(d) {
+        if (d && d.ok) {
+          if (typeof d.newBalance === 'number') {
+            try { if (typeof playerBalance !== 'undefined') playerBalance = d.newBalance; } catch (e) {}
+            try { if (typeof updateBalanceDisplay === 'function') updateBalanceDisplay(); } catch (e) {}
+          }
+          if (_seasonCache.data) _seasonCache.data.isPremium = true;
+          try { if (typeof soundMilestone === 'function') soundMilestone(6); } catch (e) {}
+          try { if (typeof buzz === 'function') buzz([80, 60, 100]); } catch (e) {}
+          showPremiumWelcomeOverlay();
+          renderSeasonModalBody(_seasonCache.data);
+          if (typeof updateHomeSeasonPassTile === 'function') {
+            try { updateHomeSeasonPassTile(); } catch (e) {}
+          }
+        } else {
+          if (btnEl) { btnEl.disabled = false; }
+          var reason = (d && d.reason) || '';
+          if (reason === 'insufficient_funds') {
+            alert('💎 חסר ביתרה. צריך ' + (d.price || price) + '💎, יש לך ' + (d.balance || 0) + '💎.\nתוכל לרכוש 💎 בחנות או לצבור על-ידי משחק.');
+          } else if (reason === 'already_premium') {
+            if (_seasonCache.data) _seasonCache.data.isPremium = true;
+            renderSeasonModalBody(_seasonCache.data);
+          } else if (reason === 'premium_disabled') {
+            alert('Premium כבוי כרגע');
+          } else {
+            alert('שגיאה: ' + (reason || 'unknown'));
+          }
+          if (btnEl) btnEl.innerHTML = '🔓 שדרג עכשיו · ' + price.toLocaleString() + '💎';
+        }
+      });
+  }
+  function showPremiumWelcomeOverlay() {
+    var ov = document.createElement('div');
+    ov.className = 'dyn-season-premium-welcome';
+    ov.innerHTML =
+      '<div class="dyn-season-premium-welcome-card">' +
+        '<div class="dyn-season-premium-welcome-icon">✨</div>' +
+        '<div class="dyn-season-premium-welcome-title">Premium Battle Pass פעיל!</div>' +
+        '<div class="dyn-season-premium-welcome-sub">כל הפרסים הזהובים פתוחים. תקבל ×2 פרס בכל דרגה.</div>' +
+        '<button class="dyn-season-premium-welcome-btn">🎁 לאסוף את הפרסים</button>' +
+      '</div>';
+    document.body.appendChild(ov);
+    var dismiss = function() { try { ov.remove(); } catch (e) {} };
+    ov.querySelector('.dyn-season-premium-welcome-btn').onclick = dismiss;
+    ov.addEventListener('click', function(e) { if (e.target === ov) dismiss(); });
+    setTimeout(dismiss, 8000);
   }
   window.showSeasonPassModal = showSeasonPassModal;
   window.closeSeasonPassModal = closeSeasonPassModal;

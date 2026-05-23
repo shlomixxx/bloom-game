@@ -826,6 +826,18 @@ CREATE TABLE IF NOT EXISTS player_season_progress (
 CREATE INDEX IF NOT EXISTS idx_season_progress_season
   ON player_season_progress (season_id, xp DESC);
 
+-- Stage 17 — Premium Battle Pass columns. Players who buy premium get a
+-- 2nd reward per tier (industry-standard pattern from Fortnite/Apex).
+-- is_premium is per-season — a player who buys premium for S1 starts
+-- S2 on the free track unless they buy again. premium_purchased_at lets
+-- the admin audit how many premium purchases happened per season.
+-- claimed_premium_tiers parallels claimed_tiers — separate so claiming
+-- a free tier doesn't mark the premium one as claimed (they're paid
+-- atomically together, but tracked independently for UI clarity).
+ALTER TABLE player_season_progress ADD COLUMN IF NOT EXISTS is_premium BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE player_season_progress ADD COLUMN IF NOT EXISTS premium_purchased_at TIMESTAMPTZ;
+ALTER TABLE player_season_progress ADD COLUMN IF NOT EXISTS claimed_premium_tiers JSONB NOT NULL DEFAULT '[]'::jsonb;
+
 -- Master toggle + active season + season name (for the modal header).
 INSERT INTO game_config (key, value) VALUES ('season_pass_enabled',   'true') ON CONFLICT (key) DO NOTHING;
 INSERT INTO game_config (key, value) VALUES ('season_pass_season_id', 'S1')   ON CONFLICT (key) DO NOTHING;
@@ -886,6 +898,34 @@ INSERT INTO game_config (key, value) VALUES ('season_tier_19_xp', '5320') ON CON
 INSERT INTO game_config (key, value) VALUES ('season_tier_19_reward','2100') ON CONFLICT (key) DO NOTHING;
 INSERT INTO game_config (key, value) VALUES ('season_tier_20_xp', '5950') ON CONFLICT (key) DO NOTHING;
 INSERT INTO game_config (key, value) VALUES ('season_tier_20_reward','3000') ON CONFLICT (key) DO NOTHING;
+
+-- Stage 17 — Premium Battle Pass master config + 20 premium-track rewards.
+-- The premium track doubles each free reward (industry standard pattern).
+-- Sum: ~32,000💎 per season for premium players vs ~16,000💎 for free.
+-- Pricing: 1500💎 OR $4.99 (USD price is display-only until Stripe lands).
+INSERT INTO game_config (key, value) VALUES ('season_pass_premium_enabled',     'true') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('season_pass_premium_price_gems',  '1500') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('season_pass_premium_price_usd',   '4.99') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('season_tier_1_premium_reward',  '50')   ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('season_tier_2_premium_reward',  '100')  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('season_tier_3_premium_reward',  '150')  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('season_tier_4_premium_reward',  '200')  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('season_tier_5_premium_reward',  '300')  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('season_tier_6_premium_reward',  '400')  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('season_tier_7_premium_reward',  '500')  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('season_tier_8_premium_reward',  '600')  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('season_tier_9_premium_reward',  '800')  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('season_tier_10_premium_reward', '1100') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('season_tier_11_premium_reward', '1300') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('season_tier_12_premium_reward', '1500') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('season_tier_13_premium_reward', '1800') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('season_tier_14_premium_reward', '2100') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('season_tier_15_premium_reward', '2400') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('season_tier_16_premium_reward', '2800') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('season_tier_17_premium_reward', '3200') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('season_tier_18_premium_reward', '3600') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('season_tier_19_premium_reward', '4200') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('season_tier_20_premium_reward', '6000') ON CONFLICT (key) DO NOTHING;
 
 -- ============================================================
 -- Live Tournaments — stage 12 (May 2026)

@@ -8879,6 +8879,304 @@ html[data-theme="dark"] .home-v2-sp-title { color: #FFD9A8; }
 html[data-theme="dark"] .home-v2-sp-meta { color: #FFC890; }
 html[data-theme="dark"] .home-v2-sp-bar { background: rgba(255,255,255,0.1); }
 html[data-theme="dark"] .home-v2-sp-claim { background: #FFD9A8; color: #3D2010; }
+
+/* ============================================================
+   Stage 17 — Premium Battle Pass UI
+   ============================================================ */
+
+/* Premium pill in modal sub */
+.dyn-season-premium-pill {
+  display: inline-block;
+  padding: 2px 8px;
+  background: linear-gradient(135deg, #FFD93D, #FFA500);
+  color: #5A2A00;
+  border-radius: 9px;
+  font-size: 11px;
+  font-weight: 900;
+  margin: 0 4px;
+  animation: dynSeasonPremiumPillPulse 2s ease-in-out infinite;
+}
+@keyframes dynSeasonPremiumPillPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 217, 61, 0.4); }
+  50%      { box-shadow: 0 0 0 6px rgba(255, 217, 61, 0); }
+}
+
+/* The big BUY banner at top of modal */
+.dyn-season-buy-banner {
+  padding: 14px 16px;
+  margin-bottom: 14px;
+  background: linear-gradient(135deg, #FFF4CC 0%, #FFD93D 50%, #FFA500 100%);
+  border: 2px solid #BA7517;
+  border-radius: 16px;
+  box-shadow: 0 4px 16px rgba(186, 117, 23, 0.35);
+  animation: dynSeasonBuyBannerPulse 2.4s ease-in-out infinite;
+  direction: rtl;
+  text-align: right;
+}
+@keyframes dynSeasonBuyBannerPulse {
+  0%, 100% { box-shadow: 0 4px 16px rgba(186, 117, 23, 0.35); }
+  50%      { box-shadow: 0 6px 24px rgba(255, 165, 0, 0.55); }
+}
+.dyn-season-buy-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.dyn-season-buy-icon {
+  font-size: 36px;
+  filter: drop-shadow(0 0 8px rgba(255, 220, 80, 0.7));
+  animation: dynSeasonBuyStar 1.8s ease-in-out infinite;
+}
+@keyframes dynSeasonBuyStar {
+  0%, 100% { transform: scale(1) rotate(0deg); }
+  50%      { transform: scale(1.18) rotate(15deg); }
+}
+.dyn-season-buy-titles { flex: 1; min-width: 0; }
+.dyn-season-buy-title {
+  font-size: 17px;
+  font-weight: 900;
+  color: #5A2A00;
+  line-height: 1.2;
+}
+.dyn-season-buy-sub {
+  font-size: 12px;
+  font-weight: 700;
+  color: #6B3D00;
+  margin-top: 3px;
+}
+.dyn-season-buy-locked {
+  padding: 8px 10px;
+  margin-bottom: 10px;
+  background: rgba(255, 255, 255, 0.5);
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #5A2A00;
+}
+.dyn-season-buy-locked strong { color: #BA7517; font-size: 14px; }
+.dyn-season-buy-btn {
+  display: block;
+  width: 100%;
+  padding: 12px;
+  background: #5A2A00;
+  color: #FFD93D;
+  border: none;
+  border-radius: 12px;
+  font-size: 15px;
+  font-weight: 900;
+  cursor: pointer;
+  font-family: inherit;
+  transition: transform 0.12s, filter 0.18s;
+}
+.dyn-season-buy-btn:hover { filter: brightness(1.15); }
+.dyn-season-buy-btn:active { transform: scale(0.98); }
+.dyn-season-buy-foot {
+  margin-top: 8px;
+  font-size: 10px;
+  font-weight: 600;
+  color: #6B3D00;
+  text-align: center;
+}
+
+/* Premium-owned banner — quieter, just confirmation */
+.dyn-season-premium-owned-banner {
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  background: linear-gradient(135deg, #FFF4CC, #FFE9A8);
+  border: 1.5px solid rgba(186, 117, 23, 0.4);
+  border-radius: 12px;
+  color: #5A2A00;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: right;
+  direction: rtl;
+}
+
+/* Dual-track tier — show free + premium reward side by side */
+.dyn-season-tier-card.has-premium .dyn-season-tier-tracks {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: nowrap;
+  margin-top: 4px;
+}
+.dyn-season-track-cta {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 8px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+  border: 1px solid transparent;
+  font-family: inherit;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dyn-season-track-cta-locked {
+  background: rgba(0,0,0,0.06);
+  color: var(--color-text-muted, #999);
+}
+.dyn-season-track-cta-claim {
+  background: linear-gradient(135deg, #9FE1CB, #4FBD8B);
+  color: #04342C;
+  cursor: pointer;
+  transition: filter 0.18s, transform 0.12s;
+}
+.dyn-season-track-cta-claim:hover { filter: brightness(1.08); }
+.dyn-season-track-cta-claim:active { transform: scale(0.97); }
+.dyn-season-track-cta-claimed {
+  background: rgba(159, 225, 203, 0.4);
+  color: #04342C;
+  border-color: rgba(4, 52, 44, 0.2);
+}
+
+/* Premium variant — gold instead of mint */
+.dyn-season-track-prem.dyn-season-track-cta-claim {
+  background: linear-gradient(135deg, #FFD93D, #FFA500);
+  color: #5A2A00;
+}
+.dyn-season-track-prem.dyn-season-track-cta-claimed {
+  background: rgba(255, 217, 61, 0.4);
+  color: #5A2A00;
+  border-color: rgba(186, 117, 23, 0.3);
+}
+.dyn-season-track-prem.dyn-season-track-cta-locked {
+  background: rgba(186, 117, 23, 0.08);
+  color: #BA7517;
+  border-color: rgba(186, 117, 23, 0.15);
+}
+/* Tease style — locked but XP earned, the loss-aversion punch */
+.dyn-season-track-tease {
+  background: linear-gradient(135deg, rgba(255, 217, 61, 0.25), rgba(255, 165, 0, 0.25));
+  color: #BA7517;
+  border: 1px dashed rgba(186, 117, 23, 0.5);
+  animation: dynSeasonTeasePulse 2.4s ease-in-out infinite;
+}
+@keyframes dynSeasonTeasePulse {
+  0%, 100% { opacity: 0.8; }
+  50%      { opacity: 1; box-shadow: 0 0 0 1px rgba(186, 117, 23, 0.3); }
+}
+
+/* Premium welcome overlay (post-purchase celebration) */
+.dyn-season-premium-welcome {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100000;
+  animation: dynSeasonPremiumWelcomeFade 0.4s ease-out;
+}
+@keyframes dynSeasonPremiumWelcomeFade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.dyn-season-premium-welcome-card {
+  background: linear-gradient(135deg, #FFF4CC 0%, #FFD93D 50%, #FFA500 100%);
+  border: 3px solid #BA7517;
+  border-radius: 24px;
+  padding: 32px 28px;
+  max-width: 320px;
+  text-align: center;
+  direction: rtl;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+  animation: dynSeasonPremiumWelcomePop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+@keyframes dynSeasonPremiumWelcomePop {
+  from { transform: scale(0.4); opacity: 0; }
+  to   { transform: scale(1); opacity: 1; }
+}
+.dyn-season-premium-welcome-icon {
+  font-size: 72px;
+  margin-bottom: 12px;
+  filter: drop-shadow(0 0 16px rgba(255, 220, 80, 0.8));
+  animation: dynSeasonPremiumWelcomeIconSpin 1.5s ease-out;
+}
+@keyframes dynSeasonPremiumWelcomeIconSpin {
+  from { transform: scale(0) rotate(-360deg); }
+  to   { transform: scale(1) rotate(0deg); }
+}
+.dyn-season-premium-welcome-title {
+  font-size: 22px;
+  font-weight: 900;
+  color: #5A2A00;
+  margin-bottom: 8px;
+}
+.dyn-season-premium-welcome-sub {
+  font-size: 14px;
+  font-weight: 700;
+  color: #6B3D00;
+  margin-bottom: 20px;
+}
+.dyn-season-premium-welcome-btn {
+  padding: 14px 28px;
+  background: #5A2A00;
+  color: #FFD93D;
+  border: none;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 900;
+  cursor: pointer;
+  font-family: inherit;
+  transition: transform 0.12s, filter 0.18s;
+}
+.dyn-season-premium-welcome-btn:hover { filter: brightness(1.15); }
+.dyn-season-premium-welcome-btn:active { transform: scale(0.97); }
+
+/* Dark theme */
+html[data-theme="dark"] .dyn-season-buy-banner {
+  background: linear-gradient(135deg, #3D2810 0%, #4D3520 50%, #5A3000 100%);
+  border-color: rgba(255, 217, 61, 0.5);
+}
+html[data-theme="dark"] .dyn-season-buy-title,
+html[data-theme="dark"] .dyn-season-buy-sub,
+html[data-theme="dark"] .dyn-season-buy-locked { color: #FFD9A8; }
+html[data-theme="dark"] .dyn-season-buy-locked { background: rgba(0,0,0,0.3); }
+html[data-theme="dark"] .dyn-season-buy-locked strong { color: #FFD93D; }
+html[data-theme="dark"] .dyn-season-buy-foot { color: #FFC890; }
+html[data-theme="dark"] .dyn-season-buy-btn { background: #FFD9A8; color: #3D2010; }
+html[data-theme="dark"] .dyn-season-premium-owned-banner {
+  background: linear-gradient(135deg, #3D2E14, #4A361B);
+  border-color: rgba(255, 217, 168, 0.4);
+  color: #FFD9A8;
+}
+html[data-theme="dark"] .dyn-season-track-cta-locked { background: rgba(255,255,255,0.08); color: #888; }
+html[data-theme="dark"] .dyn-season-track-prem.dyn-season-track-cta-locked {
+  background: rgba(255, 217, 61, 0.08);
+  color: #FFD93D;
+}
+html[data-theme="dark"] .dyn-season-track-tease {
+  background: linear-gradient(135deg, rgba(255, 217, 61, 0.15), rgba(255, 165, 0, 0.15));
+  color: #FFD93D;
+  border-color: rgba(255, 217, 61, 0.4);
+}
+html[data-theme="dark"] .dyn-season-premium-welcome-card {
+  background: linear-gradient(135deg, #3D2810 0%, #4D3520 50%, #5A3000 100%);
+  border-color: #FFD93D;
+}
+html[data-theme="dark"] .dyn-season-premium-welcome-title,
+html[data-theme="dark"] .dyn-season-premium-welcome-sub { color: #FFD9A8; }
+html[data-theme="dark"] .dyn-season-premium-welcome-btn { background: #FFD9A8; color: #3D2010; }
+
+/* Home tile premium badge */
+.home-v2-sp-prem {
+  display: inline-block;
+  padding: 1px 6px;
+  margin-right: 4px;
+  background: linear-gradient(135deg, #FFD93D, #FFA500);
+  color: #5A2A00;
+  border-radius: 7px;
+  font-size: 10px;
+  font-weight: 900;
+}
+html[data-theme="dark"] .home-v2-sp-prem {
+  background: linear-gradient(135deg, #FFD93D, #FFA500);
+  color: #3D2010;
+}
   /* ============================================================
      DARK MODE
      ============================================================
