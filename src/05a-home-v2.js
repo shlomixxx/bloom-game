@@ -251,6 +251,11 @@
       setTimeout(function() { try { maybeShowGachaBanner(); } catch (e) {} }, 1600);
     }
 
+    // Stage 19 — Lives widget (only mounts when admin enabled the system).
+    if (typeof maybeShowLivesWidget === 'function') {
+      setTimeout(function() { try { maybeShowLivesWidget(); } catch (e) {} }, 400);
+    }
+
     // Tier-icons tap → reveal stats bubble (same behaviour as v1)
     var iconsTap = document.getElementById('home-icons-tap');
     if (iconsTap) {

@@ -1165,6 +1165,36 @@ CREATE INDEX IF NOT EXISTS idx_skin_configurations_sort
   ON skin_configurations (sort_order, id);
 
 -- ============================================================
+-- Lives / Energy System (Stage 19 — scarcity-driven engagement)
+-- Candy Crush pattern: limited lives, time-regen, ad/gems refill.
+-- *** DEFAULT OFF *** — admin must explicitly opt in via lives_enabled.
+-- Applies ONLY to dynamic boards (not daily/practice/contests/duels).
+-- This is intentionally controversial — can boost retention OR cause
+-- uninstalls. A/B-test before fully rolling out.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS player_lives_state (
+  device_id          VARCHAR(64) PRIMARY KEY,
+  current_lives      INT NOT NULL DEFAULT 5,
+  max_lives          INT NOT NULL DEFAULT 5,
+  -- last_regen_at marks when the last regen tick happened; subsequent
+  -- regens are computed forward from this timestamp.
+  last_regen_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  total_lives_spent  INT NOT NULL DEFAULT 0,
+  total_ads_watched  INT NOT NULL DEFAULT 0,
+  total_gems_spent   INT NOT NULL DEFAULT 0,
+  created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- 6 config keys. lives_enabled defaults to 'false' — opt-in only.
+INSERT INTO game_config (key, value) VALUES ('lives_enabled',            'false') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('lives_max',                '5')     ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('lives_regen_minutes',      '30')    ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('lives_refill_price_gems',  '50')    ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('lives_ad_refill_count',    '1')     ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('lives_per_game_dynamic',   '1')     ON CONFLICT (key) DO NOTHING;
+
+-- ============================================================
 -- Skin Gacha (Stage 18 — variable-reward Skinner box, May 2026)
 -- The Genshin/Apex pattern that drives $4B/year in cosmetics revenue.
 -- 5 rarity tiers with admin-tunable weights. Pity system guarantees

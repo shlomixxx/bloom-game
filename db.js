@@ -63,6 +63,18 @@ export async function initDb() {
       created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )`,
+    // Stage 19 — Lives / Energy table (full CREATE in schema.sql).
+    `CREATE TABLE IF NOT EXISTS player_lives_state (
+      device_id          VARCHAR(64) PRIMARY KEY,
+      current_lives      INT NOT NULL DEFAULT 5,
+      max_lives          INT NOT NULL DEFAULT 5,
+      last_regen_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      total_lives_spent  INT NOT NULL DEFAULT 0,
+      total_ads_watched  INT NOT NULL DEFAULT 0,
+      total_gems_spent   INT NOT NULL DEFAULT 0,
+      created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`,
     // Stage 18 — Skin Gacha tables (full CREATE + seed in schema.sql).
     `CREATE TABLE IF NOT EXISTS gacha_pool (
       id           SERIAL PRIMARY KEY,

@@ -1542,6 +1542,28 @@
     </div>
   </section>
 
+  <!-- ❤️ Lives / Energy (stage 19) — CONTROVERSIAL FEATURE -->
+  <section id="lives-section" style="margin-bottom:12px">
+    <h2>❤️ חיים / Energy <span style="display:inline-block;padding:3px 8px;background:#DC2626;color:#FFF;border-radius:6px;font-size:11px;font-weight:900;margin-right:6px">⚠ RISKY</span> <button class="tip-btn" data-tip-text="<strong>❤️ Lives / Energy System</strong><br>הפטרן של Candy Crush — חיים מוגבלים שמתחדשים עם הזמן.<div class=&quot;tip-example&quot;>⚠ <strong>הזהרה</strong>: זה הפיצ\'ר הכי מסוכן UX-wise. שחקנים יכולים <strong>לאהוב</strong> אותו (יותר session loops, יותר IAP) או <strong>לשנוא</strong> אותו (uninstalls). <strong>DEFAULT OFF</strong> מסיבה זו.<br><br>💡 <strong>איך זה עובד</strong>:<br>1. שחקן מתחיל עם 5 חיים<br>2. כל משחק דינמי = -1 חיים<br>3. חידוש אוטומטי: 1 כל 30 דקות<br>4. כשנגמרו: 💎 חידוש מלא / 📺 פרסומת / ⏰ המתנה<br><br>📊 <strong>מה לא חייב לחיים</strong>: יומי, פרקטיס, תחרויות, דו-קרבות, אתגרים. רק לוחות דינמיים.<br>⚠ אם תפעיל — תבדוק D7 retention. אם ירד = כבה.</div>">?</button></h2>
+    <div style="padding:12px 16px;background:var(--card);border-radius:10px;margin-top:8px">
+
+      <div style="padding:12px;margin-bottom:12px;background:rgba(220,38,38,0.1);border:1px solid rgba(220,38,38,0.3);border-radius:8px;font-size:12px;color:#991B1B;line-height:1.5">
+        <strong>⚠ הזהרה</strong>: הפעלת המערכת מגבילה שחקנים. עלולה להוריד D7 retention. <strong>תפעיל רק אחרי שאתה מוכן ל-A/B test מבוקר</strong>. ה-default הוא <code>false</code> בכוונה.
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+        <div class="rewards-grid" data-keys="lives_enabled,lives_max"></div>
+        <div class="rewards-grid" data-keys="lives_regen_minutes,lives_per_game_dynamic"></div>
+      </div>
+
+      <div style="margin-bottom:8px">
+        <div style="font-size:13px;font-weight:700;color:var(--gold);margin-bottom:6px">💰 אפשרויות חידוש</div>
+        <div class="rewards-grid" data-keys="lives_refill_price_gems,lives_ad_refill_count"></div>
+      </div>
+
+    </div>
+  </section>
+
   <!-- 🎰 Skin Gacha (stage 18) -->
   <section id="skin-gacha-section" style="margin-bottom:12px">
     <h2>🎰 Skin Gacha — קופסת הפתעה <button class="tip-btn" data-tip-text="<strong>🎰 Skin Gacha</strong><br>הפטרן של Genshin/Apex — $4B/year cosmetics revenue.<div class=&quot;tip-example&quot;>💡 <strong>איך זה עובד</strong>:<br>1. 5 רמות נדירות (common/uncommon/rare/legendary/mythic).<br>2. שקלולים מוגדרים ב-game_config (default 60/25/12/2.5/0.5%).<br>3. <strong>Pity system</strong>: כל N פולים (default 50) מובטח legendary+.<br>4. <strong>פול חינמי יומי</strong> = daily-return hook.<br>5. 10x פול ב-10% הנחה.<br>6. <strong>Featured item</strong>: בחר אחד מהמאגר ל-+30% סיכוי בתוך ה-rarity שלו.<br>7. כפלים → מומרים אוטומטית ל-💎 (50% מהמחיר).<br><br>📊 ניהול: הוסף/ערוך/מחק פריטים במאגר. כל פריט: rarity, סוג פרס, כמות/skin_id, weight בתוך ה-rarity.</div>">?</button></h2>
@@ -2584,6 +2606,14 @@
     dyn_comeback_min_streak: 'מינימום רצף שהיה לשחקן לפני שאיבד אותו, כדי להיות זכאי ל-comeback.<div class="tip-example">📊 ברירת מחדל 3.<br>💡 רצוי לא להוריד מתחת ל-3 — אחרת כל חזרה תהפוך ל-comeback, מה שמדלל את הטקס.<br>💡 ערך 7 = רק שחקנים שכבר היו loyal יראו comeback. רוצה לתת רק לבזבזני-זמן.</div>',
     dyn_comeback_reward:     'פרס ה-💎 שנותן ה-comeback overlay.<div class="tip-example">📊 ברירת מחדל 150💎.<br>💡 גדול מספיק כדי שירגיש משמעותי, קטן מספיק כדי שלא יהיה אטרקציה לפנות-חוץ-בעצמך.<br>📊 ערכים: 50 (קמצני), 150 (default), 300 (נדיב, למתחילים), 500 (אגרסיבי).</div>',
     dyn_comeback_freeze_gift: 'מספר הקפאות חינם שנותנים עם ה-comeback bonus.<div class="tip-example">📊 ברירת מחדל 1.<br>💡 השילוב 150💎 + 1 הקפאה = "ברוך שובך + אנחנו נשמור עליך לא לנפול שוב". פסיכולוגית חזק.<br>📊 ערך 0 = רק 💎, ערך 2 = "פרמיום" comeback. ערך 3+ = ייצור הקפאות בחינם דרך win-back farming, אל תעלה מעל 1-2.</div>',
+
+    // ---- Lives / Energy (stage 19) ----
+    lives_enabled: '⚠ הפעלת מערכת חיים מוגבלים.<div class="tip-example">📊 <strong>ברירת מחדל: כבוי</strong>. זה הפיצ\'ר הכי מסוכן UX — Candy Crush pattern.<br>💡 <strong>למה זה ממכר</strong>: scarcity = anticipation. שחקן שיודע שיש לו רק 5 משחקים ביום ישכיל יותר ויחזור יותר פעמים.<br>⚠ <strong>למה זה מסוכן</strong>: שחקנים יכולים להרגיש "חסומים" ולנטוש. אם תפעיל — בדוק D7 retention שבוע אחר כך. אם ירד = כבה.<br>📊 <strong>מה לא נחסם</strong>: יומי, פרקטיס, תחרויות, דו-קרבות, אתגרים. רק לוחות דינמיים.</div>',
+    lives_max: 'מקסימום חיים שהשחקן יכול להחזיק.<div class="tip-example">📊 ברירת מחדל 5. ערכים: 3-10.<br>💡 5 הוא ה-sweet spot של Candy Crush. נמוך מדי (3) = מסכל. גבוה מדי (10) = לא מרגיש מוגבל.</div>',
+    lives_regen_minutes: 'דקות לכל חידוש חיים אחד.<div class="tip-example">📊 ברירת מחדל 30. ערכים: 15-120.<br>💡 30 דקות = חיים מלאים אחרי 2-3 שעות. ערכים גבוהים (120) דוחפים יותר ל-IAP אבל גם יותר ל-uninstall.<br>📊 Candy Crush: 30. Toon Blast: 30. Royal Match: 30.</div>',
+    lives_per_game_dynamic: 'כמה חיים עולה משחק דינמי.<div class="tip-example">📊 ברירת מחדל 1. ערכים: 1-2.<br>💡 כמעט תמיד 1. ערך 2+ אגרסיבי מדי — עלול להפיק "feels expensive" feeling.</div>',
+    lives_refill_price_gems: 'מחיר חידוש מלא ב-💎.<div class="tip-example">📊 ברירת מחדל 50💎. ערכים: 30-100.<br>💡 צריך להיות גבוה מספיק שזה משמעותי, אבל לא יותר מ-15-20% מהיתרה היומית הטיפוסית.<br>📊 אם השחקן מרוויח 50💎/יום מ-quests, 50💎/חידוש = "אם אני קונה את זה אני מבטל יום של הרווחה".</div>',
+    lives_ad_refill_count: 'כמה חיים השחקן מקבל בצפיית פרסומת.<div class="tip-example">📊 ברירת מחדל 1. ערכים: 1-3.<br>💡 1 = שמרני, מאלץ לצפות בכמה פרסומות. 3 = נדיב, פחות חיכוך.<br>📊 ההכנסה מ-AdSense כשמופעל = כל צפייה היא $ אמיתי.</div>',
 
     // ---- Skin Gacha (stage 18) ----
     gacha_enabled: 'הפעלת מערכת Gacha.<div class="tip-example">📊 ברירת מחדל פעיל. <strong>זה ה-pattern של Genshin/Apex</strong> שעושה $4B/שנה.<br>💡 השחקן רואה banner קוסמי-סגול בבית + יכול לפתוח modal לפול. נדירים מובטחים מ-pity system כל N פולים.<br>⚠ כיבוי = מסתיר לחלוטין את ה-UI. שחקנים שכבר פתחו פולים ישמרו את הפרסים.</div>',

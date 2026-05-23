@@ -3031,19 +3031,31 @@
 
   function startDynamicBoard(board) {
     if (!board || !board.definition) return;
-    closeDynamicBoardsPicker();
-    if (board.type === 'multipliers' && Array.isArray(board.definition.multipliers)) {
-      setColumnMultipliers(board.definition.multipliers);
+    // Stage 19 — Lives gate. If the system is enabled and the player has
+    // no lives, ensureLifeForDynamicGame shows the refill modal and
+    // returns false; we bail without starting the game.
+    var actuallyStart = function() {
+      closeDynamicBoardsPicker();
+      if (board.type === 'multipliers' && Array.isArray(board.definition.multipliers)) {
+        setColumnMultipliers(board.definition.multipliers);
+      } else {
+        setColumnMultipliers(null);
+      }
+      window._activeDynamicBoard = board;
+      if (typeof hideHomeV2 === 'function') hideHomeV2();
+      if (typeof hideHome === 'function') hideHome();
+      ensureAudio();
+      init('dynamic', { fresh: true });
+      playMusic('game');
+      if (typeof startEventSystem === 'function') startEventSystem();
+    };
+    if (typeof ensureLifeForDynamicGame === 'function') {
+      ensureLifeForDynamicGame().then(function(canStart) {
+        if (canStart) actuallyStart();
+      });
     } else {
-      setColumnMultipliers(null);
+      actuallyStart();
     }
-    window._activeDynamicBoard = board;
-    if (typeof hideHomeV2 === 'function') hideHomeV2();
-    if (typeof hideHome === 'function') hideHome();
-    ensureAudio();
-    init('dynamic', { fresh: true });
-    playMusic('game');
-    if (typeof startEventSystem === 'function') startEventSystem();
   }
 
   // When the player leaves dynamic mode (back to home, switching to
