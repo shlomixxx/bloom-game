@@ -2297,6 +2297,238 @@
     color: var(--color-accent-soft, #FAC775);
     border-color: rgba(250,199,117,0.3);
   }
+
+/* ============================================================
+   Stage 35 — Home Variants
+   ============================================================ */
+
+/* ── CAROUSEL VARIANT ────────────────────────────────────── */
+.hvar-carousel {
+  margin: 8px 0 16px;
+  padding: 0 8px;
+  width: 100%;
+  box-sizing: border-box;
+}
+.hvar-carousel-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #B82A4A;
+  margin: 0 4px 8px;
+  letter-spacing: 0.5px;
+}
+.hvar-carousel-scroll {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  padding-bottom: 4px;
+  -webkit-overflow-scrolling: touch;
+}
+.hvar-carousel-scroll::-webkit-scrollbar { display: none; }
+.hvar-carousel-card {
+  flex: 0 0 auto;
+  scroll-snap-align: start;
+  width: 130px;
+  padding: 12px 10px;
+  border-radius: 14px;
+  border: 2px solid rgba(186, 42, 74, 0.15);
+  background: linear-gradient(160deg, #FFF, #FFF5F8);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-align: right;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+}
+.hvar-carousel-card:active { transform: scale(0.96); }
+.hvar-carousel-card.hot {
+  border-color: #F5AD2E;
+  background: linear-gradient(160deg, #FFF8E5, #FFE9C8);
+  animation: hvarCardPulse 2s ease-in-out infinite;
+  box-shadow: 0 4px 12px rgba(245, 173, 46, 0.3);
+}
+@keyframes hvarCardPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.025); box-shadow: 0 6px 16px rgba(245, 173, 46, 0.5); }
+}
+.hvar-carousel-icon { font-size: 28px; line-height: 1; }
+.hvar-carousel-card-title { font-size: 13px; font-weight: 800; color: #2E1A1A; }
+.hvar-carousel-card-sub { font-size: 11px; color: #745454; line-height: 1.3; }
+html[data-theme="dark"] .hvar-carousel-card {
+  background: linear-gradient(160deg, #2A1F22, #3A2530);
+  border-color: rgba(255, 200, 120, 0.2);
+  color: #F0E8E2;
+}
+html[data-theme="dark"] .hvar-carousel-card-title { color: #F0E8E2; }
+html[data-theme="dark"] .hvar-carousel-card-sub { color: #BFA9A2; }
+html[data-theme="dark"] .hvar-carousel-card.hot {
+  background: linear-gradient(160deg, #4A3220, #5A3F1F);
+  border-color: #F5AD2E;
+}
+
+/* ── HERO VARIANT ────────────────────────────────────────── */
+.hvar-hero-big {
+  width: 100%;
+  padding: 24px 18px;
+  border-radius: 22px;
+  background: linear-gradient(160deg, #FFE2C8 0%, #FFB89A 60%, #F58F6A 100%);
+  border: 3px solid rgba(255, 255, 255, 0.6);
+  box-shadow: 0 12px 30px rgba(245, 143, 106, 0.4);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 8px;
+  position: relative;
+  overflow: hidden;
+  animation: hvarHeroFadeIn 0.4s ease-out;
+}
+@keyframes hvarHeroFadeIn {
+  from { opacity: 0; transform: translateY(-12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.hvar-hero-big.hero-reward {
+  background: linear-gradient(160deg, #FFE9A3 0%, #F5C24B 60%, #C9911A 100%);
+  box-shadow: 0 12px 30px rgba(201, 145, 26, 0.5);
+}
+.hvar-hero-big.hero-urgent {
+  background: linear-gradient(160deg, #FFD3D3 0%, #E07A7A 60%, #C44141 100%);
+  box-shadow: 0 12px 30px rgba(196, 65, 65, 0.5);
+  animation: hvarHeroFadeIn 0.4s ease-out, hvarHeroUrgentPulse 1.6s ease-in-out infinite 0.6s;
+}
+@keyframes hvarHeroUrgentPulse {
+  0%, 100% { box-shadow: 0 12px 30px rgba(196, 65, 65, 0.5); }
+  50% { box-shadow: 0 16px 40px rgba(196, 65, 65, 0.8); }
+}
+.hvar-hero-big.hero-hot {
+  background: linear-gradient(160deg, #FFE1F0 0%, #F587B0 60%, #C9437E 100%);
+  box-shadow: 0 12px 30px rgba(201, 67, 126, 0.5);
+}
+.hvar-hero-icon { font-size: 70px; line-height: 1; margin: 8px 0 4px; animation: hvarHeroIconBob 2.4s ease-in-out infinite; }
+@keyframes hvarHeroIconBob {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-6px) rotate(-3deg); }
+}
+.hvar-hero-title { font-size: 22px; font-weight: 900; color: #2E1A1A; line-height: 1.2; padding: 0 4px; }
+.hvar-hero-sub { font-size: 14px; color: #4A2C2C; opacity: 0.9; padding: 0 8px; line-height: 1.4; }
+.hvar-hero-cta {
+  margin-top: 12px;
+  padding: 14px 28px;
+  font-size: 17px;
+  font-weight: 800;
+  color: #FFF;
+  background: linear-gradient(180deg, #2E1A1A, #1A0F0F);
+  border: 2px solid rgba(255, 255, 255, 0.6);
+  border-radius: 16px;
+  cursor: pointer;
+  box-shadow: 0 6px 14px rgba(46, 26, 26, 0.4);
+  transition: transform 0.12s ease;
+}
+.hvar-hero-cta:active { transform: scale(0.96); }
+.hvar-extras-wrap { margin: 14px 0 8px; }
+.hvar-extras-toggle {
+  width: 100%;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.7);
+  border: 2px dashed rgba(186, 117, 23, 0.4);
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 700;
+  color: #5A3A1A;
+  transition: background 0.15s ease;
+}
+.hvar-extras-toggle:hover { background: rgba(255, 255, 255, 0.95); }
+.hvar-extras-icon { font-size: 22px; }
+.hvar-extras-label { flex: 1; text-align: right; }
+.hvar-extras-chevron { font-size: 16px; opacity: 0.6; }
+.hvar-extras-body {
+  margin-top: 10px;
+  padding: 12px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+html[data-theme="dark"] .hvar-hero-title { color: #1A0A0A; }
+html[data-theme="dark"] .hvar-hero-sub { color: #2A1414; }
+html[data-theme="dark"] .hvar-extras-toggle {
+  background: rgba(80, 50, 30, 0.5);
+  border-color: rgba(250, 199, 117, 0.4);
+  color: #F0E8E2;
+}
+
+/* ── JUST-IN-TIME VARIANT ─────────────────────────────────── */
+.hvar-jit-unlocked {
+  animation: hvarJitUnlock 1.4s ease-out;
+  box-shadow: 0 0 0 4px rgba(80, 200, 120, 0.5), 0 8px 24px rgba(80, 200, 120, 0.4) !important;
+  z-index: 10;
+}
+@keyframes hvarJitUnlock {
+  0% { transform: scale(0.92); opacity: 0; }
+  35% { transform: scale(1.08); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+.hvar-jit-newbadge {
+  position: absolute;
+  top: -10px;
+  right: -8px;
+  background: linear-gradient(180deg, #FFD93D, #F5AD2E);
+  color: #2E1A1A;
+  font-size: 11px;
+  font-weight: 900;
+  padding: 4px 9px;
+  border-radius: 10px;
+  border: 2px solid #FFF;
+  box-shadow: 0 4px 10px rgba(245, 173, 46, 0.6);
+  animation: hvarJitBadgeBounce 0.6s ease-out, hvarJitBadgePulse 1.4s ease-in-out 0.6s infinite;
+  z-index: 100;
+}
+@keyframes hvarJitBadgeBounce {
+  0% { transform: scale(0) rotate(-30deg); }
+  60% { transform: scale(1.3) rotate(8deg); }
+  100% { transform: scale(1) rotate(0); }
+}
+@keyframes hvarJitBadgePulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.08); }
+}
+.hvar-jit-teaser {
+  margin: 14px 0 8px;
+  padding: 12px 14px;
+  background: linear-gradient(135deg, rgba(120, 80, 200, 0.1), rgba(200, 120, 80, 0.1));
+  border: 2px dashed rgba(120, 80, 200, 0.4);
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 13px;
+}
+.hvar-jit-teaser-icon {
+  font-size: 28px;
+  animation: hvarJitTeaserBob 2s ease-in-out infinite;
+}
+@keyframes hvarJitTeaserBob {
+  0%, 100% { transform: translateY(0) rotate(0); }
+  50% { transform: translateY(-3px) rotate(-12deg); }
+}
+.hvar-jit-teaser-body { flex: 1; }
+.hvar-jit-teaser-title { font-weight: 700; color: #4A2C7A; margin-bottom: 2px; }
+.hvar-jit-teaser-title strong { color: #B82A4A; font-size: 15px; }
+.hvar-jit-teaser-sub { font-size: 11px; opacity: 0.85; color: #5A3A6A; }
+html[data-theme="dark"] .hvar-jit-teaser {
+  background: linear-gradient(135deg, rgba(120, 80, 200, 0.18), rgba(200, 120, 80, 0.18));
+  border-color: rgba(180, 140, 240, 0.5);
+}
+html[data-theme="dark"] .hvar-jit-teaser-title { color: #DCC4FF; }
+html[data-theme="dark"] .hvar-jit-teaser-sub { color: #BCA3DC; }
+
+/* Body marker for variant-specific tweaks */
+body[data-home-variant="hero"] .home-v2-hero { padding: 0; background: transparent; border: none; box-shadow: none; }
   /* ============================================================
      Home v3 — premium home screen (targets 9.5+ in HOME_AUDIT.md)
      ============================================================

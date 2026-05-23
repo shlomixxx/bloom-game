@@ -381,6 +381,13 @@
         if (document.getElementById('home-screen') && !hasSeenTour()) showTour();
       }, 900);
     }
+
+    // Stage 35 — Home variant decorator. After all the deferred tile
+    // mounts have settled (3.2s max delay), reorganize the layout per
+    // the admin-selected variant. 'standard' is no-op so v2 stays as-is.
+    if (typeof applyHomeVariant === 'function') {
+      try { applyHomeVariant(); } catch (e) { console.error('[home-variant]', e); }
+    }
   }
 
   function hideHomeV2() {

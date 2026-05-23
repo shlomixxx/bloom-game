@@ -1892,3 +1892,15 @@ INSERT INTO game_config (key, value) VALUES ('daily_special_enabled',      'true
 INSERT INTO game_config (key, value) VALUES ('daily_special_xp_mult',      '3')    ON CONFLICT (key) DO NOTHING;
 INSERT INTO game_config (key, value) VALUES ('daily_special_reward_mult',  '2')    ON CONFLICT (key) DO NOTHING;
 INSERT INTO game_config (key, value) VALUES ('daily_special_override_id',  '')     ON CONFLICT (key) DO NOTHING;
+
+-- ============================================================
+-- Home Variants (Stage 35 — Home Reorganization A/B test, May 2026)
+-- Admin picks ONE variant globally. All players see the chosen layout.
+-- Variants:
+--   'standard'  → current v2 home (long scroll of all tiles)
+--   'carousel'  → adds horizontal "what's hot now" carousel at top
+--   'hero'      → massive single-action card + collapse other tiles
+--   'jit'       → Just-In-Time: tiles unlock progressively by games played
+-- ============================================================
+INSERT INTO game_config (key, value) VALUES ('home_variant',           'standard') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('home_jit_unlock_games',  '3,7,13,26') ON CONFLICT (key) DO NOTHING;

@@ -852,6 +852,28 @@
     </div>
     <button class="tip-btn" data-tip="tab_game" aria-label="הסבר על לשונית משחק">?</button>
   </div>
+
+  <!-- ============================================================
+       Stage 35 — Home Variant Picker (May 2026)
+       Switches the home-screen layout globally for all players.
+       ============================================================ -->
+  <section id="home-variant-section" style="margin-bottom:12px">
+    <h2>🏠 גירסת מסך הבית <button class="tip-btn" data-tip-text="<strong>גירסת מסך הבית</strong><br>בוחר איזה layout הבית מציג לכל השחקנים.<div class=&quot;tip-example&quot;>📺 <strong>standard</strong> — הבית הנוכחי (גלילה ארוכה של כל הפיצ׳רים). הסטטוס קוו.<br><br>🎠 <strong>carousel</strong> — מוסיף קרוסלת ״חם עכשיו״ אופקית בראש הבית עם 3-6 כרטיסים של דברים דחופים (ליגה, פט עצוב, דיל יומי וכו׳). שאר הבית נשאר כמו שהיה. הכי קל לאמץ.<br><br>🎯 <strong>hero</strong> — מחליף את ההירו בכרטיס ענק עם פעולה אחת ראשית (הדבר הכי דחוף עכשיו), כל שאר ה-tiles מתקפלים תחת ״📂 עוד פיצ׳רים״. הכי דרמטי.<br><br>🎓 <strong>jit</strong> — Just-In-Time: שחקנים חדשים רואים רק 4-5 tiles. ככל שהם משחקים, נפתחים tiles חדשים עם 🎉 חגיגה. גם תיאור ״עוד X משחקים לפתיחת...״ למטה כפסיכולוגית סקרנות. הכי ממכר אבל הכי מורכב.<br><br>💡 <strong>בדיקה</strong>: שנה כאן → רענן את האפליקציה במכשיר אחר → שחקנים רואים מיד.</div>">?</button></h2>
+    <div style="padding:12px 16px;background:var(--card);border-radius:10px;margin-top:8px">
+      <div style="font-size:11px;color:var(--muted);margin-bottom:10px">בוחר layout אחד שיוצג לכל השחקנים. שינוי נכנס לתוקף מיד אחרי <code>/api/config</code> refresh (סשן חדש או רענון).</div>
+      <div id="home-variant-options" style="display:grid;grid-template-columns:1fr 1fr;gap:8px"></div>
+      <div style="margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.08)">
+        <div style="font-size:12px;font-weight:700;color:var(--gold);margin-bottom:6px">🎓 הגדרות Just-In-Time</div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:8px">גלי פתיחת פיצ׳רים — אחרי כמה משחקים נפתחים פיצ׳רים חדשים (4 ערכים: גל 2,3,4,5).</div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <input type="text" id="home-jit-unlock-input" placeholder="3,7,13,26" style="flex:1;padding:6px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--ink);font-family:monospace">
+          <button class="btn sm" id="btn-jit-unlock-save" style="min-width:70px;background:#9FE1CB;color:#1C1A18;font-weight:700">💾</button>
+          <button class="tip-btn" data-tip-text="<strong>גלי פתיחה Just-In-Time</strong><br>4 ספים שמחליטים מתי לפתוח כל גל פיצ׳רים.<div class=&quot;tip-example&quot;>📊 <strong>ברירת מחדל</strong>: <code>3,7,13,26</code><br><br>• 0-2 משחקים → גל 1: פט בלבד (פלוס CTA ראשי)<br>• 3-6 משחקים → גל 2: + checklist, lives<br>• 7-12 → גל 3: + Battle Pass, לוחות דינמיים, חנות<br>• 13-25 → גל 4: + ליגה, יריבות, הישגים, אלבום<br>• 26+ → גל 5: + קלאן, Prestige, חבילות חג<br><br>💡 ערכים נמוכים יותר = פתיחה מהירה (פחות מתח/סקרנות)<br>ערכים גבוהים יותר = יותר ״עוד משחק אחד״ <br><br>שינוי = רק לשחקנים חדשים שלא ראו עדיין את הפיצ׳רים האלה. שחקנים קיימים לא ייפגעו.</div>">?</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <!-- Game Config (Admin-controlled) -->
   <section id="config-section" style="margin-bottom:12px">
     <h2>הגדרות משחק <button class="tip-btn" data-tip="config">?</button></h2>
@@ -3743,6 +3765,92 @@
     loadReplayStats();
     loadGuildsAdmin();
     loadRivalryStats();
+    loadHomeVariant();
+  }
+
+  // ============================================================
+  // 🏠 Stage 35 — Home Variant Picker
+  // ============================================================
+  var HOME_VARIANTS = [
+    { id: 'standard', icon: '📺', label: 'Standard', desc: 'הבית הנוכחי' },
+    { id: 'carousel', icon: '🎠', label: 'Carousel',  desc: 'קרוסלת "חם עכשיו"' },
+    { id: 'hero',     icon: '🎯', label: 'Hero Card', desc: 'כרטיס ענק יחיד' },
+    { id: 'jit',      icon: '🎓', label: 'Just-In-Time', desc: 'פתיחה הדרגתית' }
+  ];
+
+  async function loadHomeVariant() {
+    var host = $('home-variant-options');
+    if (!host) return;
+    try {
+      var d = await api('/config');
+      if (!d || !d.config) { host.innerHTML = '<div style="color:var(--muted);font-size:11px">שגיאת טעינה</div>'; return; }
+      var rows = Array.isArray(d.config) ? d.config : [];
+      var current = (rows.find(function(r) { return r.key === 'home_variant'; }) || {}).value || 'standard';
+      var jit = (rows.find(function(r) { return r.key === 'home_jit_unlock_games'; }) || {}).value || '3,7,13,26';
+      renderHomeVariantOptions(current);
+      var input = $('home-jit-unlock-input');
+      if (input) input.value = jit;
+      wireJitSave();
+    } catch (e) {
+      host.innerHTML = '<div style="color:var(--muted);font-size:11px">שגיאת רשת</div>';
+    }
+  }
+
+  function renderHomeVariantOptions(current) {
+    var host = $('home-variant-options');
+    if (!host) return;
+    host.innerHTML = HOME_VARIANTS.map(function(v) {
+      var isActive = (v.id === current);
+      var bg = isActive ? 'linear-gradient(135deg,#9FE1CB,#7EC9B0)' : 'var(--bg)';
+      var border = isActive ? '2px solid #4A9F7F' : '1px solid var(--border)';
+      var color = isActive ? '#1C1A18' : 'var(--ink)';
+      var badge = isActive ? '<span style="font-size:10px;padding:2px 6px;background:#1C1A18;color:#9FE1CB;border-radius:4px;margin-right:6px">✓ פעיל</span>' : '';
+      return '<button class="home-variant-opt" data-variant="' + v.id + '" style="padding:14px 12px;border-radius:10px;border:' + border + ';background:' + bg + ';color:' + color + ';cursor:pointer;text-align:right;display:flex;flex-direction:column;gap:4px;transition:all 0.15s ease">' +
+        '<div style="display:flex;align-items:center;gap:6px;font-weight:800;font-size:14px"><span style="font-size:20px">' + v.icon + '</span>' + v.label + badge + '</div>' +
+        '<div style="font-size:11px;opacity:0.75">' + v.desc + '</div>' +
+      '</button>';
+    }).join('');
+    Array.prototype.forEach.call(host.querySelectorAll('.home-variant-opt'), function(btn) {
+      btn.addEventListener('click', function() { saveHomeVariant(btn.getAttribute('data-variant')); });
+    });
+  }
+
+  async function saveHomeVariant(variantId) {
+    try {
+      var r = await api('/config/home_variant', {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ value: variantId })
+      });
+      if (r && r.ok) {
+        renderHomeVariantOptions(variantId);
+        if (typeof showTransientToast === 'function') showTransientToast('✓ שונה ל-' + variantId);
+        else alert('✓ שונה ל-' + variantId + ' — שחקנים יראו ברענון הבא');
+      } else {
+        alert('שגיאה בשמירה');
+      }
+    } catch (e) { alert('שגיאת רשת'); }
+  }
+
+  function wireJitSave() {
+    var btn = $('btn-jit-unlock-save');
+    var input = $('home-jit-unlock-input');
+    if (!btn || !input || btn.dataset.wired) return;
+    btn.dataset.wired = '1';
+    btn.addEventListener('click', async function() {
+      var val = (input.value || '').trim();
+      if (!/^\d+(,\d+){3}$/.test(val)) { alert('פורמט: 4 מספרים מופרדים בפסיק, למשל 3,7,13,26'); return; }
+      try {
+        var r = await api('/config/home_jit_unlock_games', {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ value: val })
+        });
+        if (r && r.ok) {
+          btn.textContent = '✓';
+          btn.style.background = '#9FE1CB';
+          setTimeout(function() { btn.textContent = '💾'; }, 1500);
+        } else { alert('שגיאה בשמירה'); }
+      } catch (e) { alert('שגיאת רשת'); }
+    });
   }
 
   // ============================================================
