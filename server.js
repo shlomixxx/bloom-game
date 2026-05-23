@@ -3770,6 +3770,351 @@ app.post('/api/player/starter-pack/buy', requireDeviceAuth, async (req, res) => 
 });
 
 // ============================================================
+// Stage 21 — Daily Deals (May 2026)
+//
+// One deal per day, deterministic per Asia/Jerusalem date. Admin can
+// override via daily_deals_override_id. Each deal: gems / skin / BP
+// tiers / chest / freezes / mega bundle. 24h countdown. One purchase
+// per device per day per deal.
+// ============================================================
+function _dailyDealHash(dateStr) {
+  let h = 2166136261;
+  for (let i = 0; i < dateStr.length; i++) {
+    h ^= dateStr.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return (h >>> 0);
+}
+
+async function _loadDailyDealsCfg() {
+  try {
+    const r = await pool.query(`SELECT key, value FROM game_config WHERE key LIKE 'daily_deals_%'`);
+    const out = {};
+    r.rows.forEach(row => { out[row.key] = row.value; });
+    return out;
+  } catch (e) { return {}; }
+}
+
+async function _pickTodaysDeal() {
+  // Returns the deal row + nextMidnightAt (Asia/Jerusalem) OR null.
+  try {
+    const cfg = await _loadDailyDealsCfg();
+    if (cfg.daily_deals_enabled === 'false') return null;
+    const enabledR = await pool.query(
+      `SELECT * FROM daily_deals WHERE is_enabled = TRUE ORDER BY sort_order, id`
+    );
+    const pool_ = enabledR.rows;
+    if (!pool_.length) return null;
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' });
+    // Admin override.
+    const overrideId = parseInt(cfg.daily_deals_override_id || '', 10);
+    let pick = null;
+    if (Number.isFinite(overrideId) && overrideId > 0) {
+      pick = pool_.find(d => d.id === overrideId) || null;
+    }
+    if (!pick) {
+      const idx = _dailyDealHash(today) % pool_.length;
+      pick = pool_[idx];
+    }
+    return { deal: pick, date: today };
+  } catch (e) { return null; }
+}
+
+function _msUntilNextIsraelMidnight() {
+  // Compute ms until next Asia/Jerusalem midnight, accurate to ~1s.
+  const now = new Date();
+  const israelNowStr = now.toLocaleString('en-US', { timeZone: 'Asia/Jerusalem' });
+  const israelNow = new Date(israelNowStr);
+  const tomorrow = new Date(israelNow);
+  tomorrow.setHours(24, 0, 0, 0);
+  return tomorrow.getTime() - israelNow.getTime();
+}
+
+app.get('/api/daily-deals/today', async (req, res) => {
+  try {
+    const deviceId = (req.query.deviceId || '').toString().slice(0, 64);
+    const picked = await _pickTodaysDeal();
+    if (!picked) return res.json({ ok: true, enabled: false });
+    const deal = picked.deal;
+    const msLeft = _msUntilNextIsraelMidnight();
+    const expiresAt = new Date(Date.now() + msLeft);
+    // Check if device already purchased today.
+    let purchased = false;
+    if (deviceId && deviceId.length >= 8) {
+      const purR = await pool.query(
+        `SELECT 1 FROM daily_deal_purchases
+          WHERE device_id = $1 AND deal_id = $2 AND purchase_date = $3::date`,
+        [deviceId, deal.id, picked.date]
+      );
+      purchased = purR.rows.length > 0;
+    }
+    const discountPct = deal.original_value && deal.original_value > deal.price_gems
+      ? Math.round(((deal.original_value - deal.price_gems) / deal.original_value) * 100)
+      : null;
+    res.json({
+      ok: true,
+      enabled: true,
+      date: picked.date,
+      expiresAt,
+      msLeft,
+      deal: {
+        id: deal.id,
+        slug: deal.slug,
+        name: deal.name,
+        description: deal.description,
+        emoji: deal.emoji,
+        priceGems: deal.price_gems,
+        originalValue: deal.original_value,
+        discountPct,
+        contents: deal.contents,
+        category: deal.category
+      },
+      purchased
+    });
+  } catch (e) {
+    console.error('GET /api/daily-deals/today', e);
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
+app.post('/api/daily-deals/buy', requireDeviceAuth, async (req, res) => {
+  try {
+    const { deviceId, dealId } = req.body || {};
+    if (typeof deviceId !== 'string' || deviceId.length < 8 || deviceId.length > 64) {
+      return res.status(400).json({ error: 'bad_device' });
+    }
+    const dealIdN = parseInt(dealId, 10);
+    if (!Number.isFinite(dealIdN) || dealIdN <= 0) {
+      return res.status(400).json({ error: 'bad_deal' });
+    }
+    if (!checkRateLimit('daily_deal_buy', deviceId, 20, 60 * 60 * 1000)) {
+      return res.status(429).json({ error: 'rate_limited' });
+    }
+    // Verify dealId is actually today's deal (anti-cheat — don't trust client to send any old dealId).
+    const picked = await _pickTodaysDeal();
+    if (!picked) return res.json({ ok: false, reason: 'disabled' });
+    if (picked.deal.id !== dealIdN) {
+      return res.json({ ok: false, reason: 'wrong_deal' });
+    }
+    const deal = picked.deal;
+    const today = picked.date;
+    // Already-purchased check.
+    const purR = await pool.query(
+      `SELECT 1 FROM daily_deal_purchases
+        WHERE device_id = $1 AND deal_id = $2 AND purchase_date = $3::date`,
+      [deviceId, dealIdN, today]
+    );
+    if (purR.rows.length) return res.json({ ok: false, reason: 'already_purchased' });
+    const contents = deal.contents || {};
+    const grantGems = parseInt(contents.gems || 0, 10) || 0;
+    const grantBpTiers = parseInt(contents.bp_tiers || 0, 10) || 0;
+    const grantChests = parseInt(contents.chest_count || 0, 10) || 0;
+    const grantFreezes = parseInt(contents.streak_freezes || 0, 10) || 0;
+    const grantSkin = contents.skin_id && typeof contents.skin_id === 'string' && contents.skin_id.length < 40
+      ? contents.skin_id : null;
+    // Atomic transaction.
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const debit = await client.query(
+        `UPDATE player_profiles
+            SET balance = balance - $1, updated_at = NOW()
+          WHERE device_id = $2 AND balance >= $1 RETURNING balance`,
+        [deal.price_gems, deviceId]
+      );
+      if (!debit.rows[0]) {
+        await client.query('ROLLBACK');
+        const balR = await pool.query(`SELECT balance FROM player_profiles WHERE device_id = $1`, [deviceId]);
+        const bal = balR.rows[0] ? Number(balR.rows[0].balance) : 0;
+        return res.json({ ok: false, reason: 'insufficient_funds', price: deal.price_gems, balance: bal });
+      }
+      if (grantGems > 0) {
+        await client.query(
+          `UPDATE player_profiles
+              SET balance = balance + $1, total_earned = total_earned + $1, updated_at = NOW()
+            WHERE device_id = $2`,
+          [grantGems, deviceId]
+        );
+      }
+      if (grantSkin && grantSkin !== 'classic') {
+        await client.query(
+          `INSERT INTO player_skins (device_id, skin_id) VALUES ($1, $2)
+           ON CONFLICT (device_id, skin_id) DO NOTHING`,
+          [deviceId, grantSkin]
+        );
+      }
+      // BP tiers: same XP-boost logic as starter pack.
+      if (grantBpTiers > 0) {
+        const cfgR = await client.query(
+          `SELECT key, value FROM game_config WHERE key LIKE 'season_tier_%_xp'`
+        );
+        const tierXp = {};
+        cfgR.rows.forEach(r => {
+          const m = r.key.match(/^season_tier_(\d+)_xp$/);
+          if (m) tierXp[parseInt(m[1], 10)] = parseInt(r.value, 10);
+        });
+        const seasonId = 'S1';
+        const curR = await client.query(
+          `SELECT xp FROM player_season_progress WHERE device_id = $1 AND season_id = $2`,
+          [deviceId, seasonId]
+        );
+        const curXp = curR.rows[0] ? (Number(curR.rows[0].xp) || 0) : 0;
+        let curTier = 0;
+        for (let t = 1; t <= 20; t++) {
+          if (tierXp[t] && curXp >= tierXp[t]) curTier = t;
+        }
+        const targetTier = Math.min(20, curTier + grantBpTiers);
+        const xpBoost = Math.max(0, (tierXp[targetTier] || curXp) - curXp);
+        if (xpBoost > 0) {
+          await client.query(
+            `INSERT INTO player_season_progress (device_id, season_id, xp)
+                VALUES ($1, $2, $3)
+             ON CONFLICT (device_id, season_id) DO UPDATE SET xp = player_season_progress.xp + $3, updated_at = NOW()`,
+            [deviceId, seasonId, xpBoost]
+          );
+        }
+      }
+      // Mark purchased.
+      await client.query(
+        `INSERT INTO daily_deal_purchases (device_id, deal_id, purchase_date, price_paid, contents_snapshot)
+             VALUES ($1, $2, $3::date, $4, $5::jsonb)`,
+        [deviceId, dealIdN, today, deal.price_gems, JSON.stringify(contents)]
+      );
+      await client.query('COMMIT');
+      const finalR = await pool.query(`SELECT balance FROM player_profiles WHERE device_id = $1`, [deviceId]);
+      const newBalance = finalR.rows[0] ? Number(finalR.rows[0].balance) : null;
+      return res.json({
+        ok: true,
+        dealId: dealIdN,
+        price: deal.price_gems,
+        contents,
+        granted: {
+          gems: grantGems, bpTiers: grantBpTiers, skinId: grantSkin,
+          chests: grantChests, freezes: grantFreezes
+        },
+        newBalance
+      });
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  } catch (e) {
+    console.error('POST /api/daily-deals/buy', e);
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
+// ============================================================
+// Admin: Daily Deals CRUD
+// ============================================================
+adminRouter.get('/api/daily-deals', async (_req, res) => {
+  try {
+    const r = await pool.query(
+      `SELECT d.*,
+              (SELECT COUNT(*) FROM daily_deal_purchases WHERE deal_id = d.id) AS total_purchases,
+              (SELECT COUNT(*) FROM daily_deal_purchases WHERE deal_id = d.id AND purchase_date = (NOW() AT TIME ZONE 'Asia/Jerusalem')::date) AS today_purchases
+         FROM daily_deals d
+        ORDER BY sort_order, id`
+    );
+    res.json({ ok: true, deals: r.rows });
+  } catch (e) {
+    console.error('GET admin/daily-deals', e);
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
+adminRouter.post('/api/daily-deals', async (req, res) => {
+  try {
+    const { slug, name, description, emoji, price_gems, original_value, contents, category, is_enabled, sort_order } = req.body || {};
+    if (!slug || !name || !Number.isFinite(parseInt(price_gems, 10))) {
+      return res.status(400).json({ error: 'missing_fields' });
+    }
+    const r = await pool.query(
+      `INSERT INTO daily_deals (slug, name, description, emoji, price_gems, original_value, contents, category, is_enabled, sort_order)
+         VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9, $10)
+       RETURNING *`,
+      [
+        slug.toLowerCase().replace(/[^a-z0-9_]/g, '_').slice(0, 40),
+        String(name).slice(0, 80),
+        description || null,
+        emoji || null,
+        parseInt(price_gems, 10),
+        original_value ? parseInt(original_value, 10) : null,
+        JSON.stringify(contents || {}),
+        category || null,
+        is_enabled !== false,
+        parseInt(sort_order, 10) || 100
+      ]
+    );
+    await pool.query(
+      `INSERT INTO admin_actions (action, target_type, target_id, details)
+         VALUES ('daily_deal_create', 'daily_deal', $1, $2)`,
+      [String(r.rows[0].id), JSON.stringify({ slug: r.rows[0].slug, name })]
+    ).catch(() => {});
+    res.json({ ok: true, deal: r.rows[0] });
+  } catch (e) {
+    if (e.code === '23505') return res.status(400).json({ error: 'slug_exists' });
+    console.error('POST admin/daily-deals', e);
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
+adminRouter.patch('/api/daily-deals/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const { name, description, emoji, price_gems, original_value, contents, category, is_enabled, sort_order } = req.body || {};
+    const updates = [];
+    const vals = [];
+    let p = 1;
+    if (name !== undefined)           { updates.push(`name = $${p++}`); vals.push(String(name).slice(0, 80)); }
+    if (description !== undefined)    { updates.push(`description = $${p++}`); vals.push(description); }
+    if (emoji !== undefined)          { updates.push(`emoji = $${p++}`); vals.push(emoji); }
+    if (price_gems !== undefined)     { updates.push(`price_gems = $${p++}`); vals.push(parseInt(price_gems, 10)); }
+    if (original_value !== undefined) { updates.push(`original_value = $${p++}`); vals.push(original_value ? parseInt(original_value, 10) : null); }
+    if (contents !== undefined)       { updates.push(`contents = $${p++}::jsonb`); vals.push(JSON.stringify(contents)); }
+    if (category !== undefined)       { updates.push(`category = $${p++}`); vals.push(category); }
+    if (is_enabled !== undefined)     { updates.push(`is_enabled = $${p++}`); vals.push(!!is_enabled); }
+    if (sort_order !== undefined)     { updates.push(`sort_order = $${p++}`); vals.push(parseInt(sort_order, 10) || 100); }
+    if (!updates.length) return res.json({ ok: false, reason: 'no_changes' });
+    updates.push(`updated_at = NOW()`);
+    vals.push(id);
+    const r = await pool.query(
+      `UPDATE daily_deals SET ${updates.join(', ')} WHERE id = $${p} RETURNING *`,
+      vals
+    );
+    if (!r.rows[0]) return res.status(404).json({ error: 'not_found' });
+    await pool.query(
+      `INSERT INTO admin_actions (action, target_type, target_id, details)
+         VALUES ('daily_deal_patch', 'daily_deal', $1, $2)`,
+      [String(id), JSON.stringify({ fields: Object.keys(req.body || {}) })]
+    ).catch(() => {});
+    res.json({ ok: true, deal: r.rows[0] });
+  } catch (e) {
+    console.error('PATCH admin/daily-deals/:id', e);
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
+adminRouter.delete('/api/daily-deals/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const r = await pool.query(`DELETE FROM daily_deals WHERE id = $1 RETURNING slug`, [id]);
+    if (!r.rows[0]) return res.status(404).json({ error: 'not_found' });
+    await pool.query(
+      `INSERT INTO admin_actions (action, target_type, target_id, details)
+         VALUES ('daily_deal_delete', 'daily_deal', $1, $2)`,
+      [String(id), JSON.stringify({ slug: r.rows[0].slug })]
+    ).catch(() => {});
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('DELETE admin/daily-deals/:id', e);
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
+// ============================================================
 // Live Tournaments — stage 12 (May 2026)
 //
 // Scheduled prime-time events with a fixed window + top-N prize

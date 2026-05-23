@@ -63,6 +63,31 @@ export async function initDb() {
       created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )`,
+    // Stage 21 — Daily Deals tables (full CREATE + seed in schema.sql).
+    `CREATE TABLE IF NOT EXISTS daily_deals (
+      id            SERIAL PRIMARY KEY,
+      slug          VARCHAR(40) UNIQUE NOT NULL,
+      name          VARCHAR(80) NOT NULL,
+      description   TEXT,
+      emoji         VARCHAR(10),
+      price_gems    INT NOT NULL,
+      original_value INT,
+      contents      JSONB NOT NULL DEFAULT '{}'::jsonb,
+      category      VARCHAR(40),
+      is_enabled    BOOLEAN NOT NULL DEFAULT TRUE,
+      sort_order    INT NOT NULL DEFAULT 100,
+      created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`,
+    `CREATE TABLE IF NOT EXISTS daily_deal_purchases (
+      device_id     VARCHAR(64) NOT NULL,
+      deal_id       INT NOT NULL,
+      purchase_date DATE NOT NULL,
+      price_paid    INT,
+      contents_snapshot JSONB,
+      purchased_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (device_id, deal_id, purchase_date)
+    )`,
   ];
   for (const sql of migrations) {
     try { await pool.query(sql); } catch (e) {

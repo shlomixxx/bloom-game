@@ -1542,6 +1542,30 @@
     </div>
   </section>
 
+  <!-- 🔥 Daily Deals (stage 21) -->
+  <section id="daily-deals-section" style="margin-bottom:12px">
+    <h2>🔥 Daily Deals — דיל היום <button class="tip-btn" data-tip-text="<strong>🔥 Daily Deals</strong><br>הצעה אחת ביום, נבחרת אוטומטית מהמאגר. 50-70% הנחה.<div class=&quot;tip-example&quot;>💡 <strong>איך זה עובד</strong>:<br>1. בחצות שעון ישראל, השרת בוחר אחד מהמודלים הפעילים לפי hash של התאריך — דטרמיניסטי, כולם רואים את אותו הdeal היום, מתחלף מחר.<br>2. השחקן רואה banner ב-banner בבית + modal עם כפתור קנייה + countdown.<br>3. שחקן יכול לקנות פעם אחת ביום (per deal).<br>4. ב-24:00 בחצות שעון ישראל מתאפס — דיל חדש מופיע.<br><br>📊 <strong>Override</strong>: בחר deal ספציפי למטה כדי להכריח אותו להיום (למשל לחגים).<br>⚠ <strong>אנטי cheat</strong>: השרת מוודא ש-dealId שהקלינט שולח הוא אכן הdeal של היום (לא יקבל קנייה לdeal של מחר/אתמול).</div>">?</button></h2>
+    <div style="padding:12px 16px;background:var(--card);border-radius:10px;margin-top:8px">
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+        <div class="rewards-grid" data-keys="daily_deals_enabled,daily_deals_show_on_home"></div>
+        <div class="rewards-grid" data-keys="daily_deals_per_day,daily_deals_override_id"></div>
+      </div>
+
+      <div style="margin-bottom:12px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <div style="font-size:13px;font-weight:700;color:var(--gold)">📦 מאגר הדילים</div>
+          <button id="dd-add-btn" class="btn-primary" style="padding:6px 14px;font-size:12px">+ הוסף Deal</button>
+        </div>
+        <div id="daily-deals-list" style="display:flex;flex-direction:column;gap:6px;font-size:12px">
+          <div style="color:var(--muted);padding:10px;text-align:center">⏳ טוען...</div>
+        </div>
+      </div>
+
+      <div id="daily-deals-status" style="font-size:11px;color:var(--muted);text-align:center;margin-top:8px"></div>
+    </div>
+  </section>
+
   <!-- Monetization -->
   <section id="monetization-section" style="margin-bottom:12px">
     <h2>💰 מונטיזציה <button class="tip-btn" data-tip="monetization">?</button></h2>
@@ -2522,6 +2546,12 @@
     dyn_comeback_reward:     'פרס ה-💎 שנותן ה-comeback overlay.<div class="tip-example">📊 ברירת מחדל 150💎.<br>💡 גדול מספיק כדי שירגיש משמעותי, קטן מספיק כדי שלא יהיה אטרקציה לפנות-חוץ-בעצמך.<br>📊 ערכים: 50 (קמצני), 150 (default), 300 (נדיב, למתחילים), 500 (אגרסיבי).</div>',
     dyn_comeback_freeze_gift: 'מספר הקפאות חינם שנותנים עם ה-comeback bonus.<div class="tip-example">📊 ברירת מחדל 1.<br>💡 השילוב 150💎 + 1 הקפאה = "ברוך שובך + אנחנו נשמור עליך לא לנפול שוב". פסיכולוגית חזק.<br>📊 ערך 0 = רק 💎, ערך 2 = "פרמיום" comeback. ערך 3+ = ייצור הקפאות בחינם דרך win-back farming, אל תעלה מעל 1-2.</div>',
 
+    // ---- Daily Deals (stage 21) ----
+    daily_deals_enabled: 'הפעלת מערכת Daily Deals.<div class="tip-example">📊 ברירת מחדל פעיל. כאשר מופעל, כל יום בחצות שעון ישראל נבחר deal אחד מהמאגר ומוצג בbanner הבית + modal.<br>💡 <strong>זה Daily-return hook חזק</strong>: שחקנים יפתחו את האפליקציה כל יום כדי "לראות מה היום". 30-40% מהשחקנים שיראו את הbanner ילחצו עליו, 10-20% יקנו.<br>⚠ כיבוי מסתיר לחלוטין את הbanner. דילים פעילים במאגר נשארים — מחכים להפעלה מחדש.</div>',
+    daily_deals_show_on_home: 'הצגת ה-banner בראש המסך הראשי.<div class="tip-example">📊 ברירת מחדל פעיל. כיבוי = הdeal עדיין יבחר על-ידי השרת, אבל לא יוצג ב-banner. ה-modal עדיין יהיה נגיש דרך admin/API.<br>💡 כיבוי מתאים לA/B test — חצי מהשחקנים רואים banner, חצי לא.</div>',
+    daily_deals_per_day: 'כמה דילים להציג ביום (לעתיד).<div class="tip-example">📊 ברירת מחדל 1. כרגע הקוד תומך רק ב-1.<br>💡 בעתיד נוכל להציג 2-3 דילים מקבילים (אחד בסיסי, אחד premium, אחד flash). כל ערך מעל 1 מתעלם כרגע.</div>',
+    daily_deals_override_id: 'override ידני של deal היום (id מספרי).<div class="tip-example">📊 ריק = אוטומטי (לפי תאריך). הזן id ספציפי כדי להכריח את הdeal הזה היום.<br>💡 שימושי לחגים — למשל ב-25 לדצמבר תכריח את "🎄 Hanukkah Pack" להופיע.<br>⚠ אם הid לא קיים / לא פעיל, המערכת חוזרת לאוטומטי.</div>',
+
     // ---- Starter Pack (stage 20) ----
     starter_pack_enabled: 'הפעלת מערכת חבילת הפתיחה.<div class="tip-example">📊 ברירת מחדל פעיל. כאשר מופעל, השחקן יראה את ה-banner ב-banner של הבית + מודאל ברגע שיעבור את trigger_score פעם ראשונה.<br>💡 <strong>זה ה-monetization driver הראשון של המשחק</strong>. 50-90% conversion rate בעולם הפאזל. ⚠ כיבוי = השחקנים שכבר רכשו ימשיכו להחזיק במה שקיבלו, פשוט לא יוצעו חדשים.</div>',
     starter_pack_name: 'שם החבילה שמוצג ב-modal + banner.<div class="tip-example">📊 ברירת מחדל "🎁 חבילת פתיחה". ערכים אחרים: "🎁 חבילת ברוכים הבאים", "💎 הצעה מיוחדת חד-פעמית", וכו\'.<br>💡 הוסף emoji בהתחלה — מושך את העין יותר.</div>',
@@ -3308,6 +3338,185 @@
     loadSkins();
     loadSeasonPassTiers();
     loadDailySpecialPicker();
+    loadDailyDeals();
+  }
+
+  // ============================================================
+  // 🔥 Daily Deals admin — list / create / edit / delete
+  // ============================================================
+  async function loadDailyDeals() {
+    var host = document.getElementById('daily-deals-list');
+    if (!host) return;
+    try {
+      var r = await fetch('/' + ADMIN_PATH + '/api/daily-deals').then(function(r){return r.json();});
+      var deals = (r && r.deals) || [];
+      if (!deals.length) {
+        host.innerHTML = '<div style="color:var(--muted);padding:10px;text-align:center">אין דילים — הוסף ראשון</div>';
+      } else {
+        host.innerHTML = deals.map(function(d) {
+          var contents = d.contents || {};
+          var contentSummary = [];
+          if (contents.gems) contentSummary.push('💎 ' + contents.gems);
+          if (contents.skin_id) contentSummary.push('🎨 ' + contents.skin_id);
+          if (contents.bp_tiers) contentSummary.push('🎖 ' + contents.bp_tiers);
+          if (contents.chest_count) contentSummary.push('🎁 ' + contents.chest_count);
+          if (contents.streak_freezes) contentSummary.push('🛡 ' + contents.streak_freezes);
+          var statusPill = d.is_enabled
+            ? '<span style="display:inline-block;padding:2px 6px;background:rgba(159,225,203,0.4);color:#04342C;border-radius:6px;font-size:10px;font-weight:700">✓ פעיל</span>'
+            : '<span style="display:inline-block;padding:2px 6px;background:rgba(0,0,0,0.15);color:var(--muted);border-radius:6px;font-size:10px;font-weight:700">⏸ כבוי</span>';
+          return '<div style="display:grid;grid-template-columns:auto 1fr auto auto;gap:10px;padding:10px 12px;background:var(--bg);border-radius:8px;align-items:center">' +
+            '<div style="font-size:24px">' + (d.emoji || '🔥') + '</div>' +
+            '<div style="min-width:0">' +
+              '<div style="font-weight:700;color:var(--fg)">' + d.name + ' ' + statusPill + '</div>' +
+              '<div style="font-size:11px;color:var(--muted);margin-top:2px">' +
+                d.price_gems + '💎' +
+                (d.original_value ? ' <s>' + d.original_value + '💎</s>' : '') +
+                ' · ' + contentSummary.join(' · ') +
+                ' · קונים היום: ' + (d.today_purchases || 0) +
+                ' · סה"כ: ' + (d.total_purchases || 0) +
+              '</div>' +
+            '</div>' +
+            '<button class="btn-secondary" data-dd-edit="' + d.id + '" style="padding:4px 10px;font-size:11px">✏️ ערוך</button>' +
+            '<button class="btn-danger" data-dd-delete="' + d.id + '" style="padding:4px 10px;font-size:11px">🗑</button>' +
+          '</div>';
+        }).join('');
+        host.querySelectorAll('[data-dd-edit]').forEach(function(b) {
+          b.onclick = function() {
+            var id = parseInt(b.getAttribute('data-dd-edit'), 10);
+            var deal = deals.find(function(d) { return d.id === id; });
+            if (deal) openDailyDealEditor(deal);
+          };
+        });
+        host.querySelectorAll('[data-dd-delete]').forEach(function(b) {
+          b.onclick = async function() {
+            var id = parseInt(b.getAttribute('data-dd-delete'), 10);
+            var deal = deals.find(function(d) { return d.id === id; });
+            if (!confirm('למחוק את "' + (deal && deal.name) + '"?')) return;
+            await fetch('/' + ADMIN_PATH + '/api/daily-deals/' + id, { method: 'DELETE' });
+            loadDailyDeals();
+          };
+        });
+      }
+    } catch (e) {
+      host.innerHTML = '<div style="color:var(--danger);padding:10px">שגיאה בטעינה: ' + e.message + '</div>';
+    }
+    var addBtn = document.getElementById('dd-add-btn');
+    if (addBtn) addBtn.onclick = function() { openDailyDealEditor(null); };
+  }
+
+  function openDailyDealEditor(deal) {
+    var isEdit = !!deal;
+    var d = deal || {
+      slug: '', name: '', description: '', emoji: '🔥',
+      price_gems: 100, original_value: 300,
+      contents: { gems: 200 },
+      category: 'gems', is_enabled: true, sort_order: 100
+    };
+    var contents = d.contents || {};
+    var ov = document.createElement('div');
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:9999;padding:14px';
+    ov.innerHTML =
+      '<div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:20px;max-width:480px;width:100%;max-height:92vh;overflow-y:auto;direction:rtl;text-align:right">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">' +
+          '<h3 style="margin:0;color:var(--fg)">' + (isEdit ? '✏️ ערוך Deal' : '+ Deal חדש') + '</h3>' +
+          '<button id="dd-edit-close" style="border:none;background:none;font-size:20px;cursor:pointer;color:var(--muted)">×</button>' +
+        '</div>' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
+          '<label style="font-size:12px;color:var(--muted)">slug (אנגלית) <input id="ed-slug" value="' + escapeAttr(d.slug || '') + '" ' + (isEdit ? 'disabled' : '') + ' style="width:100%;padding:6px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--fg);margin-top:4px"></label>' +
+          '<label style="font-size:12px;color:var(--muted)">אימוג\'י <input id="ed-emoji" value="' + escapeAttr(d.emoji || '🔥') + '" maxlength="4" style="width:100%;padding:6px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--fg);margin-top:4px;text-align:center;font-size:18px"></label>' +
+        '</div>' +
+        '<label style="font-size:12px;color:var(--muted);display:block;margin-top:10px">שם (יוצג לשחקן)<input id="ed-name" value="' + escapeAttr(d.name || '') + '" style="width:100%;padding:6px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--fg);margin-top:4px"></label>' +
+        '<label style="font-size:12px;color:var(--muted);display:block;margin-top:10px">תיאור<textarea id="ed-desc" rows="2" style="width:100%;padding:6px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--fg);margin-top:4px;font-family:inherit">' + escapeAttr(d.description || '') + '</textarea></label>' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px">' +
+          '<label style="font-size:12px;color:var(--muted)">מחיר (💎)<input id="ed-price" type="number" value="' + d.price_gems + '" style="width:100%;padding:6px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--fg);margin-top:4px"></label>' +
+          '<label style="font-size:12px;color:var(--muted)">ערך מקורי (💎, להצגה)<input id="ed-orig" type="number" value="' + (d.original_value || '') + '" style="width:100%;padding:6px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--fg);margin-top:4px"></label>' +
+        '</div>' +
+        '<div style="margin-top:14px;padding:10px;background:var(--bg);border-radius:8px">' +
+          '<div style="font-size:12px;font-weight:700;color:var(--gold);margin-bottom:8px">🎁 תוכן החבילה</div>' +
+          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:11px;color:var(--muted)">' +
+            '<label>💎 יהלומים<input id="ed-c-gems" type="number" value="' + (contents.gems || 0) + '" style="width:100%;padding:4px 8px;background:var(--card);border:1px solid var(--border);border-radius:5px;color:var(--fg);margin-top:3px"></label>' +
+            '<label>🎨 סקין (skin_id)<input id="ed-c-skin" value="' + escapeAttr(contents.skin_id || '') + '" placeholder="fire / aurora / classic" style="width:100%;padding:4px 8px;background:var(--card);border:1px solid var(--border);border-radius:5px;color:var(--fg);margin-top:3px"></label>' +
+            '<label>🎖 דרגות BP<input id="ed-c-bp" type="number" value="' + (contents.bp_tiers || 0) + '" style="width:100%;padding:4px 8px;background:var(--card);border:1px solid var(--border);border-radius:5px;color:var(--fg);margin-top:3px"></label>' +
+            '<label>🎁 תיבות הפתעה<input id="ed-c-chest" type="number" value="' + (contents.chest_count || 0) + '" style="width:100%;padding:4px 8px;background:var(--card);border:1px solid var(--border);border-radius:5px;color:var(--fg);margin-top:3px"></label>' +
+            '<label>🛡 הקפאות רצף<input id="ed-c-freeze" type="number" value="' + (contents.streak_freezes || 0) + '" style="width:100%;padding:4px 8px;background:var(--card);border:1px solid var(--border);border-radius:5px;color:var(--fg);margin-top:3px"></label>' +
+          '</div>' +
+        '</div>' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px">' +
+          '<label style="font-size:12px;color:var(--muted)">קטגוריה<input id="ed-cat" value="' + escapeAttr(d.category || '') + '" placeholder="gems / skin / bp / chest" style="width:100%;padding:6px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--fg);margin-top:4px"></label>' +
+          '<label style="font-size:12px;color:var(--muted)">סדר מיון<input id="ed-sort" type="number" value="' + (d.sort_order || 100) + '" style="width:100%;padding:6px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--fg);margin-top:4px"></label>' +
+        '</div>' +
+        '<label style="font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px;margin-top:10px"><input id="ed-enabled" type="checkbox" ' + (d.is_enabled ? 'checked' : '') + '> פעיל (יכול להופיע כDeal יומי)</label>' +
+        '<div style="display:flex;gap:10px;margin-top:16px">' +
+          '<button id="ed-save" class="btn-primary" style="flex:1;padding:10px">💾 שמור</button>' +
+          '<button id="ed-cancel" class="btn-secondary" style="padding:10px 16px">ביטול</button>' +
+        '</div>' +
+        '<div id="ed-status" style="font-size:11px;color:var(--muted);text-align:center;margin-top:8px"></div>' +
+      '</div>';
+    document.body.appendChild(ov);
+    var close = function() { try { ov.remove(); } catch (e) {} };
+    document.getElementById('dd-edit-close').onclick = close;
+    document.getElementById('ed-cancel').onclick = close;
+    ov.addEventListener('click', function(e) { if (e.target === ov) close(); });
+    document.getElementById('ed-save').onclick = async function() {
+      var status = document.getElementById('ed-status');
+      var body = {
+        slug: document.getElementById('ed-slug').value,
+        name: document.getElementById('ed-name').value,
+        description: document.getElementById('ed-desc').value,
+        emoji: document.getElementById('ed-emoji').value,
+        price_gems: parseInt(document.getElementById('ed-price').value, 10),
+        original_value: parseInt(document.getElementById('ed-orig').value, 10) || null,
+        contents: {},
+        category: document.getElementById('ed-cat').value,
+        sort_order: parseInt(document.getElementById('ed-sort').value, 10) || 100,
+        is_enabled: document.getElementById('ed-enabled').checked
+      };
+      var gems = parseInt(document.getElementById('ed-c-gems').value, 10);
+      var skinId = document.getElementById('ed-c-skin').value.trim();
+      var bp = parseInt(document.getElementById('ed-c-bp').value, 10);
+      var chest = parseInt(document.getElementById('ed-c-chest').value, 10);
+      var freeze = parseInt(document.getElementById('ed-c-freeze').value, 10);
+      if (gems > 0) body.contents.gems = gems;
+      if (skinId) body.contents.skin_id = skinId;
+      if (bp > 0) body.contents.bp_tiers = bp;
+      if (chest > 0) body.contents.chest_count = chest;
+      if (freeze > 0) body.contents.streak_freezes = freeze;
+      if (!body.name || !Number.isFinite(body.price_gems)) {
+        status.textContent = '✗ חסר שם או מחיר תקין';
+        status.style.color = 'var(--danger)';
+        return;
+      }
+      try {
+        var url = '/' + ADMIN_PATH + '/api/daily-deals' + (isEdit ? '/' + deal.id : '');
+        var method = isEdit ? 'PATCH' : 'POST';
+        var r = await fetch(url, {
+          method: method,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+        var resp = await r.json();
+        if (resp.ok) {
+          status.textContent = '✓ נשמר';
+          status.style.color = 'var(--success)';
+          setTimeout(function() { close(); loadDailyDeals(); }, 600);
+        } else {
+          status.textContent = '✗ ' + (resp.error || 'שגיאה');
+          status.style.color = 'var(--danger)';
+        }
+      } catch (e) {
+        status.textContent = '✗ שגיאה: ' + e.message;
+        status.style.color = 'var(--danger)';
+      }
+    };
+  }
+
+  function escapeAttr(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
   }
 
   // ============================================================

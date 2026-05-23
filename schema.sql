@@ -1165,6 +1165,66 @@ CREATE INDEX IF NOT EXISTS idx_skin_configurations_sort
   ON skin_configurations (sort_order, id);
 
 -- ============================================================
+-- Daily Deals (Stage 21 — rotating daily offer, May 2026)
+-- One deal per day (Asia/Jerusalem), deterministic pick from the
+-- pool. 50-70% discount creates anchoring psychology. 24h countdown
+-- creates urgency. One purchase per device per day per deal.
+--
+-- Pool is admin-managed via the daily_deals table; admin adds/edits
+-- offers + can force a specific deal via daily_deals_override_id.
+-- Contents JSONB supports: gems / skin_id / bp_tiers / chest_count /
+-- streak_freezes / powerup_id+count.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS daily_deals (
+  id            SERIAL PRIMARY KEY,
+  slug          VARCHAR(40) UNIQUE NOT NULL,
+  name          VARCHAR(80) NOT NULL,
+  description   TEXT,
+  emoji         VARCHAR(10),
+  price_gems    INT NOT NULL,
+  -- original value (for the strikethrough). Display only.
+  original_value INT,
+  contents      JSONB NOT NULL DEFAULT '{}'::jsonb,
+  category      VARCHAR(40),
+  is_enabled    BOOLEAN NOT NULL DEFAULT TRUE,
+  sort_order    INT NOT NULL DEFAULT 100,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_daily_deals_enabled
+  ON daily_deals (is_enabled, sort_order);
+
+CREATE TABLE IF NOT EXISTS daily_deal_purchases (
+  device_id     VARCHAR(64) NOT NULL,
+  deal_id       INT NOT NULL,
+  purchase_date DATE NOT NULL,
+  price_paid    INT,
+  contents_snapshot JSONB,
+  purchased_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (device_id, deal_id, purchase_date)
+);
+CREATE INDEX IF NOT EXISTS idx_daily_deal_purchases_device
+  ON daily_deal_purchases (device_id, purchase_date DESC);
+
+-- Master config keys
+INSERT INTO game_config (key, value) VALUES ('daily_deals_enabled',       'true') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('daily_deals_show_on_home',  'true') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('daily_deals_override_id',   '')     ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('daily_deals_per_day',       '1')    ON CONFLICT (key) DO NOTHING;
+
+-- Seed 7 starter deals — admin can edit/disable/remove via the panel.
+-- Format: (slug, name, description, emoji, price, value, contents, category)
+INSERT INTO daily_deals (slug, name, description, emoji, price_gems, original_value, contents, category) VALUES
+  ('gem_starter',  '💎 חבילת יהלומים', 'הצעה יומית — 200💎 במחיר חצי', '💎', 50,  200, '{"gems":200}'::jsonb, 'gems'),
+  ('gem_bundle',   '💎 חבילת ענק',     '1200💎 בהנחה משמעותית',         '💎', 500, 1200,'{"gems":1200}'::jsonb,'gems'),
+  ('skin_deal',    '🎨 דיל סקין',      'סקין fire ב-60% הנחה',          '🎨', 200, 500, '{"skin_id":"fire"}'::jsonb,'skin'),
+  ('bp_boost',     '🎖 קפיצת Battle Pass', 'דרגת BP מיידית',            '🎖', 300, 800, '{"bp_tiers":1}'::jsonb,'battle_pass'),
+  ('chest_x3',     '🎁 3 תיבות הפתעה', '3 mystery chests בהנחה',         '🎁', 150, 450, '{"chest_count":3}'::jsonb,'chest'),
+  ('freeze_x3',    '🛡 3 הקפאות רצף',  'הגנה משלוש פספוסי ימים',         '🛡', 300, 600, '{"streak_freezes":3}'::jsonb,'freeze'),
+  ('mega_bundle',  '🌟 חבילת מגה',     'יהלומים + סקין + דרגת BP',       '🌟', 800, 2500,'{"gems":1000,"skin_id":"space","bp_tiers":1}'::jsonb,'mega')
+ON CONFLICT (slug) DO NOTHING;
+
+-- ============================================================
 -- Starter Pack (Stage 20 — first-purchase funnel, May 2026)
 -- The single highest-conversion offer in F2P puzzle games (50-90%
 -- buy-through in industry data). One-time per device. 7-day countdown

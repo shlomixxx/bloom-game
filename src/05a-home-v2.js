@@ -239,6 +239,12 @@
       setTimeout(function() { try { maybeOfferStarterPack(); } catch (e) {} }, 800);
     }
 
+    // Stage 21 — Daily Deals banner. Slight delay so starter-pack lands first
+    // (Starter Pack takes priority since it's one-time + first-purchase).
+    if (typeof maybeShowDailyDealBanner === 'function') {
+      setTimeout(function() { try { maybeShowDailyDealBanner(); } catch (e) {} }, 1200);
+    }
+
     // Tier-icons tap → reveal stats bubble (same behaviour as v1)
     var iconsTap = document.getElementById('home-icons-tap');
     if (iconsTap) {
