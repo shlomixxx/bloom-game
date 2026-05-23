@@ -63,6 +63,23 @@ export async function initDb() {
       created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )`,
+    // Stage 28 — Pet/Mascot table (full CREATE in schema.sql).
+    `CREATE TABLE IF NOT EXISTS player_pet (
+      device_id           VARCHAR(64) PRIMARY KEY,
+      pet_name            VARCHAR(40),
+      level               INT NOT NULL DEFAULT 1,
+      xp                  INT NOT NULL DEFAULT 0,
+      last_visited_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      last_fed_at         TIMESTAMPTZ,
+      last_petted_at      TIMESTAMPTZ,
+      last_petted_date    DATE,
+      feeds_today         INT NOT NULL DEFAULT 0,
+      feeds_today_date    DATE,
+      total_fed_count     INT NOT NULL DEFAULT 0,
+      total_pet_count     INT NOT NULL DEFAULT 0,
+      created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`,
     // Stage 26 — Live Ops Calendar (full CREATE + seed in schema.sql).
     `CREATE TABLE IF NOT EXISTS calendar_events (
       id            SERIAL PRIMARY KEY,

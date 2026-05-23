@@ -2341,6 +2341,15 @@
         if (!skinTrialMode && !window.__bloomBotActive && typeof maybeOfferStarterPack === 'function') {
           try { maybeOfferStarterPack(score); } catch (e) {}
         }
+        // Stage 28 — Pet XP grant. Fires for ALL game modes so the pet
+        // grows continuously regardless of what the player chooses to play.
+        // Server-side dedup per gameId prevents double-grant.
+        if (!skinTrialMode && !window.__bloomBotActive && typeof grantPetXpForGame === 'function') {
+          try {
+            var __gid = (typeof getCurrentGameId === 'function') ? getCurrentGameId() : ('game-' + Date.now());
+            grantPetXpForGame(__gid);
+          } catch (e) {}
+        }
         soundGameOver();
         buzz([60, 80, 100]);
         playMusic('fail');

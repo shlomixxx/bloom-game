@@ -1165,6 +1165,46 @@ CREATE INDEX IF NOT EXISTS idx_skin_configurations_sort
   ON skin_configurations (sort_order, id);
 
 -- ============================================================
+-- Pet / Mascot (Stage 28 — Tamagotchi emotional anchor, May 2026)
+-- A virtual flower-pet that grows with the player. 4 evolution stages
+-- (sprout → sapling → bloom → king-bloom) by level. 4 moods based on
+-- time since last visit (happy / neutral / sad / crying). Players can
+-- pet (free, daily, +gems) or feed (costs gems, +xp). Pet XP is
+-- granted automatically on game finish (server hook).
+--
+-- WHY: emotional attachment = daily-return hook. Players feel guilty
+-- leaving the pet hungry. Tamagotchi pattern made $10B+ industry by
+-- itself. We use a flower since BLOOM = bloom.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS player_pet (
+  device_id           VARCHAR(64) PRIMARY KEY,
+  pet_name            VARCHAR(40),
+  level               INT NOT NULL DEFAULT 1,
+  xp                  INT NOT NULL DEFAULT 0,
+  -- last_visited_at = last time the player opened the pet modal
+  last_visited_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  last_fed_at         TIMESTAMPTZ,
+  last_petted_at      TIMESTAMPTZ,
+  last_petted_date    DATE,  -- for the daily-pet dedup
+  feeds_today         INT NOT NULL DEFAULT 0,
+  feeds_today_date    DATE,
+  total_fed_count     INT NOT NULL DEFAULT 0,
+  total_pet_count     INT NOT NULL DEFAULT 0,
+  created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- 8 config keys.
+INSERT INTO game_config (key, value) VALUES ('pet_enabled',                'true') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('pet_xp_per_game',            '15')   ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('pet_xp_per_level',           '100')  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('pet_max_level',              '20')   ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('pet_feed_price_gems',        '10')   ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('pet_feed_xp_reward',         '50')   ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('pet_feeds_per_day_max',      '3')    ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('pet_daily_pet_reward_gems',  '20')   ON CONFLICT (key) DO NOTHING;
+
+-- ============================================================
 -- Live Ops Calendar (Stage 26 — anticipation engine, May 2026)
 -- Two surfaces: (1) DAILY CHECKLIST on home — 4-5 to-do items per
 -- day (free pull, daily special, daily deal, quest, streak) that

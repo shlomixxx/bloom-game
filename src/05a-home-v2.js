@@ -262,6 +262,12 @@
       setTimeout(function() { try { maybeShowChecklistTile(); } catch (e) {} }, 600);
     }
 
+    // Stage 28 — Pet widget. Mounts between lives + checklist so the
+    // pet is visible but doesn't out-rank the to-do list.
+    if (typeof maybeShowPetWidget === 'function') {
+      setTimeout(function() { try { maybeShowPetWidget(); } catch (e) {} }, 700);
+    }
+
     // Tier-icons tap → reveal stats bubble (same behaviour as v1)
     var iconsTap = document.getElementById('home-icons-tap');
     if (iconsTap) {
