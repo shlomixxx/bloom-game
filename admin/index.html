@@ -1542,6 +1542,19 @@
     </div>
   </section>
 
+  <!-- ⭐ Lifetime Progression / Prestige (stage 30) -->
+  <section id="lifetime-section" style="margin-bottom:12px">
+    <h2>⭐ פרוגרס חיים / Prestige <button class="tip-btn" data-tip-text="<strong>⭐ Lifetime Progression</strong><br>Call of Duty Prestige pattern — לעולם לא מתאפס.<div class=&quot;tip-example&quot;>💡 <strong>למה זה ממכר</strong>: שלא כמו BP שמתאפס כל עונה, ה-progress החיים נשמר לעולם. ⭐ על הפרופיל = יוקרה משחקית קבועה. מעודד שחקנים לשחק <strong>חודשים</strong> לגרינדינג.<br><br>📊 ה-XP מחושב אוטומטית מ-aggregate של פעילות קיימת: משחקים×10, הישגים×75, יהלומים÷2, תאי אלבום×25, פולי גאצ\'ה×5, דרגת פרח×50, דרגת BP×100, חברים×200.<br><br>📊 בהגיע לדרגה 100 → פרסטיג\' (⭐ + 5,000💎). מקסימום 10 ⭐ — אגדה.</div>">?</button></h2>
+    <div style="padding:12px 16px;background:var(--card);border-radius:10px;margin-top:8px">
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+        <div class="rewards-grid" data-keys="lifetime_enabled,lifetime_show_on_home"></div>
+        <div class="rewards-grid" data-keys="lifetime_xp_per_level,lifetime_prestige_reward"></div>
+      </div>
+
+    </div>
+  </section>
+
   <!-- 📔 Tile Collection Album (stage 29) -->
   <section id="album-section" style="margin-bottom:12px">
     <h2>📔 אלבום אריחים <button class="tip-btn" data-tip-text="<strong>📔 Tile Collection Album</strong><br>Genshin-style — אוסף ויזואלי של 8 דרגות × כל הלוחות הדינמיים.<div class=&quot;tip-example&quot;>💡 <strong>למה זה ממכר</strong>: completionist drive חזק. שחקן רואה אלבום עם הרבה תאים, רוצה למלא את כולם. מסכי "אוסף שלם" עם פרסים נדיבים — כל זה השפיע על מיליארדי דולרים ב-Genshin.<br><br>📊 <strong>2 סוגי פרסים</strong>:<br>1. השלמת לוח (8 דרגות על לוח אחד) → 500💎<br>2. השלמת דרגה (אותה דרגה על כל הלוחות) → 200💎<br><br>📊 כל game-over מקליט אוטומטית את ה-tier הגבוה שהשחקן הגיע אליו על לוח דינמי.</div>">?</button></h2>
@@ -2711,6 +2724,12 @@
     dyn_comeback_min_streak: 'מינימום רצף שהיה לשחקן לפני שאיבד אותו, כדי להיות זכאי ל-comeback.<div class="tip-example">📊 ברירת מחדל 3.<br>💡 רצוי לא להוריד מתחת ל-3 — אחרת כל חזרה תהפוך ל-comeback, מה שמדלל את הטקס.<br>💡 ערך 7 = רק שחקנים שכבר היו loyal יראו comeback. רוצה לתת רק לבזבזני-זמן.</div>',
     dyn_comeback_reward:     'פרס ה-💎 שנותן ה-comeback overlay.<div class="tip-example">📊 ברירת מחדל 150💎.<br>💡 גדול מספיק כדי שירגיש משמעותי, קטן מספיק כדי שלא יהיה אטרקציה לפנות-חוץ-בעצמך.<br>📊 ערכים: 50 (קמצני), 150 (default), 300 (נדיב, למתחילים), 500 (אגרסיבי).</div>',
     dyn_comeback_freeze_gift: 'מספר הקפאות חינם שנותנים עם ה-comeback bonus.<div class="tip-example">📊 ברירת מחדל 1.<br>💡 השילוב 150💎 + 1 הקפאה = "ברוך שובך + אנחנו נשמור עליך לא לנפול שוב". פסיכולוגית חזק.<br>📊 ערך 0 = רק 💎, ערך 2 = "פרמיום" comeback. ערך 3+ = ייצור הקפאות בחינם דרך win-back farming, אל תעלה מעל 1-2.</div>',
+
+    // ---- Lifetime Progression / Prestige (stage 30) ----
+    lifetime_enabled: 'הפעלת מערכת פרוגרס חיים.<div class="tip-example">📊 ברירת מחדל פעיל. <strong>Call of Duty Prestige</strong> — לעולם לא מתאפס בין עונות.<br>💡 <strong>למה זה ממכר</strong>: שלא כמו BP, כל הסיוע מצטבר. השחקן רואה ⭐ קבועים על הפרופיל = יוקרה שלא נמחקת. לוקח חודשי משחק רציני להגיע למקסימום.<br>📊 XP מחושב אוטומטית מ-aggregate: משחקים×10, הישגים×75, יהלומים÷2, אלבום×25, גאצ\'ה×5, פרח×50, BP×100, חברים×200. אין hooks חדשים — שחקנים ותיקים יקבלו דרגה גבוהה מיד.</div>',
+    lifetime_show_on_home: 'הצגת ה-tile של פרוגרס חיים בבית.<div class="tip-example">📊 ברירת מחדל פעיל. tile עם title (e.g. "מאסטר"), level number, ⭐ stars, וpregress bar.<br>💡 כיבוי = ה-API פעיל, רק ה-tile מוסתר.</div>',
+    lifetime_xp_per_level: 'XP לדרגה.<div class="tip-example">📊 ברירת מחדל 500. ערכים: 200-2000.<br>💡 500 = שחקן ממוצע (50 משחקים) יגיע לדרגה ~1-2. שחקן ותיק (500 משחקים + הישגים + פרסים) יגיע לדרגה ~30-40 מיידית.<br>📊 לדרגה 100 (פרסטיג\') צריך 50,000 XP. עם xp_per_level=500.</div>',
+    lifetime_prestige_reward: 'פרס 💎 לפעולת פרסטיג\' (דרגה 100 → ⭐ + reset).<div class="tip-example">📊 ברירת מחדל 5,000💎. ערכים: 2000-15000.<br>💡 צריך להיות פרס משמעותי — מספיק לקנות Premium BP (1500) + עוד הרבה. השקעה של חודשי משחק ראויה לפרס גדול.<br>📊 שחקן שיגיע ל-10 ⭐ יקבל 50,000💎 מצטברים — שווה ערך ל-$30+ בIAP.</div>',
 
     // ---- Tile Collection Album (stage 29) ----
     album_enabled: 'הפעלת אלבום האריחים.<div class="tip-example">📊 ברירת מחדל פעיל. <strong>completionist drive</strong> חזק — מסך אוסף ויזואלי עם פרסים על השלמות.<br>💡 כל game-over על לוח דינמי מקליט אוטומטית את הtier הגבוה ביותר. השחקן רואה גרידים מתמלאים והפרסים מחכים בקצוות.</div>',

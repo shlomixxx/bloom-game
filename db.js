@@ -72,6 +72,16 @@ export async function initDb() {
       created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )`,
+    // Stage 30 — Lifetime Progression (full CREATE in schema.sql).
+    `CREATE TABLE IF NOT EXISTS player_lifetime_state (
+      device_id            VARCHAR(64) PRIMARY KEY,
+      cached_xp            BIGINT NOT NULL DEFAULT 0,
+      prestige_count       INT NOT NULL DEFAULT 0,
+      last_prestige_at     TIMESTAMPTZ,
+      cosmetic_unlocks     JSONB NOT NULL DEFAULT '[]'::jsonb,
+      current_title        VARCHAR(40),
+      updated_at           TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`,
     // Stage 29 — Tile Collection Album (full CREATE in schema.sql).
     `CREATE TABLE IF NOT EXISTS player_tile_collection (
       device_id           VARCHAR(64) NOT NULL,

@@ -285,6 +285,11 @@
       setTimeout(function() { try { maybeShowAlbumTile(); } catch (e) {} }, 2200);
     }
 
+    // Stage 30 — Lifetime Progression tile (Prestige).
+    if (typeof maybeShowLifetimeTile === 'function') {
+      setTimeout(function() { try { maybeShowLifetimeTile(); } catch (e) {} }, 2400);
+    }
+
     // Tier-icons tap → reveal stats bubble (same behaviour as v1)
     var iconsTap = document.getElementById('home-icons-tap');
     if (iconsTap) {

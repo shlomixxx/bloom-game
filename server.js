@@ -5912,6 +5912,222 @@ app.post('/api/album/claim', requireDeviceAuth, async (req, res) => {
 });
 
 // ============================================================
+// Stage 30 — Lifetime Progression (Call of Duty Prestige)
+// XP is COMPUTED from aggregate of existing player activity. No new
+// XP grants needed — existing players are rewarded retroactively for
+// their accumulated history.
+// ============================================================
+async function _loadLifetimeConfig() {
+  try {
+    const r = await pool.query(`SELECT key, value FROM game_config WHERE key LIKE 'lifetime_%'`);
+    const out = {};
+    r.rows.forEach(row => { out[row.key] = row.value; });
+    return out;
+  } catch (e) { return {}; }
+}
+
+// Compute lifetime XP from aggregate of existing activity.
+async function _computeLifetimeXp(deviceId) {
+  // Each component is a separate query, all wrapped in catch — we want
+  // the calculation to work even if some tables don't exist yet.
+  let totalXp = 0;
+  // 1. Games played × 10. Use daily_scores + difficulty_scores + dynamic.
+  try {
+    const r = await pool.query(
+      `SELECT
+         (SELECT COUNT(*) FROM daily_scores WHERE device_id = $1) +
+         (SELECT COUNT(*) FROM difficulty_scores WHERE device_id = $1) +
+         (SELECT COUNT(*) FROM dynamic_board_scores WHERE device_id = $1)
+         AS games`,
+      [deviceId]
+    );
+    const games = parseInt(r.rows[0].games, 10) || 0;
+    totalXp += games * 10;
+  } catch (e) {}
+  // 2. Achievements × 75
+  try {
+    const r = await pool.query(`SELECT COUNT(*) AS c FROM player_achievements WHERE device_id = $1`, [deviceId]);
+    totalXp += (parseInt(r.rows[0].c, 10) || 0) * 75;
+  } catch (e) {}
+  // 3. Total gems earned / 2 (from player_profiles.total_earned)
+  try {
+    const r = await pool.query(`SELECT total_earned FROM player_profiles WHERE device_id = $1`, [deviceId]);
+    if (r.rows[0]) totalXp += Math.floor((Number(r.rows[0].total_earned) || 0) / 2);
+  } catch (e) {}
+  // 4. Album cells × 25
+  try {
+    const r = await pool.query(`SELECT COUNT(*) AS c FROM player_tile_collection WHERE device_id = $1`, [deviceId]);
+    totalXp += (parseInt(r.rows[0].c, 10) || 0) * 25;
+  } catch (e) {}
+  // 5. Gacha pulls × 5
+  try {
+    const r = await pool.query(`SELECT total_pulls FROM player_gacha_state WHERE device_id = $1`, [deviceId]);
+    if (r.rows[0]) totalXp += (Number(r.rows[0].total_pulls) || 0) * 5;
+  } catch (e) {}
+  // 6. Pet level × 50 (mature pet = invested player)
+  try {
+    const r = await pool.query(`SELECT level FROM player_pet WHERE device_id = $1`, [deviceId]);
+    if (r.rows[0]) totalXp += (Number(r.rows[0].level) || 0) * 50;
+  } catch (e) {}
+  // 7. Season pass tier × 100
+  try {
+    const r = await pool.query(`SELECT xp FROM player_season_progress WHERE device_id = $1`, [deviceId]);
+    if (r.rows[0]) {
+      // Approximate tier from XP using the standard curve. Cap at 20.
+      const sxp = parseInt(r.rows[0].xp, 10) || 0;
+      // Rough: tier ~= sqrt(sxp / 40)
+      const approxTier = Math.min(20, Math.floor(Math.sqrt(sxp / 40)));
+      totalXp += approxTier * 100;
+    }
+  } catch (e) {}
+  // 8. Friends count × 200
+  try {
+    const r = await pool.query(
+      `SELECT COUNT(*) AS c FROM friendships
+        WHERE (device_a = $1 OR device_b = $1) AND bonus_paid = TRUE`,
+      [deviceId]
+    );
+    totalXp += (parseInt(r.rows[0].c, 10) || 0) * 200;
+  } catch (e) {}
+  return totalXp;
+}
+
+function _lifetimeTitleForLevel(level, prestige) {
+  // Series of unlock thresholds. Each milestone awards a Hebrew title.
+  if (prestige >= 5) return '🌟 אגדה אינסופית';
+  if (prestige >= 3) return '🔥 אלוף נצחי';
+  if (prestige >= 1) return '✨ מקצוען';
+  if (level >= 75)   return '⚡ מומחה';
+  if (level >= 50)   return '🏆 מאסטר';
+  if (level >= 25)   return '🎯 ותיק';
+  if (level >= 10)   return '🌱 מתחיל-פלוס';
+  return '🌱 מתחיל';
+}
+
+app.get('/api/lifetime/state', async (req, res) => {
+  try {
+    const cfg = await _loadLifetimeConfig();
+    if (cfg.lifetime_enabled === 'false') return res.json({ ok: true, enabled: false });
+    const deviceId = (req.query.deviceId || '').toString().slice(0, 64);
+    if (!deviceId || deviceId.length < 8) return res.json({ ok: true, enabled: true, needsDevice: true });
+    // Ensure row exists.
+    await pool.query(
+      `INSERT INTO player_lifetime_state (device_id) VALUES ($1) ON CONFLICT DO NOTHING`,
+      [deviceId]
+    );
+    // Get prestige state.
+    const stateR = await pool.query(
+      `SELECT prestige_count, last_prestige_at, cosmetic_unlocks, current_title
+         FROM player_lifetime_state WHERE device_id = $1`,
+      [deviceId]
+    );
+    const state = stateR.rows[0] || {};
+    const prestigeCount = Math.max(0, Math.min(10, parseInt(state.prestige_count, 10) || 0));
+    // Compute current XP (recomputed every call — cheap aggregate).
+    const totalXp = await _computeLifetimeXp(deviceId);
+    // XP since last prestige is what counts toward "level".
+    // We can't easily track "XP since last prestige" without snapshotting
+    // at prestige time. So: lifetimeXp - (prestige_count * 100 * xp_per_level)
+    const xpPerLevel = parseInt(cfg.lifetime_xp_per_level || '500', 10) || 500;
+    const xpUsedByPrestige = prestigeCount * 100 * xpPerLevel;
+    const xpThisRun = Math.max(0, totalXp - xpUsedByPrestige);
+    const level = Math.min(100, Math.max(1, Math.floor(xpThisRun / xpPerLevel) + 1));
+    const xpIntoLevel = xpThisRun - (level - 1) * xpPerLevel;
+    const xpToNext = level < 100 ? xpPerLevel - xpIntoLevel : 0;
+    const canPrestige = level >= 100 && prestigeCount < 10;
+    const title = _lifetimeTitleForLevel(level, prestigeCount);
+    res.json({
+      ok: true,
+      enabled: true,
+      totalXp,
+      level,
+      xpThisRun,
+      xpIntoLevel,
+      xpToNext,
+      xpPerLevel,
+      maxLevel: 100,
+      prestigeCount,
+      maxPrestige: 10,
+      canPrestige,
+      title,
+      prestigeReward: parseInt(cfg.lifetime_prestige_reward || '5000', 10) || 5000,
+      pct: level < 100 ? Math.round((xpIntoLevel / xpPerLevel) * 100) : 100
+    });
+  } catch (e) {
+    console.error('GET /api/lifetime/state', e);
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
+// Atomic prestige claim — only valid when level >= 100.
+app.post('/api/lifetime/prestige', requireDeviceAuth, async (req, res) => {
+  try {
+    const { deviceId } = req.body || {};
+    if (typeof deviceId !== 'string' || deviceId.length < 8 || deviceId.length > 64) {
+      return res.status(400).json({ error: 'bad_device' });
+    }
+    if (!checkRateLimit('lifetime_prestige', deviceId, 5, 60 * 60 * 1000)) {
+      return res.status(429).json({ error: 'rate_limited' });
+    }
+    const cfg = await _loadLifetimeConfig();
+    if (cfg.lifetime_enabled === 'false') return res.json({ ok: false, reason: 'disabled' });
+    // Verify eligibility server-side.
+    await pool.query(
+      `INSERT INTO player_lifetime_state (device_id) VALUES ($1) ON CONFLICT DO NOTHING`,
+      [deviceId]
+    );
+    const stateR = await pool.query(
+      `SELECT prestige_count FROM player_lifetime_state WHERE device_id = $1`,
+      [deviceId]
+    );
+    const currentPrestige = parseInt((stateR.rows[0] || {}).prestige_count, 10) || 0;
+    if (currentPrestige >= 10) return res.json({ ok: false, reason: 'max_prestige' });
+    const totalXp = await _computeLifetimeXp(deviceId);
+    const xpPerLevel = parseInt(cfg.lifetime_xp_per_level || '500', 10) || 500;
+    const xpUsedByPrestige = currentPrestige * 100 * xpPerLevel;
+    const xpThisRun = Math.max(0, totalXp - xpUsedByPrestige);
+    if (xpThisRun < 100 * xpPerLevel) {
+      return res.json({ ok: false, reason: 'not_at_max_level' });
+    }
+    const reward = parseInt(cfg.lifetime_prestige_reward || '5000', 10) || 5000;
+    // Atomic claim + credit.
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(
+        `UPDATE player_lifetime_state
+            SET prestige_count = prestige_count + 1,
+                last_prestige_at = NOW(),
+                updated_at = NOW()
+          WHERE device_id = $1 AND prestige_count = $2`,
+        [deviceId, currentPrestige]
+      );
+      const credit = await client.query(
+        `UPDATE player_profiles
+            SET balance = balance + $1, total_earned = total_earned + $1, updated_at = NOW()
+          WHERE device_id = $2 RETURNING balance`,
+        [reward, deviceId]
+      );
+      await client.query('COMMIT');
+      res.json({
+        ok: true,
+        newPrestige: currentPrestige + 1,
+        reward,
+        newBalance: credit.rows[0] ? Number(credit.rows[0].balance) : null
+      });
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  } catch (e) {
+    console.error('POST /api/lifetime/prestige', e);
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
+// ============================================================
 // Live Tournaments — stage 12 (May 2026)
 //
 // Scheduled prime-time events with a fixed window + top-N prize

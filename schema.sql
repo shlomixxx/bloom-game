@@ -1165,6 +1165,39 @@ CREATE INDEX IF NOT EXISTS idx_skin_configurations_sort
   ON skin_configurations (sort_order, id);
 
 -- ============================================================
+-- Lifetime Progression (Stage 30, May 2026)
+-- Call-of-Duty prestige pattern. NEVER resets between seasons.
+-- Levels 1-100, then "prestige" → reset to 1 with a ⭐ star.
+-- Up to 10 prestige stars max.
+-- XP is COMPUTED SERVER-SIDE from existing player activity (no
+-- new XP grants needed):
+--   total_xp = (games_played * 10) + (achievements * 75) +
+--              (total_earned_gems / 2) + (collection_cells * 25) +
+--              (gacha_pulls * 5) + (album_claims * 100)
+-- This avoids the "I'm a returning player, why is my lifetime level
+-- only 3?" problem — existing players are immediately rewarded for
+-- their accumulated history.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS player_lifetime_state (
+  device_id            VARCHAR(64) PRIMARY KEY,
+  -- Optional cached lifetime_xp for fast-render. Recomputed on every
+  -- /state call; this column lets us store the prestige claim history.
+  cached_xp            BIGINT NOT NULL DEFAULT 0,
+  prestige_count       INT NOT NULL DEFAULT 0,
+  last_prestige_at     TIMESTAMPTZ,
+  -- JSONB array of milestone unlock keys ("title:novice", "frame:gold", etc).
+  cosmetic_unlocks     JSONB NOT NULL DEFAULT '[]'::jsonb,
+  current_title        VARCHAR(40),
+  updated_at           TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- 4 config keys.
+INSERT INTO game_config (key, value) VALUES ('lifetime_enabled',          'true') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('lifetime_show_on_home',     'true') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('lifetime_xp_per_level',     '500')  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('lifetime_prestige_reward',  '5000') ON CONFLICT (key) DO NOTHING;
+
+-- ============================================================
 -- Tile Collection Album (Stage 29, May 2026)
 -- Genshin-style visual collection: for each (board, tier) cell,
 -- track whether the player has reached that tier on that board.
