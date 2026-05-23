@@ -57,6 +57,8 @@ Quick-scan map of the addiction-loop work. **Update this table whenever a stage 
 |---|---|---|
 | — | (User picking which stage to test from 35-38 first) | Live to verify the addiction loop |
 
+> 📋 **Full future-tasks roadmap lives in [FUTURE_TASKS.md](FUTURE_TASKS.md)** — that's the single source of truth for what's NOT yet built. Update it whenever a backlog item ships or a new one is added.
+
 ### 📋 Backlog — PURE ADDICTION (no real money needed — ready to ship)
 | Rank | Stage | What it does | Effort | Impact |
 |---|---|---|---|---|
