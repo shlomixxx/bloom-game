@@ -233,6 +233,12 @@
     }
     if (typeof updateHomeSeasonPassTile === 'function') updateHomeSeasonPassTile();
 
+    // Stage 20 — Starter Pack offer check. Throttled to 1/min internally.
+    if (typeof maybeOfferStarterPack === 'function') {
+      // Defer slightly so the home shell mounts first.
+      setTimeout(function() { try { maybeOfferStarterPack(); } catch (e) {} }, 800);
+    }
+
     // Tier-icons tap → reveal stats bubble (same behaviour as v1)
     var iconsTap = document.getElementById('home-icons-tap');
     if (iconsTap) {

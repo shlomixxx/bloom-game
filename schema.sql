@@ -1165,6 +1165,44 @@ CREATE INDEX IF NOT EXISTS idx_skin_configurations_sort
   ON skin_configurations (sort_order, id);
 
 -- ============================================================
+-- Starter Pack (Stage 20 — first-purchase funnel, May 2026)
+-- The single highest-conversion offer in F2P puzzle games (50-90%
+-- buy-through in industry data). One-time per device. 7-day countdown
+-- after the player's first decent game (≥ trigger_score). One device
+-- can only ever buy ONCE per season_id (so a new season can reset
+-- and offer again to existing players).
+-- ============================================================
+CREATE TABLE IF NOT EXISTS starter_pack_state (
+  device_id      VARCHAR(64) PRIMARY KEY,
+  season_id      VARCHAR(32) NOT NULL DEFAULT 'S1',
+  first_seen_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  -- eligible_at is set when the player crosses the trigger score
+  -- threshold for the first time. expires_at = eligible_at + N hours.
+  eligible_at    TIMESTAMPTZ,
+  expires_at     TIMESTAMPTZ,
+  purchased_at   TIMESTAMPTZ,
+  dismissed_count INT NOT NULL DEFAULT 0,
+  -- Snapshot of the pack contents at purchase time so future config
+  -- changes don't mess with what the player actually got.
+  pack_contents  JSONB,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_starter_pack_eligible
+  ON starter_pack_state (eligible_at, expires_at)
+  WHERE purchased_at IS NULL;
+
+INSERT INTO game_config (key, value) VALUES ('starter_pack_enabled',           'true') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('starter_pack_price_gems',        '500')  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('starter_pack_price_usd',         '1.99') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('starter_pack_trigger_score',     '5000') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('starter_pack_expires_hours',     '168')  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('starter_pack_reward_gems',       '1500') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('starter_pack_reward_skin_id',    'fire') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('starter_pack_reward_bp_tiers',   '3')    ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('starter_pack_name',              '🎁 חבילת פתיחה') ON CONFLICT (key) DO NOTHING;
+
+-- ============================================================
 -- Daily Special Board (Stage 15 — Daily mini-event boards, May 2026)
 -- One dynamic board each day (Asia/Jerusalem) becomes the "🌟 הלוח של היום"
 -- with 3× Season XP + 2× quest rewards. Deterministic per-date pick from

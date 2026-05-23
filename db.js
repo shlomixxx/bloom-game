@@ -50,6 +50,19 @@ export async function initDb() {
     `ALTER TABLE player_season_progress ADD COLUMN IF NOT EXISTS is_premium BOOLEAN NOT NULL DEFAULT FALSE`,
     `ALTER TABLE player_season_progress ADD COLUMN IF NOT EXISTS premium_purchased_at TIMESTAMPTZ`,
     `ALTER TABLE player_season_progress ADD COLUMN IF NOT EXISTS claimed_premium_tiers JSONB NOT NULL DEFAULT '[]'::jsonb`,
+    // Stage 20 — Starter Pack table (idempotent — full CREATE in schema.sql).
+    `CREATE TABLE IF NOT EXISTS starter_pack_state (
+      device_id      VARCHAR(64) PRIMARY KEY,
+      season_id      VARCHAR(32) NOT NULL DEFAULT 'S1',
+      first_seen_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      eligible_at    TIMESTAMPTZ,
+      expires_at     TIMESTAMPTZ,
+      purchased_at   TIMESTAMPTZ,
+      dismissed_count INT NOT NULL DEFAULT 0,
+      pack_contents  JSONB,
+      created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`,
   ];
   for (const sql of migrations) {
     try { await pool.query(sql); } catch (e) {

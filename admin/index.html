@@ -1516,6 +1516,32 @@
     </div>
   </section>
 
+  <!-- 🎁 Starter Pack control panel (stage 20) -->
+  <section id="starter-pack-section" style="margin-bottom:12px">
+    <h2>🎁 Starter Pack — חבילת פתיחה <button class="tip-btn" data-tip-text="<strong>🎁 Starter Pack</strong><br>הצעה חד-פעמית לרכישה ראשונה — ה-#1 monetization driver של משחקי פאזל.<div class=&quot;tip-example&quot;>💡 <strong>איך זה עובד</strong>:<br>1. שחקן משחק → חוצה את trigger_score (default 5000) פעם ראשונה<br>2. השרת חותם eligible_at + expires_at (now + 7 days)<br>3. ה-banner מופיע בראש המסך הראשי + בno-קיש ימהבית = פתיחת modal<br>4. רכישה: deduct price_gems → grant gems + skin + N דרגות BP<br>5. אחת לתמיד — אף פעם לא יוצע שוב לאותו device<br><br>📊 <strong>conversion rates צפויים</strong>: 50-90% בעולם הפאזל (לפי GameAnalytics 2024).<br>⚠ ערך החבילה צריך להיות גבוה משמעותית מהמחיר (default: 500💎 → 1500💎 + skin + 3 דרגות BP = ROI ~5x).</div>">?</button></h2>
+    <div style="padding:12px 16px;background:var(--card);border-radius:10px;margin-top:8px">
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+        <div class="rewards-grid" data-keys="starter_pack_enabled,starter_pack_name"></div>
+        <div class="rewards-grid" data-keys="starter_pack_price_gems,starter_pack_price_usd"></div>
+      </div>
+
+      <div style="margin-bottom:12px">
+        <div style="font-size:13px;font-weight:700;color:var(--gold);margin-bottom:6px">🎯 תנאי הפעלה</div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:6px">המתי השחקן יקבל את ההצעה. ההצעה תוצג רק אחרי שהשחקן עבר את trigger_score פעם ראשונה, ותפוג אחרי N שעות.</div>
+        <div class="rewards-grid" data-keys="starter_pack_trigger_score,starter_pack_expires_hours"></div>
+      </div>
+
+      <div style="margin-bottom:8px">
+        <div style="font-size:13px;font-weight:700;color:var(--gold);margin-bottom:6px">🎁 תוכן החבילה</div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:6px">3 הכנות נכנסות לחבילה: גמים + סקין + דרגות Battle Pass.</div>
+        <div class="rewards-grid" data-keys="starter_pack_reward_gems,starter_pack_reward_skin_id,starter_pack_reward_bp_tiers"></div>
+      </div>
+
+      <div id="starter-pack-status" style="font-size:11px;color:var(--muted);text-align:center;margin-top:8px"></div>
+    </div>
+  </section>
+
   <!-- Monetization -->
   <section id="monetization-section" style="margin-bottom:12px">
     <h2>💰 מונטיזציה <button class="tip-btn" data-tip="monetization">?</button></h2>
@@ -2495,6 +2521,17 @@
     dyn_comeback_min_streak: 'מינימום רצף שהיה לשחקן לפני שאיבד אותו, כדי להיות זכאי ל-comeback.<div class="tip-example">📊 ברירת מחדל 3.<br>💡 רצוי לא להוריד מתחת ל-3 — אחרת כל חזרה תהפוך ל-comeback, מה שמדלל את הטקס.<br>💡 ערך 7 = רק שחקנים שכבר היו loyal יראו comeback. רוצה לתת רק לבזבזני-זמן.</div>',
     dyn_comeback_reward:     'פרס ה-💎 שנותן ה-comeback overlay.<div class="tip-example">📊 ברירת מחדל 150💎.<br>💡 גדול מספיק כדי שירגיש משמעותי, קטן מספיק כדי שלא יהיה אטרקציה לפנות-חוץ-בעצמך.<br>📊 ערכים: 50 (קמצני), 150 (default), 300 (נדיב, למתחילים), 500 (אגרסיבי).</div>',
     dyn_comeback_freeze_gift: 'מספר הקפאות חינם שנותנים עם ה-comeback bonus.<div class="tip-example">📊 ברירת מחדל 1.<br>💡 השילוב 150💎 + 1 הקפאה = "ברוך שובך + אנחנו נשמור עליך לא לנפול שוב". פסיכולוגית חזק.<br>📊 ערך 0 = רק 💎, ערך 2 = "פרמיום" comeback. ערך 3+ = ייצור הקפאות בחינם דרך win-back farming, אל תעלה מעל 1-2.</div>',
+
+    // ---- Starter Pack (stage 20) ----
+    starter_pack_enabled: 'הפעלת מערכת חבילת הפתיחה.<div class="tip-example">📊 ברירת מחדל פעיל. כאשר מופעל, השחקן יראה את ה-banner ב-banner של הבית + מודאל ברגע שיעבור את trigger_score פעם ראשונה.<br>💡 <strong>זה ה-monetization driver הראשון של המשחק</strong>. 50-90% conversion rate בעולם הפאזל. ⚠ כיבוי = השחקנים שכבר רכשו ימשיכו להחזיק במה שקיבלו, פשוט לא יוצעו חדשים.</div>',
+    starter_pack_name: 'שם החבילה שמוצג ב-modal + banner.<div class="tip-example">📊 ברירת מחדל "🎁 חבילת פתיחה". ערכים אחרים: "🎁 חבילת ברוכים הבאים", "💎 הצעה מיוחדת חד-פעמית", וכו\'.<br>💡 הוסף emoji בהתחלה — מושך את העין יותר.</div>',
+    starter_pack_price_gems: 'מחיר בקרדיטים.<div class="tip-example">📊 ברירת מחדל 500💎. ערכים: 300-1000.<br>💡 צריך להיות נגיש (שחקן חדש יכול להגיע ל-500💎 אחרי כמה משחקים) אבל לא חינמי. ROI שצפוי לתת לשחקן: ~3-5x.<br>📊 חישוב: price_gems ÷ (reward_gems + reward_bp_tiers × 200 + 300 לסקין). default = 500 ÷ 2400 = 21%.</div>',
+    starter_pack_price_usd: 'מחיר ב-USD (display only כרגע).<div class="tip-example">📊 ברירת מחדל $1.99 = price point התעשייה לחבילות starter. ערכים: $0.99 (קמצן), $1.99 (תעשייה), $4.99 (Premium).<br>💡 כרגע זה רק תצוגה. בעתיד יחובר ל-Stripe Checkout.</div>',
+    starter_pack_trigger_score: 'הציון שהשחקן צריך לעבור פעם ראשונה כדי שההצעה תופעל.<div class="tip-example">📊 ברירת מחדל 5000. ערכים: 2000-15000.<br>💡 צריך להיות גבוה מספיק שהשחקן נכנס לקצב (לא מציעים לאדם שעדיין לא הבין את המשחק) אבל נגיש מספיק שמרבית השחקנים יגיעו תוך 3-5 משחקים.<br>📊 הציון לוקח בחשבון את כל ה-tiers — score 5000 = ~2-3 שרשראות טובות.</div>',
+    starter_pack_expires_hours: 'כמה שעות אחרי ההפעלה ההצעה תפוג.<div class="tip-example">📊 ברירת מחדל 168 (7 ימים). ערכים: 24-336.<br>💡 קצר מדי (24h) = לא מספיק זמן לחשוב; ארוך מדי (30d) = לוסר את ה-FOMO. 7 ימים זה המתוק.<br>⚠ אחרי תפוגה — אי אפשר לקנות יותר אף פעם.</div>',
+    starter_pack_reward_gems: 'כמה 💎 השחקן יקבל בקנייה.<div class="tip-example">📊 ברירת מחדל 1500💎. ערכים: 1000-3000.<br>💡 צריך להיות מספיק כדי שהשחקן יוכל לקנות Premium Battle Pass (1500💎) אחר כך — בונה חוויית רכישה רצופה.<br>📊 ROI: reward_gems ÷ price_gems = 1500 ÷ 500 = 3x.</div>',
+    starter_pack_reward_skin_id: 'איזה סקין השחקן יקבל בחבילה.<div class="tip-example">📊 ברירת מחדל "fire". ערכים: כל skin_id מטבלת skin_configurations (classic, ocean, candy, space, fire, gold, aurora).<br>💡 בחר סקין מרשים — זה ה-VISUAL value של החבילה. "fire" טוב כי הוא חם וצבעוני. "aurora" הוא premium-premium.<br>⚠ "classic" = החינמי. לא ייתן ערך נתפס.</div>',
+    starter_pack_reward_bp_tiers: 'כמה דרגות Battle Pass לתת בחבילה.<div class="tip-example">📊 ברירת מחדל 3. ערכים: 1-10.<br>💡 קפיצה ראשונית במסלול ה-BP. עוזר לשחקן להרגיש שהוא "באמצע" העונה ולא בהתחלה.<br>📊 חישוב: כל דרגה = ~200💎 בממוצע בtrack חינמי. 3 דרגות = ~600💎 ערך.</div>',
 
     // ---- Premium Battle Pass (stage 17) ----
     season_pass_premium_enabled: 'הפעלת track Premium ב-Battle Pass.<div class="tip-example">📊 ברירת מחדל פעיל. כאשר מופעל, השחקן רואה את ה-CTA לקנייה במודאל ה-Season Pass + עמודה זהובה של פרסים שניים.<br>💡 <strong>זה ה-monetization driver הראשי של המשחק</strong>. Fortnite/Apex עושים מיליארדים מהבמודל הזה.<br>⚠ כיבוי = מסתיר לחלוטין את ה-Premium UI. הshחקנים שכבר רכשו לעונה הנוכחית — מוסיפים לקבל את הפרסים, רק מסתירים את מסך הרכישה.</div>',

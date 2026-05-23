@@ -9177,6 +9177,374 @@ html[data-theme="dark"] .home-v2-sp-prem {
   background: linear-gradient(135deg, #FFD93D, #FFA500);
   color: #3D2010;
 }
+
+/* ============================================================
+   Stage 20 — Starter Pack UI
+   First-purchase funnel: home banner + big modal + welcome overlay.
+   Loudest visual elements in the entire app — gold-pink gradient,
+   pulsing animations, countdown timer, "limited time" psychology.
+   ============================================================ */
+
+/* Home banner — sits at the TOP of the home screen */
+.starter-pack-home-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  margin-bottom: 14px;
+  background: linear-gradient(135deg, #FFD93D 0%, #FF8FAE 50%, #FFA500 100%);
+  border: 2px solid #BA7517;
+  border-radius: 16px;
+  box-shadow: 0 6px 20px rgba(186, 117, 23, 0.4);
+  cursor: pointer;
+  position: relative;
+  direction: rtl;
+  text-align: right;
+  font-family: inherit;
+  animation: spBannerPulse 2.2s ease-in-out infinite;
+}
+@keyframes spBannerPulse {
+  0%, 100% { box-shadow: 0 6px 20px rgba(186, 117, 23, 0.4); }
+  50%      { box-shadow: 0 8px 28px rgba(255, 143, 174, 0.55); }
+}
+.sp-banner-icon {
+  font-size: 34px;
+  filter: drop-shadow(0 0 8px rgba(255, 220, 80, 0.7));
+  animation: spBannerGift 1.6s ease-in-out infinite;
+  flex-shrink: 0;
+}
+@keyframes spBannerGift {
+  0%, 100% { transform: scale(1) rotate(-3deg); }
+  50%      { transform: scale(1.15) rotate(8deg); }
+}
+.sp-banner-body { flex: 1; min-width: 0; }
+.sp-banner-title {
+  font-size: 14px;
+  font-weight: 900;
+  color: #5A2A00;
+  line-height: 1.2;
+  margin-bottom: 3px;
+}
+.sp-banner-sub {
+  font-size: 11px;
+  font-weight: 700;
+  color: #6B3D00;
+}
+.sp-banner-perks { font-weight: 700; }
+.sp-banner-countdown {
+  display: inline-block;
+  padding: 1px 6px;
+  background: rgba(255,255,255,0.55);
+  border-radius: 6px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+.sp-banner-cta {
+  padding: 8px 14px;
+  background: #5A2A00;
+  color: #FFD93D;
+  border: none;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 900;
+  cursor: pointer;
+  flex-shrink: 0;
+  font-family: inherit;
+}
+.sp-banner-cta:hover { filter: brightness(1.15); }
+.sp-banner-cta:active { transform: scale(0.96); }
+.sp-banner-close {
+  position: absolute;
+  top: 4px;
+  left: 6px;
+  width: 22px;
+  height: 22px;
+  border: none;
+  background: rgba(0,0,0,0.12);
+  color: #5A2A00;
+  border-radius: 50%;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  font-family: inherit;
+}
+.sp-banner-close:hover { background: rgba(0,0,0,0.22); }
+
+/* Modal overlay */
+.starter-pack-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100000;
+  padding: 14px;
+  animation: spOverlayFade 0.3s ease-out;
+}
+@keyframes spOverlayFade {
+  from { opacity: 0; } to { opacity: 1; }
+}
+.starter-pack-modal-card {
+  background: linear-gradient(135deg, #FFF4CC 0%, #FFE9A8 100%);
+  border: 3px solid #BA7517;
+  border-radius: 22px;
+  padding: 24px 22px;
+  max-width: 360px;
+  width: 100%;
+  max-height: 92vh;
+  overflow-y: auto;
+  text-align: center;
+  direction: rtl;
+  position: relative;
+  box-shadow: 0 24px 70px rgba(0,0,0,0.5), 0 0 0 6px rgba(255, 217, 61, 0.25);
+  animation: spModalPop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+@keyframes spModalPop {
+  from { transform: scale(0.55); opacity: 0; }
+  to   { transform: scale(1); opacity: 1; }
+}
+.sp-modal-close {
+  position: absolute;
+  top: 10px;
+  left: 12px;
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: rgba(0,0,0,0.15);
+  color: #5A2A00;
+  border-radius: 50%;
+  font-size: 18px;
+  cursor: pointer;
+  line-height: 1;
+  font-family: inherit;
+}
+.sp-modal-close:hover { background: rgba(0,0,0,0.25); }
+.sp-modal-ribbon {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  padding: 4px 12px;
+  background: #BA1F1F;
+  color: #FFF;
+  font-size: 10px;
+  font-weight: 900;
+  border-radius: 8px;
+  animation: spRibbonPulse 1.6s ease-in-out infinite;
+}
+@keyframes spRibbonPulse {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.08); }
+}
+.sp-modal-icon {
+  font-size: 72px;
+  margin-bottom: 8px;
+  filter: drop-shadow(0 0 12px rgba(255, 220, 80, 0.8));
+  animation: spModalGift 1.8s ease-in-out infinite;
+}
+@keyframes spModalGift {
+  0%, 100% { transform: scale(1) rotate(-5deg); }
+  50%      { transform: scale(1.15) rotate(10deg); }
+}
+.sp-modal-title {
+  font-size: 24px;
+  font-weight: 900;
+  color: #5A2A00;
+  margin-bottom: 6px;
+}
+.sp-modal-sub {
+  font-size: 13px;
+  font-weight: 600;
+  color: #6B3D00;
+  margin-bottom: 16px;
+}
+.sp-modal-contents {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.sp-modal-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  background: rgba(255,255,255,0.5);
+  border-radius: 12px;
+  text-align: right;
+}
+.sp-modal-item-icon {
+  font-size: 30px;
+  flex-shrink: 0;
+}
+.sp-modal-item-body { flex: 1; min-width: 0; }
+.sp-modal-item-title {
+  font-size: 14px;
+  font-weight: 900;
+  color: #5A2A00;
+  margin-bottom: 2px;
+}
+.sp-modal-item-sub {
+  font-size: 11px;
+  font-weight: 600;
+  color: #6B3D00;
+}
+.sp-modal-value {
+  padding: 10px 14px;
+  margin-bottom: 14px;
+  background: #5A2A00;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: #FFD93D;
+}
+.sp-modal-value-label { font-size: 12px; font-weight: 700; }
+.sp-modal-value-num { font-size: 18px; font-weight: 900; }
+.sp-modal-value-saved {
+  padding: 3px 8px;
+  background: #BA1F1F;
+  color: #FFF;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 900;
+}
+.sp-modal-buy-btn {
+  display: block;
+  width: 100%;
+  padding: 14px;
+  background: linear-gradient(135deg, #FFD93D, #FFA500);
+  color: #5A2A00;
+  border: none;
+  border-radius: 14px;
+  font-size: 16px;
+  font-weight: 900;
+  cursor: pointer;
+  font-family: inherit;
+  margin-bottom: 8px;
+  box-shadow: 0 4px 12px rgba(255, 165, 0, 0.5);
+  transition: filter 0.18s, transform 0.12s;
+}
+.sp-modal-buy-btn:hover { filter: brightness(1.1); }
+.sp-modal-buy-btn:active { transform: scale(0.97); }
+.sp-modal-buy-btn.disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.sp-modal-foot {
+  font-size: 10px;
+  font-weight: 600;
+  color: #6B3D00;
+  text-align: center;
+}
+
+/* Welcome overlay (post-purchase celebration) */
+.starter-pack-welcome {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100001;
+  animation: spOverlayFade 0.4s ease-out;
+}
+.sp-welcome-card {
+  background: linear-gradient(135deg, #FFF4CC 0%, #FFD93D 50%, #FFA500 100%);
+  border: 4px solid #BA7517;
+  border-radius: 24px;
+  padding: 36px 32px;
+  max-width: 320px;
+  text-align: center;
+  direction: rtl;
+  box-shadow: 0 24px 80px rgba(0,0,0,0.6);
+  animation: spWelcomePop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+@keyframes spWelcomePop {
+  from { transform: scale(0.4) rotate(-10deg); opacity: 0; }
+  to   { transform: scale(1) rotate(0deg); opacity: 1; }
+}
+.sp-welcome-icon {
+  font-size: 84px;
+  margin-bottom: 12px;
+  filter: drop-shadow(0 0 16px rgba(255, 220, 80, 0.9));
+  animation: spWelcomeGiftSpin 1.5s ease-out;
+}
+@keyframes spWelcomeGiftSpin {
+  from { transform: scale(0) rotate(-720deg); }
+  to   { transform: scale(1) rotate(0deg); }
+}
+.sp-welcome-title {
+  font-size: 22px;
+  font-weight: 900;
+  color: #5A2A00;
+  margin-bottom: 8px;
+}
+.sp-welcome-sub {
+  font-size: 14px;
+  font-weight: 700;
+  color: #6B3D00;
+  margin-bottom: 12px;
+}
+.sp-welcome-items {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 20px;
+  padding: 12px;
+  background: rgba(255,255,255,0.5);
+  border-radius: 12px;
+}
+.sp-welcome-item {
+  font-size: 14px;
+  font-weight: 900;
+  color: #5A2A00;
+}
+.sp-welcome-btn {
+  padding: 14px 32px;
+  background: #5A2A00;
+  color: #FFD93D;
+  border: none;
+  border-radius: 14px;
+  font-size: 16px;
+  font-weight: 900;
+  cursor: pointer;
+  font-family: inherit;
+}
+.sp-welcome-btn:hover { filter: brightness(1.15); }
+.sp-welcome-btn:active { transform: scale(0.97); }
+
+/* Dark theme overrides */
+html[data-theme="dark"] .starter-pack-home-banner {
+  background: linear-gradient(135deg, #4D3520 0%, #4D2840 50%, #5A3000 100%);
+  border-color: rgba(255, 217, 61, 0.5);
+}
+html[data-theme="dark"] .sp-banner-title,
+html[data-theme="dark"] .sp-banner-sub { color: #FFD9A8; }
+html[data-theme="dark"] .sp-banner-countdown { background: rgba(0,0,0,0.3); color: #FFD93D; }
+html[data-theme="dark"] .sp-banner-cta { background: #FFD9A8; color: #3D2010; }
+html[data-theme="dark"] .sp-banner-close { background: rgba(255,255,255,0.15); color: #FFD9A8; }
+html[data-theme="dark"] .starter-pack-modal-card {
+  background: linear-gradient(135deg, #3D2810 0%, #4D3520 100%);
+  border-color: #FFD93D;
+}
+html[data-theme="dark"] .sp-modal-title,
+html[data-theme="dark"] .sp-modal-sub,
+html[data-theme="dark"] .sp-modal-foot { color: #FFD9A8; }
+html[data-theme="dark"] .sp-modal-item { background: rgba(0,0,0,0.3); }
+html[data-theme="dark"] .sp-modal-item-title { color: #FFD9A8; }
+html[data-theme="dark"] .sp-modal-item-sub { color: #FFC890; }
+html[data-theme="dark"] .sp-modal-buy-btn { color: #3D2010; }
+html[data-theme="dark"] .sp-welcome-card {
+  background: linear-gradient(135deg, #3D2810 0%, #4D3520 50%, #5A3000 100%);
+  border-color: #FFD93D;
+}
+html[data-theme="dark"] .sp-welcome-title,
+html[data-theme="dark"] .sp-welcome-sub { color: #FFD9A8; }
+html[data-theme="dark"] .sp-welcome-item { color: #FFD9A8; }
+html[data-theme="dark"] .sp-welcome-items { background: rgba(0,0,0,0.3); }
+html[data-theme="dark"] .sp-welcome-btn { background: #FFD9A8; color: #3D2010; }
   /* ============================================================
      DARK MODE
      ============================================================

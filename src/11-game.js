@@ -2334,6 +2334,13 @@
         // Save best score BEFORE rendering game-over
         var isNewBest = score > best && !skinTrialMode;
         if (isNewBest) { best = score; localStorage.setItem(BEST_KEY, String(best)); }
+        // Stage 20 — Starter Pack trigger: fire when player crosses trigger
+        // score for the first time. Throttled inside maybeOfferStarterPack.
+        // We fire it with the CURRENT game score (not best) so the trigger
+        // can stamp eligible_at on the very first qualifying game.
+        if (!skinTrialMode && !window.__bloomBotActive && typeof maybeOfferStarterPack === 'function') {
+          try { maybeOfferStarterPack(score); } catch (e) {}
+        }
         soundGameOver();
         buzz([60, 80, 100]);
         playMusic('fail');

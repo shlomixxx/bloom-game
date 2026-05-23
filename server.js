@@ -3519,6 +3519,257 @@ app.post('/api/player/season/buy-premium', requireDeviceAuth, async (req, res) =
 });
 
 // ============================================================
+// Stage 20 — Starter Pack
+//
+// The single highest-conversion offer in F2P puzzle games. Triggers
+// once per device after they cross the trigger score for the first
+// time. 7-day countdown. Pays out: gems + a skin + N BP tiers.
+//
+// State lives in starter_pack_state. Eligibility computed lazily on
+// each /status call: client sends current best score, server checks
+// if it crossed trigger_score and stamps eligible_at + expires_at.
+// ============================================================
+async function loadStarterPackConfig() {
+  try {
+    const r = await pool.query(`SELECT key, value FROM game_config WHERE key LIKE 'starter_pack_%'`);
+    const out = {};
+    r.rows.forEach(row => { out[row.key] = row.value; });
+    return out;
+  } catch (e) { return {}; }
+}
+
+app.get('/api/player/starter-pack/status', async (req, res) => {
+  try {
+    const deviceId = (req.query.deviceId || '').toString().slice(0, 64);
+    if (!deviceId || deviceId.length < 8) return res.status(400).json({ error: 'bad_device' });
+    // Client passes ?score=NNN — their current best/recent score. We use
+    // it for trigger eligibility but NEVER for reward calculation (the
+    // server picks the reward from config).
+    const reportedScore = parseInt(req.query.score || '0', 10) || 0;
+    const cfg = await loadStarterPackConfig();
+    if (cfg.starter_pack_enabled === 'false') {
+      return res.json({ ok: true, enabled: false });
+    }
+    const triggerScore = parseInt(cfg.starter_pack_trigger_score || '5000', 10) || 5000;
+    const expiresHours = parseInt(cfg.starter_pack_expires_hours || '168', 10) || 168;
+    const seasonId = 'S1'; // For now hardcoded; later wire to season_pass_season_id.
+    // Ensure row exists.
+    await pool.query(
+      `INSERT INTO starter_pack_state (device_id, season_id) VALUES ($1, $2)
+       ON CONFLICT (device_id) DO NOTHING`,
+      [deviceId, seasonId]
+    );
+    let row = (await pool.query(
+      `SELECT eligible_at, expires_at, purchased_at, dismissed_count
+         FROM starter_pack_state WHERE device_id = $1`,
+      [deviceId]
+    )).rows[0] || {};
+    // Already purchased — short-circuit.
+    if (row.purchased_at) {
+      return res.json({ ok: true, enabled: true, purchased: true, purchasedAt: row.purchased_at });
+    }
+    // First-time eligibility check: cross the trigger score → stamp eligible_at.
+    if (!row.eligible_at && reportedScore >= triggerScore) {
+      const expiresAt = new Date(Date.now() + expiresHours * 60 * 60 * 1000);
+      await pool.query(
+        `UPDATE starter_pack_state
+            SET eligible_at = NOW(), expires_at = $1, updated_at = NOW()
+          WHERE device_id = $2 AND eligible_at IS NULL`,
+        [expiresAt, deviceId]
+      );
+      row.eligible_at = new Date();
+      row.expires_at = expiresAt;
+    }
+    if (!row.eligible_at) {
+      return res.json({
+        ok: true, enabled: true, available: false,
+        triggerScore, currentScore: reportedScore
+      });
+    }
+    // Check expiry.
+    const now = Date.now();
+    const expiresAtMs = row.expires_at ? new Date(row.expires_at).getTime() : 0;
+    if (expiresAtMs && now > expiresAtMs) {
+      return res.json({ ok: true, enabled: true, available: false, expired: true });
+    }
+    // Build the offer payload.
+    const priceGems = parseInt(cfg.starter_pack_price_gems || '500', 10) || 500;
+    const priceUsd = cfg.starter_pack_price_usd || '1.99';
+    const rewardGems = parseInt(cfg.starter_pack_reward_gems || '1500', 10) || 1500;
+    const rewardBpTiers = parseInt(cfg.starter_pack_reward_bp_tiers || '3', 10) || 3;
+    const rewardSkinId = cfg.starter_pack_reward_skin_id || 'fire';
+    const name = cfg.starter_pack_name || '🎁 חבילת פתיחה';
+    res.json({
+      ok: true,
+      enabled: true,
+      available: true,
+      name,
+      expiresAt: row.expires_at,
+      priceGems,
+      priceUsd,
+      rewardGems,
+      rewardBpTiers,
+      rewardSkinId,
+      dismissedCount: row.dismissed_count || 0
+    });
+  } catch (e) {
+    console.error('GET /api/player/starter-pack/status', e);
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
+app.post('/api/player/starter-pack/dismiss', requireDeviceAuth, async (req, res) => {
+  try {
+    const { deviceId } = req.body || {};
+    if (typeof deviceId !== 'string' || deviceId.length < 8 || deviceId.length > 64) {
+      return res.status(400).json({ error: 'bad_device' });
+    }
+    if (!checkRateLimit('starter_pack_dismiss', deviceId, 30, 60 * 60 * 1000)) {
+      return res.status(429).json({ error: 'rate_limited' });
+    }
+    await pool.query(
+      `UPDATE starter_pack_state
+          SET dismissed_count = dismissed_count + 1, updated_at = NOW()
+        WHERE device_id = $1`,
+      [deviceId]
+    );
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('POST /api/player/starter-pack/dismiss', e);
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
+app.post('/api/player/starter-pack/buy', requireDeviceAuth, async (req, res) => {
+  try {
+    const { deviceId } = req.body || {};
+    if (typeof deviceId !== 'string' || deviceId.length < 8 || deviceId.length > 64) {
+      return res.status(400).json({ error: 'bad_device' });
+    }
+    if (!checkRateLimit('starter_pack_buy', deviceId, 5, 60 * 60 * 1000)) {
+      return res.status(429).json({ error: 'rate_limited' });
+    }
+    const cfg = await loadStarterPackConfig();
+    if (cfg.starter_pack_enabled === 'false') return res.json({ ok: false, reason: 'disabled' });
+    // Verify eligibility on the server (not trusting client).
+    const stateR = await pool.query(
+      `SELECT eligible_at, expires_at, purchased_at FROM starter_pack_state
+        WHERE device_id = $1`,
+      [deviceId]
+    );
+    const state = stateR.rows[0];
+    if (!state) return res.json({ ok: false, reason: 'not_eligible' });
+    if (state.purchased_at) return res.json({ ok: false, reason: 'already_purchased' });
+    if (!state.eligible_at) return res.json({ ok: false, reason: 'not_eligible' });
+    if (state.expires_at && new Date(state.expires_at).getTime() < Date.now()) {
+      return res.json({ ok: false, reason: 'expired' });
+    }
+    const priceGems = parseInt(cfg.starter_pack_price_gems || '500', 10) || 500;
+    const rewardGems = parseInt(cfg.starter_pack_reward_gems || '1500', 10) || 1500;
+    const rewardBpTiers = parseInt(cfg.starter_pack_reward_bp_tiers || '3', 10) || 3;
+    const rewardSkinId = cfg.starter_pack_reward_skin_id || 'fire';
+    // Atomic: deduct price + credit reward gems + grant skin + grant BP tiers
+    // (just XP — claim is still manual). All in one transaction so any
+    // step's failure rolls everything back.
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      // Net effect on balance: reward_gems - price_gems. If price > reward we'd
+      // be deducting, so we use two separate UPDATEs to keep the math obvious.
+      const debit = await client.query(
+        `UPDATE player_profiles
+            SET balance = balance - $1, updated_at = NOW()
+          WHERE device_id = $2 AND balance >= $1 RETURNING balance`,
+        [priceGems, deviceId]
+      );
+      if (!debit.rows[0]) {
+        await client.query('ROLLBACK');
+        const balR = await pool.query(`SELECT balance FROM player_profiles WHERE device_id = $1`, [deviceId]);
+        const bal = balR.rows[0] ? Number(balR.rows[0].balance) : 0;
+        return res.json({ ok: false, reason: 'insufficient_funds', price: priceGems, balance: bal });
+      }
+      await client.query(
+        `UPDATE player_profiles
+            SET balance = balance + $1, total_earned = total_earned + $1, updated_at = NOW()
+          WHERE device_id = $2`,
+        [rewardGems, deviceId]
+      );
+      // Grant skin (idempotent — if owned, no-op).
+      if (rewardSkinId && rewardSkinId !== 'classic') {
+        await client.query(
+          `INSERT INTO player_skins (device_id, skin_id) VALUES ($1, $2)
+           ON CONFLICT (device_id, skin_id) DO NOTHING`,
+          [deviceId, rewardSkinId]
+        );
+      }
+      // Grant BP XP (treat as immediate "lift" via xp increment). The
+      // simplest implementation: add enough XP to advance ~rewardBpTiers.
+      // Read current XP + tier thresholds, add the gap to reach
+      // current_tier + reward_bp_tiers.
+      const seasonId = 'S1';
+      const cfgR = await client.query(
+        `SELECT key, value FROM game_config WHERE key LIKE 'season_tier_%_xp'`
+      );
+      const tierXp = {};
+      cfgR.rows.forEach(r => {
+        const m = r.key.match(/^season_tier_(\d+)_xp$/);
+        if (m) tierXp[parseInt(m[1], 10)] = parseInt(r.value, 10);
+      });
+      const curR = await client.query(
+        `SELECT xp FROM player_season_progress WHERE device_id = $1 AND season_id = $2`,
+        [deviceId, seasonId]
+      );
+      const curXp = curR.rows[0] ? (Number(curR.rows[0].xp) || 0) : 0;
+      // Figure out the player's current tier.
+      let curTier = 0;
+      for (let t = 1; t <= 20; t++) {
+        if (tierXp[t] && curXp >= tierXp[t]) curTier = t;
+      }
+      const targetTier = Math.min(20, curTier + rewardBpTiers);
+      const targetXp = tierXp[targetTier] || curXp;
+      const xpBoost = Math.max(0, targetXp - curXp);
+      if (xpBoost > 0) {
+        await client.query(
+          `INSERT INTO player_season_progress (device_id, season_id, xp)
+              VALUES ($1, $2, $3)
+           ON CONFLICT (device_id, season_id) DO UPDATE SET xp = player_season_progress.xp + $3, updated_at = NOW()`,
+          [deviceId, seasonId, xpBoost]
+        );
+      }
+      // Stamp purchase + snapshot pack contents.
+      const packContents = {
+        priceGems, rewardGems, rewardBpTiers, rewardSkinId,
+        xpBoost: xpBoost
+      };
+      await client.query(
+        `UPDATE starter_pack_state
+            SET purchased_at = NOW(), pack_contents = $1::jsonb, updated_at = NOW()
+          WHERE device_id = $2`,
+        [JSON.stringify(packContents), deviceId]
+      );
+      await client.query('COMMIT');
+      // Read final balance for response.
+      const finalR = await pool.query(`SELECT balance FROM player_profiles WHERE device_id = $1`, [deviceId]);
+      const newBalance = finalR.rows[0] ? Number(finalR.rows[0].balance) : null;
+      return res.json({
+        ok: true,
+        priceGems, rewardGems, rewardBpTiers, rewardSkinId,
+        xpBoost,
+        newBalance
+      });
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  } catch (e) {
+    console.error('POST /api/player/starter-pack/buy', e);
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
+// ============================================================
 // Live Tournaments — stage 12 (May 2026)
 //
 // Scheduled prime-time events with a fixed window + top-N prize
