@@ -256,6 +256,12 @@
       setTimeout(function() { try { maybeShowLivesWidget(); } catch (e) {} }, 400);
     }
 
+    // Stage 26 — Daily Checklist tile. Mounts near top so it's the
+    // first thing the player sees after the lives widget.
+    if (typeof maybeShowChecklistTile === 'function') {
+      setTimeout(function() { try { maybeShowChecklistTile(); } catch (e) {} }, 600);
+    }
+
     // Tier-icons tap → reveal stats bubble (same behaviour as v1)
     var iconsTap = document.getElementById('home-icons-tap');
     if (iconsTap) {

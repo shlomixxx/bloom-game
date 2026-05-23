@@ -63,6 +63,21 @@ export async function initDb() {
       created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )`,
+    // Stage 26 — Live Ops Calendar (full CREATE + seed in schema.sql).
+    `CREATE TABLE IF NOT EXISTS calendar_events (
+      id            SERIAL PRIMARY KEY,
+      event_date    DATE NOT NULL,
+      title         VARCHAR(120) NOT NULL,
+      description   TEXT,
+      emoji         VARCHAR(10),
+      category      VARCHAR(40),
+      starts_at     TIMESTAMPTZ,
+      ends_at       TIMESTAMPTZ,
+      is_enabled    BOOLEAN NOT NULL DEFAULT TRUE,
+      sort_order    INT NOT NULL DEFAULT 100,
+      created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`,
     // Stage 19 — Lives / Energy table (full CREATE in schema.sql).
     `CREATE TABLE IF NOT EXISTS player_lives_state (
       device_id          VARCHAR(64) PRIMARY KEY,

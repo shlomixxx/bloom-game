@@ -4647,6 +4647,279 @@ app.post('/api/player/lives/refill-ad', requireDeviceAuth, async (req, res) => {
 });
 
 // ============================================================
+// Stage 26 — Live Ops Calendar + Daily Checklist
+// Aggregator endpoint returns N days of events from MULTIPLE sources:
+// - calendar_events (admin custom events)
+// - tournaments (existing)
+// - Daily Special (computed per day deterministically)
+// - season_pass end date
+// Plus a "today's checklist" view: 5 to-do items the player should
+// complete each day (the completionist hook).
+// ============================================================
+async function _loadCalendarConfig() {
+  try {
+    const r = await pool.query(`SELECT key, value FROM game_config WHERE key IN ('calendar_enabled','checklist_enabled','calendar_show_days','season_pass_ends_at','daily_special_enabled')`);
+    const out = {};
+    r.rows.forEach(row => { out[row.key] = row.value; });
+    return out;
+  } catch (e) { return {}; }
+}
+
+app.get('/api/calendar/upcoming', async (req, res) => {
+  try {
+    const cfg = await _loadCalendarConfig();
+    if (cfg.calendar_enabled === 'false') return res.json({ ok: true, enabled: false });
+    const days = Math.max(1, Math.min(60, parseInt(req.query.days || cfg.calendar_show_days || '30', 10) || 30));
+    const events = [];
+    // 1. Custom admin events.
+    try {
+      const r = await pool.query(
+        `SELECT id, event_date, title, description, emoji, category, starts_at, ends_at, sort_order
+           FROM calendar_events
+          WHERE is_enabled = TRUE
+            AND event_date >= (NOW() AT TIME ZONE 'Asia/Jerusalem')::date
+            AND event_date <= (NOW() AT TIME ZONE 'Asia/Jerusalem')::date + ($1 || ' days')::interval
+          ORDER BY event_date, sort_order, id`,
+        [String(days)]
+      );
+      r.rows.forEach(row => {
+        events.push({
+          source: 'custom',
+          date: row.event_date.toISOString().slice(0, 10),
+          title: row.title,
+          description: row.description,
+          emoji: row.emoji || '📅',
+          category: row.category || 'general',
+          startsAt: row.starts_at,
+          endsAt: row.ends_at
+        });
+      });
+    } catch (e) {}
+    // 2. Tournaments — both live and upcoming within window.
+    try {
+      const r = await pool.query(
+        `SELECT id, name, description, starts_at, ends_at, prize_pool, status
+           FROM tournaments
+          WHERE starts_at <= (NOW() AT TIME ZONE 'Asia/Jerusalem')::date + ($1 || ' days')::interval
+            AND (ends_at >= NOW() OR status = 'live')
+          ORDER BY starts_at`,
+        [String(days)]
+      );
+      r.rows.forEach(row => {
+        events.push({
+          source: 'tournament',
+          date: new Date(row.starts_at).toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' }),
+          title: '🏆 ' + (row.name || 'טורניר'),
+          description: row.description || '',
+          emoji: '🏆',
+          category: 'tournament',
+          startsAt: row.starts_at,
+          endsAt: row.ends_at,
+          tournamentId: row.id,
+          status: row.status
+        });
+      });
+    } catch (e) {}
+    // 3. Daily Special — compute for each upcoming day.
+    if (cfg.daily_special_enabled !== 'false') {
+      try {
+        const boardsR = await pool.query(
+          `SELECT id, name FROM board_configurations
+            WHERE is_active = true
+              AND 'dynamic' = ANY(applies_to)
+              AND (starts_at IS NULL OR starts_at <= NOW() + INTERVAL '${days} days')
+              AND (ends_at   IS NULL OR ends_at   >= NOW())
+            ORDER BY priority DESC, id DESC
+            LIMIT 25`
+        );
+        const boards = boardsR.rows;
+        if (boards.length > 0) {
+          // Compute daily special for each day in window using the same hash logic.
+          for (let i = 0; i < days; i++) {
+            const d = new Date();
+            d.setDate(d.getDate() + i);
+            const dateStr = d.toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' });
+            // _dailySpecialHash defined elsewhere in this file.
+            let h = 2166136261;
+            for (let j = 0; j < dateStr.length; j++) {
+              h ^= dateStr.charCodeAt(j);
+              h = Math.imul(h, 16777619);
+            }
+            const idx = (h >>> 0) % boards.length;
+            events.push({
+              source: 'daily_special',
+              date: dateStr,
+              title: '🌟 הלוח של היום: ' + boards[idx].name,
+              description: '×3 XP + ×2 פרסים',
+              emoji: '🌟',
+              category: 'daily_special',
+              boardId: boards[idx].id
+            });
+          }
+        }
+      } catch (e) {}
+    }
+    // 4. Season pass end.
+    if (cfg.season_pass_ends_at) {
+      try {
+        const endsAt = new Date(cfg.season_pass_ends_at);
+        if (!isNaN(endsAt.getTime()) && endsAt > new Date()) {
+          const daysUntil = Math.ceil((endsAt - new Date()) / (24 * 60 * 60 * 1000));
+          if (daysUntil <= days) {
+            events.push({
+              source: 'season_end',
+              date: endsAt.toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' }),
+              title: '🎖 סוף עונת Battle Pass',
+              description: 'אסוף את כל הפרסים שמגיעים לך לפני שייעלמו',
+              emoji: '🎖',
+              category: 'season_end'
+            });
+          }
+        }
+      } catch (e) {}
+    }
+    // Sort by date, then by source priority.
+    const sourcePriority = { tournament: 1, season_end: 2, custom: 3, daily_special: 4 };
+    events.sort((a, b) => {
+      if (a.date !== b.date) return a.date.localeCompare(b.date);
+      return (sourcePriority[a.source] || 99) - (sourcePriority[b.source] || 99);
+    });
+    // Group by date for the client's calendar view.
+    const byDate = {};
+    events.forEach(e => {
+      if (!byDate[e.date]) byDate[e.date] = [];
+      byDate[e.date].push(e);
+    });
+    res.json({
+      ok: true,
+      enabled: true,
+      days,
+      eventsByDate: byDate,
+      eventsCount: events.length
+    });
+  } catch (e) {
+    console.error('GET /api/calendar/upcoming', e);
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
+// Daily checklist — what the player should do today.
+// 5 to-do items: free gacha pull, daily special, daily deal, quest, streak.
+app.get('/api/checklist/today', async (req, res) => {
+  try {
+    const cfg = await _loadCalendarConfig();
+    if (cfg.checklist_enabled === 'false') return res.json({ ok: true, enabled: false });
+    const deviceId = (req.query.deviceId || '').toString().slice(0, 64);
+    if (!deviceId || deviceId.length < 8) return res.json({ ok: true, enabled: true, items: [] });
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' });
+    const items = [];
+    // 1. Free gacha pull (if gacha enabled + not claimed today)
+    try {
+      const gachaCfg = await pool.query(`SELECT value FROM game_config WHERE key IN ('gacha_enabled','gacha_free_pull_enabled')`);
+      const m = {};
+      gachaCfg.rows.forEach(r => { m[r.key === 'gacha_enabled' ? 'enabled' : 'free'] = r.value; });
+      if (m.enabled === 'true' && m.free !== 'false') {
+        const stateR = await pool.query(
+          `SELECT free_pull_claimed_date FROM player_gacha_state WHERE device_id = $1`,
+          [deviceId]
+        );
+        const claimedToday = stateR.rows[0] && stateR.rows[0].free_pull_claimed_date &&
+          stateR.rows[0].free_pull_claimed_date.toISOString().slice(0, 10) === today;
+        items.push({
+          key: 'gacha_free',
+          title: '🎰 פול חינם בגאצ׳ה',
+          done: !!claimedToday,
+          action: 'open_gacha'
+        });
+      }
+    } catch (e) {}
+    // 2. Daily Special (if enabled + not played today)
+    try {
+      const dsCfg = await pool.query(`SELECT value FROM game_config WHERE key = 'daily_special_enabled'`);
+      if (!dsCfg.rows[0] || dsCfg.rows[0].value !== 'false') {
+        // We can't easily check "did the player play today's special" without
+        // a hook into dynamic_board_scores filtered to today. For v1 we
+        // mark it as undone — the home banner will show it cleared via
+        // the existing markDailySpecialPlayed localStorage flag.
+        items.push({
+          key: 'daily_special',
+          title: '🌟 שחק את הלוח של היום (×3 XP)',
+          done: false, // client overrides from localStorage
+          action: 'open_dynamic_boards'
+        });
+      }
+    } catch (e) {}
+    // 3. Daily Deal (if enabled + not bought today)
+    try {
+      const ddCfg = await pool.query(`SELECT value FROM game_config WHERE key = 'daily_deals_enabled'`);
+      if (ddCfg.rows[0] && ddCfg.rows[0].value === 'true') {
+        // Check purchase for today.
+        const purR = await pool.query(
+          `SELECT 1 FROM daily_deal_purchases WHERE device_id = $1 AND purchase_date = $2::date LIMIT 1`,
+          [deviceId, today]
+        );
+        items.push({
+          key: 'daily_deal',
+          title: '🔥 בדוק את דיל היום',
+          done: purR.rows.length > 0,
+          action: 'open_daily_deal'
+        });
+      }
+    } catch (e) {}
+    // 4. Daily quest (any quest completed today)
+    try {
+      // Quest completions are tracked via the _earn dedup keys.
+      const q = await pool.query(
+        `SELECT 1 FROM game_config WHERE key LIKE $1 LIMIT 1`,
+        [`_earn:${deviceId}:dyn_quest:${today}:%`]
+      );
+      items.push({
+        key: 'quest',
+        title: '🎯 השלם משימה יומית',
+        done: q.rows.length > 0,
+        action: 'open_dynamic_boards'
+      });
+    } catch (e) {}
+    // 5. Maintain streak — done if player played any game today.
+    try {
+      const sR = await pool.query(
+        `SELECT 1 FROM daily_scores WHERE device_id = $1 AND date = $2 LIMIT 1`,
+        [deviceId, today]
+      );
+      // Also check difficulty_scores + dynamic_board_scores (broader signal).
+      const altR = sR.rows.length === 0
+        ? await pool.query(
+            `SELECT 1 FROM difficulty_scores WHERE device_id = $1 AND date = $2 LIMIT 1
+             UNION ALL
+             SELECT 1 FROM dynamic_board_scores WHERE device_id = $1
+                AND updated_at >= (NOW() AT TIME ZONE 'Asia/Jerusalem')::date LIMIT 1`,
+            [deviceId, today]
+          ).catch(() => ({ rows: [] }))
+        : { rows: [{ ok: 1 }] };
+      items.push({
+        key: 'streak',
+        title: '🔥 שמור על הרצף — שחק לפחות משחק אחד היום',
+        done: sR.rows.length > 0 || altR.rows.length > 0,
+        action: 'start_game'
+      });
+    } catch (e) {}
+    const doneCount = items.filter(i => i.done).length;
+    res.json({
+      ok: true,
+      enabled: true,
+      date: today,
+      items,
+      doneCount,
+      totalCount: items.length,
+      allDone: items.length > 0 && doneCount === items.length
+    });
+  } catch (e) {
+    console.error('GET /api/checklist/today', e);
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
+// ============================================================
 // Live Tournaments — stage 12 (May 2026)
 //
 // Scheduled prime-time events with a fixed window + top-N prize
@@ -7037,6 +7310,87 @@ if (ADMIN_PATH && ADMIN_PASSWORD) {
       res.json({ ok: true });
     } catch (e) {
       console.error('DELETE admin/gacha/pool/:id', e);
+      res.status(500).json({ error: 'internal' });
+    }
+  });
+
+  // ============================================================
+  // Admin: Calendar events CRUD (stage 26)
+  // ============================================================
+  adminRouter.get('/api/calendar/events', async (_req, res) => {
+    try {
+      const r = await pool.query(
+        `SELECT id, event_date, title, description, emoji, category, starts_at, ends_at, is_enabled, sort_order
+           FROM calendar_events
+          ORDER BY event_date, sort_order, id`
+      );
+      res.json({ ok: true, events: r.rows });
+    } catch (e) {
+      console.error('GET admin/calendar/events', e);
+      res.status(500).json({ error: 'internal' });
+    }
+  });
+
+  adminRouter.post('/api/calendar/events', async (req, res) => {
+    try {
+      const { event_date, title, description, emoji, category, starts_at, ends_at, is_enabled, sort_order } = req.body || {};
+      if (!event_date || !title) return res.status(400).json({ error: 'missing_fields' });
+      const r = await pool.query(
+        `INSERT INTO calendar_events (event_date, title, description, emoji, category, starts_at, ends_at, is_enabled, sort_order)
+           VALUES ($1::date, $2, $3, $4, $5, $6, $7, $8, $9)
+         RETURNING *`,
+        [event_date, String(title).slice(0, 120), description || null, emoji || null,
+         category || null, starts_at || null, ends_at || null,
+         is_enabled !== false, parseInt(sort_order, 10) || 100]
+      );
+      await pool.query(
+        `INSERT INTO admin_actions (action, target_type, target_id, details)
+           VALUES ('calendar_create', 'calendar_event', $1, $2)`,
+        [String(r.rows[0].id), JSON.stringify({ title, event_date })]
+      ).catch(() => {});
+      res.json({ ok: true, event: r.rows[0] });
+    } catch (e) {
+      console.error('POST admin/calendar/events', e);
+      res.status(500).json({ error: 'internal' });
+    }
+  });
+
+  adminRouter.patch('/api/calendar/events/:id', async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      const fields = ['event_date', 'title', 'description', 'emoji', 'category', 'starts_at', 'ends_at', 'is_enabled', 'sort_order'];
+      const updates = [];
+      const vals = [];
+      let p = 1;
+      fields.forEach(f => {
+        if (req.body[f] !== undefined) {
+          updates.push(`${f} = $${p++}`);
+          vals.push(req.body[f]);
+        }
+      });
+      if (!updates.length) return res.json({ ok: false, reason: 'no_changes' });
+      updates.push(`updated_at = NOW()`);
+      vals.push(id);
+      const r = await pool.query(
+        `UPDATE calendar_events SET ${updates.join(', ')} WHERE id = $${p} RETURNING *`,
+        vals
+      );
+      if (!r.rows[0]) return res.status(404).json({ error: 'not_found' });
+      res.json({ ok: true, event: r.rows[0] });
+    } catch (e) {
+      console.error('PATCH admin/calendar/events/:id', e);
+      res.status(500).json({ error: 'internal' });
+    }
+  });
+
+  adminRouter.delete('/api/calendar/events/:id', async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      const r = await pool.query(`DELETE FROM calendar_events WHERE id = $1 RETURNING title`, [id]);
+      if (!r.rows[0]) return res.status(404).json({ error: 'not_found' });
+      res.json({ ok: true });
+    } catch (e) {
+      console.error('DELETE admin/calendar/events/:id', e);
       res.status(500).json({ error: 'internal' });
     }
   });

@@ -1165,6 +1165,47 @@ CREATE INDEX IF NOT EXISTS idx_skin_configurations_sort
   ON skin_configurations (sort_order, id);
 
 -- ============================================================
+-- Live Ops Calendar (Stage 26 — anticipation engine, May 2026)
+-- Two surfaces: (1) DAILY CHECKLIST on home — 4-5 to-do items per
+-- day (free pull, daily special, daily deal, quest, streak) that
+-- activate completionist drive; (2) FULL CALENDAR modal showing
+-- 30 days of scheduled events (tournaments + daily specials + custom
+-- admin events). Plan-ahead anchoring: "I'm playing Thursday because
+-- there's a tournament at 20:00".
+-- ============================================================
+CREATE TABLE IF NOT EXISTS calendar_events (
+  id            SERIAL PRIMARY KEY,
+  event_date    DATE NOT NULL,
+  title         VARCHAR(120) NOT NULL,
+  description   TEXT,
+  emoji         VARCHAR(10),
+  category      VARCHAR(40),
+  -- 'all_day' = no specific time; 'timed' = use start_time field
+  starts_at     TIMESTAMPTZ,
+  ends_at       TIMESTAMPTZ,
+  is_enabled    BOOLEAN NOT NULL DEFAULT TRUE,
+  sort_order    INT NOT NULL DEFAULT 100,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_calendar_events_date
+  ON calendar_events (event_date, is_enabled);
+
+-- Config keys (3).
+INSERT INTO game_config (key, value) VALUES ('calendar_enabled',         'true') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('checklist_enabled',        'true') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('calendar_show_days',       '30')   ON CONFLICT (key) DO NOTHING;
+
+-- Seed 3 example custom events the admin can edit/replace.
+-- These show in the calendar but don't affect game logic.
+-- Note: dates intentionally in the future so they show up immediately.
+INSERT INTO calendar_events (event_date, title, description, emoji, category, sort_order) VALUES
+  ((NOW() AT TIME ZONE 'Asia/Jerusalem')::date + INTERVAL '2 days', 'יום שישי משולש פרסים', 'כל המשחקים מקנים 3× XP — סוף שבוע מיוחד', '🎉', 'weekend', 1),
+  ((NOW() AT TIME ZONE 'Asia/Jerusalem')::date + INTERVAL '7 days', 'שבוע סקינים בלעדי', 'סקין zוהר זמין בגאצ\'ה לזמן מוגבל', '✨', 'gacha', 2),
+  ((NOW() AT TIME ZONE 'Asia/Jerusalem')::date + INTERVAL '14 days', 'סוף עונה — Battle Pass', 'אסוף את כל הדרגות שמגיעות לך', '🎖', 'battle_pass', 3)
+ON CONFLICT DO NOTHING;
+
+-- ============================================================
 -- Lives / Energy System (Stage 19 — scarcity-driven engagement)
 -- Candy Crush pattern: limited lives, time-regen, ad/gems refill.
 -- *** DEFAULT OFF *** — admin must explicitly opt in via lives_enabled.

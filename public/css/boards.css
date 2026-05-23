@@ -5411,3 +5411,256 @@ html[data-theme="dark"] .lives-refill-opt {
 }
 html[data-theme="dark"] .lives-refill-opt-label { color: #FBCFE8; }
 html[data-theme="dark"] .lives-refill-opt-sub { color: #F9A8D4; }
+
+/* ============================================================
+   Stage 26 — Daily Checklist + Calendar Modal
+   Cyan-teal theme. Completionist drive via progress bar.
+   ============================================================ */
+
+.checklist-home-tile {
+  padding: 14px;
+  margin-bottom: 12px;
+  background: linear-gradient(135deg, #ECFEFF 0%, #CFFAFE 100%);
+  border: 2px solid #06B6D4;
+  border-radius: 16px;
+  box-shadow: 0 3px 12px rgba(6, 182, 212, 0.25);
+  direction: rtl;
+  font-family: inherit;
+}
+.checklist-home-tile.all-done {
+  background: linear-gradient(135deg, #D1FAE5 0%, #A7F3D0 100%);
+  border-color: #10B981;
+  box-shadow: 0 3px 12px rgba(16, 185, 129, 0.35);
+}
+.checklist-tile-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.checklist-tile-title {
+  font-size: 14px;
+  font-weight: 900;
+  color: #164E63;
+}
+.checklist-home-tile.all-done .checklist-tile-title { color: #064E3B; }
+.checklist-tile-calendar {
+  padding: 6px 10px;
+  background: rgba(255,255,255,0.6);
+  border: 1px solid rgba(6, 182, 212, 0.5);
+  color: #164E63;
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.checklist-tile-calendar:hover { background: #FFF; }
+.checklist-tile-bar {
+  height: 6px;
+  background: rgba(0,0,0,0.08);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-bottom: 10px;
+}
+.checklist-tile-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #06B6D4, #10B981);
+  border-radius: 3px;
+  transition: width 0.4s ease-out;
+}
+.checklist-tile-items {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.checklist-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  background: rgba(255,255,255,0.5);
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.18s, transform 0.12s;
+}
+.checklist-item:hover { background: rgba(255,255,255,0.85); transform: translateX(-2px); }
+.checklist-item-done {
+  opacity: 0.55;
+  background: rgba(16,185,129,0.18);
+}
+.checklist-item-done .checklist-item-title {
+  text-decoration: line-through;
+  color: #047857;
+}
+.checklist-item-pending .checklist-item-title { color: #164E63; }
+.checklist-item-check {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #FFF;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 900;
+  color: #06B6D4;
+  flex-shrink: 0;
+  font-size: 14px;
+}
+.checklist-item-done .checklist-item-check { background: #10B981; color: #FFF; }
+.checklist-item-title { flex: 1; min-width: 0; }
+
+/* Calendar modal */
+.calendar-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.78);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100001;
+  padding: 14px;
+  animation: spOverlayFade 0.3s ease-out;
+}
+.calendar-modal-card {
+  background: var(--color-surface, #FFF);
+  border: 2px solid #06B6D4;
+  border-radius: 20px;
+  padding: 18px;
+  max-width: 420px;
+  width: 100%;
+  max-height: 92vh;
+  overflow-y: auto;
+  direction: rtl;
+  position: relative;
+  box-shadow: 0 24px 70px rgba(0,0,0,0.5);
+  animation: spModalPop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.calendar-modal-close {
+  position: absolute;
+  top: 10px;
+  left: 12px;
+  width: 30px;
+  height: 30px;
+  border: none;
+  background: rgba(0,0,0,0.1);
+  color: #164E63;
+  border-radius: 50%;
+  font-size: 16px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.calendar-modal-title {
+  font-size: 18px;
+  font-weight: 900;
+  color: #164E63;
+  text-align: center;
+  margin-bottom: 4px;
+}
+.calendar-modal-sub {
+  font-size: 12px;
+  font-weight: 700;
+  color: #0E7490;
+  text-align: center;
+  margin-bottom: 16px;
+}
+.calendar-modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.cal-day-card {
+  padding: 10px 12px;
+  background: var(--color-bg, #F9FAFB);
+  border: 1px solid var(--color-border, #E5E7EB);
+  border-radius: 10px;
+}
+.cal-day-card.cal-day-today {
+  border-color: #06B6D4;
+  border-width: 2px;
+  background: linear-gradient(135deg, #ECFEFF, #FFF);
+  box-shadow: 0 2px 8px rgba(6, 182, 212, 0.25);
+}
+.cal-day-card.cal-day-has-events { box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
+.cal-day-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+.cal-day-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--color-text, #1F2937);
+}
+.cal-day-label strong { color: #06B6D4; font-weight: 900; }
+.cal-day-dots {
+  display: flex;
+  gap: 4px;
+}
+.cal-day-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.cal-day-events { display: flex; flex-direction: column; gap: 4px; }
+.cal-empty-row {
+  font-size: 11px;
+  color: #9CA3AF;
+  padding: 4px;
+  font-style: italic;
+}
+.cal-event-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+}
+.cal-event-emoji { font-size: 18px; flex-shrink: 0; }
+.cal-event-body { flex: 1; min-width: 0; }
+.cal-event-title { font-weight: 800; line-height: 1.2; }
+.cal-event-desc { font-size: 11px; font-weight: 600; margin-top: 2px; opacity: 0.85; }
+
+/* Dark theme */
+html[data-theme="dark"] .checklist-home-tile {
+  background: linear-gradient(135deg, #134E4A, #164E63);
+  border-color: #06B6D4;
+}
+html[data-theme="dark"] .checklist-home-tile.all-done {
+  background: linear-gradient(135deg, #064E3B, #065F46);
+  border-color: #10B981;
+}
+html[data-theme="dark"] .checklist-tile-title { color: #CFFAFE; }
+html[data-theme="dark"] .checklist-tile-calendar {
+  background: rgba(0,0,0,0.3);
+  border-color: #06B6D4;
+  color: #CFFAFE;
+}
+html[data-theme="dark"] .checklist-item { background: rgba(0,0,0,0.3); }
+html[data-theme="dark"] .checklist-item-pending .checklist-item-title { color: #CFFAFE; }
+html[data-theme="dark"] .checklist-item-done .checklist-item-title { color: #6EE7B7; }
+html[data-theme="dark"] .checklist-item-check { background: rgba(0,0,0,0.5); color: #06B6D4; }
+html[data-theme="dark"] .calendar-modal-card {
+  background: #1F2937;
+  border-color: #06B6D4;
+}
+html[data-theme="dark"] .calendar-modal-title { color: #CFFAFE; }
+html[data-theme="dark"] .calendar-modal-sub { color: #67E8F9; }
+html[data-theme="dark"] .cal-day-card {
+  background: rgba(0,0,0,0.3);
+  border-color: rgba(255,255,255,0.08);
+}
+html[data-theme="dark"] .cal-day-card.cal-day-today {
+  background: linear-gradient(135deg, #134E4A, rgba(0,0,0,0.4));
+}
+html[data-theme="dark"] .cal-day-label { color: #E5E7EB; }
+html[data-theme="dark"] .cal-event-row {
+  /* Background already set inline per category; just ensure text contrast. */
+  filter: brightness(0.92);
+}

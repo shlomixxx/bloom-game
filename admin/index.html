@@ -1542,6 +1542,30 @@
     </div>
   </section>
 
+  <!-- 📅 Live Ops Calendar (stage 26) -->
+  <section id="calendar-section" style="margin-bottom:12px">
+    <h2>📅 Live Ops Calendar + Checklist <button class="tip-btn" data-tip-text="<strong>📅 Live Ops Calendar</strong><br>שני surfaces: <strong>Daily Checklist</strong> בבית (5 משימות יומיות) + <strong>לוח שנה 30 ימים</strong>.<div class=&quot;tip-example&quot;>💡 <strong>Daily Checklist</strong> = ה-pattern של Clash Royale. השחקן רואה רשימה של 5 דברים שצריך לעשות היום: פול חינם, הלוח של היום, דיל היום, משימה, רצף. ה-progress bar מפעיל את ה-completionist drive. רוב המשחקים הגדולים מדווחים +25% DAU מהפיצ\'ר הזה.<br><br>📊 <strong>Calendar</strong> = plan-ahead anchoring. שחקן רואה ביום שני שיש טורניר ביום רביעי = "אני אהיה כאן יום רביעי". מאגד אוטומטית: טורנירים, ימי הלוח של היום, סוף עונה, וכל event מותאם שתוסיף כאן.</div>">?</button></h2>
+    <div style="padding:12px 16px;background:var(--card);border-radius:10px;margin-top:8px">
+
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:12px">
+        <div class="rewards-grid" data-keys="calendar_enabled,checklist_enabled,calendar_show_days"></div>
+      </div>
+
+      <div style="margin-bottom:8px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <div style="font-size:13px;font-weight:700;color:var(--gold)">🎪 אירועים מותאמים</div>
+          <button id="cal-add-btn" class="btn-primary" style="padding:6px 14px;font-size:12px">+ אירוע חדש</button>
+        </div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:8px">תוסיף כאן ימי חג, weekend מיוחדים, פרסום סקין חדש וכו\'. הם יופיעו ב-Calendar של השחקנים.</div>
+        <div id="calendar-events-list" style="display:flex;flex-direction:column;gap:6px;font-size:12px">
+          <div style="color:var(--muted);padding:10px;text-align:center">⏳ טוען...</div>
+        </div>
+      </div>
+
+      <div id="calendar-status" style="font-size:11px;color:var(--muted);text-align:center;margin-top:8px"></div>
+    </div>
+  </section>
+
   <!-- ❤️ Lives / Energy (stage 19) — CONTROVERSIAL FEATURE -->
   <section id="lives-section" style="margin-bottom:12px">
     <h2>❤️ חיים / Energy <span style="display:inline-block;padding:3px 8px;background:#DC2626;color:#FFF;border-radius:6px;font-size:11px;font-weight:900;margin-right:6px">⚠ RISKY</span> <button class="tip-btn" data-tip-text="<strong>❤️ Lives / Energy System</strong><br>הפטרן של Candy Crush — חיים מוגבלים שמתחדשים עם הזמן.<div class=&quot;tip-example&quot;>⚠ <strong>הזהרה</strong>: זה הפיצ\'ר הכי מסוכן UX-wise. שחקנים יכולים <strong>לאהוב</strong> אותו (יותר session loops, יותר IAP) או <strong>לשנוא</strong> אותו (uninstalls). <strong>DEFAULT OFF</strong> מסיבה זו.<br><br>💡 <strong>איך זה עובד</strong>:<br>1. שחקן מתחיל עם 5 חיים<br>2. כל משחק דינמי = -1 חיים<br>3. חידוש אוטומטי: 1 כל 30 דקות<br>4. כשנגמרו: 💎 חידוש מלא / 📺 פרסומת / ⏰ המתנה<br><br>📊 <strong>מה לא חייב לחיים</strong>: יומי, פרקטיס, תחרויות, דו-קרבות, אתגרים. רק לוחות דינמיים.<br>⚠ אם תפעיל — תבדוק D7 retention. אם ירד = כבה.</div>">?</button></h2>
@@ -2607,6 +2631,11 @@
     dyn_comeback_reward:     'פרס ה-💎 שנותן ה-comeback overlay.<div class="tip-example">📊 ברירת מחדל 150💎.<br>💡 גדול מספיק כדי שירגיש משמעותי, קטן מספיק כדי שלא יהיה אטרקציה לפנות-חוץ-בעצמך.<br>📊 ערכים: 50 (קמצני), 150 (default), 300 (נדיב, למתחילים), 500 (אגרסיבי).</div>',
     dyn_comeback_freeze_gift: 'מספר הקפאות חינם שנותנים עם ה-comeback bonus.<div class="tip-example">📊 ברירת מחדל 1.<br>💡 השילוב 150💎 + 1 הקפאה = "ברוך שובך + אנחנו נשמור עליך לא לנפול שוב". פסיכולוגית חזק.<br>📊 ערך 0 = רק 💎, ערך 2 = "פרמיום" comeback. ערך 3+ = ייצור הקפאות בחינם דרך win-back farming, אל תעלה מעל 1-2.</div>',
 
+    // ---- Live Ops Calendar + Checklist (stage 26) ----
+    calendar_enabled: 'הפעלת מערכת הCalendar (פיצ\'ר ה-Plan-Ahead).<div class="tip-example">📊 ברירת מחדל פעיל.<br>💡 <strong>למה זה חזק</strong>: שחקנים שיודעים מראש על אירועים מתכננים סביב המשחק. "אני אהיה בבית יום ד\' בערב כדי להשתתף בטורניר". זה הופך אותם משחקנים פסיביים לאקטיביים.<br>📊 הCalendar מאגד אוטומטית: טורנירים, ימי הלוח של היום, סוף עונה, וכל event שתוסיף.</div>',
+    checklist_enabled: 'הפעלת Daily Checklist בבית.<div class="tip-example">📊 ברירת מחדל פעיל. <strong>זה ה-#1 daily-engagement booster</strong> בClash Royale/Genshin.<br>💡 השחקן רואה רשימה של 5 משימות יומיות עם progress bar. המוח שלו מבקש "לסגור" את הרשימה — completionist drive. רוב המשחקים מדווחים +25% DAU מהפיצ\'ר.<br>📊 ה-5 משימות: פול חינם בגאצ\'ה, הלוח של היום, דיל היום, משימה יומית, שמירת רצף.<br>⚠ אם החלשת מערכת ספציפית (gacha/quests/etc), היא לא תופיע ב-checklist.</div>',
+    calendar_show_days: 'כמה ימים קדימה להציג בלוח השנה.<div class="tip-example">📊 ברירת מחדל 30. ערכים: 14-60.<br>💡 30 הוא ה-sweet spot — חודש שלם של תכנון. 14 פחות overwhelming, 60 מתחיל להרגיש ריק.</div>',
+
     // ---- Lives / Energy (stage 19) ----
     lives_enabled: '⚠ הפעלת מערכת חיים מוגבלים.<div class="tip-example">📊 <strong>ברירת מחדל: כבוי</strong>. זה הפיצ\'ר הכי מסוכן UX — Candy Crush pattern.<br>💡 <strong>למה זה ממכר</strong>: scarcity = anticipation. שחקן שיודע שיש לו רק 5 משחקים ביום ישכיל יותר ויחזור יותר פעמים.<br>⚠ <strong>למה זה מסוכן</strong>: שחקנים יכולים להרגיש "חסומים" ולנטוש. אם תפעיל — בדוק D7 retention שבוע אחר כך. אם ירד = כבה.<br>📊 <strong>מה לא נחסם</strong>: יומי, פרקטיס, תחרויות, דו-קרבות, אתגרים. רק לוחות דינמיים.</div>',
     lives_max: 'מקסימום חיים שהשחקן יכול להחזיק.<div class="tip-example">📊 ברירת מחדל 5. ערכים: 3-10.<br>💡 5 הוא ה-sweet spot של Candy Crush. נמוך מדי (3) = מסכל. גבוה מדי (10) = לא מרגיש מוגבל.</div>',
@@ -3426,6 +3455,145 @@
     loadDailySpecialPicker();
     loadDailyDeals();
     loadGachaPool();
+    loadCalendarEvents();
+  }
+
+  // ============================================================
+  // 📅 Calendar events admin
+  // ============================================================
+  async function loadCalendarEvents() {
+    var host = document.getElementById('calendar-events-list');
+    if (!host) return;
+    try {
+      var r = await fetch('/' + ADMIN_PATH + '/api/calendar/events').then(function(r){return r.json();});
+      var events = (r && r.events) || [];
+      if (!events.length) {
+        host.innerHTML = '<div style="color:var(--muted);padding:10px;text-align:center">אין אירועים מותאמים</div>';
+      } else {
+        host.innerHTML = events.map(function(e) {
+          var date = e.event_date ? e.event_date.substring(0, 10) : '';
+          var status = e.is_enabled
+            ? '<span style="display:inline-block;padding:2px 6px;background:rgba(159,225,203,0.4);color:#04342C;border-radius:6px;font-size:10px;font-weight:700">✓ פעיל</span>'
+            : '<span style="display:inline-block;padding:2px 6px;background:rgba(0,0,0,0.15);color:var(--muted);border-radius:6px;font-size:10px;font-weight:700">⏸ כבוי</span>';
+          return '<div style="display:grid;grid-template-columns:auto auto 1fr auto auto;gap:10px;padding:10px 12px;background:var(--bg);border-radius:8px;align-items:center">' +
+            '<div style="font-size:20px">' + (e.emoji || '📅') + '</div>' +
+            '<div style="font-size:11px;font-weight:700;color:var(--gold);padding:3px 8px;background:rgba(0,0,0,0.04);border-radius:6px;font-variant-numeric:tabular-nums">' + date + '</div>' +
+            '<div style="min-width:0">' +
+              '<div style="font-weight:700;color:var(--fg);font-size:12px">' + e.title + ' ' + status + '</div>' +
+              (e.description ? '<div style="font-size:10px;color:var(--muted);margin-top:2px">' + e.description.substring(0, 80) + '</div>' : '') +
+            '</div>' +
+            '<button class="btn-secondary" data-cal-edit="' + e.id + '" style="padding:4px 10px;font-size:11px">✏️</button>' +
+            '<button class="btn-danger" data-cal-delete="' + e.id + '" style="padding:4px 10px;font-size:11px">🗑</button>' +
+          '</div>';
+        }).join('');
+        host.querySelectorAll('[data-cal-edit]').forEach(function(b) {
+          b.onclick = function() {
+            var id = parseInt(b.getAttribute('data-cal-edit'), 10);
+            var ev = events.find(function(e) { return e.id === id; });
+            if (ev) openCalendarEditor(ev);
+          };
+        });
+        host.querySelectorAll('[data-cal-delete]').forEach(function(b) {
+          b.onclick = async function() {
+            var id = parseInt(b.getAttribute('data-cal-delete'), 10);
+            var ev = events.find(function(e) { return e.id === id; });
+            if (!confirm('למחוק את "' + (ev && ev.title) + '"?')) return;
+            await fetch('/' + ADMIN_PATH + '/api/calendar/events/' + id, { method: 'DELETE' });
+            loadCalendarEvents();
+          };
+        });
+      }
+    } catch (e) {
+      host.innerHTML = '<div style="color:var(--danger);padding:10px">שגיאה: ' + e.message + '</div>';
+    }
+    var addBtn = document.getElementById('cal-add-btn');
+    if (addBtn) addBtn.onclick = function() { openCalendarEditor(null); };
+  }
+
+  function openCalendarEditor(ev) {
+    var isEdit = !!ev;
+    var e = ev || {
+      event_date: new Date().toISOString().substring(0, 10),
+      title: '',
+      description: '',
+      emoji: '📅',
+      category: 'general',
+      is_enabled: true,
+      sort_order: 100
+    };
+    var dateValue = e.event_date ? e.event_date.substring(0, 10) : new Date().toISOString().substring(0, 10);
+    var ov = document.createElement('div');
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:9999;padding:14px';
+    ov.innerHTML =
+      '<div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:20px;max-width:440px;width:100%;max-height:92vh;overflow-y:auto;direction:rtl;text-align:right">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">' +
+          '<h3 style="margin:0;color:var(--fg)">' + (isEdit ? '✏️ ערוך אירוע' : '+ אירוע חדש') + '</h3>' +
+          '<button id="cal-edit-close" style="border:none;background:none;font-size:20px;cursor:pointer;color:var(--muted)">×</button>' +
+        '</div>' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
+          '<label style="font-size:12px;color:var(--muted)">תאריך<input id="cev-date" type="date" value="' + dateValue + '" style="width:100%;padding:6px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--fg);margin-top:4px"></label>' +
+          '<label style="font-size:12px;color:var(--muted)">אימוג\'י<input id="cev-emoji" value="' + escapeAttr(e.emoji || '📅') + '" maxlength="4" style="width:100%;padding:6px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--fg);margin-top:4px;text-align:center;font-size:18px"></label>' +
+        '</div>' +
+        '<label style="font-size:12px;color:var(--muted);display:block;margin-top:10px">כותרת<input id="cev-title" value="' + escapeAttr(e.title || '') + '" style="width:100%;padding:6px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--fg);margin-top:4px"></label>' +
+        '<label style="font-size:12px;color:var(--muted);display:block;margin-top:10px">תיאור<textarea id="cev-desc" rows="2" style="width:100%;padding:6px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--fg);margin-top:4px;font-family:inherit">' + escapeAttr(e.description || '') + '</textarea></label>' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px">' +
+          '<label style="font-size:12px;color:var(--muted)">קטגוריה' +
+            '<select id="cev-cat" style="width:100%;padding:6px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--fg);margin-top:4px">' +
+              ['general','tournament','daily_special','season_end','weekend','gacha','battle_pass'].map(function(c) {
+                return '<option value="' + c + '"' + (e.category === c ? ' selected' : '') + '>' + c + '</option>';
+              }).join('') +
+            '</select></label>' +
+          '<label style="font-size:12px;color:var(--muted)">סדר מיון<input id="cev-sort" type="number" value="' + (e.sort_order || 100) + '" style="width:100%;padding:6px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--fg);margin-top:4px"></label>' +
+        '</div>' +
+        '<label style="font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px;margin-top:10px"><input id="cev-enabled" type="checkbox" ' + (e.is_enabled ? 'checked' : '') + '> פעיל (יוצג בלוח השנה)</label>' +
+        '<div style="display:flex;gap:10px;margin-top:16px">' +
+          '<button id="cev-save" class="btn-primary" style="flex:1;padding:10px">💾 שמור</button>' +
+          '<button id="cev-cancel" class="btn-secondary" style="padding:10px 16px">ביטול</button>' +
+        '</div>' +
+        '<div id="cev-status" style="font-size:11px;color:var(--muted);text-align:center;margin-top:8px"></div>' +
+      '</div>';
+    document.body.appendChild(ov);
+    var close = function() { try { ov.remove(); } catch (e) {} };
+    document.getElementById('cal-edit-close').onclick = close;
+    document.getElementById('cev-cancel').onclick = close;
+    ov.addEventListener('click', function(ev) { if (ev.target === ov) close(); });
+    document.getElementById('cev-save').onclick = async function() {
+      var status = document.getElementById('cev-status');
+      var body = {
+        event_date: document.getElementById('cev-date').value,
+        title: document.getElementById('cev-title').value,
+        description: document.getElementById('cev-desc').value,
+        emoji: document.getElementById('cev-emoji').value,
+        category: document.getElementById('cev-cat').value,
+        sort_order: parseInt(document.getElementById('cev-sort').value, 10) || 100,
+        is_enabled: document.getElementById('cev-enabled').checked
+      };
+      if (!body.title || !body.event_date) {
+        status.textContent = '✗ חסר תאריך או כותרת';
+        status.style.color = 'var(--danger)';
+        return;
+      }
+      try {
+        var url = '/' + ADMIN_PATH + '/api/calendar/events' + (isEdit ? '/' + ev.id : '');
+        var method = isEdit ? 'PATCH' : 'POST';
+        var r = await fetch(url, {
+          method: method, headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+        var resp = await r.json();
+        if (resp.ok) {
+          status.textContent = '✓ נשמר';
+          status.style.color = 'var(--success)';
+          setTimeout(function() { close(); loadCalendarEvents(); }, 500);
+        } else {
+          status.textContent = '✗ ' + (resp.error || 'שגיאה');
+          status.style.color = 'var(--danger)';
+        }
+      } catch (e) {
+        status.textContent = '✗ ' + e.message;
+        status.style.color = 'var(--danger)';
+      }
+    };
   }
 
   // ============================================================
