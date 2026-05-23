@@ -72,6 +72,24 @@ export async function initDb() {
       created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )`,
+    // Stage 29 — Tile Collection Album (full CREATE in schema.sql).
+    `CREATE TABLE IF NOT EXISTS player_tile_collection (
+      device_id           VARCHAR(64) NOT NULL,
+      board_id            INT NOT NULL,
+      tier                INT NOT NULL CHECK (tier >= 1 AND tier <= 8),
+      first_collected_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (device_id, board_id, tier)
+    )`,
+    `CREATE TABLE IF NOT EXISTS player_collection_claims (
+      id           BIGSERIAL PRIMARY KEY,
+      device_id    VARCHAR(64) NOT NULL,
+      claim_type   VARCHAR(20) NOT NULL,
+      target_id    INT NOT NULL,
+      reward_gems  INT NOT NULL,
+      claimed_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_collection_claims_uniq
+       ON player_collection_claims (device_id, claim_type, target_id)`,
     // Stage 16 — Achievement-driven Cross-Leaderboard (full CREATE in schema.sql).
     `CREATE TABLE IF NOT EXISTS player_achievements (
       id              BIGSERIAL PRIMARY KEY,

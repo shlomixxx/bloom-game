@@ -1165,6 +1165,44 @@ CREATE INDEX IF NOT EXISTS idx_skin_configurations_sort
   ON skin_configurations (sort_order, id);
 
 -- ============================================================
+-- Tile Collection Album (Stage 29, May 2026)
+-- Genshin-style visual collection: for each (board, tier) cell,
+-- track whether the player has reached that tier on that board.
+-- Completing a full board (all 8 tiers) or a full tier across all
+-- boards earns bonus gems. Activates completionist drive at a
+-- different axis than achievements (more granular: 8 cells per
+-- board × all admin boards = potentially hundreds of cells).
+-- ============================================================
+CREATE TABLE IF NOT EXISTS player_tile_collection (
+  device_id           VARCHAR(64) NOT NULL,
+  board_id            INT NOT NULL,
+  tier                INT NOT NULL CHECK (tier >= 1 AND tier <= 8),
+  first_collected_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (device_id, board_id, tier)
+);
+CREATE INDEX IF NOT EXISTS idx_tile_collection_device
+  ON player_tile_collection (device_id);
+
+CREATE TABLE IF NOT EXISTS player_collection_claims (
+  id           BIGSERIAL PRIMARY KEY,
+  device_id    VARCHAR(64) NOT NULL,
+  -- 'board_complete' = filled all 8 tiers on a specific board (target_id = board_id)
+  -- 'tier_complete'  = filled that tier on ALL boards (target_id = 1..8)
+  claim_type   VARCHAR(20) NOT NULL,
+  target_id    INT NOT NULL,
+  reward_gems  INT NOT NULL,
+  claimed_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_collection_claims_uniq
+  ON player_collection_claims (device_id, claim_type, target_id);
+
+-- 4 config keys.
+INSERT INTO game_config (key, value) VALUES ('album_enabled',                  'true') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('album_show_on_home',             'true') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('album_reward_per_board_complete', '500') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('album_reward_per_tier_complete',  '200') ON CONFLICT (key) DO NOTHING;
+
+-- ============================================================
 -- Achievement-driven Cross-Leaderboard (Stage 16, May 2026)
 -- New competitive axis: rank by NUMBER of achievements unlocked,
 -- not by score. Rewards completionists / breadth-players over

@@ -280,6 +280,11 @@
       setTimeout(function() { try { maybeShowAchLbTile(); } catch (e) {} }, 2000);
     }
 
+    // Stage 29 — Tile Collection Album tile.
+    if (typeof maybeShowAlbumTile === 'function') {
+      setTimeout(function() { try { maybeShowAlbumTile(); } catch (e) {} }, 2200);
+    }
+
     // Tier-icons tap → reveal stats bubble (same behaviour as v1)
     var iconsTap = document.getElementById('home-icons-tap');
     if (iconsTap) {

@@ -11723,6 +11723,307 @@ html[data-theme="dark"] .ach-lb-row-me {
   background: linear-gradient(90deg, rgba(252,211,77,0.25), rgba(252,211,77,0.1));
   border-color: #FBBF24;
 }
+
+/* ============================================================
+   Stage 29 — Tile Collection Album
+   Indigo/teal theme. Grid of tiles per board, claim buttons for
+   board-complete + tier-complete bonuses.
+   ============================================================ */
+
+.album-home-tile {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  background: linear-gradient(135deg, #E0E7FF, #CFFAFE);
+  border: 2px solid #4F46E5;
+  border-radius: 14px;
+  box-shadow: 0 3px 10px rgba(79, 70, 229, 0.22);
+  cursor: pointer;
+  direction: rtl;
+  text-align: right;
+  font-family: inherit;
+  color: #1E1B4B;
+  transition: transform 0.12s, box-shadow 0.18s;
+}
+.album-home-tile:hover { transform: translateY(-1px); box-shadow: 0 5px 14px rgba(79, 70, 229, 0.35); }
+.album-home-tile:active { transform: scale(0.98); }
+.album-home-tile.has-claim {
+  border-color: #F59E0B;
+  background: linear-gradient(135deg, #FEF3C7, #E0E7FF);
+  animation: albumHasClaim 1.8s ease-in-out infinite;
+}
+@keyframes albumHasClaim {
+  0%, 100% { box-shadow: 0 3px 10px rgba(245, 158, 11, 0.4); }
+  50%      { box-shadow: 0 5px 18px rgba(245, 158, 11, 0.65); }
+}
+.album-tile-icon { font-size: 30px; flex-shrink: 0; }
+.album-tile-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.album-tile-title { font-size: 13px; font-weight: 900; color: #1E1B4B; display: flex; align-items: center; gap: 6px; }
+.album-tile-claim {
+  display: inline-block;
+  padding: 2px 8px;
+  background: #F59E0B;
+  color: #1F2937;
+  border-radius: 7px;
+  font-size: 11px;
+  font-weight: 900;
+}
+.album-tile-bar {
+  display: block;
+  height: 5px;
+  background: rgba(0,0,0,0.1);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.album-tile-bar-fill {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #4F46E5, #06B6D4);
+  border-radius: 3px;
+  transition: width 0.4s ease-out;
+}
+.album-tile-sub { font-size: 11px; font-weight: 700; color: #312E81; font-variant-numeric: tabular-nums; }
+.album-tile-arrow { font-size: 18px; color: #312E81; flex-shrink: 0; }
+
+/* Modal */
+.album-modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(15, 10, 30, 0.85);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 100001; padding: 14px;
+  animation: spOverlayFade 0.3s ease-out;
+}
+.album-modal-card {
+  background: linear-gradient(180deg, #E0E7FF 0%, #FFF 25%);
+  border: 3px solid #4F46E5;
+  border-radius: 22px;
+  padding: 22px 18px;
+  max-width: 420px; width: 100%;
+  max-height: 92vh; overflow-y: auto;
+  text-align: center; direction: rtl; position: relative;
+  box-shadow: 0 24px 70px rgba(0,0,0,0.55);
+  animation: spModalPop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.album-modal-close {
+  position: absolute; top: 10px; left: 12px;
+  width: 32px; height: 32px; border: none;
+  background: rgba(0,0,0,0.15); color: #1E1B4B;
+  border-radius: 50%; font-size: 18px; cursor: pointer;
+  line-height: 1; font-family: inherit;
+}
+.album-modal-icon {
+  font-size: 56px;
+  filter: drop-shadow(0 0 12px rgba(79, 70, 229, 0.5));
+  margin-bottom: 4px;
+}
+.album-modal-title { font-size: 22px; font-weight: 900; color: #1E1B4B; margin-bottom: 4px; }
+.album-modal-sub { font-size: 12px; font-weight: 700; color: #312E81; margin-bottom: 14px; }
+.album-modal-body { text-align: right; }
+
+.album-header {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.album-header.album-header-3 { grid-template-columns: 1fr 1fr 1fr; }
+.album-header:has(.album-header-claim) { grid-template-columns: 1fr 1fr 1fr; }
+.album-header-stat {
+  background: rgba(79, 70, 229, 0.08);
+  border-radius: 12px;
+  padding: 10px 8px;
+  text-align: center;
+}
+.album-header-claim {
+  background: linear-gradient(135deg, rgba(245,158,11,0.18), rgba(245,158,11,0.05));
+  border: 1px solid #F59E0B;
+}
+.album-header-num { font-size: 18px; font-weight: 900; color: #1E1B4B; font-variant-numeric: tabular-nums; }
+.album-header-claim .album-header-num { color: #D97706; }
+.album-header-lbl { font-size: 10px; font-weight: 700; color: #4338CA; }
+
+.album-section-title {
+  font-size: 13px; font-weight: 900; color: #1E1B4B;
+  margin: 12px 0 8px; padding-bottom: 4px;
+  border-bottom: 1px solid rgba(79, 70, 229, 0.2);
+}
+
+/* Tier completion rows */
+.album-tier-claims { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }
+.album-tier-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  gap: 8px;
+  align-items: center;
+  padding: 6px 10px;
+  background: rgba(79, 70, 229, 0.05);
+  border-radius: 8px;
+}
+.album-tier-row.can-claim {
+  background: linear-gradient(90deg, rgba(245,158,11,0.18), rgba(245,158,11,0.04));
+  border: 1px solid #F59E0B;
+}
+.album-tier-row-emoji { font-size: 22px; }
+.album-tier-row-label { font-size: 12px; font-weight: 700; color: #1F2937; }
+.album-tier-row-bar {
+  display: block;
+  width: 50px;
+  height: 5px;
+  background: rgba(0,0,0,0.1);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.album-tier-row-bar > span {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #4F46E5, #06B6D4);
+}
+.album-tier-row-claim {
+  padding: 5px 10px;
+  background: linear-gradient(135deg, #F59E0B, #FBBF24);
+  color: #1F2937;
+  border: none; border-radius: 8px;
+  font-family: inherit; font-size: 11px; font-weight: 900;
+  cursor: pointer;
+}
+.album-tier-row-claim:hover { filter: brightness(1.08); }
+.album-tier-row-status {
+  font-size: 11px; font-weight: 800;
+  color: #4338CA; padding: 4px 8px;
+  background: rgba(79, 70, 229, 0.1);
+  border-radius: 6px;
+}
+.album-tier-row-claimed { background: rgba(16, 185, 129, 0.15); color: #047857; }
+
+/* Boards list */
+.album-boards-list { display: flex; flex-direction: column; gap: 8px; }
+.album-board-row {
+  background: rgba(0,0,0,0.04);
+  border: 1px solid rgba(0,0,0,0.06);
+  border-radius: 10px;
+  padding: 10px;
+}
+.album-board-row.complete { background: rgba(16, 185, 129, 0.08); border-color: rgba(16, 185, 129, 0.3); }
+.album-board-row.can-claim {
+  background: linear-gradient(135deg, rgba(245,158,11,0.18), rgba(245,158,11,0.04));
+  border-color: #F59E0B;
+  animation: albumHasClaim 2s ease-in-out infinite;
+}
+.album-board-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  gap: 8px;
+}
+.album-board-name {
+  font-size: 13px; font-weight: 900; color: #1F2937;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  flex: 1; min-width: 0;
+}
+.album-board-claim {
+  padding: 5px 12px;
+  background: linear-gradient(135deg, #F59E0B, #FBBF24);
+  color: #1F2937;
+  border: none; border-radius: 8px;
+  font-family: inherit; font-size: 11px; font-weight: 900;
+  cursor: pointer; flex-shrink: 0;
+}
+.album-board-claim:hover { filter: brightness(1.08); }
+.album-board-status {
+  font-size: 11px; font-weight: 800;
+  color: #4338CA; padding: 4px 8px;
+  background: rgba(79, 70, 229, 0.1);
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+.album-board-claimed { background: rgba(16, 185, 129, 0.15); color: #047857; }
+.album-board-tiles {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 4px;
+}
+.album-tile-cell {
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  border-radius: 6px;
+  border: 1.5px solid;
+  transition: transform 0.18s;
+}
+.album-tile-cell.collected {
+  background: linear-gradient(135deg, #C7D2FE, #A5F3FC);
+  border-color: #4F46E5;
+  box-shadow: 0 0 6px rgba(79, 70, 229, 0.3);
+}
+.album-tile-cell.locked {
+  background: rgba(0,0,0,0.04);
+  border-color: rgba(0,0,0,0.08);
+  filter: grayscale(1);
+  opacity: 0.4;
+}
+
+/* Toast (game-over: "+3 tiles added!") */
+.album-toast {
+  position: fixed;
+  top: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  background: linear-gradient(135deg, #E0E7FF, #CFFAFE);
+  border: 2px solid #4F46E5;
+  border-radius: 14px;
+  box-shadow: 0 12px 30px rgba(79, 70, 229, 0.4);
+  color: #1E1B4B;
+  font-weight: 900;
+  font-size: 13px;
+  z-index: 100002;
+  animation: petLevelupSlide 0.4s ease-out, petLevelupOut 0.4s ease-in 3.0s forwards;
+}
+.album-toast-icon { font-size: 22px; }
+
+/* Dark theme */
+html[data-theme="dark"] .album-home-tile {
+  background: linear-gradient(135deg, #1E1B4B, #134E4A);
+  border-color: #6366F1;
+  color: #E0E7FF;
+}
+html[data-theme="dark"] .album-home-tile.has-claim {
+  background: linear-gradient(135deg, #3D2810, #1E1B4B);
+  border-color: #FBBF24;
+}
+html[data-theme="dark"] .album-tile-title,
+html[data-theme="dark"] .album-tile-sub { color: #E0E7FF; }
+html[data-theme="dark"] .album-modal-card {
+  background: linear-gradient(180deg, #1E1B4B, #1F2937 25%);
+  border-color: #6366F1;
+}
+html[data-theme="dark"] .album-modal-title,
+html[data-theme="dark"] .album-modal-sub { color: #E0E7FF; }
+html[data-theme="dark"] .album-header-stat { background: rgba(99,102,241,0.15); }
+html[data-theme="dark"] .album-header-num { color: #E0E7FF; }
+html[data-theme="dark"] .album-header-lbl { color: #A5B4FC; }
+html[data-theme="dark"] .album-section-title { color: #E0E7FF; border-color: rgba(99,102,241,0.3); }
+html[data-theme="dark"] .album-tier-row { background: rgba(99,102,241,0.1); }
+html[data-theme="dark"] .album-tier-row-label { color: #E0E7FF; }
+html[data-theme="dark"] .album-board-row { background: rgba(255,255,255,0.04); border-color: rgba(255,255,255,0.06); }
+html[data-theme="dark"] .album-board-row.complete { background: rgba(16,185,129,0.15); }
+html[data-theme="dark"] .album-board-name { color: #E0E7FF; }
+html[data-theme="dark"] .album-tile-cell.collected { background: linear-gradient(135deg, #4338CA, #0E7490); border-color: #818CF8; }
+html[data-theme="dark"] .album-tile-cell.locked { background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.08); }
+html[data-theme="dark"] .album-toast {
+  background: linear-gradient(135deg, #1E1B4B, #134E4A);
+  border-color: #6366F1;
+  color: #E0E7FF;
+}
   /* ============================================================
      DARK MODE
      ============================================================

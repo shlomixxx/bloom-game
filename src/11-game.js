@@ -2714,6 +2714,11 @@
             grantSeasonXpForGame(__sessionGameId, score, highestTier, __boardId);
           } catch (e) {}
         }
+        // Stage 29 — Album. Record the highest tier reached on this board.
+        // Server idempotently inserts tiles 1..highestTier.
+        if (typeof recordAlbumProgress === 'function' && highestTier >= 1) {
+          try { recordAlbumProgress(__boardId, highestTier); } catch (e) {}
+        }
         // Stage 15 — mark today's special as played if this game was the
         // special board. Drives the home FOMO label to switch off.
         try {

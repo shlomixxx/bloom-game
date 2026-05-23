@@ -5667,6 +5667,251 @@ app.get('/api/achievements/me', async (req, res) => {
 });
 
 // ============================================================
+// Stage 29 — Tile Collection Album (Genshin-style)
+// For each (board, tier) cell, track if the player has reached that
+// tier on that board. Completion rewards: full board (all 8 tiers) +
+// full tier (all boards). Activates completionist drive.
+// ============================================================
+async function _loadAlbumConfig() {
+  try {
+    const r = await pool.query(`SELECT key, value FROM game_config WHERE key LIKE 'album_%'`);
+    const out = {};
+    r.rows.forEach(row => { out[row.key] = row.value; });
+    return out;
+  } catch (e) { return {}; }
+}
+
+// Record collection: player reached tier T on board B. Idempotent (PK).
+// Client should call after each game-over with the highest tier reached.
+app.post('/api/album/record', requireDeviceAuth, async (req, res) => {
+  try {
+    const { deviceId, boardId, maxTier } = req.body || {};
+    if (typeof deviceId !== 'string' || deviceId.length < 8 || deviceId.length > 64) {
+      return res.status(400).json({ error: 'bad_device' });
+    }
+    const bId = parseInt(boardId, 10);
+    const mt = parseInt(maxTier, 10);
+    if (!Number.isFinite(bId) || bId <= 0) return res.status(400).json({ error: 'bad_board' });
+    if (!Number.isFinite(mt) || mt < 1 || mt > 8) return res.status(400).json({ error: 'bad_tier' });
+    if (!checkRateLimit('album_record', deviceId, 200, 60 * 60 * 1000)) {
+      return res.status(429).json({ error: 'rate_limited' });
+    }
+    const cfg = await _loadAlbumConfig();
+    if (cfg.album_enabled === 'false') return res.json({ ok: false, reason: 'disabled' });
+    // Insert all tiers 1..mt (collecting tier T means you've also collected lower).
+    // Multi-row INSERT with ON CONFLICT DO NOTHING for idempotency.
+    const values = [];
+    const params = [deviceId, bId];
+    for (let t = 1; t <= mt; t++) {
+      values.push(`($1, $2, $${params.length + 1})`);
+      params.push(t);
+    }
+    const r = await pool.query(
+      `INSERT INTO player_tile_collection (device_id, board_id, tier)
+           VALUES ${values.join(', ')}
+       ON CONFLICT (device_id, board_id, tier) DO NOTHING
+       RETURNING tier`,
+      params
+    );
+    res.json({
+      ok: true,
+      newTiers: r.rows.map(x => x.tier),
+      maxRecorded: mt
+    });
+  } catch (e) {
+    console.error('POST /api/album/record', e);
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
+// Get full state: collection per board + claim status + claimable rewards.
+app.get('/api/album/state', async (req, res) => {
+  try {
+    const cfg = await _loadAlbumConfig();
+    if (cfg.album_enabled === 'false') return res.json({ ok: true, enabled: false });
+    const deviceId = (req.query.deviceId || '').toString().slice(0, 64);
+    if (!deviceId || deviceId.length < 8) return res.json({ ok: true, enabled: true, needsDevice: true });
+    // List active boards (cap to 50). board_configurations has no emoji
+    // column — we just use name + id. Client can map id to emoji if needed.
+    const boardsR = await pool.query(
+      `SELECT id, name FROM board_configurations
+        WHERE is_active = true AND 'dynamic' = ANY(applies_to)
+        ORDER BY id LIMIT 50`
+    ).catch(() => ({ rows: [] }));
+    // Collected tiles for this device.
+    const collR = await pool.query(
+      `SELECT board_id, tier, first_collected_at
+         FROM player_tile_collection WHERE device_id = $1`,
+      [deviceId]
+    );
+    const collByBoard = {};
+    collR.rows.forEach(row => {
+      if (!collByBoard[row.board_id]) collByBoard[row.board_id] = {};
+      collByBoard[row.board_id][row.tier] = true;
+    });
+    // Claims.
+    const claimsR = await pool.query(
+      `SELECT claim_type, target_id FROM player_collection_claims WHERE device_id = $1`,
+      [deviceId]
+    );
+    const claimedBoards = new Set();
+    const claimedTiers = new Set();
+    claimsR.rows.forEach(row => {
+      if (row.claim_type === 'board_complete') claimedBoards.add(row.target_id);
+      else if (row.claim_type === 'tier_complete') claimedTiers.add(row.target_id);
+    });
+    // Build state per board.
+    var totalCells = 0;
+    var collectedCells = 0;
+    var unclaimedBoardCount = 0;
+    var unclaimedTierCount = 0;
+    const boards = boardsR.rows.map(b => {
+      const c = collByBoard[b.id] || {};
+      const tiers = [];
+      let count = 0;
+      for (let t = 1; t <= 8; t++) {
+        var has = !!c[t];
+        tiers.push({ tier: t, collected: has });
+        if (has) count++;
+        totalCells++;
+        if (has) collectedCells++;
+      }
+      const isComplete = count === 8;
+      const isClaimed = claimedBoards.has(b.id);
+      if (isComplete && !isClaimed) unclaimedBoardCount++;
+      return {
+        id: b.id,
+        name: b.name,
+        tiers,
+        collectedCount: count,
+        isComplete,
+        canClaim: isComplete && !isClaimed,
+        claimed: isClaimed
+      };
+    });
+    // Tier completion: across ALL boards.
+    const tiers = [];
+    for (let t = 1; t <= 8; t++) {
+      const fullCount = boards.filter(b => b.tiers[t - 1].collected).length;
+      const isComplete = fullCount === boards.length && boards.length > 0;
+      const isClaimed = claimedTiers.has(t);
+      if (isComplete && !isClaimed) unclaimedTierCount++;
+      tiers.push({
+        tier: t,
+        collectedOn: fullCount,
+        totalBoards: boards.length,
+        isComplete,
+        canClaim: isComplete && !isClaimed,
+        claimed: isClaimed
+      });
+    }
+    res.json({
+      ok: true,
+      enabled: true,
+      boards,
+      tiers,
+      totalCells,
+      collectedCells,
+      pct: totalCells > 0 ? Math.round((collectedCells / totalCells) * 100) : 0,
+      unclaimedBoardCount,
+      unclaimedTierCount,
+      unclaimedCount: unclaimedBoardCount + unclaimedTierCount,
+      rewardPerBoard: parseInt(cfg.album_reward_per_board_complete || '500', 10) || 500,
+      rewardPerTier: parseInt(cfg.album_reward_per_tier_complete || '200', 10) || 200
+    });
+  } catch (e) {
+    console.error('GET /api/album/state', e);
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
+// Atomic claim a completion reward.
+app.post('/api/album/claim', requireDeviceAuth, async (req, res) => {
+  try {
+    const { deviceId, claimType, targetId } = req.body || {};
+    if (typeof deviceId !== 'string' || deviceId.length < 8 || deviceId.length > 64) {
+      return res.status(400).json({ error: 'bad_device' });
+    }
+    if (claimType !== 'board_complete' && claimType !== 'tier_complete') {
+      return res.status(400).json({ error: 'bad_claim_type' });
+    }
+    const tId = parseInt(targetId, 10);
+    if (!Number.isFinite(tId) || tId <= 0) return res.status(400).json({ error: 'bad_target' });
+    if (!checkRateLimit('album_claim', deviceId, 50, 60 * 60 * 1000)) {
+      return res.status(429).json({ error: 'rate_limited' });
+    }
+    const cfg = await _loadAlbumConfig();
+    if (cfg.album_enabled === 'false') return res.json({ ok: false, reason: 'disabled' });
+    // Verify eligibility server-side.
+    let eligible = false;
+    if (claimType === 'board_complete') {
+      const r = await pool.query(
+        `SELECT COUNT(*) AS cnt FROM player_tile_collection
+          WHERE device_id = $1 AND board_id = $2`,
+        [deviceId, tId]
+      );
+      eligible = (parseInt(r.rows[0].cnt, 10) || 0) >= 8;
+    } else if (claimType === 'tier_complete') {
+      if (tId < 1 || tId > 8) return res.json({ ok: false, reason: 'bad_tier' });
+      const boardsR = await pool.query(
+        `SELECT id FROM board_configurations
+          WHERE is_active = true AND 'dynamic' = ANY(applies_to)`
+      );
+      const totalBoards = boardsR.rows.length;
+      if (totalBoards === 0) return res.json({ ok: false, reason: 'no_boards' });
+      const collR = await pool.query(
+        `SELECT COUNT(*) AS cnt FROM player_tile_collection
+          WHERE device_id = $1 AND tier = $2 AND board_id = ANY($3::int[])`,
+        [deviceId, tId, boardsR.rows.map(b => b.id)]
+      );
+      eligible = (parseInt(collR.rows[0].cnt, 10) || 0) >= totalBoards;
+    }
+    if (!eligible) return res.json({ ok: false, reason: 'not_complete' });
+    const reward = claimType === 'board_complete'
+      ? (parseInt(cfg.album_reward_per_board_complete || '500', 10) || 500)
+      : (parseInt(cfg.album_reward_per_tier_complete || '200', 10) || 200);
+    // Atomic claim + credit.
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const insertR = await client.query(
+        `INSERT INTO player_collection_claims (device_id, claim_type, target_id, reward_gems)
+             VALUES ($1, $2, $3, $4)
+         ON CONFLICT (device_id, claim_type, target_id) DO NOTHING
+         RETURNING id`,
+        [deviceId, claimType, tId, reward]
+      );
+      if (!insertR.rows[0]) {
+        await client.query('ROLLBACK');
+        return res.json({ ok: false, reason: 'already_claimed' });
+      }
+      const credit = await client.query(
+        `UPDATE player_profiles
+            SET balance = balance + $1, total_earned = total_earned + $1, updated_at = NOW()
+          WHERE device_id = $2 RETURNING balance`,
+        [reward, deviceId]
+      );
+      await client.query('COMMIT');
+      return res.json({
+        ok: true,
+        claimType,
+        targetId: tId,
+        reward,
+        newBalance: credit.rows[0] ? Number(credit.rows[0].balance) : null
+      });
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  } catch (e) {
+    console.error('POST /api/album/claim', e);
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
+// ============================================================
 // Live Tournaments — stage 12 (May 2026)
 //
 // Scheduled prime-time events with a fixed window + top-N prize

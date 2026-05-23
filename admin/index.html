@@ -1542,6 +1542,19 @@
     </div>
   </section>
 
+  <!-- 📔 Tile Collection Album (stage 29) -->
+  <section id="album-section" style="margin-bottom:12px">
+    <h2>📔 אלבום אריחים <button class="tip-btn" data-tip-text="<strong>📔 Tile Collection Album</strong><br>Genshin-style — אוסף ויזואלי של 8 דרגות × כל הלוחות הדינמיים.<div class=&quot;tip-example&quot;>💡 <strong>למה זה ממכר</strong>: completionist drive חזק. שחקן רואה אלבום עם הרבה תאים, רוצה למלא את כולם. מסכי "אוסף שלם" עם פרסים נדיבים — כל זה השפיע על מיליארדי דולרים ב-Genshin.<br><br>📊 <strong>2 סוגי פרסים</strong>:<br>1. השלמת לוח (8 דרגות על לוח אחד) → 500💎<br>2. השלמת דרגה (אותה דרגה על כל הלוחות) → 200💎<br><br>📊 כל game-over מקליט אוטומטית את ה-tier הגבוה שהשחקן הגיע אליו על לוח דינמי.</div>">?</button></h2>
+    <div style="padding:12px 16px;background:var(--card);border-radius:10px;margin-top:8px">
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+        <div class="rewards-grid" data-keys="album_enabled,album_show_on_home"></div>
+        <div class="rewards-grid" data-keys="album_reward_per_board_complete,album_reward_per_tier_complete"></div>
+      </div>
+
+    </div>
+  </section>
+
   <!-- 🏅 Achievement-driven Leaderboard (stage 16) -->
   <section id="ach-lb-section" style="margin-bottom:12px">
     <h2>🏅 לוח מובילים — הישגים <button class="tip-btn" data-tip-text="<strong>🏅 Achievement-driven Cross-Leaderboard</strong><br>דירוג גלובלי חדש לפי מספר ההישגים שנפתחו (לא לפי ציון).<div class=&quot;tip-example&quot;>💡 <strong>למה זה ממכר</strong>: זה ציר תחרותי חדש שמעודד שחקנים <strong>לשחק על הרבה לוחות שונים</strong> במקום למקסם לוח אחד. מתגמל completionists ויוצר מטרה ארוכת-טווח.<br><br>📊 השרת אוסף את כל ההישגים של כל השחקנים (זה לא היה בשרת קודם — היה רק ב-localStorage), ועושה GROUP BY device_id COUNT(*) ORDER BY DESC.<br><br>💡 הטייל בבית מופיע רק ל-3+ הישגים — כדי לא להציג ללא ערך לשחקנים חדשים שלא פתחו עדיין כלום.</div>">?</button></h2>
@@ -2698,6 +2711,12 @@
     dyn_comeback_min_streak: 'מינימום רצף שהיה לשחקן לפני שאיבד אותו, כדי להיות זכאי ל-comeback.<div class="tip-example">📊 ברירת מחדל 3.<br>💡 רצוי לא להוריד מתחת ל-3 — אחרת כל חזרה תהפוך ל-comeback, מה שמדלל את הטקס.<br>💡 ערך 7 = רק שחקנים שכבר היו loyal יראו comeback. רוצה לתת רק לבזבזני-זמן.</div>',
     dyn_comeback_reward:     'פרס ה-💎 שנותן ה-comeback overlay.<div class="tip-example">📊 ברירת מחדל 150💎.<br>💡 גדול מספיק כדי שירגיש משמעותי, קטן מספיק כדי שלא יהיה אטרקציה לפנות-חוץ-בעצמך.<br>📊 ערכים: 50 (קמצני), 150 (default), 300 (נדיב, למתחילים), 500 (אגרסיבי).</div>',
     dyn_comeback_freeze_gift: 'מספר הקפאות חינם שנותנים עם ה-comeback bonus.<div class="tip-example">📊 ברירת מחדל 1.<br>💡 השילוב 150💎 + 1 הקפאה = "ברוך שובך + אנחנו נשמור עליך לא לנפול שוב". פסיכולוגית חזק.<br>📊 ערך 0 = רק 💎, ערך 2 = "פרמיום" comeback. ערך 3+ = ייצור הקפאות בחינם דרך win-back farming, אל תעלה מעל 1-2.</div>',
+
+    // ---- Tile Collection Album (stage 29) ----
+    album_enabled: 'הפעלת אלבום האריחים.<div class="tip-example">📊 ברירת מחדל פעיל. <strong>completionist drive</strong> חזק — מסך אוסף ויזואלי עם פרסים על השלמות.<br>💡 כל game-over על לוח דינמי מקליט אוטומטית את הtier הגבוה ביותר. השחקן רואה גרידים מתמלאים והפרסים מחכים בקצוות.</div>',
+    album_show_on_home: 'הצגת ה-tile של האלבום בבית.<div class="tip-example">📊 ברירת מחדל פעיל. ה-tile מציג את אחוז ההשלמה + תגית עם מספר הפרסים המחכים.<br>💡 כיבוי = ה-data ימשיך להיאסף, רק הtile מוסתר.</div>',
+    album_reward_per_board_complete: 'פרס 💎 על השלמת לוח (כל 8 הדרגות).<div class="tip-example">📊 ברירת מחדל 500💎. ערכים: 200-2000.<br>💡 צריך להיות פרס משמעותי כי השלמת לוח דורש להגיע לכתר — קשה מאוד. עבור שחקן שיש לו 10 לוחות, השלמת כולם = 5,000💎 מצטברים. זה מספיק לקנות Premium BP (1500) + השלמות.</div>',
+    album_reward_per_tier_complete: 'פרס 💎 על השלמת דרגה (אותה דרגה על כל הלוחות).<div class="tip-example">📊 ברירת מחדל 200💎. ערכים: 100-500.<br>💡 קל יותר מהשלמת לוח (במיוחד דרגות נמוכות), אז הפרס קטן יותר. עם 8 דרגות × 200 = 1,600💎 מצטברים על השלמת כל הדרגות.</div>',
 
     // ---- Achievement-driven Cross-Leaderboard (stage 16) ----
     ach_leaderboard_enabled: 'הפעלת לוח המובילים של הישגים.<div class="tip-example">📊 ברירת מחדל פעיל. <strong>זה ציר תחרותי חדש</strong> — לא לפי ציון, אלא לפי מספר ההישגים שנפתחו.<br>💡 מתגמל שחקנים שמשחקים על הרבה לוחות שונים (completionists) במקום לחבוט בלוח אחד עד אינסוף. יוצר מטרה ארוכת-טווח חדשה.<br>📊 ה-leaderboard מאגד אוטומטית את כל ההישגים שנשמרו בDB (מוסנכרן מ-localStorage בכל boot של שחקן).</div>',
