@@ -3648,3 +3648,82 @@ html[data-theme="dark"] .dyn-boards-chip.dyn-boards-chip-daily-special {
   background: linear-gradient(135deg, #FFD93D 0%, #FF8FAE 100%);
   color: #2A1500;
 }
+
+/* ============================================================
+   Battle Pass / Season Pass — primary home tile (May 2026)
+   Was hidden behind the dynamic-boards picker until this commit;
+   now a first-class home-screen entry. Gold-themed to feel premium.
+   ============================================================ */
+.home-v2-season-pass {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  margin-top: 8px;
+  padding: 12px 14px;
+  border: 1.5px solid rgba(186,117,23,0.35);
+  border-radius: 14px;
+  background: linear-gradient(135deg, #FFF4D6 0%, #FFE9A8 100%);
+  color: #5A3000;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: right;
+  direction: rtl;
+  cursor: pointer;
+  transition: transform 0.12s ease-out, box-shadow 0.18s ease-out;
+}
+.home-v2-season-pass:hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(255, 185, 92, 0.35); }
+.home-v2-season-pass:active { transform: scale(0.98); }
+.home-v2-season-pass.has-claim {
+  border-color: #BA7517;
+  box-shadow: 0 0 0 1px rgba(186,117,23,0.4), 0 4px 16px rgba(186,117,23,0.35);
+  animation: homeSpClaim 1.8s ease-in-out infinite;
+}
+@keyframes homeSpClaim {
+  0%, 100% { box-shadow: 0 0 0 1px rgba(186,117,23,0.4), 0 4px 16px rgba(186,117,23,0.35); }
+  50%      { box-shadow: 0 0 0 2px rgba(186,117,23,0.55), 0 6px 22px rgba(255, 180, 100, 0.6); }
+}
+.home-v2-sp-icon { font-size: 26px; flex-shrink: 0; line-height: 1; }
+.home-v2-sp-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.home-v2-sp-title { font-size: 13px; font-weight: 900; color: #5A3000; }
+.home-v2-sp-progress { display: flex; align-items: center; gap: 8px; }
+.home-v2-sp-bar {
+  flex: 1;
+  height: 6px;
+  background: rgba(0,0,0,0.12);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.home-v2-sp-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #BA7517, #FFC857);
+  border-radius: 3px;
+  transition: width 0.4s ease-out;
+}
+.home-v2-sp-meta { font-size: 11px; color: #6B3D00; font-weight: 600; font-variant-numeric: tabular-nums; }
+.home-v2-sp-claim {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 9px;
+  background: #BA7517;
+  color: #FFF4D6;
+  font-size: 12px;
+  font-weight: 900;
+  flex-shrink: 0;
+  animation: homeSpClaimPulse 1.4s ease-in-out infinite;
+}
+@keyframes homeSpClaimPulse {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.06); }
+}
+
+html[data-theme="dark"] .home-v2-season-pass {
+  background: linear-gradient(135deg, #3D2E14 0%, #4A361B 100%);
+  border-color: rgba(255, 217, 168, 0.4);
+  color: #FFD9A8;
+}
+html[data-theme="dark"] .home-v2-sp-title { color: #FFD9A8; }
+html[data-theme="dark"] .home-v2-sp-meta { color: #FFC890; }
+html[data-theme="dark"] .home-v2-sp-bar { background: rgba(255,255,255,0.1); }
+html[data-theme="dark"] .home-v2-sp-claim { background: #FFD9A8; color: #3D2010; }

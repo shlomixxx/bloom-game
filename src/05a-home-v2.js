@@ -139,6 +139,23 @@
         '<span class="home-v2-boards-arrow">›</span>' +
       '</button>' +
 
+      // ── Battle Pass entry — primary visibility for the Season Pass.
+      // Until this commit the BP was only accessible via the dynamic-boards
+      // picker — players who never opened it never saw the BP existed.
+      // Hidden by default; updateHomeSeasonPassTile() flips display.
+      '<button class="home-v2-season-pass" id="home-v2-season-pass" style="display:none">' +
+        '<span class="home-v2-sp-icon">🎖</span>' +
+        '<span class="home-v2-sp-text">' +
+          '<span class="home-v2-sp-title" id="home-v2-sp-title">Battle Pass</span>' +
+          '<span class="home-v2-sp-progress">' +
+            '<span class="home-v2-sp-bar"><span class="home-v2-sp-bar-fill" id="home-v2-sp-bar-fill" style="width:0%"></span></span>' +
+            '<span class="home-v2-sp-meta" id="home-v2-sp-meta">טוען…</span>' +
+          '</span>' +
+        '</span>' +
+        '<span class="home-v2-sp-claim" id="home-v2-sp-claim" style="display:none">0 🎁</span>' +
+        '<span class="home-v2-boards-arrow">›</span>' +
+      '</button>' +
+
       // ── Weekly + Jackpot (reuse v1 hosts so the existing refresh* helpers work as-is) ──
       '<div id="home-weekly-host"></div>' +
       '<div class="home-jackpot" id="home-jackpot"></div>' +
@@ -205,6 +222,16 @@
     };
     // Sync visibility immediately in case the boards-list was already loaded.
     if (typeof updateDynamicBoardsButton === 'function') updateDynamicBoardsButton();
+
+    // Battle Pass tile — opens the Season Pass modal directly (skips the picker).
+    var spBtn = document.getElementById('home-v2-season-pass');
+    if (spBtn) {
+      spBtn.onclick = function() {
+        ensureAudio();
+        if (typeof showSeasonPassModal === 'function') showSeasonPassModal();
+      };
+    }
+    if (typeof updateHomeSeasonPassTile === 'function') updateHomeSeasonPassTile();
 
     // Tier-icons tap → reveal stats bubble (same behaviour as v1)
     var iconsTap = document.getElementById('home-icons-tap');

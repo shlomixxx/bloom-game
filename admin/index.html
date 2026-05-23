@@ -1450,6 +1450,66 @@
     </div>
   </section>
 
+  <!-- 🎖 Battle Pass / Season Pass dedicated control panel -->
+  <section id="season-pass-section" style="margin-bottom:12px">
+    <h2>🎖 Battle Pass (Season Pass) <button class="tip-btn" data-tip-text="<strong>🎖 Battle Pass</strong><br>20 דרגות של תגמולים, XP מצטבר מכל פעולה בלוחות דינמיים.<div class=&quot;tip-example&quot;>💡 <strong>איך זה עובד</strong>:<br>• כל משחק מעניק XP לפי score + tier<br>• משימות יומיות + הישגים מעניקים XP נוסף<br>• השחקן חוצה דרגה ← הופך לrequirable<br>• לוחץ <strong>קבל</strong> ← מקבל גם 💎<br><br>📊 <strong>הקבועים הנוכחיים</strong>: <code>season_xp_max_per_game</code> = תקרת XP במשחק יחיד (default 100); <code>daily_special_xp_mult</code> מכפיל את התקרה כשהשחקן על הלוח של היום.<br><br>⚠ הקיים כיום: track יחיד חינמי. <strong>track Premium</strong> שיכפיל את הפרסים = stage 17 ב-roadmap (בעבודה).</div>">?</button></h2>
+    <div style="padding:12px 16px;background:var(--card);border-radius:10px;margin-top:8px">
+
+      <!-- Master controls -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+        <div class="rewards-grid" data-keys="season_pass_enabled,season_pass_season_id"></div>
+        <div class="rewards-grid" data-keys="season_pass_name,season_pass_ends_at"></div>
+      </div>
+
+      <!-- XP rates -->
+      <div style="margin-bottom:12px">
+        <div style="font-size:13px;font-weight:700;color:var(--gold);margin-bottom:6px">⚡ מקורות XP</div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:6px">כמה XP כל פעולה מעניקה. ה-cap הסופי במשחק יחיד הוא <code>season_xp_max_per_game</code>.</div>
+        <div class="rewards-grid" data-keys="season_xp_game_finish,season_xp_crown_bonus,season_xp_per_10k_score,season_xp_quest_done,season_xp_achievement,season_xp_max_per_game"></div>
+      </div>
+
+      <!-- 20-tier table -->
+      <div style="margin-bottom:8px">
+        <div style="font-size:13px;font-weight:700;color:var(--gold);margin-bottom:6px">🏆 20 דרגות התגמול (XP threshold → 💎)</div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:8px">
+          🟢 קל בהתחלה (דרגה 1 = 40 XP) → 🔴 קשה בסוף (דרגה 20 = 5950 XP).
+          סך הכל לעונה: ~16,000💎. <strong>מהר מדי?</strong> תעלה את ה-XP thresholds.
+          <strong>קמצן מדי?</strong> תעלה את ה-💎 על-דרגה.
+        </div>
+        <div id="season-pass-tiers-table" style="display:grid;grid-template-columns:auto 1fr 1fr;gap:8px;font-size:12px">
+          <div style="font-weight:700;color:var(--gold);padding:4px 8px">דרגה</div>
+          <div style="font-weight:700;color:var(--gold);padding:4px 8px">XP threshold</div>
+          <div style="font-weight:700;color:var(--gold);padding:4px 8px">פרס 💎 (track חינמי)</div>
+          <!-- 20 rows injected by JS at render time -->
+        </div>
+        <div style="font-size:11px;color:var(--muted);margin-top:8px">
+          💡 <strong>Premium track</strong> (stage 17, בעבודה): track שני שיכפיל את הפרסים — מחיר $4.99 או 1500💎. כשייכנס יוצג כאן עמודה שלישית.
+        </div>
+      </div>
+
+      <div id="season-pass-status" style="font-size:11px;color:var(--muted);text-align:center;margin-top:8px"></div>
+    </div>
+  </section>
+
+  <!-- 🌟 Daily Special control panel -->
+  <section id="daily-special-section" style="margin-bottom:12px">
+    <h2>🌟 הלוח של היום <button class="tip-btn" data-tip-text="<strong>🌟 הלוח של היום</strong><br>בכל יום (שעון ישראל) אחד מהלוחות הדינמיים מקבל סטטוס מיוחד עם XP/פרסים מוגדלים.<div class=&quot;tip-example&quot;>💡 <strong>הבחירה דטרמיניסטית</strong>: hash של התאריך → אינדקס למערך הלוחות הפעילים. כל השחקנים רואים את אותו הלוח היום, אבל זה משתנה כל יום.<br><br>🎯 <strong>Override</strong>: בחר לוח ספציפי מהרשימה למטה כדי להכריח אותו להיות הלוח של היום (למשל לוח ולנטיין ב-14/2). השאר על 'אוטומטי' לסיבוב רגיל.<br><br>📊 <strong>multiplier מומלץ</strong>: 3× XP + 2× פרסים = שחקנים יודעים שהיום משתלם פי-3 לשחק את הלוח הזה.</div>">?</button></h2>
+    <div style="padding:12px 16px;background:var(--card);border-radius:10px;margin-top:8px">
+      <div class="rewards-grid" data-keys="daily_special_enabled,daily_special_xp_mult,daily_special_reward_mult"></div>
+      <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
+        <div style="font-size:12px;font-weight:600;color:var(--gold);margin-bottom:6px">🎯 Override ידני (בחר לוח ספציפי להיום)</div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <select id="daily-special-override-picker" style="flex:1;min-width:180px;padding:6px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;font-size:13px;color:var(--fg)">
+            <option value="">— אוטומטי (לפי תאריך) —</option>
+          </select>
+          <button id="daily-special-override-save" class="btn-primary" style="padding:6px 14px">שמור Override</button>
+          <button id="daily-special-override-clear" class="btn-secondary" style="padding:6px 14px">חזור לאוטומטי</button>
+        </div>
+        <div id="daily-special-current-status" style="font-size:11px;color:var(--muted);margin-top:8px"></div>
+      </div>
+    </div>
+  </section>
+
   <!-- Monetization -->
   <section id="monetization-section" style="margin-bottom:12px">
     <h2>💰 מונטיזציה <button class="tip-btn" data-tip="monetization">?</button></h2>
@@ -3198,6 +3258,148 @@
     loadAudit();
     loadBoards();
     loadSkins();
+    loadSeasonPassTiers();
+    loadDailySpecialPicker();
+  }
+
+  // ============================================================
+  // 🎖 Battle Pass — render 20-tier editable table
+  // ============================================================
+  async function loadSeasonPassTiers() {
+    var host = document.getElementById('season-pass-tiers-table');
+    if (!host) return;
+    try {
+      var cfgR = await fetch('/' + ADMIN_PATH + '/api/config').then(function(r){return r.json();});
+      var cfg = (cfgR && cfgR.config) || {};
+      // Keep header row, remove old data rows
+      while (host.children.length > 3) host.removeChild(host.lastChild);
+      for (var tier = 1; tier <= 20; tier++) {
+        var xpKey = 'season_tier_' + tier + '_xp';
+        var rewardKey = 'season_tier_' + tier + '_reward';
+        var xpVal = cfg[xpKey] || '';
+        var rewardVal = cfg[rewardKey] || '';
+        var tierLabel = document.createElement('div');
+        tierLabel.style.cssText = 'padding:8px 10px;background:var(--bg);border-radius:6px;font-weight:700;color:var(--gold);text-align:center';
+        tierLabel.textContent = tier;
+        var xpInput = document.createElement('input');
+        xpInput.type = 'number';
+        xpInput.value = xpVal;
+        xpInput.dataset.key = xpKey;
+        xpInput.className = 'sp-tier-input';
+        xpInput.style.cssText = 'padding:6px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--fg);font-size:13px;width:100%';
+        var rewardInput = document.createElement('input');
+        rewardInput.type = 'number';
+        rewardInput.value = rewardVal;
+        rewardInput.dataset.key = rewardKey;
+        rewardInput.className = 'sp-tier-input';
+        rewardInput.style.cssText = xpInput.style.cssText;
+        host.appendChild(tierLabel);
+        host.appendChild(xpInput);
+        host.appendChild(rewardInput);
+      }
+      // Wire change handlers — save on blur or Enter
+      host.querySelectorAll('.sp-tier-input').forEach(function(inp) {
+        inp.addEventListener('blur', function() { saveSeasonPassTier(inp); });
+        inp.addEventListener('keydown', function(e) { if (e.key === 'Enter') inp.blur(); });
+      });
+    } catch (e) {
+      host.innerHTML += '<div style="grid-column:1/-1;color:var(--danger);padding:10px">שגיאה בטעינת דרגות</div>';
+    }
+  }
+  async function saveSeasonPassTier(input) {
+    var key = input.dataset.key;
+    var val = String(parseInt(input.value, 10) || 0);
+    var status = document.getElementById('season-pass-status');
+    try {
+      var r = await fetch('/' + ADMIN_PATH + '/api/config/' + encodeURIComponent(key), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ value: val })
+      });
+      var d = await r.json();
+      if (d.ok) {
+        input.style.borderColor = 'var(--success)';
+        if (status) status.textContent = '✓ נשמר ' + key + ' = ' + val;
+        setTimeout(function() { input.style.borderColor = 'var(--border)'; }, 1500);
+      } else {
+        input.style.borderColor = 'var(--danger)';
+        if (status) status.textContent = '✗ שגיאה: ' + (d.error || 'unknown');
+      }
+    } catch (e) {
+      input.style.borderColor = 'var(--danger)';
+      if (status) status.textContent = '✗ שגיאה ברשת';
+    }
+  }
+
+  // ============================================================
+  // 🌟 Daily Special — picker dropdown wiring
+  // ============================================================
+  async function loadDailySpecialPicker() {
+    var picker = document.getElementById('daily-special-override-picker');
+    var status = document.getElementById('daily-special-current-status');
+    var saveBtn = document.getElementById('daily-special-override-save');
+    var clearBtn = document.getElementById('daily-special-override-clear');
+    if (!picker) return;
+    try {
+      var [boardsR, dsR, cfgR] = await Promise.all([
+        fetch('/api/boards/available').then(function(r){return r.json();}),
+        fetch('/api/boards/available').then(function(r){return r.json();}),
+        fetch('/' + ADMIN_PATH + '/api/config').then(function(r){return r.json();})
+      ]);
+      var boards = (boardsR && boardsR.boards) || [];
+      var dailySpecial = (dsR && dsR.dailySpecial) || { enabled: false };
+      var currentOverride = ((cfgR && cfgR.config) || {}).daily_special_override_id || '';
+      // Reset options (keep the auto option)
+      while (picker.options.length > 1) picker.remove(1);
+      boards.forEach(function(b) {
+        var opt = document.createElement('option');
+        opt.value = String(b.id);
+        opt.textContent = b.id + ' · ' + (b.name || 'לוח');
+        if (String(b.id) === String(currentOverride)) opt.selected = true;
+        picker.appendChild(opt);
+      });
+      // Status line
+      if (status) {
+        if (dailySpecial.enabled && dailySpecial.id) {
+          var todayBoard = boards.find(function(b) { return b.id === dailySpecial.id; });
+          var who = todayBoard ? (todayBoard.name || 'לוח #' + dailySpecial.id) : 'לוח #' + dailySpecial.id;
+          var origin = dailySpecial.isOverride ? '🎯 override ידני' : '🔄 בחירה אוטומטית';
+          status.innerHTML = '🌟 <strong>היום</strong>: ' + who + ' (' + origin + ') · ' + dailySpecial.xpMult + '× XP · ' + dailySpecial.rewardMult + '× פרסים';
+        } else {
+          status.innerHTML = '⚠ כרגע אין לוח של היום (אין לוחות פעילים או שהמערכת כבויה)';
+        }
+      }
+      if (saveBtn) saveBtn.onclick = async function() {
+        var val = picker.value;
+        if (!val) return;
+        await saveDailySpecialOverride(val);
+      };
+      if (clearBtn) clearBtn.onclick = async function() {
+        picker.value = '';
+        await saveDailySpecialOverride('');
+      };
+    } catch (e) {
+      if (status) status.textContent = '⚠ שגיאה בטעינה: ' + e.message;
+    }
+  }
+  async function saveDailySpecialOverride(val) {
+    var status = document.getElementById('daily-special-current-status');
+    try {
+      var r = await fetch('/' + ADMIN_PATH + '/api/config/daily_special_override_id', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ value: val })
+      });
+      var d = await r.json();
+      if (d.ok) {
+        if (status) status.textContent = '✓ נשמר. ייכנס לתוקף תוך 60 שניות (cache).';
+        setTimeout(loadDailySpecialPicker, 1500);
+      } else {
+        if (status) status.textContent = '✗ שגיאה: ' + (d.error || 'unknown');
+      }
+    } catch (e) {
+      if (status) status.textContent = '✗ שגיאה ברשת';
+    }
   }
 
   // ============================================================

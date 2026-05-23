@@ -1478,11 +1478,76 @@
           if (d.leveledUp) {
             setTimeout(function() { showSeasonLevelUpToast(d.currentTier); }, 4500);
           }
+          // Refresh the home tile if the player returns home.
+          if (typeof updateHomeSeasonPassTile === 'function') {
+            try { updateHomeSeasonPassTile(); } catch (e) {}
+          }
         }
         return d;
       });
   }
   window.grantSeasonXpForGame = grantSeasonXpForGame;
+
+  // ============================================================
+  // Battle Pass home tile updater — called on home mount + after every XP
+  // grant. Reads the cached season status (warmed by the picker fetch or by
+  // grantSeasonXpForGame) and updates the home tile in place.
+  // ============================================================
+  function updateHomeSeasonPassTile() {
+    var tile = document.getElementById('home-v2-season-pass');
+    if (!tile) return;
+    if (!dynConfigBool('season_pass_enabled', true)) {
+      tile.style.display = 'none';
+      return;
+    }
+    var cached = getCachedSeasonStatus();
+    if (!cached) {
+      // Trigger fetch — re-call this on resolve.
+      fetchSeasonStatus(false).then(function(d) {
+        if (d) updateHomeSeasonPassTile();
+      });
+      return;
+    }
+    if (cached.enabled === false) {
+      tile.style.display = 'none';
+      return;
+    }
+    tile.style.display = '';
+    var sXp = cached.xp | 0;
+    var sTier = cached.currentTier | 0;
+    var sUnclaimed = cached.unclaimedCount | 0;
+    var tiers = cached.tiers || [];
+    var nextTier = tiers.find(function(t) { return t.tier > sTier; });
+    var prevTierXp = sTier > 0 ? (tiers.find(function(t) { return t.tier === sTier; }) || {}).xpRequired || 0 : 0;
+    var nextXp = nextTier ? nextTier.xpRequired : (tiers[tiers.length - 1] || {}).xpRequired || 1;
+    var pct = nextTier
+      ? Math.max(0, Math.min(100, Math.round(((sXp - prevTierXp) / (nextXp - prevTierXp)) * 100)))
+      : 100;
+    var titleEl = document.getElementById('home-v2-sp-title');
+    if (titleEl) titleEl.textContent = '🎖 Battle Pass · דרגה ' + sTier;
+    var fill = document.getElementById('home-v2-sp-bar-fill');
+    if (fill) fill.style.width = pct + '%';
+    var meta = document.getElementById('home-v2-sp-meta');
+    if (meta) {
+      if (nextTier) {
+        meta.textContent = sXp + ' / ' + nextXp + ' XP · עוד ' + (nextXp - sXp) + ' לדרגה הבאה';
+      } else {
+        meta.textContent = '🏆 הגעת לדרגה הסופית — ' + sXp + ' XP';
+      }
+    }
+    var claim = document.getElementById('home-v2-sp-claim');
+    if (claim) {
+      if (sUnclaimed > 0) {
+        claim.style.display = '';
+        claim.textContent = sUnclaimed + ' 🎁 לקבל';
+        tile.classList.add('has-claim');
+      } else {
+        claim.style.display = 'none';
+        tile.classList.remove('has-claim');
+      }
+    }
+  }
+  window.updateHomeSeasonPassTile = updateHomeSeasonPassTile;
 
   function showSeasonLevelUpToast(tier) {
     var t = document.createElement('div');
