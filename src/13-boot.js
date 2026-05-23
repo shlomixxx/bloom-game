@@ -319,6 +319,34 @@
       },
       drop: function(col) { return drop(col); },
       restart: function() { init('practice'); },
+      // Bot extras (May 2026) — let the bot drive mode switching + read
+      // dynamic-board context without depending on internal IIFE state.
+      setMode: function(nextMode) {
+        try { init(nextMode || 'practice', { fresh: true }); return true; }
+        catch (e) { return false; }
+      },
+      getMode: function() { return mode; },
+      getActiveBoard: function() {
+        // window._activeSpecialBoard carries multipliers + cells + theme_id
+        // + shape_id (when applicable). Bot uses this to score-bias columns.
+        return window._activeSpecialBoard || null;
+      },
+      getAvailableBoards: function() {
+        return Array.isArray(window._availableBoards) ? window._availableBoards.slice() : [];
+      },
+      startDynamicBoard: function(boardId) {
+        // Switch into dynamic mode + apply a specific board. The bot reads
+        // /api/boards/available to learn ids; restart with the chosen board.
+        var list = Array.isArray(window._availableBoards) ? window._availableBoards : [];
+        var board = list.find(function(b) { return String(b.id) === String(boardId); });
+        if (!board) return false;
+        try {
+          window._activeDynamicBoard = board;
+          applyBoardToSession(board);
+          init('dynamic', { fresh: true });
+          return true;
+        } catch (e) { return false; }
+      },
     };
   }
 

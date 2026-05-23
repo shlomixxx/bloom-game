@@ -2,16 +2,27 @@
   'use strict';
 
   // ============================================================
-  // BLOOM Auto-Play Bot — Premium Edition
+  // BLOOM Auto-Play Bot — Premium Edition (May 2026)
   // ?bot=1 or ?botui — panel with full controls
   // Panel can be fully hidden for clean video recording.
-  // Bot NEVER affects stats, leaderboards, or graphs.
+  //
+  // Two modes:
+  // • Silent (default): window.__bloomBotActive = true → game-side guards
+  //   skip leaderboard submits, achievements, season XP, etc.
+  // • Submit: window.__bloomBotActive = false → bot behaves like a real
+  //   player and writes to every leaderboard, including daily / dynamic /
+  //   tournaments. Useful for testing and for an admin who wants to
+  //   populate boards. Off-by-default for safety.
+  //
+  // AI is aware of dynamic boards: special cells (gold/bonus/frozen/
+  // locked/electric/teleport), column multipliers (×1..×20), shape voids.
   // ============================================================
 
   const params = new URLSearchParams(window.location.search);
   if (!params.has('bot') && !params.has('botui')) return;
 
-  // Signal to the game: skip stats, heartbeat, best-score when bot is active
+  // Signal to the game: skip stats, heartbeat, best-score when bot is active.
+  // Re-toggled inside play() based on the "submit to LB" checkbox.
   window.__bloomBotActive = false;
 
   const SPEED_DELAYS = {
@@ -21,16 +32,71 @@
     instant: { min: 30,  max: 80 },
   };
 
+  const STATE_KEY = 'bloom_bot_state_v2';
+  const SETTINGS_KEY = 'bloom_bot_settings_v2';
+
   const bot = {
     running: false,
     speed: 'normal',
+    autoRestart: true,
+    submitToLB: false,         // ☑ allow LB submits (off by default)
+    targetMode: 'auto',        // auto | practice | daily | dynamic
+    selectedBoardId: null,     // null = random dynamic board
+    // stats
     gamesPlayed: 0,
     totalScore: 0,
     bestScore: 0,
     bestTier: 0,
+    crownCount: 0,             // games where bot reached tier 8 at least once
+    totalPlaytimeMs: 0,
+    lastRank: null,            // last seen leaderboard rank (after submit-ON game)
+    lastRankTotal: null,
+    lastRankMode: null,
+    // internals
     stopRequested: false,
-    autoRestart: true,
+    currentGameStart: 0,
+    sawCrownThisGame: false,
   };
+
+  // Load persisted state + settings.
+  try {
+    const s = JSON.parse(localStorage.getItem(STATE_KEY) || '{}');
+    Object.assign(bot, {
+      gamesPlayed: s.gamesPlayed | 0,
+      totalScore: s.totalScore | 0,
+      bestScore: s.bestScore | 0,
+      bestTier: s.bestTier | 0,
+      crownCount: s.crownCount | 0,
+      totalPlaytimeMs: s.totalPlaytimeMs | 0,
+    });
+  } catch (e) {}
+  try {
+    const s = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}');
+    if (s.speed) bot.speed = s.speed;
+    if (s.targetMode) bot.targetMode = s.targetMode;
+    if (s.selectedBoardId !== undefined) bot.selectedBoardId = s.selectedBoardId;
+    if (typeof s.autoRestart === 'boolean') bot.autoRestart = s.autoRestart;
+    if (typeof s.submitToLB === 'boolean') bot.submitToLB = s.submitToLB;
+  } catch (e) {}
+
+  function persistState() {
+    try {
+      localStorage.setItem(STATE_KEY, JSON.stringify({
+        gamesPlayed: bot.gamesPlayed, totalScore: bot.totalScore,
+        bestScore: bot.bestScore, bestTier: bot.bestTier,
+        crownCount: bot.crownCount, totalPlaytimeMs: bot.totalPlaytimeMs
+      }));
+    } catch (e) {}
+  }
+  function persistSettings() {
+    try {
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify({
+        speed: bot.speed, targetMode: bot.targetMode,
+        selectedBoardId: bot.selectedBoardId,
+        autoRestart: bot.autoRestart, submitToLB: bot.submitToLB
+      }));
+    } catch (e) {}
+  }
 
   function waitForGame() {
     return new Promise(resolve => {
@@ -55,6 +121,50 @@
   }
 
   // ============================================================
+  // Dynamic-board awareness — read window._activeSpecialBoard
+  // ============================================================
+
+  function getBoardContext() {
+    const sb = window._activeSpecialBoard || null;
+    if (!sb) return { mults: null, cellsByPos: null, shapeId: null };
+    const def = sb.definition || sb;
+    const cellsByPos = {};
+    if (Array.isArray(def.cells)) {
+      for (const c of def.cells) {
+        if (!c || typeof c.row !== 'number' || typeof c.col !== 'number') continue;
+        cellsByPos[c.row + ',' + c.col] = c;
+      }
+    }
+    return {
+      mults: Array.isArray(def.multipliers) ? def.multipliers : null,
+      cellsByPos: cellsByPos,
+      shapeId: def.shape_id || null,
+    };
+  }
+
+  // Shape voids per src/01-constants.js SHAPE_GEOMETRIES. 1 = active, 0 = void.
+  const SHAPE_GEOMETRIES = {
+    heart: [
+      [0,1,1,0],[1,1,1,1],[1,1,1,1],[1,1,1,1],[0,1,1,0],[0,0,1,0]
+    ],
+    diamond: [
+      [0,1,1,0],[1,1,1,1],[1,1,1,1],[1,1,1,1],[1,1,1,1],[0,1,1,0]
+    ],
+    tree: [
+      [0,1,1,0],[0,1,1,0],[1,1,1,1],[1,1,1,1],[1,1,1,1],[0,1,1,0]
+    ],
+    pyramid: [
+      [0,1,1,0],[1,1,1,1],[1,1,1,1],[1,1,1,1],[1,1,1,1],[1,1,1,1]
+    ],
+  };
+  function isShapeVoid(shapeId, r, c) {
+    if (!shapeId) return false;
+    const g = SHAPE_GEOMETRIES[shapeId];
+    if (!g || !g[r]) return false;
+    return g[r][c] === 0;
+  }
+
+  // ============================================================
   // ADVANCED AI — multi-factor board evaluation
   // ============================================================
 
@@ -64,7 +174,7 @@
     return g.map(r => r.slice());
   }
 
-  function findGroupSim(g, sr, sc, tier) {
+  function findGroupSim(g, sr, sc, tier, voidAt) {
     const ROWS = g.length, COLS = g[0].length;
     const visited = new Set();
     const group = [];
@@ -72,6 +182,7 @@
     while (stack.length) {
       const [r, c] = stack.pop();
       if (r < 0 || r >= ROWS || c < 0 || c >= COLS) continue;
+      if (voidAt(r, c)) continue;
       const k = r * COLS + c;
       if (visited.has(k)) continue;
       if (g[r][c] !== tier) continue;
@@ -82,11 +193,14 @@
     return group;
   }
 
-  function applyGravitySim(g) {
+  function applyGravitySim(g, voidAt, frozenAt) {
     const ROWS = g.length, COLS = g[0].length;
     for (let c = 0; c < COLS; c++) {
       let w = ROWS - 1;
       for (let r = ROWS - 1; r >= 0; r--) {
+        // Voids + frozen tiles are anchors — write cursor jumps above them.
+        if (voidAt(r, c)) { w = r - 1; continue; }
+        if (frozenAt(r, c) && g[r][c] !== 0) { w = r - 1; continue; }
         if (g[r][c] !== 0) {
           if (r !== w) { g[w][c] = g[r][c]; g[r][c] = 0; }
           w--;
@@ -95,56 +209,105 @@
     }
   }
 
-  function simulateDrop(grid, col, piece) {
-    const ROWS = grid.length, COLS = grid[0].length;
-    const g = cloneGrid(grid);
-    let row = -1;
+  // Find the landing row of a drop in column `col`, taking voids + locked
+  // cells into account. Returns -1 if the column is unplayable.
+  function findLandingRow(grid, col, ctx) {
+    const ROWS = grid.length;
+    const shapeId = ctx.shapeId;
+    const cellsByPos = ctx.cellsByPos || {};
     for (let r = ROWS - 1; r >= 0; r--) {
-      if (g[r][col] === 0) { row = r; break; }
-    }
-    if (row === -1) return null;
-    g[row][col] = piece;
-
-    let score = 0, chains = 0, highest = piece;
-    while (true) {
-      let merged = false;
-      outer: for (let r = 0; r < ROWS; r++) {
-        for (let c = 0; c < COLS; c++) {
-          const t = g[r][c];
-          if (t === 0 || t === MAX_TIER) continue;
-          const group = findGroupSim(g, r, c, t);
-          if (group.length >= 2) {
-            let kr = -1, kc = -1;
-            for (const [gr, gc] of group) {
-              if (gr > kr) { kr = gr; kc = gc; }
-              else if (gr === kr && Math.abs(gc - col) < Math.abs(kc - col)) kc = gc;
-            }
-            for (const [gr, gc] of group) {
-              if (gr === kr && gc === kc) continue;
-              g[gr][gc] = 0;
-            }
-            const nt = Math.min(t + 1, MAX_TIER);
-            g[kr][kc] = nt;
-            chains++;
-            const mult = 1 + (chains - 1) * 0.5;
-            score += nt * 10 * group.length * mult;
-            if (nt > highest) highest = nt;
-            merged = true;
-            break outer;
-          }
-        }
+      if (isShapeVoid(shapeId, r, col)) {
+        // hit a void from below — column ends here
+        return -1;
       }
-      if (!merged) break;
-      applyGravitySim(g);
+      const cell = cellsByPos[r + ',' + col];
+      // Locked cell that isn't yet unlocked blocks like a wall
+      if (cell && cell.type === 'locked' && !cell.unlocked) continue;
+      if (grid[r][col] === 0) return r;
     }
-    return { grid: g, score, chains, highestTier: highest };
+    return -1;
   }
 
-  function evaluateBoard(g) {
+  function simulateDrop(grid, col, piece, ctx) {
+    const ROWS = grid.length, COLS = grid[0].length;
+    const cellsByPos = ctx.cellsByPos || {};
+    const shapeId = ctx.shapeId;
+    const voidAt = (r, c) => isShapeVoid(shapeId, r, c);
+    const frozenAt = (r, c) => {
+      const cell = cellsByPos[r + ',' + c];
+      return !!(cell && cell.type === 'frozen');
+    };
+    const g = cloneGrid(grid);
+    const row = findLandingRow(grid, col, ctx);
+    if (row === -1) return null;
+
+    // Frozen cell behavior: tile landing on it is inert (won't merge,
+    // acts as anchor). Treat as placed but tag it to skip from groups.
+    const landedOnFrozen = frozenAt(row, col);
+    g[row][col] = piece;
+
+    // Gold cell upgrade — landing on gold cell promotes by one tier.
+    const landedCell = cellsByPos[row + ',' + col];
+    let goldBonus = 0;
+    if (landedCell && landedCell.type === 'gold' && piece < MAX_TIER) {
+      g[row][col] = piece + 1;
+      goldBonus = 30; // small heuristic bonus — promotion is huge
+    }
+    // Bonus cell — adds amount to score on merge landing.
+    let bonusGain = 0;
+    if (landedCell && landedCell.type === 'bonus' && typeof landedCell.amount === 'number') {
+      bonusGain = landedCell.amount;
+    }
+
+    let score = 0, chains = 0, highest = g[row][col];
+    if (!landedOnFrozen) {
+      while (true) {
+        let merged = false;
+        outer: for (let r = 0; r < ROWS; r++) {
+          for (let c = 0; c < COLS; c++) {
+            const t = g[r][c];
+            if (t === 0 || t === MAX_TIER) continue;
+            if (voidAt(r, c)) continue;
+            if (frozenAt(r, c)) continue;
+            const group = findGroupSim(g, r, c, t, voidAt);
+            if (group.length >= 2) {
+              let kr = -1, kc = -1;
+              for (const [gr, gc] of group) {
+                if (gr > kr) { kr = gr; kc = gc; }
+                else if (gr === kr && Math.abs(gc - col) < Math.abs(kc - col)) kc = gc;
+              }
+              for (const [gr, gc] of group) {
+                if (gr === kr && gc === kc) continue;
+                g[gr][gc] = 0;
+              }
+              const nt = Math.min(t + 1, MAX_TIER);
+              g[kr][kc] = nt;
+              chains++;
+              const mult = 1 + (chains - 1) * 0.5;
+              // Column multiplier — applied at the survivor column.
+              const colMult = (ctx.mults && ctx.mults[kc]) ? ctx.mults[kc] : 1;
+              score += nt * 10 * group.length * mult * colMult;
+              if (nt > highest) highest = nt;
+              merged = true;
+              break outer;
+            }
+          }
+        }
+        if (!merged) break;
+        applyGravitySim(g, voidAt, frozenAt);
+      }
+    }
+    return { grid: g, score: score + bonusGain + goldBonus, chains,
+             highestTier: highest, landedOnFrozen };
+  }
+
+  function evaluateBoard(g, ctx) {
     const ROWS = g.length, COLS = g[0].length;
+    const shapeId = ctx.shapeId;
     const heights = new Array(COLS).fill(0);
     for (let c = 0; c < COLS; c++) {
       for (let r = 0; r < ROWS; r++) {
+        if (isShapeVoid(shapeId, r, c)) continue;
         if (g[r][c] !== 0) { heights[c] = ROWS - r; break; }
       }
     }
@@ -152,7 +315,7 @@
     for (let c = 0; c < COLS; c++) {
       if (heights[c] > maxH) maxH = heights[c];
       sumH += heights[c];
-      if (g[0][c] !== 0) topFilled++;
+      if (g[0][c] !== 0 && !isShapeVoid(shapeId, 0, c)) topFilled++;
     }
     let roughness = 0;
     for (let c = 0; c < COLS - 1; c++) roughness += Math.abs(heights[c] - heights[c+1]);
@@ -160,14 +323,13 @@
     let tierBonus = 0, pairBonus = 0, tripleBonus = 0;
     for (let r = 0; r < ROWS; r++) {
       for (let c = 0; c < COLS; c++) {
+        if (isShapeVoid(shapeId, r, c)) continue;
         const t = g[r][c];
         if (t === 0) continue;
         if (t >= 4) tierBonus += t * 3;
-        if (t >= 6) tierBonus += t * 5; // extra reward for high tiers
-        // Adjacent same-tier pairs
+        if (t >= 6) tierBonus += t * 5;
         if (c + 1 < COLS && g[r][c+1] === t) pairBonus += t * 1.5;
         if (r + 1 < ROWS && g[r+1][c] === t) pairBonus += t * 1.5;
-        // Triple potential (3 of same tier nearby)
         let nearby = 0;
         if (c > 0 && g[r][c-1] === t) nearby++;
         if (c < COLS-1 && g[r][c+1] === t) nearby++;
@@ -176,8 +338,9 @@
         if (nearby >= 2) tripleBonus += t * 3;
       }
     }
-    return { heightPenalty: maxH * 7 + sumH * 1.5, topPenalty: topFilled * 50 + (topFilled >= 3 ? 150 : 0),
-      roughness: roughness * 5, tierBonus, pairBonus, tripleBonus };
+    return { heightPenalty: maxH * 7 + sumH * 1.5,
+             topPenalty: topFilled * 50 + (topFilled >= 3 ? 150 : 0),
+             roughness: roughness * 5, tierBonus, pairBonus, tripleBonus };
   }
 
   function decideMove() {
@@ -185,18 +348,28 @@
     const piece = window.BloomDebug.getCurrentPiece();
     if (!grid || !piece) return 0;
     const COLS = grid[0].length;
+    const ctx = getBoardContext();
 
     let bestCol = -1, bestScore = -Infinity;
     for (let col = 0; col < COLS; col++) {
-      const sim = simulateDrop(grid, col, piece);
+      const sim = simulateDrop(grid, col, piece, ctx);
       if (!sim) continue;
-      const ev = evaluateBoard(sim.grid);
+      const ev = evaluateBoard(sim.grid, ctx);
 
-      let s = sim.score * 1.2; // value immediate points
+      let s = sim.score * 1.2;
       if (sim.chains >= 2) s += 100 * (sim.chains - 1);
       if (sim.chains >= 3) s += 250;
       if (sim.chains >= 4) s += 500;
       if (sim.highestTier > piece) s += (sim.highestTier - piece) * 80;
+
+      // Column-multiplier preference — favor placing high-value tiles in
+      // high-multiplier columns even before they merge, because future
+      // merges that survive in that column score more.
+      if (ctx.mults && ctx.mults[col] > 1) s += piece * (ctx.mults[col] - 1) * 12;
+
+      // Penalty for landing on a frozen cell — the tile becomes inert and
+      // wastes a slot. Only do it if no other column is playable.
+      if (sim.landedOnFrozen) s -= 200;
 
       s -= ev.heightPenalty;
       s -= ev.topPenalty;
@@ -206,7 +379,10 @@
       s += ev.tripleBonus;
 
       let topEmpty = 0;
-      for (let c = 0; c < COLS; c++) if (sim.grid[0][c] === 0) topEmpty++;
+      for (let c = 0; c < COLS; c++) {
+        if (isShapeVoid(ctx.shapeId, 0, c)) continue;
+        if (sim.grid[0][c] === 0) topEmpty++;
+      }
       if (topEmpty === 0) s -= 8000;
       else if (topEmpty === 1) s -= 300;
 
@@ -217,6 +393,76 @@
   }
 
   // ============================================================
+  // MODE NAVIGATION
+  // ============================================================
+
+  async function navigateToTargetMode() {
+    if (!window.BloomDebug) return;
+    const mode = bot.targetMode;
+    if (mode === 'auto') {
+      // If we're not in a game, default to practice.
+      if (!isInGame()) {
+        try { window.BloomDebug.setMode('practice'); } catch (e) {}
+        await sleep(400);
+      }
+      return;
+    }
+    if (mode === 'practice') {
+      window.BloomDebug.setMode('practice');
+      await sleep(400);
+      return;
+    }
+    if (mode === 'daily') {
+      window.BloomDebug.setMode('daily');
+      await sleep(400);
+      return;
+    }
+    if (mode === 'dynamic') {
+      const list = window.BloomDebug.getAvailableBoards();
+      if (!list.length) {
+        // No dynamic board available — fall back to practice.
+        window.BloomDebug.setMode('practice');
+        await sleep(400);
+        return;
+      }
+      let board = null;
+      if (bot.selectedBoardId) {
+        board = list.find(b => String(b.id) === String(bot.selectedBoardId));
+      }
+      if (!board) board = list[Math.floor(Math.random() * list.length)];
+      window.BloomDebug.startDynamicBoard(board.id);
+      await sleep(500);
+      return;
+    }
+  }
+
+  // After a submit-ON game, try to read this device's rank for the played mode.
+  async function fetchLastRank() {
+    try {
+      const mode = window.BloomDebug.getMode();
+      const deviceId = localStorage.getItem('bloom_device_id');
+      if (!deviceId) return;
+      let url = null, label = '';
+      if (mode === 'daily') {
+        const today = new Date().toISOString().slice(0, 10);
+        url = '/api/leaderboard/' + today + '?deviceId=' + encodeURIComponent(deviceId);
+        label = 'יומי';
+      } else if (mode === 'dynamic' && window._activeDynamicBoard) {
+        url = '/api/boards/' + window._activeDynamicBoard.id + '/leaderboard?limit=1&deviceId=' + encodeURIComponent(deviceId);
+        label = 'לוח';
+      }
+      if (!url) return;
+      const r = await fetch(url);
+      const d = await r.json();
+      if (typeof d.rank === 'number') {
+        bot.lastRank = d.rank;
+        bot.lastRankTotal = d.total | 0;
+        bot.lastRankMode = label;
+      }
+    } catch (e) {}
+  }
+
+  // ============================================================
   // PLAY LOOP
   // ============================================================
 
@@ -224,15 +470,23 @@
     if (bot.running) return;
     bot.running = true;
     bot.stopRequested = false;
-    window.__bloomBotActive = true;
+    // When "submit to LB" is checked we DON'T set the guard flag → all the
+    // game's normal submit / earn / achievement paths run. When unchecked
+    // (default), guards skip them and the bot stays sandboxed.
+    window.__bloomBotActive = !bot.submitToLB;
     updateUI();
 
-    if (window.BloomDebug && window.BloomDebug.restart) {
+    await navigateToTargetMode();
+
+    if (window.BloomDebug && window.BloomDebug.restart && bot.targetMode === 'auto') {
       window.BloomDebug.restart();
       await sleep(400);
     }
     const homeScreen = document.getElementById('home-screen');
     if (homeScreen) homeScreen.remove();
+
+    bot.currentGameStart = Date.now();
+    bot.sawCrownThisGame = false;
 
     while (!bot.stopRequested) {
       if (!window.BloomDebug || !window.BloomDebug.ready()) {
@@ -248,18 +502,34 @@
         bot.totalScore += score;
         if (score > bot.bestScore) bot.bestScore = score;
         if (tier > bot.bestTier) bot.bestTier = tier;
+        if (tier >= MAX_TIER || bot.sawCrownThisGame) bot.crownCount++;
+        const elapsed = Date.now() - bot.currentGameStart;
+        bot.totalPlaytimeMs += Math.min(elapsed, 1000 * 60 * 30);
+        persistState();
         updateUI();
+        if (bot.submitToLB) {
+          // Give the score-submit POST a beat to land, then read back rank.
+          await sleep(700);
+          await fetchLastRank();
+          updateUI();
+        }
         if (!bot.autoRestart) { bot.stopRequested = true; break; }
         await sleep(1500);
         if (bot.stopRequested) break;
-        window.BloomDebug.restart();
+        await navigateToTargetMode();
+        if (bot.targetMode === 'auto' || bot.targetMode === 'practice') {
+          window.BloomDebug.restart();
+        }
         await sleep(600);
+        bot.currentGameStart = Date.now();
+        bot.sawCrownThisGame = false;
         continue;
       }
       if (window.BloomDebug.isBusy()) { await sleep(80); continue; }
 
       const col = decideMove();
       window.BloomDebug.drop(col);
+      if (window.BloomDebug.getHighestTier() >= MAX_TIER) bot.sawCrownThisGame = true;
 
       const d = SPEED_DELAYS[bot.speed];
       await sleep(d.min + Math.random() * (d.max - d.min));
@@ -279,8 +549,14 @@
   let panelVisible = true;
   let dotVisible = true;
 
+  function fmtMinutes(ms) {
+    const totalSec = Math.floor(ms / 1000);
+    const m = Math.floor(totalSec / 60);
+    const s = totalSec % 60;
+    return m + ':' + (s < 10 ? '0' : '') + s;
+  }
+
   function createUI() {
-    // Floating dot (visible when panel is hidden)
     const dot = document.createElement('div');
     dot.id = 'bloom-bot-dot';
     document.body.appendChild(dot);
@@ -297,27 +573,64 @@
         <div class="bbp-controls">
           <button id="bbp-toggle" class="bbp-btn-primary">▶ Start</button>
         </div>
+
+        <div class="bbp-row">
+          <label class="bbp-label">Mode</label>
+          <select id="bbp-mode">
+            <option value="auto">🎮 Auto (current screen)</option>
+            <option value="practice">🎯 Practice</option>
+            <option value="daily">📅 Daily Challenge</option>
+            <option value="dynamic">✨ Dynamic Board</option>
+          </select>
+        </div>
+
+        <div class="bbp-row" id="bbp-board-row" style="display:none">
+          <label class="bbp-label">Board</label>
+          <select id="bbp-board">
+            <option value="">🎲 Random</option>
+          </select>
+        </div>
+
         <div class="bbp-row">
           <label class="bbp-label">Speed</label>
           <select id="bbp-speed">
             <option value="slow">🐌 Slow (video)</option>
-            <option value="normal" selected>🏃 Normal</option>
+            <option value="normal">🏃 Normal</option>
             <option value="fast">⚡ Fast</option>
             <option value="instant">🚀 Instant</option>
           </select>
         </div>
+
         <div class="bbp-row">
           <label class="bbp-label">
-            <input type="checkbox" id="bbp-autorestart" checked />
+            <input type="checkbox" id="bbp-autorestart" />
             Auto-restart on game over
           </label>
         </div>
+
+        <div class="bbp-row bbp-submit-row">
+          <label class="bbp-label">
+            <input type="checkbox" id="bbp-submit" />
+            📊 שלח ניקוד לטבלאות
+          </label>
+          <div class="bbp-warn" id="bbp-warn" style="display:none">
+            ⚠ ניקוד הבוט יישלח לטבלאות בשמך (יומי / לוחות דינמיים / טורנירים / season pass / הישגים). בוט פעיל בלי דגל = שחקן רגיל לשרת.
+          </div>
+        </div>
+
         <div class="bbp-stats">
           <div class="bbp-stat"><span>Games</span><b id="bbp-games">0</b></div>
           <div class="bbp-stat"><span>Best</span><b id="bbp-best">0</b></div>
           <div class="bbp-stat"><span>Average</span><b id="bbp-avg">0</b></div>
           <div class="bbp-stat"><span>Top tier</span><b id="bbp-tier">1</b></div>
+          <div class="bbp-stat"><span>👑 Crowns</span><b id="bbp-crowns">0</b></div>
+          <div class="bbp-stat"><span>⏱ Playtime</span><b id="bbp-playtime">0:00</b></div>
         </div>
+
+        <div class="bbp-stats bbp-stats-lb" id="bbp-rank-row" style="display:none">
+          <div class="bbp-stat bbp-stat-wide"><span id="bbp-rank-label">Last LB rank</span><b id="bbp-rank">—</b></div>
+        </div>
+
         <div class="bbp-footer">
           <button id="bbp-reset" class="bbp-btn-link">reset stats</button>
         </div>
@@ -331,12 +644,14 @@
       #bloom-bot-dot{position:fixed;bottom:20px;left:20px;z-index:2147483647;width:12px;height:12px;border-radius:50%;background:rgba(250,199,117,0.5);cursor:pointer;transition:opacity 0.3s,transform 0.2s;display:none}
       #bloom-bot-dot:hover{transform:scale(1.5);background:rgba(250,199,117,0.9)}
       #bloom-bot-dot.hidden{display:none!important}
-      #bloom-bot-panel{position:fixed;bottom:16px;left:16px;z-index:2147483647;background:#1C1A18;color:#FFF;border-radius:14px;padding:14px;font-family:-apple-system,BlinkMacSystemFont,sans-serif;font-size:13px;width:240px;direction:ltr;box-shadow:0 8px 32px rgba(0,0,0,0.4);transition:transform 0.2s,opacity 0.2s}
+      #bloom-bot-panel{position:fixed;bottom:16px;left:16px;z-index:2147483647;background:#1C1A18;color:#FFF;border-radius:14px;padding:14px;font-family:-apple-system,BlinkMacSystemFont,sans-serif;font-size:13px;width:260px;direction:ltr;box-shadow:0 8px 32px rgba(0,0,0,0.4);transition:transform 0.2s,opacity 0.2s;max-height:90vh;overflow-y:auto}
       #bloom-bot-panel.hidden{transform:translateY(20px);opacity:0;pointer-events:none}
+      #bloom-bot-panel.submitting{box-shadow:0 8px 32px rgba(244,192,209,0.6),0 0 0 2px #F4C0D1}
       .bbp-header{display:flex;align-items:center;gap:8px;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid rgba(255,255,255,0.1)}
       .bbp-title{font-weight:600;flex:1;font-size:13px}
       .bbp-status{background:rgba(255,255,255,0.15);color:rgba(255,255,255,0.85);padding:2px 8px;border-radius:6px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em}
       .bbp-status.running{background:#9FE1CB;color:#04342C}
+      .bbp-status.submitting{background:#F4C0D1;color:#7A2B3A}
       .bbp-minimize{background:transparent;border:none;color:rgba(255,255,255,0.6);font-size:18px;cursor:pointer;padding:0 4px;line-height:1}
       .bbp-minimize:hover{color:#FFF}
       .bbp-controls{margin-bottom:10px}
@@ -346,9 +661,13 @@
       .bbp-row{margin-bottom:10px}
       .bbp-label{display:block;font-size:11px;color:rgba(255,255,255,0.6);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.05em;cursor:pointer}
       .bbp-label input{vertical-align:middle;margin-right:4px}
-      #bbp-speed{width:100%;padding:7px 8px;border-radius:6px;background:rgba(255,255,255,0.08);color:#FFF;border:1px solid rgba(255,255,255,0.15);font-family:inherit;font-size:13px}
+      .bbp-row select{width:100%;padding:7px 8px;border-radius:6px;background:rgba(255,255,255,0.08);color:#FFF;border:1px solid rgba(255,255,255,0.15);font-family:inherit;font-size:13px}
+      .bbp-submit-row{background:rgba(244,192,209,0.08);padding:8px 10px;border-radius:8px;border:1px solid rgba(244,192,209,0.2)}
+      .bbp-warn{margin-top:6px;font-size:10px;color:#F4C0D1;line-height:1.5;padding:6px;background:rgba(244,192,209,0.1);border-radius:6px}
       .bbp-stats{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:8px 0;border-top:1px solid rgba(255,255,255,0.1)}
+      .bbp-stats-lb{border-top:none;padding-top:0}
       .bbp-stat{background:rgba(255,255,255,0.05);padding:6px 8px;border-radius:6px}
+      .bbp-stat-wide{grid-column:span 2;background:rgba(159,225,203,0.08);border:1px solid rgba(159,225,203,0.2)}
       .bbp-stat span{display:block;font-size:10px;color:rgba(255,255,255,0.55);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:2px}
       .bbp-stat b{font-size:15px;font-weight:700;color:#FFF}
       .bbp-footer{display:flex;gap:8px;margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.1)}
@@ -358,30 +677,57 @@
     `;
     document.head.appendChild(style);
 
-    // Wire buttons
+    // Initial values
+    document.getElementById('bbp-speed').value = bot.speed;
+    document.getElementById('bbp-mode').value = bot.targetMode;
+    document.getElementById('bbp-autorestart').checked = bot.autoRestart;
+    document.getElementById('bbp-submit').checked = bot.submitToLB;
+    document.getElementById('bbp-warn').style.display = bot.submitToLB ? 'block' : 'none';
+    document.getElementById('bbp-board-row').style.display =
+      bot.targetMode === 'dynamic' ? 'block' : 'none';
+    populateBoardDropdown();
+
+    // Wire
     document.getElementById('bbp-toggle').onclick = () => { if (bot.running) stop(); else play(); };
-    document.getElementById('bbp-speed').onchange = e => bot.speed = e.target.value;
-    document.getElementById('bbp-autorestart').onchange = e => bot.autoRestart = e.target.checked;
+    document.getElementById('bbp-speed').onchange = e => { bot.speed = e.target.value; persistSettings(); };
+    document.getElementById('bbp-mode').onchange = e => {
+      bot.targetMode = e.target.value;
+      document.getElementById('bbp-board-row').style.display =
+        bot.targetMode === 'dynamic' ? 'block' : 'none';
+      if (bot.targetMode === 'dynamic') populateBoardDropdown();
+      persistSettings();
+    };
+    document.getElementById('bbp-board').onchange = e => {
+      bot.selectedBoardId = e.target.value || null;
+      persistSettings();
+    };
+    document.getElementById('bbp-autorestart').onchange = e => { bot.autoRestart = e.target.checked; persistSettings(); };
+    document.getElementById('bbp-submit').onchange = e => {
+      bot.submitToLB = e.target.checked;
+      document.getElementById('bbp-warn').style.display = bot.submitToLB ? 'block' : 'none';
+      // If the bot is currently running, flip the guard live.
+      if (bot.running) window.__bloomBotActive = !bot.submitToLB;
+      updateUI();
+      persistSettings();
+    };
     document.getElementById('bbp-reset').onclick = () => {
-      bot.gamesPlayed = 0; bot.totalScore = 0; bot.bestScore = 0; bot.bestTier = 0;
+      bot.gamesPlayed = 0; bot.totalScore = 0; bot.bestScore = 0;
+      bot.bestTier = 0; bot.crownCount = 0; bot.totalPlaytimeMs = 0;
+      bot.lastRank = null; bot.lastRankTotal = null; bot.lastRankMode = null;
+      persistState();
       updateUI();
     };
 
-    // Hide panel → show dot
     document.getElementById('bbp-hide').onclick = () => {
       panel.classList.add('hidden');
       panelVisible = false;
       if (dotVisible) dot.style.display = 'block';
     };
-
-    // Tap dot → show panel
     dot.onclick = () => {
       panel.classList.remove('hidden');
       panelVisible = true;
       dot.style.display = 'none';
     };
-
-    // Long-press dot → hide dot too (fully clean screen)
     let longPressTimer = null;
     dot.addEventListener('pointerdown', () => {
       longPressTimer = setTimeout(() => {
@@ -392,10 +738,9 @@
     dot.addEventListener('pointerup', () => clearTimeout(longPressTimer));
     dot.addEventListener('pointercancel', () => clearTimeout(longPressTimer));
 
-    // Triple-tap anywhere → restore panel (emergency)
     let tapCount = 0, tapTimer = null;
-    document.addEventListener('pointerdown', (e) => {
-      if (panelVisible) return; // panel already visible
+    document.addEventListener('pointerdown', () => {
+      if (panelVisible) return;
       tapCount++;
       if (tapCount >= 3) {
         tapCount = 0;
@@ -408,24 +753,56 @@
       clearTimeout(tapTimer);
       tapTimer = setTimeout(() => { tapCount = 0; }, 600);
     }, true);
+
+    // Refresh available boards periodically (admin can add/remove).
+    setInterval(populateBoardDropdown, 30000);
+  }
+
+  function populateBoardDropdown() {
+    const sel = document.getElementById('bbp-board');
+    if (!sel) return;
+    let boards = [];
+    try { boards = window.BloomDebug ? window.BloomDebug.getAvailableBoards() : []; } catch (e) {}
+    const prev = bot.selectedBoardId || '';
+    sel.innerHTML = '<option value="">🎲 Random</option>' +
+      boards.map(b => `<option value="${b.id}">${(b.name || ('Board #' + b.id)).slice(0, 36)}</option>`).join('');
+    if (prev && boards.find(b => String(b.id) === String(prev))) sel.value = prev;
   }
 
   function updateUI() {
     const status = document.getElementById('bbp-status');
     const toggle = document.getElementById('bbp-toggle');
+    const panel = document.getElementById('bloom-bot-panel');
     if (status) {
-      status.textContent = bot.running ? 'playing' : 'paused';
-      status.className = 'bbp-status' + (bot.running ? ' running' : '');
+      let txt = bot.running ? 'playing' : 'paused';
+      let cls = 'bbp-status' + (bot.running ? ' running' : '');
+      if (bot.running && bot.submitToLB) { txt = 'submitting'; cls += ' submitting'; }
+      status.textContent = txt;
+      status.className = cls;
     }
     if (toggle) {
       toggle.textContent = bot.running ? '⏸ Stop' : '▶ Start';
       toggle.className = 'bbp-btn-primary' + (bot.running ? ' running' : '');
     }
+    if (panel) panel.classList.toggle('submitting', bot.running && bot.submitToLB);
     const setText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
     setText('bbp-games', bot.gamesPlayed);
     setText('bbp-best', bot.bestScore.toLocaleString());
     setText('bbp-avg', bot.gamesPlayed ? Math.round(bot.totalScore / bot.gamesPlayed).toLocaleString() : 0);
     setText('bbp-tier', bot.bestTier);
+    setText('bbp-crowns', bot.crownCount);
+    setText('bbp-playtime', fmtMinutes(bot.totalPlaytimeMs));
+    const rankRow = document.getElementById('bbp-rank-row');
+    if (rankRow) {
+      if (bot.lastRank != null) {
+        rankRow.style.display = 'grid';
+        setText('bbp-rank-label', 'Last LB rank · ' + (bot.lastRankMode || ''));
+        const t = bot.lastRankTotal ? ' / ' + bot.lastRankTotal : '';
+        setText('bbp-rank', '#' + bot.lastRank + t);
+      } else {
+        rankRow.style.display = 'none';
+      }
+    }
   }
 
   // ============================================================
@@ -435,6 +812,7 @@
   async function init() {
     await waitForGame();
     createUI();
+    updateUI();
   }
 
   window.BloomBot = { start: play, stop, state: () => ({ ...bot }), decideMove };
