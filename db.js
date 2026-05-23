@@ -81,6 +81,17 @@ export async function initDb() {
       reward_claimed     BOOLEAN NOT NULL DEFAULT FALSE,
       PRIMARY KEY (device_id, week_start)
     )`,
+    // Stage 36 — Daily Spin Wheel (full CREATE in schema.sql).
+    `CREATE TABLE IF NOT EXISTS daily_spin_state (
+      device_id        VARCHAR(64) PRIMARY KEY,
+      last_spin_date   DATE,
+      current_streak   INT NOT NULL DEFAULT 0,
+      longest_streak   INT NOT NULL DEFAULT 0,
+      total_spins      INT NOT NULL DEFAULT 0,
+      total_gems_won   BIGINT NOT NULL DEFAULT 0,
+      last_reward      JSONB,
+      last_spin_at     TIMESTAMPTZ
+    )`,
     // Stage 33 — Rivalry System (full CREATE in schema.sql).
     `CREATE TABLE IF NOT EXISTS player_rivalries (
       id                BIGSERIAL PRIMARY KEY,

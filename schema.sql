@@ -1904,3 +1904,101 @@ INSERT INTO game_config (key, value) VALUES ('daily_special_override_id',  '')  
 -- ============================================================
 INSERT INTO game_config (key, value) VALUES ('home_variant',           'standard') ON CONFLICT (key) DO NOTHING;
 INSERT INTO game_config (key, value) VALUES ('home_jit_unlock_games',  '3,7,13,26') ON CONFLICT (key) DO NOTHING;
+
+-- ============================================================
+-- Daily Spin Wheel (Stage 36 — Coin Master pattern, May 2026)
+-- One spin per day per device. Wheel has 12 weighted segments;
+-- the server rolls and grants atomically. Streak (consecutive
+-- days spun) multiplies gem rewards up to a cap. The single
+-- most addictive daily-return mechanic in F2P puzzles — Coin
+-- Master built a $1B/year business on this exact pattern.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS daily_spin_state (
+  device_id        VARCHAR(64) PRIMARY KEY,
+  last_spin_date   DATE,
+  current_streak   INT NOT NULL DEFAULT 0,
+  longest_streak   INT NOT NULL DEFAULT 0,
+  total_spins      INT NOT NULL DEFAULT 0,
+  total_gems_won   BIGINT NOT NULL DEFAULT 0,
+  last_reward      JSONB,
+  last_spin_at     TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_daily_spin_state_last ON daily_spin_state (last_spin_at DESC);
+
+INSERT INTO game_config (key, value) VALUES ('daily_spin_enabled',           'true')  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('daily_spin_show_on_home',      'true')  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('daily_spin_streak_bonus_pct',  '10')    ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('daily_spin_streak_max_pct',    '200')   ON CONFLICT (key) DO NOTHING;
+-- 12 wheel segments stored as flat keys: label, emoji, type (gems|bp_xp|chest|freeze|jackpot), amount, weight (out of 100), color
+INSERT INTO game_config (key, value) VALUES ('daily_spin_seg_1_label',  '10 💎')     ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('daily_spin_seg_1_emoji',  '💎')        ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('daily_spin_seg_1_type',   'gems')      ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('daily_spin_seg_1_amount', '10')        ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('daily_spin_seg_1_weight', '25')        ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('daily_spin_seg_1_color',  '#7EC9B0')   ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('daily_spin_seg_2_label',  '25 💎')     ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('daily_spin_seg_2_emoji',  '💎')        ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('daily_spin_seg_2_type',   'gems')      ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('daily_spin_seg_2_amount', '25')        ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('daily_spin_seg_2_weight', '20')        ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('daily_spin_seg_2_color',  '#9FD18F')   ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('daily_spin_seg_3_label',  '50 💎')     ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('daily_spin_seg_3_emoji',  '💎')        ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('daily_spin_seg_3_type',   'gems')      ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('daily_spin_seg_3_amount', '50')        ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('daily_spin_seg_3_weight', '15')        ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('daily_spin_seg_3_color',  '#F5C24B')   ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('daily_spin_seg_4_label',  '5 XP פס')   ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('daily_spin_seg_4_emoji',  '🎖')        ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('daily_spin_seg_4_type',   'bp_xp')     ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('daily_spin_seg_4_amount', '5')         ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('daily_spin_seg_4_weight', '12')        ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('daily_spin_seg_4_color',  '#A87FE0')   ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('daily_spin_seg_5_label',  '100 💎')    ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('daily_spin_seg_5_emoji',  '💎')        ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('daily_spin_seg_5_type',   'gems')      ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('daily_spin_seg_5_amount', '100')       ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('daily_spin_seg_5_weight', '8')         ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('daily_spin_seg_5_color',  '#F58F6A')   ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('daily_spin_seg_6_label',  '🛡 הקפאה') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('daily_spin_seg_6_emoji',  '🛡')        ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('daily_spin_seg_6_type',   'freeze')    ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('daily_spin_seg_6_amount', '1')         ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('daily_spin_seg_6_weight', '5')         ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('daily_spin_seg_6_color',  '#7AB8E0')   ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('daily_spin_seg_7_label',  '20 XP פס')  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('daily_spin_seg_7_emoji',  '🎖')        ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('daily_spin_seg_7_type',   'bp_xp')     ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('daily_spin_seg_7_amount', '20')        ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('daily_spin_seg_7_weight', '6')         ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('daily_spin_seg_7_color',  '#8A6FC9')   ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('daily_spin_seg_8_label',  '🎁 צ׳סט')   ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('daily_spin_seg_8_emoji',  '🎁')        ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('daily_spin_seg_8_type',   'chest')     ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('daily_spin_seg_8_amount', '1')         ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('daily_spin_seg_8_weight', '4')         ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('daily_spin_seg_8_color',  '#F587B0')   ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('daily_spin_seg_9_label',  '200 💎')    ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('daily_spin_seg_9_emoji',  '💎')        ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('daily_spin_seg_9_type',   'gems')      ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('daily_spin_seg_9_amount', '200')       ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('daily_spin_seg_9_weight', '3')         ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('daily_spin_seg_9_color',  '#E05A8A')   ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('daily_spin_seg_10_label',  '500 💎')   ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('daily_spin_seg_10_emoji',  '💎')       ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('daily_spin_seg_10_type',   'gems')     ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('daily_spin_seg_10_amount', '500')      ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('daily_spin_seg_10_weight', '1.5')      ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('daily_spin_seg_10_color',  '#C9437E')  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('daily_spin_seg_11_label',  '1000 💎')  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('daily_spin_seg_11_emoji',  '💎')       ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('daily_spin_seg_11_type',   'gems')     ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('daily_spin_seg_11_amount', '1000')     ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('daily_spin_seg_11_weight', '0.4')      ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('daily_spin_seg_11_color',  '#A82255')  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('daily_spin_seg_12_label',  'JACKPOT')  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('daily_spin_seg_12_emoji',  '🏆')       ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('daily_spin_seg_12_type',   'jackpot')  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('daily_spin_seg_12_amount', '5000')     ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('daily_spin_seg_12_weight', '0.1')      ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('daily_spin_seg_12_color',  '#FFD93D')  ON CONFLICT (key) DO NOTHING;

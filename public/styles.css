@@ -2529,6 +2529,348 @@ html[data-theme="dark"] .hvar-jit-teaser-sub { color: #BCA3DC; }
 
 /* Body marker for variant-specific tweaks */
 body[data-home-variant="hero"] .home-v2-hero { padding: 0; background: transparent; border: none; box-shadow: none; }
+
+/* ============================================================
+   Stage 36 — Daily Spin Wheel
+   ============================================================ */
+
+/* ── Home tile ── */
+.spin-home-tile {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 14px 16px;
+  margin-top: 10px;
+  background: linear-gradient(135deg, #4F2A8F 0%, #7E3FCA 50%, #FFB347 100%);
+  border: 2px solid rgba(255, 215, 100, 0.5);
+  border-radius: 14px;
+  cursor: pointer;
+  color: #FFF;
+  text-align: right;
+  box-shadow: 0 6px 18px rgba(126, 63, 202, 0.3);
+  transition: all 0.15s ease;
+  position: relative;
+  overflow: hidden;
+}
+.spin-home-tile:active { transform: scale(0.98); }
+.spin-home-tile.has-spin {
+  animation: spinTilePulse 2.4s ease-in-out infinite;
+  box-shadow: 0 8px 24px rgba(255, 179, 71, 0.5);
+}
+@keyframes spinTilePulse {
+  0%, 100% { box-shadow: 0 8px 24px rgba(255, 179, 71, 0.5); }
+  50% { box-shadow: 0 12px 32px rgba(255, 179, 71, 0.85); transform: scale(1.012); }
+}
+.spin-tile-wheel {
+  font-size: 32px;
+  line-height: 1;
+  flex-shrink: 0;
+  animation: spinTileWheelTilt 4s ease-in-out infinite;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+}
+@keyframes spinTileWheelTilt {
+  0%, 100% { transform: rotate(0); }
+  50% { transform: rotate(15deg); }
+}
+.spin-tile-body { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.spin-tile-title {
+  font-size: 14px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+.spin-tile-badge {
+  background: #FFD93D;
+  color: #4F2A8F;
+  font-size: 10px;
+  font-weight: 900;
+  padding: 2px 7px;
+  border-radius: 8px;
+  text-shadow: none;
+  animation: spinTileBadgeBounce 1.4s ease-in-out infinite;
+}
+@keyframes spinTileBadgeBounce {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.12); }
+}
+.spin-tile-sub {
+  font-size: 11px;
+  opacity: 0.9;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.spin-tile-arrow {
+  font-size: 24px;
+  opacity: 0.7;
+  flex-shrink: 0;
+}
+
+/* ── Modal ── */
+.spin-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.75);
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  backdrop-filter: blur(4px);
+  animation: spinModalFade 0.2s ease-out;
+}
+@keyframes spinModalFade { from { opacity: 0; } to { opacity: 1; } }
+.spin-modal-card {
+  background: linear-gradient(160deg, #2E1645 0%, #4F2A8F 100%);
+  border-radius: 22px;
+  padding: 18px;
+  width: 100%;
+  max-width: 420px;
+  max-height: 92vh;
+  overflow-y: auto;
+  color: #FFF;
+  position: relative;
+  border: 2px solid rgba(255, 215, 100, 0.4);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+  animation: spinModalSlide 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+@keyframes spinModalSlide {
+  from { transform: scale(0.85) translateY(20px); opacity: 0; }
+  to { transform: scale(1) translateY(0); opacity: 1; }
+}
+.spin-modal-close {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.15);
+  border: none;
+  color: #FFF;
+  font-size: 22px;
+  cursor: pointer;
+  font-weight: 700;
+}
+.spin-modal-title {
+  font-size: 22px;
+  font-weight: 900;
+  text-align: center;
+  margin: 4px 0 2px;
+  text-shadow: 0 2px 8px rgba(255, 215, 100, 0.3);
+}
+.spin-modal-sub {
+  font-size: 12px;
+  text-align: center;
+  opacity: 0.85;
+  margin-bottom: 14px;
+}
+.spin-modal-body { padding: 6px 0; }
+
+/* ── Streak card ── */
+.spin-streak-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: linear-gradient(135deg, rgba(255, 100, 100, 0.2), rgba(255, 165, 0, 0.2));
+  border: 1px solid rgba(255, 165, 0, 0.4);
+  border-radius: 12px;
+  margin-bottom: 12px;
+}
+.spin-streak-icon { font-size: 28px; animation: spinStreakFlame 1.6s ease-in-out infinite; }
+@keyframes spinStreakFlame {
+  0%, 100% { transform: scale(1) rotate(-5deg); }
+  50% { transform: scale(1.15) rotate(5deg); }
+}
+.spin-streak-body { flex: 1; }
+.spin-streak-title { font-size: 14px; font-weight: 800; color: #FFD580; }
+.spin-streak-sub { font-size: 11px; opacity: 0.85; }
+
+/* ── Wheel ── */
+.spin-wheel-wrap {
+  position: relative;
+  margin: 16px auto 18px;
+  width: min(320px, 80vw);
+  aspect-ratio: 1;
+}
+.spin-wheel-frame {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+.spin-wheel-svg {
+  width: 100%;
+  height: 100%;
+  filter: drop-shadow(0 8px 24px rgba(0, 0, 0, 0.5));
+}
+.spin-wheel-rotate {
+  transition: none;
+}
+.spin-wheel-pointer {
+  position: absolute;
+  top: -8px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 36px;
+  color: #FFD93D;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
+  z-index: 5;
+  filter: drop-shadow(0 0 4px rgba(255, 217, 61, 0.8));
+}
+
+/* ── Spin button ── */
+.spin-btn {
+  width: 100%;
+  padding: 14px;
+  font-size: 18px;
+  font-weight: 900;
+  color: #2E1645;
+  background: linear-gradient(180deg, #FFD93D 0%, #F5AD2E 100%);
+  border: 2px solid rgba(255, 255, 255, 0.6);
+  border-radius: 14px;
+  cursor: pointer;
+  box-shadow: 0 6px 16px rgba(245, 173, 46, 0.6);
+  transition: all 0.15s ease;
+}
+.spin-btn:not(:disabled):hover { transform: scale(1.02); box-shadow: 0 8px 24px rgba(245, 173, 46, 0.85); }
+.spin-btn:not(:disabled):active { transform: scale(0.98); }
+.spin-btn-disabled {
+  background: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.5);
+  cursor: not-allowed;
+  box-shadow: none;
+  border-color: rgba(255, 255, 255, 0.15);
+}
+.spin-next-hint {
+  margin-top: 10px;
+  font-size: 12px;
+  text-align: center;
+  opacity: 0.85;
+  padding: 8px 12px;
+  background: rgba(255, 217, 61, 0.1);
+  border-radius: 10px;
+  border: 1px dashed rgba(255, 217, 61, 0.3);
+}
+
+/* ── Stats ── */
+.spin-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.15);
+}
+.spin-stat { text-align: center; padding: 8px; background: rgba(255, 255, 255, 0.06); border-radius: 8px; }
+.spin-stat-num { display: block; font-size: 18px; font-weight: 800; color: #FFD93D; }
+.spin-stat-lbl { display: block; font-size: 10px; opacity: 0.75; margin-top: 2px; }
+
+/* ── Reward overlay ── */
+.spin-reward-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.85);
+  border-radius: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  animation: spinRewardFade 0.3s ease-out;
+}
+@keyframes spinRewardFade { from { opacity: 0; } to { opacity: 1; } }
+.spin-reward-card {
+  width: 80%;
+  max-width: 320px;
+  padding: 28px 20px;
+  border-radius: 22px;
+  text-align: center;
+  border: 3px solid rgba(255, 255, 255, 0.7);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.6);
+  animation: spinRewardPop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+@keyframes spinRewardPop {
+  0% { transform: scale(0.3) rotate(-12deg); opacity: 0; }
+  60% { transform: scale(1.15) rotate(6deg); opacity: 1; }
+  100% { transform: scale(1) rotate(0); opacity: 1; }
+}
+.spin-reward-card-jackpot {
+  animation: spinRewardPop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1), spinRewardJackpotGlow 1.5s ease-in-out 0.5s infinite;
+}
+@keyframes spinRewardJackpotGlow {
+  0%, 100% { box-shadow: 0 16px 48px rgba(255, 217, 61, 0.6); }
+  50% { box-shadow: 0 20px 64px rgba(255, 217, 61, 1); }
+}
+.spin-reward-emoji {
+  font-size: 80px;
+  line-height: 1;
+  margin-bottom: 8px;
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.3));
+  animation: spinRewardEmojiBob 1.4s ease-in-out infinite;
+}
+@keyframes spinRewardEmojiBob {
+  0%, 100% { transform: translateY(0) rotate(0); }
+  50% { transform: translateY(-6px) rotate(-8deg); }
+}
+.spin-reward-type {
+  font-size: 14px;
+  font-weight: 700;
+  color: #2E1645;
+  opacity: 0.85;
+  margin-bottom: 6px;
+}
+.spin-reward-amount {
+  font-size: 42px;
+  font-weight: 900;
+  color: #2E1645;
+  margin-bottom: 12px;
+  text-shadow: 0 2px 4px rgba(255, 255, 255, 0.4);
+}
+.spin-reward-card-jackpot .spin-reward-amount {
+  font-size: 52px;
+  color: #8B0000;
+  text-shadow: 0 0 12px rgba(255, 217, 61, 0.6);
+}
+.spin-reward-bonus {
+  font-size: 13px;
+  font-weight: 800;
+  color: #FFF;
+  background: linear-gradient(135deg, #FF6B6B, #FF8E53);
+  padding: 6px 12px;
+  border-radius: 10px;
+  display: inline-block;
+  margin-bottom: 12px;
+  box-shadow: 0 3px 8px rgba(255, 107, 107, 0.5);
+}
+.spin-reward-ok {
+  padding: 12px 30px;
+  font-size: 15px;
+  font-weight: 800;
+  color: #FFF;
+  background: linear-gradient(180deg, #2E1645, #1A0A2A);
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  border-radius: 12px;
+  cursor: pointer;
+}
+
+/* ── Confetti ── */
+.spin-confetti {
+  position: absolute;
+  bottom: 50%;
+  width: 10px;
+  height: 14px;
+  border-radius: 2px;
+  pointer-events: none;
+  animation: spinConfettiFly 1.5s ease-out forwards;
+  z-index: 11;
+}
+@keyframes spinConfettiFly {
+  0% { transform: translate(0, 0) rotate(0); opacity: 1; }
+  100% { transform: translate(var(--confetti-dx), var(--confetti-dy)) rotate(720deg); opacity: 0; }
+}
   /* ============================================================
      Home v3 — premium home screen (targets 9.5+ in HOME_AUDIT.md)
      ============================================================

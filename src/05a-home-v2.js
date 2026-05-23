@@ -305,6 +305,11 @@
       setTimeout(function() { try { maybeShowLeagueTile(); } catch (e) {} }, 3000);
     }
 
+    // Stage 36 — Daily Spin Wheel tile.
+    if (typeof maybeShowSpinTile === 'function') {
+      setTimeout(function() { try { maybeShowSpinTile(); } catch (e) {} }, 500);
+    }
+
     // Tier-icons tap → reveal stats bubble (same behaviour as v1)
     var iconsTap = document.getElementById('home-icons-tap');
     if (iconsTap) {

@@ -26,6 +26,7 @@
   // We never touch the primary CTA, the hero, or the pid line — those are
   // load-bearing for the addiction loop and must stay visible in every variant.
   var SECONDARY_TILE_SELECTORS = [
+    '#spin-home-tile',
     '#home-v2-boards',
     '#home-v2-season-pass',
     '#league-home-tile',
@@ -117,6 +118,11 @@
     var out = [];
     // Each helper reads the relevant tile from DOM and returns a card object
     // only if there's something hot worth showing. Order = priority.
+    // Spin wheel — top priority when available (daily-return hook).
+    var spinTile = document.getElementById('spin-home-tile');
+    if (spinTile && spinTile.classList.contains('has-spin')) {
+      out.push({ action: 'spin', icon: '🎡', title: 'גלגל יומי חינם', sub: '🎁 ספין חינם זמין עכשיו!', cls: 'hot' });
+    }
     var sp = document.getElementById('home-v2-season-pass');
     if (sp && sp.style.display !== 'none') {
       var claim = sp.querySelector('#home-v2-sp-claim');
@@ -169,6 +175,7 @@
   function runCarouselAction(action) {
     // Each action triggers a click on the underlying tile to reuse its logic.
     var map = {
+      spin: '#spin-home-tile',
       season: '#home-v2-season-pass',
       league: '#league-home-tile',
       rival: '#rival-home-tile',
@@ -233,6 +240,11 @@
 
   function pickHottestSignal() {
     // Returns a signal object or null. Priority encoded by order.
+    // Spin wheel — top priority when available (daily-return hook).
+    var spinTile = document.getElementById('spin-home-tile');
+    if (spinTile && spinTile.classList.contains('has-spin')) {
+      return { icon: '🎡', title: 'גלגל יומי חינם!', sub: 'סובב פעם ביום וזכה בפרס משתנה', cta: '🎁 סובב עכשיו', sel: '#spin-home-tile', cls: 'hero-reward' };
+    }
     var league = document.getElementById('league-home-tile');
     if (league && league.querySelector('.league-tile-reward')) {
       return { icon: '⚔️', title: 'פרס ליגה ממתין!', sub: 'אסוף את פרס שבוע שעבר', cta: '🎁 לאסוף', sel: '#league-home-tile', cls: 'hero-reward' };
