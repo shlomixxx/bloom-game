@@ -1165,6 +1165,83 @@ CREATE INDEX IF NOT EXISTS idx_skin_configurations_sort
   ON skin_configurations (sort_order, id);
 
 -- ============================================================
+-- Limited-time Bundles (Stage 25 — themed event packs, May 2026)
+-- Multi-day premium bundles tied to specific events (Hanukkah, Valentine,
+-- Black Friday, etc.). Stronger FOMO than Daily Deals because: (a) bigger
+-- contents, (b) longer window so anticipation builds, (c) explicit themed
+-- design (color, emoji decoration) signals "this is special / limited".
+--
+-- Differs from Daily Deals: Daily Deals = 1 deal/day, auto-rotate; Bundles
+-- = admin-scheduled, theme-decorated, often 3-30 day windows.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS limited_bundles (
+  id                      SERIAL PRIMARY KEY,
+  slug                    VARCHAR(40) UNIQUE NOT NULL,
+  name                    VARCHAR(120) NOT NULL,
+  description             TEXT,
+  emoji                   VARCHAR(10),
+  -- Theme color (hex) for the banner gradient.
+  theme_color             VARCHAR(20) DEFAULT '#A855F7',
+  -- Decoration emoji that floats around the modal (e.g. 🕎 for Hanukkah).
+  decoration_emoji        VARCHAR(10),
+  price_gems              INT NOT NULL,
+  original_value          INT,
+  contents                JSONB NOT NULL DEFAULT '{}'::jsonb,
+  starts_at               TIMESTAMPTZ NOT NULL,
+  ends_at                 TIMESTAMPTZ NOT NULL,
+  is_enabled              BOOLEAN NOT NULL DEFAULT TRUE,
+  max_purchases_per_device INT NOT NULL DEFAULT 1,
+  sort_order              INT NOT NULL DEFAULT 100,
+  created_at              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at              TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_limited_bundles_window
+  ON limited_bundles (is_enabled, starts_at, ends_at);
+
+CREATE TABLE IF NOT EXISTS limited_bundle_purchases (
+  id                SERIAL PRIMARY KEY,
+  device_id         VARCHAR(64) NOT NULL,
+  bundle_id         INT NOT NULL,
+  price_paid        INT,
+  contents_snapshot JSONB,
+  purchased_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_limited_bundle_purch_dev
+  ON limited_bundle_purchases (device_id, bundle_id);
+
+-- 2 config keys.
+INSERT INTO game_config (key, value) VALUES ('bundles_enabled',       'true') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('bundles_show_on_home',  'true') ON CONFLICT (key) DO NOTHING;
+
+-- Seed 3 example bundles starting from today. Admin will edit dates.
+-- Format: (slug, name, description, emoji, theme_color, decoration_emoji,
+--          price, value, contents, starts_at, ends_at)
+-- Slug must stay unique across all bundles ever created.
+INSERT INTO limited_bundles (slug, name, description, emoji, theme_color, decoration_emoji, price_gems, original_value, contents, starts_at, ends_at) VALUES
+  ('hanukkah_2026', '🕎 חבילת חנוכה',
+   'חבילה מיוחדת לחנוכה — 8 ימים, 8 מתנות',
+   '🕎', '#0B3A82', '🕯',
+   600, 2400,
+   '{"gems":1500,"skin_id":"gold","bp_tiers":3,"chest_count":5,"streak_freezes":2}'::jsonb,
+   NOW(),
+   NOW() + INTERVAL '8 days'),
+  ('valentine_2026', '💕 חבילת ולנטיין',
+   'אהבת לאהוב? תאהב גם את החבילה הזו — בלעדית לוולנטיין',
+   '💕', '#EC4899', '🌹',
+   400, 1800,
+   '{"gems":1000,"skin_id":"candy","bp_tiers":2,"chest_count":3}'::jsonb,
+   NOW(),
+   NOW() + INTERVAL '14 days'),
+  ('black_friday_2026', '🔥 בלאק פריידיי',
+   'הצעה אחת בשנה! חבילת המגה הגדולה ביותר במחיר הטוב ביותר',
+   '🔥', '#1F2937', '💸',
+   1200, 5000,
+   '{"gems":3000,"skin_id":"aurora","bp_tiers":5,"chest_count":10,"streak_freezes":5}'::jsonb,
+   NOW() + INTERVAL '60 days',
+   NOW() + INTERVAL '63 days')
+ON CONFLICT (slug) DO NOTHING;
+
+-- ============================================================
 -- Pet / Mascot (Stage 28 — Tamagotchi emotional anchor, May 2026)
 -- A virtual flower-pet that grows with the player. 4 evolution stages
 -- (sprout → sapling → bloom → king-bloom) by level. 4 moods based on

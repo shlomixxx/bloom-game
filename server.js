@@ -5245,6 +5245,217 @@ app.post('/api/pet/grant-xp', requireDeviceAuth, async (req, res) => {
 });
 
 // ============================================================
+// Stage 25 — Limited-time Bundles (themed event packs)
+// Multi-day premium bundles with countdown + theme color. Stronger
+// FOMO than Daily Deals because window is longer (3-30 days) and
+// design is theme-specific (Hanukkah / Valentine / Black Friday).
+// ============================================================
+async function _loadBundlesConfig() {
+  try {
+    const r = await pool.query(`SELECT key, value FROM game_config WHERE key LIKE 'bundles_%'`);
+    const out = {};
+    r.rows.forEach(row => { out[row.key] = row.value; });
+    return out;
+  } catch (e) { return {}; }
+}
+
+app.get('/api/bundles/active', async (req, res) => {
+  try {
+    const cfg = await _loadBundlesConfig();
+    if (cfg.bundles_enabled === 'false') return res.json({ ok: true, enabled: false });
+    const deviceId = (req.query.deviceId || '').toString().slice(0, 64);
+    const r = await pool.query(
+      `SELECT id, slug, name, description, emoji, theme_color, decoration_emoji,
+              price_gems, original_value, contents, starts_at, ends_at,
+              max_purchases_per_device, sort_order
+         FROM limited_bundles
+        WHERE is_enabled = TRUE
+          AND starts_at <= NOW()
+          AND ends_at >= NOW()
+        ORDER BY sort_order, id`
+    );
+    // Decorate with purchase count per device.
+    let purchases = {};
+    if (deviceId && deviceId.length >= 8 && r.rows.length > 0) {
+      const ids = r.rows.map(x => x.id);
+      try {
+        const purR = await pool.query(
+          `SELECT bundle_id, COUNT(*) AS cnt FROM limited_bundle_purchases
+            WHERE device_id = $1 AND bundle_id = ANY($2::int[])
+            GROUP BY bundle_id`,
+          [deviceId, ids]
+        );
+        purR.rows.forEach(row => { purchases[row.bundle_id] = parseInt(row.cnt, 10) || 0; });
+      } catch (e) {}
+    }
+    const bundles = r.rows.map(row => {
+      const purchased = purchases[row.id] || 0;
+      const remaining = Math.max(0, (row.max_purchases_per_device || 1) - purchased);
+      const discountPct = row.original_value && row.original_value > row.price_gems
+        ? Math.round(((row.original_value - row.price_gems) / row.original_value) * 100)
+        : null;
+      return {
+        id: row.id,
+        slug: row.slug,
+        name: row.name,
+        description: row.description,
+        emoji: row.emoji,
+        themeColor: row.theme_color,
+        decorationEmoji: row.decoration_emoji,
+        priceGems: row.price_gems,
+        originalValue: row.original_value,
+        discountPct,
+        contents: row.contents,
+        startsAt: row.starts_at,
+        endsAt: row.ends_at,
+        maxPurchases: row.max_purchases_per_device || 1,
+        purchasesByMe: purchased,
+        remainingForMe: remaining,
+        canBuy: remaining > 0
+      };
+    });
+    res.json({ ok: true, enabled: true, bundles });
+  } catch (e) {
+    console.error('GET /api/bundles/active', e);
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
+app.post('/api/bundles/buy', requireDeviceAuth, async (req, res) => {
+  try {
+    const { deviceId, bundleId } = req.body || {};
+    if (typeof deviceId !== 'string' || deviceId.length < 8 || deviceId.length > 64) {
+      return res.status(400).json({ error: 'bad_device' });
+    }
+    const bundleIdN = parseInt(bundleId, 10);
+    if (!Number.isFinite(bundleIdN) || bundleIdN <= 0) return res.status(400).json({ error: 'bad_bundle' });
+    if (!checkRateLimit('bundle_buy', deviceId, 10, 60 * 60 * 1000)) {
+      return res.status(429).json({ error: 'rate_limited' });
+    }
+    const cfg = await _loadBundlesConfig();
+    if (cfg.bundles_enabled === 'false') return res.json({ ok: false, reason: 'disabled' });
+    // Look up bundle + verify active window.
+    const bR = await pool.query(
+      `SELECT id, slug, name, price_gems, contents, starts_at, ends_at,
+              max_purchases_per_device, is_enabled
+         FROM limited_bundles WHERE id = $1`,
+      [bundleIdN]
+    );
+    const bundle = bR.rows[0];
+    if (!bundle || !bundle.is_enabled) return res.json({ ok: false, reason: 'not_found' });
+    const now = new Date();
+    if (new Date(bundle.starts_at) > now) return res.json({ ok: false, reason: 'not_started' });
+    if (new Date(bundle.ends_at) < now) return res.json({ ok: false, reason: 'expired' });
+    // Check existing purchase count.
+    const purR = await pool.query(
+      `SELECT COUNT(*) AS cnt FROM limited_bundle_purchases WHERE device_id = $1 AND bundle_id = $2`,
+      [deviceId, bundleIdN]
+    );
+    const existing = parseInt(purR.rows[0].cnt, 10) || 0;
+    if (existing >= (bundle.max_purchases_per_device || 1)) {
+      return res.json({ ok: false, reason: 'limit_reached' });
+    }
+    const contents = bundle.contents || {};
+    const grantGems = parseInt(contents.gems || 0, 10) || 0;
+    const grantBpTiers = parseInt(contents.bp_tiers || 0, 10) || 0;
+    const grantChests = parseInt(contents.chest_count || 0, 10) || 0;
+    const grantFreezes = parseInt(contents.streak_freezes || 0, 10) || 0;
+    const grantSkin = contents.skin_id && typeof contents.skin_id === 'string' && contents.skin_id.length < 40
+      ? contents.skin_id : null;
+    // Atomic transaction.
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const debit = await client.query(
+        `UPDATE player_profiles
+            SET balance = balance - $1, updated_at = NOW()
+          WHERE device_id = $2 AND balance >= $1 RETURNING balance`,
+        [bundle.price_gems, deviceId]
+      );
+      if (!debit.rows[0]) {
+        await client.query('ROLLBACK');
+        const balR = await pool.query(`SELECT balance FROM player_profiles WHERE device_id = $1`, [deviceId]);
+        const bal = balR.rows[0] ? Number(balR.rows[0].balance) : 0;
+        return res.json({ ok: false, reason: 'insufficient_funds', price: bundle.price_gems, balance: bal });
+      }
+      if (grantGems > 0) {
+        await client.query(
+          `UPDATE player_profiles
+              SET balance = balance + $1, total_earned = total_earned + $1, updated_at = NOW()
+            WHERE device_id = $2`,
+          [grantGems, deviceId]
+        );
+      }
+      if (grantSkin && grantSkin !== 'classic') {
+        await client.query(
+          `INSERT INTO player_skins (device_id, skin_id) VALUES ($1, $2)
+           ON CONFLICT (device_id, skin_id) DO NOTHING`,
+          [deviceId, grantSkin]
+        );
+      }
+      if (grantBpTiers > 0) {
+        // Reuse the BP XP boost pattern used by gacha + starter pack.
+        const cfgR = await client.query(
+          `SELECT key, value FROM game_config WHERE key LIKE 'season_tier_%_xp'`
+        );
+        const tierXp = {};
+        cfgR.rows.forEach(r => {
+          const m = r.key.match(/^season_tier_(\d+)_xp$/);
+          if (m) tierXp[parseInt(m[1], 10)] = parseInt(r.value, 10);
+        });
+        const seasonId = 'S1';
+        const curR = await client.query(
+          `SELECT xp FROM player_season_progress WHERE device_id = $1 AND season_id = $2`,
+          [deviceId, seasonId]
+        );
+        const curXp = curR.rows[0] ? (Number(curR.rows[0].xp) || 0) : 0;
+        let curTier = 0;
+        for (let t2 = 1; t2 <= 20; t2++) {
+          if (tierXp[t2] && curXp >= tierXp[t2]) curTier = t2;
+        }
+        const targetTier = Math.min(20, curTier + grantBpTiers);
+        const xpBoost = Math.max(0, (tierXp[targetTier] || curXp) - curXp);
+        if (xpBoost > 0) {
+          await client.query(
+            `INSERT INTO player_season_progress (device_id, season_id, xp)
+                VALUES ($1, $2, $3)
+             ON CONFLICT (device_id, season_id) DO UPDATE SET xp = player_season_progress.xp + $3, updated_at = NOW()`,
+            [deviceId, seasonId, xpBoost]
+          );
+        }
+      }
+      await client.query(
+        `INSERT INTO limited_bundle_purchases (device_id, bundle_id, price_paid, contents_snapshot)
+             VALUES ($1, $2, $3, $4::jsonb)`,
+        [deviceId, bundleIdN, bundle.price_gems, JSON.stringify(contents)]
+      );
+      await client.query('COMMIT');
+      const finalR = await pool.query(`SELECT balance FROM player_profiles WHERE device_id = $1`, [deviceId]);
+      const newBalance = finalR.rows[0] ? Number(finalR.rows[0].balance) : null;
+      return res.json({
+        ok: true,
+        bundleId: bundleIdN,
+        price: bundle.price_gems,
+        contents,
+        granted: {
+          gems: grantGems, bpTiers: grantBpTiers, skinId: grantSkin,
+          chests: grantChests, freezes: grantFreezes
+        },
+        newBalance
+      });
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  } catch (e) {
+    console.error('POST /api/bundles/buy', e);
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
+// ============================================================
 // Live Tournaments — stage 12 (May 2026)
 //
 // Scheduled prime-time events with a fixed window + top-N prize
@@ -7716,6 +7927,114 @@ if (ADMIN_PATH && ADMIN_PASSWORD) {
       res.json({ ok: true });
     } catch (e) {
       console.error('DELETE admin/calendar/events/:id', e);
+      res.status(500).json({ error: 'internal' });
+    }
+  });
+
+  // ============================================================
+  // Admin: Limited-time Bundles CRUD (stage 25)
+  // ============================================================
+  adminRouter.get('/api/bundles', async (_req, res) => {
+    try {
+      const r = await pool.query(
+        `SELECT b.*,
+                (SELECT COUNT(*) FROM limited_bundle_purchases WHERE bundle_id = b.id) AS total_purchases,
+                (SELECT COALESCE(SUM(price_paid), 0) FROM limited_bundle_purchases WHERE bundle_id = b.id) AS total_revenue
+           FROM limited_bundles b
+          ORDER BY sort_order, id`
+      );
+      res.json({ ok: true, bundles: r.rows });
+    } catch (e) {
+      console.error('GET admin/bundles', e);
+      res.status(500).json({ error: 'internal' });
+    }
+  });
+
+  adminRouter.post('/api/bundles', async (req, res) => {
+    try {
+      const { slug, name, description, emoji, theme_color, decoration_emoji,
+              price_gems, original_value, contents, starts_at, ends_at,
+              is_enabled, max_purchases_per_device, sort_order } = req.body || {};
+      if (!slug || !name || !Number.isFinite(parseInt(price_gems, 10)) || !starts_at || !ends_at) {
+        return res.status(400).json({ error: 'missing_fields' });
+      }
+      const r = await pool.query(
+        `INSERT INTO limited_bundles (slug, name, description, emoji, theme_color, decoration_emoji,
+                                       price_gems, original_value, contents, starts_at, ends_at,
+                                       is_enabled, max_purchases_per_device, sort_order)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10, $11, $12, $13, $14)
+         RETURNING *`,
+        [
+          slug.toLowerCase().replace(/[^a-z0-9_]/g, '_').slice(0, 40),
+          String(name).slice(0, 120), description || null, emoji || null,
+          theme_color || '#A855F7', decoration_emoji || null,
+          parseInt(price_gems, 10), original_value ? parseInt(original_value, 10) : null,
+          JSON.stringify(contents || {}), starts_at, ends_at,
+          is_enabled !== false, parseInt(max_purchases_per_device, 10) || 1,
+          parseInt(sort_order, 10) || 100
+        ]
+      );
+      await pool.query(
+        `INSERT INTO admin_actions (action, target_type, target_id, details)
+           VALUES ('bundle_create', 'bundle', $1, $2)`,
+        [String(r.rows[0].id), JSON.stringify({ slug: r.rows[0].slug, name })]
+      ).catch(() => {});
+      res.json({ ok: true, bundle: r.rows[0] });
+    } catch (e) {
+      if (e.code === '23505') return res.status(400).json({ error: 'slug_exists' });
+      console.error('POST admin/bundles', e);
+      res.status(500).json({ error: 'internal' });
+    }
+  });
+
+  adminRouter.patch('/api/bundles/:id', async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      const fields = ['name', 'description', 'emoji', 'theme_color', 'decoration_emoji',
+                      'price_gems', 'original_value', 'contents', 'starts_at', 'ends_at',
+                      'is_enabled', 'max_purchases_per_device', 'sort_order'];
+      const updates = [];
+      const vals = [];
+      let p = 1;
+      fields.forEach(f => {
+        if (req.body[f] !== undefined) {
+          if (f === 'contents') {
+            updates.push(`${f} = $${p++}::jsonb`);
+            vals.push(JSON.stringify(req.body[f]));
+          } else {
+            updates.push(`${f} = $${p++}`);
+            vals.push(req.body[f]);
+          }
+        }
+      });
+      if (!updates.length) return res.json({ ok: false, reason: 'no_changes' });
+      updates.push(`updated_at = NOW()`);
+      vals.push(id);
+      const r = await pool.query(
+        `UPDATE limited_bundles SET ${updates.join(', ')} WHERE id = $${p} RETURNING *`,
+        vals
+      );
+      if (!r.rows[0]) return res.status(404).json({ error: 'not_found' });
+      await pool.query(
+        `INSERT INTO admin_actions (action, target_type, target_id, details)
+           VALUES ('bundle_patch', 'bundle', $1, $2)`,
+        [String(id), JSON.stringify({ fields: Object.keys(req.body || {}) })]
+      ).catch(() => {});
+      res.json({ ok: true, bundle: r.rows[0] });
+    } catch (e) {
+      console.error('PATCH admin/bundles/:id', e);
+      res.status(500).json({ error: 'internal' });
+    }
+  });
+
+  adminRouter.delete('/api/bundles/:id', async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      const r = await pool.query(`DELETE FROM limited_bundles WHERE id = $1 RETURNING slug`, [id]);
+      if (!r.rows[0]) return res.status(404).json({ error: 'not_found' });
+      res.json({ ok: true });
+    } catch (e) {
+      console.error('DELETE admin/bundles/:id', e);
       res.status(500).json({ error: 'internal' });
     }
   });

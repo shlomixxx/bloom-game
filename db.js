@@ -72,6 +72,34 @@ export async function initDb() {
       created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )`,
+    // Stage 25 — Limited-time Bundles (full CREATE + seed in schema.sql).
+    `CREATE TABLE IF NOT EXISTS limited_bundles (
+      id                      SERIAL PRIMARY KEY,
+      slug                    VARCHAR(40) UNIQUE NOT NULL,
+      name                    VARCHAR(120) NOT NULL,
+      description             TEXT,
+      emoji                   VARCHAR(10),
+      theme_color             VARCHAR(20) DEFAULT '#A855F7',
+      decoration_emoji        VARCHAR(10),
+      price_gems              INT NOT NULL,
+      original_value          INT,
+      contents                JSONB NOT NULL DEFAULT '{}'::jsonb,
+      starts_at               TIMESTAMPTZ NOT NULL,
+      ends_at                 TIMESTAMPTZ NOT NULL,
+      is_enabled              BOOLEAN NOT NULL DEFAULT TRUE,
+      max_purchases_per_device INT NOT NULL DEFAULT 1,
+      sort_order              INT NOT NULL DEFAULT 100,
+      created_at              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at              TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`,
+    `CREATE TABLE IF NOT EXISTS limited_bundle_purchases (
+      id                SERIAL PRIMARY KEY,
+      device_id         VARCHAR(64) NOT NULL,
+      bundle_id         INT NOT NULL,
+      price_paid        INT,
+      contents_snapshot JSONB,
+      purchased_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`,
     // Stage 28 — Pet/Mascot table (full CREATE in schema.sql).
     `CREATE TABLE IF NOT EXISTS player_pet (
       device_id           VARCHAR(64) PRIMARY KEY,

@@ -1542,6 +1542,34 @@
     </div>
   </section>
 
+  <!-- 🎁 Limited-time Bundles (stage 25) -->
+  <section id="bundles-section" style="margin-bottom:12px">
+    <h2>🎁 חבילות חג / Limited-time Bundles <button class="tip-btn" data-tip-text="<strong>🎁 Limited-time Bundles</strong><br>חבילות יום/שבוע/חודש מתוזמנות עם countdown + עיצוב חג.<div class=&quot;tip-example&quot;>💡 <strong>למה זה ממכר</strong>: FOMO חזק יותר מ-Daily Deals כי החלון ארוך יותר (3-30 ימים) — anticipation נבנה לאט. עיצוב נושאי (Hanukkah/Valentine/Black Friday) הופך אותו ל-event ולא רק עוד הצעה.<br><br>📊 <strong>שימוש</strong>: צור חבילה לכל חג גדול (חנוכה, ולנטיין, פסח, יום עצמאות, black friday, חגי המשחק). הגדר decoration emoji ש-ymrcd סביב ה-modal (כמו 🕎 לחנוכה).<br><br>⚠ Slug חייב להיות ייחודי. אם תרצה חבילה חוזרת שנה הבאה — תיצור slug חדש (hanukkah_2027).</div>">?</button></h2>
+    <div style="padding:12px 16px;background:var(--card);border-radius:10px;margin-top:8px">
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+        <div class="rewards-grid" data-keys="bundles_enabled,bundles_show_on_home"></div>
+      </div>
+
+      <div style="margin-bottom:8px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <div style="font-size:13px;font-weight:700;color:var(--gold)">📦 חבילות מתוזמנות</div>
+          <div style="display:flex;gap:6px">
+            <button id="bundle-preset-hanukkah" class="btn-secondary" style="padding:6px 12px;font-size:11px">🕎 חנוכה</button>
+            <button id="bundle-preset-valentine" class="btn-secondary" style="padding:6px 12px;font-size:11px">💕 ולנטיין</button>
+            <button id="bundle-preset-bf" class="btn-secondary" style="padding:6px 12px;font-size:11px">🔥 Black Friday</button>
+            <button id="bundle-add-btn" class="btn-primary" style="padding:6px 14px;font-size:11px">+ חבילה ריקה</button>
+          </div>
+        </div>
+        <div id="bundles-list" style="display:flex;flex-direction:column;gap:6px;font-size:12px">
+          <div style="color:var(--muted);padding:10px;text-align:center">⏳ טוען...</div>
+        </div>
+      </div>
+
+      <div id="bundles-status" style="font-size:11px;color:var(--muted);text-align:center;margin-top:8px"></div>
+    </div>
+  </section>
+
   <!-- 🌱 Pet / Mascot (stage 28) -->
   <section id="pet-section" style="margin-bottom:12px">
     <h2>🌱 Pet / Mascot — חיית מחמד <button class="tip-btn" data-tip-text="<strong>🌱 Pet / Mascot</strong><br>פרח virtual שגדל איתך — Tamagotchi pattern.<div class=&quot;tip-example&quot;>💡 <strong>למה זה ממכר</strong>: emotional anchor. שחקנים מרגישים אחראים על הפרח. אם לא משחקים יום-יומיים — הפרח עצוב/בוכה. <strong>זה Tamagotchi pattern שיצר תעשייה של $10B+</strong> בעצמו.<br><br>📊 4 שלבי אבולוציה: 🌱 נבט (דרגות 1-5) → 🌿 שתיל (6-10) → 🌸 פריחה (11-15) → 🌺 מלך פריחה (16-20).<br>📊 4 מצבי רוח לפי שעות מאז ביקור אחרון: <24h שמח 😊 / <48h בסדר 😐 / <72h עצוב 😢 / >72h בוכה 😭.<br>📊 2 פעולות יומיות: 💗 ליטוף חינם (פעם ביום, +20💎), 🍽 האכלה (10💎 → 50 XP, מקס 3/יום).<br>📊 XP גם נצבר אוטומטית מכל משחק (15 XP/game default).</div>">?</button></h2>
@@ -2649,6 +2677,10 @@
     dyn_comeback_reward:     'פרס ה-💎 שנותן ה-comeback overlay.<div class="tip-example">📊 ברירת מחדל 150💎.<br>💡 גדול מספיק כדי שירגיש משמעותי, קטן מספיק כדי שלא יהיה אטרקציה לפנות-חוץ-בעצמך.<br>📊 ערכים: 50 (קמצני), 150 (default), 300 (נדיב, למתחילים), 500 (אגרסיבי).</div>',
     dyn_comeback_freeze_gift: 'מספר הקפאות חינם שנותנים עם ה-comeback bonus.<div class="tip-example">📊 ברירת מחדל 1.<br>💡 השילוב 150💎 + 1 הקפאה = "ברוך שובך + אנחנו נשמור עליך לא לנפול שוב". פסיכולוגית חזק.<br>📊 ערך 0 = רק 💎, ערך 2 = "פרמיום" comeback. ערך 3+ = ייצור הקפאות בחינם דרך win-back farming, אל תעלה מעל 1-2.</div>',
 
+    // ---- Limited-time Bundles (stage 25) ----
+    bundles_enabled: 'הפעלת מערכת חבילות חג / Limited-time Bundles.<div class="tip-example">📊 ברירת מחדל פעיל. <strong>FOMO חזק יותר מ-Daily Deals</strong> כי חלון זמן ארוך יותר (3-30 ימים) + עיצוב נושאי.<br>💡 שימוש מומלץ: צור חבילה לכל חג גדול (חנוכה, ולנטיין, פסח, יום עצמאות, Black Friday, יום הולדת המשחק). השתמש ב-presets כדי להתחיל מהר.<br>📊 שחקנים רוכשים חבילות חג בשיעור 3-7x גבוה יותר מ-Daily Deals כי החג עצמו מייצר anticipation.</div>',
+    bundles_show_on_home: 'הצגת ה-banners של החבילות בבית.<div class="tip-example">📊 ברירת מחדל פעיל. כיבוי = החבילות עדיין נגישות דרך API/admin, אבל לא יוצגו אוטומטית לשחקנים.<br>💡 כיבוי מתאים ל-A/B test — חצי מהשחקנים רואים banners, חצי לא.</div>',
+
     // ---- Pet / Mascot (stage 28) ----
     pet_enabled: 'הפעלת מערכת חיית המחמד.<div class="tip-example">📊 ברירת מחדל פעיל. <strong>Tamagotchi pattern</strong> — emotional anchor חזק שיצר תעשייה של $10B+ בעצמו.<br>💡 השחקן מקבל פרח virtual שגדל איתו, ויש לו 4 מצבי רוח שמשתנים לפי הזמן מאז ביקור אחרון. אם השחקן לא יבקר 24+ שעות — הפרח עצוב/בוכה. זה מנגנון אשמה שמחזיר שחקנים יום אחרי יום.<br>⚠ כיבוי = מסתיר לחלוטין את המערכת. הdata בDB נשמר ויחזור כשתפעיל שוב.</div>',
     pet_max_level: 'מקסימום דרגה לפרח.<div class="tip-example">📊 ברירת מחדל 20. ערכים: 10-50.<br>💡 4 שלבי אבולוציה: 🌱 נבט (דרגות 1-5) → 🌿 שתיל (6-10) → 🌸 פריחה (11-15) → 🌺 מלך פריחה (16-20). אם תעלה את המקסימום, השלבים החדשים יחולקו ביחס. v1 לא מוסיף שלבי אבולוציה נוספים.</div>',
@@ -3484,6 +3516,239 @@
     loadDailyDeals();
     loadGachaPool();
     loadCalendarEvents();
+    loadBundles();
+  }
+
+  // ============================================================
+  // 🎁 Limited-time Bundles admin
+  // ============================================================
+  async function loadBundles() {
+    var host = document.getElementById('bundles-list');
+    if (!host) return;
+    try {
+      var r = await fetch('/' + ADMIN_PATH + '/api/bundles').then(function(r){return r.json();});
+      var bundles = (r && r.bundles) || [];
+      if (!bundles.length) {
+        host.innerHTML = '<div style="color:var(--muted);padding:10px;text-align:center">אין חבילות מתוזמנות</div>';
+      } else {
+        var now = Date.now();
+        host.innerHTML = bundles.map(function(b) {
+          var startsMs = new Date(b.starts_at).getTime();
+          var endsMs = new Date(b.ends_at).getTime();
+          var status;
+          if (!b.is_enabled) status = '<span style="display:inline-block;padding:2px 6px;background:rgba(0,0,0,0.15);color:var(--muted);border-radius:6px;font-size:10px;font-weight:700">⏸ כבוי</span>';
+          else if (now < startsMs) status = '<span style="display:inline-block;padding:2px 6px;background:rgba(59,130,246,0.2);color:#1E40AF;border-radius:6px;font-size:10px;font-weight:700">⏳ עתידי</span>';
+          else if (now > endsMs) status = '<span style="display:inline-block;padding:2px 6px;background:rgba(0,0,0,0.15);color:var(--muted);border-radius:6px;font-size:10px;font-weight:700">⌛ הסתיים</span>';
+          else status = '<span style="display:inline-block;padding:2px 6px;background:rgba(159,225,203,0.4);color:#04342C;border-radius:6px;font-size:10px;font-weight:700">🟢 פעיל</span>';
+          var contents = b.contents || {};
+          var contentSummary = [];
+          if (contents.gems) contentSummary.push('💎 ' + contents.gems);
+          if (contents.skin_id) contentSummary.push('🎨 ' + contents.skin_id);
+          if (contents.bp_tiers) contentSummary.push('🎖 ' + contents.bp_tiers);
+          if (contents.chest_count) contentSummary.push('🎁 ' + contents.chest_count);
+          if (contents.streak_freezes) contentSummary.push('🛡 ' + contents.streak_freezes);
+          var dateRange = new Date(b.starts_at).toLocaleDateString('he-IL', {day:'2-digit',month:'2-digit'}) +
+            ' → ' + new Date(b.ends_at).toLocaleDateString('he-IL', {day:'2-digit',month:'2-digit'});
+          return '<div style="display:grid;grid-template-columns:auto 1fr auto auto;gap:10px;padding:10px 12px;background:var(--bg);border-radius:8px;align-items:center;border-right:4px solid ' + (b.theme_color || '#A855F7') + '">' +
+            '<div style="font-size:24px">' + (b.emoji || '🎁') + '</div>' +
+            '<div style="min-width:0">' +
+              '<div style="font-weight:700;color:var(--fg);font-size:12px">' + b.name + ' ' + status + '</div>' +
+              '<div style="font-size:10px;color:var(--muted);margin-top:2px">' +
+                b.price_gems + '💎' + (b.original_value ? ' <s>' + b.original_value + '💎</s>' : '') +
+                ' · ' + contentSummary.join(' · ') +
+                ' · 📅 ' + dateRange +
+                ' · 🛒 ' + (b.total_purchases || 0) + ' · ' + ((b.total_revenue || 0) | 0) + '💎' +
+              '</div>' +
+            '</div>' +
+            '<button class="btn-secondary" data-bun-edit="' + b.id + '" style="padding:4px 10px;font-size:11px">✏️</button>' +
+            '<button class="btn-danger" data-bun-delete="' + b.id + '" style="padding:4px 10px;font-size:11px">🗑</button>' +
+          '</div>';
+        }).join('');
+        host.querySelectorAll('[data-bun-edit]').forEach(function(b) {
+          b.onclick = function() {
+            var id = parseInt(b.getAttribute('data-bun-edit'), 10);
+            var bundle = bundles.find(function(x) { return x.id === id; });
+            if (bundle) openBundleEditor(bundle);
+          };
+        });
+        host.querySelectorAll('[data-bun-delete]').forEach(function(b) {
+          b.onclick = async function() {
+            var id = parseInt(b.getAttribute('data-bun-delete'), 10);
+            var bundle = bundles.find(function(x) { return x.id === id; });
+            if (!confirm('למחוק את "' + (bundle && bundle.name) + '"?')) return;
+            await fetch('/' + ADMIN_PATH + '/api/bundles/' + id, { method: 'DELETE' });
+            loadBundles();
+          };
+        });
+      }
+    } catch (e) {
+      host.innerHTML = '<div style="color:var(--danger);padding:10px">שגיאה: ' + e.message + '</div>';
+    }
+    // Wire preset buttons + add button
+    var addBtn = document.getElementById('bundle-add-btn');
+    if (addBtn) addBtn.onclick = function() { openBundleEditor(null); };
+    var hanu = document.getElementById('bundle-preset-hanukkah');
+    if (hanu) hanu.onclick = function() {
+      var endDate = new Date(Date.now() + 8 * 86400000);
+      openBundleEditor({
+        slug: 'hanukkah_' + new Date().getFullYear() + '_' + Math.floor(Math.random() * 1000),
+        name: '🕎 חבילת חנוכה', description: '8 ימים, 8 מתנות — בלעדי לחנוכה',
+        emoji: '🕎', theme_color: '#0B3A82', decoration_emoji: '🕯',
+        price_gems: 600, original_value: 2400,
+        contents: { gems: 1500, skin_id: 'gold', bp_tiers: 3, chest_count: 5, streak_freezes: 2 },
+        starts_at: new Date().toISOString(), ends_at: endDate.toISOString(),
+        max_purchases_per_device: 1, is_enabled: true
+      });
+    };
+    var val = document.getElementById('bundle-preset-valentine');
+    if (val) val.onclick = function() {
+      var endDate = new Date(Date.now() + 14 * 86400000);
+      openBundleEditor({
+        slug: 'valentine_' + new Date().getFullYear() + '_' + Math.floor(Math.random() * 1000),
+        name: '💕 חבילת ולנטיין', description: 'אהבת לאהוב? תאהב גם את החבילה הזו',
+        emoji: '💕', theme_color: '#EC4899', decoration_emoji: '🌹',
+        price_gems: 400, original_value: 1800,
+        contents: { gems: 1000, skin_id: 'candy', bp_tiers: 2, chest_count: 3 },
+        starts_at: new Date().toISOString(), ends_at: endDate.toISOString(),
+        max_purchases_per_device: 1, is_enabled: true
+      });
+    };
+    var bf = document.getElementById('bundle-preset-bf');
+    if (bf) bf.onclick = function() {
+      var endDate = new Date(Date.now() + 3 * 86400000);
+      openBundleEditor({
+        slug: 'black_friday_' + new Date().getFullYear() + '_' + Math.floor(Math.random() * 1000),
+        name: '🔥 בלאק פריידיי', description: 'הצעה אחת בשנה! חבילת מגה במחיר הטוב ביותר',
+        emoji: '🔥', theme_color: '#1F2937', decoration_emoji: '💸',
+        price_gems: 1200, original_value: 5000,
+        contents: { gems: 3000, skin_id: 'aurora', bp_tiers: 5, chest_count: 10, streak_freezes: 5 },
+        starts_at: new Date().toISOString(), ends_at: endDate.toISOString(),
+        max_purchases_per_device: 1, is_enabled: true
+      });
+    };
+  }
+
+  function isoToLocalInput(iso) {
+    if (!iso) return '';
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
+    var tzOffset = d.getTimezoneOffset() * 60000;
+    return new Date(d.getTime() - tzOffset).toISOString().slice(0, 16);
+  }
+
+  function openBundleEditor(bundle) {
+    var isEdit = !!bundle && !!bundle.id;
+    var b = bundle || {
+      slug: '', name: '', description: '', emoji: '🎁',
+      theme_color: '#A855F7', decoration_emoji: '',
+      price_gems: 500, original_value: 1500,
+      contents: { gems: 1000 },
+      starts_at: new Date().toISOString(),
+      ends_at: new Date(Date.now() + 7 * 86400000).toISOString(),
+      max_purchases_per_device: 1, is_enabled: true, sort_order: 100
+    };
+    var c = b.contents || {};
+    var ov = document.createElement('div');
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:9999;padding:14px';
+    ov.innerHTML =
+      '<div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:20px;max-width:500px;width:100%;max-height:92vh;overflow-y:auto;direction:rtl;text-align:right">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">' +
+          '<h3 style="margin:0;color:var(--fg)">' + (isEdit ? '✏️ ערוך חבילה' : '+ חבילה חדשה') + '</h3>' +
+          '<button id="bun-edit-close" style="border:none;background:none;font-size:20px;cursor:pointer;color:var(--muted)">×</button>' +
+        '</div>' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
+          '<label style="font-size:12px;color:var(--muted)">slug (אנגלית, ייחודי)<input id="bun-slug" value="' + escapeAttr(b.slug || '') + '" ' + (isEdit ? 'disabled' : '') + ' style="width:100%;padding:6px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--fg);margin-top:4px"></label>' +
+          '<label style="font-size:12px;color:var(--muted)">אימוג\'י<input id="bun-emoji" value="' + escapeAttr(b.emoji || '🎁') + '" maxlength="4" style="width:100%;padding:6px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--fg);margin-top:4px;text-align:center;font-size:18px"></label>' +
+        '</div>' +
+        '<label style="font-size:12px;color:var(--muted);display:block;margin-top:10px">שם<input id="bun-name" value="' + escapeAttr(b.name || '') + '" style="width:100%;padding:6px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--fg);margin-top:4px"></label>' +
+        '<label style="font-size:12px;color:var(--muted);display:block;margin-top:10px">תיאור<textarea id="bun-desc" rows="2" style="width:100%;padding:6px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--fg);margin-top:4px;font-family:inherit">' + escapeAttr(b.description || '') + '</textarea></label>' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px">' +
+          '<label style="font-size:12px;color:var(--muted)">צבע נושא (hex)<input id="bun-color" type="text" value="' + escapeAttr(b.theme_color || '#A855F7') + '" style="width:100%;padding:6px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--fg);margin-top:4px"></label>' +
+          '<label style="font-size:12px;color:var(--muted)">אימוג\'י קישוט<input id="bun-deco" value="' + escapeAttr(b.decoration_emoji || '') + '" maxlength="4" placeholder="🌹 🕯 ⭐" style="width:100%;padding:6px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--fg);margin-top:4px;text-align:center;font-size:18px"></label>' +
+        '</div>' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px">' +
+          '<label style="font-size:12px;color:var(--muted)">תחילה<input id="bun-starts" type="datetime-local" value="' + isoToLocalInput(b.starts_at) + '" style="width:100%;padding:6px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--fg);margin-top:4px"></label>' +
+          '<label style="font-size:12px;color:var(--muted)">סיום<input id="bun-ends" type="datetime-local" value="' + isoToLocalInput(b.ends_at) + '" style="width:100%;padding:6px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--fg);margin-top:4px"></label>' +
+        '</div>' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px">' +
+          '<label style="font-size:12px;color:var(--muted)">מחיר 💎<input id="bun-price" type="number" value="' + b.price_gems + '" style="width:100%;padding:6px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--fg);margin-top:4px"></label>' +
+          '<label style="font-size:12px;color:var(--muted)">ערך מקורי 💎<input id="bun-orig" type="number" value="' + (b.original_value || '') + '" style="width:100%;padding:6px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--fg);margin-top:4px"></label>' +
+        '</div>' +
+        '<div style="margin-top:14px;padding:10px;background:var(--bg);border-radius:8px">' +
+          '<div style="font-size:12px;font-weight:700;color:var(--gold);margin-bottom:8px">🎁 תוכן החבילה</div>' +
+          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:11px;color:var(--muted)">' +
+            '<label>💎 יהלומים<input id="bun-c-gems" type="number" value="' + (c.gems || 0) + '" style="width:100%;padding:4px 8px;background:var(--card);border:1px solid var(--border);border-radius:5px;color:var(--fg);margin-top:3px"></label>' +
+            '<label>🎨 סקין<input id="bun-c-skin" value="' + escapeAttr(c.skin_id || '') + '" placeholder="fire/aurora/..." style="width:100%;padding:4px 8px;background:var(--card);border:1px solid var(--border);border-radius:5px;color:var(--fg);margin-top:3px"></label>' +
+            '<label>🎖 דרגות BP<input id="bun-c-bp" type="number" value="' + (c.bp_tiers || 0) + '" style="width:100%;padding:4px 8px;background:var(--card);border:1px solid var(--border);border-radius:5px;color:var(--fg);margin-top:3px"></label>' +
+            '<label>🎁 תיבות הפתעה<input id="bun-c-chest" type="number" value="' + (c.chest_count || 0) + '" style="width:100%;padding:4px 8px;background:var(--card);border:1px solid var(--border);border-radius:5px;color:var(--fg);margin-top:3px"></label>' +
+            '<label>🛡 הקפאות רצף<input id="bun-c-freeze" type="number" value="' + (c.streak_freezes || 0) + '" style="width:100%;padding:4px 8px;background:var(--card);border:1px solid var(--border);border-radius:5px;color:var(--fg);margin-top:3px"></label>' +
+          '</div>' +
+        '</div>' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px">' +
+          '<label style="font-size:12px;color:var(--muted)">מקס\' רכישות/device<input id="bun-max" type="number" value="' + (b.max_purchases_per_device || 1) + '" min="1" style="width:100%;padding:6px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--fg);margin-top:4px"></label>' +
+          '<label style="font-size:12px;color:var(--muted)">סדר מיון<input id="bun-sort" type="number" value="' + (b.sort_order || 100) + '" style="width:100%;padding:6px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--fg);margin-top:4px"></label>' +
+        '</div>' +
+        '<label style="font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px;margin-top:10px"><input id="bun-enabled" type="checkbox" ' + (b.is_enabled ? 'checked' : '') + '> פעיל (יוצג לשחקנים בחלון הזמן)</label>' +
+        '<div style="display:flex;gap:10px;margin-top:16px">' +
+          '<button id="bun-save" class="btn-primary" style="flex:1;padding:10px">💾 שמור</button>' +
+          '<button id="bun-cancel" class="btn-secondary" style="padding:10px 16px">ביטול</button>' +
+        '</div>' +
+        '<div id="bun-status" style="font-size:11px;color:var(--muted);text-align:center;margin-top:8px"></div>' +
+      '</div>';
+    document.body.appendChild(ov);
+    var close = function() { try { ov.remove(); } catch (e) {} };
+    document.getElementById('bun-edit-close').onclick = close;
+    document.getElementById('bun-cancel').onclick = close;
+    ov.addEventListener('click', function(e) { if (e.target === ov) close(); });
+    document.getElementById('bun-save').onclick = async function() {
+      var status = document.getElementById('bun-status');
+      var body = {
+        slug: document.getElementById('bun-slug').value,
+        name: document.getElementById('bun-name').value,
+        description: document.getElementById('bun-desc').value,
+        emoji: document.getElementById('bun-emoji').value,
+        theme_color: document.getElementById('bun-color').value,
+        decoration_emoji: document.getElementById('bun-deco').value,
+        price_gems: parseInt(document.getElementById('bun-price').value, 10),
+        original_value: parseInt(document.getElementById('bun-orig').value, 10) || null,
+        contents: {},
+        starts_at: new Date(document.getElementById('bun-starts').value).toISOString(),
+        ends_at: new Date(document.getElementById('bun-ends').value).toISOString(),
+        max_purchases_per_device: parseInt(document.getElementById('bun-max').value, 10) || 1,
+        sort_order: parseInt(document.getElementById('bun-sort').value, 10) || 100,
+        is_enabled: document.getElementById('bun-enabled').checked
+      };
+      var g = parseInt(document.getElementById('bun-c-gems').value, 10);
+      var s = document.getElementById('bun-c-skin').value.trim();
+      var bp = parseInt(document.getElementById('bun-c-bp').value, 10);
+      var ch = parseInt(document.getElementById('bun-c-chest').value, 10);
+      var fz = parseInt(document.getElementById('bun-c-freeze').value, 10);
+      if (g > 0) body.contents.gems = g;
+      if (s) body.contents.skin_id = s;
+      if (bp > 0) body.contents.bp_tiers = bp;
+      if (ch > 0) body.contents.chest_count = ch;
+      if (fz > 0) body.contents.streak_freezes = fz;
+      if (!body.slug || !body.name || !Number.isFinite(body.price_gems)) {
+        status.textContent = '✗ חסר slug / שם / מחיר'; status.style.color = 'var(--danger)'; return;
+      }
+      try {
+        var url = '/' + ADMIN_PATH + '/api/bundles' + (isEdit ? '/' + bundle.id : '');
+        var method = isEdit ? 'PATCH' : 'POST';
+        var r = await fetch(url, {
+          method: method, headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+        var resp = await r.json();
+        if (resp.ok) {
+          status.textContent = '✓ נשמר'; status.style.color = 'var(--success)';
+          setTimeout(function() { close(); loadBundles(); }, 500);
+        } else {
+          status.textContent = '✗ ' + (resp.error || 'שגיאה'); status.style.color = 'var(--danger)';
+        }
+      } catch (e) {
+        status.textContent = '✗ ' + e.message; status.style.color = 'var(--danger)';
+      }
+    };
   }
 
   // ============================================================

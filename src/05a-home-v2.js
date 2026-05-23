@@ -268,6 +268,12 @@
       setTimeout(function() { try { maybeShowPetWidget(); } catch (e) {} }, 700);
     }
 
+    // Stage 25 — Limited-time Bundles. Appended at the END of home
+    // (lower priority than time-critical surfaces like starter/daily-deal).
+    if (typeof maybeShowBundleBanners === 'function') {
+      setTimeout(function() { try { maybeShowBundleBanners(); } catch (e) {} }, 1800);
+    }
+
     // Tier-icons tap → reveal stats bubble (same behaviour as v1)
     var iconsTap = document.getElementById('home-icons-tap');
     if (iconsTap) {
