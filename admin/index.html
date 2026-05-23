@@ -1605,6 +1605,26 @@
     </div>
   </section>
 
+  <!-- ⚔️ Weekly Leagues (stage 34) -->
+  <section id="leagues-section" style="margin-bottom:12px">
+    <h2>⚔️ ליגות שבועיות <button class="tip-btn" data-tip-text="<strong>⚔️ Weekly Leagues</strong><br>5-tier weekly ladder based on Lifetime XP gain.<div class=&quot;tip-example&quot;>💡 <strong>למה זה ממכר</strong>: weekly reset = anxiety + aspiration. כל יום ראשון השחקן רואה "השבוע מתחיל מחדש" וצריך לתפוס מקום בליגה. שונה מ-leaderboards סטטיים — זה רץ קצוב, ויש פרס סופי שבועי.<br><br>📊 5 ליגות: 🥉 Bronze (default) → 🥈 Silver (500 XP/שבוע) → 🥇 Gold (2K) → 💎 Diamond (10K) → 👑 Master (50K).<br>📊 פרס שבועי: 50 / 150 / 400 / 1000 / 3000 💎.<br><br>📊 ה-snapshot של week_start נוצר אוטומטית בפעם הראשונה שהשחקן נכנס לאחר ה-Sunday reset. לא צריך scheduler — lazy initialization.</div>">?</button></h2>
+    <div style="padding:12px 16px;background:var(--card);border-radius:10px;margin-top:8px">
+
+      <div class="rewards-grid" data-keys="league_enabled" style="margin-bottom:12px"></div>
+
+      <div style="margin-bottom:12px">
+        <div style="font-size:13px;font-weight:700;color:var(--gold);margin-bottom:6px">🎯 ערכי סף לליגות (XP שבועי)</div>
+        <div class="rewards-grid" data-keys="league_threshold_silver,league_threshold_gold,league_threshold_diamond,league_threshold_master"></div>
+      </div>
+
+      <div style="margin-bottom:8px">
+        <div style="font-size:13px;font-weight:700;color:var(--gold);margin-bottom:6px">🎁 פרסי סוף-שבוע (💎)</div>
+        <div class="rewards-grid" data-keys="league_reward_bronze_gems,league_reward_silver_gems,league_reward_gold_gems,league_reward_diamond_gems,league_reward_master_gems"></div>
+      </div>
+
+    </div>
+  </section>
+
   <!-- 🥊 Rivalry System (stage 33) -->
   <section id="rivalries-section" style="margin-bottom:12px">
     <h2>🥊 יריבויות / Rivalries <button class="tip-btn" data-tip-text="<strong>🥊 Rivalry System</strong><br>Auto-pairs players close in lifetime XP for 24h personal competition.<div class=&quot;tip-example&quot;>💡 <strong>למה זה ממכר</strong>: שונה מ-leaderboard גלובלי — זה personal. השחקן רואה <strong>שם ספציפי</strong> (לא מספר), <strong>delta קטנה</strong> ('עוד 320 לעקוף'), <strong>דדליין</strong> (24h). שלושת אלה ביחד = engagement מקסימלי.<br><br>📊 ה-scheduler רץ כל 4 שעות. בוחר 200 שחקנים אקטיביים, ממיין לפי best score, יוצר ביניהם זוגות שכנים אם ה-delta < 10%. כל פעם עד 50 זוגות נוצרים. שני הצדדים מקבלים rivalry reciprocal.<br><br>📊 פרס לזוכה: 150💎. הזוכה הוא מי שצבר יותר Lifetime XP במהלך 24 השעות. ניצחון לפני התפוגה (לעקוף בכוונה) מסתיים מיד.</div>">?</button></h2>
@@ -2842,6 +2862,18 @@
     lifetime_show_on_home: 'הצגת ה-tile של פרוגרס חיים בבית.<div class="tip-example">📊 ברירת מחדל פעיל. tile עם title (e.g. "מאסטר"), level number, ⭐ stars, וpregress bar.<br>💡 כיבוי = ה-API פעיל, רק ה-tile מוסתר.</div>',
     lifetime_xp_per_level: 'XP לדרגה.<div class="tip-example">📊 ברירת מחדל 500. ערכים: 200-2000.<br>💡 500 = שחקן ממוצע (50 משחקים) יגיע לדרגה ~1-2. שחקן ותיק (500 משחקים + הישגים + פרסים) יגיע לדרגה ~30-40 מיידית.<br>📊 לדרגה 100 (פרסטיג\') צריך 50,000 XP. עם xp_per_level=500.</div>',
     lifetime_prestige_reward: 'פרס 💎 לפעולת פרסטיג\' (דרגה 100 → ⭐ + reset).<div class="tip-example">📊 ברירת מחדל 5,000💎. ערכים: 2000-15000.<br>💡 צריך להיות פרס משמעותי — מספיק לקנות Premium BP (1500) + עוד הרבה. השקעה של חודשי משחק ראויה לפרס גדול.<br>📊 שחקן שיגיע ל-10 ⭐ יקבל 50,000💎 מצטברים — שווה ערך ל-$30+ בIAP.</div>',
+
+    // ---- Weekly Leagues (stage 34) ----
+    league_enabled: 'הפעלת מערכת הליגות השבועיות.<div class="tip-example">📊 ברירת מחדל פעיל. 5-tier weekly ladder — XP שצברת השבוע (lifetime XP מ-stage 30) קובע ליגה.<br>💡 <strong>למה זה ממכר</strong>: weekly reset = aspiration. שונה מ-leaderboards סטטיים שהם abstract. שחקן רואה ביום ראשון "השבוע מתחיל" ויש לו 7 ימים להגיע לפסגה.<br>📊 כל יום ראשון בחצות (שעון ישראל) ה-week_start מתאפס lazy — כשהשחקן נכנס לראשונה אחרי ראשון, חדשה snapshot נוצרת.</div>',
+    league_threshold_silver: 'XP שבועי מינימלי לליגת Silver.<div class="tip-example">📊 ברירת מחדל 500. ערכים: 200-1000.<br>💡 צריך להיות נגיש לרוב השחקנים (5-10 משחקים) — בשביל שהם ידעו שאפשר.<br>📊 חישוב: 500 / 15 XP per game (default pet_xp_per_game) = ~33 משחקים. סביר לשבוע פעיל.</div>',
+    league_threshold_gold: 'XP שבועי מינימלי לליגת Gold.<div class="tip-example">📊 ברירת מחדל 2,000. ערכים: 1,000-5,000.<br>💡 ה-sweet spot של "שחקן פעיל מאוד". 4× silver — מסמן רצינות.</div>',
+    league_threshold_diamond: 'XP שבועי מינימלי לליגת Diamond.<div class="tip-example">📊 ברירת מחדל 10,000. ערכים: 5,000-25,000.<br>💡 דורש "hardcore play". יחס 5× ל-gold — מבדיל בין שחקן רגיל לשחקן מאוד מעורב.</div>',
+    league_threshold_master: 'XP שבועי מינימלי לליגת Master.<div class="tip-example">📊 ברירת מחדל 50,000. ערכים: 25,000-200,000.<br>💡 ה-top 0.5%. שחקן שמשחק כל יום, פותח הישגים, ומסיים יעדי קלאן/אלבום.<br>⚠ אם הסף גבוה מדי = אף אחד לא מגיע, האסיר נעלם. נמוך מדי = ה-prestige של master מתקרר.</div>',
+    league_reward_bronze_gems: 'פרס שבועי לBronze.<div class="tip-example">📊 ברירת מחדל 50💎. ערכים: 20-100.<br>💡 פרס מינימלי — גם שחקן שלא תרם הרבה מקבל "משהו". מעודד אותו להישאר.</div>',
+    league_reward_silver_gems: 'פרס שבועי לSilver.<div class="tip-example">📊 ברירת מחדל 150💎. ערכים: 100-300.</div>',
+    league_reward_gold_gems: 'פרס שבועי לGold.<div class="tip-example">📊 ברירת מחדל 400💎. ערכים: 200-800.</div>',
+    league_reward_diamond_gems: 'פרס שבועי לDiamond.<div class="tip-example">📊 ברירת מחדל 1,000💎. ערכים: 500-2,000.<br>💡 פרס משמעותי — מספיק לקנות Premium BP (1500) אחרי 2 שבועות ב-diamond.</div>',
+    league_reward_master_gems: 'פרס שבועי לMaster (פסגת הגבר).<div class="tip-example">📊 ברירת מחדל 3,000💎. ערכים: 1,500-10,000.<br>💡 פרס ענק — מצדיק את ה-grind. שחקן שמגיע ל-master כל שבוע מרוויח 12,000💎/חודש = ~$5 בערך IAP.</div>',
 
     // ---- Rivalry System (stage 33) ----
     rival_enabled: 'הפעלת מערכת היריבויות האוטומטית.<div class="tip-example">📊 ברירת מחדל פעיל. <strong>השאילתה הכי personal-engagement שיש</strong>: אחת ל-4 שעות, השרת מצרף בין שחקנים קרובים ב-Lifetime XP ויוצר ביניהם יריבות של 24 שעות.<br>💡 השחקן מקבל הודעה "רוני קרוב אליך — עוד 320 נקודות לעקוף!" + home tile + push notification. דירוג גלובלי הוא abstract — יריבות אישית עם שם ספציפי = engagement חזק פי-3.<br>⚠ כיבוי = שתי-yarivuyot פעילות יסתיימו ב-תפוגה הטבעית. אחרי כן לא ייווצרו חדשות.</div>',

@@ -300,6 +300,11 @@
       setTimeout(function() { try { maybeShowRivalTile(); } catch (e) {} }, 2800);
     }
 
+    // Stage 34 — Weekly League tile.
+    if (typeof maybeShowLeagueTile === 'function') {
+      setTimeout(function() { try { maybeShowLeagueTile(); } catch (e) {} }, 3000);
+    }
+
     // Tier-icons tap → reveal stats bubble (same behaviour as v1)
     var iconsTap = document.getElementById('home-icons-tap');
     if (iconsTap) {

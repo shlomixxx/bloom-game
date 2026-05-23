@@ -13127,6 +13127,276 @@ html[data-theme="dark"] .rival-reward-sub { color: #FCD34D; }
 html[data-theme="dark"] .rival-tips { background: rgba(99, 102, 241, 0.18); }
 html[data-theme="dark"] .rival-tips-title { color: #C7D2FE; }
 html[data-theme="dark"] .rival-tips-list { color: #D1D5DB; }
+
+/* ============================================================
+   Stage 34 — Weekly Leagues
+   5-tier ladder with color-themed cards per league (Bronze→Master).
+   Big shiny badge in modal + claim-reward card.
+   ============================================================ */
+
+.league-home-tile {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  background: linear-gradient(135deg, #1F2937, #312E81);
+  border: 2px solid #818CF8;
+  border-radius: 14px;
+  box-shadow: 0 3px 10px rgba(99, 102, 241, 0.35);
+  cursor: pointer;
+  direction: rtl;
+  text-align: right;
+  font-family: inherit;
+  color: #E0E7FF;
+  transition: transform 0.12s, box-shadow 0.18s;
+}
+.league-home-tile:hover { transform: translateY(-1px); box-shadow: 0 5px 16px rgba(129, 140, 248, 0.4); }
+.league-home-tile:active { transform: scale(0.98); }
+.league-home-tile.has-reward {
+  border-color: #FCD34D;
+  box-shadow: 0 0 0 2px rgba(252, 211, 77, 0.4), 0 5px 18px rgba(252, 211, 77, 0.5);
+  animation: lifetimePrestigeReady 1.5s ease-in-out infinite;
+}
+.league-tile-icon {
+  font-size: 34px;
+  filter: drop-shadow(0 0 8px currentColor);
+  flex-shrink: 0;
+}
+.league-tile-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.league-tile-title {
+  font-size: 13px;
+  font-weight: 900;
+  color: #FEF3C7;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.league-tile-reward {
+  display: inline-block;
+  padding: 2px 8px;
+  background: #FCD34D;
+  color: #1F2937;
+  border-radius: 7px;
+  font-size: 11px;
+  font-weight: 900;
+  animation: spRibbonPulse 1.4s ease-in-out infinite;
+}
+.league-tile-bar {
+  display: block;
+  height: 6px;
+  background: rgba(0,0,0,0.4);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.league-tile-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.5s ease-out;
+}
+.league-tile-sub { font-size: 11px; font-weight: 700; color: #C7D2FE; font-variant-numeric: tabular-nums; }
+.league-tile-arrow { font-size: 18px; color: #C7D2FE; flex-shrink: 0; }
+
+/* Modal */
+.league-modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.82);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 100001; padding: 14px;
+  animation: spOverlayFade 0.3s ease-out;
+}
+.league-modal-card {
+  background: linear-gradient(180deg, #1F2937, #312E81 50%);
+  border: 3px solid #818CF8;
+  border-radius: 22px;
+  padding: 22px 18px;
+  max-width: 420px;
+  width: 100%;
+  max-height: 92vh;
+  overflow-y: auto;
+  text-align: center;
+  direction: rtl;
+  position: relative;
+  color: #E0E7FF;
+  box-shadow: 0 24px 70px rgba(0,0,0,0.6);
+  animation: spModalPop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.league-modal-close {
+  position: absolute; top: 10px; left: 12px;
+  width: 32px; height: 32px; border: none;
+  background: rgba(255,255,255,0.15); color: #FFF;
+  border-radius: 50%; font-size: 18px; cursor: pointer;
+  line-height: 1; font-family: inherit;
+}
+.league-modal-title { font-size: 22px; font-weight: 900; color: #FCD34D; margin-bottom: 4px; }
+.league-modal-sub { font-size: 12px; font-weight: 700; color: #C7D2FE; margin-bottom: 14px; }
+
+/* Current league big card */
+.league-current-card {
+  padding: 18px 14px;
+  border-radius: 16px;
+  margin-bottom: 14px;
+  text-align: center;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.4);
+}
+.league-current-emoji {
+  font-size: 64px;
+  margin-bottom: 6px;
+  filter: drop-shadow(0 0 16px rgba(255,255,255,0.5));
+}
+.league-current-label {
+  font-size: 28px;
+  font-weight: 900;
+  color: #FFF;
+  text-shadow: 0 2px 4px rgba(0,0,0,0.4);
+  margin-bottom: 4px;
+}
+.league-current-week {
+  font-size: 13px;
+  font-weight: 700;
+  color: #FFF;
+  opacity: 0.92;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Next-tier card */
+.league-next-card {
+  padding: 12px 14px;
+  background: rgba(0,0,0,0.25);
+  border: 1px solid rgba(252,211,77,0.3);
+  border-radius: 12px;
+  margin-bottom: 14px;
+}
+.league-next-label { font-size: 13px; font-weight: 800; color: #FCD34D; margin-bottom: 8px; }
+.league-next-bar {
+  height: 10px;
+  background: rgba(0,0,0,0.5);
+  border-radius: 5px;
+  overflow: hidden;
+  margin-bottom: 6px;
+}
+.league-next-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #818CF8, #FCD34D);
+  border-radius: 5px;
+  transition: width 0.5s ease-out;
+}
+.league-next-gap { font-size: 12px; font-weight: 700; color: #E0E7FF; }
+.league-next-gap strong { color: #FCD34D; font-variant-numeric: tabular-nums; }
+
+.league-max-banner {
+  padding: 14px;
+  background: linear-gradient(135deg, #A855F7, #FCD34D);
+  color: #1F2937;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 900;
+  margin-bottom: 14px;
+}
+
+/* Unclaimed reward card */
+.league-reward-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: linear-gradient(135deg, #FCD34D, #F59E0B);
+  border-radius: 12px;
+  margin-bottom: 14px;
+  animation: lifetimePrestigeReady 1.5s ease-in-out infinite;
+}
+.league-reward-icon { font-size: 32px; flex-shrink: 0; }
+.league-reward-body { flex: 1; min-width: 0; text-align: right; }
+.league-reward-title { font-size: 14px; font-weight: 900; color: #1F2937; }
+.league-reward-sub { font-size: 11px; font-weight: 700; color: #1F2937; opacity: 0.85; margin-top: 2px; }
+.league-reward-btn {
+  padding: 8px 14px;
+  background: #1F2937;
+  color: #FCD34D;
+  border: none;
+  border-radius: 10px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 900;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+/* Ladder of all tiers */
+.league-ladder-title {
+  font-size: 13px;
+  font-weight: 900;
+  color: #FCD34D;
+  margin-bottom: 8px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid rgba(252, 211, 77, 0.25);
+  text-align: right;
+}
+.league-ladder { display: flex; flex-direction: column; gap: 6px; }
+.league-ladder-row {
+  display: grid;
+  grid-template-columns: 40px 1fr auto;
+  gap: 10px;
+  padding: 8px 12px;
+  background: rgba(255,255,255,0.06);
+  border-radius: 10px;
+  align-items: center;
+  text-align: right;
+}
+.league-ladder-row.league-ladder-current {
+  background: rgba(252,211,77,0.18);
+  border: 1px solid #FCD34D;
+  box-shadow: 0 2px 8px rgba(252, 211, 77, 0.25);
+}
+.league-ladder-emoji {
+  font-size: 26px;
+  text-align: center;
+  filter: drop-shadow(0 0 4px currentColor);
+}
+.league-ladder-info { min-width: 0; }
+.league-ladder-name { font-size: 13px; font-weight: 800; color: #FFF; }
+.league-ladder-thr { font-size: 10px; color: #C7D2FE; margin-top: 2px; }
+.league-ladder-reward { font-size: 13px; font-weight: 900; color: #FCD34D; }
+
+/* Promotion celebration */
+.league-promo-celebration {
+  position: fixed; inset: 0;
+  background: radial-gradient(circle at center, rgba(168,85,247,0.4), rgba(0,0,0,0.9));
+  display: flex; align-items: center; justify-content: center;
+  z-index: 100003; padding: 14px;
+  animation: spOverlayFade 0.4s ease-out;
+}
+.league-promo-card {
+  border: 5px solid #1F2937;
+  border-radius: 24px;
+  padding: 38px 30px;
+  max-width: 320px;
+  text-align: center;
+  direction: rtl;
+  box-shadow: 0 24px 80px rgba(0,0,0,0.7);
+  animation: spWelcomePop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.league-promo-icon {
+  font-size: 96px;
+  margin-bottom: 12px;
+  filter: drop-shadow(0 0 20px rgba(255,255,255,0.7));
+  animation: spWelcomeGiftSpin 1.3s ease-out;
+}
+.league-promo-title { font-size: 24px; font-weight: 900; color: #1F2937; margin-bottom: 6px; text-shadow: 0 2px 4px rgba(255,255,255,0.3); }
+.league-promo-sub { font-size: 20px; font-weight: 900; color: #1F2937; margin-bottom: 22px; }
+.league-promo-btn {
+  padding: 14px 32px;
+  background: #1F2937;
+  color: #FCD34D;
+  border: none;
+  border-radius: 14px;
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 900;
+  cursor: pointer;
+}
   /* ============================================================
      DARK MODE
      ============================================================

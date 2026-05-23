@@ -72,6 +72,15 @@ export async function initDb() {
       created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )`,
+    // Stage 34 — Weekly Leagues (full CREATE in schema.sql).
+    `CREATE TABLE IF NOT EXISTS player_weekly_xp (
+      device_id          VARCHAR(64) NOT NULL,
+      week_start         DATE NOT NULL,
+      xp_at_week_start   BIGINT NOT NULL,
+      best_league_seen   VARCHAR(20),
+      reward_claimed     BOOLEAN NOT NULL DEFAULT FALSE,
+      PRIMARY KEY (device_id, week_start)
+    )`,
     // Stage 33 — Rivalry System (full CREATE in schema.sql).
     `CREATE TABLE IF NOT EXISTS player_rivalries (
       id                BIGSERIAL PRIMARY KEY,

@@ -7154,6 +7154,193 @@ app.post('/api/rival/resolve', requireDeviceAuth, async (req, res) => {
 });
 
 // ============================================================
+// Stage 34 — Weekly Leagues
+// 5 tiers based on lifetime XP gained THIS week. Reset every Sunday.
+// Brawl Stars pattern: week-over-week competitive structure.
+// ============================================================
+async function _loadLeagueConfig() {
+  try {
+    const r = await pool.query(`SELECT key, value FROM game_config WHERE key LIKE 'league_%'`);
+    const out = {};
+    r.rows.forEach(row => { out[row.key] = row.value; });
+    return out;
+  } catch (e) { return {}; }
+}
+
+// Asia/Jerusalem week-start (Sunday) as YYYY-MM-DD.
+function _currentWeekStartISO() {
+  const israelNowStr = new Date().toLocaleString('en-US', { timeZone: 'Asia/Jerusalem' });
+  const d = new Date(israelNowStr);
+  // Sunday = 0 in JS. Roll back to most-recent Sunday.
+  d.setDate(d.getDate() - d.getDay());
+  d.setHours(0, 0, 0, 0);
+  return d.toISOString().slice(0, 10);
+}
+
+function _leagueForGain(gain, cfg) {
+  // Tiers: bronze < silver < gold < diamond < master
+  const thrSilver  = parseInt(cfg.league_threshold_silver  || '500',   10) || 500;
+  const thrGold    = parseInt(cfg.league_threshold_gold    || '2000',  10) || 2000;
+  const thrDiamond = parseInt(cfg.league_threshold_diamond || '10000', 10) || 10000;
+  const thrMaster  = parseInt(cfg.league_threshold_master  || '50000', 10) || 50000;
+  if (gain >= thrMaster)  return { id: 'master',   emoji: '👑', label: 'Master',   color: '#A855F7' };
+  if (gain >= thrDiamond) return { id: 'diamond',  emoji: '💎', label: 'Diamond',  color: '#3B82F6' };
+  if (gain >= thrGold)    return { id: 'gold',     emoji: '🥇', label: 'Gold',     color: '#F59E0B' };
+  if (gain >= thrSilver)  return { id: 'silver',   emoji: '🥈', label: 'Silver',   color: '#94A3B8' };
+  return { id: 'bronze', emoji: '🥉', label: 'Bronze', color: '#B45309' };
+}
+
+function _nextLeagueThreshold(gain, cfg) {
+  // Returns the gap to the next tier, or null if at Master.
+  const thrSilver  = parseInt(cfg.league_threshold_silver  || '500',   10) || 500;
+  const thrGold    = parseInt(cfg.league_threshold_gold    || '2000',  10) || 2000;
+  const thrDiamond = parseInt(cfg.league_threshold_diamond || '10000', 10) || 10000;
+  const thrMaster  = parseInt(cfg.league_threshold_master  || '50000', 10) || 50000;
+  if (gain < thrSilver)  return { target: thrSilver,  gap: thrSilver - gain,   tier: 'silver' };
+  if (gain < thrGold)    return { target: thrGold,    gap: thrGold - gain,     tier: 'gold' };
+  if (gain < thrDiamond) return { target: thrDiamond, gap: thrDiamond - gain,  tier: 'diamond' };
+  if (gain < thrMaster)  return { target: thrMaster,  gap: thrMaster - gain,   tier: 'master' };
+  return null;
+}
+
+app.get('/api/league/state', async (req, res) => {
+  try {
+    const cfg = await _loadLeagueConfig();
+    if (cfg.league_enabled === 'false') return res.json({ ok: true, enabled: false });
+    const deviceId = (req.query.deviceId || '').toString().slice(0, 64);
+    if (!deviceId || deviceId.length < 8) return res.json({ ok: true, enabled: true, needsDevice: true });
+    const weekStart = _currentWeekStartISO();
+    const currentXp = await _computeLifetimeXp(deviceId);
+    // Get-or-insert the week's snapshot. If first time this week, snapshot
+    // = current XP (so this week's gain starts at 0).
+    await pool.query(
+      `INSERT INTO player_weekly_xp (device_id, week_start, xp_at_week_start)
+           VALUES ($1, $2::date, $3)
+       ON CONFLICT (device_id, week_start) DO NOTHING`,
+      [deviceId, weekStart, currentXp]
+    );
+    const stateR = await pool.query(
+      `SELECT xp_at_week_start, best_league_seen, reward_claimed
+         FROM player_weekly_xp
+        WHERE device_id = $1 AND week_start = $2::date`,
+      [deviceId, weekStart]
+    );
+    const state = stateR.rows[0] || { xp_at_week_start: currentXp };
+    const weeklyGain = Math.max(0, currentXp - (Number(state.xp_at_week_start) || 0));
+    const league = _leagueForGain(weeklyGain, cfg);
+    const next = _nextLeagueThreshold(weeklyGain, cfg);
+    // Save best_league_seen if upgraded.
+    const tierOrder = ['bronze', 'silver', 'gold', 'diamond', 'master'];
+    const currentIdx = tierOrder.indexOf(league.id);
+    const bestIdx = state.best_league_seen ? tierOrder.indexOf(state.best_league_seen) : -1;
+    let leveledUp = false;
+    if (currentIdx > bestIdx) {
+      leveledUp = true;
+      await pool.query(
+        `UPDATE player_weekly_xp SET best_league_seen = $1
+          WHERE device_id = $2 AND week_start = $3::date`,
+        [league.id, deviceId, weekStart]
+      );
+    }
+    // Reward — looks at LAST week's snapshot (if there is one), unclaimed.
+    const prevWeekStart = (function() {
+      const d = new Date(weekStart);
+      d.setDate(d.getDate() - 7);
+      return d.toISOString().slice(0, 10);
+    })();
+    const lastWeekR = await pool.query(
+      `SELECT best_league_seen, reward_claimed, xp_at_week_start
+         FROM player_weekly_xp
+        WHERE device_id = $1 AND week_start = $2::date`,
+      [deviceId, prevWeekStart]
+    );
+    let unclaimedReward = null;
+    if (lastWeekR.rows[0] && !lastWeekR.rows[0].reward_claimed) {
+      const lastTier = lastWeekR.rows[0].best_league_seen || 'bronze';
+      const rewardKey = 'league_reward_' + lastTier + '_gems';
+      const rewardAmt = parseInt(cfg[rewardKey] || '50', 10) || 50;
+      unclaimedReward = { tier: lastTier, gems: rewardAmt };
+    }
+    res.json({
+      ok: true,
+      enabled: true,
+      weekStart,
+      weeklyGain,
+      league,
+      next,
+      progressPct: next ? Math.min(100, Math.round((1 - next.gap / (next.target - (currentIdx > 0 ? parseInt(cfg['league_threshold_' + tierOrder[currentIdx]] || '0', 10) || 0 : 0))) * 100)) : 100,
+      leveledUp,
+      unclaimedReward
+    });
+  } catch (e) {
+    console.error('GET /api/league/state', e);
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
+app.post('/api/league/claim', requireDeviceAuth, async (req, res) => {
+  try {
+    const { deviceId } = req.body || {};
+    if (typeof deviceId !== 'string' || deviceId.length < 8 || deviceId.length > 64) {
+      return res.status(400).json({ error: 'bad_device' });
+    }
+    if (!checkRateLimit('league_claim', deviceId, 10, 60 * 60 * 1000)) {
+      return res.status(429).json({ error: 'rate_limited' });
+    }
+    const cfg = await _loadLeagueConfig();
+    if (cfg.league_enabled === 'false') return res.json({ ok: false, reason: 'disabled' });
+    const weekStart = _currentWeekStartISO();
+    const prevWeekStart = (function() {
+      const d = new Date(weekStart);
+      d.setDate(d.getDate() - 7);
+      return d.toISOString().slice(0, 10);
+    })();
+    // Look up last week's row.
+    const lastR = await pool.query(
+      `SELECT best_league_seen, reward_claimed
+         FROM player_weekly_xp
+        WHERE device_id = $1 AND week_start = $2::date`,
+      [deviceId, prevWeekStart]
+    );
+    if (!lastR.rows[0]) return res.json({ ok: false, reason: 'no_last_week' });
+    if (lastR.rows[0].reward_claimed) return res.json({ ok: false, reason: 'already_claimed' });
+    const tier = lastR.rows[0].best_league_seen || 'bronze';
+    const rewardKey = 'league_reward_' + tier + '_gems';
+    const rewardAmt = parseInt(cfg[rewardKey] || '50', 10) || 50;
+    // Atomic: mark claimed + credit.
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const upd = await client.query(
+        `UPDATE player_weekly_xp SET reward_claimed = TRUE
+          WHERE device_id = $1 AND week_start = $2::date AND reward_claimed = FALSE
+          RETURNING device_id`,
+        [deviceId, prevWeekStart]
+      );
+      if (!upd.rows[0]) {
+        await client.query('ROLLBACK');
+        return res.json({ ok: false, reason: 'race_already_claimed' });
+      }
+      const credit = await client.query(
+        `UPDATE player_profiles SET balance = balance + $1, total_earned = total_earned + $1, updated_at = NOW()
+          WHERE device_id = $2 RETURNING balance`,
+        [rewardAmt, deviceId]
+      );
+      await client.query('COMMIT');
+      res.json({ ok: true, tier, reward: rewardAmt, newBalance: credit.rows[0] ? Number(credit.rows[0].balance) : null });
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  } catch (e) {
+    console.error('POST /api/league/claim', e);
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
+// ============================================================
 // Live Tournaments — stage 12 (May 2026)
 //
 // Scheduled prime-time events with a fixed window + top-N prize

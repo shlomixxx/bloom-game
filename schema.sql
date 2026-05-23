@@ -1165,6 +1165,42 @@ CREATE INDEX IF NOT EXISTS idx_skin_configurations_sort
   ON skin_configurations (sort_order, id);
 
 -- ============================================================
+-- Weekly Leagues (Stage 34, May 2026)
+-- 5 tiers (Bronze/Silver/Gold/Diamond/Master) based on lifetime XP
+-- gained THIS week. Resets every Sunday (Asia/Jerusalem). Each tier
+-- multiplies the daily login bonus and quest rewards. Creates the
+-- week-over-week competitive structure that's missing — Brawl Stars
+-- pattern that adds anxiety + aspiration.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS player_weekly_xp (
+  device_id          VARCHAR(64) NOT NULL,
+  -- Week start date (Sunday in Asia/Jerusalem).
+  week_start         DATE NOT NULL,
+  xp_at_week_start   BIGINT NOT NULL,
+  -- Computed at read time but we cache so client can show "this week's gain"
+  -- without aggregating again.
+  best_league_seen   VARCHAR(20),
+  reward_claimed     BOOLEAN NOT NULL DEFAULT FALSE,
+  PRIMARY KEY (device_id, week_start)
+);
+CREATE INDEX IF NOT EXISTS idx_weekly_xp_week
+  ON player_weekly_xp (week_start DESC);
+
+-- 4 config keys.
+INSERT INTO game_config (key, value) VALUES ('league_enabled',                    'true') ON CONFLICT (key) DO NOTHING;
+-- Threshold XP for each tier (cumulative weekly gain to reach this tier).
+INSERT INTO game_config (key, value) VALUES ('league_threshold_silver',           '500')   ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('league_threshold_gold',             '2000')  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('league_threshold_diamond',          '10000') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('league_threshold_master',           '50000') ON CONFLICT (key) DO NOTHING;
+-- End-of-week bonus per tier (claimed on Sunday).
+INSERT INTO game_config (key, value) VALUES ('league_reward_bronze_gems',         '50')    ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('league_reward_silver_gems',         '150')   ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('league_reward_gold_gems',           '400')   ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('league_reward_diamond_gems',        '1000')  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('league_reward_master_gems',         '3000')  ON CONFLICT (key) DO NOTHING;
+
+-- ============================================================
 -- Rivalry System (Stage 33, May 2026)
 -- Auto-pairs players close in lifetime XP into 24-hour "rivalries".
 -- Personal competition with a specific named opponent + deadline +
