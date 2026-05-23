@@ -3581,6 +3581,150 @@ body[data-home-variant="hero"] .home-v2-hero { padding: 0; background: transpare
   border-radius: 12px;
   cursor: pointer;
 }
+
+/* ============================================================
+   Stage 39 — UX Polish + Addiction Maximizer
+   ============================================================ */
+
+/* ── PRIORITY CALMER ────────────────────────────────────────
+   Tiles that aren't the hottest right now get visually muted.
+   Animations are paused, colors slightly desaturated, scale
+   stays at 1. The eye is drawn to the spotlight tile. */
+.polish-calmed {
+  animation: none !important;
+  transform: none !important;
+  filter: saturate(0.75) brightness(0.94);
+  opacity: 0.88;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08) !important;
+  transition: filter 0.4s ease, opacity 0.4s ease, box-shadow 0.4s ease;
+}
+.polish-calmed *,
+.polish-calmed *::before,
+.polish-calmed *::after {
+  animation-play-state: paused !important;
+}
+
+/* The winning spotlight tile gets an extra glow + scale boost */
+.polish-spotlight {
+  position: relative;
+  z-index: 2;
+}
+.polish-spotlight::before {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border-radius: inherit;
+  background: linear-gradient(135deg, rgba(255, 215, 100, 0.5), rgba(255, 100, 150, 0.3), rgba(255, 215, 100, 0.5));
+  background-size: 200% 200%;
+  z-index: -1;
+  opacity: 0;
+  animation: polishSpotlightHalo 2.6s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes polishSpotlightHalo {
+  0%, 100% { opacity: 0.4; background-position: 0% 50%; }
+  50% { opacity: 0.85; background-position: 100% 50%; }
+}
+
+/* ── MICRO-TUTORIAL BALLOON ─────────────────────────────────
+   Pointer balloon that appears above (or below) a new tile.
+   Auto-dismisses after 8 seconds or on "הבנתי ✓" click. */
+.polish-micro-tooltip {
+  position: fixed;
+  z-index: 10500;
+  opacity: 0;
+  max-width: 280px;
+  pointer-events: auto;
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+.polish-micro-tooltip.polish-tooltip-fade { opacity: 0; transform: scale(0.95); }
+.polish-tooltip-body {
+  background: linear-gradient(160deg, #FFD93D 0%, #F5AD2E 100%);
+  color: #1A0F2E;
+  border-radius: 14px;
+  padding: 12px 14px;
+  box-shadow: 0 8px 26px rgba(245, 173, 46, 0.5), 0 4px 10px rgba(0, 0, 0, 0.3);
+  border: 2px solid #FFF;
+  animation: polishTooltipBob 2s ease-in-out infinite;
+}
+@keyframes polishTooltipBob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+.polish-tooltip-text {
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.4;
+  margin-bottom: 8px;
+}
+.polish-tooltip-ok {
+  padding: 6px 12px;
+  font-size: 11px;
+  font-weight: 800;
+  color: #FFD93D;
+  background: #1A0F2E;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  width: 100%;
+}
+.polish-tooltip-arrow {
+  position: absolute;
+  bottom: -7px;
+  left: 50%;
+  transform: translateX(-50%) rotate(45deg);
+  width: 14px;
+  height: 14px;
+  background: linear-gradient(135deg, transparent 50%, #F5AD2E 50%);
+  border-right: 2px solid #FFF;
+  border-bottom: 2px solid #FFF;
+}
+.polish-micro-tooltip.polish-tooltip-below .polish-tooltip-arrow {
+  bottom: auto;
+  top: -7px;
+  background: linear-gradient(135deg, #FFD93D 50%, transparent 50%);
+  border-right: none;
+  border-bottom: none;
+  border-left: 2px solid #FFF;
+  border-top: 2px solid #FFF;
+}
+
+/* ── UNIFIED LOADING SPINNER ────────────────────────────────
+   Replaces every "⏳ טוען..." text with a polished spinner.
+   Mounted dynamically by polish module. */
+.polish-spinner {
+  width: 36px;
+  height: 36px;
+  border: 3px solid rgba(255, 217, 61, 0.15);
+  border-top-color: #FFD93D;
+  border-radius: 50%;
+  margin: 12px auto;
+  animation: polishSpin 0.8s linear infinite;
+}
+@keyframes polishSpin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── UNIFIED MODAL CSS VARIABLES ────────────────────────────
+   New stages use these. Old modals can opt-in incrementally. */
+:root {
+  --bloom-modal-bg-overlay: rgba(0, 0, 0, 0.78);
+  --bloom-modal-bg-card: linear-gradient(160deg, #1F0F2E 0%, #2E1A1A 100%);
+  --bloom-modal-bg-card-gold: linear-gradient(160deg, #2E1645 0%, #4F2A8F 100%);
+  --bloom-modal-radius: 22px;
+  --bloom-modal-max-width: 460px;
+  --bloom-modal-padding: 18px;
+  --bloom-modal-shadow: 0 20px 60px rgba(0, 0, 0, 0.7);
+  --bloom-modal-z: 10000;
+}
+
+/* Dark theme overrides — slight color adjustment */
+html[data-theme="dark"] .polish-calmed {
+  filter: saturate(0.7) brightness(0.85);
+}
+html[data-theme="dark"] .polish-tooltip-body {
+  /* Stays gold even in dark mode — yellow on dark = pop */
+}
   /* ============================================================
      Home v3 — premium home screen (targets 9.5+ in HOME_AUDIT.md)
      ============================================================

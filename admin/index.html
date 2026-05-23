@@ -63,6 +63,44 @@
   .kpi .sub.good { color: #2E8B6F; font-weight: 600; }
   .kpi .sub.bad  { color: #C8472F; font-weight: 600; }
 
+  /* ── ENGAGEMENT GRID (Stage 39) ── */
+  .engagement-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 8px;
+  }
+  .eng-card {
+    background: linear-gradient(135deg, var(--card), rgba(255, 215, 100, 0.08));
+    border-radius: 10px;
+    padding: 12px;
+    border: 1px solid rgba(255, 215, 100, 0.15);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .eng-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 14px rgba(255, 215, 100, 0.2);
+    border-color: rgba(255, 215, 100, 0.4);
+  }
+  .eng-card-head { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 800; }
+  .eng-card-icon { font-size: 20px; line-height: 1; }
+  .eng-card-stat { font-size: 22px; font-weight: 800; color: var(--gold); font-variant-numeric: tabular-nums; }
+  .eng-card-lbl { font-size: 10px; opacity: 0.65; }
+  .eng-card-status {
+    font-size: 10px;
+    margin-top: 4px;
+    padding: 2px 7px;
+    border-radius: 6px;
+    align-self: flex-start;
+    font-weight: 700;
+  }
+  .eng-card-status.ok { background: rgba(80, 200, 120, 0.2); color: #2E8B6F; }
+  .eng-card-status.warn { background: rgba(255, 165, 0, 0.2); color: #C8472F; }
+  .eng-card-status.off { background: rgba(120, 120, 120, 0.15); color: #888; }
+
   /* ANOMALY BANNER */
   .anomaly {
     background: #FCE4E0; color: #8B1F0A;
@@ -2182,6 +2220,18 @@
     </div>
     <button class="tip-btn" data-tip="tab_dashboard" aria-label="הסבר על לשונית דשבורד">?</button>
   </div>
+  <!-- ============================================================
+       Stage 39 — Engagement Overview (May 2026)
+       Quick-stats card at top of dashboard with jump-to-section.
+       Solves "where is X feature in admin?" pain.
+       ============================================================ -->
+  <section style="margin-bottom:14px">
+    <h2>🎯 סקירת מערכות התמכרות <button class="tip-btn" data-tip-text="<strong>🎯 Engagement Overview</strong><br>סקירה מהירה של כל מערכות ה-retention/addiction. סטטיסטיקה חיה + כפתורי קפיצה לסעיף.<div class=&quot;tip-example&quot;>💡 כל קלף = מערכת אחת (Trophy / Spin / Guild War / League / Rivalry / Pet / Album / Achievements LB). מציג: <strong>מספר שחקנים פעילים</strong> + פעולות אחרונות + כפתור לקפוץ ישר לסעיף הניהול.<br><br>📊 השתמש בזה כ-״מרכז שליטה״ — כל יום פותח כאן ורואה אם משהו דורש תשומת לב (קלאן ללא יריבים, ליגה ריקה, וכו׳).</div>">?</button></h2>
+    <div class="engagement-grid" id="engagement-overview">
+      <div class="loading">טוען…</div>
+    </div>
+  </section>
+
   <!-- KPI cards -->
   <section>
     <h2>מטריקות-על <button class="tip-btn" data-tip="kpi">?</button> <span class="badge" id="kpi-tag">היום</span></h2>
@@ -3860,6 +3910,101 @@
     loadSpinStats();
     loadGuildWars();
     loadTrophyStats();
+    loadEngagementOverview();
+  }
+
+  // ============================================================
+  // 🎯 Stage 39 — Engagement Overview (single source of truth)
+  // ============================================================
+  async function loadEngagementOverview() {
+    var host = $('engagement-overview');
+    if (!host) return;
+    // Fetch all in parallel
+    var [trophyR, spinR, gwR, rivR] = await Promise.all([
+      api('/trophies/stats').catch(function() { return null; }),
+      api('/spin/stats').catch(function() { return null; }),
+      api('/guild-wars').catch(function() { return null; }),
+      api('/rivalries/stats').catch(function() { return null; })
+    ]);
+    var cards = [];
+    // Trophy Road
+    if (trophyR && trophyR.ok) {
+      var s = trophyR.stats || {};
+      cards.push({
+        icon: '🏆', title: 'Trophy Road',
+        stat: (s.players || 0).toLocaleString(),
+        lbl: 'שחקנים פעילים',
+        status: s.players > 0 ? 'ok' : 'off',
+        statusText: s.players > 0 ? '✓ פעיל · ' + (s.total_games || 0).toLocaleString() + ' משחקים' : '⏸ אין שחקנים',
+        jump: 'trophy-road-section'
+      });
+    }
+    // Spin Wheel
+    if (spinR && spinR.ok) {
+      var ss = spinR.stats || {};
+      cards.push({
+        icon: '🎡', title: 'גלגל יומי',
+        stat: (ss.total_spins || 0).toLocaleString(),
+        lbl: 'סך ספינים',
+        status: ss.active_7d > 0 ? 'ok' : 'off',
+        statusText: ss.active_7d > 0 ? '✓ ' + (ss.active_7d || 0).toLocaleString() + ' פעילים בשבוע' : '⏸ אין פעילים',
+        jump: 'spin-wheel-section'
+      });
+    }
+    // Guild Wars
+    if (gwR && gwR.ok) {
+      var wars = gwR.wars || [];
+      var active = wars.filter(function(w) { return w.status === 'active'; }).length;
+      cards.push({
+        icon: '🛡⚔️', title: 'מלחמות קלאנים',
+        stat: active.toLocaleString(),
+        lbl: 'מלחמות פעילות',
+        status: active > 0 ? 'ok' : (wars.length > 0 ? 'warn' : 'off'),
+        statusText: active > 0 ? '✓ פעילות' : (wars.length > 0 ? '⏰ אין פעילות — צריך matchmaker' : '⏸ אין מלחמות'),
+        jump: 'guild-wars-section'
+      });
+    }
+    // Rivalries
+    if (rivR && rivR.ok) {
+      var rs = rivR.stats || {};
+      cards.push({
+        icon: '🥊', title: 'יריבויות',
+        stat: (rs.active_now || 0).toLocaleString(),
+        lbl: 'יריבויות פעילות',
+        status: rs.active_now > 0 ? 'ok' : 'off',
+        statusText: rs.active_now > 0 ? '✓ פעיל · ' + (rs.total_ever || 0).toLocaleString() + ' לאורך זמן' : '⏸ אין יריבויות',
+        jump: 'rivalries-section'
+      });
+    }
+    if (!cards.length) { host.innerHTML = '<div class="loading">שגיאת טעינה</div>'; return; }
+    host.innerHTML = cards.map(function(c) {
+      return '<div class="eng-card" data-jump="' + c.jump + '">' +
+        '<div class="eng-card-head"><span class="eng-card-icon">' + c.icon + '</span>' + c.title + '</div>' +
+        '<div class="eng-card-stat">' + c.stat + '</div>' +
+        '<div class="eng-card-lbl">' + c.lbl + '</div>' +
+        '<div class="eng-card-status ' + c.status + '">' + c.statusText + '</div>' +
+      '</div>';
+    }).join('');
+    Array.prototype.forEach.call(host.querySelectorAll('.eng-card'), function(card) {
+      card.onclick = function() {
+        var jumpId = card.getAttribute('data-jump');
+        var target = document.getElementById(jumpId);
+        if (!target) return;
+        // Find which tab the target is in
+        var panel = target.closest('.admin-tab-panel');
+        if (panel) {
+          var tabName = panel.getAttribute('data-tab');
+          if (typeof switchAdminTab === 'function') switchAdminTab(tabName);
+          else {
+            // Fallback: click the tab button
+            var btn = document.querySelector('.admin-tab[data-tab="' + tabName + '"]');
+            if (btn) btn.click();
+          }
+          // Scroll into view after tab switches
+          setTimeout(function() { target.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 200);
+        }
+      };
+    });
   }
 
   async function loadTrophyStats() {
