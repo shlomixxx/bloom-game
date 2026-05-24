@@ -147,6 +147,19 @@ export async function initDb() {
       meta               JSONB,
       created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )`,
+    // A3 — Trophy Chests (Clash Royale must-return pattern; full def in schema.sql).
+    `CREATE TABLE IF NOT EXISTS trophy_chests (
+      id                BIGSERIAL PRIMARY KEY,
+      device_id         VARCHAR(64) NOT NULL,
+      chest_type        VARCHAR(20) NOT NULL,
+      earned_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      unlock_started_at TIMESTAMPTZ,
+      opens_at          TIMESTAMPTZ,
+      claimed_at        TIMESTAMPTZ,
+      reward_gems       INT
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_trophy_chests_device_unclaimed
+      ON trophy_chests (device_id) WHERE claimed_at IS NULL`,
     // Stage 33 — Rivalry System (full CREATE in schema.sql).
     `CREATE TABLE IF NOT EXISTS player_rivalries (
       id                BIGSERIAL PRIMARY KEY,

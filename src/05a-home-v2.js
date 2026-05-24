@@ -359,6 +359,11 @@
       setTimeout(function() { try { maybeShowTrophyTile(); } catch (e) {} }, 450);
     }
 
+    // A3 — Trophy Chests tile (mounts only when chests exist; level-gated L10).
+    if (window.__bloomChests && typeof window.__bloomChests.maybeShow === 'function') {
+      setTimeout(function() { try { window.__bloomChests.maybeShow(); } catch (e) {} }, 500);
+    }
+
     // Tier-icons tap → reveal stats bubble (same behaviour as v1)
     var iconsTap = document.getElementById('home-icons-tap');
     if (iconsTap) {

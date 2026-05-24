@@ -283,6 +283,51 @@ INSERT INTO game_config (key, value) VALUES ('checklist_all_done_reward', '100')
 INSERT INTO game_config (key, value) VALUES ('booster_enabled',    'true') ON CONFLICT (key) DO NOTHING;
 INSERT INTO game_config (key, value) VALUES ('booster_pick_price', '50')   ON CONFLICT (key) DO NOTHING;
 INSERT INTO game_config (key, value) VALUES ('booster_pop_price',  '40')   ON CONFLICT (key) DO NOTHING;
+-- A3 — Trophy Chests (Clash Royale "must-return" pattern). After a trophy-
+-- earning game (score ≥ threshold) the server may grant a chest. The chest
+-- sits "earned" until the player taps "התחל לפתוח" — then a real-time
+-- countdown starts. Player must come back N hours later to open + collect
+-- gems. 4 slot maximum (creates scarcity — full slots block new chests).
+-- Only ONE chest can be unlocking at a time (Clash Royale pattern — player
+-- has to choose which chest to "burn" the time on).
+CREATE TABLE IF NOT EXISTS trophy_chests (
+  id                      BIGSERIAL PRIMARY KEY,
+  device_id               VARCHAR(64) NOT NULL,
+  chest_type              VARCHAR(20) NOT NULL,
+  earned_at               TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  unlock_started_at       TIMESTAMPTZ,
+  opens_at                TIMESTAMPTZ,
+  claimed_at              TIMESTAMPTZ,
+  reward_gems             INT
+);
+CREATE INDEX IF NOT EXISTS idx_trophy_chests_device_unclaimed
+  ON trophy_chests (device_id) WHERE claimed_at IS NULL;
+
+INSERT INTO game_config (key, value) VALUES ('chest_enabled',                'true') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('chest_max_slots',              '4')    ON CONFLICT (key) DO NOTHING;
+-- Earn chance (0-100) on any trophy-earning game whose score >= chest_min_score.
+INSERT INTO game_config (key, value) VALUES ('chest_earn_chance_pct',        '50')   ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('chest_min_score',              '500')  ON CONFLICT (key) DO NOTHING;
+-- Per-tier unlock durations (in MINUTES so admin can ship 1-min test chests
+-- without rewriting the schema). Defaults match the spec: 4h / 8h / 24h.
+INSERT INTO game_config (key, value) VALUES ('chest_common_minutes',         '240')   ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('chest_rare_minutes',           '480')   ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('chest_legendary_minutes',      '1440')  ON CONFLICT (key) DO NOTHING;
+-- Per-tier reward ranges (random within [min, max] at earn time, stored
+-- on the row so opening pays exactly what was rolled — no re-roll exploits).
+INSERT INTO game_config (key, value) VALUES ('chest_common_gems_min',        '50')   ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('chest_common_gems_max',        '150')  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('chest_rare_gems_min',          '200')  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('chest_rare_gems_max',          '500')  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('chest_legendary_gems_min',     '1000') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('chest_legendary_gems_max',     '3000') ON CONFLICT (key) DO NOTHING;
+-- Tier roll weights (sums to 100). Common drops most often, legendary rare.
+INSERT INTO game_config (key, value) VALUES ('chest_weight_common',          '65')   ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('chest_weight_rare',            '28')   ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('chest_weight_legendary',       '7')    ON CONFLICT (key) DO NOTHING;
+-- Guaranteed Legendary when a Trophy Road milestone is claimed (admin gate).
+INSERT INTO game_config (key, value) VALUES ('chest_milestone_legendary',    'true') ON CONFLICT (key) DO NOTHING;
+
 -- T7.2 — Golden Hour event. Admin-toggleable time-windowed XP multiplier.
 -- When `event_golden_hour_active = 'true'` AND `event_golden_hour_ends_at`
 -- is in the future, every season XP grant multiplies by `event_golden_hour_xp_mult`.

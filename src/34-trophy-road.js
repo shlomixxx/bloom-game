@@ -260,6 +260,12 @@
           if (typeof buzz === 'function') buzz([60, 50, 100, 50, 140]);
         } catch (e) {}
         _trophyCache.data = null;
+        // A3 — Milestone claim = guaranteed legendary chest drop.
+        if (d.chestEarned) {
+          setTimeout(function() {
+            try { if (window.__bloomChests) window.__bloomChests.onEarned(d.chestEarned); } catch (e) {}
+          }, 2000);
+        }
         fetchTrophyState(true).then(function(fresh) { renderTrophyBody(fresh); updateTrophyTile(fresh); });
       });
   }
@@ -292,6 +298,13 @@
         }
         if (d && d.ok && d.leveledArena && d.delta > 0) {
           setTimeout(function() { showArenaPromotionOverlay(d.arena); }, 1400);
+        }
+        // A3 — Trophy Chest drop. Fired after the trophy toast so the
+        // sequence reads clearly: trophy ticks up, then "📦 chest!"
+        if (d && d.ok && d.chestEarned) {
+          setTimeout(function() {
+            try { if (window.__bloomChests) window.__bloomChests.onEarned(d.chestEarned); } catch (e) {}
+          }, d.leveledArena ? 2800 : 1200);
         }
         return d;
       });

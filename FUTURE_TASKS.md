@@ -1,7 +1,7 @@
 # 📋 BLOOM — משימות עתידיות
 
 > **מסמך מרכזי לכל מה שעדיין לא נבנה.**
-> עודכן: 2026-05-23 · 38 שלבים חיים בפרודקשן · 14 משימות פתוחות
+> עודכן: 2026-05-24 · 39 שלבים חיים בפרודקשן · 13 משימות פתוחות (A3 Trophy Chests ✅)
 >
 > 🎯 **איך להשתמש**: בשיחה חדשה תגיד "בוא נבנה A1" / "המשך עם הכי ממכר" / "תעשה A2 + A3 ביחד" ואני אדע בדיוק על מה אתה מדבר.
 
@@ -14,7 +14,7 @@
 
 ---
 
-### A1 · 📬 Notification Inbox
+### A1 · 📬 Notification Inbox ✅ נבנה (24.05.2026)
 **מאמץ**: 1-2 ימים · **השפעה**: ★★★★★ · **המלצה ראשונה שלי**
 
 **מה זה**:
@@ -51,21 +51,18 @@
 
 ---
 
-### A3 · 🎁 Trophy Chests
-**מאמץ**: 1-2 ימים · **השפעה**: ★★★★★ · **המלצה להעמקת Stage 38**
+### A3 · 🎁 Trophy Chests ✅ נבנה (24.05.2026)
+**מאמץ**: 1-2 ימים · **השפעה**: ★★★★★ · **סטטוס: חי בייצור**
 
-**מה זה**:
-תיבות פיזיות שנפתחות אחרי **זמן אמת** — 4 שעות / 8 שעות / 24 שעות. שחקן רץ לסיים game טוב, מקבל תיבה, לוחץ "התחל לפתוח" → צריך לחזור עוד 4 שעות לפתוח אותה. בינתיים יכול לראות את ה-countdown.
-
-**למה לבנות**:
-- מנגנון "must return" — דוחף סשנים נוספים ביום
-- Coin Master + Clash Royale pattern — מוכח כמעלה DAU פי 2-3
-- משלים את Stage 38 (Trophy Road) שכבר נבנה
-
-**טכני**:
-- טבלה `trophy_chests` (device_id, type, started_at, opens_at, claimed)
-- 3 endpoints: earn / start-unlock / open
-- UI: 4 chest slots בתפריט, countdown לכל אחד
+**מה נבנה**:
+- 3 רמות תיבות (🎁 common / 💎 rare / 🏆 legendary) עם משכי פתיחה 4ש / 8ש / 24ש (admin-tunable)
+- 4 slots פתוחים, אם כולם מלאים → אין דרופים חדשים
+- רק תיבה אחת יכולה להיפתח בכל רגע נתון (Clash Royale pattern — בחירה אסטרטגית)
+- Drop chance 50% על משחק עם score ≥ 500 (admin-tunable). Arena promotion = guaranteed Rare. Milestone claim = guaranteed Legendary.
+- Schema: טבלה `trophy_chests` + 13 config keys
+- Endpoints: `GET /api/chests/state`, `POST /api/chests/start-unlock`, `POST /api/chests/open`
+- Client: [src/38-trophy-chests.js](src/38-trophy-chests.js) — IIFE עצמאי. Home tile (L10+, only-when-chests-exist) עם 4 icon-pills + countdown. Modal עם 4 קלפים. Full-screen rarity-themed celebration (legendary = 40 confetti particles, soundMilestone(7)).
+- חיווט אוטומטי דרך Stage 38 — `_trophyGrantFromGame` קורא ל-`_maybeGrantChest` בסוף, ומחזיר `chestEarned` ל-client. Client trophy module fires the chest toast 1.2s אחרי trophy toast.
 
 ---
 

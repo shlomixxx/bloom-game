@@ -7083,6 +7083,231 @@ app.get('/api/trophies/state', async (req, res) => {
 // Granted automatically when /api/score (daily) or /api/score/practice
 // fires — see hooks below. Also a direct endpoint so admin / future
 // modes can call it explicitly with a custom reason.
+// ============================================================
+// A3 — Trophy Chests (Clash Royale "must-return" pattern)
+// ============================================================
+async function _loadChestConfig() {
+  // Hits the global config cache via the helper from T6.3.
+  try { return await getCachedConfigPrefix('chest_'); }
+  catch (e) { return {}; }
+}
+
+function _chestPickType(cfg) {
+  const wC = parseFloat(cfg.chest_weight_common)    || 65;
+  const wR = parseFloat(cfg.chest_weight_rare)      || 28;
+  const wL = parseFloat(cfg.chest_weight_legendary) || 7;
+  const total = wC + wR + wL;
+  if (total <= 0) return 'common';
+  let r = Math.random() * total;
+  if ((r -= wC) <= 0) return 'common';
+  if ((r -= wR) <= 0) return 'rare';
+  return 'legendary';
+}
+
+function _chestRollGems(cfg, type) {
+  const lo = parseInt(cfg['chest_' + type + '_gems_min'], 10) || 50;
+  const hi = parseInt(cfg['chest_' + type + '_gems_max'], 10) || 150;
+  if (hi <= lo) return lo;
+  return lo + Math.floor(Math.random() * (hi - lo + 1));
+}
+
+function _chestUnlockMinutes(cfg, type) {
+  return parseInt(cfg['chest_' + type + '_minutes'], 10) || 240;
+}
+
+// Called from inside the trophy grant flow when a chest should drop.
+// Inserts a new chest row (provided we're below the 4-slot cap).
+// Returns the chest row or null if the slots are full.
+async function _maybeGrantChest(deviceId, opts) {
+  try {
+    const cfg = await _loadChestConfig();
+    if (cfg.chest_enabled === 'false') return null;
+    const minScore = parseInt(cfg.chest_min_score, 10) || 500;
+    // If this isn't a high-quality game, don't even roll the chance.
+    if (!opts.forceGrant && (opts.score | 0) < minScore) return null;
+    // Slot cap — count unclaimed chests for this device.
+    const maxSlots = parseInt(cfg.chest_max_slots, 10) || 4;
+    const occ = await pool.query(
+      `SELECT COUNT(*)::int AS n FROM trophy_chests WHERE device_id = $1 AND claimed_at IS NULL`,
+      [deviceId]
+    );
+    if ((occ.rows[0].n | 0) >= maxSlots) return null;
+    // Roll the chance unless we're force-granting (e.g. milestone bonus).
+    if (!opts.forceGrant) {
+      const chancePct = parseFloat(cfg.chest_earn_chance_pct) || 50;
+      if (Math.random() * 100 >= chancePct) return null;
+    }
+    const chestType = opts.forceType || _chestPickType(cfg);
+    const gems = _chestRollGems(cfg, chestType);
+    const r = await pool.query(
+      `INSERT INTO trophy_chests (device_id, chest_type, reward_gems)
+       VALUES ($1, $2, $3)
+       RETURNING id, chest_type, earned_at, reward_gems`,
+      [deviceId, chestType, gems]
+    );
+    return r.rows[0];
+  } catch (e) { console.warn('_maybeGrantChest', e.message); return null; }
+}
+
+// Returns the player's chest state: list of unclaimed chests with
+// computed status (earned / unlocking / ready) + slot summary + cfg
+// snapshot needed by the client.
+app.get('/api/chests/state', async (req, res) => {
+  try {
+    const deviceId = String(req.query.deviceId || '').slice(0, 64);
+    if (!deviceId || deviceId.length < 8) return res.status(400).json({ error: 'bad_device' });
+    const cfg = await _loadChestConfig();
+    if (cfg.chest_enabled === 'false') return res.json({ ok: true, enabled: false, chests: [], maxSlots: 4 });
+    const r = await pool.query(
+      `SELECT id, chest_type, earned_at, unlock_started_at, opens_at, reward_gems
+         FROM trophy_chests
+        WHERE device_id = $1 AND claimed_at IS NULL
+        ORDER BY earned_at ASC`,
+      [deviceId]
+    );
+    const now = Date.now();
+    const chests = r.rows.map(row => {
+      const opensMs = row.opens_at ? new Date(row.opens_at).getTime() : 0;
+      let status = 'earned'; // not yet started
+      if (row.unlock_started_at) {
+        status = opensMs > now ? 'unlocking' : 'ready';
+      }
+      return {
+        id: row.id,
+        type: row.chest_type,
+        earnedAt: row.earned_at,
+        unlockStartedAt: row.unlock_started_at,
+        opensAt: row.opens_at,
+        status,
+        msLeft: opensMs > now ? (opensMs - now) : 0,
+        rewardGems: row.reward_gems | 0,
+        unlockMinutes: _chestUnlockMinutes(cfg, row.chest_type)
+      };
+    });
+    res.json({
+      ok: true,
+      enabled: true,
+      chests,
+      maxSlots: parseInt(cfg.chest_max_slots, 10) || 4,
+      tiers: {
+        common: { minutes: _chestUnlockMinutes(cfg, 'common'),
+          gemsMin: parseInt(cfg.chest_common_gems_min, 10) || 50,
+          gemsMax: parseInt(cfg.chest_common_gems_max, 10) || 150 },
+        rare: { minutes: _chestUnlockMinutes(cfg, 'rare'),
+          gemsMin: parseInt(cfg.chest_rare_gems_min, 10) || 200,
+          gemsMax: parseInt(cfg.chest_rare_gems_max, 10) || 500 },
+        legendary: { minutes: _chestUnlockMinutes(cfg, 'legendary'),
+          gemsMin: parseInt(cfg.chest_legendary_gems_min, 10) || 1000,
+          gemsMax: parseInt(cfg.chest_legendary_gems_max, 10) || 3000 }
+      }
+    });
+  } catch (e) {
+    console.error('GET /api/chests/state', e);
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
+// Start unlocking a specific chest. Only ONE chest can be unlocking at a
+// time (Clash Royale pattern — forces the player to choose). Returns the
+// new opens_at timestamp.
+app.post('/api/chests/start-unlock', requireDeviceAuth, async (req, res) => {
+  try {
+    const deviceId = req.deviceId;
+    const chestId = parseInt((req.body && req.body.chestId) || 0, 10);
+    if (!chestId) return res.status(400).json({ error: 'bad_chest_id' });
+    if (!checkRateLimit('chest:unlock', deviceId, 30, 60 * 60 * 1000)) {
+      return res.status(429).json({ error: 'rate_limited' });
+    }
+    const cfg = await _loadChestConfig();
+    if (cfg.chest_enabled === 'false') return res.json({ ok: false, reason: 'disabled' });
+    // Fetch the chest and verify ownership + still earned.
+    const r = await pool.query(
+      `SELECT id, chest_type, unlock_started_at, claimed_at
+         FROM trophy_chests WHERE id = $1 AND device_id = $2`,
+      [chestId, deviceId]
+    );
+    if (!r.rows.length) return res.json({ ok: false, reason: 'not_found' });
+    const row = r.rows[0];
+    if (row.claimed_at) return res.json({ ok: false, reason: 'already_claimed' });
+    if (row.unlock_started_at) return res.json({ ok: false, reason: 'already_unlocking' });
+    // Only one chest can be unlocking at a time.
+    const otherUnlock = await pool.query(
+      `SELECT id FROM trophy_chests
+        WHERE device_id = $1 AND claimed_at IS NULL
+          AND unlock_started_at IS NOT NULL
+          AND id != $2
+          AND opens_at > NOW()`,
+      [deviceId, chestId]
+    );
+    if (otherUnlock.rows.length > 0) {
+      return res.json({ ok: false, reason: 'another_unlocking', otherId: otherUnlock.rows[0].id });
+    }
+    const minutes = _chestUnlockMinutes(cfg, row.chest_type);
+    const upd = await pool.query(
+      `UPDATE trophy_chests
+          SET unlock_started_at = NOW(),
+              opens_at          = NOW() + ($2 || ' minutes')::interval
+        WHERE id = $1 AND unlock_started_at IS NULL AND claimed_at IS NULL
+        RETURNING opens_at`,
+      [chestId, String(minutes)]
+    );
+    if (!upd.rows.length) return res.json({ ok: false, reason: 'race' });
+    res.json({ ok: true, chestId, opensAt: upd.rows[0].opens_at, unlockMinutes: minutes });
+  } catch (e) {
+    console.error('POST /api/chests/start-unlock', e);
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
+// Open a ripe chest (opens_at <= NOW). Awards the locked-in gem amount,
+// marks claimed_at. Atomic — uses RETURNING + UPDATE WHERE guard to
+// prevent double-claim on race.
+app.post('/api/chests/open', requireDeviceAuth, async (req, res) => {
+  try {
+    const deviceId = req.deviceId;
+    const chestId = parseInt((req.body && req.body.chestId) || 0, 10);
+    if (!chestId) return res.status(400).json({ error: 'bad_chest_id' });
+    if (!checkRateLimit('chest:open', deviceId, 30, 60 * 60 * 1000)) {
+      return res.status(429).json({ error: 'rate_limited' });
+    }
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      // Atomic claim: WHERE opens_at <= NOW + still unclaimed.
+      const r = await client.query(
+        `UPDATE trophy_chests
+            SET claimed_at = NOW()
+          WHERE id = $1 AND device_id = $2 AND claimed_at IS NULL
+            AND opens_at IS NOT NULL AND opens_at <= NOW()
+          RETURNING chest_type, reward_gems`,
+        [chestId, deviceId]
+      );
+      if (!r.rows.length) {
+        await client.query('ROLLBACK');
+        return res.json({ ok: false, reason: 'not_ready_or_claimed' });
+      }
+      const reward = r.rows[0].reward_gems | 0;
+      const chestType = r.rows[0].chest_type;
+      // Credit gems atomically.
+      const bal = await client.query(
+        `UPDATE player_profiles SET balance = balance + $1 WHERE device_id = $2 RETURNING balance`,
+        [reward, deviceId]
+      );
+      const newBalance = bal.rows[0] ? (bal.rows[0].balance | 0) : null;
+      await client.query('COMMIT');
+      res.json({ ok: true, chestId, chestType, rewardGems: reward, newBalance });
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  } catch (e) {
+    console.error('POST /api/chests/open', e);
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
 app.post('/api/trophies/grant-from-game', requireDeviceAuth, async (req, res) => {
   try {
     const deviceId = req.deviceId;
@@ -7165,6 +7390,23 @@ async function _trophyGrantFromGame(deviceId, opts, cfg) {
       } catch (e) {}
     }
     await client.query('COMMIT');
+    // A3 — Trophy Chest grant attempt. Fire-and-forget (won't block the
+    // trophy response if chest insertion fails). Only on positive trophy
+    // deltas (good games), and only after the trophy transaction has
+    // committed successfully. The helper enforces all gating internally:
+    // chest_enabled, slot cap, score threshold, chance roll.
+    let chestEarned = null;
+    if (calc.delta > 0) {
+      try {
+        chestEarned = await _maybeGrantChest(deviceId, {
+          score: opts.score | 0,
+          isNewBest: !!opts.isNewBest,
+          // Arena promotion = guaranteed chest. Otherwise normal roll.
+          forceGrant: !!leveledArena,
+          forceType: leveledArena ? 'rare' : null
+        });
+      } catch (e) { /* never block trophy response */ }
+    }
     return {
       ok: true,
       delta: calc.delta,
@@ -7172,7 +7414,8 @@ async function _trophyGrantFromGame(deviceId, opts, cfg) {
       after,
       arena: newArenaObj,
       leveledArena,
-      breakdown: calc.breakdown
+      breakdown: calc.breakdown,
+      chestEarned: chestEarned ? { id: chestEarned.id, type: chestEarned.chest_type, gems: chestEarned.reward_gems } : null
     };
   } catch (err) {
     await client.query('ROLLBACK');
@@ -7225,7 +7468,19 @@ app.post('/api/trophies/claim-milestone', requireDeviceAuth, async (req, res) =>
         [milestone.gems, deviceId]
       );
       await client.query('COMMIT');
-      res.json({ ok: true, reward: milestone.gems, newBalance: cr.rows[0] ? Number(cr.rows[0].balance) : null, milestone });
+      // A3 — Trophy milestone claim guarantees a legendary chest if enabled.
+      let chestEarned = null;
+      try {
+        const ccfg = await _loadChestConfig();
+        if (ccfg.chest_milestone_legendary !== 'false') {
+          chestEarned = await _maybeGrantChest(deviceId, {
+            score: 1000000, // bypass score threshold
+            forceGrant: true,
+            forceType: 'legendary'
+          });
+        }
+      } catch (e) { /* never block milestone claim */ }
+      res.json({ ok: true, reward: milestone.gems, newBalance: cr.rows[0] ? Number(cr.rows[0].balance) : null, milestone, chestEarned: chestEarned ? { id: chestEarned.id, type: chestEarned.chest_type, gems: chestEarned.reward_gems } : null });
     } catch (err) {
       await client.query('ROLLBACK');
       throw err;
