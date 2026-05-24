@@ -34,6 +34,8 @@
   }
 
   function maybeShowLeagueTile() {
+    // T1.1 — Weekly Leagues unlock at L20 (final wave — competitive layer).
+    try { if (typeof getPlayerLevel === 'function' && getPlayerLevel() < 20) return; } catch (e) {}
     fetchLeagueState(false).then(function(d) {
       if (!d || !d.ok || !d.enabled) return;
       var home = document.getElementById('home-screen-v2') || document.getElementById('home-screen');

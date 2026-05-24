@@ -74,6 +74,9 @@
   }
 
   function maybeShowGuildTile() {
+    // T1.1 — Guilds unlock at L15. Social/team play is a deep mechanic;
+    // showing it on day 1 sends mixed signals about what BLOOM is.
+    try { if (typeof getPlayerLevel === 'function' && getPlayerLevel() < 15) return; } catch (e) {}
     fetchGuildState(false).then(function(d) {
       if (!d || !d.ok || !d.enabled) return;
       var home = document.getElementById('home-screen-v2') || document.getElementById('home-screen');

@@ -2090,13 +2090,18 @@
 
   function updateBalanceDisplay() {
     var el = document.getElementById('balance-display');
-    if (!el) return;
-    var b = playerBalance;
-    var text = b >= 100000 ? Math.round(b / 1000) + 'K'
-      : b >= 10000 ? (b / 1000).toFixed(1).replace('.0', '') + 'K'
-      : b >= 1000 ? (b / 1000).toFixed(1).replace('.0', '') + 'K'
-      : String(b);
-    el.textContent = text;
+    if (el) {
+      var b = playerBalance;
+      var text = b >= 100000 ? Math.round(b / 1000) + 'K'
+        : b >= 10000 ? (b / 1000).toFixed(1).replace('.0', '') + 'K'
+        : b >= 1000 ? (b / 1000).toFixed(1).replace('.0', '') + 'K'
+        : String(b);
+      el.textContent = text;
+    }
+    // T1.3 — propagate to the home Balance Widget. The widget reads
+    // playerBalance directly so a render-only call is enough; no need
+    // to pass delta here (delta is reserved for earnCredits anim).
+    try { if (typeof window.__bloomRenderBal === 'function') window.__bloomRenderBal(); } catch (e) {}
   }
 
   // Active power-up mode
@@ -3668,6 +3673,104 @@
   function loadGamesPlayed() {
     try { return parseInt(localStorage.getItem(GAMES_COUNT_KEY) || '0', 10) | 0; } catch (e) { return 0; }
   }
+
+  // ============ PROGRESSIVE UNLOCK SYSTEM (T1.1 + T1.4) ============
+  // A new player who lands on a home full of 19 tiles bounces. Industry data:
+  // Match Masters shows only "PLAY" on day 1. We hide every non-essential
+  // surface until the player has accumulated enough games (= reached the
+  // unlock level). Level is derived directly from games_played (cheap,
+  // localStorage-backed) so we don't need a server round-trip on boot.
+  //
+  // Formula: level = min(MAX_LEVEL, games_played + 1). Anyone with ≥19
+  // games played is at level 20 (all features unlocked). New player is L1.
+  //
+  // LEVEL_UNLOCKS maps level → feature labels (Hebrew, for the toast).
+  // The data-min-level attribute on HTML elements and the level gate
+  // inside each maybeShow* together drive the actual hiding.
+  const PLAYER_LEVEL_MAX = 20;
+  const PLAYER_SEEN_LEVEL_KEY = 'bloom_seen_level';
+  const LEVEL_UNLOCKS = {
+    5:  '👥 תחרות חברים · 📋 משימות יומיות',
+    8:  '🎨 סקינים · 🔥 דיל יומי · 🌱 חיית מחמד',
+    10: '⚔️ דו-קרב · 🏆 דרך הגביעים',
+    12: '🎖 Battle Pass · 🎡 גלגל יומי',
+    15: '🛡 קלאן · 📔 אלבום אריחים',
+    18: '🎰 גאצ\'ה · 🎁 חבילות',
+    20: '⚔️ ליגות · 🥊 יריבים · 🛡⚔️ מלחמות קלאן'
+  };
+  function getPlayerLevel() {
+    const games = loadGamesPlayed();
+    const level = games + 1;
+    return level > PLAYER_LEVEL_MAX ? PLAYER_LEVEL_MAX : level;
+  }
+  function loadSeenLevel() {
+    try { return parseInt(localStorage.getItem(PLAYER_SEEN_LEVEL_KEY) || '0', 10) | 0; }
+    catch (e) { return 0; }
+  }
+  function saveSeenLevel(n) {
+    try { localStorage.setItem(PLAYER_SEEN_LEVEL_KEY, String(n | 0)); } catch (e) {}
+  }
+  // Walks every visible element with data-min-level and sets display:none
+  // when the player isn't there yet. Safe to call multiple times — display
+  // is restored by setting an empty string (CSS default). Re-run after any
+  // deferred maybeShow* tile mounts (the home-v2 setTimeouts up to 3.2s).
+  function applyLevelGates(rootEl) {
+    const root = rootEl || document;
+    const level = getPlayerLevel();
+    const nodes = root.querySelectorAll('[data-min-level]');
+    for (let i = 0; i < nodes.length; i++) {
+      const el = nodes[i];
+      const req = parseInt(el.getAttribute('data-min-level') || '1', 10) | 0;
+      if (level < req) {
+        // Stash the original display value once so we can restore later.
+        if (!el.hasAttribute('data-pre-gate-display')) {
+          el.setAttribute('data-pre-gate-display', el.style.display || '');
+        }
+        el.style.display = 'none';
+      } else if (el.hasAttribute('data-pre-gate-display')) {
+        el.style.display = el.getAttribute('data-pre-gate-display');
+        el.removeAttribute('data-pre-gate-display');
+      }
+    }
+  }
+  // Called after every game-over (and once on boot). If the player crossed
+  // one or more unlock thresholds since their last seen level, show ONE
+  // combined toast naming everything newly available. Persists seen level
+  // so we never re-toast the same crossing.
+  function checkLevelUnlock() {
+    const cur = getPlayerLevel();
+    const seen = loadSeenLevel();
+    if (cur <= seen) {
+      // First-ever call (seen=0) — still want to seed seen so the next
+      // game-over only toasts genuine new crossings.
+      if (seen === 0) saveSeenLevel(cur);
+      return null;
+    }
+    const newlyUnlocked = [];
+    Object.keys(LEVEL_UNLOCKS).forEach(function(k) {
+      const lvl = parseInt(k, 10) | 0;
+      if (lvl > seen && lvl <= cur) newlyUnlocked.push({ level: lvl, label: LEVEL_UNLOCKS[k] });
+    });
+    saveSeenLevel(cur);
+    if (newlyUnlocked.length && typeof showToast === 'function') {
+      // Combined toast — "🔓 דרגה N נפתחה: X · Y · Z". For multi-cross
+      // (player jumped from L4 to L9 in one session) we list all groups.
+      const msg = newlyUnlocked.map(function(u) {
+        return '🔓 דרגה ' + u.level + ': ' + u.label;
+      }).join(' · ');
+      showToast(msg, 'success');
+    }
+    return newlyUnlocked.length ? newlyUnlocked : null;
+  }
+  try {
+    window.__bloomLevel = {
+      getPlayerLevel: getPlayerLevel,
+      applyLevelGates: applyLevelGates,
+      checkLevelUnlock: checkLevelUnlock,
+      LEVEL_UNLOCKS: LEVEL_UNLOCKS
+    };
+  } catch (e) {}
+
   function incrementGamesPlayed() {
     const n = loadGamesPlayed() + 1;
     try { localStorage.setItem(GAMES_COUNT_KEY, String(n)); } catch (e) {}
@@ -4157,6 +4260,30 @@
         '</div>' +
       '</div>' +
 
+      // ── Balance Widget (T1.3) ─────────────────────────────────────
+      // Always-on at-a-glance status: gems / lives / streak / level.
+      // Match Masters / Royal Match keep these visible permanently —
+      // makes the player feel "I have something" → encourages spending.
+      // Lives slot hidden when admin disabled the lives system.
+      '<div class="home-v2-balance-bar" id="home-v2-balance-bar">' +
+        '<div class="home-v2-bal-slot home-v2-bal-gems" id="home-v2-bal-gems-slot" title="יתרת יהלומים">' +
+          '<span class="home-v2-bal-icon">💎</span>' +
+          '<span class="home-v2-bal-val" id="home-v2-bal-gems">--</span>' +
+        '</div>' +
+        '<div class="home-v2-bal-slot home-v2-bal-lives" id="home-v2-bal-lives-slot" style="display:none" title="חיים">' +
+          '<span class="home-v2-bal-icon">❤️</span>' +
+          '<span class="home-v2-bal-val" id="home-v2-bal-lives">--</span>' +
+        '</div>' +
+        '<div class="home-v2-bal-slot home-v2-bal-streak" id="home-v2-bal-streak-slot" title="רצף ימים">' +
+          '<span class="home-v2-bal-icon">🔥</span>' +
+          '<span class="home-v2-bal-val" id="home-v2-bal-streak">--</span>' +
+        '</div>' +
+        '<div class="home-v2-bal-slot home-v2-bal-level" id="home-v2-bal-level-slot" title="דרגה">' +
+          '<span class="home-v2-bal-icon">⭐</span>' +
+          '<span class="home-v2-bal-val" id="home-v2-bal-level">1</span>' +
+        '</div>' +
+      '</div>' +
+
       // ── Compact brand area ──
       '<div class="home-v2-brand-wrap">' +
         '<div class="home-icons home-v2-icons" id="home-icons-tap">' +
@@ -4188,23 +4315,26 @@
       '<div class="home-v2-featured" id="home-v2-featured"></div>' +
 
       // ── Secondary actions grid 2x2 with badges (§B1) ──
-      '<div class="home-v2-actions">' +
-        '<button class="home-v2-action" id="home-v2-contest" data-action="contest">' +
+      // T1.1 — each button carries data-min-level so applyLevelGates
+      // hides it until the player crosses the threshold. Contest=L5,
+      // Skins=L8, Duel=L10, Challenges=L5 (single grid stays clean).
+      '<div class="home-v2-actions" data-actions-row>' +
+        '<button class="home-v2-action" id="home-v2-contest" data-action="contest" data-min-level="5">' +
           '<span class="home-v2-badge" id="home-v2-contest-badge" style="display:none"></span>' +
           '<span class="home-v2-action-icon">👥</span>' +
           '<span class="home-v2-action-label">תחרות</span>' +
         '</button>' +
-        '<button class="home-v2-action" id="home-v2-challenge" data-action="challenge">' +
+        '<button class="home-v2-action" id="home-v2-challenge" data-action="challenge" data-min-level="5">' +
           '<span class="home-v2-badge home-v2-badge-prize" id="home-v2-challenge-badge" style="display:none"></span>' +
           '<span class="home-v2-action-icon">🏆</span>' +
           '<span class="home-v2-action-label">אתגרים</span>' +
         '</button>' +
-        '<button class="home-v2-action" id="home-v2-duel" data-action="duel">' +
+        '<button class="home-v2-action" id="home-v2-duel" data-action="duel" data-min-level="10">' +
           '<span class="home-v2-badge" id="home-v2-duel-badge" style="display:none"></span>' +
           '<span class="home-v2-action-icon">⚔️</span>' +
           '<span class="home-v2-action-label">דו-קרב</span>' +
         '</button>' +
-        '<button class="home-v2-action" id="home-v2-skins" data-action="skins">' +
+        '<button class="home-v2-action" id="home-v2-skins" data-action="skins" data-min-level="8">' +
           '<span class="home-v2-action-icon">🎨</span>' +
           '<span class="home-v2-action-label">סקינים</span>' +
         '</button>' +
@@ -4226,7 +4356,8 @@
       // Until this commit the BP was only accessible via the dynamic-boards
       // picker — players who never opened it never saw the BP existed.
       // Hidden by default; updateHomeSeasonPassTile() flips display.
-      '<button class="home-v2-season-pass" id="home-v2-season-pass" style="display:none">' +
+      // T1.1 — also level-gated (Season Pass = L12+).
+      '<button class="home-v2-season-pass" id="home-v2-season-pass" style="display:none" data-min-level="12">' +
         '<span class="home-v2-sp-icon">🎖</span>' +
         '<span class="home-v2-sp-text">' +
           '<span class="home-v2-sp-title" id="home-v2-sp-title">Battle Pass</span>' +
@@ -4440,6 +4571,7 @@
     renderHeroBannerV2();
     renderPlayerIdV2();
     renderMyStatsV2();
+    renderBalanceBarV2();        // T1.3 — gems/lives/streak/level top widget
     refreshHomeV2LivePulse();
     refreshHomeV2Badges();
     refreshFeaturedActionV2();
@@ -4447,6 +4579,29 @@
     refreshHomeJackpot();
     refreshHomeWeekly();
     startHomeV2LivePulse();
+
+    // T1.1 — apply level gates initially (hides high-level tiles for
+    // new players). Re-run on a few delays to catch tiles that mount
+    // via setTimeout (matches Stage 35 home-variants' deferred apply
+    // pattern). Last apply at 3.4s — after every maybeShow* has settled.
+    if (typeof applyLevelGates === 'function') {
+      try { applyLevelGates(h); } catch (e) {}
+      [600, 1500, 2500, 3400].forEach(function(t) {
+        setTimeout(function() {
+          if (document.getElementById('home-screen') && typeof applyLevelGates === 'function') {
+            try { applyLevelGates(); } catch (e) {}
+          }
+        }, t);
+      });
+    }
+    // Boot-time unlock check — shows toast(s) if the player crossed
+    // any thresholds since last visit (e.g. closed app at L4, comes
+    // back after a server-side stat bump putting them at L8).
+    if (typeof checkLevelUnlock === 'function') {
+      setTimeout(function() {
+        try { checkLevelUnlock(); } catch (e) {}
+      }, 1800);
+    }
 
     playMusic('lobby');
 
@@ -4913,6 +5068,81 @@
   }
 
   // ── Your week stats — small scannable line ──
+  // T1.3 — Balance bar render. Reads live state from in-IIFE vars when
+  // available (playerBalance from earnCredits, lives from _livesCache),
+  // falls back to localStorage where the var hasn't been initialized.
+  // Re-fired on (a) home mount, (b) earnCredits success via __bloomBumpBal,
+  // (c) lives widget refresh, and (d) game-over (so level/streak update
+  // even if we don't reach a new threshold).
+  function renderBalanceBarV2() {
+    const bar = document.getElementById('home-v2-balance-bar');
+    if (!bar) return;
+    // Gems — playerBalance is the canonical in-memory var, set by
+    // fetchPlayerCode + earnCredits + every /api/player/* response.
+    const gemsEl = document.getElementById('home-v2-bal-gems');
+    if (gemsEl) {
+      let balance = 0;
+      try { if (typeof playerBalance === 'number') balance = playerBalance | 0; } catch (e) {}
+      gemsEl.textContent = balance.toLocaleString();
+    }
+    // Lives — only show slot if lives system is enabled & cache has data.
+    // The lives module owns _livesCache; we read defensively.
+    const livesSlot = document.getElementById('home-v2-bal-lives-slot');
+    if (livesSlot) {
+      let livesData = null;
+      try { if (window._livesCache && window._livesCache.data) livesData = window._livesCache.data; } catch (e) {}
+      if (livesData && livesData.enabled !== false && typeof livesData.currentLives === 'number') {
+        const livesEl = document.getElementById('home-v2-bal-lives');
+        if (livesEl) livesEl.textContent = livesData.currentLives + '/' + (livesData.maxLives | 0);
+        livesSlot.style.display = '';
+      } else {
+        livesSlot.style.display = 'none';
+      }
+    }
+    // Streak — loadStreak() returns the dynamic-streak object across
+    // all play modes (daily/practice/contest/duel/dynamic).
+    const streakEl = document.getElementById('home-v2-bal-streak');
+    if (streakEl) {
+      let count = 0;
+      try {
+        const s = (typeof loadStreak === 'function') ? loadStreak() : null;
+        if (s && typeof s.count === 'number') count = s.count | 0;
+      } catch (e) {}
+      streakEl.textContent = String(count);
+    }
+    // Level (T1.1 progression)
+    const levelEl = document.getElementById('home-v2-bal-level');
+    if (levelEl) {
+      let lvl = 1;
+      try { if (typeof getPlayerLevel === 'function') lvl = getPlayerLevel(); } catch (e) {}
+      levelEl.textContent = String(lvl);
+    }
+  }
+  // Bump animation on gem-change. Called from earnCredits via
+  // window.__bloomBumpBal so the widget reacts instantly to rewards.
+  function bumpBalanceGems(newBalance, delta) {
+    const slot = document.getElementById('home-v2-bal-gems-slot');
+    const el = document.getElementById('home-v2-bal-gems');
+    if (!slot || !el) return;
+    if (typeof newBalance === 'number') el.textContent = newBalance.toLocaleString();
+    slot.classList.remove('home-v2-bal-bump');
+    // Force reflow to restart the animation.
+    void slot.offsetWidth;
+    slot.classList.add('home-v2-bal-bump');
+    // Floating "+N" if delta is positive.
+    if (typeof delta === 'number' && delta > 0) {
+      const float = document.createElement('span');
+      float.className = 'home-v2-bal-float';
+      float.textContent = '+' + delta.toLocaleString();
+      slot.appendChild(float);
+      setTimeout(function() { try { float.remove(); } catch (e) {} }, 1400);
+    }
+  }
+  try {
+    window.__bloomBumpBal = bumpBalanceGems;
+    window.__bloomRenderBal = renderBalanceBarV2;
+  } catch (e) {}
+
   function renderMyStatsV2() {
     const el = document.getElementById('home-v2-mystats');
     if (!el) return;
@@ -10988,6 +11218,9 @@
         playerBalance = d.newBalance;
         try { localStorage.setItem(PLAYER_BALANCE_KEY, String(d.newBalance)); } catch(e) {}
         showCreditToast(d.reward, action);
+        // T1.3 — bump the home balance widget if mounted, so the gem
+        // counter ticks up in sync with the toast and shows a +N flash.
+        try { if (typeof window.__bloomBumpBal === 'function') window.__bloomBumpBal(d.newBalance, d.reward); } catch (e) {}
         // XP + Level
         if (d.xpGain) {
           playerXp = (d.level && d.level.xp) || (playerXp + d.xpGain);
@@ -15361,6 +15594,11 @@
           var gameDuration = Date.now() - (gameStartTime || Date.now());
           var totalMs = loadLifetimeInt(TOTAL_PLAY_TIME_KEY) + gameDuration;
           try { localStorage.setItem(TOTAL_PLAY_TIME_KEY, String(totalMs)); } catch(e) {}
+          // T1.1 — check progressive-unlock thresholds + refresh balance widget.
+          // Order matters: incrementGamesPlayed happens BEFORE level check
+          // so getPlayerLevel() reflects the JUST-finished game.
+          try { if (typeof checkLevelUnlock === 'function') checkLevelUnlock(); } catch (e) {}
+          try { if (typeof window.__bloomRenderBal === 'function') window.__bloomRenderBal(); } catch (e) {}
         }
         checkAchievements();
         // Challenge game-over
@@ -19416,6 +19654,9 @@
   // Public: called on home mount to inject the deal banner.
   var _lastBannerCheckAt = 0;
   function maybeShowDailyDealBanner() {
+    // T1.1 — Daily Deal unlocks at L8. New players shouldn't see paid
+    // offers before they've internalized the core loop.
+    try { if (typeof getPlayerLevel === 'function' && getPlayerLevel() < 8) return; } catch (e) {}
     if (Date.now() - _lastBannerCheckAt < 30 * 1000) return;
     _lastBannerCheckAt = Date.now();
     fetchTodayDeal(false).then(function(d) {
@@ -19697,6 +19938,9 @@
   }
 
   function maybeShowGachaBanner() {
+    // T1.1 — Gacha unlocks at L18. Variable-reward gambling is a deep
+    // mechanic — exposing it too early hits monetization but kills early retention.
+    try { if (typeof getPlayerLevel === 'function' && getPlayerLevel() < 18) return; } catch (e) {}
     fetchGachaState(false).then(function(d) {
       if (!d || !d.ok || !d.enabled || !d.showOnHome) return;
       var home = document.getElementById('home-screen-v2') || document.getElementById('home-screen');
@@ -20442,6 +20686,9 @@
   }
 
   function mountChecklistTile() {
+    // T1.1 — Daily Checklist unlocks at L5 (alongside contests). A new
+    // player without quests/streaks to track shouldn't see an empty list.
+    try { if (typeof getPlayerLevel === 'function' && getPlayerLevel() < 5) return; } catch (e) {}
     var home = document.getElementById('home-screen-v2') || document.getElementById('home-screen');
     if (!home) return;
     if (document.getElementById('checklist-home-tile')) return;
@@ -20643,6 +20890,10 @@
   }
 
   function maybeShowPetWidget() {
+    // T1.1 — Pet widget unlocks at L8 (alongside Daily Deal). Below that
+    // a new player has too many tiles already; pet is emotional but not
+    // the first dopamine surface they should meet.
+    try { if (typeof getPlayerLevel === 'function' && getPlayerLevel() < 8) return; } catch (e) {}
     fetchPetState(false).then(function(d) {
       if (!d || !d.ok || !d.enabled) return;
       var home = document.getElementById('home-screen-v2') || document.getElementById('home-screen');
@@ -21019,6 +21270,8 @@
   // Public: mount banners for active bundles. Limits to top 2 by sort_order
   // to avoid drowning the home screen.
   function maybeShowBundleBanners() {
+    // T1.1 — Themed bundles unlock at L18 (same as Gacha — heavy paid surfaces).
+    try { if (typeof getPlayerLevel === 'function' && getPlayerLevel() < 18) return; } catch (e) {}
     fetchActiveBundles(false).then(function(d) {
       if (!d || !d.ok || !d.enabled) return;
       var bundles = (d.bundles || []).filter(function(b) { return b.canBuy; });
@@ -21333,6 +21586,9 @@
   }
 
   function maybeShowAchLbTile() {
+    // T1.1 — Achievements LB unlocks at L8. Existing "3+ achievements"
+    // gate combined with this means new players see neither.
+    try { if (typeof getPlayerLevel === 'function' && getPlayerLevel() < 8) return; } catch (e) {}
     // First, fire the boot sync (silent).
     syncAchievementsToServer().then(function() {
       // Then check my count to decide whether to show the tile.
@@ -21512,6 +21768,9 @@
   }
 
   function maybeShowAlbumTile() {
+    // T1.1 — Album unlocks at L15 (completionist surface — needs a player
+    // who's already past basic dynamic-board familiarity).
+    try { if (typeof getPlayerLevel === 'function' && getPlayerLevel() < 15) return; } catch (e) {}
     fetchAlbumState(false).then(function(d) {
       if (!d || !d.ok || !d.enabled) return;
       if (d.totalCells === 0) return; // no boards yet
@@ -21773,6 +22032,9 @@
   }
 
   function maybeShowLifetimeTile() {
+    // T1.1 — Lifetime/Prestige unlocks at L10. Aggregate XP is meaningless
+    // for a brand-new player; meet them when they have something to display.
+    try { if (typeof getPlayerLevel === 'function' && getPlayerLevel() < 10) return; } catch (e) {}
     fetchLifetimeState(false).then(function(d) {
       if (!d || !d.ok || !d.enabled) return;
       var home = document.getElementById('home-screen-v2') || document.getElementById('home-screen');
@@ -22313,6 +22575,9 @@
   }
 
   function maybeShowGuildTile() {
+    // T1.1 — Guilds unlock at L15. Social/team play is a deep mechanic;
+    // showing it on day 1 sends mixed signals about what BLOOM is.
+    try { if (typeof getPlayerLevel === 'function' && getPlayerLevel() < 15) return; } catch (e) {}
     fetchGuildState(false).then(function(d) {
       if (!d || !d.ok || !d.enabled) return;
       var home = document.getElementById('home-screen-v2') || document.getElementById('home-screen');
@@ -22715,6 +22980,9 @@
   }
 
   function maybeShowRivalTile() {
+    // T1.1 — Rivals unlock at L20 (final wave — needs enough lifetime XP
+    // for the auto-pairing to find a meaningful opponent in the matchmaker).
+    try { if (typeof getPlayerLevel === 'function' && getPlayerLevel() < 20) return; } catch (e) {}
     // First, try to resolve any expired rivalries (server-side check).
     resolveRivalriesOnServer().then(function(rd) {
       // Show celebration if I just won.
@@ -22963,6 +23231,8 @@
   }
 
   function maybeShowLeagueTile() {
+    // T1.1 — Weekly Leagues unlock at L20 (final wave — competitive layer).
+    try { if (typeof getPlayerLevel === 'function' && getPlayerLevel() < 20) return; } catch (e) {}
     fetchLeagueState(false).then(function(d) {
       if (!d || !d.ok || !d.enabled) return;
       var home = document.getElementById('home-screen-v2') || document.getElementById('home-screen');
@@ -23680,6 +23950,9 @@
   }
 
   function maybeShowSpinTile() {
+    // T1.1 — Daily Spin unlocks at L12 (matches Season Pass — both are
+    // engagement engines the player should meet after the basics click).
+    try { if (typeof getPlayerLevel === 'function' && getPlayerLevel() < 12) return; } catch (e) {}
     fetchSpinState(false).then(function(d) {
       if (!d || !d.ok || !d.enabled) return;
       var home = document.getElementById('home-screen-v2') || document.getElementById('home-screen');
@@ -24015,6 +24288,11 @@
   }
 
   function maybeShowWarTile() {
+    // T1.1 — Guild Wars need an L20 player. inGuild gate below would
+    // skip non-guild players anyway, but the explicit level gate keeps
+    // a brand-new player from accidentally seeing the tile if they're
+    // somehow already in a guild.
+    try { if (typeof getPlayerLevel === 'function' && getPlayerLevel() < 20) return; } catch (e) {}
     fetchWarState(false).then(function(d) {
       if (!d || !d.ok || !d.enabled || !d.inGuild) return;
       if (!d.activeWar && !d.unclaimed) return; // nothing to show
@@ -24287,6 +24565,10 @@
   }
 
   function maybeShowTrophyTile() {
+    // T1.1 — Trophy Road unlocks at L10 (alongside Duel — both build
+    // on competitive instinct). Below that the player isn't gaining
+    // trophies anyway (needs score ≥500 in dynamic games).
+    try { if (typeof getPlayerLevel === 'function' && getPlayerLevel() < 10) return; } catch (e) {}
     fetchTrophyState(false).then(function(d) {
       if (!d || !d.ok || !d.enabled) return;
       var home = document.getElementById('home-screen-v2') || document.getElementById('home-screen');

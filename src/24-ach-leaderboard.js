@@ -88,6 +88,9 @@
   }
 
   function maybeShowAchLbTile() {
+    // T1.1 — Achievements LB unlocks at L8. Existing "3+ achievements"
+    // gate combined with this means new players see neither.
+    try { if (typeof getPlayerLevel === 'function' && getPlayerLevel() < 8) return; } catch (e) {}
     // First, fire the boot sync (silent).
     syncAchievementsToServer().then(function() {
       // Then check my count to decide whether to show the tile.

@@ -54,6 +54,9 @@
   }
 
   function maybeShowLifetimeTile() {
+    // T1.1 — Lifetime/Prestige unlocks at L10. Aggregate XP is meaningless
+    // for a brand-new player; meet them when they have something to display.
+    try { if (typeof getPlayerLevel === 'function' && getPlayerLevel() < 10) return; } catch (e) {}
     fetchLifetimeState(false).then(function(d) {
       if (!d || !d.ok || !d.enabled) return;
       var home = document.getElementById('home-screen-v2') || document.getElementById('home-screen');

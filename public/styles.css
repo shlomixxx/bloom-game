@@ -1818,7 +1818,89 @@
     background: linear-gradient(180deg, #1A1816 0%, #232120 100%);
   }
 
-  /* ── Topbar: mute + always-visible social proof ── */
+  /* ── T1.3 — Balance Bar (sticky-ish above content) ──
+     Always-on at-a-glance status: gems / lives / streak / level.
+     Sits right below the topbar; on scroll it stays at the top of
+     home content (NOT viewport-fixed — keeps the modal layer above
+     it untouched).  */
+  .home-v2-balance-bar {
+    width: 100%;
+    max-width: 420px;
+    display: flex;
+    align-items: stretch;
+    justify-content: space-between;
+    gap: 6px;
+    margin: 4px 0 6px;
+    background: var(--color-surface, rgba(255,255,255,0.96));
+    border: 1px solid var(--color-border, rgba(0,0,0,0.08));
+    border-radius: 14px;
+    padding: 8px 10px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.04);
+  }
+  .home-v2-bal-slot {
+    position: relative;
+    flex: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    padding: 6px 4px;
+    min-height: 30px;
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--color-text, #1C1A18);
+    background: var(--color-surface-2, rgba(0,0,0,0.025));
+    transition: transform 0.18s ease;
+  }
+  .home-v2-bal-icon {
+    font-size: 14px;
+    line-height: 1;
+    filter: saturate(1.1);
+  }
+  .home-v2-bal-val {
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.2px;
+  }
+  /* Per-slot tint to make each readable at a glance. */
+  .home-v2-bal-gems { background: rgba(255, 200, 80, 0.18); color: #7A4F00; }
+  .home-v2-bal-lives { background: rgba(232, 70, 96, 0.16); color: #A11A33; }
+  .home-v2-bal-streak { background: rgba(255, 130, 50, 0.15); color: #8B3A00; }
+  .home-v2-bal-level { background: rgba(110, 90, 200, 0.16); color: #3B2C7A; }
+
+  /* Bump animation when gems change (called via __bloomBumpBal). */
+  @keyframes balBumpScale {
+    0%   { transform: scale(1); }
+    50%  { transform: scale(1.15); }
+    100% { transform: scale(1); }
+  }
+  .home-v2-bal-bump {
+    animation: balBumpScale 0.55s ease-out;
+  }
+  /* Floating "+N" label that drifts up + fades on earn. */
+  .home-v2-bal-float {
+    position: absolute;
+    top: -14px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: linear-gradient(135deg, #FFD96A, #FF9F2E);
+    color: #4A2A00;
+    font-size: 11px;
+    font-weight: 800;
+    padding: 2px 7px;
+    border-radius: 999px;
+    pointer-events: none;
+    box-shadow: 0 2px 6px rgba(255, 159, 46, 0.45);
+    animation: balFloatUp 1.4s ease-out forwards;
+    z-index: 2;
+  }
+  @keyframes balFloatUp {
+    0%   { opacity: 0; transform: translate(-50%, 4px) scale(0.85); }
+    20%  { opacity: 1; transform: translate(-50%, -2px) scale(1.05); }
+    100% { opacity: 0; transform: translate(-50%, -24px) scale(0.95); }
+  }
+
+  /* Topbar: mute + always-visible social proof */
   .home-v2-topbar {
     width: 100%;
     max-width: 420px;

@@ -29,6 +29,9 @@
   }
 
   function maybeShowSpinTile() {
+    // T1.1 — Daily Spin unlocks at L12 (matches Season Pass — both are
+    // engagement engines the player should meet after the basics click).
+    try { if (typeof getPlayerLevel === 'function' && getPlayerLevel() < 12) return; } catch (e) {}
     fetchSpinState(false).then(function(d) {
       if (!d || !d.ok || !d.enabled) return;
       var home = document.getElementById('home-screen-v2') || document.getElementById('home-screen');

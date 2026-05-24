@@ -26,6 +26,10 @@
   }
 
   function maybeShowTrophyTile() {
+    // T1.1 — Trophy Road unlocks at L10 (alongside Duel — both build
+    // on competitive instinct). Below that the player isn't gaining
+    // trophies anyway (needs score ≥500 in dynamic games).
+    try { if (typeof getPlayerLevel === 'function' && getPlayerLevel() < 10) return; } catch (e) {}
     fetchTrophyState(false).then(function(d) {
       if (!d || !d.ok || !d.enabled) return;
       var home = document.getElementById('home-screen-v2') || document.getElementById('home-screen');

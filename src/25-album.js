@@ -65,6 +65,9 @@
   }
 
   function maybeShowAlbumTile() {
+    // T1.1 — Album unlocks at L15 (completionist surface — needs a player
+    // who's already past basic dynamic-board familiarity).
+    try { if (typeof getPlayerLevel === 'function' && getPlayerLevel() < 15) return; } catch (e) {}
     fetchAlbumState(false).then(function(d) {
       if (!d || !d.ok || !d.enabled) return;
       if (d.totalCells === 0) return; // no boards yet

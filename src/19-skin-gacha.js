@@ -38,6 +38,9 @@
   }
 
   function maybeShowGachaBanner() {
+    // T1.1 — Gacha unlocks at L18. Variable-reward gambling is a deep
+    // mechanic — exposing it too early hits monetization but kills early retention.
+    try { if (typeof getPlayerLevel === 'function' && getPlayerLevel() < 18) return; } catch (e) {}
     fetchGachaState(false).then(function(d) {
       if (!d || !d.ok || !d.enabled || !d.showOnHome) return;
       var home = document.getElementById('home-screen-v2') || document.getElementById('home-screen');

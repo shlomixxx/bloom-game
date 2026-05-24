@@ -45,6 +45,9 @@
   // Public: called on home mount to inject the deal banner.
   var _lastBannerCheckAt = 0;
   function maybeShowDailyDealBanner() {
+    // T1.1 — Daily Deal unlocks at L8. New players shouldn't see paid
+    // offers before they've internalized the core loop.
+    try { if (typeof getPlayerLevel === 'function' && getPlayerLevel() < 8) return; } catch (e) {}
     if (Date.now() - _lastBannerCheckAt < 30 * 1000) return;
     _lastBannerCheckAt = Date.now();
     fetchTodayDeal(false).then(function(d) {

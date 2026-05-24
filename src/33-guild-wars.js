@@ -32,6 +32,11 @@
   }
 
   function maybeShowWarTile() {
+    // T1.1 — Guild Wars need an L20 player. inGuild gate below would
+    // skip non-guild players anyway, but the explicit level gate keeps
+    // a brand-new player from accidentally seeing the tile if they're
+    // somehow already in a guild.
+    try { if (typeof getPlayerLevel === 'function' && getPlayerLevel() < 20) return; } catch (e) {}
     fetchWarState(false).then(function(d) {
       if (!d || !d.ok || !d.enabled || !d.inGuild) return;
       if (!d.activeWar && !d.unclaimed) return; // nothing to show

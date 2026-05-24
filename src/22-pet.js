@@ -36,6 +36,10 @@
   }
 
   function maybeShowPetWidget() {
+    // T1.1 — Pet widget unlocks at L8 (alongside Daily Deal). Below that
+    // a new player has too many tiles already; pet is emotional but not
+    // the first dopamine surface they should meet.
+    try { if (typeof getPlayerLevel === 'function' && getPlayerLevel() < 8) return; } catch (e) {}
     fetchPetState(false).then(function(d) {
       if (!d || !d.ok || !d.enabled) return;
       var home = document.getElementById('home-screen-v2') || document.getElementById('home-screen');

@@ -1445,13 +1445,18 @@
 
   function updateBalanceDisplay() {
     var el = document.getElementById('balance-display');
-    if (!el) return;
-    var b = playerBalance;
-    var text = b >= 100000 ? Math.round(b / 1000) + 'K'
-      : b >= 10000 ? (b / 1000).toFixed(1).replace('.0', '') + 'K'
-      : b >= 1000 ? (b / 1000).toFixed(1).replace('.0', '') + 'K'
-      : String(b);
-    el.textContent = text;
+    if (el) {
+      var b = playerBalance;
+      var text = b >= 100000 ? Math.round(b / 1000) + 'K'
+        : b >= 10000 ? (b / 1000).toFixed(1).replace('.0', '') + 'K'
+        : b >= 1000 ? (b / 1000).toFixed(1).replace('.0', '') + 'K'
+        : String(b);
+      el.textContent = text;
+    }
+    // T1.3 — propagate to the home Balance Widget. The widget reads
+    // playerBalance directly so a render-only call is enough; no need
+    // to pass delta here (delta is reserved for earnCredits anim).
+    try { if (typeof window.__bloomRenderBal === 'function') window.__bloomRenderBal(); } catch (e) {}
   }
 
   // Active power-up mode

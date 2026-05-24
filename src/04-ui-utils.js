@@ -549,6 +549,104 @@
   function loadGamesPlayed() {
     try { return parseInt(localStorage.getItem(GAMES_COUNT_KEY) || '0', 10) | 0; } catch (e) { return 0; }
   }
+
+  // ============ PROGRESSIVE UNLOCK SYSTEM (T1.1 + T1.4) ============
+  // A new player who lands on a home full of 19 tiles bounces. Industry data:
+  // Match Masters shows only "PLAY" on day 1. We hide every non-essential
+  // surface until the player has accumulated enough games (= reached the
+  // unlock level). Level is derived directly from games_played (cheap,
+  // localStorage-backed) so we don't need a server round-trip on boot.
+  //
+  // Formula: level = min(MAX_LEVEL, games_played + 1). Anyone with ≥19
+  // games played is at level 20 (all features unlocked). New player is L1.
+  //
+  // LEVEL_UNLOCKS maps level → feature labels (Hebrew, for the toast).
+  // The data-min-level attribute on HTML elements and the level gate
+  // inside each maybeShow* together drive the actual hiding.
+  const PLAYER_LEVEL_MAX = 20;
+  const PLAYER_SEEN_LEVEL_KEY = 'bloom_seen_level';
+  const LEVEL_UNLOCKS = {
+    5:  '👥 תחרות חברים · 📋 משימות יומיות',
+    8:  '🎨 סקינים · 🔥 דיל יומי · 🌱 חיית מחמד',
+    10: '⚔️ דו-קרב · 🏆 דרך הגביעים',
+    12: '🎖 Battle Pass · 🎡 גלגל יומי',
+    15: '🛡 קלאן · 📔 אלבום אריחים',
+    18: '🎰 גאצ\'ה · 🎁 חבילות',
+    20: '⚔️ ליגות · 🥊 יריבים · 🛡⚔️ מלחמות קלאן'
+  };
+  function getPlayerLevel() {
+    const games = loadGamesPlayed();
+    const level = games + 1;
+    return level > PLAYER_LEVEL_MAX ? PLAYER_LEVEL_MAX : level;
+  }
+  function loadSeenLevel() {
+    try { return parseInt(localStorage.getItem(PLAYER_SEEN_LEVEL_KEY) || '0', 10) | 0; }
+    catch (e) { return 0; }
+  }
+  function saveSeenLevel(n) {
+    try { localStorage.setItem(PLAYER_SEEN_LEVEL_KEY, String(n | 0)); } catch (e) {}
+  }
+  // Walks every visible element with data-min-level and sets display:none
+  // when the player isn't there yet. Safe to call multiple times — display
+  // is restored by setting an empty string (CSS default). Re-run after any
+  // deferred maybeShow* tile mounts (the home-v2 setTimeouts up to 3.2s).
+  function applyLevelGates(rootEl) {
+    const root = rootEl || document;
+    const level = getPlayerLevel();
+    const nodes = root.querySelectorAll('[data-min-level]');
+    for (let i = 0; i < nodes.length; i++) {
+      const el = nodes[i];
+      const req = parseInt(el.getAttribute('data-min-level') || '1', 10) | 0;
+      if (level < req) {
+        // Stash the original display value once so we can restore later.
+        if (!el.hasAttribute('data-pre-gate-display')) {
+          el.setAttribute('data-pre-gate-display', el.style.display || '');
+        }
+        el.style.display = 'none';
+      } else if (el.hasAttribute('data-pre-gate-display')) {
+        el.style.display = el.getAttribute('data-pre-gate-display');
+        el.removeAttribute('data-pre-gate-display');
+      }
+    }
+  }
+  // Called after every game-over (and once on boot). If the player crossed
+  // one or more unlock thresholds since their last seen level, show ONE
+  // combined toast naming everything newly available. Persists seen level
+  // so we never re-toast the same crossing.
+  function checkLevelUnlock() {
+    const cur = getPlayerLevel();
+    const seen = loadSeenLevel();
+    if (cur <= seen) {
+      // First-ever call (seen=0) — still want to seed seen so the next
+      // game-over only toasts genuine new crossings.
+      if (seen === 0) saveSeenLevel(cur);
+      return null;
+    }
+    const newlyUnlocked = [];
+    Object.keys(LEVEL_UNLOCKS).forEach(function(k) {
+      const lvl = parseInt(k, 10) | 0;
+      if (lvl > seen && lvl <= cur) newlyUnlocked.push({ level: lvl, label: LEVEL_UNLOCKS[k] });
+    });
+    saveSeenLevel(cur);
+    if (newlyUnlocked.length && typeof showToast === 'function') {
+      // Combined toast — "🔓 דרגה N נפתחה: X · Y · Z". For multi-cross
+      // (player jumped from L4 to L9 in one session) we list all groups.
+      const msg = newlyUnlocked.map(function(u) {
+        return '🔓 דרגה ' + u.level + ': ' + u.label;
+      }).join(' · ');
+      showToast(msg, 'success');
+    }
+    return newlyUnlocked.length ? newlyUnlocked : null;
+  }
+  try {
+    window.__bloomLevel = {
+      getPlayerLevel: getPlayerLevel,
+      applyLevelGates: applyLevelGates,
+      checkLevelUnlock: checkLevelUnlock,
+      LEVEL_UNLOCKS: LEVEL_UNLOCKS
+    };
+  } catch (e) {}
+
   function incrementGamesPlayed() {
     const n = loadGamesPlayed() + 1;
     try { localStorage.setItem(GAMES_COUNT_KEY, String(n)); } catch (e) {}

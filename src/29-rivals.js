@@ -57,6 +57,9 @@
   }
 
   function maybeShowRivalTile() {
+    // T1.1 — Rivals unlock at L20 (final wave — needs enough lifetime XP
+    // for the auto-pairing to find a meaningful opponent in the matchmaker).
+    try { if (typeof getPlayerLevel === 'function' && getPlayerLevel() < 20) return; } catch (e) {}
     // First, try to resolve any expired rivalries (server-side check).
     resolveRivalriesOnServer().then(function(rd) {
       // Show celebration if I just won.

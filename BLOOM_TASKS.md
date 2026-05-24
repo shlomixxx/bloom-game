@@ -38,7 +38,13 @@
 > ⏱ ~8 שעות | 🎯 שחקן חדש מבין מה לעשות ב-30 שניות
 > 💡 **למה זה ממכר**: Match Masters מראה רק "PLAY" לשחקנים חדשים. פשטות = שחקן לא בורח.
 
-- [ ] **T1.1** — Progressive Unlock System
+- [x] **T1.1** ✅ — Progressive Unlock System (24.05.2026)
+  - `getPlayerLevel() = Math.min(20, games + 1)` ב-[src/04-ui-utils.js](src/04-ui-utils.js).
+  - `LEVEL_UNLOCKS` map: L5 (contest/checklist) · L8 (skins/daily-deal/pet/ach-lb) · L10 (duel/trophy/lifetime) · L12 (season-pass/spin) · L15 (guilds/album) · L18 (gacha/bundles) · L20 (leagues/rivals/wars).
+  - `applyLevelGates(root)` runs on home mount + 600/1500/2500/3400ms intervals to catch deferred `maybeShow*` mounts. Uses `data-min-level` attr — hides via display:none, restores on level-up.
+  - `checkLevelUnlock()` fires on home-mount + every game-over — shows ONE combined toast for all newly-crossed thresholds.
+  - 12 `maybeShow*` functions got `if (getPlayerLevel() < N) return;` top-line gate.
+  - **Important**: existing players (≥19 games) are at level 20 → see everything. Zero regression.
   - קובץ: `public/app.js` — `showHomeV2()` (שורה ~4101)
   - הוסף function `getPlayerLevel()` שמושכת level מ-localStorage
   - כל `maybeShow*` function מקבלת check: `if (getPlayerLevel() < REQUIRED_LEVEL) return;`
@@ -55,32 +61,19 @@
     ```
   - כשפיצ'ר חדש נפתח → `showToast('🔓 נפתח: תחרויות חברים!', 'success')` + אנימציה
 
-- [ ] **T1.2** — FTUE אינטראקטיבי (Tutorial)
-  - קובץ: `src/15-ftue.js` (כבר קיים, צריך לשדרג)
-  - 3 צעדים אינטראקטיביים על לוח אמיתי:
-    1. Highlight עמודה + "לחץ כאן להטיל חלק" → שחקן לוחץ → drop
-    2. שני pieces זהים ← "מעולה! עכשיו לחץ כדי למזג" → merge קורה
-    3. Chain reaction מתרחשת ← "שרשרת! ×2 נקודות!" → celebration
-  - אחרי 3 drops: "מעולה! עכשיו שחק לבד 💪" → משחק אמיתי מתחיל
-  - **חשוב**: אל תראה טקסט ארוך. רק חיצים + 3-5 מילים per step.
+- [ ] **T1.2** — FTUE אינטראקטיבי (Tutorial) — **DEFERRED**
+  - **סטטוס**: dferred. [src/15-ftue.js](src/15-ftue.js) הנוכחי כבר עושה 3 צעדים scripted-demo (drop → merge → chain) על mock board עם אותה אומנות. המעבר ל-"real board interactive" דורש כירורגיה במנוע (`init()` seed + drop interception + tour pause/resume) — risk גבוה למנוע ה-merge, ו-ROI נמוך אחרי שה-scripted-demo עובד. נחזור לזה אם data של D1 retention יראה שצריך.
 
-- [ ] **T1.3** — Balance Widget קבוע
-  - קובץ: `public/app.js` — `showHomeV2()` + CSS ב-`public/styles.css`
-  - Header bar קבוע בראש מסך הבית:
-    ```
-    💎 1,250  |  ❤️ 4/5  |  🔥 7 ימים רצוף
-    ```
-  - מתעדכן אחרי כל earn/spend/game
-  - מונפש (bump animation) כשמקבלים gems
+- [x] **T1.3** ✅ — Balance Widget קבוע (24.05.2026)
+  - 4-slot bar בראש home-v2: `💎 gems · ❤️ lives · 🔥 streak · ⭐ level`. Lives slot מוסתר אם המערכת disabled (matches lives_enabled config).
+  - אנימציית bump + floating "+N" pill כל פעם שמקבלים gems (חיווט ב-`earnCredits` ב-[src/07-identity.js](src/07-identity.js#L463) דרך `window.__bloomBumpBal`).
+  - `updateBalanceDisplay` ב-[src/02-shop.js](src/02-shop.js#L1446) קורא ל-`window.__bloomRenderBal` כדי לרענן את הוידג'ט אחרי כל spend/buy/refund.
+  - render גם אחרי game-over (level + streak מתעדכנים).
 
-- [ ] **T1.4** — Simplified Home (פחות = יותר)
-  - קובץ: `public/app.js` — `showHomeV2()`
-  - שחקן חדש (Level 1-3) רואה:
-    1. Header: balance + streak
-    2. כפתור "שחק עכשיו" — גדול, מרכזי, מונפש
-    3. Mini leaderboard (top 3 + המקום שלך)
-    4. "איך משחקים?" link
-  - **זהו.** כלום אחר. הפיצ'רים יופיעו כש-level עולה.
+- [x] **T1.4** ✅ — Simplified Home (24.05.2026)
+  - מסך הבית עכשיו gating-by-level: שחקן L1-4 רואה רק את הטופ-בר (mute + live-pulse + balance bar), הירו, ה-pid, ה-CTA "שחק עכשיו", המסטטס, וה-bottom-links (Tour + Privacy). זהו.
+  - 12 tiles + 4 action buttons מוסתרים עד שעוברים את ה-threshold (ראה T1.1).
+  - הקצב: L1 שחק → L5 עוברים חבר (~4 משחקים) → L8 (~7) → L10 (~9) → L20 (~19 משחקים = הכל פתוח).
 
 ---
 
@@ -381,14 +374,14 @@
 | Phase | משימות | הושלמו | % |
 |-------|--------|--------|---|
 | 0 — Critical Fixes | 5 | 4 | 80% |
-| 1 — New Player Experience | 4 | 0 | 0% |
+| 1 — New Player Experience | 4 | 3 | 75% |
 | 2 — Addiction Loops | 5 | 0 | 0% |
 | 3 — Economy & Shop | 4 | 0 | 0% |
 | 4 — Social & Competition | 5 | 0 | 0% |
 | 5 — Admin Panel | 5 | 0 | 0% |
 | 6 — Performance | 5 | 0 | 0% |
 | 7 — Polish & Monetization | 5 | 0 | 0% |
-| **סה"כ** | **38** | **4** | **10.5%** |
+| **סה"כ** | **38** | **7** | **18.4%** |
 
 ---
 

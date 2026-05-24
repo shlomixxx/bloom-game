@@ -74,6 +74,30 @@
         '</div>' +
       '</div>' +
 
+      // ── Balance Widget (T1.3) ─────────────────────────────────────
+      // Always-on at-a-glance status: gems / lives / streak / level.
+      // Match Masters / Royal Match keep these visible permanently —
+      // makes the player feel "I have something" → encourages spending.
+      // Lives slot hidden when admin disabled the lives system.
+      '<div class="home-v2-balance-bar" id="home-v2-balance-bar">' +
+        '<div class="home-v2-bal-slot home-v2-bal-gems" id="home-v2-bal-gems-slot" title="יתרת יהלומים">' +
+          '<span class="home-v2-bal-icon">💎</span>' +
+          '<span class="home-v2-bal-val" id="home-v2-bal-gems">--</span>' +
+        '</div>' +
+        '<div class="home-v2-bal-slot home-v2-bal-lives" id="home-v2-bal-lives-slot" style="display:none" title="חיים">' +
+          '<span class="home-v2-bal-icon">❤️</span>' +
+          '<span class="home-v2-bal-val" id="home-v2-bal-lives">--</span>' +
+        '</div>' +
+        '<div class="home-v2-bal-slot home-v2-bal-streak" id="home-v2-bal-streak-slot" title="רצף ימים">' +
+          '<span class="home-v2-bal-icon">🔥</span>' +
+          '<span class="home-v2-bal-val" id="home-v2-bal-streak">--</span>' +
+        '</div>' +
+        '<div class="home-v2-bal-slot home-v2-bal-level" id="home-v2-bal-level-slot" title="דרגה">' +
+          '<span class="home-v2-bal-icon">⭐</span>' +
+          '<span class="home-v2-bal-val" id="home-v2-bal-level">1</span>' +
+        '</div>' +
+      '</div>' +
+
       // ── Compact brand area ──
       '<div class="home-v2-brand-wrap">' +
         '<div class="home-icons home-v2-icons" id="home-icons-tap">' +
@@ -105,23 +129,26 @@
       '<div class="home-v2-featured" id="home-v2-featured"></div>' +
 
       // ── Secondary actions grid 2x2 with badges (§B1) ──
-      '<div class="home-v2-actions">' +
-        '<button class="home-v2-action" id="home-v2-contest" data-action="contest">' +
+      // T1.1 — each button carries data-min-level so applyLevelGates
+      // hides it until the player crosses the threshold. Contest=L5,
+      // Skins=L8, Duel=L10, Challenges=L5 (single grid stays clean).
+      '<div class="home-v2-actions" data-actions-row>' +
+        '<button class="home-v2-action" id="home-v2-contest" data-action="contest" data-min-level="5">' +
           '<span class="home-v2-badge" id="home-v2-contest-badge" style="display:none"></span>' +
           '<span class="home-v2-action-icon">👥</span>' +
           '<span class="home-v2-action-label">תחרות</span>' +
         '</button>' +
-        '<button class="home-v2-action" id="home-v2-challenge" data-action="challenge">' +
+        '<button class="home-v2-action" id="home-v2-challenge" data-action="challenge" data-min-level="5">' +
           '<span class="home-v2-badge home-v2-badge-prize" id="home-v2-challenge-badge" style="display:none"></span>' +
           '<span class="home-v2-action-icon">🏆</span>' +
           '<span class="home-v2-action-label">אתגרים</span>' +
         '</button>' +
-        '<button class="home-v2-action" id="home-v2-duel" data-action="duel">' +
+        '<button class="home-v2-action" id="home-v2-duel" data-action="duel" data-min-level="10">' +
           '<span class="home-v2-badge" id="home-v2-duel-badge" style="display:none"></span>' +
           '<span class="home-v2-action-icon">⚔️</span>' +
           '<span class="home-v2-action-label">דו-קרב</span>' +
         '</button>' +
-        '<button class="home-v2-action" id="home-v2-skins" data-action="skins">' +
+        '<button class="home-v2-action" id="home-v2-skins" data-action="skins" data-min-level="8">' +
           '<span class="home-v2-action-icon">🎨</span>' +
           '<span class="home-v2-action-label">סקינים</span>' +
         '</button>' +
@@ -143,7 +170,8 @@
       // Until this commit the BP was only accessible via the dynamic-boards
       // picker — players who never opened it never saw the BP existed.
       // Hidden by default; updateHomeSeasonPassTile() flips display.
-      '<button class="home-v2-season-pass" id="home-v2-season-pass" style="display:none">' +
+      // T1.1 — also level-gated (Season Pass = L12+).
+      '<button class="home-v2-season-pass" id="home-v2-season-pass" style="display:none" data-min-level="12">' +
         '<span class="home-v2-sp-icon">🎖</span>' +
         '<span class="home-v2-sp-text">' +
           '<span class="home-v2-sp-title" id="home-v2-sp-title">Battle Pass</span>' +
@@ -357,6 +385,7 @@
     renderHeroBannerV2();
     renderPlayerIdV2();
     renderMyStatsV2();
+    renderBalanceBarV2();        // T1.3 — gems/lives/streak/level top widget
     refreshHomeV2LivePulse();
     refreshHomeV2Badges();
     refreshFeaturedActionV2();
@@ -364,6 +393,29 @@
     refreshHomeJackpot();
     refreshHomeWeekly();
     startHomeV2LivePulse();
+
+    // T1.1 — apply level gates initially (hides high-level tiles for
+    // new players). Re-run on a few delays to catch tiles that mount
+    // via setTimeout (matches Stage 35 home-variants' deferred apply
+    // pattern). Last apply at 3.4s — after every maybeShow* has settled.
+    if (typeof applyLevelGates === 'function') {
+      try { applyLevelGates(h); } catch (e) {}
+      [600, 1500, 2500, 3400].forEach(function(t) {
+        setTimeout(function() {
+          if (document.getElementById('home-screen') && typeof applyLevelGates === 'function') {
+            try { applyLevelGates(); } catch (e) {}
+          }
+        }, t);
+      });
+    }
+    // Boot-time unlock check — shows toast(s) if the player crossed
+    // any thresholds since last visit (e.g. closed app at L4, comes
+    // back after a server-side stat bump putting them at L8).
+    if (typeof checkLevelUnlock === 'function') {
+      setTimeout(function() {
+        try { checkLevelUnlock(); } catch (e) {}
+      }, 1800);
+    }
 
     playMusic('lobby');
 
@@ -830,6 +882,81 @@
   }
 
   // ── Your week stats — small scannable line ──
+  // T1.3 — Balance bar render. Reads live state from in-IIFE vars when
+  // available (playerBalance from earnCredits, lives from _livesCache),
+  // falls back to localStorage where the var hasn't been initialized.
+  // Re-fired on (a) home mount, (b) earnCredits success via __bloomBumpBal,
+  // (c) lives widget refresh, and (d) game-over (so level/streak update
+  // even if we don't reach a new threshold).
+  function renderBalanceBarV2() {
+    const bar = document.getElementById('home-v2-balance-bar');
+    if (!bar) return;
+    // Gems — playerBalance is the canonical in-memory var, set by
+    // fetchPlayerCode + earnCredits + every /api/player/* response.
+    const gemsEl = document.getElementById('home-v2-bal-gems');
+    if (gemsEl) {
+      let balance = 0;
+      try { if (typeof playerBalance === 'number') balance = playerBalance | 0; } catch (e) {}
+      gemsEl.textContent = balance.toLocaleString();
+    }
+    // Lives — only show slot if lives system is enabled & cache has data.
+    // The lives module owns _livesCache; we read defensively.
+    const livesSlot = document.getElementById('home-v2-bal-lives-slot');
+    if (livesSlot) {
+      let livesData = null;
+      try { if (window._livesCache && window._livesCache.data) livesData = window._livesCache.data; } catch (e) {}
+      if (livesData && livesData.enabled !== false && typeof livesData.currentLives === 'number') {
+        const livesEl = document.getElementById('home-v2-bal-lives');
+        if (livesEl) livesEl.textContent = livesData.currentLives + '/' + (livesData.maxLives | 0);
+        livesSlot.style.display = '';
+      } else {
+        livesSlot.style.display = 'none';
+      }
+    }
+    // Streak — loadStreak() returns the dynamic-streak object across
+    // all play modes (daily/practice/contest/duel/dynamic).
+    const streakEl = document.getElementById('home-v2-bal-streak');
+    if (streakEl) {
+      let count = 0;
+      try {
+        const s = (typeof loadStreak === 'function') ? loadStreak() : null;
+        if (s && typeof s.count === 'number') count = s.count | 0;
+      } catch (e) {}
+      streakEl.textContent = String(count);
+    }
+    // Level (T1.1 progression)
+    const levelEl = document.getElementById('home-v2-bal-level');
+    if (levelEl) {
+      let lvl = 1;
+      try { if (typeof getPlayerLevel === 'function') lvl = getPlayerLevel(); } catch (e) {}
+      levelEl.textContent = String(lvl);
+    }
+  }
+  // Bump animation on gem-change. Called from earnCredits via
+  // window.__bloomBumpBal so the widget reacts instantly to rewards.
+  function bumpBalanceGems(newBalance, delta) {
+    const slot = document.getElementById('home-v2-bal-gems-slot');
+    const el = document.getElementById('home-v2-bal-gems');
+    if (!slot || !el) return;
+    if (typeof newBalance === 'number') el.textContent = newBalance.toLocaleString();
+    slot.classList.remove('home-v2-bal-bump');
+    // Force reflow to restart the animation.
+    void slot.offsetWidth;
+    slot.classList.add('home-v2-bal-bump');
+    // Floating "+N" if delta is positive.
+    if (typeof delta === 'number' && delta > 0) {
+      const float = document.createElement('span');
+      float.className = 'home-v2-bal-float';
+      float.textContent = '+' + delta.toLocaleString();
+      slot.appendChild(float);
+      setTimeout(function() { try { float.remove(); } catch (e) {} }, 1400);
+    }
+  }
+  try {
+    window.__bloomBumpBal = bumpBalanceGems;
+    window.__bloomRenderBal = renderBalanceBarV2;
+  } catch (e) {}
+
   function renderMyStatsV2() {
     const el = document.getElementById('home-v2-mystats');
     if (!el) return;

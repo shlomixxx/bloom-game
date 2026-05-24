@@ -2392,6 +2392,11 @@
           var gameDuration = Date.now() - (gameStartTime || Date.now());
           var totalMs = loadLifetimeInt(TOTAL_PLAY_TIME_KEY) + gameDuration;
           try { localStorage.setItem(TOTAL_PLAY_TIME_KEY, String(totalMs)); } catch(e) {}
+          // T1.1 — check progressive-unlock thresholds + refresh balance widget.
+          // Order matters: incrementGamesPlayed happens BEFORE level check
+          // so getPlayerLevel() reflects the JUST-finished game.
+          try { if (typeof checkLevelUnlock === 'function') checkLevelUnlock(); } catch (e) {}
+          try { if (typeof window.__bloomRenderBal === 'function') window.__bloomRenderBal(); } catch (e) {}
         }
         checkAchievements();
         // Challenge game-over

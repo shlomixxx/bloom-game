@@ -62,6 +62,9 @@
   }
 
   function mountChecklistTile() {
+    // T1.1 — Daily Checklist unlocks at L5 (alongside contests). A new
+    // player without quests/streaks to track shouldn't see an empty list.
+    try { if (typeof getPlayerLevel === 'function' && getPlayerLevel() < 5) return; } catch (e) {}
     var home = document.getElementById('home-screen-v2') || document.getElementById('home-screen');
     if (!home) return;
     if (document.getElementById('checklist-home-tile')) return;

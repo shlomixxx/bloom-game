@@ -461,6 +461,9 @@
         playerBalance = d.newBalance;
         try { localStorage.setItem(PLAYER_BALANCE_KEY, String(d.newBalance)); } catch(e) {}
         showCreditToast(d.reward, action);
+        // T1.3 — bump the home balance widget if mounted, so the gem
+        // counter ticks up in sync with the toast and shows a +N flash.
+        try { if (typeof window.__bloomBumpBal === 'function') window.__bloomBumpBal(d.newBalance, d.reward); } catch (e) {}
         // XP + Level
         if (d.xpGain) {
           playerXp = (d.level && d.level.xp) || (playerXp + d.xpGain);

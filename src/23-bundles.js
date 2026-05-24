@@ -42,6 +42,8 @@
   // Public: mount banners for active bundles. Limits to top 2 by sort_order
   // to avoid drowning the home screen.
   function maybeShowBundleBanners() {
+    // T1.1 — Themed bundles unlock at L18 (same as Gacha — heavy paid surfaces).
+    try { if (typeof getPlayerLevel === 'function' && getPlayerLevel() < 18) return; } catch (e) {}
     fetchActiveBundles(false).then(function(d) {
       if (!d || !d.ok || !d.enabled) return;
       var bundles = (d.bundles || []).filter(function(b) { return b.canBuy; });
