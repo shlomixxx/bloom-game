@@ -147,6 +147,27 @@ export async function initDb() {
       meta               JSONB,
       created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )`,
+    // A2 — Friend Challenges (full def in schema.sql).
+    `CREATE TABLE IF NOT EXISTS friend_challenges (
+      id                  BIGSERIAL PRIMARY KEY,
+      challenger_device   VARCHAR(64) NOT NULL,
+      challenged_device   VARCHAR(64) NOT NULL,
+      challenger_name     VARCHAR(80),
+      challenged_name     VARCHAR(80),
+      target_score        INT NOT NULL,
+      board_id            INT,
+      board_name          VARCHAR(120),
+      message             VARCHAR(200),
+      status              VARCHAR(20) NOT NULL DEFAULT 'pending',
+      result_score        INT,
+      result_at           TIMESTAMPTZ,
+      created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      expires_at          TIMESTAMPTZ NOT NULL
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_friend_challenges_challenged_pending
+      ON friend_challenges (challenged_device, status) WHERE status = 'pending'`,
+    `CREATE INDEX IF NOT EXISTS idx_friend_challenges_challenger_active
+      ON friend_challenges (challenger_device, created_at DESC)`,
     // A3 — Trophy Chests (Clash Royale must-return pattern; full def in schema.sql).
     `CREATE TABLE IF NOT EXISTS trophy_chests (
       id                BIGSERIAL PRIMARY KEY,

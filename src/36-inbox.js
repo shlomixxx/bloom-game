@@ -177,6 +177,7 @@
           if (action === 'open_duels' && typeof window.showDuelModal === 'function') window.showDuelModal();
           else if (action === 'open_guild' && typeof window.showGuildModal === 'function') window.showGuildModal();
           else if (action === 'open_challenges' && typeof window.showChallengesList === 'function') window.showChallengesList('inbox');
+          else if (action === 'open_friend_challenges' && window.__bloomFriendChallenges) window.__bloomFriendChallenges.openListModal();
         } catch (e) {}
         // Close the panel so the player can see what they tapped through to.
         var p = document.getElementById('inbox-panel');

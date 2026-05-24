@@ -1,7 +1,7 @@
 # 📋 BLOOM — משימות עתידיות
 
 > **מסמך מרכזי לכל מה שעדיין לא נבנה.**
-> עודכן: 2026-05-24 · 39 שלבים חיים בפרודקשן · 13 משימות פתוחות (A3 Trophy Chests ✅)
+> עודכן: 2026-05-24 · 41 שלבים חיים בפרודקשן · 12 משימות פתוחות (A3 ✅ + A2 ✅)
 >
 > 🎯 **איך להשתמש**: בשיחה חדשה תגיד "בוא נבנה A1" / "המשך עם הכי ממכר" / "תעשה A2 + A3 ביחד" ואני אדע בדיוק על מה אתה מדבר.
 
@@ -33,21 +33,20 @@
 
 ---
 
-### A2 · 🎯 Friend Challenges
-**מאמץ**: 1-2 ימים · **השפעה**: ★★★★★ · **המלצה לויראליות**
+### A2 · 🎯 Friend Challenges ✅ נבנה (24.05.2026)
+**מאמץ**: 1-2 ימים · **השפעה**: ★★★★★ · **סטטוס: חי בייצור**
 
-**מה זה**:
-"אני מאתגר אותך לעבור 67K בלוח X" — דחיפה ישירה לחבר עם deep-link ללוח. כשהוא מסיים, אתה מקבל push עם הציון שלו. הדדי.
+**מה נבנה**:
+- שחקן A לוחץ 🎯 ליד חבר במודאל החברים → modal "אתגר חבר" עם BLOOM code (pre-filled) + יעד ניקוד (input) + הודעה אופציונלית
+- שרת מאמת ש-A ו-B חברים בפועל (`friendships`), יוצר row, שולח push ל-B
+- שחקן B רואה את האתגר ב-inbox (✅ source חמישי) + (לעתיד: בתוך מודאל "האתגרים שלי")
+- **Auto-resolve**: כל submission של ציון (`/api/score`, `/api/score/practice`, `/api/boards/:id/score`) מפעיל `_resolveFriendChallengesForGame(deviceId, score)` שסורק את כל ה-pending challenges של השחקן ומפליפ ל-`passed` כל אחד שהציון עבר את היעד שלו. Atomic UPDATE עם WHERE status='pending' guard.
+- **שני הצדדים מקבלים 50💎** (config-tunable `friend_challenge_win_reward`). כל אחד → push: "🏆 ניצח/ה!"
+- **24 שעות** ל-pending (config-tunable). אחרי = `failed_expired` אוטומטית (lazy-update בכל `/mine` fetch).
+- Schema: טבלה `friend_challenges` + 4 config keys. Server: 3 endpoints (send / mine / decline). Inbox כולל פסים לכל מצב: ⏳ sent / 🎯 incoming / 🏆 passed / ⌛ expired / 🚫 declined.
+- Client: [src/39-friend-challenges.js](src/39-friend-challenges.js) — IIFE עצמאי. Send modal + List modal. CSS לאדום-ורוד (theme של אתגרים).
 
-**למה לבנות**:
-- K-factor הכי חזק שיש — כל אתגר = פוטנציאל לעוד שחקן
-- מנצל את כל ה-infrastructure הקיים (friends + push + dynamic boards)
-- שחקנים מאתגרים אחד את השני = שעות משחק נוספות
-
-**טכני**:
-- טבלה `friend_challenges` (challenger, challenged, board_id, target_score, status)
-- 3 endpoints: send / accept / complete
-- Push notif בכל מעבר סטטוס
+**Loop ויראלי**: A מאתגר B עם 67K → push ל-B → B חוזר ומשחק → עובר → שניהם מקבלים 50💎 + push ל-A "B עבר אותך" → A רוצה להתנקם → מאתגר חזרה. K-factor במלוא מובן המילה.
 
 ---
 

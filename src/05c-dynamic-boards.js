@@ -2386,8 +2386,9 @@
           // suffix is already constrained to [A-HJ-NP-Z2-9]{4} by the regex
           // above, so no need to escape — the chars are HTML/attr-safe by
           // construction. No XSS surface.
-          var challengeBtn = suffix
-            ? '<button class="dyn-friend-row-challenge" data-suffix="' + suffix + '" title="אתגר לדו-קרב">⚔️</button>'
+          var actionBtns = suffix
+            ? ('<button class="dyn-friend-row-fc" data-suffix="' + suffix + '" data-name="' + escapeHtml(f.name || '') + '" title="🎯 שלח אתגר ניקוד">🎯</button>' +
+               '<button class="dyn-friend-row-challenge" data-suffix="' + suffix + '" title="⚔️ אתגר לדו-קרב">⚔️</button>')
             : '';
           html += '<div class="dyn-friend-row">' +
             '<div class="dyn-friend-row-avatar">👤</div>' +
@@ -2396,14 +2397,12 @@
               '<div class="dyn-friend-row-code">' + escapeHtml(f.code || '') + '</div>' +
             '</div>' +
             statusPill +
-            challengeBtn +
+            actionBtns +
           '</div>';
         });
         host.innerHTML = html;
-        // T4.5 — wire one-tap challenge buttons. Closes the friends
-        // modal then opens the duel modal pre-filled with the friend's
-        // 4-char BLOOM suffix. showDuelModal({prefillSuffix}) is the
-        // existing public API.
+        // T4.5 — wire one-tap duel button. Closes the friends modal then
+        // opens the duel modal pre-filled with the friend's BLOOM suffix.
         host.querySelectorAll('.dyn-friend-row-challenge').forEach(function(btn) {
           btn.onclick = function(e) {
             e.stopPropagation();
@@ -2412,6 +2411,20 @@
             if (typeof closeFriendsModal === 'function') closeFriendsModal();
             if (typeof showDuelModal === 'function') {
               showDuelModal({ prefillSuffix: suffix });
+            }
+          };
+        });
+        // A2 — Friend Challenge button (🎯) — opens the send-challenge modal
+        // pre-filled with the friend's code + name.
+        host.querySelectorAll('.dyn-friend-row-fc').forEach(function(btn) {
+          btn.onclick = function(e) {
+            e.stopPropagation();
+            var suffix = btn.getAttribute('data-suffix');
+            var name = btn.getAttribute('data-name');
+            if (!suffix) return;
+            if (typeof closeFriendsModal === 'function') closeFriendsModal();
+            if (window.__bloomFriendChallenges) {
+              window.__bloomFriendChallenges.openSendModal(suffix, name);
             }
           };
         });

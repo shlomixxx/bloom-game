@@ -753,6 +753,10 @@ app.post('/api/score', requireDeviceAuth, async (req, res) => {
       rank: parseInt(rankRes.rows[0].rank, 10),
       total: totalRes.rows[0].c
     });
+    // A2 — Auto-resolve friend challenges for this daily score.
+    if (typeof _resolveFriendChallengesForGame === 'function') {
+      _resolveFriendChallengesForGame(deviceId, score, { boardId: null }).catch(function() {});
+    }
   } catch (e) {
     console.error('POST /api/score', e);
     res.status(500).json({ error: 'server' });
@@ -919,6 +923,10 @@ app.post('/api/score/practice', requireDeviceAuth, async (req, res) => {
       [date, deviceId, safeDiff, safeName, Math.floor(score), Math.floor(tier), safeCountry, safeSource, dropsN]
     );
     res.json({ ok: true });
+    // A2 — Auto-resolve friend challenges (practice + duel both write here).
+    if (typeof _resolveFriendChallengesForGame === 'function') {
+      _resolveFriendChallengesForGame(deviceId, Math.floor(score), { boardId: null }).catch(function() {});
+    }
   } catch (e) {
     console.error('POST /api/score/practice', e);
     res.status(500).json({ error: 'server' });
@@ -2872,6 +2880,11 @@ app.post('/api/boards/:id/score', requireDeviceAuth, async (req, res) => {
     // make the score submission depend on the friend bonus succeeding.
     if (typeof recordDynActivityAndPayShared === 'function') {
       recordDynActivityAndPayShared(deviceId).catch(function() {});
+    }
+    // A2 — Auto-resolve any friend challenges aimed at this player whose
+    // target is beaten by this score. Fire-and-forget.
+    if (typeof _resolveFriendChallengesForGame === 'function') {
+      _resolveFriendChallengesForGame(deviceId, score, { boardId: boardId }).catch(function() {});
     }
   } catch (e) {
     console.error('POST /api/boards/:id/score', e);
@@ -7083,6 +7096,251 @@ app.get('/api/trophies/state', async (req, res) => {
 // Granted automatically when /api/score (daily) or /api/score/practice
 // fires — see hooks below. Also a direct endpoint so admin / future
 // modes can call it explicitly with a custom reason.
+// ============================================================
+// A2 — Friend Challenges (K-factor viral lever)
+// Player A picks friend B + target score → server creates a
+// "beat this" challenge. B can attempt by playing any game in 24h.
+// When B's score crosses target → status=passed + both pushed +
+// both get gem reward. Otherwise expires.
+// ============================================================
+async function _loadFriendChallengeConfig() {
+  try { return await getCachedConfigPrefix('friend_challenge_'); }
+  catch (e) { return {}; }
+}
+
+// Verifies A and B are mutual friends per the existing friendships table.
+async function _areFriends(deviceA, deviceB) {
+  try {
+    const r = await pool.query(
+      `SELECT 1 FROM friendships
+        WHERE (device_a = $1 AND device_b = $2) OR (device_a = $2 AND device_b = $1)
+        LIMIT 1`,
+      [deviceA, deviceB]
+    );
+    return r.rows.length > 0;
+  } catch (e) { return false; }
+}
+
+// Helper: get a player's display name (cached implicitly via profiles).
+async function _getProfileName(deviceId) {
+  try {
+    const r = await pool.query(
+      `SELECT display_name FROM player_profiles WHERE device_id = $1`,
+      [deviceId]
+    );
+    return (r.rows[0] && r.rows[0].display_name) || 'אנונימי';
+  } catch (e) { return 'אנונימי'; }
+}
+
+// Send a challenge. Validates: feature enabled, A and B are friends,
+// A hasn't hit pending cap, target is sane, B is not A.
+app.post('/api/friend-challenges/send', requireDeviceAuth, async (req, res) => {
+  try {
+    const challengerDevice = req.deviceId;
+    const { challengedCode, targetScore, message, boardId, boardName } = req.body || {};
+    const cfg = await _loadFriendChallengeConfig();
+    if (cfg.friend_challenge_enabled === 'false') return res.json({ ok: false, reason: 'disabled' });
+    if (!checkRateLimit('friend_challenge_send', challengerDevice, 30, 60 * 60 * 1000)) {
+      return res.json({ ok: false, reason: 'rate_limited' });
+    }
+    const tgt = parseInt(targetScore, 10);
+    if (!Number.isFinite(tgt) || tgt < 100 || tgt > 10_000_000) {
+      return res.json({ ok: false, reason: 'bad_target' });
+    }
+    // Resolve challenged player by their BLOOM code or device_id.
+    const codeRaw = String(challengedCode || '').toUpperCase().replace(/[^A-HJ-NP-Z2-9]/g, '').slice(0, 4);
+    if (codeRaw.length !== 4) return res.json({ ok: false, reason: 'bad_code' });
+    const lookup = await pool.query(
+      `SELECT device_id, display_name FROM player_profiles WHERE player_code = $1`,
+      [codeRaw]
+    );
+    if (!lookup.rows.length) return res.json({ ok: false, reason: 'friend_not_found' });
+    const challengedDevice = lookup.rows[0].device_id;
+    if (challengedDevice === challengerDevice) return res.json({ ok: false, reason: 'cant_self_challenge' });
+    if (!(await _areFriends(challengerDevice, challengedDevice))) {
+      return res.json({ ok: false, reason: 'not_friends' });
+    }
+    // Pending-cap: how many outgoing challenges from A are still active.
+    const maxPending = parseInt(cfg.friend_challenge_max_pending, 10) || 10;
+    const pend = await pool.query(
+      `SELECT COUNT(*)::int AS n FROM friend_challenges
+        WHERE challenger_device = $1 AND status = 'pending' AND expires_at > NOW()`,
+      [challengerDevice]
+    );
+    if ((pend.rows[0].n | 0) >= maxPending) return res.json({ ok: false, reason: 'too_many_pending' });
+    const hours = Math.max(1, Math.min(168, parseInt(cfg.friend_challenge_expires_hours, 10) || 24));
+    const cleanMessage = String(message || '').slice(0, 200);
+    const challengerName = await _getProfileName(challengerDevice);
+    const challengedName = lookup.rows[0].display_name || 'אנונימי';
+    const boardIdNum = parseInt(boardId, 10);
+    const cleanBoardId = Number.isFinite(boardIdNum) && boardIdNum > 0 ? boardIdNum : null;
+    const cleanBoardName = String(boardName || '').slice(0, 120) || null;
+    const ins = await pool.query(
+      `INSERT INTO friend_challenges
+        (challenger_device, challenged_device, challenger_name, challenged_name,
+         target_score, board_id, board_name, message, expires_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW() + ($9 || ' hours')::interval)
+       RETURNING id, expires_at`,
+      [challengerDevice, challengedDevice, challengerName, challengedName,
+       tgt, cleanBoardId, cleanBoardName, cleanMessage, String(hours)]
+    );
+    // Fire-and-forget push to the challenged player.
+    if (typeof sendPushToDevice === 'function') {
+      sendPushToDevice(challengedDevice, {
+        title: '🎯 ' + challengerName + ' אתגר/ה אותך!',
+        body: 'עבור ' + tgt.toLocaleString() + ' נקודות' + (cleanMessage ? ' · "' + cleanMessage.slice(0, 50) + '"' : ''),
+        tag: 'friend-challenge-' + ins.rows[0].id,
+        data: { url: '/?action=inbox', kind: 'friend_challenge', challengeId: ins.rows[0].id }
+      });
+    }
+    res.json({ ok: true, challengeId: ins.rows[0].id, expiresAt: ins.rows[0].expires_at });
+  } catch (e) {
+    console.error('POST /api/friend-challenges/send', e);
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
+// List my challenges (incoming pending + outgoing active + recent results).
+app.get('/api/friend-challenges/mine', async (req, res) => {
+  try {
+    const deviceId = String(req.query.deviceId || '').slice(0, 64);
+    if (!deviceId || deviceId.length < 8) return res.status(400).json({ error: 'bad_device' });
+    // First expire any pending past their window — single-pass UPDATE so
+    // subsequent reads see a clean state.
+    await pool.query(
+      `UPDATE friend_challenges
+          SET status = 'failed_expired', result_at = NOW()
+        WHERE status = 'pending' AND expires_at <= NOW()`
+    ).catch(() => {});
+    const r = await pool.query(
+      `SELECT id, challenger_device, challenged_device, challenger_name, challenged_name,
+              target_score, board_id, board_name, message, status, result_score, result_at,
+              created_at, expires_at
+         FROM friend_challenges
+        WHERE (challenger_device = $1 OR challenged_device = $1)
+          AND (status = 'pending' OR result_at > NOW() - INTERVAL '7 days')
+        ORDER BY
+          CASE WHEN status = 'pending' THEN 0 ELSE 1 END,
+          created_at DESC
+        LIMIT 30`,
+      [deviceId]
+    );
+    res.json({
+      ok: true,
+      challenges: r.rows.map(row => ({
+        id: row.id,
+        role: row.challenger_device === deviceId ? 'challenger' : 'challenged',
+        challengerName: row.challenger_name,
+        challengedName: row.challenged_name,
+        targetScore: row.target_score,
+        boardId: row.board_id,
+        boardName: row.board_name,
+        message: row.message,
+        status: row.status,
+        resultScore: row.result_score,
+        resultAt: row.result_at,
+        createdAt: row.created_at,
+        expiresAt: row.expires_at,
+        msUntilExpiry: row.status === 'pending' ? Math.max(0, new Date(row.expires_at).getTime() - Date.now()) : 0
+      }))
+    });
+  } catch (e) {
+    console.error('GET /api/friend-challenges/mine', e);
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
+// Decline a challenge — challenged-only.
+app.post('/api/friend-challenges/:id/decline', requireDeviceAuth, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (!id) return res.status(400).json({ error: 'bad_id' });
+    const r = await pool.query(
+      `UPDATE friend_challenges
+          SET status = 'declined', result_at = NOW()
+        WHERE id = $1 AND challenged_device = $2 AND status = 'pending'
+        RETURNING challenger_device`,
+      [id, req.deviceId]
+    );
+    if (!r.rows.length) return res.json({ ok: false, reason: 'not_found_or_locked' });
+    // Optional: push to the challenger so they know.
+    if (typeof sendPushToDevice === 'function') {
+      sendPushToDevice(r.rows[0].challenger_device, {
+        title: '🚫 האתגר נדחה',
+        body: 'החבר/ה שלך דחה את האתגר',
+        tag: 'friend-challenge-declined-' + id,
+        data: { url: '/?action=inbox', kind: 'friend_challenge_declined', challengeId: id }
+      });
+    }
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('POST /api/friend-challenges/:id/decline', e);
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
+// Internal helper: scan a player's pending incoming challenges and pass
+// any whose target the submitted score crosses. Called from any score-
+// submission flow (daily, practice, dynamic). Multiple challenges can
+// pass on a single game.
+async function _resolveFriendChallengesForGame(deviceId, score, opts) {
+  try {
+    const cfg = await _loadFriendChallengeConfig();
+    if (cfg.friend_challenge_enabled === 'false') return [];
+    const reward = parseInt(cfg.friend_challenge_win_reward, 10) || 50;
+    // Find pending challenges aimed at this player that the score beats.
+    // If the challenge specifies a board_id, only credit it when the game
+    // matched that board (opts.boardId). Otherwise any-board games count.
+    const boardId = opts && opts.boardId ? parseInt(opts.boardId, 10) : null;
+    const candidatesR = await pool.query(
+      `SELECT id, challenger_device, challenger_name, target_score, board_id
+         FROM friend_challenges
+        WHERE challenged_device = $1 AND status = 'pending'
+          AND expires_at > NOW()
+          AND target_score <= $2
+          AND (board_id IS NULL OR board_id = $3)
+        ORDER BY target_score DESC
+        LIMIT 5`,
+      [deviceId, score | 0, boardId]
+    );
+    if (!candidatesR.rows.length) return [];
+    const passed = [];
+    for (const c of candidatesR.rows) {
+      // Atomic flip: WHERE status='pending' guards against double-resolve
+      // races with a parallel attempt.
+      const upd = await pool.query(
+        `UPDATE friend_challenges
+            SET status = 'passed', result_score = $1, result_at = NOW()
+          WHERE id = $2 AND status = 'pending'
+          RETURNING challenger_device, challenger_name, target_score`,
+        [score | 0, c.id]
+      );
+      if (!upd.rows.length) continue;
+      // Credit BOTH players: challenger for setting it + challenged for winning.
+      // Atomic: each in its own UPDATE.
+      await pool.query(
+        `UPDATE player_profiles SET balance = balance + $1, total_earned = total_earned + $1 WHERE device_id = $2`,
+        [reward, c.challenger_device]
+      ).catch(() => {});
+      await pool.query(
+        `UPDATE player_profiles SET balance = balance + $1, total_earned = total_earned + $1 WHERE device_id = $2`,
+        [reward, deviceId]
+      ).catch(() => {});
+      // Push the challenger: "you motivated them — they passed!"
+      if (typeof sendPushToDevice === 'function') {
+        sendPushToDevice(c.challenger_device, {
+          title: '🏆 ' + (upd.rows[0].challenger_name || 'חבר') + ' עבר את האתגר!',
+          body: 'ציון: ' + (score | 0).toLocaleString() + ' (יעד: ' + c.target_score.toLocaleString() + ') · +' + reward + '💎 לשניכם',
+          tag: 'friend-challenge-passed-' + c.id,
+          data: { url: '/?action=inbox', kind: 'friend_challenge_passed', challengeId: c.id }
+        });
+      }
+      passed.push({ id: c.id, target: c.target_score, reward });
+    }
+    return passed;
+  } catch (e) { console.warn('_resolveFriendChallengesForGame', e.message); return []; }
+}
+
 // ============================================================
 // A3 — Trophy Chests (Clash Royale "must-return" pattern)
 // ============================================================
@@ -12369,6 +12627,69 @@ app.get('/api/inbox', async (req, res) => {
         });
       }
     } catch (e) {}
+    // 4b. Friend Challenges (incoming pending + recent results, last 14d).
+    try {
+      const fc = await pool.query(
+        `SELECT id, challenger_device, challenged_device, challenger_name, challenged_name,
+                target_score, message, status, result_score, result_at, created_at, expires_at
+         FROM friend_challenges
+         WHERE (challenger_device = $1 OR challenged_device = $1)
+           AND ((status = 'pending' AND expires_at > NOW()) OR
+                (status IN ('passed','failed_expired','declined') AND result_at > NOW() - INTERVAL '14 days'))
+         ORDER BY COALESCE(result_at, created_at) DESC
+         LIMIT 10`,
+        [deviceId]
+      );
+      for (const row of fc.rows) {
+        const isChallenger = row.challenger_device === deviceId;
+        const otherName = isChallenger ? (row.challenged_name || 'יריב') : (row.challenger_name || 'יריב');
+        let title, body, kind;
+        if (row.status === 'pending') {
+          if (isChallenger) {
+            kind = 'friend_challenge_sent';
+            title = '⏳ שלחת אתגר ל-' + otherName;
+            body = 'יעד: ' + row.target_score.toLocaleString() + (row.message ? ' · "' + String(row.message).slice(0, 40) + '"' : '');
+          } else {
+            kind = 'friend_challenge_pending';
+            title = '🎯 ' + otherName + ' אתגר/ה אותך';
+            body = 'עבור ' + row.target_score.toLocaleString() + ' נקודות' + (row.message ? ' · "' + String(row.message).slice(0, 40) + '"' : '');
+          }
+        } else if (row.status === 'passed') {
+          if (isChallenger) {
+            kind = 'friend_challenge_passed_them';
+            title = '🏆 ' + otherName + ' עבר/ה את האתגר!';
+            body = 'ציון: ' + (row.result_score || 0).toLocaleString() + ' (יעד: ' + row.target_score.toLocaleString() + ')';
+          } else {
+            kind = 'friend_challenge_passed_me';
+            title = '🏆 ניצחת אתגר!';
+            body = 'עברת את ' + otherName + ' עם ' + (row.result_score || 0).toLocaleString();
+          }
+        } else if (row.status === 'failed_expired') {
+          if (isChallenger) {
+            kind = 'friend_challenge_expired';
+            title = '⌛ האתגר פג תוקף';
+            body = otherName + ' לא הצליח לעבור את ' + row.target_score.toLocaleString();
+          } else {
+            kind = 'friend_challenge_missed';
+            title = '⌛ פספסת אתגר';
+            body = 'לא עברת את ' + otherName + ' (יעד: ' + row.target_score.toLocaleString() + ')';
+          }
+        } else if (row.status === 'declined') {
+          kind = 'friend_challenge_declined';
+          title = '🚫 האתגר נדחה';
+          body = isChallenger ? otherName + ' דחה את האתגר' : 'דחית אתגר מ-' + otherName;
+        } else { continue; }
+        items.push({
+          kind,
+          title,
+          body,
+          created_at: row.result_at || row.created_at,
+          ref: 'friend_challenge:' + row.id,
+          action: 'open_friend_challenges'
+        });
+      }
+    } catch (e) {}
+
     // 4. Challenge wins — last 14 days. The entries table has no
     // created_at; we fall back to started_at when completed_at is null.
     try {

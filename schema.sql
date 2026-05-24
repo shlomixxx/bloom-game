@@ -283,6 +283,42 @@ INSERT INTO game_config (key, value) VALUES ('checklist_all_done_reward', '100')
 INSERT INTO game_config (key, value) VALUES ('booster_enabled',    'true') ON CONFLICT (key) DO NOTHING;
 INSERT INTO game_config (key, value) VALUES ('booster_pick_price', '50')   ON CONFLICT (key) DO NOTHING;
 INSERT INTO game_config (key, value) VALUES ('booster_pop_price',  '40')   ON CONFLICT (key) DO NOTHING;
+-- A2 — Friend Challenges (K-factor viral lever). Player A picks a friend
+-- + target score → server creates a "beat this" challenge that the friend
+-- can attempt by playing any game in 24h. When the friend's score crosses
+-- target, status flips to 'passed' and both get a push. Otherwise expires.
+-- Simpler than duels: no wager, no shared seed, no live race — just a
+-- "can you beat my score?" thrown at a friend.
+CREATE TABLE IF NOT EXISTS friend_challenges (
+  id                  BIGSERIAL PRIMARY KEY,
+  challenger_device   VARCHAR(64) NOT NULL,
+  challenged_device   VARCHAR(64) NOT NULL,
+  challenger_name     VARCHAR(80),
+  challenged_name     VARCHAR(80),
+  target_score        INT NOT NULL,
+  board_id            INT, -- optional: specific dynamic board; NULL = any board
+  board_name          VARCHAR(120),
+  message             VARCHAR(200),
+  status              VARCHAR(20) NOT NULL DEFAULT 'pending',
+  -- statuses: pending / passed / failed_expired / declined
+  result_score        INT,
+  result_at           TIMESTAMPTZ,
+  created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  expires_at          TIMESTAMPTZ NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_friend_challenges_challenged_pending
+  ON friend_challenges (challenged_device, status) WHERE status = 'pending';
+CREATE INDEX IF NOT EXISTS idx_friend_challenges_challenger_active
+  ON friend_challenges (challenger_device, created_at DESC);
+
+INSERT INTO game_config (key, value) VALUES ('friend_challenge_enabled',       'true') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('friend_challenge_expires_hours', '24')   ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('friend_challenge_max_pending',   '10')   ON CONFLICT (key) DO NOTHING;
+-- Winner's gem reward when the challenged player passes the target.
+-- BOTH sides get it (challenger because "you motivated them" = +50;
+-- challenged because "you won = +50"). Encourages spamming challenges.
+INSERT INTO game_config (key, value) VALUES ('friend_challenge_win_reward',    '50')   ON CONFLICT (key) DO NOTHING;
+
 -- A3 — Trophy Chests (Clash Royale "must-return" pattern). After a trophy-
 -- earning game (score ≥ threshold) the server may grant a chest. The chest
 -- sits "earned" until the player taps "התחל לפתוח" — then a real-time
