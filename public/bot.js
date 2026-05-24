@@ -44,6 +44,8 @@
     selectedBoardId: null,     // null = random | id | '__rotation__'
     rotationIndex: 0,          // cursor for '__rotation__' mode
     currentBoardName: '',      // populated when starting a dynamic board
+    duelWaiting: false,        // true when in duel mode but no duel ready
+    duelGamesPlayed: 0,        // duel-specific session counter
     // stats
     gamesPlayed: 0,
     totalScore: 0,
@@ -499,6 +501,47 @@
   // MODE NAVIGATION
   // ============================================================
 
+  // Scan the user's duels and start the next playable one. Priority:
+  // (1) ACCEPTED duels where my score is null (already wagered + waiting),
+  // (2) PENDING duels where I'm the opponent (accept then start).
+  // Settled / tied / expired / declined / submitted are skipped.
+  // Returns true if a duel was kicked off, false if nothing is actionable.
+  async function tryStartNextDuel() {
+    try {
+      const deviceId = localStorage.getItem('bloom_device_id');
+      if (!deviceId) return false;
+      const r = await fetch('/api/duels/mine?deviceId=' + encodeURIComponent(deviceId));
+      const d = await r.json();
+      if (!d || !Array.isArray(d.duels) || !d.duels.length) return false;
+
+      // Pass 1: accepted + my-score-null = ready to play
+      for (const duel of d.duels) {
+        if (duel.status !== 'accepted') continue;
+        const isChallenger = duel.challenger_device === deviceId;
+        const myScore = isChallenger ? duel.challenger_score : duel.opponent_score;
+        if (myScore != null) continue;
+        if (typeof window.playDuel === 'function') {
+          window.playDuel(duel.id);
+          await sleep(900); // give startDuelGame a beat to mount
+          return true;
+        }
+      }
+      // Pass 2: pending + I'm the opponent = needs accept
+      for (const duel of d.duels) {
+        if (duel.status !== 'pending') continue;
+        const isChallenger = duel.challenger_device === deviceId;
+        if (isChallenger) continue;
+        if (typeof window.acceptDuel === 'function') {
+          window.acceptDuel(duel.id);
+          // acceptDuel chains into startDuelGame internally
+          await sleep(1200);
+          return true;
+        }
+      }
+      return false;
+    } catch (e) { return false; }
+  }
+
   async function navigateToTargetMode() {
     if (!window.BloomDebug) return;
     const mode = bot.targetMode;
@@ -518,6 +561,16 @@
     if (mode === 'daily') {
       window.BloomDebug.setMode('daily');
       await sleep(400);
+      return;
+    }
+    if (mode === 'duel') {
+      // Find an actionable duel for this device. Returns true if a duel
+      // is starting; false if there's nothing to do right now (caller
+      // will sleep + retry).
+      const started = await tryStartNextDuel();
+      bot.duelWaiting = !started;
+      updateUI();
+      if (started) await sleep(700);
       return;
     }
     if (mode === 'dynamic') {
@@ -582,7 +635,13 @@
     // When "submit to LB" is checked we DON'T set the guard flag → all the
     // game's normal submit / earn / achievement paths run. When unchecked
     // (default), guards skip them and the bot stays sandboxed.
-    window.__bloomBotActive = !bot.submitToLB;
+    //
+    // EXCEPTION — Duel mode always behaves like a real player. The user
+    // explicitly wants the bot to play their pending duels FOR them and
+    // earn the wager + trophies + achievements + season XP that come with
+    // it. Sandbox mode would skip all of that and leave the duel in limbo.
+    const treatAsRealPlayer = bot.submitToLB || bot.targetMode === 'duel';
+    window.__bloomBotActive = !treatAsRealPlayer;
     updateUI();
 
     await navigateToTargetMode();
@@ -600,6 +659,14 @@
     while (!bot.stopRequested) {
       if (!window.BloomDebug || !window.BloomDebug.ready()) {
         await sleep(200); continue;
+      }
+      // Duel-mode: if we're waiting for a duel and not actively in a game,
+      // re-poll every 30s instead of burning the play loop.
+      if (bot.targetMode === 'duel' && bot.duelWaiting && !isInGame()) {
+        await sleep(30000);
+        if (bot.stopRequested) break;
+        await navigateToTargetMode();
+        continue;
       }
       if (!isInGame() && !window.BloomDebug.isGameOver()) {
         await sleep(300); continue;
@@ -622,6 +689,7 @@
           await fetchLastRank();
           updateUI();
         }
+        if (bot.targetMode === 'duel') bot.duelGamesPlayed++;
         if (!bot.autoRestart) { bot.stopRequested = true; break; }
         await sleep(1500);
         if (bot.stopRequested) break;
@@ -690,6 +758,7 @@
             <option value="practice">🎯 Practice</option>
             <option value="daily">📅 Daily Challenge</option>
             <option value="dynamic">✨ Dynamic Board</option>
+            <option value="duel">⚔️ Duel</option>
           </select>
         </div>
 
@@ -700,6 +769,8 @@
           </select>
           <div class="bbp-board-current" id="bbp-board-current" style="display:none"></div>
         </div>
+
+        <div class="bbp-duel-status" id="bbp-duel-status" style="display:none"></div>
 
         <div class="bbp-row">
           <label class="bbp-label">Speed</label>
@@ -773,6 +844,9 @@
       .bbp-label input{vertical-align:middle;margin-right:4px}
       .bbp-row select{width:100%;padding:7px 8px;border-radius:6px;background:rgba(255,255,255,0.08);color:#FFF;border:1px solid rgba(255,255,255,0.15);font-family:inherit;font-size:13px}
       .bbp-board-current{margin-top:4px;font-size:10px;color:#9FE1CB;background:rgba(159,225,203,0.1);padding:4px 6px;border-radius:5px;text-align:center;direction:rtl}
+      .bbp-duel-status{margin-bottom:10px;font-size:11px;padding:8px 10px;border-radius:6px;text-align:center;direction:rtl;background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.75);border:1px solid rgba(255,255,255,0.1)}
+      .bbp-duel-status.waiting{background:rgba(250,199,117,0.08);color:#FAC775;border-color:rgba(250,199,117,0.25)}
+      .bbp-duel-status.active{background:rgba(244,192,209,0.1);color:#F4C0D1;border-color:rgba(244,192,209,0.3);font-weight:600}
       .bbp-submit-row{background:rgba(244,192,209,0.08);padding:8px 10px;border-radius:8px;border:1px solid rgba(244,192,209,0.2)}
       .bbp-warn{margin-top:6px;font-size:10px;color:#F4C0D1;line-height:1.5;padding:6px;background:rgba(244,192,209,0.1);border-radius:6px}
       .bbp-stats{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:8px 0;border-top:1px solid rgba(255,255,255,0.1)}
@@ -806,6 +880,14 @@
       document.getElementById('bbp-board-row').style.display =
         bot.targetMode === 'dynamic' ? 'block' : 'none';
       if (bot.targetMode === 'dynamic') populateBoardDropdown();
+      // Duel mode must always act as a real player — flip the guard live
+      // if the bot is running so a mid-session mode switch takes effect.
+      if (bot.running) {
+        const treatAsReal = bot.submitToLB || bot.targetMode === 'duel';
+        window.__bloomBotActive = !treatAsReal;
+      }
+      bot.duelWaiting = false;
+      updateUI();
       persistSettings();
     };
     document.getElementById('bbp-board').onchange = e => {
@@ -816,8 +898,12 @@
     document.getElementById('bbp-submit').onchange = e => {
       bot.submitToLB = e.target.checked;
       document.getElementById('bbp-warn').style.display = bot.submitToLB ? 'block' : 'none';
-      // If the bot is currently running, flip the guard live.
-      if (bot.running) window.__bloomBotActive = !bot.submitToLB;
+      // If the bot is currently running, flip the guard live (duel mode
+      // overrides — it always acts as a real player).
+      if (bot.running) {
+        const treatAsReal = bot.submitToLB || bot.targetMode === 'duel';
+        window.__bloomBotActive = !treatAsReal;
+      }
       updateUI();
       persistSettings();
     };
@@ -915,6 +1001,26 @@
         setText('bbp-rank', '#' + bot.lastRank + t);
       } else {
         rankRow.style.display = 'none';
+      }
+    }
+    // Duel-mode status pill.
+    const duelStatus = document.getElementById('bbp-duel-status');
+    if (duelStatus) {
+      if (bot.targetMode === 'duel') {
+        duelStatus.style.display = 'block';
+        if (bot.duelWaiting) {
+          duelStatus.className = 'bbp-duel-status waiting';
+          duelStatus.textContent = '⏳ ממתין לדו-קרב... (סריקה כל 30ש)';
+        } else if (window._duelMode && window._duelOpponentName) {
+          duelStatus.className = 'bbp-duel-status active';
+          duelStatus.textContent = '⚔️ דו-קרב פעיל · vs ' + window._duelOpponentName +
+            (bot.duelGamesPlayed > 0 ? '  ·  שיחקתי ' + bot.duelGamesPlayed : '');
+        } else {
+          duelStatus.className = 'bbp-duel-status';
+          duelStatus.textContent = '⚔️ Duel mode · שיחקתי ' + bot.duelGamesPlayed + ' דו-קרבות';
+        }
+      } else {
+        duelStatus.style.display = 'none';
       }
     }
     // Show currently-playing board name + rotation cursor when in dynamic mode.
