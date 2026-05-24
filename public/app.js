@@ -17537,17 +17537,14 @@
         return Array.isArray(window._availableBoards) ? window._availableBoards.slice() : [];
       },
       startDynamicBoard: function(boardId) {
-        // Switch into dynamic mode + apply a specific board. The bot reads
-        // /api/boards/available to learn ids; restart with the chosen board.
+        // Delegate to the canonical startDynamicBoard() in 05c-dynamic-boards.js
+        // which handles lives gate + event system + audio + picker close. The
+        // bot just needs to resolve the id → full board object.
         var list = Array.isArray(window._availableBoards) ? window._availableBoards : [];
         var board = list.find(function(b) { return String(b.id) === String(boardId); });
         if (!board) return false;
-        try {
-          window._activeDynamicBoard = board;
-          applyBoardToSession(board);
-          init('dynamic', { fresh: true });
-          return true;
-        } catch (e) { return false; }
+        try { startDynamicBoard(board); return true; }
+        catch (e) { return false; }
       },
     };
   }

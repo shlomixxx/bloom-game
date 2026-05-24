@@ -41,7 +41,9 @@
     autoRestart: true,
     submitToLB: false,         // ☑ allow LB submits (off by default)
     targetMode: 'auto',        // auto | practice | daily | dynamic
-    selectedBoardId: null,     // null = random dynamic board
+    selectedBoardId: null,     // null = random | id | '__rotation__'
+    rotationIndex: 0,          // cursor for '__rotation__' mode
+    currentBoardName: '',      // populated when starting a dynamic board
     // stats
     gamesPlayed: 0,
     totalScore: 0,
@@ -343,50 +345,151 @@
              roughness: roughness * 5, tierBonus, pairBonus, tripleBonus };
   }
 
+  // Compute a per-column "value tier" 0..1 from the multipliers.
+  // Used to bias high-tier pieces toward high-mult columns AND to penalize
+  // wasting low-tier pieces in high-mult columns when other slots exist.
+  function multStats(ctx, COLS) {
+    if (!ctx.mults || !ctx.mults.length) return null;
+    let maxM = -Infinity, minM = Infinity;
+    for (let c = 0; c < COLS; c++) {
+      const m = ctx.mults[c] || 1;
+      if (m > maxM) maxM = m;
+      if (m < minM) minM = m;
+    }
+    const range = maxM - minM;
+    return {
+      max: maxM, min: minM, range,
+      valueTier: (col) => range > 0 ? (((ctx.mults[col] || 1) - minM) / range) : 0
+    };
+  }
+
+  // Single-ply scoring: how good is THIS landing for THIS piece.
+  function scoreLanding(grid, col, piece, ctx, ms, COLS) {
+    const sim = simulateDrop(grid, col, piece, ctx);
+    if (!sim) return { score: -Infinity, sim: null };
+    const ev = evaluateBoard(sim.grid, ctx);
+
+    // Base: immediate sim score includes column-multiplier scaling from
+    // pointsFor-equivalent inside simulateDrop. Weight it heavily.
+    let s = sim.score * 1.5;
+
+    // CHAIN VALUATION — chains are the game's life-blood. Big chain in a
+    // VIP column wins the game. Boost vs v1 by 4×.
+    if (sim.chains >= 2) s += 250 * (sim.chains - 1);
+    if (sim.chains >= 3) s += 600;
+    if (sim.chains >= 4) s += 1500;
+    if (sim.chains >= 5) s += 3500;
+    // Chains in high-mult boards are even better — every chained merge
+    // is multiplied. Reward them disproportionately.
+    if (sim.chains >= 2 && ms) s += sim.chains * ms.max * 25;
+
+    // TIER UPGRADE — every time a merge produces a tier the bot hasn't seen
+    // before this drop, that's progress toward crown. Reward proportional
+    // to the new tier reached, with extra weight for crown (8).
+    if (sim.highestTier > piece) {
+      const newTiers = sim.highestTier - piece;
+      s += newTiers * 120;
+      if (sim.highestTier === MAX_TIER) s += 5000; // crown achievement
+      if (sim.highestTier >= 6) s += (sim.highestTier - 5) * 200;
+    }
+
+    // COLUMN RESERVATION — the single biggest mistake a naive bot makes
+    // on a multiplier board is wasting slots in the ×6 column on tier-1
+    // tiles. Strongly route high tiers to VIP columns, penalize low tiers
+    // landing there when non-VIP columns have space.
+    if (ms && ms.range > 0) {
+      const vt = ms.valueTier(col); // 0..1
+      // High piece in high-mult column: big bonus.
+      if (piece >= 4) s += piece * vt * 120;
+      else if (piece === 3) s += vt * 50;
+      // Low piece in high-mult column: penalty (proportional to value).
+      else if (piece <= 2) s -= (3 - piece) * vt * 130;
+      // BONUS: this drop's survivor lands in a VIP column? Check sim.grid
+      // for highest tier present in this column.
+      let colMax = 0;
+      for (let r = 0; r < sim.grid.length; r++) {
+        if (sim.grid[r][col] > colMax) colMax = sim.grid[r][col];
+      }
+      if (colMax >= 5) s += colMax * vt * 30;
+    }
+
+    // Frozen-landing penalty — the tile becomes inert + wastes a slot.
+    if (sim.landedOnFrozen) s -= 350;
+
+    s -= ev.heightPenalty;
+    s -= ev.topPenalty;
+    s -= ev.roughness;
+    s += ev.tierBonus;
+    s += ev.pairBonus * 1.4; // pairs are setups for next merge — boost
+    s += ev.tripleBonus * 1.8;
+
+    // SETUP BONUS — does dropping here create an adjacent same-tier pair
+    // (i.e., a merge-ready setup) in a VIP column?
+    if (ms && ms.range > 0) {
+      const ROWS = sim.grid.length;
+      // Find landing row of THIS piece (post-merges if any).
+      // Heuristic: look for the piece's tier in the column from top down.
+      for (let r = 0; r < ROWS; r++) {
+        if (sim.grid[r][col] === 0) continue;
+        const t = sim.grid[r][col];
+        if (t < 3) break;
+        const vt = ms.valueTier(col);
+        if (vt < 0.4) break;
+        // Same-tier neighbor in this VIP column → setup
+        if (r + 1 < ROWS && sim.grid[r + 1][col] === t) s += t * vt * 25;
+        if (col > 0 && sim.grid[r][col - 1] === t) s += t * vt * 15;
+        if (col + 1 < COLS && sim.grid[r][col + 1] === t) s += t * vt * 15;
+        break;
+      }
+    }
+
+    // Top-of-board awareness.
+    let topEmpty = 0;
+    for (let c = 0; c < COLS; c++) {
+      if (isShapeVoid(ctx.shapeId, 0, c)) continue;
+      if (sim.grid[0][c] === 0) topEmpty++;
+    }
+    if (topEmpty === 0) s -= 9000;
+    else if (topEmpty === 1) s -= 450;
+    else if (topEmpty === 2) s -= 80;
+
+    return { score: s, sim };
+  }
+
+  // 2-ply lookahead: for each candidate landing, simulate the best follow-up
+  // assuming the next piece is the expected average tier (default weights
+  // favor tier 1-2). We only consider the BEST follow-up column, not full
+  // expectation over piece distribution — fast and good enough.
   function decideMove() {
     const grid = window.BloomDebug.getGrid();
     const piece = window.BloomDebug.getCurrentPiece();
     if (!grid || !piece) return 0;
     const COLS = grid[0].length;
     const ctx = getBoardContext();
+    const ms = multStats(ctx, COLS);
+    // Expected next piece — tier 1 is most common under default weights;
+    // tier 2 is the second-most. Score both, take the better follow-up to
+    // approximate "the next move will at least be playable."
+    const EXPECTED_NEXT_PIECES = [1, 2];
 
     let bestCol = -1, bestScore = -Infinity;
     for (let col = 0; col < COLS; col++) {
-      const sim = simulateDrop(grid, col, piece, ctx);
-      if (!sim) continue;
-      const ev = evaluateBoard(sim.grid, ctx);
+      const r = scoreLanding(grid, col, piece, ctx, ms, COLS);
+      if (!r.sim) continue;
+      let s = r.score;
 
-      let s = sim.score * 1.2;
-      if (sim.chains >= 2) s += 100 * (sim.chains - 1);
-      if (sim.chains >= 3) s += 250;
-      if (sim.chains >= 4) s += 500;
-      if (sim.highestTier > piece) s += (sim.highestTier - piece) * 80;
-
-      // Column-multiplier preference — favor placing high-value tiles in
-      // high-multiplier columns even before they merge, because future
-      // merges that survive in that column score more.
-      if (ctx.mults && ctx.mults[col] > 1) s += piece * (ctx.mults[col] - 1) * 12;
-
-      // Penalty for landing on a frozen cell — the tile becomes inert and
-      // wastes a slot. Only do it if no other column is playable.
-      if (sim.landedOnFrozen) s -= 200;
-
-      s -= ev.heightPenalty;
-      s -= ev.topPenalty;
-      s -= ev.roughness;
-      s += ev.tierBonus;
-      s += ev.pairBonus;
-      s += ev.tripleBonus;
-
-      let topEmpty = 0;
-      for (let c = 0; c < COLS; c++) {
-        if (isShapeVoid(ctx.shapeId, 0, c)) continue;
-        if (sim.grid[0][c] === 0) topEmpty++;
+      // 2-PLY: simulate the best follow-up move from the resulting grid.
+      // Discounted by 0.55 so present > future without ignoring it.
+      let bestFollowup = -Infinity;
+      for (const np of EXPECTED_NEXT_PIECES) {
+        for (let nc = 0; nc < COLS; nc++) {
+          const fr = scoreLanding(r.sim.grid, nc, np, ctx, ms, COLS);
+          if (fr.score > bestFollowup) bestFollowup = fr.score;
+        }
       }
-      if (topEmpty === 0) s -= 8000;
-      else if (topEmpty === 1) s -= 300;
+      if (bestFollowup > -Infinity) s += bestFollowup * 0.55;
 
-      s += Math.random() * 2;
+      s += Math.random() * 1.5;
       if (s > bestScore) { bestScore = s; bestCol = col; }
     }
     return bestCol === -1 ? 0 : bestCol;
@@ -426,10 +529,16 @@
         return;
       }
       let board = null;
-      if (bot.selectedBoardId) {
+      if (bot.selectedBoardId === '__rotation__') {
+        // Cycle through every available board, one game per board.
+        const idx = bot.rotationIndex % list.length;
+        board = list[idx];
+        bot.rotationIndex = (idx + 1) % list.length;
+      } else if (bot.selectedBoardId) {
         board = list.find(b => String(b.id) === String(bot.selectedBoardId));
       }
       if (!board) board = list[Math.floor(Math.random() * list.length)];
+      bot.currentBoardName = board.name || ('Board #' + board.id);
       window.BloomDebug.startDynamicBoard(board.id);
       await sleep(500);
       return;
@@ -589,6 +698,7 @@
           <select id="bbp-board">
             <option value="">🎲 Random</option>
           </select>
+          <div class="bbp-board-current" id="bbp-board-current" style="display:none"></div>
         </div>
 
         <div class="bbp-row">
@@ -662,6 +772,7 @@
       .bbp-label{display:block;font-size:11px;color:rgba(255,255,255,0.6);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.05em;cursor:pointer}
       .bbp-label input{vertical-align:middle;margin-right:4px}
       .bbp-row select{width:100%;padding:7px 8px;border-radius:6px;background:rgba(255,255,255,0.08);color:#FFF;border:1px solid rgba(255,255,255,0.15);font-family:inherit;font-size:13px}
+      .bbp-board-current{margin-top:4px;font-size:10px;color:#9FE1CB;background:rgba(159,225,203,0.1);padding:4px 6px;border-radius:5px;text-align:center;direction:rtl}
       .bbp-submit-row{background:rgba(244,192,209,0.08);padding:8px 10px;border-radius:8px;border:1px solid rgba(244,192,209,0.2)}
       .bbp-warn{margin-top:6px;font-size:10px;color:#F4C0D1;line-height:1.5;padding:6px;background:rgba(244,192,209,0.1);border-radius:6px}
       .bbp-stats{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:8px 0;border-top:1px solid rgba(255,255,255,0.1)}
@@ -764,9 +875,12 @@
     let boards = [];
     try { boards = window.BloomDebug ? window.BloomDebug.getAvailableBoards() : []; } catch (e) {}
     const prev = bot.selectedBoardId || '';
+    const rotLabel = '🔄 כל הלוחות בסבב (' + boards.length + ')';
     sel.innerHTML = '<option value="">🎲 Random</option>' +
+      '<option value="__rotation__">' + rotLabel + '</option>' +
       boards.map(b => `<option value="${b.id}">${(b.name || ('Board #' + b.id)).slice(0, 36)}</option>`).join('');
-    if (prev && boards.find(b => String(b.id) === String(prev))) sel.value = prev;
+    if (prev === '__rotation__') sel.value = '__rotation__';
+    else if (prev && boards.find(b => String(b.id) === String(prev))) sel.value = prev;
   }
 
   function updateUI() {
@@ -801,6 +915,25 @@
         setText('bbp-rank', '#' + bot.lastRank + t);
       } else {
         rankRow.style.display = 'none';
+      }
+    }
+    // Show currently-playing board name + rotation cursor when in dynamic mode.
+    const cur = document.getElementById('bbp-board-current');
+    if (cur) {
+      if (bot.targetMode === 'dynamic' && bot.currentBoardName) {
+        let txt = '▶ ' + bot.currentBoardName;
+        if (bot.selectedBoardId === '__rotation__') {
+          try {
+            const total = window.BloomDebug.getAvailableBoards().length;
+            // rotationIndex was incremented to point at NEXT; the one playing is index-1.
+            const idx = ((bot.rotationIndex - 1) + total) % total;
+            txt = '▶ ' + bot.currentBoardName + ' (' + (idx + 1) + '/' + total + ')';
+          } catch (e) {}
+        }
+        cur.textContent = txt;
+        cur.style.display = 'block';
+      } else {
+        cur.style.display = 'none';
       }
     }
   }
