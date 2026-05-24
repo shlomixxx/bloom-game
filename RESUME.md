@@ -2,7 +2,7 @@
 
 > **קובץ הזה הוא המסך הראשון לקרוא בכל סשן חדש.** הוא אומר במשפט אחד מה המצב, מה הצעד הבא, ולאן ללכת לפרטים מלאים.
 >
-> עדכון אחרון: **2026-05-24** · 48 שלבים חיים בפרודקשן · /api/health=ok · **כל A1-A10 הושלמו** 🎉
+> עדכון אחרון: **2026-05-25** · 49 שלבים חיים בפרודקשן · /api/health=ok · **M1 Self-Promo הושלם** 🎉
 
 ---
 
@@ -11,14 +11,18 @@
 **מה חי**:
 - ✅ **BLOOM_TASKS.md**: 34/38 = 89.5% (4 deferred עם נימוק ברור)
 - ✅ **FUTURE_TASKS.md**: **10/10 משימות pure-addiction הושלמו** 🎉 (כל A1-A10)
-- ✅ **48 stages** ב-CLAUDE.md §0 — חיים בפרודקשן ([bloom-web-production-f3bd.up.railway.app](https://bloom-web-production-f3bd.up.railway.app))
-- ✅ Cache `v20260524r` · SW `bloom-v13.2`
+- ✅ **49 stages** ב-CLAUDE.md §0 — חיים בפרודקשן ([bloom-web-production-f3bd.up.railway.app](https://bloom-web-production-f3bd.up.railway.app))
+- ✅ **M1 Self-Promo Engine חי** — מחליף AdSense שלא מאשרים את ה-subdomain. כל "watch ad" הופך לקידום של מוצר שלנו (Starter Pack/Daily Deal/Gacha/BP/Gem Bank).
+- ✅ Cache `v20260525a` · SW `bloom-v13.3`
 
-**מה פתוח** — רק 4 משימות monetization (כל pure-addiction הושלם!):
-- Stripe IAP integration (~3-4 ימים)
-- VIP subscription ($4.99/mo)
-- Real-money cosmetic shop
-- Wager / RM tournaments (דורש legal certification)
+**מה פתוח** — [MONETIZATION_TASKS.md](MONETIZATION_TASKS.md) 7 שלבים (M1-M7):
+- ✅ **M1 Self-Promo** (1.5 שעות — הושלם היום!) — admin CRUD + 6 פרסומות מסומנות
+- ⏳ **M2 Stripe Foundation** (~3 ימים, דורש Stripe account של המשתמש)
+- ⏳ **M3 RM per-product wiring** (4-6 שעות, אחרי M2)
+- ⏳ **M4 Legal + VAT** (3 שעות)
+- ⏳ **M5 Self-Promo + RM Integration** (אחרי M3)
+- ⏳ **M6 VIP Subscription** ($4.99/mo, אחרי M3)
+- ⏳ **M7 Analytics** (עליות באירוע רכישה דרך GA4)
 
 **מה מומלץ לעצור**:
 - D1/D7 retention על שחקנים אמיתיים — יש מספיק פיצ'רים ויראליים שבנינו (Friend Challenges + Wrapped + Random Matchmaking). זה הזמן לבחון data לפני שמוסיפים עוד.
