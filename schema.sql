@@ -285,6 +285,24 @@ INSERT INTO game_config (key, value) VALUES ('booster_pick_price', '50')   ON CO
 INSERT INTO game_config (key, value) VALUES ('booster_pop_price',  '40')   ON CONFLICT (key) DO NOTHING;
 ALTER TABLE duels ADD COLUMN IF NOT EXISTS is_random_match BOOLEAN DEFAULT FALSE;
 
+-- A7 — 7-Day Login Calendar (Genshin pattern). Separate from the
+-- existing daily-login flow (which pays streak-tiered rewards). This
+-- is a 7-day cycle: day 1 → 2 → ... → 7 → 1, with escalating gem
+-- rewards each day. Miss a day = reset to day 1 (FOMO of losing the
+-- big day-7 payout drives daily returns).
+ALTER TABLE player_profiles ADD COLUMN IF NOT EXISTS login_cal_day INT DEFAULT 0;
+ALTER TABLE player_profiles ADD COLUMN IF NOT EXISTS login_cal_last_claim DATE;
+
+INSERT INTO game_config (key, value) VALUES ('login_cal_enabled',  'true') ON CONFLICT (key) DO NOTHING;
+-- Per-day rewards (1-7). Day 7 is the big jackpot — losing it = pain.
+INSERT INTO game_config (key, value) VALUES ('login_cal_day_1_reward', '50')   ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('login_cal_day_2_reward', '100')  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('login_cal_day_3_reward', '200')  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('login_cal_day_4_reward', '500')  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('login_cal_day_5_reward', '1000') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('login_cal_day_6_reward', '2000') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('login_cal_day_7_reward', '5000') ON CONFLICT (key) DO NOTHING;
+
 -- A6 — Skill-based Duel Matchmaking. Solo players who don't have a
 -- friend with a BLOOM code can hit "🎲 דו-קרב אקראי" → server pairs
 -- them with another waiting player in similar trophy range. Atomic

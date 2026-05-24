@@ -48,6 +48,9 @@ export async function initDb() {
     `ALTER TABLE contests ADD COLUMN IF NOT EXISTS difficulty_label VARCHAR(20)`,
     `ALTER TABLE contests ADD COLUMN IF NOT EXISTS difficulty_weights VARCHAR(64)`,
     `ALTER TABLE contests ADD COLUMN IF NOT EXISTS difficulty_speed_pct INT`,
+    // A7 — 7-Day Login Calendar columns on player_profiles.
+    `ALTER TABLE player_profiles ADD COLUMN IF NOT EXISTS login_cal_day INT DEFAULT 0`,
+    `ALTER TABLE player_profiles ADD COLUMN IF NOT EXISTS login_cal_last_claim DATE`,
     `ALTER TABLE duels ADD COLUMN IF NOT EXISTS difficulty_label VARCHAR(20)`,
     `ALTER TABLE duels ADD COLUMN IF NOT EXISTS difficulty_weights VARCHAR(64)`,
     `ALTER TABLE duels ADD COLUMN IF NOT EXISTS difficulty_speed_pct INT`,

@@ -364,6 +364,11 @@
       setTimeout(function() { try { window.__bloomChests.maybeShow(); } catch (e) {} }, 500);
     }
 
+    // A7 — 7-Day Login Calendar tile (L5+, always shown for engagement).
+    if (window.__bloomLoginCal && typeof window.__bloomLoginCal.maybeShow === 'function') {
+      setTimeout(function() { try { window.__bloomLoginCal.maybeShow(); } catch (e) {} }, 550);
+    }
+
     // Tier-icons tap → reveal stats bubble (same behaviour as v1)
     var iconsTap = document.getElementById('home-icons-tap');
     if (iconsTap) {

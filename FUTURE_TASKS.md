@@ -1,7 +1,7 @@
 # 📋 BLOOM — משימות עתידיות
 
 > **מסמך מרכזי לכל מה שעדיין לא נבנה.**
-> עודכן: 2026-05-24 · 43 שלבים חיים בפרודקשן · 10 משימות פתוחות (A1+A2+A3+A4+A6 ✅)
+> עודכן: 2026-05-24 · 44 שלבים חיים בפרודקשן · 9 משימות פתוחות (A1+A2+A3+A4+A6+A7 ✅)
 >
 > 🎯 **איך להשתמש**: בשיחה חדשה תגיד "בוא נבנה A1" / "המשך עם הכי ממכר" / "תעשה A2 + A3 ביחד" ואני אדע בדיוק על מה אתה מדבר.
 
@@ -114,8 +114,17 @@
 
 ---
 
-### A7 · 📅 7-Day Login Calendar
-**מאמץ**: 1 יום · **השפעה**: ★★★
+### A7 · 📅 7-Day Login Calendar ✅ נבנה (24.05.2026)
+**מאמץ**: 1 יום · **השפעה**: ★★★ · **סטטוס: חי בייצור**
+
+**מה נבנה**:
+- מסלול 7-יומי נפרד מה-daily login הקיים. כל יום ברצף = פרס גדל: 50 / 100 / 200 / 500 / 1000 / 2000 / **5000💎**. אחרי יום 7 — חוזר ליום 1 (cycle אינסופי).
+- **פספסת יום** = reset ליום 1. ה-FOMO של איבוד הג׳קפוט (5000💎) ביום 7 הוא ה-driver העיקרי.
+- Schema: 2 עמודות חדשות על `player_profiles` (`login_cal_day`, `login_cal_last_claim`) + 8 config keys (master + 7 reward tiers). אפס טבלה חדשה.
+- Server: `GET /state` + `POST /claim` עם atomic transaction (FOR UPDATE על המ player_profiles row → diff days → advance/reset → atomic balance update + state save).
+- Client: [src/41-login-cal.js](src/41-login-cal.js) — home tile (L5+) עם mini 7-grid + status pill + claim ribbon. Modal עם 7-card grid (4-col, day 7 פורש על 2 stretches כי זה ג׳קפוט) + "🎁 קבל X💎 עכשיו" + tip.
+- Celebration: 3 tiers — normal (3 sound, 10 confetti), big (5 sound, 24 confetti, day 5-6), **jackpot** (day 7: gold border ענק + 50 confetti + 7-pulse buzz + 76px 👑 spinning).
+- כפתור לא auto-claim — שחקן חייב ללחוץ (Clash Royale pattern — מרגיש earned).
 
 **מה זה**:
 רשת 7-ימים. כל יום פרס מצטבר: 50→100→200→500→1000→2000→**5000💎**. אם מפסיד יום אחד → מתחיל מההתחלה.
