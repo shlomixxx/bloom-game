@@ -8241,6 +8241,329 @@ app.post('/api/duels/find-random', requireDeviceAuth, async (req, res) => {
   }
 });
 
+// ────────────────────────────────────────────────────────────
+// A5 — Live PvP Race ("⚡ דו-קרב חי 60 שניות")
+// Polling-based real-time race using the existing duel infrastructure.
+// Same atomic match-or-queue as /find-random, but creates a duel with
+// is_live=TRUE + started_at=NOW(). Both players poll heartbeat every 1s
+// to sync scores; auto-settles after duration_seconds elapse.
+// ────────────────────────────────────────────────────────────
+app.post('/api/duels/find-random-live', requireDeviceAuth, async (req, res) => {
+  const deviceId = req.deviceId;
+  if (!checkRateLimit('duel_random_live', deviceId, 60, 60 * 60 * 1000)) {
+    return res.json({ ok: false, reason: 'rate_limited' });
+  }
+  try {
+    const liveCfg = await getCachedConfigPrefix('live_race_').catch(() => ({}));
+    if (liveCfg.live_race_enabled === 'false') return res.json({ ok: false, reason: 'disabled' });
+    const duration = Math.max(30, Math.min(180, parseInt(liveCfg.live_race_duration, 10) || 60));
+    const matchCfg = await _loadRandomMatchConfig();
+    if (matchCfg.random_match_enabled === 'false') return res.json({ ok: false, reason: 'matchmaking_disabled' });
+    const difficulty = String((req.body && req.body.difficulty) || 'default').slice(0, 20);
+    // Step 1: did the OTHER side already match me? (their /find-random-live
+    // call created a live duel with me as opponent; my poll catches up.)
+    const recent = await pool.query(
+      `SELECT * FROM duels
+        WHERE (challenger_device = $1 OR opponent_device = $1)
+          AND is_live = TRUE
+          AND status IN ('pending', 'accepted')
+          AND created_at > NOW() - INTERVAL '90 seconds'
+        ORDER BY created_at DESC LIMIT 1`,
+      [deviceId]
+    );
+    if (recent.rows.length) {
+      await pool.query(`DELETE FROM duel_matchmaking_queue WHERE device_id = $1`, [deviceId]).catch(() => {});
+      return res.json({ ok: true, matched: true, duel: recent.rows[0], duration });
+    }
+    // Step 2: try to find an opponent in the LIVE queue. We use the same
+    // duel_matchmaking_queue table but with difficulty_label = '@live:<diff>'
+    // to keep live + async pools separate.
+    const myTrophies = await _getTrophies(deviceId);
+    const myProfile = await pool.query(
+      `SELECT display_name, player_code FROM player_profiles WHERE device_id = $1`,
+      [deviceId]
+    );
+    const myName = (myProfile.rows[0] && myProfile.rows[0].display_name) || 'אנונימי';
+    const myCode = (myProfile.rows[0] && myProfile.rows[0].player_code) || null;
+    const liveLabel = '@live:' + difficulty;
+    const meRow = await pool.query(
+      `SELECT poll_count FROM duel_matchmaking_queue WHERE device_id = $1 AND difficulty_label = $2`,
+      [deviceId, liveLabel]
+    );
+    const myPollCount = meRow.rows[0] ? (meRow.rows[0].poll_count | 0) : 0;
+    const range = _matchRangeForPoll(myPollCount, matchCfg);
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const opp = await client.query(
+        `SELECT device_id, display_name, player_code, trophy_count
+           FROM duel_matchmaking_queue
+          WHERE device_id != $1
+            AND ABS(trophy_count - $2) <= $3
+            AND difficulty_label = $4
+            AND joined_queue_at > NOW() - INTERVAL '90 seconds'
+          ORDER BY joined_queue_at ASC
+          LIMIT 1
+          FOR UPDATE SKIP LOCKED`,
+        [deviceId, myTrophies, range, liveLabel]
+      );
+      if (opp.rows.length) {
+        const oppRow = opp.rows[0];
+        await client.query(
+          `DELETE FROM duel_matchmaking_queue WHERE device_id IN ($1, $2) AND difficulty_label = $3`,
+          [deviceId, oppRow.device_id, liveLabel]
+        );
+        const seed = Math.floor(Math.random() * 0xFFFFFFFF);
+        const diff = resolveDifficulty(difficulty);
+        const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
+        const ins = await client.query(
+          `INSERT INTO duels (
+              challenger_device, challenger_name, challenger_code,
+              opponent_code, opponent_device, opponent_name,
+              amount, board_seed, expires_at, status,
+              difficulty_label, difficulty_weights, difficulty_speed_pct,
+              is_random_match, is_live, started_at, duration_seconds,
+              live_last_heartbeat_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'accepted', $10, $11, $12, TRUE, TRUE, NOW(), $13, NOW())
+           RETURNING *`,
+          [
+            deviceId, myName, myCode,
+            (oppRow.player_code || ''), oppRow.device_id, oppRow.display_name || 'יריב',
+            0, seed, expiresAt,
+            diff.label, diff.weights, diff.speed_pct, duration
+          ]
+        );
+        await client.query('COMMIT');
+        if (typeof sendPushToDevice === 'function') {
+          sendPushToDevice(oppRow.device_id, {
+            title: '⚡ נמצא יריב לדו-קרב חי!',
+            body: myName + ' (' + myTrophies + '🏆) מחכה לקרב של ' + duration + ' שניות',
+            tag: 'live-race-' + ins.rows[0].id,
+            data: { url: '/?action=duels', kind: 'live_race_found', duelId: ins.rows[0].id }
+          });
+        }
+        return res.json({ ok: true, matched: true, duel: ins.rows[0], duration });
+      }
+      // No opponent — queue up.
+      await client.query(
+        `INSERT INTO duel_matchmaking_queue
+            (device_id, trophy_count, display_name, player_code, difficulty_label, poll_count)
+         VALUES ($1, $2, $3, $4, $5, 1)
+         ON CONFLICT (device_id) DO UPDATE
+           SET trophy_count = EXCLUDED.trophy_count,
+               difficulty_label = EXCLUDED.difficulty_label,
+               poll_count   = duel_matchmaking_queue.poll_count + 1`,
+        [deviceId, myTrophies, myName, myCode, liveLabel]
+      );
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+    const stats = await pool.query(
+      `SELECT COUNT(*)::int AS n FROM duel_matchmaking_queue
+        WHERE difficulty_label = $1 AND joined_queue_at > NOW() - INTERVAL '90 seconds'`,
+      [liveLabel]
+    );
+    res.json({
+      ok: true, matched: false, searching: true,
+      queueSize: stats.rows[0].n | 0,
+      trophyRange: _matchRangeForPoll(myPollCount + 1, matchCfg)
+    });
+  } catch (e) {
+    console.error('POST /api/duels/find-random-live', e);
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
+// Live heartbeat — both players post their current score every 1s.
+// Server stores the latest scores in the duel row + updates last_heartbeat_at.
+app.post('/api/duels/:id/live-heartbeat', requireDeviceAuth, async (req, res) => {
+  const deviceId = req.deviceId;
+  const duelId = parseInt(req.params.id, 10);
+  if (!duelId) return res.status(400).json({ error: 'bad_id' });
+  const score = parseInt((req.body && req.body.score) || 0, 10);
+  if (!Number.isFinite(score) || score < 0 || score > 10_000_000) {
+    return res.status(400).json({ error: 'bad_score' });
+  }
+  if (!checkRateLimit('live_hb:' + duelId, deviceId, 120, 60 * 1000)) {
+    return res.json({ ok: false, reason: 'rate_limited' });
+  }
+  try {
+    const r = await pool.query(
+      `SELECT challenger_device, opponent_device, is_live, started_at, duration_seconds, status
+         FROM duels WHERE id = $1`,
+      [duelId]
+    );
+    if (!r.rows[0]) return res.json({ ok: false, reason: 'not_found' });
+    const d = r.rows[0];
+    if (!d.is_live) return res.json({ ok: false, reason: 'not_live' });
+    const isChallenger = d.challenger_device === deviceId;
+    const isOpponent = d.opponent_device === deviceId;
+    if (!isChallenger && !isOpponent) return res.json({ ok: false, reason: 'not_participant' });
+    // Score-only-grows guard so a buggy/cheating client can't decrement.
+    const col = isChallenger ? 'challenger_live_score' : 'opponent_live_score';
+    await pool.query(
+      `UPDATE duels SET ${col} = GREATEST(${col}, $1), live_last_heartbeat_at = NOW() WHERE id = $2`,
+      [score, duelId]
+    );
+    // Check if duration elapsed → auto-settle.
+    const startedAt = d.started_at ? new Date(d.started_at).getTime() : 0;
+    const durationMs = (d.duration_seconds || 60) * 1000;
+    const elapsed = Date.now() - startedAt;
+    const timeLeft = Math.max(0, durationMs - elapsed);
+    if (timeLeft <= 0 && d.status === 'accepted') {
+      // Settle now.
+      await _settleLiveDuel(duelId);
+    }
+    res.json({ ok: true, timeLeft });
+  } catch (e) {
+    console.error('POST /api/duels/:id/live-heartbeat', e);
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
+// Live state — opponent polls for the other side's score.
+app.get('/api/duels/:id/live-state', async (req, res) => {
+  const duelId = parseInt(req.params.id, 10);
+  if (!duelId) return res.status(400).json({ error: 'bad_id' });
+  try {
+    const r = await pool.query(
+      `SELECT challenger_device, opponent_device, challenger_name, opponent_name,
+              challenger_live_score, opponent_live_score, started_at, duration_seconds,
+              status, winner_device, challenger_score, opponent_score
+         FROM duels WHERE id = $1 AND is_live = TRUE`,
+      [duelId]
+    );
+    if (!r.rows[0]) return res.json({ ok: false, reason: 'not_found' });
+    const d = r.rows[0];
+    const startedMs = d.started_at ? new Date(d.started_at).getTime() : 0;
+    const durationMs = (d.duration_seconds || 60) * 1000;
+    const timeLeft = Math.max(0, durationMs - (Date.now() - startedMs));
+    res.json({
+      ok: true,
+      challengerScore: d.challenger_live_score | 0,
+      opponentScore: d.opponent_live_score | 0,
+      challengerName: d.challenger_name,
+      opponentName: d.opponent_name,
+      timeLeft,
+      status: d.status,
+      winner: d.winner_device || null,
+      challengerFinal: d.challenger_score,
+      opponentFinal: d.opponent_score
+    });
+  } catch (e) {
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
+// Settle a live duel: snapshot live scores to final, pay winner reward.
+async function _settleLiveDuel(duelId) {
+  const liveCfg = await getCachedConfigPrefix('live_race_').catch(() => ({}));
+  const reward = parseInt(liveCfg.live_race_winner_reward, 10) || 50;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const r = await client.query(
+      `SELECT challenger_device, opponent_device, challenger_live_score, opponent_live_score, status
+         FROM duels WHERE id = $1 AND is_live = TRUE FOR UPDATE`,
+      [duelId]
+    );
+    if (!r.rows[0] || r.rows[0].status !== 'accepted') {
+      await client.query('ROLLBACK');
+      return null;
+    }
+    const d = r.rows[0];
+    const cScore = d.challenger_live_score | 0;
+    const oScore = d.opponent_live_score | 0;
+    let winner = null;
+    if (cScore > oScore) winner = d.challenger_device;
+    else if (oScore > cScore) winner = d.opponent_device;
+    // Update final scores + status. Tie → no winner, no reward.
+    await client.query(
+      `UPDATE duels
+          SET challenger_score = $1, opponent_score = $2,
+              winner_device = $3, status = $4
+        WHERE id = $5`,
+      [cScore, oScore, winner, winner ? 'settled' : 'tie', duelId]
+    );
+    // Credit winner reward atomically.
+    if (winner && reward > 0) {
+      await client.query(
+        `UPDATE player_profiles SET balance = balance + $1, total_earned = total_earned + $1 WHERE device_id = $2`,
+        [reward, winner]
+      );
+    }
+    await client.query('COMMIT');
+    // Push notify both players. Best-effort.
+    if (typeof sendPushToDevice === 'function') {
+      if (winner === d.challenger_device) {
+        sendPushToDevice(d.challenger_device, {
+          title: '🏆 ניצחת בקרב חי!',
+          body: 'ניצחת ' + cScore.toLocaleString() + ' לעומת ' + oScore.toLocaleString() + ' · +' + reward + '💎',
+          tag: 'live-race-end-' + duelId,
+          data: { url: '/?action=duels', kind: 'live_race_won', duelId }
+        });
+        sendPushToDevice(d.opponent_device, {
+          title: '😔 הפסדת בקרב חי',
+          body: 'נמרצת ' + oScore.toLocaleString() + ' לעומת ' + cScore.toLocaleString(),
+          tag: 'live-race-end-' + duelId,
+          data: { url: '/?action=duels', kind: 'live_race_lost', duelId }
+        });
+      } else if (winner === d.opponent_device) {
+        sendPushToDevice(d.opponent_device, {
+          title: '🏆 ניצחת בקרב חי!',
+          body: 'ניצחת ' + oScore.toLocaleString() + ' לעומת ' + cScore.toLocaleString() + ' · +' + reward + '💎',
+          tag: 'live-race-end-' + duelId,
+          data: { url: '/?action=duels', kind: 'live_race_won', duelId }
+        });
+        sendPushToDevice(d.challenger_device, {
+          title: '😔 הפסדת בקרב חי',
+          body: 'נמרצת ' + cScore.toLocaleString() + ' לעומת ' + oScore.toLocaleString(),
+          tag: 'live-race-end-' + duelId,
+          data: { url: '/?action=duels', kind: 'live_race_lost', duelId }
+        });
+      } else {
+        sendPushToDevice(d.challenger_device, {
+          title: '🤝 תיקו בקרב חי',
+          body: 'שני הצדדים סיימו עם ' + cScore.toLocaleString() + ' נקודות',
+          tag: 'live-race-end-' + duelId,
+          data: { url: '/?action=duels', kind: 'live_race_tie', duelId }
+        });
+        sendPushToDevice(d.opponent_device, {
+          title: '🤝 תיקו בקרב חי',
+          body: 'שני הצדדים סיימו עם ' + oScore.toLocaleString() + ' נקודות',
+          tag: 'live-race-end-' + duelId,
+          data: { url: '/?action=duels', kind: 'live_race_tie', duelId }
+        });
+      }
+    }
+    return { winner, cScore, oScore };
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+// Auto-settler: every 30s, find any live duel whose duration elapsed and
+// is still 'accepted' (i.e., one of the clients failed to ping the heart-
+// beat that would have triggered settlement). Backup against disconnects.
+setInterval(async function() {
+  try {
+    const r = await pool.query(
+      `SELECT id FROM duels
+        WHERE is_live = TRUE AND status = 'accepted'
+          AND started_at IS NOT NULL
+          AND started_at + (duration_seconds || ' seconds')::interval < NOW()`
+    );
+    for (const row of r.rows) await _settleLiveDuel(row.id).catch(() => {});
+  } catch (e) {}
+}, 30 * 1000);
+
 // Cancel matchmaking — remove from queue. Caller-controlled (no rate
 // limit since it's a destructive op that always succeeds idempotently).
 app.post('/api/duels/find-random/cancel', requireDeviceAuth, async (req, res) => {

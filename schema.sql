@@ -285,6 +285,23 @@ INSERT INTO game_config (key, value) VALUES ('booster_pick_price', '50')   ON CO
 INSERT INTO game_config (key, value) VALUES ('booster_pop_price',  '40')   ON CONFLICT (key) DO NOTHING;
 ALTER TABLE duels ADD COLUMN IF NOT EXISTS is_random_match BOOLEAN DEFAULT FALSE;
 
+-- A5 — Live PvP Race. Polling-based "real-time" 60-second race using
+-- the existing duels table. is_live flag distinguishes from async duels.
+-- started_at is set on match; both players post heartbeats every 1s.
+-- Auto-settles after duration_seconds elapse via cron.
+ALTER TABLE duels ADD COLUMN IF NOT EXISTS is_live BOOLEAN DEFAULT FALSE;
+ALTER TABLE duels ADD COLUMN IF NOT EXISTS started_at TIMESTAMPTZ;
+ALTER TABLE duels ADD COLUMN IF NOT EXISTS duration_seconds INT DEFAULT 60;
+ALTER TABLE duels ADD COLUMN IF NOT EXISTS challenger_live_score INT DEFAULT 0;
+ALTER TABLE duels ADD COLUMN IF NOT EXISTS opponent_live_score INT DEFAULT 0;
+ALTER TABLE duels ADD COLUMN IF NOT EXISTS live_last_heartbeat_at TIMESTAMPTZ;
+
+INSERT INTO game_config (key, value) VALUES ('live_race_enabled',  'true') ON CONFLICT (key) DO NOTHING;
+-- Default race length in seconds. 60s = adrenaline; 90s = more strategy.
+INSERT INTO game_config (key, value) VALUES ('live_race_duration', '60')   ON CONFLICT (key) DO NOTHING;
+-- Winner reward (taken from wager pool; if no wager, paid from house).
+INSERT INTO game_config (key, value) VALUES ('live_race_winner_reward', '50') ON CONFLICT (key) DO NOTHING;
+
 -- A9 — Ghost Mode. Stores the column-index sequence of every drop in
 -- a game so other players can "race the ghost" of someone who finished
 -- the same daily/practice run earlier. Storage is minimal (~30 ints per

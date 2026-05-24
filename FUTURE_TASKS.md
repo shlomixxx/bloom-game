@@ -1,7 +1,7 @@
 # 📋 BLOOM — משימות עתידיות
 
 > **מסמך מרכזי לכל מה שעדיין לא נבנה.**
-> עודכן: 2026-05-24 · 47 שלבים חיים בפרודקשן · 6 משימות פתוחות (A1+A2+A3+A4+A6+A7+A8+A9+A10 ✅ · רק A5 פתוח ב-pure-addiction)
+> עודכן: 2026-05-24 · 48 שלבים חיים בפרודקשן · 4 משימות פתוחות (כל A1-A10 ✅ pure-addiction) · 4 פתוחות = monetization (Stripe IAP, VIP, RM shop, wager)
 >
 > 🎯 **איך להשתמש**: בשיחה חדשה תגיד "בוא נבנה A1" / "המשך עם הכי ממכר" / "תעשה A2 + A3 ביחד" ואני אדע בדיוק על מה אתה מדבר.
 
@@ -80,22 +80,26 @@
 
 ---
 
-### A5 · ⚡ Live PvP Race
-**מאמץ**: 3-4 ימים · **השפעה**: ★★★★★ · **הכי מורכב**
+### A5 · ⚡ Live PvP Race ✅ נבנה (24.05.2026 — MVP polling-based)
+**מאמץ**: ~75 דקות (במקום 3-4 ימים של true WebSocket) · **השפעה**: ★★★★★ · **סטטוס: חי בייצור**
 
-**מה זה**:
-מרוץ real-time 60 שניות — שני שחקנים, אותו seed של לוח, מי שמגיע לציון הכי גבוה מנצח. רואים אחד את השני בזמן אמת.
+**מה נבנה — MVP חכם בלי WebSocket**:
+- **החלטה אסטרטגית**: במקום להוסיף WebSocket server לסטאק (3-4 ימי עבודה), השתמשתי ב-**polling כל 1 שניה** מעל ה-duels infrastructure הקיים. החוויה כמעט זהה (delay של 1-2s לא מורגש במשחק של 60 שניות), הסקופ קטן פי 4.
+- 6 ALTER COLUMN על `duels`: `is_live`, `started_at`, `duration_seconds`, `challenger_live_score`, `opponent_live_score`, `live_last_heartbeat_at`. 3 config keys (enabled, duration=60, winner_reward=50).
+- **Matchmaking**: `POST /api/duels/find-random-live` — אותה atomic-match-or-queue logic של A6, עם `difficulty_label = '@live:<diff>'` כדי לבודד את ה-pool הליבל מה-async. כשנמצא יריב → INSERT duel עם `is_live=TRUE`, `status='accepted'`, `started_at=NOW()`.
+- **Heartbeat**: `POST /api/duels/:id/live-heartbeat` — כל שחקן שולח את הציון הנוכחי שלו פעם בשנייה. שמירה ב-`<role>_live_score` עם `GREATEST` guard (score-only-grows).
+- **Polling**: `GET /api/duels/:id/live-state` — מחזיר שני הציונים + timeLeft. השחקנים פולינג כל 1s ב-stagger של 500ms מה-heartbeat.
+- **Auto-settle**: שני מנגנונים — (1) ה-heartbeat עצמו מסיים כשduration עוברה. (2) cron כל 30s סורק duels שlive+accepted+stale ומסיים בכוח (מגן על disconnects).
+- **Client flow** ([src/02-shop.js](src/02-shop.js)): "⚡ דו-קרב חי 60 שניות" button בduel modal → matchmaking overlay אדום-ורוד → countdown overlay 3-2-1-GO! עם sound + buzz → init('practice', {fresh, seed}) → mount Live HUD (timer גדול + 2-side scores) → heartbeat+polling loops → at timeout או status=settled, show result overlay עם 4 modes (won/tie/lost עם gold/purple/pink themes).
+- **Result overlay**: full-screen card עם large emoji + title + side-by-side scores + reward line + "המשך" button. soundMilestone(7) + 7-pulse buzz למנצח; soundMilestone(3) + 3-pulse למפסיד.
+- Push notifications לשני הצדדים בסוף (win/lose/tie copy מותאם).
 
-**למה לבנות**:
-- אדרנלין טהור — הכי "ממכר תוך כדי משחק" שיש
-- ההבדל בין משחק casual ל-competitive
-- מצדיק "עוד משחק אחד"
+**מה לא הוטמע** (out-of-scope MVP):
+- Split-screen UI (לא חיוני; ה-HUD מספק את ה-"feel" של תחרות חיה)
+- True WebSocket (לא חיוני; polling 1s "feels live" במשחק 60 שניות)
+- Per-tile sync של היריב (היריב הוא רק score, לא state of grid)
 
-**טכני**:
-- **דורש WebSocket** — תוספת אמיתית לסטאק
-- Matchmaking queue + room management
-- Sync של drops + scores בזמן אמת
-- הכי מורכב מהרשימה — אבל גם הכי גדול
+**Future upgrade**: כשיהיו 100+ DAU וה-Render/Railway plan תומך ב-WebSocket — שדרוג ל-true Socket.io לוקח ~2 ימים על גבי הקיים.
 
 ---
 

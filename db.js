@@ -54,6 +54,13 @@ export async function initDb() {
     // A9 — Ghost Mode drops_sequence columns (full def in schema.sql).
     `ALTER TABLE daily_scores ADD COLUMN IF NOT EXISTS drops_sequence JSONB`,
     `ALTER TABLE difficulty_scores ADD COLUMN IF NOT EXISTS drops_sequence JSONB`,
+    // A5 — Live PvP Race columns on duels (full def in schema.sql).
+    `ALTER TABLE duels ADD COLUMN IF NOT EXISTS is_live BOOLEAN DEFAULT FALSE`,
+    `ALTER TABLE duels ADD COLUMN IF NOT EXISTS started_at TIMESTAMPTZ`,
+    `ALTER TABLE duels ADD COLUMN IF NOT EXISTS duration_seconds INT DEFAULT 60`,
+    `ALTER TABLE duels ADD COLUMN IF NOT EXISTS challenger_live_score INT DEFAULT 0`,
+    `ALTER TABLE duels ADD COLUMN IF NOT EXISTS opponent_live_score INT DEFAULT 0`,
+    `ALTER TABLE duels ADD COLUMN IF NOT EXISTS live_last_heartbeat_at TIMESTAMPTZ`,
     // A8 — Squad Tournaments (full def in schema.sql).
     `CREATE TABLE IF NOT EXISTS squad_tournaments (
       id              BIGSERIAL PRIMARY KEY,

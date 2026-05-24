@@ -756,6 +756,8 @@
       // A6 — Random matchmaking. Solo players who don't have a BLOOM code
       // to type can hit this and get paired with another waiting player.
       '<button class="btn" id="duel-random" style="width:100%;margin-bottom:6px;background:linear-gradient(135deg,#7A5FE0,#B59FFA);color:#FFF;font-weight:800">🎲 דו-קרב אקראי (חיפוש אוטומטי)</button>' +
+      // A5 — Live PvP Race. 60-second real-time race against another player.
+      '<button class="btn" id="duel-live" style="width:100%;margin-bottom:6px;background:linear-gradient(135deg,#FF4D6D,#FF8DA1);color:#FFF;font-weight:800">⚡ דו-קרב חי 60 שניות</button>' +
       // Send gift — peaceful counterpart to a duel. Same input (BLOOM-XXXX
       // suffix), small gem amount, optional message. Recipient sees a
       // toast banner next time they open the app.
@@ -789,6 +791,17 @@
       var diff = diffPill ? (diffPill.getAttribute('data-diff') || 'default') : 'default';
       modal.remove();
       startRandomMatchmaking(diff);
+    };
+
+    // A5 — Live PvP Race button. Same matchmaking flow but targets the
+    // live queue; on match, runs a 60-second real-time race instead of
+    // an async duel.
+    var liveBtn = document.getElementById('duel-live');
+    if (liveBtn) liveBtn.onclick = function() {
+      var diffPill = modal.querySelector('.diff-pill.selected');
+      var diff = diffPill ? (diffPill.getAttribute('data-diff') || 'default') : 'default';
+      modal.remove();
+      startLiveRaceMatchmaking(diff);
     };
 
     // Difficulty pill picker (challenger picks one — both players get it)
@@ -1508,6 +1521,289 @@
     var r = document.getElementById('rm-range');
     if (q) q.textContent = queueSize;
     if (r) r.textContent = (trophyRange > 100000) ? '∞' : trophyRange;
+  }
+
+  // ============================================================
+  // A5 — Live PvP Race (60-second real-time, polling-based)
+  // ============================================================
+  var _liveRacePoller = null;
+  var _liveRaceOverlay = null;
+  var _liveRaceStartMs = 0;
+  var _liveRaceHbTimer = null;
+  var _liveRacePollTimer = null;
+  var _liveRaceState = null; // { duelId, durationMs, opponentName, ... }
+
+  function startLiveRaceMatchmaking(difficulty) {
+    if (_liveRacePoller) return;
+    _liveRaceStartMs = Date.now();
+    showLiveRaceMatchOverlay(difficulty);
+    pollLiveRaceMatch(difficulty);
+    _liveRacePoller = setInterval(function() { pollLiveRaceMatch(difficulty); }, 3000);
+  }
+
+  function stopLiveRaceMatchmaking(reason) {
+    if (_liveRacePoller) { clearInterval(_liveRacePoller); _liveRacePoller = null; }
+    if (_liveRaceOverlay) { try { _liveRaceOverlay.remove(); } catch (e) {} _liveRaceOverlay = null; }
+    if (reason === 'cancelled') {
+      fetch('/api/duels/find-random/cancel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deviceId: deviceId, token: deviceToken })
+      }).catch(function() {});
+    }
+  }
+
+  function pollLiveRaceMatch(difficulty) {
+    fetch('/api/duels/find-random-live', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ deviceId: deviceId, token: deviceToken, difficulty: difficulty })
+    }).then(function(r) { return r.json(); }).catch(function() { return null; }).then(function(d) {
+      if (!d || !d.ok) return;
+      if (d.matched && d.duel) {
+        stopLiveRaceMatchmaking('matched');
+        // Set up race state.
+        var isChall = d.duel.challenger_device === deviceId;
+        _liveRaceState = {
+          duelId: d.duel.id,
+          duel: d.duel,
+          durationMs: (d.duration || 60) * 1000,
+          opponentName: isChall ? (d.duel.opponent_name || 'יריב') : (d.duel.challenger_name || 'יריב'),
+          isChallenger: isChall,
+          startedAt: 0 // set after countdown
+        };
+        showLiveRaceCountdown();
+        return;
+      }
+      var queueEl = document.getElementById('lrm-queue');
+      var rangeEl = document.getElementById('lrm-range');
+      if (queueEl) queueEl.textContent = d.queueSize || 0;
+      if (rangeEl) rangeEl.textContent = (d.trophyRange > 100000) ? '∞' : d.trophyRange;
+    });
+  }
+
+  function showLiveRaceMatchOverlay(difficulty) {
+    var existing = document.getElementById('live-race-match-overlay');
+    if (existing) existing.remove();
+    var ov = document.createElement('div');
+    ov.id = 'live-race-match-overlay';
+    ov.className = 'live-race-match-overlay';
+    ov.innerHTML =
+      '<div class="lrm-card">' +
+        '<div class="lrm-spinner">' +
+          '<div class="lrm-spinner-circle"></div>' +
+          '<div class="lrm-spinner-emoji">⚡</div>' +
+        '</div>' +
+        '<div class="lrm-title">מחפש יריב לקרב חי...</div>' +
+        '<div class="lrm-sub">60 שניות בלבד · אדרנלין טהור</div>' +
+        '<div class="lrm-stats">' +
+          '<span class="lrm-stat">⏱ <span id="lrm-elapsed">0</span>ש</span>' +
+          '<span class="lrm-stat">👥 <span id="lrm-queue">--</span> בתור</span>' +
+          '<span class="lrm-stat">🏆 ±<span id="lrm-range">50</span></span>' +
+        '</div>' +
+        '<button class="lrm-cancel" id="lrm-cancel-btn">ביטול</button>' +
+      '</div>';
+    document.body.appendChild(ov);
+    _liveRaceOverlay = ov;
+    document.getElementById('lrm-cancel-btn').onclick = function() { stopLiveRaceMatchmaking('cancelled'); };
+    var ticker = setInterval(function() {
+      var el = document.getElementById('lrm-elapsed');
+      if (!el || !_liveRaceOverlay) { clearInterval(ticker); return; }
+      el.textContent = Math.floor((Date.now() - _liveRaceStartMs) / 1000);
+    }, 1000);
+  }
+
+  // 3-2-1 countdown overlay before the race starts.
+  function showLiveRaceCountdown() {
+    var ov = document.createElement('div');
+    ov.id = 'live-race-countdown';
+    ov.className = 'live-race-countdown-overlay';
+    ov.innerHTML =
+      '<div class="lrc-card">' +
+        '<div class="lrc-opponent">⚡ נגד ' + escapeHtml(_liveRaceState.opponentName) + '</div>' +
+        '<div class="lrc-number" id="lrc-number">3</div>' +
+        '<div class="lrc-sub">60 שניות לזכות</div>' +
+      '</div>';
+    document.body.appendChild(ov);
+    var n = 3;
+    var tick = function() {
+      var el = document.getElementById('lrc-number');
+      if (!el) return;
+      if (n > 0) {
+        el.textContent = n;
+        el.classList.remove('lrc-pulse'); void el.offsetWidth; el.classList.add('lrc-pulse');
+        try { if (typeof soundMilestone === 'function') soundMilestone(3); } catch (e) {}
+        n--;
+        setTimeout(tick, 1000);
+      } else {
+        el.textContent = 'התחל!';
+        el.classList.add('lrc-go');
+        try { if (typeof soundMilestone === 'function') soundMilestone(6); } catch (e) {}
+        try { if (typeof buzz === 'function') buzz([80, 60, 100]); } catch (e) {}
+        setTimeout(function() {
+          try { ov.remove(); } catch (e) {}
+          startLiveRaceGame();
+        }, 700);
+      }
+    };
+    tick();
+  }
+
+  function startLiveRaceGame() {
+    activeDuelId = _liveRaceState.duelId;
+    window._duelMode = true;
+    window._liveRaceMode = true;
+    window._duelOpponentName = _liveRaceState.opponentName;
+    activeDuelOpponentName = _liveRaceState.opponentName;
+    _liveRaceState.startedAt = Date.now();
+    hideHome();
+    mode = 'practice';
+    // Start the game with the duel's seed.
+    init('practice', { fresh: true, seed: _liveRaceState.duel.board_seed });
+    // Mount live HUD + timer.
+    mountLiveRaceHUD();
+    // Heartbeat: send my score every 1s.
+    _liveRaceHbTimer = setInterval(sendLiveHeartbeat, 1000);
+    // Poll: fetch opponent's score every 1s (staggered 500ms from hb).
+    setTimeout(function() {
+      _liveRacePollTimer = setInterval(pollLiveRaceState, 1000);
+    }, 500);
+  }
+
+  function sendLiveHeartbeat() {
+    if (!_liveRaceState) return;
+    var myScore = (typeof score !== 'undefined') ? (score | 0) : 0;
+    fetch('/api/duels/' + _liveRaceState.duelId + '/live-heartbeat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ deviceId: deviceId, token: deviceToken, score: myScore })
+    }).then(function(r) { return r.json(); }).catch(function() {});
+  }
+
+  function pollLiveRaceState() {
+    if (!_liveRaceState) return;
+    fetch('/api/duels/' + _liveRaceState.duelId + '/live-state').then(function(r) { return r.json(); }).catch(function() { return null; }).then(function(d) {
+      if (!d || !d.ok) return;
+      // Update HUD with opponent's score + time left.
+      var oppScore = _liveRaceState.isChallenger ? d.opponentScore : d.challengerScore;
+      var myScore = _liveRaceState.isChallenger ? d.challengerScore : d.opponentScore;
+      paintLiveRaceHUD(oppScore, myScore, d.timeLeft);
+      // Auto-end when timer expires OR server marked settled.
+      if (d.status === 'settled' || d.status === 'tie' || d.timeLeft <= 0) {
+        endLiveRace(d);
+      }
+    });
+  }
+
+  function mountLiveRaceHUD() {
+    var existing = document.getElementById('live-race-hud');
+    if (existing) existing.remove();
+    var hud = document.createElement('div');
+    hud.id = 'live-race-hud';
+    hud.className = 'live-race-hud';
+    hud.innerHTML =
+      '<div class="lrh-timer-row">' +
+        '<span class="lrh-timer-label">⏰</span>' +
+        '<span class="lrh-timer" id="lrh-timer">60</span>' +
+        '<span class="lrh-timer-unit">שניות</span>' +
+      '</div>' +
+      '<div class="lrh-score-row">' +
+        '<div class="lrh-me">' +
+          '<div class="lrh-label">אתה</div>' +
+          '<div class="lrh-score" id="lrh-my-score">0</div>' +
+        '</div>' +
+        '<div class="lrh-vs">⚡</div>' +
+        '<div class="lrh-opp">' +
+          '<div class="lrh-label">' + escapeHtml(_liveRaceState.opponentName).slice(0, 12) + '</div>' +
+          '<div class="lrh-score" id="lrh-opp-score">0</div>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(hud);
+  }
+
+  function paintLiveRaceHUD(oppScore, myServerScore, timeLeft) {
+    var localScore = (typeof score !== 'undefined') ? (score | 0) : 0;
+    // Use the higher of server-stored vs local — prevents lag-flicker.
+    var myFinal = Math.max(localScore, myServerScore | 0);
+    var oppEl = document.getElementById('lrh-opp-score');
+    var meEl = document.getElementById('lrh-my-score');
+    var timerEl = document.getElementById('lrh-timer');
+    if (oppEl) oppEl.textContent = (oppScore | 0).toLocaleString();
+    if (meEl) meEl.textContent = myFinal.toLocaleString();
+    if (timerEl) timerEl.textContent = Math.ceil(timeLeft / 1000);
+    var hud = document.getElementById('live-race-hud');
+    if (hud) {
+      hud.classList.toggle('lrh-ahead', myFinal > (oppScore | 0));
+      hud.classList.toggle('lrh-behind', myFinal < (oppScore | 0));
+      // Urgent state in last 10 seconds.
+      hud.classList.toggle('lrh-urgent', timeLeft < 10 * 1000);
+    }
+  }
+
+  function endLiveRace(stateData) {
+    if (!_liveRaceState) return;
+    if (_liveRaceHbTimer) { clearInterval(_liveRaceHbTimer); _liveRaceHbTimer = null; }
+    if (_liveRacePollTimer) { clearInterval(_liveRacePollTimer); _liveRacePollTimer = null; }
+    // Force game end (busy/disable input).
+    window.__bloomGameOver = true;
+    try { busy = true; } catch (e) {}
+    // Send one last heartbeat with final score so server records it.
+    sendLiveHeartbeat();
+    // Brief delay then show result overlay.
+    setTimeout(function() {
+      var myScore = _liveRaceState.isChallenger ? stateData.challengerScore : stateData.opponentScore;
+      var oppScore = _liveRaceState.isChallenger ? stateData.opponentScore : stateData.challengerScore;
+      // Re-fetch in case settlement just happened.
+      fetch('/api/duels/' + _liveRaceState.duelId + '/live-state').then(function(r) { return r.json(); }).catch(function() { return null; }).then(function(d) {
+        if (d && d.ok && d.challengerFinal != null) {
+          myScore = _liveRaceState.isChallenger ? d.challengerFinal : d.opponentFinal;
+          oppScore = _liveRaceState.isChallenger ? d.opponentFinal : d.challengerFinal;
+        }
+        showLiveRaceResult(myScore, oppScore, _liveRaceState.opponentName);
+        _liveRaceState = null;
+        window._duelMode = false;
+        window._liveRaceMode = false;
+        var hud = document.getElementById('live-race-hud');
+        if (hud) hud.remove();
+      });
+    }, 800);
+  }
+
+  function showLiveRaceResult(myScore, oppScore, oppName) {
+    var existing = document.getElementById('live-race-result');
+    if (existing) existing.remove();
+    var won = myScore > oppScore;
+    var tied = myScore === oppScore;
+    var ov = document.createElement('div');
+    ov.id = 'live-race-result';
+    ov.className = 'live-race-result-overlay';
+    var emoji = won ? '🏆' : (tied ? '🤝' : '😔');
+    var title = won ? 'ניצחת!' : (tied ? 'תיקו' : 'הפסדת');
+    var sub = won ? ('+50💎 על הזכייה') : (tied ? 'אף אחד לא קיבל פרס' : 'נסה שוב!');
+    ov.innerHTML =
+      '<div class="lrr-card lrr-' + (won ? 'won' : tied ? 'tie' : 'lost') + '">' +
+        '<div class="lrr-emoji">' + emoji + '</div>' +
+        '<div class="lrr-title">' + title + '</div>' +
+        '<div class="lrr-scores">' +
+          '<div class="lrr-side"><div class="lrr-side-name">אתה</div><div class="lrr-side-score">' + (myScore | 0).toLocaleString() + '</div></div>' +
+          '<div class="lrr-vs">vs</div>' +
+          '<div class="lrr-side"><div class="lrr-side-name">' + escapeHtml(oppName) + '</div><div class="lrr-side-score">' + (oppScore | 0).toLocaleString() + '</div></div>' +
+        '</div>' +
+        '<div class="lrr-sub">' + sub + '</div>' +
+        '<button class="lrr-btn" onclick="this.closest(\'.live-race-result-overlay\').remove()">המשך</button>' +
+      '</div>';
+    document.body.appendChild(ov);
+    try { if (typeof soundMilestone === 'function') soundMilestone(won ? 7 : 3); } catch (e) {}
+    try { if (typeof buzz === 'function') buzz(won ? [80,60,100,60,120,80,140] : [40,30,60]); } catch (e) {}
+    if (won && window.__bloomBumpBal && typeof playerBalance !== 'undefined') {
+      try { window.__bloomBumpBal(playerBalance + 50, 50); } catch (e) {}
+    }
+  }
+
+  function escapeHtml(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
 
   function startDuelGame(duelId, seed, duelRow) {

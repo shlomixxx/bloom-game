@@ -2,7 +2,7 @@
 
 > **קובץ הזה הוא המסך הראשון לקרוא בכל סשן חדש.** הוא אומר במשפט אחד מה המצב, מה הצעד הבא, ולאן ללכת לפרטים מלאים.
 >
-> עדכון אחרון: **2026-05-24** · 47 שלבים חיים בפרודקשן · /api/health=ok
+> עדכון אחרון: **2026-05-24** · 48 שלבים חיים בפרודקשן · /api/health=ok · **כל A1-A10 הושלמו** 🎉
 
 ---
 
@@ -10,13 +10,15 @@
 
 **מה חי**:
 - ✅ **BLOOM_TASKS.md**: 34/38 = 89.5% (4 deferred עם נימוק ברור)
-- ✅ **FUTURE_TASKS.md**: 9/10 משימות backlog הושלמו (A1+A2+A3+A4+A6+A7+A8+A9+A10)
-- ✅ **47 stages** ב-CLAUDE.md §0 — חיים בפרודקשן ([bloom-web-production-f3bd.up.railway.app](https://bloom-web-production-f3bd.up.railway.app))
-- ✅ Cache `v20260524q` · SW `bloom-v13.1`
+- ✅ **FUTURE_TASKS.md**: **10/10 משימות pure-addiction הושלמו** 🎉 (כל A1-A10)
+- ✅ **48 stages** ב-CLAUDE.md §0 — חיים בפרודקשן ([bloom-web-production-f3bd.up.railway.app](https://bloom-web-production-f3bd.up.railway.app))
+- ✅ Cache `v20260524r` · SW `bloom-v13.2`
 
-**מה פתוח** (1 backlog item + 4 monetization items):
-- A5 Live PvP Race (3-4 ימים, WebSocket — הפיצ׳ר האחרון של pure-addiction)
-- + 4 משימות monetization (Stripe IAP, VIP sub, RM shop, wager certification)
+**מה פתוח** — רק 4 משימות monetization (כל pure-addiction הושלם!):
+- Stripe IAP integration (~3-4 ימים)
+- VIP subscription ($4.99/mo)
+- Real-money cosmetic shop
+- Wager / RM tournaments (דורש legal certification)
 
 **מה מומלץ לעצור**:
 - D1/D7 retention על שחקנים אמיתיים — יש מספיק פיצ'רים ויראליים שבנינו (Friend Challenges + Wrapped + Random Matchmaking). זה הזמן לבחון data לפני שמוסיפים עוד.
@@ -37,10 +39,9 @@
 ### 2. [FUTURE_TASKS.md](FUTURE_TASKS.md) — Backlog (10 pure-addiction + 4 monetization)
 אחרי שסיימתי את ה-roadmap, עברתי לזה. **6/10 כבר נבנו** ב-A1/A2/A3/A4/A6/A7.
 
-**1 משימה פתוחה** (האחרונה ב-pure-addiction):
-| # | פיצ'ר | מאמץ | השפעה | תיאור |
-|---|---|---|---|---|
-| **A5** | ⚡ Live PvP Race | 3-4 ימים | ★★★★★ | real-time 1v1, אותו seed, 60 שניות — **הכי גדול, צריך WebSocket** |
+**🎉 כל ה-10 משימות pure-addiction הושלמו!** A5 Live PvP Race שיודרגה למעלה הוטמעה כ-MVP polling-based (במקום true WebSocket — חוויה כמעט זהה, סקופ קטן פי 4).
+
+ה-backlog שנשאר הוא monetization בלבד — דורש החלטות עסקיות + Stripe + יועץ משפטי.
 
 **4 משימות monetization** (real money — דורש Stripe + יעוץ משפטי):
 - 17b Stripe IAP — תשתית לכל השאר. ~3-4 ימים.
