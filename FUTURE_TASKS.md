@@ -1,7 +1,7 @@
 # 📋 BLOOM — משימות עתידיות
 
 > **מסמך מרכזי לכל מה שעדיין לא נבנה.**
-> עודכן: 2026-05-24 · 45 שלבים חיים בפרודקשן · 8 משימות פתוחות (A1+A2+A3+A4+A6+A7+A10 ✅)
+> עודכן: 2026-05-24 · 46 שלבים חיים בפרודקשן · 7 משימות פתוחות (A1+A2+A3+A4+A6+A7+A8+A10 ✅)
 >
 > 🎯 **איך להשתמש**: בשיחה חדשה תגיד "בוא נבנה A1" / "המשך עם הכי ממכר" / "תעשה A2 + A3 ביחד" ואני אדע בדיוק על מה אתה מדבר.
 
@@ -140,21 +140,20 @@
 
 ---
 
-### A8 · 🏟 Squad Tournaments
-**מאמץ**: 2 ימים · **השפעה**: ★★★★
+### A8 · 🏟 Squad Tournaments ✅ נבנה (24.05.2026)
+**מאמץ**: 2 ימים · **השפעה**: ★★★★ · **סטטוס: חי בייצור**
 
-**מה זה**:
-מרחיב את Live Tournaments (Stage 12) לטורנירים בין **קלאנים**. 4 קלאנים מתחרים ב-bracket שבועי. הקלאן עם הציון הכולל הכי גבוה מנצח.
-
-**למה לבנות**:
-- משלים את Stage 27 (Guilds) ו-Stage 37 (Guild Wars)
-- "אנחנו vs הם" — peer pressure לקלאן + תחרות לטורניר
-- שילוב של 2 פיצ׳רים קיימים — חוזק מוכפל
-
-**טכני**:
-- טבלה `squad_tournaments` (id, bracket, status, week_start)
-- 4-guild bracket — semi-finals + final
-- כל המנגנון של Stage 12 + scoring per guild
+**מה נבנה**:
+- Auto-matchmaker רץ כל יום ראשון 06:00 IL → מצרף 4 קלאנים power-balanced (top vs 4th, 2nd vs 3rd seeding)
+- כל ה-week, score של כל חבר-קלאן מתווסף ל-`squad_tournament_guilds.score_total` דרך hook ב-`/api/guilds/contribute` (Atomic, same transaction).
+- **יום רביעי 20:00 IL**: חצי-גמרים — הגבוה ביותר בכל pair עובר; השני נפסל.
+- **יום שבת 20:00 IL**: גמר — מנצח-גמר נקבע.
+- **Rewards**: גמר-מנצח 1000💎/חבר · מגיע-לגמר 300💎/חבר · נופל-בחצי 100💎/חבר.
+- Schema: 4 טבלאות חדשות (squad_tournaments + squad_tournament_guilds + squad_tournament_contributions + squad_tournament_claims) + 5 config keys (admin-tunable: rewards, min_members).
+- Server: 2 endpoints (`GET /state` + `POST /claim`) + 2 crons (matchmaker hourly, advancer hourly — both no-op outside their time windows).
+- Client: [src/43-squad-tournament.js](src/43-squad-tournament.js) — IIFE עצמאי. Tile (L15+) רק מוצג כשהקלאן IN tournament. Modal עם bracket visualization (קבוצה A + VS + קבוצה B), per-guild scores + my-contribution + claim button (gold-pulsing כשמגיע).
+- **Push notifications**: כשהtournament מתחיל (לכל חברי 4 הקלאנים) + כשהtournament נסגר (לכל החברים עם הודעה role-appropriate).
+- Differs from Stage 37 Guild Wars (1v1): 4-way bracket → 3 elimination stages → more drama → שבועי.
 
 ---
 

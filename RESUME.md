@@ -2,7 +2,7 @@
 
 > **קובץ הזה הוא המסך הראשון לקרוא בכל סשן חדש.** הוא אומר במשפט אחד מה המצב, מה הצעד הבא, ולאן ללכת לפרטים מלאים.
 >
-> עדכון אחרון: **2026-05-24** · 45 שלבים חיים בפרודקשן · /api/health=ok
+> עדכון אחרון: **2026-05-24** · 46 שלבים חיים בפרודקשן · /api/health=ok
 
 ---
 
@@ -10,13 +10,12 @@
 
 **מה חי**:
 - ✅ **BLOOM_TASKS.md**: 34/38 = 89.5% (4 deferred עם נימוק ברור)
-- ✅ **FUTURE_TASKS.md**: 7/10 משימות backlog הושלמו (A1+A2+A3+A4+A6+A7+A10)
-- ✅ **45 stages** ב-CLAUDE.md §0 — חיים בפרודקשן ([bloom-web-production-f3bd.up.railway.app](https://bloom-web-production-f3bd.up.railway.app))
-- ✅ Cache `v20260524o` · SW `bloom-v12.9`
+- ✅ **FUTURE_TASKS.md**: 8/10 משימות backlog הושלמו (A1+A2+A3+A4+A6+A7+A8+A10)
+- ✅ **46 stages** ב-CLAUDE.md §0 — חיים בפרודקשן ([bloom-web-production-f3bd.up.railway.app](https://bloom-web-production-f3bd.up.railway.app))
+- ✅ Cache `v20260524p` · SW `bloom-v13.0`
 
-**מה פתוח** (3 backlog items + 4 monetization items):
+**מה פתוח** (2 backlog items + 4 monetization items):
 - A5 Live PvP Race (3-4 ימים, WebSocket)
-- A8 Squad Tournaments (2 ימים)
 - A9 Ghost Mode (2 ימים)
 - + 4 משימות monetization (Stripe IAP, VIP sub, RM shop, wager certification)
 
@@ -39,10 +38,9 @@
 ### 2. [FUTURE_TASKS.md](FUTURE_TASKS.md) — Backlog (10 pure-addiction + 4 monetization)
 אחרי שסיימתי את ה-roadmap, עברתי לזה. **6/10 כבר נבנו** ב-A1/A2/A3/A4/A6/A7.
 
-**3 משימות פתוחות**, מסודרות לפי effort:
+**2 משימות פתוחות**, מסודרות לפי effort:
 | # | פיצ'ר | מאמץ | השפעה | תיאור |
 |---|---|---|---|---|
-| **A8** | 🏟 Squad Tournaments | 2 ימים | ★★★★ | 4 גילדות bracket בסוף-שבוע, מעל infra קיים |
 | **A9** | 👻 Ghost Mode | 2 ימים | ★★★ | overlay שקוף של ה-tile placements של חבר תוך כדי משחק |
 | **A5** | ⚡ Live PvP Race | 3-4 ימים | ★★★★★ | real-time 1v1, אותו seed, 60 שניות — **הכי גדול, צריך WebSocket** |
 

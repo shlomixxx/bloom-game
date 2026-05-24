@@ -51,6 +51,46 @@ export async function initDb() {
     // A7 — 7-Day Login Calendar columns on player_profiles.
     `ALTER TABLE player_profiles ADD COLUMN IF NOT EXISTS login_cal_day INT DEFAULT 0`,
     `ALTER TABLE player_profiles ADD COLUMN IF NOT EXISTS login_cal_last_claim DATE`,
+    // A8 — Squad Tournaments (full def in schema.sql).
+    `CREATE TABLE IF NOT EXISTS squad_tournaments (
+      id              BIGSERIAL PRIMARY KEY,
+      week_start      DATE NOT NULL,
+      status          VARCHAR(20) NOT NULL DEFAULT 'active',
+      winner_guild_id INT,
+      created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      semifinals_at   TIMESTAMPTZ,
+      finals_at       TIMESTAMPTZ,
+      finished_at     TIMESTAMPTZ,
+      UNIQUE (week_start)
+    )`,
+    `CREATE TABLE IF NOT EXISTS squad_tournament_guilds (
+      tournament_id      BIGINT NOT NULL REFERENCES squad_tournaments(id) ON DELETE CASCADE,
+      guild_id           INT NOT NULL,
+      bracket_position   INT NOT NULL,
+      score_total        BIGINT NOT NULL DEFAULT 0,
+      games_count        INT NOT NULL DEFAULT 0,
+      eliminated_at      TIMESTAMPTZ,
+      semifinal_winner   BOOLEAN NOT NULL DEFAULT FALSE,
+      final_winner       BOOLEAN NOT NULL DEFAULT FALSE,
+      PRIMARY KEY (tournament_id, guild_id)
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_squad_guilds_guild ON squad_tournament_guilds (guild_id)`,
+    `CREATE TABLE IF NOT EXISTS squad_tournament_contributions (
+      tournament_id BIGINT NOT NULL REFERENCES squad_tournaments(id) ON DELETE CASCADE,
+      device_id     VARCHAR(64) NOT NULL,
+      guild_id      INT NOT NULL,
+      score_contrib BIGINT NOT NULL DEFAULT 0,
+      games_count   INT NOT NULL DEFAULT 0,
+      updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (tournament_id, device_id)
+    )`,
+    `CREATE TABLE IF NOT EXISTS squad_tournament_claims (
+      tournament_id BIGINT NOT NULL REFERENCES squad_tournaments(id) ON DELETE CASCADE,
+      device_id     VARCHAR(64) NOT NULL,
+      amount        INT NOT NULL,
+      claimed_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (tournament_id, device_id)
+    )`,
     // A10 — Compound Interest Gem Bank (full def in schema.sql).
     `CREATE TABLE IF NOT EXISTS gem_bank (
       device_id          VARCHAR(64) PRIMARY KEY,

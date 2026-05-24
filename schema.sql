@@ -285,6 +285,68 @@ INSERT INTO game_config (key, value) VALUES ('booster_pick_price', '50')   ON CO
 INSERT INTO game_config (key, value) VALUES ('booster_pop_price',  '40')   ON CONFLICT (key) DO NOTHING;
 ALTER TABLE duels ADD COLUMN IF NOT EXISTS is_random_match BOOLEAN DEFAULT FALSE;
 
+-- A8 — Squad Tournaments. Weekly 4-guild bracket competition. Auto-matched
+-- Sunday morning. 4 guilds play through the week → Wednesday evening
+-- semifinals (top-2 scores per pair) → Saturday evening final → winner
+-- guild's members each get 1000💎. Differs from Stage 37 Guild Wars (1v1)
+-- by being a 4-way bracket — 3 elimination stages, more drama, weekly
+-- cadence ON TOP of the daily-war cadence Guild Wars already provides.
+CREATE TABLE IF NOT EXISTS squad_tournaments (
+  id              BIGSERIAL PRIMARY KEY,
+  week_start      DATE NOT NULL,
+  status          VARCHAR(20) NOT NULL DEFAULT 'active',
+  -- Statuses: active (week-long score gathering) →
+  -- semifinals (Wed eve, top-2 of each pair advance) →
+  -- finals (Sat eve, finalists compete) →
+  -- finished (winner credited, gems distributed)
+  winner_guild_id INT,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  semifinals_at   TIMESTAMPTZ,
+  finals_at       TIMESTAMPTZ,
+  finished_at     TIMESTAMPTZ,
+  UNIQUE (week_start)
+);
+
+CREATE TABLE IF NOT EXISTS squad_tournament_guilds (
+  tournament_id      BIGINT NOT NULL REFERENCES squad_tournaments(id) ON DELETE CASCADE,
+  guild_id           INT NOT NULL,
+  bracket_position   INT NOT NULL, -- 0,1 = pair A; 2,3 = pair B
+  score_total        BIGINT NOT NULL DEFAULT 0,
+  games_count        INT NOT NULL DEFAULT 0,
+  eliminated_at      TIMESTAMPTZ,
+  semifinal_winner   BOOLEAN NOT NULL DEFAULT FALSE,
+  final_winner       BOOLEAN NOT NULL DEFAULT FALSE,
+  PRIMARY KEY (tournament_id, guild_id)
+);
+CREATE INDEX IF NOT EXISTS idx_squad_guilds_guild ON squad_tournament_guilds (guild_id);
+
+-- Per-member score contribution tracking (so the modal can show who's
+-- carrying the guild this week).
+CREATE TABLE IF NOT EXISTS squad_tournament_contributions (
+  tournament_id BIGINT NOT NULL REFERENCES squad_tournaments(id) ON DELETE CASCADE,
+  device_id     VARCHAR(64) NOT NULL,
+  guild_id      INT NOT NULL,
+  score_contrib BIGINT NOT NULL DEFAULT 0,
+  games_count   INT NOT NULL DEFAULT 0,
+  updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (tournament_id, device_id)
+);
+
+-- Reward-claim dedup (one claim per device per tournament).
+CREATE TABLE IF NOT EXISTS squad_tournament_claims (
+  tournament_id BIGINT NOT NULL REFERENCES squad_tournaments(id) ON DELETE CASCADE,
+  device_id     VARCHAR(64) NOT NULL,
+  amount        INT NOT NULL,
+  claimed_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (tournament_id, device_id)
+);
+
+INSERT INTO game_config (key, value) VALUES ('squad_tournament_enabled',     'true') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('squad_tournament_min_members', '3')    ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('squad_tournament_winner_reward','1000') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('squad_tournament_finalist_reward','300') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('squad_tournament_semi_reward', '100') ON CONFLICT (key) DO NOTHING;
+
 -- A10 — Compound Interest Gem Bank. Player deposits 💎 → bank pays
 -- daily compound interest. Withdrawal costs a percentage fee. Pure
 -- behavioral economics — loss-aversion (withdrawal fee) + compound

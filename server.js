@@ -6855,6 +6855,8 @@ app.post('/api/guilds/contribute', requireDeviceAuth, async (req, res) => {
       }
       // Stage 37 — Guild Wars contribution (best-effort, same txn).
       const warContribId = await _maybeContributeToWar(guildId, deviceId, sc, client);
+      // A8 — Squad Tournaments contribution (best-effort, same txn).
+      try { await _contributeToSquadTournament(client, deviceId, guildId, sc); } catch (e) {}
       await client.query('COMMIT');
       res.json({
         ok: true,
@@ -7096,6 +7098,425 @@ app.get('/api/trophies/state', async (req, res) => {
 // Granted automatically when /api/score (daily) or /api/score/practice
 // fires — see hooks below. Also a direct endpoint so admin / future
 // modes can call it explicitly with a custom reason.
+// ============================================================
+// A8 — Squad Tournaments (4-guild weekly bracket)
+// Auto-matched Sunday morning. Score-aggregation over the week.
+// Wed eve = semifinals (pair-winner advances). Sat eve = final.
+// Winner guild → 1000💎/member; finalist → 300; semi-only → 100.
+// ============================================================
+async function _loadSquadConfig() {
+  try { return await getCachedConfigPrefix('squad_tournament_'); }
+  catch (e) { return {}; }
+}
+
+function _ilWeekStart() {
+  // Returns the most recent Sunday in YYYY-MM-DD (Asia/Jerusalem).
+  const ilNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Jerusalem' }));
+  const day = ilNow.getDay(); // 0 = Sunday
+  ilNow.setDate(ilNow.getDate() - day);
+  return ilNow.toISOString().slice(0, 10);
+}
+
+// Auto-match 4 guilds with similar power into a new tournament.
+async function _runSquadMatchmaker() {
+  try {
+    const cfg = await _loadSquadConfig();
+    if (cfg.squad_tournament_enabled === 'false') return;
+    const ilNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Jerusalem' }));
+    if (ilNow.getDay() !== 0 || ilNow.getHours() !== 6) return; // Sunday 06:00 IL only
+    const weekStart = _ilWeekStart();
+    // Skip if this week's tournament already exists.
+    const ex = await pool.query(`SELECT id FROM squad_tournaments WHERE week_start = $1`, [weekStart]);
+    if (ex.rows.length > 0) return;
+    // Find guilds eligible: enough active members + not currently in any active tournament.
+    const minMembers = parseInt(cfg.squad_tournament_min_members, 10) || 3;
+    const eligible = await pool.query(
+      `SELECT g.id, g.name, g.total_score_alltime, COUNT(gm.device_id)::int AS member_count
+         FROM guilds g
+         JOIN guild_members gm ON gm.guild_id = g.id
+        WHERE g.id NOT IN (
+          SELECT guild_id FROM squad_tournament_guilds stg
+            JOIN squad_tournaments st ON st.id = stg.tournament_id
+           WHERE st.status IN ('active', 'semifinals', 'finals')
+        )
+        GROUP BY g.id
+       HAVING COUNT(gm.device_id) >= $1
+        ORDER BY g.total_score_alltime DESC`,
+      [minMembers]
+    );
+    // Need at least 4 eligible guilds to run a tournament.
+    if (eligible.rows.length < 4) {
+      console.log('[squad] not enough eligible guilds (' + eligible.rows.length + ')');
+      return;
+    }
+    // Power-balanced bracket: pair top with 4th, 2nd with 3rd (classic seeding).
+    const sortedByPower = eligible.rows.slice(0, 4);
+    const bracket = [sortedByPower[0], sortedByPower[3], sortedByPower[1], sortedByPower[2]];
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const tIns = await client.query(
+        `INSERT INTO squad_tournaments (week_start, status) VALUES ($1, 'active') RETURNING id`,
+        [weekStart]
+      );
+      const tournamentId = tIns.rows[0].id;
+      for (let i = 0; i < 4; i++) {
+        await client.query(
+          `INSERT INTO squad_tournament_guilds (tournament_id, guild_id, bracket_position) VALUES ($1, $2, $3)`,
+          [tournamentId, bracket[i].id, i]
+        );
+      }
+      await client.query('COMMIT');
+      console.log('[squad] Created tournament', tournamentId, 'with 4 guilds');
+      // Push notify members of all 4 guilds.
+      const memR = await pool.query(
+        `SELECT gm.device_id, g.name AS guild_name
+           FROM guild_members gm JOIN guilds g ON g.id = gm.guild_id
+          WHERE gm.guild_id = ANY($1::int[])`,
+        [bracket.map(g => g.id)]
+      );
+      for (const m of memR.rows) {
+        if (typeof sendPushToDevice === 'function') {
+          sendPushToDevice(m.device_id, {
+            title: '🏟 הטורניר השבועי החל!',
+            body: 'הקלאן ' + m.guild_name + ' מתחרה ב-4 קלאנים. שחק כדי לתרום!',
+            tag: 'squad-start-' + tournamentId,
+            data: { url: '/?action=squad', kind: 'squad_start', tournamentId }
+          });
+        }
+      }
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  } catch (e) { console.warn('[squad] matchmaker', e.message); }
+}
+
+// Called inside the existing /api/guilds/contribute flow so we don't
+// need a separate score-submission endpoint. Adds the player's score
+// to their guild's running total + per-member contribution row.
+async function _contributeToSquadTournament(client, deviceId, guildId, score) {
+  // Find active tournament for this guild (status='active' only — once
+  // we're in semifinals/finals, scores are locked).
+  const r = await client.query(
+    `SELECT st.id FROM squad_tournaments st
+      JOIN squad_tournament_guilds stg ON stg.tournament_id = st.id
+     WHERE stg.guild_id = $1 AND st.status = 'active'
+     LIMIT 1`,
+    [guildId]
+  );
+  if (!r.rows.length) return;
+  const tournamentId = r.rows[0].id;
+  await client.query(
+    `UPDATE squad_tournament_guilds
+        SET score_total = score_total + $1, games_count = games_count + 1
+      WHERE tournament_id = $2 AND guild_id = $3`,
+    [score, tournamentId, guildId]
+  );
+  await client.query(
+    `INSERT INTO squad_tournament_contributions (tournament_id, device_id, guild_id, score_contrib, games_count)
+     VALUES ($1, $2, $3, $4, 1)
+     ON CONFLICT (tournament_id, device_id) DO UPDATE
+       SET score_contrib = squad_tournament_contributions.score_contrib + EXCLUDED.score_contrib,
+           games_count = squad_tournament_contributions.games_count + 1,
+           updated_at = NOW()`,
+    [tournamentId, deviceId, guildId, score]
+  );
+}
+
+// Advance tournament state machine — runs hourly, checks for due transitions.
+async function _runSquadAdvance() {
+  try {
+    const cfg = await _loadSquadConfig();
+    if (cfg.squad_tournament_enabled === 'false') return;
+    const ilNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Jerusalem' }));
+    const dow = ilNow.getDay(); // 0=Sun ... 6=Sat
+    const hour = ilNow.getHours();
+    // Wed (dow=3) 20:00+ IL → run semifinals on any 'active' tournament from this week.
+    if (dow === 3 && hour >= 20) {
+      const r = await pool.query(`SELECT id FROM squad_tournaments WHERE status = 'active'`);
+      for (const t of r.rows) await _resolveSemifinals(t.id);
+    }
+    // Sat (dow=6) 20:00+ IL → run finals on any 'semifinals' tournament.
+    if (dow === 6 && hour >= 20) {
+      const r = await pool.query(`SELECT id FROM squad_tournaments WHERE status = 'semifinals'`);
+      for (const t of r.rows) await _resolveFinals(t.id);
+    }
+  } catch (e) { console.warn('[squad] advance', e.message); }
+}
+
+async function _resolveSemifinals(tournamentId) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    // Per pair (positions 0+1 and 2+3): higher score wins, advances.
+    for (const pair of [[0, 1], [2, 3]]) {
+      const r = await client.query(
+        `SELECT guild_id, score_total FROM squad_tournament_guilds
+          WHERE tournament_id = $1 AND bracket_position = ANY($2::int[])
+          ORDER BY score_total DESC`,
+        [tournamentId, pair]
+      );
+      if (r.rows.length < 2) continue;
+      const winner = r.rows[0];
+      const loser = r.rows[1];
+      await client.query(
+        `UPDATE squad_tournament_guilds SET semifinal_winner = TRUE WHERE tournament_id = $1 AND guild_id = $2`,
+        [tournamentId, winner.guild_id]
+      );
+      await client.query(
+        `UPDATE squad_tournament_guilds SET eliminated_at = NOW() WHERE tournament_id = $1 AND guild_id = $2`,
+        [tournamentId, loser.guild_id]
+      );
+    }
+    await client.query(
+      `UPDATE squad_tournaments SET status = 'semifinals', semifinals_at = NOW() WHERE id = $1`,
+      [tournamentId]
+    );
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+async function _resolveFinals(tournamentId) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    // Of the 2 semifinal winners, the one with higher score_total wins.
+    const r = await client.query(
+      `SELECT guild_id, score_total FROM squad_tournament_guilds
+        WHERE tournament_id = $1 AND semifinal_winner = TRUE
+        ORDER BY score_total DESC`,
+      [tournamentId]
+    );
+    if (r.rows.length >= 1) {
+      const winner = r.rows[0];
+      await client.query(
+        `UPDATE squad_tournament_guilds SET final_winner = TRUE WHERE tournament_id = $1 AND guild_id = $2`,
+        [tournamentId, winner.guild_id]
+      );
+      await client.query(
+        `UPDATE squad_tournaments SET status = 'finished', finals_at = NOW(), finished_at = NOW(), winner_guild_id = $2 WHERE id = $1`,
+        [tournamentId, winner.guild_id]
+      );
+    } else {
+      await client.query(
+        `UPDATE squad_tournaments SET status = 'finished', finals_at = NOW(), finished_at = NOW() WHERE id = $1`,
+        [tournamentId]
+      );
+    }
+    await client.query('COMMIT');
+    // Push winners + finalists.
+    const memR = await pool.query(
+      `SELECT stg.guild_id, stg.final_winner, stg.semifinal_winner, gm.device_id
+         FROM squad_tournament_guilds stg
+         JOIN guild_members gm ON gm.guild_id = stg.guild_id
+        WHERE stg.tournament_id = $1`,
+      [tournamentId]
+    );
+    for (const m of memR.rows) {
+      let title, body;
+      if (m.final_winner) {
+        title = '🏆 הקלאן זכה בטורניר!';
+        body = 'תוכלו לאסוף 1000💎 כל אחד';
+      } else if (m.semifinal_winner) {
+        title = '🥈 הגעתם לגמר!';
+        body = 'הפסדתם בגמר. תוכלו לאסוף 300💎 כל אחד';
+      } else {
+        title = '😔 הקלאן הודח בחצי הגמר';
+        body = 'תוכלו לאסוף 100💎 על השתתפות';
+      }
+      if (typeof sendPushToDevice === 'function') {
+        sendPushToDevice(m.device_id, {
+          title, body,
+          tag: 'squad-end-' + tournamentId,
+          data: { url: '/?action=squad', kind: 'squad_end', tournamentId }
+        });
+      }
+    }
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+// Crons. Sunday-matchmaker fires every hour but no-ops outside Sun 06:00 IL.
+// Advancer fires every hour, checks for due transitions on the right day.
+setInterval(_runSquadMatchmaker, 60 * 60 * 1000);
+setInterval(_runSquadAdvance, 60 * 60 * 1000);
+// Initial fire 60s after boot — catches restart on Sun 06:xx or Wed/Sat 20:xx.
+setTimeout(function() { _runSquadMatchmaker().catch(() => {}); }, 60 * 1000);
+setTimeout(function() { _runSquadAdvance().catch(() => {}); }, 90 * 1000);
+
+// ── Public endpoints ──
+app.get('/api/squad/state', async (req, res) => {
+  try {
+    const deviceId = String(req.query.deviceId || '').slice(0, 64);
+    if (!deviceId || deviceId.length < 8) return res.status(400).json({ error: 'bad_device' });
+    const cfg = await _loadSquadConfig();
+    if (cfg.squad_tournament_enabled === 'false') return res.json({ ok: true, enabled: false });
+    // Find my guild.
+    const gR = await pool.query(`SELECT guild_id FROM guild_members WHERE device_id = $1`, [deviceId]);
+    if (!gR.rows.length) return res.json({ ok: true, enabled: true, inGuild: false });
+    const myGuildId = gR.rows[0].guild_id;
+    // Find my guild's current tournament (active OR recently finished w/ unclaimed reward).
+    const tR = await pool.query(
+      `SELECT st.*
+         FROM squad_tournaments st
+         JOIN squad_tournament_guilds stg ON stg.tournament_id = st.id
+        WHERE stg.guild_id = $1
+          AND (st.status IN ('active', 'semifinals', 'finals')
+               OR (st.status = 'finished' AND st.finished_at > NOW() - INTERVAL '7 days'))
+        ORDER BY st.week_start DESC LIMIT 1`,
+      [myGuildId]
+    );
+    if (!tR.rows.length) return res.json({ ok: true, enabled: true, inGuild: true, tournament: null });
+    const tournament = tR.rows[0];
+    // Get all 4 guilds in this tournament with their scores.
+    const allR = await pool.query(
+      `SELECT stg.*, g.name AS guild_name, g.emoji AS guild_emoji
+         FROM squad_tournament_guilds stg
+         JOIN guilds g ON g.id = stg.guild_id
+        WHERE stg.tournament_id = $1
+        ORDER BY stg.bracket_position ASC`,
+      [tournament.id]
+    );
+    // My contribution
+    const myC = await pool.query(
+      `SELECT score_contrib, games_count FROM squad_tournament_contributions
+        WHERE tournament_id = $1 AND device_id = $2`,
+      [tournament.id, deviceId]
+    );
+    // Did I already claim?
+    const claimR = await pool.query(
+      `SELECT amount FROM squad_tournament_claims WHERE tournament_id = $1 AND device_id = $2`,
+      [tournament.id, deviceId]
+    );
+    // Compute my potential reward (if tournament is finished).
+    let myReward = 0;
+    let canClaim = false;
+    if (tournament.status === 'finished' && !claimR.rows.length) {
+      const myGuildRow = allR.rows.find(g => g.guild_id === myGuildId);
+      if (myGuildRow) {
+        if (myGuildRow.final_winner) myReward = parseInt(cfg.squad_tournament_winner_reward, 10) || 1000;
+        else if (myGuildRow.semifinal_winner) myReward = parseInt(cfg.squad_tournament_finalist_reward, 10) || 300;
+        else myReward = parseInt(cfg.squad_tournament_semi_reward, 10) || 100;
+        // Must have contributed at least 1 game to claim.
+        canClaim = myC.rows.length > 0 && Number(myC.rows[0].games_count) > 0;
+      }
+    }
+    res.json({
+      ok: true, enabled: true, inGuild: true,
+      tournament: {
+        id: tournament.id,
+        weekStart: tournament.week_start,
+        status: tournament.status,
+        winnerGuildId: tournament.winner_guild_id,
+        semifinalsAt: tournament.semifinals_at,
+        finalsAt: tournament.finals_at,
+        finishedAt: tournament.finished_at
+      },
+      guilds: allR.rows.map(g => ({
+        guildId: g.guild_id,
+        name: g.guild_name,
+        emoji: g.guild_emoji,
+        bracketPos: g.bracket_position,
+        score: Number(g.score_total),
+        games: g.games_count,
+        eliminated: !!g.eliminated_at,
+        semifinalWinner: g.semifinal_winner,
+        finalWinner: g.final_winner,
+        isMine: g.guild_id === myGuildId
+      })),
+      myContribution: myC.rows[0] ? Number(myC.rows[0].score_contrib) : 0,
+      myGames: myC.rows[0] ? Number(myC.rows[0].games_count) : 0,
+      myGuildId,
+      myReward,
+      canClaim,
+      alreadyClaimed: claimR.rows.length > 0
+    });
+  } catch (e) {
+    console.error('GET /api/squad/state', e);
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
+app.post('/api/squad/claim', requireDeviceAuth, async (req, res) => {
+  const deviceId = req.deviceId;
+  if (!checkRateLimit('squad_claim', deviceId, 10, 60 * 60 * 1000)) {
+    return res.json({ ok: false, reason: 'rate_limited' });
+  }
+  try {
+    const tournamentId = parseInt((req.body && req.body.tournamentId) || 0, 10);
+    if (!tournamentId) return res.json({ ok: false, reason: 'bad_id' });
+    const cfg = await _loadSquadConfig();
+    if (cfg.squad_tournament_enabled === 'false') return res.json({ ok: false, reason: 'disabled' });
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      // Verify: tournament finished + my guild was in it + I contributed + not claimed.
+      const tR = await client.query(`SELECT status FROM squad_tournaments WHERE id = $1`, [tournamentId]);
+      if (!tR.rows[0] || tR.rows[0].status !== 'finished') {
+        await client.query('ROLLBACK');
+        return res.json({ ok: false, reason: 'not_finished' });
+      }
+      const gR = await client.query(`SELECT guild_id FROM guild_members WHERE device_id = $1`, [deviceId]);
+      if (!gR.rows.length) { await client.query('ROLLBACK'); return res.json({ ok: false, reason: 'not_in_guild' }); }
+      const myGuildId = gR.rows[0].guild_id;
+      const sgR = await client.query(
+        `SELECT final_winner, semifinal_winner FROM squad_tournament_guilds WHERE tournament_id = $1 AND guild_id = $2`,
+        [tournamentId, myGuildId]
+      );
+      if (!sgR.rows.length) { await client.query('ROLLBACK'); return res.json({ ok: false, reason: 'guild_not_in_tournament' }); }
+      const cR = await client.query(
+        `SELECT games_count FROM squad_tournament_contributions WHERE tournament_id = $1 AND device_id = $2`,
+        [tournamentId, deviceId]
+      );
+      if (!cR.rows.length || Number(cR.rows[0].games_count) < 1) {
+        await client.query('ROLLBACK');
+        return res.json({ ok: false, reason: 'no_contribution' });
+      }
+      // Determine reward.
+      let reward;
+      if (sgR.rows[0].final_winner) reward = parseInt(cfg.squad_tournament_winner_reward, 10) || 1000;
+      else if (sgR.rows[0].semifinal_winner) reward = parseInt(cfg.squad_tournament_finalist_reward, 10) || 300;
+      else reward = parseInt(cfg.squad_tournament_semi_reward, 10) || 100;
+      // Atomic: insert claim (UNIQUE constraint catches double-claim) + credit balance.
+      try {
+        await client.query(
+          `INSERT INTO squad_tournament_claims (tournament_id, device_id, amount) VALUES ($1, $2, $3)`,
+          [tournamentId, deviceId, reward]
+        );
+      } catch (insErr) {
+        await client.query('ROLLBACK');
+        return res.json({ ok: false, reason: 'already_claimed' });
+      }
+      const balR = await client.query(
+        `UPDATE player_profiles SET balance = balance + $1, total_earned = total_earned + $1 WHERE device_id = $2 RETURNING balance`,
+        [reward, deviceId]
+      );
+      await client.query('COMMIT');
+      res.json({ ok: true, reward, newBalance: balR.rows[0] ? Number(balR.rows[0].balance) : null });
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  } catch (e) {
+    console.error('POST /api/squad/claim', e);
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
 // ============================================================
 // A10 — Compound Interest Gem Bank
 // Player deposits 💎 → bank pays daily compound interest.

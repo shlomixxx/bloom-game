@@ -374,6 +374,11 @@
       setTimeout(function() { try { window.__bloomBank.maybeShow(); } catch (e) {} }, 600);
     }
 
+    // A8 — Squad Tournaments tile (L15+, only when guild is in active tournament).
+    if (window.__bloomSquad && typeof window.__bloomSquad.maybeShow === 'function') {
+      setTimeout(function() { try { window.__bloomSquad.maybeShow(); } catch (e) {} }, 650);
+    }
+
     // Tier-icons tap → reveal stats bubble (same behaviour as v1)
     var iconsTap = document.getElementById('home-icons-tap');
     if (iconsTap) {
