@@ -51,6 +51,10 @@ export async function initDb() {
     `ALTER TABLE duels ADD COLUMN IF NOT EXISTS difficulty_label VARCHAR(20)`,
     `ALTER TABLE duels ADD COLUMN IF NOT EXISTS difficulty_weights VARCHAR(64)`,
     `ALTER TABLE duels ADD COLUMN IF NOT EXISTS difficulty_speed_pct INT`,
+    // A6 — flag for random matchmaking duels so the find-random endpoint
+    // can locate recently-paired duels for the OTHER player (who's still
+    // polling and doesn't know they matched until next poll).
+    `ALTER TABLE duels ADD COLUMN IF NOT EXISTS is_random_match BOOLEAN DEFAULT FALSE`,
     // Needed by the chest / comeback / streak-freeze UPDATEs added in May 2026.
     // schema.sql also has this ALTER, but include here as belt-and-suspenders
     // since several endpoints will 500 without it.
@@ -147,6 +151,18 @@ export async function initDb() {
       meta               JSONB,
       created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )`,
+    // A6 — Skill-based Duel Matchmaking queue (full def in schema.sql).
+    `CREATE TABLE IF NOT EXISTS duel_matchmaking_queue (
+      device_id        VARCHAR(64) PRIMARY KEY,
+      trophy_count     INT NOT NULL DEFAULT 0,
+      display_name     VARCHAR(80),
+      player_code      VARCHAR(10),
+      joined_queue_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      poll_count       INT NOT NULL DEFAULT 0,
+      difficulty_label VARCHAR(20) NOT NULL DEFAULT 'default'
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_duel_queue_trophies
+      ON duel_matchmaking_queue (trophy_count, joined_queue_at)`,
     // A2 — Friend Challenges (full def in schema.sql).
     `CREATE TABLE IF NOT EXISTS friend_challenges (
       id                  BIGSERIAL PRIMARY KEY,

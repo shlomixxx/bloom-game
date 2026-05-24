@@ -1,7 +1,7 @@
 # 📋 BLOOM — משימות עתידיות
 
 > **מסמך מרכזי לכל מה שעדיין לא נבנה.**
-> עודכן: 2026-05-24 · 41 שלבים חיים בפרודקשן · 12 משימות פתוחות (A3 ✅ + A2 ✅)
+> עודכן: 2026-05-24 · 42 שלבים חיים בפרודקשן · 11 משימות פתוחות (A1✅ + A2✅ + A3✅ + A6✅)
 >
 > 🎯 **איך להשתמש**: בשיחה חדשה תגיד "בוא נבנה A1" / "המשך עם הכי ממכר" / "תעשה A2 + A3 ביחד" ואני אדע בדיוק על מה אתה מדבר.
 
@@ -102,21 +102,18 @@
 
 ---
 
-### A6 · 🎚 Skill-based Duel Matchmaking
-**מאמץ**: 1 יום · **השפעה**: ★★★★
+### A6 · 🎚 Skill-based Duel Matchmaking ✅ נבנה (24.05.2026)
+**מאמץ**: 1 יום · **השפעה**: ★★★★ · **סטטוס: חי בייצור**
 
-**מה זה**:
-כרגע דו-קרבים הם רק חבר-לחבר עם קוד. הוסף "🎲 דו-קרב אקראי" שמזווג אוטומטית שחקנים בטווח trophy דומה (±200 trophies).
-
-**למה לבנות**:
-- מנגיש דו-קרבים לשחקנים סולואיים (אין להם חברים שמשחקים)
-- מנצל את Stage 38 Trophy ranges
-- מאוד פשוט לבנות מעל ה-duels הקיים
-
-**טכני**:
-- 1 endpoint `POST /api/duels/random-match`
-- Pool של שחקנים שלחצו "מחפש יריב" — מתאים בין שניים תוך 30 שניות
-- שאר ה-duel flow זהה לקיים
+**מה נבנה**:
+- כפתור "🎲 דו-קרב אקראי (חיפוש אוטומטי)" במודאל הdueles, ליד הכפתור הקיים "שלח אתגר".
+- שחקן לוחץ → modal חיפוש עם spinner + countdown + "👥 N בתור · 🏆 ±M". Polling כל 3s.
+- Server: `POST /api/duels/find-random` הוא **atomic match-or-queue** — בכל קריאה: (1) בדוק אם יש לי duel מתאים שכבר נוצר (אני הצד השני שעדיין מחפש); (2) נסה לחפש opponent בטווח trophy ←atomic FOR UPDATE SKIP LOCKED → אם נמצא: DELETE שני entries + CREATE duel + return matched; (3) אם לא נמצא: UPSERT my queue row + return searching.
+- **Range מתרחב כל poll**: 50 → 200 → 350 → 500 → ∞. שחקן לא נשאר תקוע בשעה שקטה.
+- Schema: טבלה `duel_matchmaking_queue` (PK device_id, trophy_count, joined_queue_at, poll_count, difficulty_label) + 5 config keys (enabled, range_initial, range_widen, max_wait_secs, wager=0). ALTER duels ADD COLUMN is_random_match.
+- Duel נוצר עם `status='accepted'` ישירות (skip accept dance) + `is_random_match=TRUE`. Wager=0 (random duels are FREE).
+- Push לצד השני (שעדיין מחפש) כש-match נוצר — backup ל-polling במקרה שהאפליקציה מינימייז.
+- Client: [src/02-shop.js](src/02-shop.js) `startRandomMatchmaking(diff)` → spinner overlay → match-found flash (gold gradient pop) → auto-start `startDuelGame()`. כמובן: cancel button מסיר מהqueue. Cleanup interval 5min מנקה queue rows ישנים.
 
 ---
 

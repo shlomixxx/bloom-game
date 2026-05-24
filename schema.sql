@@ -283,6 +283,38 @@ INSERT INTO game_config (key, value) VALUES ('checklist_all_done_reward', '100')
 INSERT INTO game_config (key, value) VALUES ('booster_enabled',    'true') ON CONFLICT (key) DO NOTHING;
 INSERT INTO game_config (key, value) VALUES ('booster_pick_price', '50')   ON CONFLICT (key) DO NOTHING;
 INSERT INTO game_config (key, value) VALUES ('booster_pop_price',  '40')   ON CONFLICT (key) DO NOTHING;
+ALTER TABLE duels ADD COLUMN IF NOT EXISTS is_random_match BOOLEAN DEFAULT FALSE;
+
+-- A6 — Skill-based Duel Matchmaking. Solo players who don't have a
+-- friend with a BLOOM code can hit "🎲 דו-קרב אקראי" → server pairs
+-- them with another waiting player in similar trophy range. Atomic
+-- match-or-queue: every search call either pairs two players in one
+-- transaction OR upserts a queue row + returns "still searching".
+-- Range widens each poll (50 → 200 → 500 → ANY) so a player isn't
+-- stuck waiting forever even on a quiet hour.
+CREATE TABLE IF NOT EXISTS duel_matchmaking_queue (
+  device_id        VARCHAR(64) PRIMARY KEY,
+  trophy_count     INT NOT NULL DEFAULT 0,
+  display_name     VARCHAR(80),
+  player_code      VARCHAR(10),
+  joined_queue_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  poll_count       INT NOT NULL DEFAULT 0,
+  difficulty_label VARCHAR(20) NOT NULL DEFAULT 'default'
+);
+CREATE INDEX IF NOT EXISTS idx_duel_queue_trophies
+  ON duel_matchmaking_queue (trophy_count, joined_queue_at);
+
+INSERT INTO game_config (key, value) VALUES ('random_match_enabled',       'true') ON CONFLICT (key) DO NOTHING;
+-- Trophy range tiers — match widens with each poll. ±50 first try, then
+-- ±200, then ±500, then ANY (after wait threshold).
+INSERT INTO game_config (key, value) VALUES ('random_match_range_initial', '50')   ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('random_match_range_widen',   '150')  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('random_match_max_wait_secs', '30')   ON CONFLICT (key) DO NOTHING;
+-- Random duels are FREE (no wager) — opposite of code-duels which support
+-- player-set wagers. This keeps the bar to entry low; trophy stakes are
+-- the implicit competition.
+INSERT INTO game_config (key, value) VALUES ('random_match_wager',         '0')    ON CONFLICT (key) DO NOTHING;
+
 -- A2 — Friend Challenges (K-factor viral lever). Player A picks a friend
 -- + target score → server creates a "beat this" challenge that the friend
 -- can attempt by playing any game in 24h. When the friend's score crosses

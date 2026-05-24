@@ -7097,6 +7097,199 @@ app.get('/api/trophies/state', async (req, res) => {
 // fires — see hooks below. Also a direct endpoint so admin / future
 // modes can call it explicitly with a custom reason.
 // ============================================================
+// A6 — Skill-based Duel Matchmaking ("🎲 דו-קרב אקראי")
+// Solo players hit "find random opponent" → server pairs them
+// with another waiting player in similar trophy range.
+//
+// Single endpoint design: every call is atomic match-or-queue.
+// Returns { matched: true, duel } when paired (either as the matcher
+// or as the previously-queued player whose row was deleted), or
+// { matched: false, secondsWaited, queueSize } to keep polling.
+// Range widens with poll_count: initial → +widen → +2*widen → unlimited.
+// ============================================================
+async function _loadRandomMatchConfig() {
+  try { return await getCachedConfigPrefix('random_match_'); }
+  catch (e) { return {}; }
+}
+
+// Helper: get player's current trophies (defaults to 0 if no row yet).
+async function _getTrophies(deviceId) {
+  try {
+    const r = await pool.query(`SELECT trophies FROM player_trophies WHERE device_id = $1`, [deviceId]);
+    return r.rows[0] ? (r.rows[0].trophies | 0) : 0;
+  } catch (e) { return 0; }
+}
+
+// Helper: trophy-range for a given poll attempt. Each subsequent poll
+// widens the acceptable range so a player isn't stuck on a quiet hour.
+function _matchRangeForPoll(pollCount, cfg) {
+  const initial = parseInt(cfg.random_match_range_initial, 10) || 50;
+  const widen = parseInt(cfg.random_match_range_widen, 10) || 150;
+  if (pollCount <= 0) return initial;
+  if (pollCount === 1) return initial + widen;       // ±200 default
+  if (pollCount === 2) return initial + 2 * widen;   // ±350 default
+  if (pollCount === 3) return initial + 3 * widen;   // ±500 default
+  return 999999999; // unbounded after 4+ polls (~12+ seconds)
+}
+
+app.post('/api/duels/find-random', requireDeviceAuth, async (req, res) => {
+  const deviceId = req.deviceId;
+  if (!checkRateLimit('duel_random', deviceId, 120, 60 * 60 * 1000)) {
+    return res.json({ ok: false, reason: 'rate_limited' });
+  }
+  try {
+    const cfg = await _loadRandomMatchConfig();
+    if (cfg.random_match_enabled === 'false') return res.json({ ok: false, reason: 'disabled' });
+    const difficulty = String((req.body && req.body.difficulty) || 'default').slice(0, 20);
+    // Step 1: check if I was already matched (the OTHER player created a
+    // duel for us in the last 60s). This is how the "previously-queued"
+    // side learns they were matched.
+    const recent = await pool.query(
+      `SELECT * FROM duels
+        WHERE (challenger_device = $1 OR opponent_device = $1)
+          AND is_random_match = TRUE
+          AND status IN ('pending', 'accepted')
+          AND created_at > NOW() - INTERVAL '90 seconds'
+        ORDER BY created_at DESC LIMIT 1`,
+      [deviceId]
+    );
+    if (recent.rows.length) {
+      // Found my recently-paired duel — ensure I'm out of the queue
+      // (matcher already deleted it, but defensive cleanup) and return it.
+      await pool.query(`DELETE FROM duel_matchmaking_queue WHERE device_id = $1`, [deviceId]).catch(() => {});
+      return res.json({ ok: true, matched: true, duel: recent.rows[0] });
+    }
+    // Step 2: try to match with someone already in the queue. Atomic —
+    // FOR UPDATE SKIP LOCKED prevents two parallel pollers from claiming
+    // the same opponent.
+    const myTrophies = await _getTrophies(deviceId);
+    const myProfile = await pool.query(
+      `SELECT display_name, player_code FROM player_profiles WHERE device_id = $1`,
+      [deviceId]
+    );
+    const myName = (myProfile.rows[0] && myProfile.rows[0].display_name) || 'אנונימי';
+    const myCode = (myProfile.rows[0] && myProfile.rows[0].player_code) || null;
+    // First find my current poll_count (if I'm in the queue).
+    const meRow = await pool.query(
+      `SELECT poll_count, joined_queue_at FROM duel_matchmaking_queue WHERE device_id = $1`,
+      [deviceId]
+    );
+    const myPollCount = meRow.rows[0] ? (meRow.rows[0].poll_count | 0) : 0;
+    const range = _matchRangeForPoll(myPollCount, cfg);
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      // Look for an opponent in range. ORDER BY: oldest first so we
+      // honor FIFO order in the queue.
+      const opp = await client.query(
+        `SELECT device_id, display_name, player_code, trophy_count, difficulty_label
+           FROM duel_matchmaking_queue
+          WHERE device_id != $1
+            AND ABS(trophy_count - $2) <= $3
+            AND difficulty_label = $4
+            AND joined_queue_at > NOW() - INTERVAL '90 seconds'
+          ORDER BY joined_queue_at ASC
+          LIMIT 1
+          FOR UPDATE SKIP LOCKED`,
+        [deviceId, myTrophies, range, difficulty]
+      );
+      if (opp.rows.length) {
+        const oppRow = opp.rows[0];
+        // Atomic: delete both, create duel, commit.
+        await client.query(
+          `DELETE FROM duel_matchmaking_queue WHERE device_id IN ($1, $2)`,
+          [deviceId, oppRow.device_id]
+        );
+        const seed = Math.floor(Math.random() * 0xFFFFFFFF);
+        const diff = resolveDifficulty(difficulty);
+        const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+        // Insert as 'accepted' so both players can submit scores
+        // immediately — random match skips the accept/decline dance.
+        const ins = await client.query(
+          `INSERT INTO duels (
+              challenger_device, challenger_name, challenger_code,
+              opponent_code, opponent_device, opponent_name,
+              amount, board_seed, expires_at, status,
+              difficulty_label, difficulty_weights, difficulty_speed_pct,
+              is_random_match)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'accepted', $10, $11, $12, TRUE)
+           RETURNING *`,
+          [
+            deviceId, myName, myCode,
+            (oppRow.player_code || ''), oppRow.device_id, oppRow.display_name || 'יריב',
+            0, seed, expiresAt,
+            diff.label, diff.weights, diff.speed_pct
+          ]
+        );
+        await client.query('COMMIT');
+        // Push to the OTHER player (we're the matcher — we'll auto-start;
+        // they're polling but a push helps if they backgrounded the app).
+        if (typeof sendPushToDevice === 'function') {
+          sendPushToDevice(oppRow.device_id, {
+            title: '🎲 נמצא יריב!',
+            body: myName + ' (' + myTrophies + '🏆) מחכה לקרב',
+            tag: 'random-match-' + ins.rows[0].id,
+            data: { url: '/?action=duels', kind: 'random_match_found', duelId: ins.rows[0].id }
+          });
+        }
+        return res.json({ ok: true, matched: true, duel: ins.rows[0] });
+      }
+      // No opponent in range — upsert my queue row + bump poll_count.
+      await client.query(
+        `INSERT INTO duel_matchmaking_queue
+            (device_id, trophy_count, display_name, player_code, difficulty_label, poll_count)
+         VALUES ($1, $2, $3, $4, $5, 1)
+         ON CONFLICT (device_id) DO UPDATE
+           SET trophy_count = EXCLUDED.trophy_count,
+               poll_count   = duel_matchmaking_queue.poll_count + 1`,
+        [deviceId, myTrophies, myName, myCode, difficulty]
+      );
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+    // Return "still searching" with stats so client can render countdown.
+    const stats = await pool.query(`SELECT COUNT(*)::int AS n FROM duel_matchmaking_queue WHERE joined_queue_at > NOW() - INTERVAL '90 seconds'`);
+    const myJoinTime = meRow.rows[0] ? new Date(meRow.rows[0].joined_queue_at).getTime() : Date.now();
+    const secondsWaited = Math.floor((Date.now() - myJoinTime) / 1000);
+    res.json({
+      ok: true,
+      matched: false,
+      searching: true,
+      secondsWaited,
+      queueSize: stats.rows[0].n | 0,
+      trophyRange: _matchRangeForPoll(myPollCount + 1, cfg)
+    });
+  } catch (e) {
+    console.error('POST /api/duels/find-random', e);
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
+// Cancel matchmaking — remove from queue. Caller-controlled (no rate
+// limit since it's a destructive op that always succeeds idempotently).
+app.post('/api/duels/find-random/cancel', requireDeviceAuth, async (req, res) => {
+  try {
+    await pool.query(`DELETE FROM duel_matchmaking_queue WHERE device_id = $1`, [req.deviceId]);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
+// Background cleanup: stale queue rows (>90s) are filtered out by the
+// time-window in the matchmaker query above, but they pile up if not
+// purged. Run every 5min — cheap, doesn't need a separate process.
+setInterval(async function() {
+  try {
+    await pool.query(`DELETE FROM duel_matchmaking_queue WHERE joined_queue_at < NOW() - INTERVAL '5 minutes'`);
+  } catch (e) {}
+}, 5 * 60 * 1000);
+
+// ============================================================
 // A2 — Friend Challenges (K-factor viral lever)
 // Player A picks friend B + target score → server creates a
 // "beat this" challenge. B can attempt by playing any game in 24h.

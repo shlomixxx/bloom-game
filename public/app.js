@@ -753,6 +753,9 @@
         '<span style="font-size:12px;color:#6F6E68">💎 · המנצח לוקח הכל (minus 5% עמלה)</span>' +
       '</div>' +
       '<button class="btn" id="duel-send" style="width:100%;margin-bottom:6px">שלח אתגר ⚔️</button>' +
+      // A6 — Random matchmaking. Solo players who don't have a BLOOM code
+      // to type can hit this and get paired with another waiting player.
+      '<button class="btn" id="duel-random" style="width:100%;margin-bottom:6px;background:linear-gradient(135deg,#7A5FE0,#B59FFA);color:#FFF;font-weight:800">🎲 דו-קרב אקראי (חיפוש אוטומטי)</button>' +
       // Send gift — peaceful counterpart to a duel. Same input (BLOOM-XXXX
       // suffix), small gem amount, optional message. Recipient sees a
       // toast banner next time they open the app.
@@ -776,6 +779,16 @@
     if (giftBtn) giftBtn.onclick = function() {
       var prefSuf = ((document.getElementById('duel-opponent-suffix') || {}).value || '').trim().toUpperCase().replace(/[^A-HJ-NP-Z2-9]/g, '');
       showGiftFriendModal(prefSuf);
+    };
+
+    // A6 — Random match button. Closes the duel modal + opens the
+    // matchmaking overlay which polls /find-random every 3s.
+    var randomBtn = document.getElementById('duel-random');
+    if (randomBtn) randomBtn.onclick = function() {
+      var diffPill = modal.querySelector('.diff-pill.selected');
+      var diff = diffPill ? (diffPill.getAttribute('data-diff') || 'default') : 'default';
+      modal.remove();
+      startRandomMatchmaking(diff);
     };
 
     // Difficulty pill picker (challenger picks one — both players get it)
@@ -1375,6 +1388,126 @@
       el.textContent = '= תיקו';
       el.className = 'duel-hud-delta duel-hud-delta-tied';
     }
+  }
+
+  // ============================================================
+  // A6 — Random Matchmaking flow
+  // ============================================================
+  // Polls /api/duels/find-random every 3s until matched, queue
+  // empty (timeout 60s), or user cancels. Renders an animated
+  // overlay with countdown + queue size.
+  var _randomMatchPoller = null;
+  var _randomMatchOverlay = null;
+  var _randomMatchStartMs = 0;
+
+  function startRandomMatchmaking(difficulty) {
+    if (_randomMatchPoller) return; // already searching
+    _randomMatchStartMs = Date.now();
+    showRandomMatchOverlay(difficulty);
+    // Initial call is immediate; subsequent polls every 3s.
+    pollRandomMatch(difficulty);
+    _randomMatchPoller = setInterval(function() {
+      pollRandomMatch(difficulty);
+    }, 3000);
+  }
+
+  function stopRandomMatchmaking(reason) {
+    if (_randomMatchPoller) { clearInterval(_randomMatchPoller); _randomMatchPoller = null; }
+    if (_randomMatchOverlay) { try { _randomMatchOverlay.remove(); } catch (e) {} _randomMatchOverlay = null; }
+    if (reason === 'cancelled') {
+      // Fire-and-forget cancel.
+      fetch('/api/duels/find-random/cancel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deviceId: deviceId, token: deviceToken })
+      }).catch(function() {});
+    }
+  }
+
+  function pollRandomMatch(difficulty) {
+    fetch('/api/duels/find-random', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ deviceId: deviceId, token: deviceToken, difficulty: difficulty })
+    }).then(function(r) { return r.json(); }).catch(function() { return null; }).then(function(d) {
+      if (!d || !d.ok) {
+        // Soft fail — keep polling, update UI to "waiting".
+        return;
+      }
+      if (d.matched && d.duel) {
+        // Stop polling + auto-start the duel game.
+        stopRandomMatchmaking('matched');
+        try { if (typeof soundMilestone === 'function') soundMilestone(5); } catch (e) {}
+        try { if (typeof buzz === 'function') buzz([60, 40, 100]); } catch (e) {}
+        // Brief "match found!" flash before the game starts.
+        var flash = document.createElement('div');
+        flash.className = 'random-match-flash';
+        flash.innerHTML =
+          '<div class="rm-flash-card">' +
+            '<div class="rm-flash-emoji">⚔️</div>' +
+            '<div class="rm-flash-title">נמצא יריב!</div>' +
+            '<div class="rm-flash-name">' +
+              ((d.duel.challenger_device === deviceId ? d.duel.opponent_name : d.duel.challenger_name) || 'יריב') +
+            '</div>' +
+            '<div class="rm-flash-cta">המשחק מתחיל...</div>' +
+          '</div>';
+        document.body.appendChild(flash);
+        setTimeout(function() { try { flash.remove(); } catch (e) {} }, 1800);
+        // Start the game using the existing duel-game entry point.
+        // The duel row already has status='accepted' so no /accept call needed.
+        var isChallenger = d.duel.challenger_device === deviceId;
+        activeDuelOpponentName = isChallenger
+          ? (d.duel.opponent_name || d.duel.opponent_code || 'יריב')
+          : (d.duel.challenger_name || d.duel.challenger_code || 'יריב');
+        setTimeout(function() {
+          startDuelGame(d.duel.id, d.duel.board_seed, d.duel);
+        }, 1400);
+        return;
+      }
+      // Still searching — update overlay countdown.
+      updateRandomMatchOverlay(d.queueSize || 0, d.trophyRange);
+    });
+  }
+
+  function showRandomMatchOverlay(difficulty) {
+    var existing = document.getElementById('random-match-overlay');
+    if (existing) existing.remove();
+    var ov = document.createElement('div');
+    ov.id = 'random-match-overlay';
+    ov.className = 'random-match-overlay';
+    ov.innerHTML =
+      '<div class="rm-card">' +
+        '<div class="rm-spinner">' +
+          '<div class="rm-spinner-circle"></div>' +
+          '<div class="rm-spinner-emoji">🎲</div>' +
+        '</div>' +
+        '<div class="rm-title">מחפש יריב...</div>' +
+        '<div class="rm-sub">המערכת מזווגת אותך עם שחקן בטווח דירוג דומה</div>' +
+        '<div class="rm-stats">' +
+          '<span class="rm-stat">⏱ <span id="rm-elapsed">0</span>ש</span>' +
+          '<span class="rm-stat">👥 <span id="rm-queue">--</span> בתור</span>' +
+          '<span class="rm-stat">🏆 ±<span id="rm-range">50</span></span>' +
+        '</div>' +
+        '<button class="rm-cancel" id="rm-cancel-btn">ביטול</button>' +
+      '</div>';
+    document.body.appendChild(ov);
+    _randomMatchOverlay = ov;
+    document.getElementById('rm-cancel-btn').onclick = function() {
+      stopRandomMatchmaking('cancelled');
+    };
+    // Live elapsed-time counter (1s tick) — independent of polling cadence.
+    var elapsedTicker = setInterval(function() {
+      var el = document.getElementById('rm-elapsed');
+      if (!el || !_randomMatchOverlay) { clearInterval(elapsedTicker); return; }
+      el.textContent = Math.floor((Date.now() - _randomMatchStartMs) / 1000);
+    }, 1000);
+  }
+
+  function updateRandomMatchOverlay(queueSize, trophyRange) {
+    var q = document.getElementById('rm-queue');
+    var r = document.getElementById('rm-range');
+    if (q) q.textContent = queueSize;
+    if (r) r.textContent = (trophyRange > 100000) ? '∞' : trophyRange;
   }
 
   function startDuelGame(duelId, seed, duelRow) {
