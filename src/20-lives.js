@@ -270,9 +270,11 @@
     if (btn) { btn.disabled = true; btn.innerHTML = '⏳ צופה...'; }
     // Use existing ad simulation pattern. The real AdSense integration
     // would replace this. For now: simulate a 3-second "watch".
-    var simulate = (typeof simulateAdWatch === 'function')
-      ? simulateAdWatch
-      : function(cb) { setTimeout(cb, 3000); };
+    var simulate = (typeof window.simulatePromoWatch === 'function')
+      ? window.simulatePromoWatch
+      : ((typeof simulateAdWatch === 'function')
+          ? simulateAdWatch
+          : function(cb) { setTimeout(cb, 3000); });
     simulate(function() {
       var deviceId = (typeof getDeviceId === 'function') ? getDeviceId() : '';
       var token = (typeof deviceToken !== 'undefined') ? deviceToken : null;

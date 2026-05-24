@@ -285,6 +285,125 @@ INSERT INTO game_config (key, value) VALUES ('booster_pick_price', '50')   ON CO
 INSERT INTO game_config (key, value) VALUES ('booster_pop_price',  '40')   ON CONFLICT (key) DO NOTHING;
 ALTER TABLE duels ADD COLUMN IF NOT EXISTS is_random_match BOOLEAN DEFAULT FALSE;
 
+-- M1 — Self-Promo Engine. Replaces external AdSense with in-house
+-- promotions for OUR products (skins, deals, gem packs, etc). Each
+-- "ad slot" in the game shows a smart-targeted promo card instead of
+-- a third-party ad. Player can still get their gem reward; the promo
+-- adds an optional CTA to buy/visit one of our products.
+CREATE TABLE IF NOT EXISTS internal_promos (
+  id              BIGSERIAL PRIMARY KEY,
+  slug            VARCHAR(60) UNIQUE NOT NULL,
+  kind            VARCHAR(40) NOT NULL, -- 'starter_pack' / 'daily_deal' / 'skin' / 'gacha' / 'battle_pass' / 'gem_pack' / 'custom'
+  title           VARCHAR(120) NOT NULL,
+  body            VARCHAR(400) NOT NULL,
+  cta_text        VARCHAR(60) NOT NULL DEFAULT 'קנה עכשיו',
+  cta_target      VARCHAR(60) NOT NULL, -- e.g. 'open_starter_pack' / 'open_daily_deal' / 'open_skin_shop' / 'open_gacha'
+  image_emoji     VARCHAR(8) NOT NULL DEFAULT '🎁',
+  bg_gradient     VARCHAR(120), -- optional custom gradient
+  level_min       INT NOT NULL DEFAULT 1,
+  level_max       INT NOT NULL DEFAULT 999,
+  weight          INT NOT NULL DEFAULT 100, -- higher = more often
+  is_enabled      BOOLEAN NOT NULL DEFAULT TRUE,
+  starts_at       TIMESTAMPTZ,
+  ends_at         TIMESTAMPTZ,
+  -- If this promo targets a player-specific gate (e.g. don't show
+  -- starter_pack to someone who already bought it), the kind drives
+  -- a server-side exclusion query.
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_promos_enabled_kind ON internal_promos (is_enabled, kind);
+
+CREATE TABLE IF NOT EXISTS promo_impressions (
+  id              BIGSERIAL PRIMARY KEY,
+  promo_id        BIGINT NOT NULL REFERENCES internal_promos(id) ON DELETE CASCADE,
+  device_id       VARCHAR(64) NOT NULL,
+  slot            VARCHAR(30) NOT NULL, -- 'ad_watch' / 'home_tile' / 'game_over' / etc.
+  shown_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_promo_impr_device_time ON promo_impressions (device_id, shown_at DESC);
+CREATE INDEX IF NOT EXISTS idx_promo_impr_promo ON promo_impressions (promo_id, shown_at DESC);
+
+CREATE TABLE IF NOT EXISTS promo_clicks (
+  id              BIGSERIAL PRIMARY KEY,
+  promo_id        BIGINT NOT NULL REFERENCES internal_promos(id) ON DELETE CASCADE,
+  device_id       VARCHAR(64) NOT NULL,
+  slot            VARCHAR(30) NOT NULL,
+  clicked_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_promo_clicks_promo ON promo_clicks (promo_id, clicked_at DESC);
+
+INSERT INTO game_config (key, value) VALUES ('promo_enabled', 'true') ON CONFLICT (key) DO NOTHING;
+-- Cooldown: same promo can't reappear within X minutes for the same device.
+INSERT INTO game_config (key, value) VALUES ('promo_cooldown_minutes', '60') ON CONFLICT (key) DO NOTHING;
+
+-- ── 6 seeded default promos ──
+INSERT INTO internal_promos (slug, kind, title, body, cta_text, cta_target, image_emoji, bg_gradient, level_min, level_max, weight) VALUES
+('starter_pack_promo', 'starter_pack',
+  '🎁 חבילת פתיחה — חד-פעמית',
+  '1,500💎 + סקין חדש + 3 דרגות Battle Pass · במחיר 500💎 בלבד (חוסך 79%)',
+  'פתח את החבילה →',
+  'open_starter_pack',
+  '🎁',
+  'linear-gradient(135deg, #FFD93D 0%, #FF9F2E 50%, #FF6B9D 100%)',
+  1, 999, 150)
+ON CONFLICT (slug) DO NOTHING;
+
+INSERT INTO internal_promos (slug, kind, title, body, cta_text, cta_target, image_emoji, bg_gradient, level_min, level_max, weight) VALUES
+('daily_deal_promo', 'daily_deal',
+  '🔥 דיל היום!',
+  'הצעה מתחלפת בכל יום. הנחות עד 60%. נגמר בחצות.',
+  'בדוק עכשיו →',
+  'open_daily_deal',
+  '🔥',
+  'linear-gradient(135deg, #FF4D6D 0%, #FF8DA1 100%)',
+  5, 999, 120)
+ON CONFLICT (slug) DO NOTHING;
+
+INSERT INTO internal_promos (slug, kind, title, body, cta_text, cta_target, image_emoji, bg_gradient, level_min, level_max, weight) VALUES
+('skin_shop_promo', 'skin',
+  '🎨 סקינים חדשים בחנות',
+  'התאם אישית את הלוח שלך. סקין Aurora אגדי + עוד 6 סגנונות.',
+  'גלה →',
+  'open_skin_shop',
+  '🎨',
+  'linear-gradient(135deg, #7A5FE0 0%, #B59FFA 100%)',
+  8, 999, 80)
+ON CONFLICT (slug) DO NOTHING;
+
+INSERT INTO internal_promos (slug, kind, title, body, cta_text, cta_target, image_emoji, bg_gradient, level_min, level_max, weight) VALUES
+('gacha_promo', 'gacha',
+  '🎰 גאצ׳ה — סקין אגדי מובטח!',
+  'פול חינם זמין היום. אגדי מובטח כל 50 פולים.',
+  'נסה את המזל →',
+  'open_gacha',
+  '🎰',
+  'linear-gradient(135deg, #3D1A78 0%, #7A5FE0 50%, #FF6B9D 100%)',
+  18, 999, 70)
+ON CONFLICT (slug) DO NOTHING;
+
+INSERT INTO internal_promos (slug, kind, title, body, cta_text, cta_target, image_emoji, bg_gradient, level_min, level_max, weight) VALUES
+('battle_pass_promo', 'battle_pass',
+  '✨ Battle Pass Premium',
+  '×2 פרסים בכל דרגה · עד 32,000💎 לעונה · רק 1,500💎',
+  'שדרג עכשיו →',
+  'open_battle_pass',
+  '✨',
+  'linear-gradient(135deg, #FFD93D 0%, #FFFAEC 100%)',
+  12, 999, 90)
+ON CONFLICT (slug) DO NOTHING;
+
+INSERT INTO internal_promos (slug, kind, title, body, cta_text, cta_target, image_emoji, bg_gradient, level_min, level_max, weight) VALUES
+('gem_bank_promo', 'custom',
+  '💰 הבנק שלך מחכה',
+  'הפקד 💎 וצבור 1% ריבית יומית. שחקנים חכמים חוסכים.',
+  'פתח את הבנק →',
+  'open_gem_bank',
+  '💰',
+  'linear-gradient(135deg, #1B5E20 0%, #2E7D32 50%, #66BB6A 100%)',
+  8, 999, 60)
+ON CONFLICT (slug) DO NOTHING;
+
 -- A5 — Live PvP Race. Polling-based "real-time" 60-second race using
 -- the existing duels table. is_live flag distinguishes from async duels.
 -- started_at is set on match; both players post heartbeats every 1s.

@@ -54,6 +54,44 @@ export async function initDb() {
     // A9 — Ghost Mode drops_sequence columns (full def in schema.sql).
     `ALTER TABLE daily_scores ADD COLUMN IF NOT EXISTS drops_sequence JSONB`,
     `ALTER TABLE difficulty_scores ADD COLUMN IF NOT EXISTS drops_sequence JSONB`,
+    // M1 — Self-Promo Engine (full def in schema.sql).
+    `CREATE TABLE IF NOT EXISTS internal_promos (
+      id              BIGSERIAL PRIMARY KEY,
+      slug            VARCHAR(60) UNIQUE NOT NULL,
+      kind            VARCHAR(40) NOT NULL,
+      title           VARCHAR(120) NOT NULL,
+      body            VARCHAR(400) NOT NULL,
+      cta_text        VARCHAR(60) NOT NULL DEFAULT 'קנה עכשיו',
+      cta_target      VARCHAR(60) NOT NULL,
+      image_emoji     VARCHAR(8) NOT NULL DEFAULT '🎁',
+      bg_gradient     VARCHAR(120),
+      level_min       INT NOT NULL DEFAULT 1,
+      level_max       INT NOT NULL DEFAULT 999,
+      weight          INT NOT NULL DEFAULT 100,
+      is_enabled      BOOLEAN NOT NULL DEFAULT TRUE,
+      starts_at       TIMESTAMPTZ,
+      ends_at         TIMESTAMPTZ,
+      created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_promos_enabled_kind ON internal_promos (is_enabled, kind)`,
+    `CREATE TABLE IF NOT EXISTS promo_impressions (
+      id              BIGSERIAL PRIMARY KEY,
+      promo_id        BIGINT NOT NULL REFERENCES internal_promos(id) ON DELETE CASCADE,
+      device_id       VARCHAR(64) NOT NULL,
+      slot            VARCHAR(30) NOT NULL,
+      shown_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_promo_impr_device_time ON promo_impressions (device_id, shown_at DESC)`,
+    `CREATE INDEX IF NOT EXISTS idx_promo_impr_promo ON promo_impressions (promo_id, shown_at DESC)`,
+    `CREATE TABLE IF NOT EXISTS promo_clicks (
+      id              BIGSERIAL PRIMARY KEY,
+      promo_id        BIGINT NOT NULL REFERENCES internal_promos(id) ON DELETE CASCADE,
+      device_id       VARCHAR(64) NOT NULL,
+      slot            VARCHAR(30) NOT NULL,
+      clicked_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_promo_clicks_promo ON promo_clicks (promo_id, clicked_at DESC)`,
     // A5 — Live PvP Race columns on duels (full def in schema.sql).
     `ALTER TABLE duels ADD COLUMN IF NOT EXISTS is_live BOOLEAN DEFAULT FALSE`,
     `ALTER TABLE duels ADD COLUMN IF NOT EXISTS started_at TIMESTAMPTZ`,

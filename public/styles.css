@@ -8829,6 +8829,80 @@ html[data-theme="dark"] .fc-list-empty-title { color: #E8E6E2; }
   html[data-theme="dark"] .over-daily-special-title { color: #FFD9A8; }
   html[data-theme="dark"] .over-daily-special-perks { color: #FFC890; }
   html[data-theme="dark"] .over-daily-special-perks strong { color: #FFD93D; }
+
+/* M1 — Self-Promo overlay (replaces simulateAdWatch ad slot) */
+.promo-overlay {
+  position: fixed; inset: 0; z-index: 99999;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0,0,0,0.82);
+  animation: promoFadeIn 220ms ease-out;
+}
+@keyframes promoFadeIn { from { opacity: 0; } to { opacity: 1; } }
+.promo-overlay-out { animation: promoFadeOut 200ms ease-in forwards; }
+@keyframes promoFadeOut { to { opacity: 0; } }
+.promo-card {
+  width: min(360px, 88vw); max-width: 380px;
+  padding: 28px 22px 24px;
+  border-radius: 18px;
+  color: #FFF; text-align: center;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.45);
+  animation: promoCardIn 320ms cubic-bezier(.18,1.1,.4,1.05);
+  position: relative;
+}
+@keyframes promoCardIn {
+  from { transform: translateY(20px) scale(0.92); opacity: 0; }
+  to   { transform: translateY(0) scale(1); opacity: 1; }
+}
+.promo-skip {
+  position: absolute; top: 10px; left: 12px;
+  font-size: 11px; font-weight: 700; color: rgba(255,255,255,0.7);
+  letter-spacing: 0.3px;
+}
+.promo-skip-ready { color: #FFF; }
+.promo-skip-ready:hover { color: #FAC775; }
+.promo-emoji {
+  font-size: 56px; line-height: 1;
+  margin-bottom: 12px;
+  filter: drop-shadow(0 4px 12px rgba(0,0,0,0.3));
+  animation: promoEmojiPop 600ms cubic-bezier(.18,1.4,.4,1.05);
+}
+@keyframes promoEmojiPop {
+  0%   { transform: scale(0.4) rotate(-20deg); opacity: 0; }
+  60%  { transform: scale(1.15) rotate(8deg); }
+  100% { transform: scale(1) rotate(0deg); opacity: 1; }
+}
+.promo-title {
+  font-size: 22px; font-weight: 900;
+  letter-spacing: -0.3px; line-height: 1.2;
+  margin-bottom: 10px;
+  text-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+.promo-body {
+  font-size: 14px; font-weight: 600;
+  line-height: 1.45; opacity: 0.92;
+  margin-bottom: 18px;
+}
+.promo-cta {
+  display: inline-block; padding: 12px 26px;
+  background: #FFF; color: #1a1a2e;
+  border: none; border-radius: 12px;
+  font-size: 16px; font-weight: 900; letter-spacing: -0.2px;
+  cursor: pointer;
+  box-shadow: 0 6px 20px rgba(255,255,255,0.35);
+  transition: transform 120ms ease, box-shadow 120ms ease;
+  animation: promoCtaPulse 1.6s ease-in-out 600ms infinite;
+}
+.promo-cta:hover { transform: translateY(-2px); box-shadow: 0 10px 26px rgba(255,255,255,0.5); }
+.promo-cta:active { transform: translateY(0); }
+@keyframes promoCtaPulse {
+  0%, 100% { box-shadow: 0 6px 20px rgba(255,255,255,0.35); }
+  50%      { box-shadow: 0 6px 28px rgba(255,255,255,0.6), 0 0 0 4px rgba(255,255,255,0.15); }
+}
+.promo-reward-hint {
+  margin-top: 14px; font-size: 12px; font-weight: 700;
+  color: rgba(255,255,255,0.85);
+  letter-spacing: 0.2px;
+}
   /* ── Home: Streak hero ── */
   .home-streak {
     display: flex; align-items: center; justify-content: center; gap: 10px;

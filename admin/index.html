@@ -2086,6 +2086,63 @@
       <div style="font-size:12px;color:var(--muted)">📋 ערוך פרסי גלגל / הגדרות בלשונית 🎮 משחק → "כל ההגדרות" → מפתחות <code>daily_spin_*</code>.</div>
     </div>
   </section>
+
+  <!-- 📢 Self-Promo Engine — internal ads for our own products -->
+  <section id="promo-section" style="margin-bottom:12px">
+    <h2>📢 פרסומות פנימיות (Self-Promo) <button class="tip-btn" data-tip-text="<strong>📢 Self-Promo Engine</strong><br>במקום AdSense (שלא מאשרים subdomain), אנחנו ממקמים את הפרסומות של עצמנו ב-slot ה-watch-ad. כל פרסומת מקדמת מוצר שלנו (Starter Pack, Daily Deal, Skin Shop, Gacha, BP, Gem Bank).<div class=&quot;tip-example&quot;>💡 <strong>איך זה עובד</strong>:<br>• שחקן לוחץ ▶️ פרסומת בגיים-אובר<br>• ה-promo engine מושך פרסומת אקראית (משוקלל לפי <code>weight</code>)<br>• כללי targeting: <code>level_min/max</code>, <code>starts_at/ends_at</code>, cooldown של שעה (לא לראות אותה פעמיים)<br>• השחקן צופה 3 שניות → מקבל 30💎<br>• או לוחץ ▶️ CTA → נכנס למוצר → מקבל 0💎 (אבל אנחנו מקבלים הזדמנות מכירה)<br><br>📊 <strong>טלמטריה</strong>: כל impression + click נספרים → CTR + funnel rate נראים בטבלה למטה.<br><br>🔧 <strong>כללי תצוגה</strong>: <code>promo_enabled</code> = master toggle. <code>promo_cooldown_minutes</code> = מינימום בין שתי פרסומות לאותו שחקן לאותה פרסומת (default 60).<br><br>💰 <strong>ROI</strong>: כל click שיוצר רכישה אמיתית = הכנסה מלאה (לא רק $0.01 כמו AdSense). אפילו רק 1-2% conversion rate על כל 1000 צפיות = יותר מהרבה שעות של AdSense.</div>">?</button></h2>
+    <div style="padding:12px 16px;background:var(--card);border-radius:10px;margin-top:8px">
+
+      <!-- Master controls -->
+      <div style="margin-bottom:14px">
+        <div style="font-size:13px;font-weight:700;color:var(--gold);margin-bottom:6px">⚙️ הגדרות מאסטר</div>
+        <div class="rewards-grid" data-keys="promo_enabled,promo_cooldown_minutes"></div>
+      </div>
+
+      <!-- Promo list + stats -->
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <div style="font-size:13px;font-weight:700;color:var(--gold)">📋 פרסומות פעילות</div>
+        <button id="promo-new-btn" type="button" style="padding:6px 12px;font-size:12px;font-weight:700;background:var(--gold);color:#1a1a2e;border:none;border-radius:6px;cursor:pointer">+ פרסומת חדשה</button>
+      </div>
+      <div id="promo-list" style="font-size:12px;color:var(--muted)">טוען...</div>
+
+      <!-- Editor modal -->
+      <div id="promo-editor" style="display:none;margin-top:12px;padding:12px;background:var(--bg);border-radius:8px;border:1px solid var(--border)">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+          <label style="font-size:11px;color:var(--muted)">slug<input id="promo-f-slug" type="text" maxlength="60" style="width:100%;margin-top:3px"></label>
+          <label style="font-size:11px;color:var(--muted)">kind<input id="promo-f-kind" type="text" maxlength="40" placeholder="starter_pack / daily_deal / ..." style="width:100%;margin-top:3px"></label>
+        </div>
+        <label style="font-size:11px;color:var(--muted)">כותרת<input id="promo-f-title" type="text" maxlength="120" style="width:100%;margin-top:3px"></label>
+        <label style="font-size:11px;color:var(--muted);display:block;margin-top:6px">גוף הטקסט<textarea id="promo-f-body" maxlength="400" rows="2" style="width:100%;margin-top:3px"></textarea></label>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px">
+          <label style="font-size:11px;color:var(--muted)">CTA text<input id="promo-f-cta" type="text" maxlength="60" style="width:100%;margin-top:3px"></label>
+          <label style="font-size:11px;color:var(--muted)">CTA target<select id="promo-f-target" style="width:100%;margin-top:3px">
+            <option value="starter_pack">starter_pack</option>
+            <option value="daily_deal">daily_deal</option>
+            <option value="skin_shop">skin_shop</option>
+            <option value="gacha">gacha</option>
+            <option value="battle_pass">battle_pass</option>
+            <option value="gem_bank">gem_bank</option>
+            <option value="bundles">bundles</option>
+            <option value="home">home</option>
+          </select></label>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-top:6px">
+          <label style="font-size:11px;color:var(--muted)">emoji<input id="promo-f-emoji" type="text" maxlength="8" style="width:100%;margin-top:3px"></label>
+          <label style="font-size:11px;color:var(--muted)">level_min<input id="promo-f-lvlmin" type="number" min="1" value="1" style="width:100%;margin-top:3px"></label>
+          <label style="font-size:11px;color:var(--muted)">level_max<input id="promo-f-lvlmax" type="number" min="1" value="999" style="width:100%;margin-top:3px"></label>
+          <label style="font-size:11px;color:var(--muted)">weight<input id="promo-f-weight" type="number" min="1" value="100" style="width:100%;margin-top:3px"></label>
+        </div>
+        <label style="font-size:11px;color:var(--muted);display:block;margin-top:6px">bg_gradient (CSS)<input id="promo-f-bg" type="text" maxlength="120" placeholder="linear-gradient(135deg,#FF6B35,#C8472F)" style="width:100%;margin-top:3px"></label>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:8px">
+          <label style="font-size:12px"><input type="checkbox" id="promo-f-enabled" checked> פעיל</label>
+          <span style="margin-right:auto"></span>
+          <button id="promo-save-btn" type="button" style="padding:6px 14px;font-size:12px;font-weight:700;background:var(--gold);color:#1a1a2e;border:none;border-radius:6px;cursor:pointer">שמור</button>
+          <button id="promo-cancel-btn" type="button" style="padding:6px 12px;font-size:12px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:6px;cursor:pointer">ביטול</button>
+        </div>
+        <input type="hidden" id="promo-f-id">
+      </div>
+    </div>
+  </section>
   </div><!-- /admin-tab-panel economy:monetization+wager -->
 
   <div class="admin-tab-panel" data-tab="players">
@@ -3930,6 +3987,7 @@
     loadHomeVariant();
     loadSpinStats();
     loadGuildWars();
+    loadPromos();
     loadTrophyStats();
     loadEngagementOverview();
   }
@@ -4125,6 +4183,114 @@
       else alert('שגיאה');
     } catch (e) { alert('שגיאת רשת'); }
   };
+
+  // ============================================================
+  // M1 — Self-Promo admin CRUD
+  // ============================================================
+  async function loadPromos() {
+    var listEl = $('promo-list');
+    if (!listEl) return;
+    try {
+      var d = await api('/promos');
+      if (!d || !d.ok) { listEl.textContent = 'שגיאה בטעינה'; return; }
+      if (!d.promos.length) { listEl.innerHTML = '<div style="padding:14px;text-align:center;color:var(--muted)">אין פרסומות עדיין. לחץ "+ פרסומת חדשה" כדי להוסיף.</div>'; return; }
+      listEl.innerHTML = '';
+      d.promos.forEach(function(p) {
+        var ctr = (p.impressions > 0) ? (((p.clicks / p.impressions) * 100).toFixed(1) + '%') : '—';
+        var status = p.is_enabled
+          ? '<span style="color:#3DAA77;font-weight:700">✓ פעיל</span>'
+          : '<span style="color:#999">⏸ כבוי</span>';
+        var row = document.createElement('div');
+        row.style.cssText = 'display:grid;grid-template-columns:auto 1fr auto auto;gap:10px;align-items:center;padding:10px;margin-bottom:6px;background:var(--bg);border-radius:8px;border:1px solid var(--border)';
+        row.innerHTML =
+          '<div style="font-size:24px">' + (p.image_emoji || '🎁') + '</div>' +
+          '<div>' +
+            '<div style="font-size:13px;font-weight:700">' + escapeHtml(p.title) + ' <span style="font-size:10px;color:var(--muted);font-weight:400">· ' + p.slug + '</span></div>' +
+            '<div style="font-size:11px;color:var(--muted)">' + status + ' · target: <code>' + p.cta_target + '</code> · weight: ' + p.weight + ' · 👁 ' + p.impressions + ' · 🖱 ' + p.clicks + ' · CTR: ' + ctr + '</div>' +
+          '</div>' +
+          '<button type="button" data-promo-edit="' + p.id + '" style="padding:5px 10px;font-size:11px;background:var(--bg);border:1px solid var(--border);border-radius:5px;cursor:pointer">✎ ערוך</button>' +
+          '<button type="button" data-promo-del="' + p.id + '" style="padding:5px 10px;font-size:11px;background:#E84A5F22;color:#E84A5F;border:1px solid #E84A5F;border-radius:5px;cursor:pointer">🗑</button>';
+        listEl.appendChild(row);
+      });
+      Array.prototype.forEach.call(listEl.querySelectorAll('[data-promo-edit]'), function(btn) {
+        btn.onclick = function() {
+          var id = +btn.getAttribute('data-promo-edit');
+          var p = d.promos.find(function(x) { return x.id === id; });
+          if (p) openPromoEditor(p);
+        };
+      });
+      Array.prototype.forEach.call(listEl.querySelectorAll('[data-promo-del]'), function(btn) {
+        btn.onclick = async function() {
+          var id = +btn.getAttribute('data-promo-del');
+          if (!confirm('למחוק את הפרסומת?')) return;
+          var r = await api('/promos/' + id, { method: 'DELETE' });
+          if (r && r.ok) loadPromos();
+          else alert('שגיאה');
+        };
+      });
+    } catch (e) { listEl.textContent = 'שגיאת רשת'; }
+  }
+
+  function openPromoEditor(p) {
+    var ed = $('promo-editor');
+    if (!ed) return;
+    p = p || {};
+    $('promo-f-id').value = p.id || '';
+    $('promo-f-slug').value = p.slug || '';
+    $('promo-f-kind').value = p.kind || 'general';
+    $('promo-f-title').value = p.title || '';
+    $('promo-f-body').value = p.body || '';
+    $('promo-f-cta').value = p.cta_text || 'קנה עכשיו';
+    $('promo-f-target').value = p.cta_target || 'home';
+    $('promo-f-emoji').value = p.image_emoji || '🎁';
+    $('promo-f-lvlmin').value = p.level_min || 1;
+    $('promo-f-lvlmax').value = p.level_max || 999;
+    $('promo-f-weight').value = p.weight || 100;
+    $('promo-f-bg').value = p.bg_gradient || '';
+    $('promo-f-enabled').checked = p.is_enabled !== false;
+    $('promo-f-slug').disabled = !!p.id; // immutable on edit
+    ed.style.display = 'block';
+    ed.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
+  if ($('promo-new-btn')) $('promo-new-btn').onclick = function() { openPromoEditor({}); };
+  if ($('promo-cancel-btn')) $('promo-cancel-btn').onclick = function() { $('promo-editor').style.display = 'none'; };
+  if ($('promo-save-btn')) $('promo-save-btn').onclick = async function() {
+    var id = $('promo-f-id').value | 0;
+    var body = {
+      kind: $('promo-f-kind').value,
+      title: $('promo-f-title').value,
+      body: $('promo-f-body').value,
+      cta_text: $('promo-f-cta').value,
+      cta_target: $('promo-f-target').value,
+      image_emoji: $('promo-f-emoji').value,
+      bg_gradient: $('promo-f-bg').value || null,
+      level_min: +$('promo-f-lvlmin').value || 1,
+      level_max: +$('promo-f-lvlmax').value || 999,
+      weight: +$('promo-f-weight').value || 100,
+      is_enabled: $('promo-f-enabled').checked
+    };
+    if (!id) body.slug = $('promo-f-slug').value;
+    try {
+      var r;
+      if (id) r = await api('/promos/' + id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      else r = await api('/promos', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      if (r && r.ok) {
+        $('promo-editor').style.display = 'none';
+        loadPromos();
+      } else if (r && r.error === 'slug_taken') {
+        alert('slug תפוס — בחר אחר');
+      } else {
+        alert('שגיאה: ' + (r && r.error || 'unknown'));
+      }
+    } catch (e) { alert('שגיאת רשת'); }
+  };
+
+  function escapeHtml(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function(c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
 
   async function loadSpinStats() {
     var totEl = $('spin-stat-total');

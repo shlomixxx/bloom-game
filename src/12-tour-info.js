@@ -949,7 +949,8 @@
       if (watchAdBtn) watchAdBtn.onclick = function() {
         this.disabled = true; this.textContent = '⏳ טוען פרסומת...';
         var self = this;
-        simulateAdWatch(function() {
+        var watchFn = (typeof window.simulatePromoWatch === 'function') ? window.simulatePromoWatch : simulateAdWatch;
+        watchFn(function() {
           var gameId = (typeof getCurrentGameId === 'function') ? getCurrentGameId() : null;
           if (!gameId) { self.textContent = 'שגיאה'; return; }
           apiPost('/api/player/ad-watch', { gameId: gameId })

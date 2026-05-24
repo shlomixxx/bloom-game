@@ -8242,6 +8242,93 @@ app.post('/api/duels/find-random', requireDeviceAuth, async (req, res) => {
 });
 
 // ────────────────────────────────────────────────────────────
+// M1 — Self-Promo Engine
+// Replaces external ads. Server picks one promo from internal_promos
+// weighted by `weight`, with level + cooldown + active-window filtering.
+// Tracks impression + click counts for admin telemetry.
+// ────────────────────────────────────────────────────────────
+async function _loadPromoConfig() {
+  return await getCachedConfigPrefix('promo_').catch(() => ({}));
+}
+
+function _promoCooldownMinutes(cfg) {
+  const n = parseInt(cfg.promo_cooldown_minutes, 10);
+  return Number.isFinite(n) && n > 0 ? n : 60;
+}
+
+app.get('/api/promo/next', async (req, res) => {
+  try {
+    const cfg = await _loadPromoConfig();
+    if (cfg.promo_enabled === 'false') return res.json({ ok: true, promo: null, reason: 'disabled' });
+    const deviceId = String(req.query.deviceId || '').slice(0, 64);
+    const level = Math.max(1, parseInt(req.query.level, 10) || 1);
+    const cooldownMin = _promoCooldownMinutes(cfg);
+    // Pick a candidate weighted by `weight`. The NOT EXISTS clause excludes
+    // any promo this device clicked within the cooldown window.
+    const r = await pool.query(
+      `SELECT id, slug, kind, title, body, cta_text, cta_target, image_emoji, bg_gradient
+         FROM internal_promos p
+        WHERE p.is_enabled = TRUE
+          AND (p.starts_at IS NULL OR p.starts_at <= NOW())
+          AND (p.ends_at   IS NULL OR p.ends_at   >  NOW())
+          AND $2 BETWEEN p.level_min AND p.level_max
+          AND NOT EXISTS (
+            SELECT 1 FROM promo_clicks c
+             WHERE c.promo_id = p.id
+               AND c.device_id = $1
+               AND c.clicked_at > NOW() - ($3::TEXT || ' minutes')::INTERVAL
+          )
+        ORDER BY RANDOM() * p.weight DESC
+        LIMIT 1`,
+      [deviceId || '__none__', level, String(cooldownMin)]
+    );
+    if (!r.rows.length) return res.json({ ok: true, promo: null });
+    res.json({ ok: true, promo: r.rows[0] });
+  } catch (e) {
+    console.error('GET /api/promo/next', e);
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
+app.post('/api/promo/impression', requireDeviceAuth, async (req, res) => {
+  const deviceId = req.deviceId;
+  if (!checkRateLimit('promo_imp', deviceId, 300, 60 * 60 * 1000)) {
+    return res.json({ ok: false, reason: 'rate_limited' });
+  }
+  try {
+    const promoId = parseInt(req.body && req.body.promoId, 10);
+    if (!Number.isFinite(promoId) || promoId <= 0) return res.status(400).json({ error: 'bad_promo_id' });
+    await pool.query(
+      `INSERT INTO promo_impressions (promo_id, device_id) VALUES ($1, $2)`,
+      [promoId, deviceId]
+    );
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('POST /api/promo/impression', e);
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
+app.post('/api/promo/click', requireDeviceAuth, async (req, res) => {
+  const deviceId = req.deviceId;
+  if (!checkRateLimit('promo_click', deviceId, 120, 60 * 60 * 1000)) {
+    return res.json({ ok: false, reason: 'rate_limited' });
+  }
+  try {
+    const promoId = parseInt(req.body && req.body.promoId, 10);
+    if (!Number.isFinite(promoId) || promoId <= 0) return res.status(400).json({ error: 'bad_promo_id' });
+    await pool.query(
+      `INSERT INTO promo_clicks (promo_id, device_id) VALUES ($1, $2)`,
+      [promoId, deviceId]
+    );
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('POST /api/promo/click', e);
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
+// ────────────────────────────────────────────────────────────
 // A5 — Live PvP Race ("⚡ דו-קרב חי 60 שניות")
 // Polling-based real-time race using the existing duel infrastructure.
 // Same atomic match-or-queue as /find-random, but creates a duel with
@@ -13104,6 +13191,110 @@ if (ADMIN_PATH && ADMIN_PASSWORD) {
       res.json({ ok: true, stats: r.rows[0] });
     } catch (e) {
       console.error('GET admin/spin/stats', e);
+      res.status(500).json({ error: 'internal' });
+    }
+  });
+
+  // ============================================================
+  // M1 — Self-Promo admin CRUD + stats
+  // ============================================================
+  adminRouter.get('/api/promos', async (_req, res) => {
+    try {
+      const r = await pool.query(
+        `SELECT p.*,
+                COALESCE(i.impressions, 0)::int AS impressions,
+                COALESCE(c.clicks, 0)::int AS clicks
+           FROM internal_promos p
+           LEFT JOIN (SELECT promo_id, COUNT(*) AS impressions FROM promo_impressions GROUP BY promo_id) i ON i.promo_id = p.id
+           LEFT JOIN (SELECT promo_id, COUNT(*) AS clicks FROM promo_clicks GROUP BY promo_id) c ON c.promo_id = p.id
+          ORDER BY p.is_enabled DESC, p.weight DESC, p.id ASC`
+      );
+      res.json({ ok: true, promos: r.rows });
+    } catch (e) {
+      console.error('admin GET /promos', e);
+      res.status(500).json({ error: 'internal' });
+    }
+  });
+
+  adminRouter.post('/api/promos', async (req, res) => {
+    const b = req.body || {};
+    try {
+      const slug = String(b.slug || '').slice(0, 60).toLowerCase().replace(/[^a-z0-9_]/g, '');
+      if (!slug) return res.status(400).json({ error: 'bad_slug' });
+      const r = await pool.query(
+        `INSERT INTO internal_promos
+          (slug, kind, title, body, cta_text, cta_target, image_emoji, bg_gradient,
+           level_min, level_max, weight, is_enabled, starts_at, ends_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+         RETURNING *`,
+        [
+          slug,
+          String(b.kind || 'general').slice(0, 40),
+          String(b.title || '').slice(0, 120),
+          String(b.body || '').slice(0, 400),
+          String(b.cta_text || 'קנה עכשיו').slice(0, 60),
+          String(b.cta_target || 'home').slice(0, 60),
+          String(b.image_emoji || '🎁').slice(0, 8),
+          b.bg_gradient ? String(b.bg_gradient).slice(0, 120) : null,
+          Math.max(1, parseInt(b.level_min, 10) || 1),
+          Math.max(1, parseInt(b.level_max, 10) || 999),
+          Math.max(1, parseInt(b.weight, 10) || 100),
+          b.is_enabled !== false,
+          b.starts_at || null,
+          b.ends_at || null
+        ]
+      );
+      await logAdminAction('promo.create', 'promo', String(r.rows[0].id), { slug });
+      res.json({ ok: true, promo: r.rows[0] });
+    } catch (e) {
+      if (e && e.code === '23505') return res.status(409).json({ error: 'slug_taken' });
+      console.error('admin POST /promos', e);
+      res.status(500).json({ error: 'internal' });
+    }
+  });
+
+  adminRouter.patch('/api/promos/:id', async (req, res) => {
+    const id = parseInt(req.params.id, 10);
+    if (!Number.isFinite(id) || id <= 0) return res.status(400).json({ error: 'bad_id' });
+    const b = req.body || {};
+    const fields = [];
+    const values = [];
+    let idx = 1;
+    const allow = ['kind', 'title', 'body', 'cta_text', 'cta_target', 'image_emoji', 'bg_gradient', 'level_min', 'level_max', 'weight', 'is_enabled', 'starts_at', 'ends_at'];
+    for (const key of allow) {
+      if (b[key] !== undefined) {
+        fields.push(key + ' = $' + idx);
+        values.push(b[key]);
+        idx++;
+      }
+    }
+    if (!fields.length) return res.status(400).json({ error: 'no_fields' });
+    fields.push('updated_at = NOW()');
+    values.push(id);
+    try {
+      const r = await pool.query(
+        `UPDATE internal_promos SET ${fields.join(', ')} WHERE id = $${idx} RETURNING *`,
+        values
+      );
+      if (!r.rows.length) return res.status(404).json({ error: 'not_found' });
+      await logAdminAction('promo.update', 'promo', String(id), { fields: Object.keys(b) });
+      res.json({ ok: true, promo: r.rows[0] });
+    } catch (e) {
+      console.error('admin PATCH /promos/:id', e);
+      res.status(500).json({ error: 'internal' });
+    }
+  });
+
+  adminRouter.delete('/api/promos/:id', async (req, res) => {
+    const id = parseInt(req.params.id, 10);
+    if (!Number.isFinite(id) || id <= 0) return res.status(400).json({ error: 'bad_id' });
+    try {
+      const r = await pool.query(`DELETE FROM internal_promos WHERE id = $1 RETURNING slug`, [id]);
+      if (!r.rows.length) return res.status(404).json({ error: 'not_found' });
+      await logAdminAction('promo.delete', 'promo', String(id), { slug: r.rows[0].slug });
+      res.json({ ok: true });
+    } catch (e) {
+      console.error('admin DELETE /promos/:id', e);
       res.status(500).json({ error: 'internal' });
     }
   });
