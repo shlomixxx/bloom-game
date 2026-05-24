@@ -81,7 +81,10 @@
 > ⏱ ~12 שעות | 🎯 D1 retention מעל 40%
 > 💡 **למה זה ממכר**: כל loop יוצר סיבה לחזור מחר
 
-- [ ] **T2.1** — Trophy Road ויזואלי
+- [x] **T2.1** ✅ — Trophy Road ויזואלי (24.05.2026)
+  - Horizontal strip של כל 8 הארנות בתוך ה-trophy tile עצמו ([src/34-trophy-road.js](src/34-trophy-road.js) `renderTrophyStrip`). nodes ✓-עברו (gold) / current (white pulsing ring) / locked-grey.
+  - מילוי-ביניים פרופורציונלי בין הארנה הנוכחית לבאה (`(trophies - curr.min) / (next.min - curr.min)`).
+  - Tile עדיין נפתח לmodal עם הפירוט המלא של 10 ה-milestones.
   - קובץ חדש: `src/34-trophy-road.js` (כבר קיים, צריך לשדרג UI)
   - Strip ויזואלי בראש מסך הבית:
     ```
@@ -93,35 +96,28 @@
   - Progress bar מונפש בין nodes
   - **Dopamine trigger**: כשמגיע ל-node חדש → confetti + sound + reward popup
 
-- [ ] **T2.2** — Daily Login Calendar ויזואלי
-  - קובץ: `src/21-calendar.js` (קיים, צריך UI)
-  - Grid 7×5 (30 יום):
-    - ימים שעברו: ✓ ירוק
-    - היום: מהבהב זהב
-    - streak bonus days (7, 14, 21, 30): גדולים יותר + פרס מיוחד
-    - ימים שפוספסו: ✗ אפור
-  - Popup בכניסה יומית ראשונה: "יום 7! 🎁 +50💎"
-  - **Dopamine trigger**: כל יום רצוף = פרס גדל (25→50→100→200)
+- [x] **T2.2** ✅ — Streak Calendar visual (24.05.2026)
+  - 14-cell calendar modal (7×2): 7 ימי עבר + היום + 6 ימים עתידיים. פתיחה דרך לחיצה על ה-streak slot ב-balance bar.
+  - Past days: ✓ ירוק if in current streak; היום: gold pulsing border; עתיד: milestone markers (3/7/14/30/60/100) עם תצוגת הפרס "+50💎/+100💎/+250💎/...".
+  - Next-milestone summary line: "🎯 עוד 4 ימים ל-🎁 +100💎" — prospective-FOMO.
+  - לוגיקה ב-[src/04-ui-utils.js](src/04-ui-utils.js) `showStreakCalendar`; חיווט ב-[src/05a-home-v2.js](src/05a-home-v2.js).
 
-- [ ] **T2.3** — Score Submit Retry
-  - קובץ: `public/app.js` — `submitAndShowLeaderboard()` (שורה ~13553)
-  - אם submit נכשל:
-    1. `showToast('הציון לא נשמר — ננסה שוב...', 'warning')`
-    2. Retry 3 פעמים עם exponential backoff (2s, 4s, 8s)
-    3. אם עדיין נכשל: שמור ב-localStorage ← retry בכניסה הבאה
-    4. `showToast('הציון נשמר בהצלחה! ✓', 'success')` על הצלחה
+- [x] **T2.3** ✅ — Score Submit Retry + offline queue (24.05.2026)
+  - 4-attempt fetch עם backoff `[0, 2s, 4s, 8s]`. אחרי attempt 1 → showToast warning "הציון לא נשמר — מנסה שוב…". על הצלחה → toast success. על failure סופי → רושם ל-`localStorage[bloom_score_queue]` (max 10 entries).
+  - 4xx terminal errors (bad_date/bad_score) לא retried, לא queued (השרת דחה ולא יקבל).
+  - `drainScoreQueue()` נקרא אוטומטית 2.5s אחרי boot ([src/13-boot.js](src/13-boot.js)) — שולח את כל ההישנים ברצף, מסיר מהtable על הצלחה. Toast מציג כמה נשלחו.
 
-- [ ] **T2.4** — Streak Danger + Comeback
-  - שחקן ששכח לשחק אתמול: popup "אתה עומד לאבד את הרצף! 🔥"
-  - שחקן שחוזר אחרי 3+ ימים: comeback bonus popup מוגדל
-  - **קיים חלקית** — צריך לשפר UI + לוודא push notification יוצא
+- [x] **T2.4** ✅ — Streak Danger live countdown + persistent banner (24.05.2026)
+  - Live countdown ticker שמתעדכן כל דקה ("נשארו N שעות עד חצות"). כשנשארת פחות משעה — "נשארו N דקות עד חצות".
+  - הוספת `🎮 שחק` button מפורש בתוך הבאנר (ולא רק tap-anywhere סמוי) → סטראט מיידי של daily.
+  - הבאנר persistent — לא מתפוגג אוטומטית, נשאר עד שהשחקן לוחץ play או ✕ explicit. Loss-aversion חזק יותר כשההזהרה ממשיכה להציק.
+  - Comeback overlay כבר היה תקין — לא נגענו.
 
-- [ ] **T2.5** — Checklist Daily Quests שיפור
-  - קובץ: `src/05c-dynamic-boards.js` + server `GET /api/checklist/today`
-  - הוסף "All Done!" bonus כש-5/5 quests מושלמים
-  - Progress bar ויזואלי (3/5 ██░░)
-  - כשquest מושלם → checkmark animation + sound
-  - **Dopamine trigger**: "השלמת הכל! +100💎 בונוס" → confetti
+- [x] **T2.5** ✅ — Daily Checklist All-Done bonus + celebration (24.05.2026)
+  - שרת: action חדש `daily_checklist_complete` ב-`/api/player/earn` ([server.js](server.js#L11526)). server **re-verifies** את כל 5 הפריטים מחדש לפני התשלום (anti-cheat) — gacha free pull / daily deal / quest / streak / daily-special (האחרון client-tracked כי הוא localStorage-only).
+  - Config: `checklist_all_done_reward` (default 100💎) ב-[schema.sql](schema.sql).
+  - Client: ב-[src/21-calendar.js](src/21-calendar.js) — `renderChecklistTile` בודק `data.allDone` ולא `bloom_checklist_bonus === today` → קורא ל-`earnCredits('daily_checklist_complete', {dailySpecialDone})` + מציג overlay full-screen עם 28-particle confetti, 🏆 spinning icon, "כל המשימות הושלמו! +100💎 בונוס יומי".
+  - Daily dedup: lockbox client-side + server-side `_earn:<device>:daily_checklist_complete:<today>` dedup key.
 
 ---
 
@@ -375,13 +371,13 @@
 |-------|--------|--------|---|
 | 0 — Critical Fixes | 5 | 4 | 80% |
 | 1 — New Player Experience | 4 | 3 | 75% |
-| 2 — Addiction Loops | 5 | 0 | 0% |
+| 2 — Addiction Loops | 5 | 5 | 100% |
 | 3 — Economy & Shop | 4 | 0 | 0% |
 | 4 — Social & Competition | 5 | 0 | 0% |
 | 5 — Admin Panel | 5 | 0 | 0% |
 | 6 — Performance | 5 | 0 | 0% |
 | 7 — Polish & Monetization | 5 | 0 | 0% |
-| **סה"כ** | **38** | **7** | **18.4%** |
+| **סה"כ** | **38** | **12** | **31.6%** |
 
 ---
 

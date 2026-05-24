@@ -11291,7 +11291,10 @@ app.post('/api/player/earn', requireDeviceAuth, async (req, res) => {
       // clamped to event_gift_credits_max (typically 10💎) in payment.
       'dyn_quest': '_dyn_quest_',
       'dyn_ach': '_dyn_ach_',
-      'dyn_streak_milestone': '_dyn_streak_milestone_'
+      'dyn_streak_milestone': '_dyn_streak_milestone_',
+      // T2.5 — Daily Checklist all-done bonus. Server re-checks allDone
+      // before paying so a tampered client can't claim without finishing.
+      'daily_checklist_complete': 'checklist_all_done_reward'
     };
     const configKey = actionMap[action];
     if (!configKey) return res.json({ ok: false, reason: 'unknown_action' });
@@ -11514,6 +11517,57 @@ app.post('/api/player/earn', requireDeviceAuth, async (req, res) => {
         breakdown,
         finalReward: reward
       };
+    } else if (action === 'daily_checklist_complete') {
+      // T2.5 — re-verify allDone server-side. We re-run a lightweight
+      // version of the GET /api/checklist/today logic. Refuse if not
+      // genuinely complete (reason='checklist_not_complete').
+      try {
+        const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' });
+        // (1) Gacha free pull claimed today.
+        const gR = await pool.query(
+          `SELECT 1 FROM player_gacha_state WHERE device_id = $1 AND free_pull_claimed_date::text = $2 LIMIT 1`,
+          [deviceId, today]
+        ).catch(() => ({ rows: [] }));
+        const gachaClaimed = gR.rows.length > 0;
+        // (2) Daily Deal purchased today.
+        const ddR = await pool.query(
+          `SELECT 1 FROM daily_deal_purchases WHERE device_id = $1 AND purchase_date = $2::date LIMIT 1`,
+          [deviceId, today]
+        ).catch(() => ({ rows: [] }));
+        const dealBought = ddR.rows.length > 0;
+        // (3) Daily quest claimed today (LIKE pattern on _earn dedup keys).
+        const qR = await pool.query(
+          `SELECT 1 FROM game_config WHERE key LIKE $1 LIMIT 1`,
+          [`_earn:${deviceId}:dyn_quest:${today}:%`]
+        ).catch(() => ({ rows: [] }));
+        const questClaimed = qR.rows.length > 0;
+        // (4) Played a game today (any source).
+        const sR1 = await pool.query(
+          `SELECT 1 FROM daily_scores WHERE device_id = $1 AND date = $2 LIMIT 1`,
+          [deviceId, today]
+        ).catch(() => ({ rows: [] }));
+        const sR2 = sR1.rows.length === 0
+          ? await pool.query(
+              `SELECT 1 FROM difficulty_scores WHERE device_id = $1 AND date = $2 LIMIT 1`,
+              [deviceId, today]
+            ).catch(() => ({ rows: [] }))
+          : { rows: [{ ok: 1 }] };
+        const streakDone = sR1.rows.length > 0 || sR2.rows.length > 0;
+        // (5) "Daily special played" — purely client-tracked in
+        // localStorage. Client passes meta.dailySpecialDone=true. We
+        // trust the flag (the rest of the checklist is server-verified
+        // so a forged meta gives the cheater at most this single item;
+        // doesn't change the outcome since allFive needs the other 4).
+        const dailySpecialDone = !!(meta && meta.dailySpecialDone);
+        const allFive = gachaClaimed && dealBought && questClaimed && streakDone && dailySpecialDone;
+        if (!allFive) {
+          return res.json({ ok: false, reason: 'checklist_not_complete' });
+        }
+      } catch (e) {
+        return res.json({ ok: false, reason: 'verify_failed' });
+      }
+      const cfgRow = await pool.query('SELECT value FROM game_config WHERE key = $1', [configKey]);
+      reward = parseInt((cfgRow.rows[0] || {}).value, 10) || 0;
     } else {
       const cfgRow = await pool.query('SELECT value FROM game_config WHERE key = $1', [configKey]);
       reward = parseInt((cfgRow.rows[0] || {}).value, 10) || 0;

@@ -621,31 +621,33 @@
       await loadLeaderboard();
       return;
     }
-    try {
-      const res = await fetch(API_BASE + '/api/score', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          date: dailyDate,
-          deviceId: deviceId,
-          name: (playerName || 'אנונימי').slice(0, 24),
-          score: score,
-          tier: highestTier,
-          drops: dropsCount | 0,
-          token: deviceToken,
-          country: getCountry() || null
-        })
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data && typeof data.rank === 'number') dailyRank = data.rank;
-        if (data && typeof data.total === 'number') dailyTotal = data.total;
-        // Earn credits for daily completion
-        if (!window.__bloomBotActive && mode === 'daily') earnCredits('daily_complete');
-        trackEvent('game_over', { mode: mode, score: score, tier: highestTier });
-      }
-    } catch (e) {
-      console.warn('Submit failed:', e);
+    var payload = {
+      date: dailyDate,
+      deviceId: deviceId,
+      name: (playerName || 'אנונימי').slice(0, 24),
+      score: score,
+      tier: highestTier,
+      drops: dropsCount | 0,
+      token: deviceToken,
+      country: getCountry() || null
+    };
+    // T2.3 — retry-with-backoff + persistent queue. Network blips on
+    // mobile are the #1 reason scores silently disappear; the queue
+    // means a player who finished the daily on the bus and then went
+    // through a tunnel still gets their submission delivered when they
+    // open the app next time.
+    var result = await submitScoreWithRetry(payload);
+    if (result && result.ok && result.data) {
+      var data = result.data;
+      if (typeof data.rank === 'number') dailyRank = data.rank;
+      if (typeof data.total === 'number') dailyTotal = data.total;
+      if (!window.__bloomBotActive && mode === 'daily') earnCredits('daily_complete');
+      trackEvent('game_over', { mode: mode, score: score, tier: highestTier });
+    } else if (result && !result.ok) {
+      // All retries failed → row queued. Tell the player.
+      try {
+        if (window.__bloomToast) window.__bloomToast('הציון נשמר במכשיר — ננסה לשלוח שוב כשתחזור', 'warning');
+      } catch (e) {}
     }
     // Practice + duel scores also feed the difficulty leaderboard. Daily
     // mode is excluded by design (fairness — the daily seed is uniform and
@@ -653,6 +655,105 @@
     submitPracticeOrDuelScore();
     await loadLeaderboard();
   }
+
+  // T2.3 — Score submit with exponential-backoff retries + offline queue.
+  // Attempts the POST up to 3 times (delays: 2s/4s/8s) — total worst-case
+  // ~14s of waiting. The first successful response wins. On final fail,
+  // serializes to localStorage[bloom_score_queue] for drain on next boot.
+  // Returns { ok:true, data } on success, { ok:false, queued:true } on fail.
+  var SCORE_QUEUE_KEY = 'bloom_score_queue';
+  async function submitScoreWithRetry(payload) {
+    var delays = [0, 2000, 4000, 8000]; // first attempt immediate, then back off
+    var lastErr = null;
+    for (var attempt = 0; attempt < delays.length; attempt++) {
+      if (delays[attempt] > 0) {
+        // Tell the user we're retrying so they don't think it crashed.
+        if (attempt === 1) {
+          try { if (window.__bloomToast) window.__bloomToast('הציון לא נשמר — מנסה שוב…', 'warning'); } catch (e) {}
+        }
+        await new Promise(function(r) { setTimeout(r, delays[attempt]); });
+      }
+      try {
+        var res = await fetch(API_BASE + '/api/score', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (res.ok) {
+          var data = await res.json();
+          if (attempt > 0) {
+            try { if (window.__bloomToast) window.__bloomToast('הציון נשמר ✓', 'success'); } catch (e) {}
+          }
+          return { ok: true, data: data };
+        }
+        // 4xx errors (bad_date / bad_score / etc) are not transient —
+        // don't retry, don't queue. Server has rejected the payload.
+        if (res.status >= 400 && res.status < 500) {
+          return { ok: false, terminal: true, status: res.status };
+        }
+        lastErr = new Error('http_' + res.status);
+      } catch (e) { lastErr = e; }
+    }
+    // All retries failed — queue for next session.
+    enqueueScore(payload);
+    return { ok: false, queued: true, error: lastErr ? String(lastErr.message || lastErr) : 'unknown' };
+  }
+
+  function enqueueScore(payload) {
+    try {
+      var raw = localStorage.getItem(SCORE_QUEUE_KEY);
+      var arr = raw ? JSON.parse(raw) : [];
+      if (!Array.isArray(arr)) arr = [];
+      // Cap the queue at 10 entries to prevent runaway storage growth
+      // (10 daily attempts queued = ~10 days offline = realistic upper bound).
+      arr.push({ ts: Date.now(), payload: payload });
+      while (arr.length > 10) arr.shift();
+      localStorage.setItem(SCORE_QUEUE_KEY, JSON.stringify(arr));
+    } catch (e) {}
+  }
+
+  // Called once on boot (from 13-boot.js). Drains every queued submission
+  // sequentially, removing each on success. Non-blocking — runs in the
+  // background while the player navigates.
+  async function drainScoreQueue() {
+    var arr;
+    try {
+      var raw = localStorage.getItem(SCORE_QUEUE_KEY);
+      if (!raw) return;
+      arr = JSON.parse(raw);
+      if (!Array.isArray(arr) || !arr.length) return;
+    } catch (e) { return; }
+    var drained = 0;
+    var remaining = [];
+    for (var i = 0; i < arr.length; i++) {
+      var item = arr[i];
+      if (!item || !item.payload) continue;
+      try {
+        var r = await fetch(API_BASE + '/api/score', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(item.payload)
+        });
+        if (r.ok) { drained++; continue; }
+        if (r.status >= 400 && r.status < 500) {
+          // Terminal — drop the row, log + count as drained for stats.
+          drained++; continue;
+        }
+        // 5xx / network — keep for next time.
+        remaining.push(item);
+      } catch (e) {
+        remaining.push(item);
+      }
+    }
+    try {
+      if (remaining.length) localStorage.setItem(SCORE_QUEUE_KEY, JSON.stringify(remaining));
+      else localStorage.removeItem(SCORE_QUEUE_KEY);
+    } catch (e) {}
+    if (drained > 0) {
+      try { if (window.__bloomToast) window.__bloomToast('🎯 ' + drained + ' ציון' + (drained > 1 ? 'ים' : '') + ' שמורים נשלחו בהצלחה', 'success'); } catch (e) {}
+    }
+  }
+  try { window.__bloomDrainScoreQueue = drainScoreQueue; } catch (e) {}
 
   // Writes one row to difficulty_scores per game so the "לפי קושי" tab can
   // aggregate best-per-difficulty across practice + duel without polluting

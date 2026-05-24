@@ -88,10 +88,10 @@
           '<span class="home-v2-bal-icon">❤️</span>' +
           '<span class="home-v2-bal-val" id="home-v2-bal-lives">--</span>' +
         '</div>' +
-        '<div class="home-v2-bal-slot home-v2-bal-streak" id="home-v2-bal-streak-slot" title="רצף ימים">' +
+        '<button class="home-v2-bal-slot home-v2-bal-streak" id="home-v2-bal-streak-slot" title="רצף ימים — לחץ ללוח שנה" type="button">' +
           '<span class="home-v2-bal-icon">🔥</span>' +
           '<span class="home-v2-bal-val" id="home-v2-bal-streak">--</span>' +
-        '</div>' +
+        '</button>' +
         '<div class="home-v2-bal-slot home-v2-bal-level" id="home-v2-bal-level-slot" title="דרגה">' +
           '<span class="home-v2-bal-icon">⭐</span>' +
           '<span class="home-v2-bal-val" id="home-v2-bal-level">1</span>' +
@@ -394,6 +394,13 @@
     refreshHomeWeekly();
     startHomeV2LivePulse();
 
+    // T2.2 — Streak slot opens the streak calendar modal.
+    var streakSlot = document.getElementById('home-v2-bal-streak-slot');
+    if (streakSlot) streakSlot.onclick = function() {
+      ensureAudio();
+      if (typeof window.__bloomShowStreakCal === 'function') window.__bloomShowStreakCal();
+    };
+
     // T1.1 — apply level gates initially (hides high-level tiles for
     // new players). Re-run on a few delays to catch tiles that mount
     // via setTimeout (matches Stage 35 home-variants' deferred apply
@@ -514,30 +521,55 @@
           '<div style="font-size:28px">🔥</div>' +
           '<div style="flex:1;min-width:0">' +
             '<div style="font-weight:900;font-size:14px">רצף ' + (s.count | 0) + ' ימים בסכנה!</div>' +
-            '<div style="font-size:11px;opacity:0.85;margin-top:2px">נשארו ' + timeText + ' · לחץ לשחק</div>' +
+            '<div style="font-size:11px;opacity:0.85;margin-top:2px" id="streak-danger-countdown">נשארו ' + timeText + '</div>' +
           '</div>' +
-          '<div style="font-size:14px;opacity:0.7">✕</div>' +
+          '<button id="streak-danger-play" style="background:#1C1A18;color:#FAC775;border:none;padding:8px 12px;border-radius:10px;font-weight:800;font-family:inherit;font-size:13px;cursor:pointer">🎮 שחק</button>' +
+          '<div id="streak-danger-x" style="font-size:14px;opacity:0.7;cursor:pointer;padding:4px 6px">✕</div>' +
         '</div>';
       document.body.appendChild(banner);
       requestAnimationFrame(function() {
         banner.style.opacity = '1';
         banner.style.transform = 'translateX(-50%) translateY(0)';
       });
+      // T2.4 — Live countdown ticker. Re-paints the "נשארו N" text every
+      // 60s so a player who lingers on home sees the urgency climb. Auto-
+      // teardown when the banner is removed (no zombie interval).
+      let countdownTimer = null;
+      const repaintCountdown = function() {
+        const cdEl = document.getElementById('streak-danger-countdown');
+        if (!cdEl) { if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; } return; }
+        const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Jerusalem' }));
+        const hLeft = 23 - now.getHours();
+        const mLeft = 60 - now.getMinutes();
+        const text = hLeft >= 2
+          ? hLeft + ' שעות'
+          : (hLeft === 1 ? ('שעה ו-' + mLeft + ' דקות') : (mLeft + ' דקות'));
+        cdEl.textContent = 'נשארו ' + text + ' עד חצות';
+      };
+      countdownTimer = setInterval(repaintCountdown, 60 * 1000);
+      repaintCountdown(); // initial paint for accuracy
       const dismiss = function() {
+        if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; }
         banner.style.opacity = '0';
         banner.style.transform = 'translateX(-50%) translateY(-20px)';
-        setTimeout(function() { banner.remove(); }, 250);
+        setTimeout(function() { try { banner.remove(); } catch (e) {} }, 250);
         try { localStorage.setItem(dismissKey, '1'); } catch (e) {}
       };
-      banner.onclick = function(e) {
-        if (e.target && e.target.textContent === '✕') { dismiss(); return; }
-        dismiss();
-        // Tap = "I'll play now" — open the daily challenge.
+      const playNow = function() {
+        if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; }
+        try { banner.remove(); } catch (e) {}
+        try { localStorage.setItem(dismissKey, '1'); } catch (e) {}
         hideHomeV2();
         if (typeof init === 'function') init('daily');
       };
-      // Auto-hide after 9 seconds so we don't block the home indefinitely
-      setTimeout(dismiss, 9000);
+      banner.onclick = function(e) {
+        if (!e.target) { playNow(); return; }
+        const id = e.target.id || '';
+        if (id === 'streak-danger-x') { dismiss(); return; }
+        playNow();
+      };
+      // No auto-hide — banner stays until the player explicitly dismisses
+      // or taps "play". Loss-aversion works better when the warning persists.
     } catch (e) { /* never throw from a notification path */ }
   }
 

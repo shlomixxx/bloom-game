@@ -269,6 +269,12 @@ INSERT INTO game_config (key, value) VALUES ('daily_reward', '10')
   ON CONFLICT (key) DO NOTHING;
 INSERT INTO game_config (key, value) VALUES ('daily_login_reward', '25')
   ON CONFLICT (key) DO NOTHING;
+-- T2.5 — Daily Checklist all-done bonus. One-shot reward per device per
+-- day when 5/5 checklist items are complete. Server validates allDone
+-- by re-running the checklist query (anti-cheat). Default 100💎 keeps
+-- it meaningful but not exploitable (max 100/day per device).
+INSERT INTO game_config (key, value) VALUES ('checklist_all_done_reward', '100')
+  ON CONFLICT (key) DO NOTHING;
 -- Tiered daily-login rewards — the client overlay escalates the displayed
 -- amount with streak (25 → 50 → 100 → 200), so the server payment now
 -- mirrors the same tiers. Without these tiers the overlay said +200 while

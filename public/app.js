@@ -3771,6 +3771,110 @@
     };
   } catch (e) {}
 
+  // ============ T2.2 — Streak Calendar modal ============
+  // Visual representation of the player's current streak + upcoming
+  // milestone bonuses. We don't store a full per-day play history
+  // (would require schema work), so we reconstruct backwards from
+  // today based on streak.count — this is honest: if you have a
+  // 7-day streak, the last 7 days WERE played. Today's status is
+  // derived from streak.lastPlayed === todayInIsrael().
+  //
+  // Layout: 14 cells in a 7×2 grid. Row 1 = past 7 days. Row 2 = next
+  // 7 days. Today sits at the leftmost of row 2 (matches RTL flow:
+  // "past on the right, future on the left"). Milestones (3/7/14/30)
+  // are marked with their gem reward to drive prospective-FOMO.
+  var STREAK_MILESTONES = [
+    { day: 3,  reward: 50,   icon: '🎁' },
+    { day: 7,  reward: 100,  icon: '🎁' },
+    { day: 14, reward: 250,  icon: '💎' },
+    { day: 30, reward: 500,  icon: '💎' },
+    { day: 60, reward: 1000, icon: '👑' },
+    { day: 100,reward: 2000, icon: '👑' }
+  ];
+  function dateAddDays(dateStr, n) {
+    var d = new Date(dateStr + 'T00:00:00Z');
+    d.setUTCDate(d.getUTCDate() + n);
+    return d.toISOString().slice(0, 10);
+  }
+  function shortDayLabel(dateStr) {
+    var d = new Date(dateStr + 'T00:00:00Z');
+    var day = d.getUTCDate();
+    var months = ['1','2','3','4','5','6','7','8','9','10','11','12'];
+    return day + '.' + months[d.getUTCMonth()];
+  }
+  function showStreakCalendar() {
+    var existing = document.getElementById('streak-cal-modal');
+    if (existing) { existing.remove(); return; }
+    var s = (typeof loadStreak === 'function') ? loadStreak() : { count: 0, lastPlayed: null };
+    var today = (typeof todayInIsrael === 'function') ? todayInIsrael() : new Date().toISOString().slice(0, 10);
+    var playedToday = s.lastPlayed === today;
+    var streakLen = s.count | 0;
+    // Reconstruct: today's date is the LAST played day if playedToday,
+    // else (today - 1) is the last played day (if streakLen > 0).
+    var lastPlayedDate = playedToday ? today : (streakLen > 0 ? dateAddDays(today, -1) : null);
+    // Build 14 cells: 7 in the past (right side / row 1) + today + 6 future.
+    var cellsHtml = '';
+    // Row 1: 7 cells from oldest → most recent (excluding today)
+    for (var off = -7; off <= -1; off++) {
+      var cellDate = dateAddDays(today, off);
+      var inStreak = lastPlayedDate && streakLen > 0
+        ? (new Date(cellDate + 'T00:00:00Z') >= new Date(dateAddDays(lastPlayedDate, -(streakLen - 1)) + 'T00:00:00Z')
+           && new Date(cellDate + 'T00:00:00Z') <= new Date(lastPlayedDate + 'T00:00:00Z'))
+        : false;
+      cellsHtml += '<div class="streak-cal-cell ' + (inStreak ? 'sc-played' : 'sc-empty') + '">' +
+        '<span class="sc-icon">' + (inStreak ? '✓' : '·') + '</span>' +
+        '<span class="sc-date">' + shortDayLabel(cellDate) + '</span>' +
+        '</div>';
+    }
+    // Today cell
+    cellsHtml += '<div class="streak-cal-cell sc-today ' + (playedToday ? 'sc-played' : 'sc-pending') + '">' +
+      '<span class="sc-icon">' + (playedToday ? '✓' : '🔥') + '</span>' +
+      '<span class="sc-date">היום</span>' +
+      '</div>';
+    // Row 2: next 6 days, with milestone markers
+    for (var off2 = 1; off2 <= 6; off2++) {
+      var futureDate = dateAddDays(today, off2);
+      // What streak count would I have on this future day if I keep playing?
+      var futureStreak = streakLen + off2;
+      if (!playedToday) futureStreak = off2; // would have to restart today
+      // Is this day a milestone?
+      var ms = null;
+      for (var m = 0; m < STREAK_MILESTONES.length; m++) {
+        if (STREAK_MILESTONES[m].day === futureStreak) { ms = STREAK_MILESTONES[m]; break; }
+      }
+      cellsHtml += '<div class="streak-cal-cell sc-future' + (ms ? ' sc-milestone' : '') + '">' +
+        '<span class="sc-icon">' + (ms ? ms.icon : '·') + '</span>' +
+        '<span class="sc-date">' + shortDayLabel(futureDate) + '</span>' +
+        (ms ? '<span class="sc-reward">+' + ms.reward + '💎</span>' : '') +
+        '</div>';
+    }
+    // Next-milestone summary line (the loss-aversion driver)
+    var nextMs = null;
+    for (var k = 0; k < STREAK_MILESTONES.length; k++) {
+      if (STREAK_MILESTONES[k].day > streakLen) { nextMs = STREAK_MILESTONES[k]; break; }
+    }
+    var nextHtml = nextMs
+      ? '<div class="streak-cal-next">🎯 עוד <strong>' + (nextMs.day - streakLen) + ' ימים</strong> ל-' + nextMs.icon + ' <strong>+' + nextMs.reward + '💎</strong></div>'
+      : '<div class="streak-cal-next">👑 הגעת לרצף הגבוה ביותר!</div>';
+    var modal = document.createElement('div');
+    modal.id = 'streak-cal-modal';
+    modal.className = 'streak-cal-overlay';
+    modal.innerHTML =
+      '<div class="streak-cal-card">' +
+        '<button class="streak-cal-close" aria-label="סגור">×</button>' +
+        '<div class="streak-cal-title">🔥 ' + streakLen + ' ימים רצוף</div>' +
+        '<div class="streak-cal-sub">' + (playedToday ? '✅ שמרת היום' : '⚠ עדיין לא שיחקת היום') + '</div>' +
+        nextHtml +
+        '<div class="streak-cal-grid">' + cellsHtml + '</div>' +
+        '<div class="streak-cal-foot">המשך לשחק כל יום ותקבל בונוסים גדלים. יום אחד פסיכ → הרצף מתאפס.</div>' +
+      '</div>';
+    document.body.appendChild(modal);
+    var close = function() { try { modal.remove(); } catch (e) {} };
+    modal.querySelector('.streak-cal-close').onclick = close;
+    modal.addEventListener('click', function(e) { if (e.target === modal) close(); });
+  }
+  try { window.__bloomShowStreakCal = showStreakCalendar; } catch (e) {}
+
   function incrementGamesPlayed() {
     const n = loadGamesPlayed() + 1;
     try { localStorage.setItem(GAMES_COUNT_KEY, String(n)); } catch (e) {}
@@ -4274,10 +4378,10 @@
           '<span class="home-v2-bal-icon">❤️</span>' +
           '<span class="home-v2-bal-val" id="home-v2-bal-lives">--</span>' +
         '</div>' +
-        '<div class="home-v2-bal-slot home-v2-bal-streak" id="home-v2-bal-streak-slot" title="רצף ימים">' +
+        '<button class="home-v2-bal-slot home-v2-bal-streak" id="home-v2-bal-streak-slot" title="רצף ימים — לחץ ללוח שנה" type="button">' +
           '<span class="home-v2-bal-icon">🔥</span>' +
           '<span class="home-v2-bal-val" id="home-v2-bal-streak">--</span>' +
-        '</div>' +
+        '</button>' +
         '<div class="home-v2-bal-slot home-v2-bal-level" id="home-v2-bal-level-slot" title="דרגה">' +
           '<span class="home-v2-bal-icon">⭐</span>' +
           '<span class="home-v2-bal-val" id="home-v2-bal-level">1</span>' +
@@ -4580,6 +4684,13 @@
     refreshHomeWeekly();
     startHomeV2LivePulse();
 
+    // T2.2 — Streak slot opens the streak calendar modal.
+    var streakSlot = document.getElementById('home-v2-bal-streak-slot');
+    if (streakSlot) streakSlot.onclick = function() {
+      ensureAudio();
+      if (typeof window.__bloomShowStreakCal === 'function') window.__bloomShowStreakCal();
+    };
+
     // T1.1 — apply level gates initially (hides high-level tiles for
     // new players). Re-run on a few delays to catch tiles that mount
     // via setTimeout (matches Stage 35 home-variants' deferred apply
@@ -4700,30 +4811,55 @@
           '<div style="font-size:28px">🔥</div>' +
           '<div style="flex:1;min-width:0">' +
             '<div style="font-weight:900;font-size:14px">רצף ' + (s.count | 0) + ' ימים בסכנה!</div>' +
-            '<div style="font-size:11px;opacity:0.85;margin-top:2px">נשארו ' + timeText + ' · לחץ לשחק</div>' +
+            '<div style="font-size:11px;opacity:0.85;margin-top:2px" id="streak-danger-countdown">נשארו ' + timeText + '</div>' +
           '</div>' +
-          '<div style="font-size:14px;opacity:0.7">✕</div>' +
+          '<button id="streak-danger-play" style="background:#1C1A18;color:#FAC775;border:none;padding:8px 12px;border-radius:10px;font-weight:800;font-family:inherit;font-size:13px;cursor:pointer">🎮 שחק</button>' +
+          '<div id="streak-danger-x" style="font-size:14px;opacity:0.7;cursor:pointer;padding:4px 6px">✕</div>' +
         '</div>';
       document.body.appendChild(banner);
       requestAnimationFrame(function() {
         banner.style.opacity = '1';
         banner.style.transform = 'translateX(-50%) translateY(0)';
       });
+      // T2.4 — Live countdown ticker. Re-paints the "נשארו N" text every
+      // 60s so a player who lingers on home sees the urgency climb. Auto-
+      // teardown when the banner is removed (no zombie interval).
+      let countdownTimer = null;
+      const repaintCountdown = function() {
+        const cdEl = document.getElementById('streak-danger-countdown');
+        if (!cdEl) { if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; } return; }
+        const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Jerusalem' }));
+        const hLeft = 23 - now.getHours();
+        const mLeft = 60 - now.getMinutes();
+        const text = hLeft >= 2
+          ? hLeft + ' שעות'
+          : (hLeft === 1 ? ('שעה ו-' + mLeft + ' דקות') : (mLeft + ' דקות'));
+        cdEl.textContent = 'נשארו ' + text + ' עד חצות';
+      };
+      countdownTimer = setInterval(repaintCountdown, 60 * 1000);
+      repaintCountdown(); // initial paint for accuracy
       const dismiss = function() {
+        if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; }
         banner.style.opacity = '0';
         banner.style.transform = 'translateX(-50%) translateY(-20px)';
-        setTimeout(function() { banner.remove(); }, 250);
+        setTimeout(function() { try { banner.remove(); } catch (e) {} }, 250);
         try { localStorage.setItem(dismissKey, '1'); } catch (e) {}
       };
-      banner.onclick = function(e) {
-        if (e.target && e.target.textContent === '✕') { dismiss(); return; }
-        dismiss();
-        // Tap = "I'll play now" — open the daily challenge.
+      const playNow = function() {
+        if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; }
+        try { banner.remove(); } catch (e) {}
+        try { localStorage.setItem(dismissKey, '1'); } catch (e) {}
         hideHomeV2();
         if (typeof init === 'function') init('daily');
       };
-      // Auto-hide after 9 seconds so we don't block the home indefinitely
-      setTimeout(dismiss, 9000);
+      banner.onclick = function(e) {
+        if (!e.target) { playNow(); return; }
+        const id = e.target.id || '';
+        if (id === 'streak-danger-x') { dismiss(); return; }
+        playNow();
+      };
+      // No auto-hide — banner stays until the player explicitly dismisses
+      // or taps "play". Loss-aversion works better when the warning persists.
     } catch (e) { /* never throw from a notification path */ }
   }
 
@@ -13823,31 +13959,33 @@
       await loadLeaderboard();
       return;
     }
-    try {
-      const res = await fetch(API_BASE + '/api/score', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          date: dailyDate,
-          deviceId: deviceId,
-          name: (playerName || 'אנונימי').slice(0, 24),
-          score: score,
-          tier: highestTier,
-          drops: dropsCount | 0,
-          token: deviceToken,
-          country: getCountry() || null
-        })
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data && typeof data.rank === 'number') dailyRank = data.rank;
-        if (data && typeof data.total === 'number') dailyTotal = data.total;
-        // Earn credits for daily completion
-        if (!window.__bloomBotActive && mode === 'daily') earnCredits('daily_complete');
-        trackEvent('game_over', { mode: mode, score: score, tier: highestTier });
-      }
-    } catch (e) {
-      console.warn('Submit failed:', e);
+    var payload = {
+      date: dailyDate,
+      deviceId: deviceId,
+      name: (playerName || 'אנונימי').slice(0, 24),
+      score: score,
+      tier: highestTier,
+      drops: dropsCount | 0,
+      token: deviceToken,
+      country: getCountry() || null
+    };
+    // T2.3 — retry-with-backoff + persistent queue. Network blips on
+    // mobile are the #1 reason scores silently disappear; the queue
+    // means a player who finished the daily on the bus and then went
+    // through a tunnel still gets their submission delivered when they
+    // open the app next time.
+    var result = await submitScoreWithRetry(payload);
+    if (result && result.ok && result.data) {
+      var data = result.data;
+      if (typeof data.rank === 'number') dailyRank = data.rank;
+      if (typeof data.total === 'number') dailyTotal = data.total;
+      if (!window.__bloomBotActive && mode === 'daily') earnCredits('daily_complete');
+      trackEvent('game_over', { mode: mode, score: score, tier: highestTier });
+    } else if (result && !result.ok) {
+      // All retries failed → row queued. Tell the player.
+      try {
+        if (window.__bloomToast) window.__bloomToast('הציון נשמר במכשיר — ננסה לשלוח שוב כשתחזור', 'warning');
+      } catch (e) {}
     }
     // Practice + duel scores also feed the difficulty leaderboard. Daily
     // mode is excluded by design (fairness — the daily seed is uniform and
@@ -13855,6 +13993,105 @@
     submitPracticeOrDuelScore();
     await loadLeaderboard();
   }
+
+  // T2.3 — Score submit with exponential-backoff retries + offline queue.
+  // Attempts the POST up to 3 times (delays: 2s/4s/8s) — total worst-case
+  // ~14s of waiting. The first successful response wins. On final fail,
+  // serializes to localStorage[bloom_score_queue] for drain on next boot.
+  // Returns { ok:true, data } on success, { ok:false, queued:true } on fail.
+  var SCORE_QUEUE_KEY = 'bloom_score_queue';
+  async function submitScoreWithRetry(payload) {
+    var delays = [0, 2000, 4000, 8000]; // first attempt immediate, then back off
+    var lastErr = null;
+    for (var attempt = 0; attempt < delays.length; attempt++) {
+      if (delays[attempt] > 0) {
+        // Tell the user we're retrying so they don't think it crashed.
+        if (attempt === 1) {
+          try { if (window.__bloomToast) window.__bloomToast('הציון לא נשמר — מנסה שוב…', 'warning'); } catch (e) {}
+        }
+        await new Promise(function(r) { setTimeout(r, delays[attempt]); });
+      }
+      try {
+        var res = await fetch(API_BASE + '/api/score', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (res.ok) {
+          var data = await res.json();
+          if (attempt > 0) {
+            try { if (window.__bloomToast) window.__bloomToast('הציון נשמר ✓', 'success'); } catch (e) {}
+          }
+          return { ok: true, data: data };
+        }
+        // 4xx errors (bad_date / bad_score / etc) are not transient —
+        // don't retry, don't queue. Server has rejected the payload.
+        if (res.status >= 400 && res.status < 500) {
+          return { ok: false, terminal: true, status: res.status };
+        }
+        lastErr = new Error('http_' + res.status);
+      } catch (e) { lastErr = e; }
+    }
+    // All retries failed — queue for next session.
+    enqueueScore(payload);
+    return { ok: false, queued: true, error: lastErr ? String(lastErr.message || lastErr) : 'unknown' };
+  }
+
+  function enqueueScore(payload) {
+    try {
+      var raw = localStorage.getItem(SCORE_QUEUE_KEY);
+      var arr = raw ? JSON.parse(raw) : [];
+      if (!Array.isArray(arr)) arr = [];
+      // Cap the queue at 10 entries to prevent runaway storage growth
+      // (10 daily attempts queued = ~10 days offline = realistic upper bound).
+      arr.push({ ts: Date.now(), payload: payload });
+      while (arr.length > 10) arr.shift();
+      localStorage.setItem(SCORE_QUEUE_KEY, JSON.stringify(arr));
+    } catch (e) {}
+  }
+
+  // Called once on boot (from 13-boot.js). Drains every queued submission
+  // sequentially, removing each on success. Non-blocking — runs in the
+  // background while the player navigates.
+  async function drainScoreQueue() {
+    var arr;
+    try {
+      var raw = localStorage.getItem(SCORE_QUEUE_KEY);
+      if (!raw) return;
+      arr = JSON.parse(raw);
+      if (!Array.isArray(arr) || !arr.length) return;
+    } catch (e) { return; }
+    var drained = 0;
+    var remaining = [];
+    for (var i = 0; i < arr.length; i++) {
+      var item = arr[i];
+      if (!item || !item.payload) continue;
+      try {
+        var r = await fetch(API_BASE + '/api/score', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(item.payload)
+        });
+        if (r.ok) { drained++; continue; }
+        if (r.status >= 400 && r.status < 500) {
+          // Terminal — drop the row, log + count as drained for stats.
+          drained++; continue;
+        }
+        // 5xx / network — keep for next time.
+        remaining.push(item);
+      } catch (e) {
+        remaining.push(item);
+      }
+    }
+    try {
+      if (remaining.length) localStorage.setItem(SCORE_QUEUE_KEY, JSON.stringify(remaining));
+      else localStorage.removeItem(SCORE_QUEUE_KEY);
+    } catch (e) {}
+    if (drained > 0) {
+      try { if (window.__bloomToast) window.__bloomToast('🎯 ' + drained + ' ציון' + (drained > 1 ? 'ים' : '') + ' שמורים נשלחו בהצלחה', 'success'); } catch (e) {}
+    }
+  }
+  try { window.__bloomDrainScoreQueue = drainScoreQueue; } catch (e) {}
 
   // Writes one row to difficulty_scores per game so the "לפי קושי" tab can
   // aggregate best-per-difficulty across practice + duel without polluting
@@ -17614,6 +17851,15 @@
   // Persist mode on every init so we can restore on refresh.
   // (the save is inside init() itself — see 'bloom_last_mode' setItem)
 
+  // T2.3 — drain any queued score submissions that failed to send last
+  // session (offline / mobile data flake). Runs after a short delay so
+  // the home/game mounts first. Self-toasts on success.
+  setTimeout(function() {
+    try {
+      if (typeof window.__bloomDrainScoreQueue === 'function') window.__bloomDrainScoreQueue();
+    } catch (e) {}
+  }, 2500);
+
   // Visit ping — fire-and-forget. Lets the admin dashboard distinguish
   // "visited but didn't play" from "didn't visit at all" (bounce rate).
   try {
@@ -20698,6 +20944,25 @@
     });
   }
 
+  // T2.5 — track per-day "we already claimed the all-done bonus" so we
+  // only fire the celebration once per day. The earn endpoint also dedups
+  // server-side (one per device per day), but client-side dedup avoids
+  // even the network round-trip.
+  var CHECKLIST_BONUS_KEY = 'bloom_checklist_bonus';
+  function checklistBonusClaimedToday() {
+    try {
+      var raw = localStorage.getItem(CHECKLIST_BONUS_KEY);
+      var today = (typeof todayInIsrael === 'function') ? todayInIsrael() : new Date().toISOString().slice(0,10);
+      return raw === today;
+    } catch (e) { return false; }
+  }
+  function markChecklistBonusClaimed() {
+    try {
+      var today = (typeof todayInIsrael === 'function') ? todayInIsrael() : new Date().toISOString().slice(0,10);
+      localStorage.setItem(CHECKLIST_BONUS_KEY, today);
+    } catch (e) {}
+  }
+
   function renderChecklistTile(homeEl, data) {
     var existing = document.getElementById('checklist-home-tile');
     if (existing) existing.remove();
@@ -20735,6 +21000,58 @@
     });
     var calBtn = document.getElementById('checklist-open-calendar');
     if (calBtn) calBtn.onclick = showCalendarModal;
+
+    // T2.5 — All-Done bonus. When data.allDone transitions to true AND
+    // we haven't yet claimed today's bonus, fire earnCredits() and show
+    // a celebration. The dedup is double-bolted (localStorage on client,
+    // game_config _earn key on server) so a refresh-spammer gets nothing.
+    if (data.allDone && !checklistBonusClaimedToday()) {
+      markChecklistBonusClaimed();
+      // Determine today's daily-special-played flag from localStorage
+      // (the only client-tracked item — others are server-verified).
+      var dailySpecialDone = false;
+      try {
+        var todayStr = (typeof todayInIsrael === 'function') ? todayInIsrael() : null;
+        if (todayStr && typeof window._dailySpecial === 'object' && window._dailySpecial) {
+          var raw = localStorage.getItem('bloom_ds_played:' + todayStr);
+          dailySpecialDone = !!raw;
+        }
+      } catch (e) {}
+      if (typeof earnCredits === 'function') {
+        earnCredits('daily_checklist_complete', { dailySpecialDone: dailySpecialDone });
+      }
+      // Celebrate.
+      try { if (typeof soundMilestone === 'function') soundMilestone(5); } catch (e) {}
+      try { if (typeof buzz === 'function') buzz([80, 60, 100, 60, 120]); } catch (e) {}
+      showChecklistAllDoneOverlay();
+    }
+  }
+
+  // Full-screen celebration overlay for the all-done event. Mounts a
+  // 28-particle confetti burst + big "🏆 הושלמו!" card. Auto-dismisses
+  // in 4 seconds or on tap.
+  function showChecklistAllDoneOverlay() {
+    var ov = document.createElement('div');
+    ov.id = 'checklist-all-done-overlay';
+    ov.className = 'cl-celeb-overlay';
+    var confetti = '';
+    for (var i = 0; i < 28; i++) {
+      var x = Math.random() * 100;
+      var delay = Math.random() * 0.4;
+      var color = ['#FFD93D', '#FF6B9D', '#6BCB77', '#5FAEE0', '#9C7BD8'][i % 5];
+      confetti += '<span class="cl-conf" style="left:' + x + '%;background:' + color + ';animation-delay:' + delay + 's"></span>';
+    }
+    ov.innerHTML =
+      confetti +
+      '<div class="cl-celeb-card">' +
+        '<div class="cl-celeb-icon">🏆</div>' +
+        '<div class="cl-celeb-title">כל המשימות הושלמו!</div>' +
+        '<div class="cl-celeb-sub">+100💎 בונוס יומי</div>' +
+      '</div>';
+    document.body.appendChild(ov);
+    var close = function() { try { ov.remove(); } catch (e) {} };
+    ov.onclick = close;
+    setTimeout(close, 4200);
   }
 
   function handleChecklistAction(action) {
@@ -24607,9 +24924,57 @@
       '<span class="trophy-tile-body">' +
         '<span class="trophy-tile-title">🏆 ' + data.trophies.toLocaleString() + claimBadge + '</span>' +
         '<span class="trophy-tile-sub">ארנת ' + arena.label + ' · ' + nextHint + '</span>' +
+        renderTrophyStrip(data) +
       '</span>' +
       '<span class="trophy-tile-arrow">›</span>'
     );
+  }
+
+  // T2.1 — Trophy Road horizontal strip embedded inside the tile.
+  // 8 arena nodes laid out with a connecting bar. Current arena gets
+  // the "you-are-here" pulse + scale-up; already-passed arenas show ✓
+  // and the connecting bar to them is fully filled; upcoming arenas are
+  // muted and the bar to them is empty. The next-arena segment has a
+  // partial fill proportional to (trophies - curr.min) / (next.min - curr.min).
+  // The strip is purely visual — clicking the tile still opens the modal.
+  function renderTrophyStrip(data) {
+    var arenas = Array.isArray(data.arenas) && data.arenas.length
+      ? data.arenas
+      : [data.arena].filter(Boolean);
+    if (!arenas.length) return '';
+    var curIdx = -1;
+    for (var i = 0; i < arenas.length; i++) {
+      if (data.arena && arenas[i].id === data.arena.id) { curIdx = i; break; }
+    }
+    if (curIdx < 0) curIdx = 0;
+    var trophies = data.trophies | 0;
+    // Build the segments: nodes (arena pills) interleaved with bars.
+    var html = '<span class="trophy-strip">';
+    for (var j = 0; j < arenas.length; j++) {
+      var a = arenas[j];
+      var nodeClass = 'trophy-strip-node';
+      if (j < curIdx) nodeClass += ' tr-passed';
+      else if (j === curIdx) nodeClass += ' tr-current';
+      else nodeClass += ' tr-upcoming';
+      var content = j === curIdx
+        ? a.emoji
+        : (j < curIdx ? '✓' : a.emoji);
+      html += '<span class="' + nodeClass + '" style="color:' + a.color + '" title="ארנת ' + a.label + ' · ' + a.minTrophies + '🏆">' + content + '</span>';
+      // Bar to next arena (if any)
+      if (j < arenas.length - 1) {
+        var next = arenas[j + 1];
+        var pct = 0;
+        if (j < curIdx) pct = 100;
+        else if (j === curIdx) {
+          var span = next.minTrophies - a.minTrophies;
+          var progress = trophies - a.minTrophies;
+          pct = span > 0 ? Math.max(0, Math.min(100, Math.round(progress / span * 100))) : 100;
+        }
+        html += '<span class="trophy-strip-bar"><span class="trophy-strip-fill" style="width:' + pct + '%;background:' + next.color + '"></span></span>';
+      }
+    }
+    html += '</span>';
+    return html;
   }
 
   function showTrophyModal() {

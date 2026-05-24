@@ -140,6 +140,15 @@
   // Persist mode on every init so we can restore on refresh.
   // (the save is inside init() itself — see 'bloom_last_mode' setItem)
 
+  // T2.3 — drain any queued score submissions that failed to send last
+  // session (offline / mobile data flake). Runs after a short delay so
+  // the home/game mounts first. Self-toasts on success.
+  setTimeout(function() {
+    try {
+      if (typeof window.__bloomDrainScoreQueue === 'function') window.__bloomDrainScoreQueue();
+    } catch (e) {}
+  }, 2500);
+
   // Visit ping — fire-and-forget. Lets the admin dashboard distinguish
   // "visited but didn't play" from "didn't visit at all" (bounce rate).
   try {

@@ -74,6 +74,25 @@
     });
   }
 
+  // T2.5 — track per-day "we already claimed the all-done bonus" so we
+  // only fire the celebration once per day. The earn endpoint also dedups
+  // server-side (one per device per day), but client-side dedup avoids
+  // even the network round-trip.
+  var CHECKLIST_BONUS_KEY = 'bloom_checklist_bonus';
+  function checklistBonusClaimedToday() {
+    try {
+      var raw = localStorage.getItem(CHECKLIST_BONUS_KEY);
+      var today = (typeof todayInIsrael === 'function') ? todayInIsrael() : new Date().toISOString().slice(0,10);
+      return raw === today;
+    } catch (e) { return false; }
+  }
+  function markChecklistBonusClaimed() {
+    try {
+      var today = (typeof todayInIsrael === 'function') ? todayInIsrael() : new Date().toISOString().slice(0,10);
+      localStorage.setItem(CHECKLIST_BONUS_KEY, today);
+    } catch (e) {}
+  }
+
   function renderChecklistTile(homeEl, data) {
     var existing = document.getElementById('checklist-home-tile');
     if (existing) existing.remove();
@@ -111,6 +130,58 @@
     });
     var calBtn = document.getElementById('checklist-open-calendar');
     if (calBtn) calBtn.onclick = showCalendarModal;
+
+    // T2.5 — All-Done bonus. When data.allDone transitions to true AND
+    // we haven't yet claimed today's bonus, fire earnCredits() and show
+    // a celebration. The dedup is double-bolted (localStorage on client,
+    // game_config _earn key on server) so a refresh-spammer gets nothing.
+    if (data.allDone && !checklistBonusClaimedToday()) {
+      markChecklistBonusClaimed();
+      // Determine today's daily-special-played flag from localStorage
+      // (the only client-tracked item — others are server-verified).
+      var dailySpecialDone = false;
+      try {
+        var todayStr = (typeof todayInIsrael === 'function') ? todayInIsrael() : null;
+        if (todayStr && typeof window._dailySpecial === 'object' && window._dailySpecial) {
+          var raw = localStorage.getItem('bloom_ds_played:' + todayStr);
+          dailySpecialDone = !!raw;
+        }
+      } catch (e) {}
+      if (typeof earnCredits === 'function') {
+        earnCredits('daily_checklist_complete', { dailySpecialDone: dailySpecialDone });
+      }
+      // Celebrate.
+      try { if (typeof soundMilestone === 'function') soundMilestone(5); } catch (e) {}
+      try { if (typeof buzz === 'function') buzz([80, 60, 100, 60, 120]); } catch (e) {}
+      showChecklistAllDoneOverlay();
+    }
+  }
+
+  // Full-screen celebration overlay for the all-done event. Mounts a
+  // 28-particle confetti burst + big "🏆 הושלמו!" card. Auto-dismisses
+  // in 4 seconds or on tap.
+  function showChecklistAllDoneOverlay() {
+    var ov = document.createElement('div');
+    ov.id = 'checklist-all-done-overlay';
+    ov.className = 'cl-celeb-overlay';
+    var confetti = '';
+    for (var i = 0; i < 28; i++) {
+      var x = Math.random() * 100;
+      var delay = Math.random() * 0.4;
+      var color = ['#FFD93D', '#FF6B9D', '#6BCB77', '#5FAEE0', '#9C7BD8'][i % 5];
+      confetti += '<span class="cl-conf" style="left:' + x + '%;background:' + color + ';animation-delay:' + delay + 's"></span>';
+    }
+    ov.innerHTML =
+      confetti +
+      '<div class="cl-celeb-card">' +
+        '<div class="cl-celeb-icon">🏆</div>' +
+        '<div class="cl-celeb-title">כל המשימות הושלמו!</div>' +
+        '<div class="cl-celeb-sub">+100💎 בונוס יומי</div>' +
+      '</div>';
+    document.body.appendChild(ov);
+    var close = function() { try { ov.remove(); } catch (e) {} };
+    ov.onclick = close;
+    setTimeout(close, 4200);
   }
 
   function handleChecklistAction(action) {

@@ -647,6 +647,110 @@
     };
   } catch (e) {}
 
+  // ============ T2.2 — Streak Calendar modal ============
+  // Visual representation of the player's current streak + upcoming
+  // milestone bonuses. We don't store a full per-day play history
+  // (would require schema work), so we reconstruct backwards from
+  // today based on streak.count — this is honest: if you have a
+  // 7-day streak, the last 7 days WERE played. Today's status is
+  // derived from streak.lastPlayed === todayInIsrael().
+  //
+  // Layout: 14 cells in a 7×2 grid. Row 1 = past 7 days. Row 2 = next
+  // 7 days. Today sits at the leftmost of row 2 (matches RTL flow:
+  // "past on the right, future on the left"). Milestones (3/7/14/30)
+  // are marked with their gem reward to drive prospective-FOMO.
+  var STREAK_MILESTONES = [
+    { day: 3,  reward: 50,   icon: '🎁' },
+    { day: 7,  reward: 100,  icon: '🎁' },
+    { day: 14, reward: 250,  icon: '💎' },
+    { day: 30, reward: 500,  icon: '💎' },
+    { day: 60, reward: 1000, icon: '👑' },
+    { day: 100,reward: 2000, icon: '👑' }
+  ];
+  function dateAddDays(dateStr, n) {
+    var d = new Date(dateStr + 'T00:00:00Z');
+    d.setUTCDate(d.getUTCDate() + n);
+    return d.toISOString().slice(0, 10);
+  }
+  function shortDayLabel(dateStr) {
+    var d = new Date(dateStr + 'T00:00:00Z');
+    var day = d.getUTCDate();
+    var months = ['1','2','3','4','5','6','7','8','9','10','11','12'];
+    return day + '.' + months[d.getUTCMonth()];
+  }
+  function showStreakCalendar() {
+    var existing = document.getElementById('streak-cal-modal');
+    if (existing) { existing.remove(); return; }
+    var s = (typeof loadStreak === 'function') ? loadStreak() : { count: 0, lastPlayed: null };
+    var today = (typeof todayInIsrael === 'function') ? todayInIsrael() : new Date().toISOString().slice(0, 10);
+    var playedToday = s.lastPlayed === today;
+    var streakLen = s.count | 0;
+    // Reconstruct: today's date is the LAST played day if playedToday,
+    // else (today - 1) is the last played day (if streakLen > 0).
+    var lastPlayedDate = playedToday ? today : (streakLen > 0 ? dateAddDays(today, -1) : null);
+    // Build 14 cells: 7 in the past (right side / row 1) + today + 6 future.
+    var cellsHtml = '';
+    // Row 1: 7 cells from oldest → most recent (excluding today)
+    for (var off = -7; off <= -1; off++) {
+      var cellDate = dateAddDays(today, off);
+      var inStreak = lastPlayedDate && streakLen > 0
+        ? (new Date(cellDate + 'T00:00:00Z') >= new Date(dateAddDays(lastPlayedDate, -(streakLen - 1)) + 'T00:00:00Z')
+           && new Date(cellDate + 'T00:00:00Z') <= new Date(lastPlayedDate + 'T00:00:00Z'))
+        : false;
+      cellsHtml += '<div class="streak-cal-cell ' + (inStreak ? 'sc-played' : 'sc-empty') + '">' +
+        '<span class="sc-icon">' + (inStreak ? '✓' : '·') + '</span>' +
+        '<span class="sc-date">' + shortDayLabel(cellDate) + '</span>' +
+        '</div>';
+    }
+    // Today cell
+    cellsHtml += '<div class="streak-cal-cell sc-today ' + (playedToday ? 'sc-played' : 'sc-pending') + '">' +
+      '<span class="sc-icon">' + (playedToday ? '✓' : '🔥') + '</span>' +
+      '<span class="sc-date">היום</span>' +
+      '</div>';
+    // Row 2: next 6 days, with milestone markers
+    for (var off2 = 1; off2 <= 6; off2++) {
+      var futureDate = dateAddDays(today, off2);
+      // What streak count would I have on this future day if I keep playing?
+      var futureStreak = streakLen + off2;
+      if (!playedToday) futureStreak = off2; // would have to restart today
+      // Is this day a milestone?
+      var ms = null;
+      for (var m = 0; m < STREAK_MILESTONES.length; m++) {
+        if (STREAK_MILESTONES[m].day === futureStreak) { ms = STREAK_MILESTONES[m]; break; }
+      }
+      cellsHtml += '<div class="streak-cal-cell sc-future' + (ms ? ' sc-milestone' : '') + '">' +
+        '<span class="sc-icon">' + (ms ? ms.icon : '·') + '</span>' +
+        '<span class="sc-date">' + shortDayLabel(futureDate) + '</span>' +
+        (ms ? '<span class="sc-reward">+' + ms.reward + '💎</span>' : '') +
+        '</div>';
+    }
+    // Next-milestone summary line (the loss-aversion driver)
+    var nextMs = null;
+    for (var k = 0; k < STREAK_MILESTONES.length; k++) {
+      if (STREAK_MILESTONES[k].day > streakLen) { nextMs = STREAK_MILESTONES[k]; break; }
+    }
+    var nextHtml = nextMs
+      ? '<div class="streak-cal-next">🎯 עוד <strong>' + (nextMs.day - streakLen) + ' ימים</strong> ל-' + nextMs.icon + ' <strong>+' + nextMs.reward + '💎</strong></div>'
+      : '<div class="streak-cal-next">👑 הגעת לרצף הגבוה ביותר!</div>';
+    var modal = document.createElement('div');
+    modal.id = 'streak-cal-modal';
+    modal.className = 'streak-cal-overlay';
+    modal.innerHTML =
+      '<div class="streak-cal-card">' +
+        '<button class="streak-cal-close" aria-label="סגור">×</button>' +
+        '<div class="streak-cal-title">🔥 ' + streakLen + ' ימים רצוף</div>' +
+        '<div class="streak-cal-sub">' + (playedToday ? '✅ שמרת היום' : '⚠ עדיין לא שיחקת היום') + '</div>' +
+        nextHtml +
+        '<div class="streak-cal-grid">' + cellsHtml + '</div>' +
+        '<div class="streak-cal-foot">המשך לשחק כל יום ותקבל בונוסים גדלים. יום אחד פסיכ → הרצף מתאפס.</div>' +
+      '</div>';
+    document.body.appendChild(modal);
+    var close = function() { try { modal.remove(); } catch (e) {} };
+    modal.querySelector('.streak-cal-close').onclick = close;
+    modal.addEventListener('click', function(e) { if (e.target === modal) close(); });
+  }
+  try { window.__bloomShowStreakCal = showStreakCalendar; } catch (e) {}
+
   function incrementGamesPlayed() {
     const n = loadGamesPlayed() + 1;
     try { localStorage.setItem(GAMES_COUNT_KEY, String(n)); } catch (e) {}

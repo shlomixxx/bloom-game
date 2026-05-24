@@ -68,9 +68,57 @@
       '<span class="trophy-tile-body">' +
         '<span class="trophy-tile-title">🏆 ' + data.trophies.toLocaleString() + claimBadge + '</span>' +
         '<span class="trophy-tile-sub">ארנת ' + arena.label + ' · ' + nextHint + '</span>' +
+        renderTrophyStrip(data) +
       '</span>' +
       '<span class="trophy-tile-arrow">›</span>'
     );
+  }
+
+  // T2.1 — Trophy Road horizontal strip embedded inside the tile.
+  // 8 arena nodes laid out with a connecting bar. Current arena gets
+  // the "you-are-here" pulse + scale-up; already-passed arenas show ✓
+  // and the connecting bar to them is fully filled; upcoming arenas are
+  // muted and the bar to them is empty. The next-arena segment has a
+  // partial fill proportional to (trophies - curr.min) / (next.min - curr.min).
+  // The strip is purely visual — clicking the tile still opens the modal.
+  function renderTrophyStrip(data) {
+    var arenas = Array.isArray(data.arenas) && data.arenas.length
+      ? data.arenas
+      : [data.arena].filter(Boolean);
+    if (!arenas.length) return '';
+    var curIdx = -1;
+    for (var i = 0; i < arenas.length; i++) {
+      if (data.arena && arenas[i].id === data.arena.id) { curIdx = i; break; }
+    }
+    if (curIdx < 0) curIdx = 0;
+    var trophies = data.trophies | 0;
+    // Build the segments: nodes (arena pills) interleaved with bars.
+    var html = '<span class="trophy-strip">';
+    for (var j = 0; j < arenas.length; j++) {
+      var a = arenas[j];
+      var nodeClass = 'trophy-strip-node';
+      if (j < curIdx) nodeClass += ' tr-passed';
+      else if (j === curIdx) nodeClass += ' tr-current';
+      else nodeClass += ' tr-upcoming';
+      var content = j === curIdx
+        ? a.emoji
+        : (j < curIdx ? '✓' : a.emoji);
+      html += '<span class="' + nodeClass + '" style="color:' + a.color + '" title="ארנת ' + a.label + ' · ' + a.minTrophies + '🏆">' + content + '</span>';
+      // Bar to next arena (if any)
+      if (j < arenas.length - 1) {
+        var next = arenas[j + 1];
+        var pct = 0;
+        if (j < curIdx) pct = 100;
+        else if (j === curIdx) {
+          var span = next.minTrophies - a.minTrophies;
+          var progress = trophies - a.minTrophies;
+          pct = span > 0 ? Math.max(0, Math.min(100, Math.round(progress / span * 100))) : 100;
+        }
+        html += '<span class="trophy-strip-bar"><span class="trophy-strip-fill" style="width:' + pct + '%;background:' + next.color + '"></span></span>';
+      }
+    }
+    html += '</span>';
+    return html;
   }
 
   function showTrophyModal() {
