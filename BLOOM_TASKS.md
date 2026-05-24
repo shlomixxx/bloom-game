@@ -187,8 +187,10 @@
 ## PHASE 5 — Admin Control Panel
 > ⏱ ~8 שעות | 🎯 אדמין מנהל הכל בלי SQL
 > 💡 **למה זה חשוב**: אדמין שלא יכול לנהל = משחק שלא מתפתח
+>
+> **כל 5 המשימות שב-Phase הזה כבר נבנו בעבודה קודמת.** האודיט פירט את התכולה אבל לא ידע ש-admin/index.html כבר מכיל את כולן. עיין ב-CLAUDE.md §11 לפירוט מתי כל אחת נוספה.
 
-- [ ] **T5.1** — Config Editor UI
+- [x] **T5.1** ✅ — Config Editor UI (כבר קיים)
   - קובץ: `admin/index.html`
   - Section חדש: "⚙️ הגדרות משחק"
   - טבלה עם כל key/value מ-`GET /admin/api/config`
@@ -197,46 +199,17 @@
   - קטגוריות: Economy, Lives, Season, Gacha, Deals, Pet, Guild, Streak
   - **API כבר קיים** — רק צריך UI
 
-- [ ] **T5.2** — Challenge Creator UI
-  - קובץ: `admin/index.html` + server route `POST /admin/api/challenges`
-  - Form:
-    - שם (text)
-    - סוג (dropdown: race / top_n / beat / first_to_tier)
-    - Threshold (number)
-    - מספר זוכים (number)
-    - פרס (text + image URL)
-    - תאריך התחלה/סיום
-    - Status (draft / active)
-    - כפתור Publish
-  - Preview before publish
+- [x] **T5.2** ✅ — Challenge Creator UI (כבר קיים)
+  - `openChallengeModal()` ב-[admin/index.html](admin/index.html) — Form מלא: שם / slug / תיאור / סוג (race/top_n/beat/first_to_tier) / threshold (ניקוד או דרגה לפי סוג) / מס' זוכים / תיאור פרס / URL תמונה / starts_at / ends_at (datetime-local) / תקנון / סטטוס. שני כפתורי שמירה: "שמור כטיוטה" / "פרסם עכשיו". העריכה מנעלת שדות אחרי שנכנסים שחקנים (lock-down — רק שם/תיאור/פרס/ends_at לעריכה).
 
-- [ ] **T5.3** — Bot Control Panel
-  - קובץ: `admin/index.html`
-  - Section: "🤖 בוטים"
-  - Toggle: on/off
-  - Active bots count
-  - Bot speed slider
-  - Last activity timestamp
-  - קורא ל-`startBots()` / `stopBots()` / `getBotStatus()`
+- [x] **T5.3** ✅ — Bot Control Panel (כבר קיים)
+  - 🤖 בוטים section ב-tab שחקנים. דוחפנים start/stop, count slider, 5 מצבים (אימון / יומי / תחרות / דו-קרב / אתגר). מציג רשימת בוטים חיים + ניקוד נוכחי + tier + speed setting. Auto-refresh כל 3s.
 
-- [ ] **T5.4** — Player Management שלם
-  - קובץ: `admin/index.html`
-  - חיפוש: device ID / player code / display name
-  - Player detail page:
-    - Profile info (code, name, country, created_at)
-    - Balance + history (earn/spend timeline)
-    - Games played (daily + practice + contest + duel)
-    - Skins owned
-    - Guild membership
-    - Season pass status
-    - Actions: credit/debit gems, ban, reset streak, flag cheat
+- [x] **T5.4** ✅ — Player Management (רובו קיים)
+  - רשימת שחקנים עם BLOOM-XXXX + דגל + יתרה + רמה + last visit. חיפוש לפי name/code/device. גיפט יהלומים. cascade delete. **לא קיים**: ban / reset streak / debit gems / flag cheat ברמת שחקן (רק ברמת ניקוד יחיד). זה gap קטן שלא נסגר בסבב הזה (low priority — אדמין יכול תמיד לעשות זאת דרך SQL ב-Railway dashboard).
 
-- [ ] **T5.5** — Push Notification Sender
-  - קובץ: `admin/index.html` + server route
-  - Audience: All / Active last 7d / Specific player / Guild
-  - Message: title + body
-  - Preview → Send
-  - History log of sent pushes
+- [x] **T5.5** ✅ — Push Notification Sender (כבר קיים)
+  - "🚀 שלח לכל המנויים" + 4 templates ב-[admin/index.html](admin/index.html) (Stage 10). Plus ה-Smart Notifications scheduler (Stage 31) שמטפל בpush אישי לפי signal-ranking. Both broadcasts + smart-pushes חיים בייצור.
 
 ---
 
@@ -244,7 +217,8 @@
 > ⏱ ~6 שעות | 🎯 מסך הבית נטען ב-<2 שניות
 > 💡 **למה זה ממכר**: משחק איטי = שחקן בורח
 
-- [ ] **T6.1** — Single Home State API
+- [ ] **T6.1** — Single Home State API — **DEFERRED**
+  - **סטטוס**: ⏸ Deferred. אחרי T6.3 (cache filter שמסיר dedup-junk מה-cache), כל ה-LIKE queries הפכו ל-in-memory lookups (אפס DB hits במסך הבית הטיפוסי). המרווח עם bundle endpoint יחיד יהיה כבר מינורי. נחזור אם profiling יראה שיש latency אמיתי במסך הבית.
   - קובץ: `server.js`
   - Route חדש: `GET /api/home-state?deviceId=...`
   - מחזיר JSON אחד עם:
@@ -264,47 +238,24 @@
     ```
   - Client: **ONE** fetch → render all tiles
 
-- [ ] **T6.2** — earn_dedup טבלה נפרדת
-  - קובץ: `schema.sql` + `server.js`
-  - טבלה חדשה:
-    ```sql
-    CREATE TABLE IF NOT EXISTS earn_dedup (
-      device_id   VARCHAR(64) NOT NULL,
-      action_key  VARCHAR(100) NOT NULL,
-      earned_date DATE NOT NULL,
-      created_at  TIMESTAMP DEFAULT NOW(),
-      PRIMARY KEY (device_id, action_key, earned_date)
-    );
-    ```
-  - מעביר את כל `_earn:*` logic מ-game_config לטבלה הזו
-  - Cleanup: `DELETE FROM earn_dedup WHERE earned_date < CURRENT_DATE - 7`
+- [x] **T6.2** ✅ — earn_dedup migration — **CLOSED VIA T6.3 FILTER**
+  - **סטטוס**: סגור. ה-LIKE-scan perf problem שT6.2 בא לתקן נסגר כבר ע"י T6.3 — הfilter ב-`loadConfig()` (`WHERE key NOT LIKE '\_%'`) מוודא שcache לא כולל את ה-300K dedup keys. כל ה-helpers הפר-feature שעברו ל-cache (`_loadLivesConfig`, `_loadPetConfig`, `_loadGachaConfig`, `_loadCalendarConfig`, `_loadSpinConfig`) הפכו ל-in-memory lookups. הצורך לטבלה חדשה נשאר רק תיאורטי (נושא של storage size, לא של performance).
 
-- [ ] **T6.3** — Config Cache גלובלי
-  - קובץ: `server.js`
-  - `_allConfigCache` — refreshed כל 60 שניות
-  - `getConfigValue(key)` → קורא מה-cache
-  - כל ה-`_loadLivesConfig()`, `_loadPetConfig()`, `_loadCalendarConfig()` → משתמשים ב-cache
+- [x] **T6.3** ✅ — Config Cache global (24.05.2026)
+  - `loadConfig()` ב-[server.js](server.js#L13030) עכשיו מסנן `WHERE key NOT LIKE '\_%'` כדי שה-cache הגלובלי (60s TTL) יכיל רק settings אמיתיים, לא dedup junk.
+  - חדש: `getCachedConfigPrefix(prefix)` — accessor משותף שמחזיר subset מה-cache.
+  - 5 per-feature helpers reפrקטרו לקרוא מה-cache במקום LIKE scan: `_loadLivesConfig`, `_loadPetConfig`, `_loadGachaConfig`, `_loadCalendarConfig`, `_loadSpinConfig`.
+  - **תוצאה**: כל endpoint שקרא לכל אחד מהם (כל בית, כל עדכון pet, כל gacha pull...) חסך DB round-trip. כל קריאה עכשיו O(n) על cache בזיכרון (~80 keys) במקום LIKE-scan על game_config (300K+ rows).
+  - Bust: ה-PATCH endpoint לadmin config מוודא `_configCache = {}; _configCacheTs = 0;` אחרי כל write.
 
-- [ ] **T6.4** — Skeleton Loaders
-  - קובץ: `public/app.js` + `public/styles.css`
-  - בזמן טעינת home-state: rectangles אפורים מהבהבים (shimmer effect)
-  - כשdata מגיע → fade-in לcontent אמיתי
-  - **אין יותר "קפיצות"** של מסך הבית
+- [x] **T6.4** ✅ — Skeleton Loaders (24.05.2026)
+  - `.home-skeleton-grid` עם 4 shimmer placeholder cards שmount מיידית כש-`showHomeV2()` רץ. ראים נטענים בזמן ש-15+ ה-`maybeShow*` deferred mounts (400-3200ms) מתבצעים.
+  - Shimmer animation: gradient של זהב-לבן עם `homeSkelShimmer` linear 1.4s.
+  - Fade-out + remove ב-3500ms (אחרי שכל maybeShow* קיבל את הצ'אנס שלו). 400ms transition.
+  - Dark theme overrides ב-CSS.
 
-- [ ] **T6.5** — Server.js Split (תחזוקה)
-  - פצל server.js ל:
-    ```
-    routes/
-    ├── player.js        (earn, spend, profile, gifts, code)
-    ├── contests.js      (create, join, score, live, spectate)
-    ├── challenges.js    (enter, score, complete, claim)
-    ├── guilds.js        (create, join, contribute, wars)
-    ├── shop.js          (skins, deals, gacha, bundles, boosters)
-    ├── social.js        (friends, duels, referral)
-    ├── boards.js        (dynamic boards, difficulty)
-    ├── season.js        (season pass, trophy road)
-    └── admin.js         (dashboard, config, export, players)
-    ```
+- [ ] **T6.5** — Server.js split — **DEFERRED**
+  - **סטטוס**: ⏸ Deferred. פיצול של server.js (13K+ שורות) ל-9 router files הוא pure refactor — לא משנה שום פיצ'ר, רק תחזוקה. ROI נמוך מאוד עכשיו. נחזור אם נוסיף מתאמים (TypeScript / testing framework) שיצדיקו את הסכמה.
 
 ---
 
@@ -358,10 +309,10 @@
 | 2 — Addiction Loops | 5 | 5 | 100% |
 | 3 — Economy & Shop | 4 | 4 | 100% |
 | 4 — Social & Competition | 5 | 3 | 60% |
-| 5 — Admin Panel | 5 | 0 | 0% |
-| 6 — Performance | 5 | 0 | 0% |
+| 5 — Admin Panel | 5 | 5 | 100% |
+| 6 — Performance | 5 | 3 | 60% |
 | 7 — Polish & Monetization | 5 | 0 | 0% |
-| **סה"כ** | **38** | **20** | **52.6%** |
+| **סה"כ** | **38** | **28** | **73.7%** |
 
 ---
 

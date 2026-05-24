@@ -4034,12 +4034,9 @@ app.post('/api/daily-deals/buy', requireDeviceAuth, async (req, res) => {
 // audit + future ML-driven balance tweaks.
 // ============================================================
 async function _loadGachaConfig() {
-  try {
-    const r = await pool.query(`SELECT key, value FROM game_config WHERE key LIKE 'gacha_%'`);
-    const out = {};
-    r.rows.forEach(row => { out[row.key] = row.value; });
-    return out;
-  } catch (e) { return {}; }
+  // T6.3 — hits the global config cache (was per-feature LIKE scan).
+  try { return await getCachedConfigPrefix('gacha_'); }
+  catch (e) { return {}; }
 }
 
 async function _gachaResolveOnePull(cfg, pityCounter, isFreePull) {
@@ -4423,12 +4420,10 @@ app.get('/api/gacha/history', async (req, res) => {
 // Lives regen automatically over time, or via gems / ad watch.
 // ============================================================
 async function _loadLivesConfig() {
-  try {
-    const r = await pool.query(`SELECT key, value FROM game_config WHERE key LIKE 'lives_%'`);
-    const out = {};
-    r.rows.forEach(row => { out[row.key] = row.value; });
-    return out;
-  } catch (e) { return {}; }
+  // T6.3 — was a per-feature LIKE scan; now hits the global config
+  // cache via getCachedConfigPrefix(). Saves a DB round-trip per call.
+  try { return await getCachedConfigPrefix('lives_'); }
+  catch (e) { return {}; }
 }
 
 async function _computeLivesNow(deviceId, cfg) {
@@ -4684,10 +4679,13 @@ app.post('/api/player/lives/refill-ad', requireDeviceAuth, async (req, res) => {
 // complete each day (the completionist hook).
 // ============================================================
 async function _loadCalendarConfig() {
+  // T6.3 — reads from cached config. Picks the 5 keys we need; the
+  // cache already holds them.
   try {
-    const r = await pool.query(`SELECT key, value FROM game_config WHERE key IN ('calendar_enabled','checklist_enabled','calendar_show_days','season_pass_ends_at','daily_special_enabled')`);
+    await loadConfig();
+    const keys = ['calendar_enabled','checklist_enabled','calendar_show_days','season_pass_ends_at','daily_special_enabled'];
     const out = {};
-    r.rows.forEach(row => { out[row.key] = row.value; });
+    for (const k of keys) if (_configCache[k] !== undefined) out[k] = _configCache[k];
     return out;
   } catch (e) { return {}; }
 }
@@ -4953,12 +4951,9 @@ app.get('/api/checklist/today', async (req, res) => {
 // (gems, +xp). XP also granted server-side on game finish.
 // ============================================================
 async function _loadPetConfig() {
-  try {
-    const r = await pool.query(`SELECT key, value FROM game_config WHERE key LIKE 'pet_%'`);
-    const out = {};
-    r.rows.forEach(row => { out[row.key] = row.value; });
-    return out;
-  } catch (e) { return {}; }
+  // T6.3 — hits the global config cache (was per-feature LIKE scan).
+  try { return await getCachedConfigPrefix('pet_'); }
+  catch (e) { return {}; }
 }
 
 function _petComputeMood(lastVisitedAt) {
@@ -7980,13 +7975,10 @@ app.post('/api/league/claim', requireDeviceAuth, async (req, res) => {
 // Anti-cheat: server picks the segment, never trusts client.
 // ============================================================
 async function _loadSpinConfig() {
-  // Pulls the master toggle + bonus settings + all 12 segment definitions.
-  const r = await pool.query(
-    `SELECT key, value FROM game_config WHERE key LIKE 'daily_spin_%'`
-  );
-  const cfg = {};
-  for (const row of r.rows) cfg[row.key] = row.value;
-  return cfg;
+  // T6.3 — cached. Pulls the master toggle + bonus settings + all 12
+  // segment definitions from the global cache instead of a LIKE scan.
+  try { return await getCachedConfigPrefix('daily_spin_'); }
+  catch (e) { return {}; }
 }
 
 function _spinSegments(cfg) {
@@ -13021,6 +13013,10 @@ setInterval(async () => {
 // ============================================================
 
 // In-memory cache refreshed every 60s (avoids DB hit per page load).
+// T6.3 — Filter out dedup keys (`_earn:*`, `_gift_rate:*`, `_ad:*`, etc.)
+// at SELECT time so the cache holds ONLY genuine settings. Without this
+// filter, a production instance with 300K dedup rows would pull all of
+// them into memory every 60s — wasted RAM + slow refresh.
 let _configCache = {};
 let _configCacheTs = 0;
 const CONFIG_CACHE_TTL = 60 * 1000;
@@ -13028,7 +13024,10 @@ const CONFIG_CACHE_TTL = 60 * 1000;
 async function loadConfig() {
   if (Date.now() - _configCacheTs < CONFIG_CACHE_TTL) return _configCache;
   try {
-    const r = await pool.query('SELECT key, value FROM game_config');
+    // The `\_` escape + ESCAPE clause makes the underscore literal (not
+    // a wildcard). Keys starting with `_` are dedup junk; everything
+    // else is a real setting.
+    const r = await pool.query(`SELECT key, value FROM game_config WHERE key NOT LIKE '\\_%' ESCAPE '\\'`);
     const cfg = {};
     for (const row of r.rows) cfg[row.key] = row.value;
     _configCache = cfg;
@@ -13037,6 +13036,20 @@ async function loadConfig() {
     console.warn('loadConfig failed', e.message);
   }
   return _configCache;
+}
+
+// T6.3 — Shared accessor used by per-feature config helpers (_loadLivesConfig,
+// _loadPetConfig, _loadGachaConfig, etc). Returns the subset of cached
+// config whose keys start with the given prefix. Hits the cache (or
+// refreshes it transparently) — replaces the per-feature LIKE queries.
+async function getCachedConfigPrefix(prefix) {
+  await loadConfig();
+  const out = {};
+  const cfg = _configCache;
+  for (const k in cfg) {
+    if (k.indexOf(prefix) === 0) out[k] = cfg[k];
+  }
+  return out;
 }
 
 app.get('/api/config', async (_req, res) => {

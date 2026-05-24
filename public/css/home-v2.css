@@ -2768,3 +2768,54 @@ html[data-theme="dark"] .inbox-item-new { background: linear-gradient(135deg, rg
 html[data-theme="dark"] .inbox-item-title { color: #F5F2EB; }
 html[data-theme="dark"] .inbox-item-sub { color: #B5B2AA; }
 html[data-theme="dark"] .inbox-empty-title { color: #E8E6E2; }
+
+/* ── T6.4 — Skeleton loader grid ── */
+.home-skeleton-grid {
+  width: 100%;
+  max-width: 420px;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  margin: 8px 0;
+  transition: opacity 0.4s ease-out;
+}
+.home-skel-card {
+  height: 52px;
+  background: linear-gradient(135deg, var(--color-surface, #FFF), var(--color-surface-2, #F4F1E8));
+  border: 1px solid var(--color-border, rgba(0,0,0,0.06));
+  border-radius: 14px;
+  overflow: hidden;
+  position: relative;
+}
+.home-skel-shimmer {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 217, 61, 0.18) 25%,
+    rgba(255, 255, 255, 0.65) 50%,
+    rgba(255, 217, 61, 0.18) 75%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: homeSkelShimmer 1.4s linear infinite;
+}
+@keyframes homeSkelShimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+html[data-theme="dark"] .home-skel-card {
+  background: linear-gradient(135deg, #2A2724, #3A3530);
+  border-color: rgba(255,255,255,0.07);
+}
+html[data-theme="dark"] .home-skel-shimmer {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 217, 61, 0.10) 25%,
+    rgba(255, 255, 255, 0.18) 50%,
+    rgba(255, 217, 61, 0.10) 75%,
+    transparent 100%
+  );
+}

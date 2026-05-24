@@ -4520,6 +4520,17 @@
         '<span class="home-v2-boards-arrow">›</span>' +
       '</button>' +
 
+      // ── T6.4 — Skeleton grid: 4 placeholder cards visible immediately
+      // while the deferred maybeShow* tile mounts (400-3200ms) settle.
+      // Each placeholder card has a CSS shimmer. The whole grid fades
+      // out at 3500ms (after all maybeShow* have had their chance).
+      '<div class="home-skeleton-grid" id="home-skeleton-grid">' +
+        '<div class="home-skel-card"><span class="home-skel-shimmer"></span></div>' +
+        '<div class="home-skel-card"><span class="home-skel-shimmer"></span></div>' +
+        '<div class="home-skel-card"><span class="home-skel-shimmer"></span></div>' +
+        '<div class="home-skel-card"><span class="home-skel-shimmer"></span></div>' +
+      '</div>' +
+
       // ── Battle Pass entry — primary visibility for the Season Pass.
       // Until this commit the BP was only accessible via the dynamic-boards
       // picker — players who never opened it never saw the BP existed.
@@ -4777,6 +4788,19 @@
         try { checkLevelUnlock(); } catch (e) {}
       }, 1800);
     }
+
+    // T6.4 — fade out + remove the skeleton grid after all deferred
+    // maybeShow* mounts have had a chance to settle (max delay is 3.2s).
+    // Skeleton serves as the "loading" state for the addiction-stack
+    // tiles that arrive asynchronously.
+    setTimeout(function() {
+      var sk = document.getElementById('home-skeleton-grid');
+      if (sk) {
+        sk.style.transition = 'opacity 0.4s ease-out';
+        sk.style.opacity = '0';
+        setTimeout(function() { try { sk.remove(); } catch (e) {} }, 450);
+      }
+    }, 3500);
 
     // T4.4 — Notification Inbox icon. Mounts the 🔔 button into the
     // topbar and kicks off the badge fetch. Re-refresh badge every
