@@ -240,7 +240,7 @@
           });
         } else {
           if (btn) btn.disabled = false;
-          alert(d && d.reason === 'already_petted_today' ? 'כבר ליטפת היום!' : 'שגיאה');
+          showToast(d && d.reason === 'already_petted_today' ? 'כבר ליטפת היום!' : 'שגיאה', d && d.reason === 'already_petted_today' ? 'info' : 'error');
         }
       });
   }
@@ -277,11 +277,11 @@
         } else {
           if (btn) btn.disabled = false;
           if (d && d.reason === 'insufficient_funds') {
-            alert('💎 חסר ' + ((d.price || 0) - (d.balance || 0)) + '💎');
+            showToast('💎 חסר ' + ((d.price || 0) - (d.balance || 0)) + '💎', 'warning');
           } else if (d && d.reason === 'daily_limit_reached') {
-            alert('🍽 הגעת למקסימום האכלות יומי (' + d.feedsPerDay + ')');
+            showToast('🍽 הגעת למקסימום האכלות יומי (' + d.feedsPerDay + ')', 'info');
           } else {
-            alert('שגיאה');
+            showToast('שגיאה', 'error');
           }
         }
       });

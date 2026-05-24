@@ -206,8 +206,8 @@
         if (!d || !d.ok) {
           _spinning = false;
           if (btn) { btn.disabled = false; btn.innerHTML = '🎡 סובב!'; }
-          if (d && d.reason === 'already_spun_today') alert('כבר סובבת היום! חזור מחר.');
-          else alert(d && d.reason ? d.reason : 'שגיאה');
+          if (d && d.reason === 'already_spun_today') showToast('כבר סובבת היום! חזור מחר.', 'info');
+          else showToast(d && d.reason ? d.reason : 'שגיאה', 'error');
           return;
         }
         animateAndReveal(d);

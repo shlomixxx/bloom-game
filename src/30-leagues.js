@@ -204,7 +204,7 @@
           });
         } else {
           if (btn) btn.disabled = false;
-          alert(d && d.reason ? d.reason : 'שגיאה');
+          showToast(d && d.reason ? d.reason : 'שגיאה', 'error');
         }
       });
   }

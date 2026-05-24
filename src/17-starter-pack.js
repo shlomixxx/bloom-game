@@ -234,17 +234,17 @@
           if (btnEl) { btnEl.disabled = false; }
           var reason = (d && d.reason) || '';
           if (reason === 'insufficient_funds') {
-            alert('💎 חסר ביתרה. צריך ' + (d.price || 0) + '💎, יש לך ' + (d.balance || 0) + '💎.');
+            showToast('💎 חסר ביתרה. צריך ' + (d.price || 0) + '💎, יש לך ' + (d.balance || 0) + '💎', 'warning');
           } else if (reason === 'already_purchased') {
-            alert('כבר קנית את חבילת הפתיחה.');
+            showToast('כבר קנית את חבילת הפתיחה', 'info');
             var b = document.getElementById('starter-pack-home-banner');
             if (b) b.remove();
           } else if (reason === 'expired') {
-            alert('⏰ פג תוקף ההצעה.');
+            showToast('⏰ פג תוקף ההצעה', 'warning');
             var b2 = document.getElementById('starter-pack-home-banner');
             if (b2) b2.remove();
           } else {
-            alert('שגיאה: ' + (reason || 'unknown'));
+            showToast('שגיאה: ' + (reason || 'unknown'), 'error');
           }
           if (btnEl) btnEl.innerHTML = '✨ קנה עכשיו';
         }

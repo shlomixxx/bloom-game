@@ -196,7 +196,7 @@
       .then(function(d) {
         if (!d || !d.ok) {
           if (btn) { btn.disabled = false; btn.textContent = '🎁 שגיאה'; }
-          alert(d && d.reason ? d.reason : 'שגיאה');
+          showToast(d && d.reason ? d.reason : 'שגיאה', 'error');
           return;
         }
         if (typeof d.newBalance === 'number') {

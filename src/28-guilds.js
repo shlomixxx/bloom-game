@@ -250,7 +250,7 @@
           try { if (typeof buzz === 'function') buzz([80, 60, 100]); } catch (e) {}
           if (onSuccess) onSuccess();
           // Show the new guild's modal — and show the share code!
-          alert('🎉 הקלאן נוצר! קוד שיתוף: ' + (d.guild && d.guild.code));
+          showToast('🎉 הקלאן נוצר! קוד שיתוף: ' + (d.guild && d.guild.code), 'success');
           fetchGuildState(true).then(function(fresh) {
             if (fresh) {
               maybeShowGuildTile();
@@ -385,7 +385,7 @@
           });
         } else {
           if (btn) { btn.disabled = false; btn.textContent = '🎁 קבל פרס יומי'; }
-          alert(d && d.reason ? d.reason : 'שגיאה');
+          showToast(d && d.reason ? d.reason : 'שגיאה', 'error');
         }
       });
   }
@@ -406,7 +406,7 @@
           if (tile) tile.remove();
           maybeShowGuildTile();
         } else {
-          alert(d && d.reason ? d.reason : 'שגיאה');
+          showToast(d && d.reason ? d.reason : 'שגיאה', 'error');
         }
       });
   }

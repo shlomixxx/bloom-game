@@ -205,7 +205,7 @@
           });
         } else {
           if (btn) { btn.disabled = false; btn.innerHTML = '⭐ בצע פרסטיג\' עכשיו'; }
-          alert(d && d.reason ? d.reason : 'שגיאה');
+          showToast(d && d.reason ? d.reason : 'שגיאה', 'error');
         }
       });
   }

@@ -1,3 +1,37 @@
+  // ============ localStorage safe wrappers (T0.3) ============
+  // Safari Private Mode + iOS quota errors + some Android in-app browsers
+  // throw on direct localStorage access. Every site that touches a key
+  // should go through safeGet/safeSet so a thrown call never aborts the
+  // surrounding flow. Exposed on window so non-IIFE callers (admin panel,
+  // bot.js) can reuse the same defense without re-implementing.
+  function safeGet(key, fallback) {
+    try {
+      const v = localStorage.getItem(key);
+      return v === null ? (fallback === undefined ? null : fallback) : v;
+    } catch (e) { return fallback === undefined ? null : fallback; }
+  }
+  function safeSet(key, value) {
+    try { localStorage.setItem(key, value); return true; }
+    catch (e) { return false; }
+  }
+  function safeRemove(key) {
+    try { localStorage.removeItem(key); return true; }
+    catch (e) { return false; }
+  }
+  function safeGetJSON(key, fallback) {
+    const raw = safeGet(key, null);
+    if (raw === null) return fallback === undefined ? null : fallback;
+    try { return JSON.parse(raw); }
+    catch (e) { return fallback === undefined ? null : fallback; }
+  }
+  function safeSetJSON(key, value) {
+    try { return safeSet(key, JSON.stringify(value)); }
+    catch (e) { return false; }
+  }
+  try {
+    window.__bloomStorage = { safeGet, safeSet, safeRemove, safeGetJSON, safeSetJSON };
+  } catch (e) {}
+
   // ============ NAV STACK + SHELL (UX audit §2.1 + §3.1) ============
   // Lightweight navigation primitive: each non-game screen pushes itself
   // onto NavStack on entry; the shell's back button pops one level.

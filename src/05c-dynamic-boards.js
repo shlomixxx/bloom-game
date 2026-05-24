@@ -1837,14 +1837,14 @@
           if (btnEl) { btnEl.disabled = false; }
           var reason = (d && d.reason) || '';
           if (reason === 'insufficient_funds') {
-            alert('💎 חסר ביתרה. צריך ' + (d.price || price) + '💎, יש לך ' + (d.balance || 0) + '💎.\nתוכל לרכוש 💎 בחנות או לצבור על-ידי משחק.');
+            showToast('💎 חסר ביתרה. צריך ' + (d.price || price) + '💎, יש לך ' + (d.balance || 0) + '💎', 'warning');
           } else if (reason === 'already_premium') {
             if (_seasonCache.data) _seasonCache.data.isPremium = true;
             renderSeasonModalBody(_seasonCache.data);
           } else if (reason === 'premium_disabled') {
-            alert('Premium כבוי כרגע');
+            showToast('Premium כבוי כרגע', 'info');
           } else {
-            alert('שגיאה: ' + (reason || 'unknown'));
+            showToast('שגיאה: ' + (reason || 'unknown'), 'error');
           }
           if (btnEl) btnEl.innerHTML = '🔓 שדרג עכשיו · ' + price.toLocaleString() + '💎';
         }

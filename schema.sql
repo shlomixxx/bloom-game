@@ -493,6 +493,12 @@ ALTER TABLE player_profiles ADD COLUMN IF NOT EXISTS country VARCHAR(2);
 -- May 2026. Idempotent ALTER so legacy DBs pick it up on the next boot.
 ALTER TABLE player_profiles ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
 
+-- xp/level: progression columns referenced by ranking, FTUE gates, and
+-- Phase-1 progressive-unlock. db.js applies these idempotently on boot,
+-- but schema.sql must also carry them so a fresh psql replay matches.
+ALTER TABLE player_profiles ADD COLUMN IF NOT EXISTS xp INT DEFAULT 0;
+ALTER TABLE player_profiles ADD COLUMN IF NOT EXISTS level INT DEFAULT 1;
+
 -- ============================================================
 -- Difficulty leaderboard (practice + duel best per device per difficulty)
 -- ============================================================

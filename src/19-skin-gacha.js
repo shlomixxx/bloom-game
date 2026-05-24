@@ -242,11 +242,11 @@
           if (rolling) rolling.remove();
           var reason = (d && d.reason) || '';
           if (reason === 'insufficient_funds') {
-            alert('💎 חסר ביתרה. צריך ' + (d.price || 0) + '💎, יש לך ' + (d.balance || 0) + '💎.');
+            showToast('💎 חסר ביתרה. צריך ' + (d.price || 0) + '💎, יש לך ' + (d.balance || 0) + '💎', 'warning');
           } else if (reason === 'free_already_claimed') {
-            alert('🎁 כבר קיבלת את הפול החינם של היום. חוזרים מחר!');
+            showToast('🎁 כבר קיבלת את הפול החינם של היום. חוזרים מחר!', 'info');
           } else {
-            alert('שגיאה: ' + (reason || 'unknown'));
+            showToast('שגיאה: ' + (reason || 'unknown'), 'error');
           }
         }
       });

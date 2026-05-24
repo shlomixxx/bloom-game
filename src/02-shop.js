@@ -283,7 +283,7 @@
       startDuelGame(id, d.duel.board_seed, d.duel);
     } else {
       var msgs = { not_opponent: 'אתה לא היריב', not_pending: 'כבר קיבלת', expired: 'פג תוקף', insufficient_balance: 'אין מספיק 💎' };
-      alert(msgs[d && d.reason] || 'שגיאה');
+      showToast(msgs[d && d.reason] || 'שגיאה', 'error');
     }
   };
 
@@ -312,10 +312,10 @@
           missing_token: 'התחבר מחדש',
           bad_token: 'התחבר מחדש'
         };
-        alert(msgs[d && d.reason] || 'שגיאה');
+        showToast(msgs[d && d.reason] || 'שגיאה', 'error');
       }
     } catch (e) {
-      alert('שגיאה בחיבור');
+      showToast('שגיאה בחיבור', 'error');
     }
   };
 
@@ -337,11 +337,11 @@
       var d = await r.json();
       if (!d || !d.duels) return;
       var duel = d.duels.find(function(dd) { return dd.id === id; });
-      if (!duel || duel.status !== 'accepted') { alert('הדו-קרב לא פעיל'); return; }
+      if (!duel || duel.status !== 'accepted') { showToast('הדו-קרב לא פעיל', 'warning'); return; }
       var isChallenger = duel.challenger_device === deviceId;
       activeDuelOpponentName = isChallenger ? (duel.opponent_name || duel.opponent_code || 'יריב') : (duel.challenger_name || duel.challenger_code || 'יריב');
       startDuelGame(id, duel.board_seed, duel);
-    } catch(e) { alert('שגיאת רשת'); }
+    } catch(e) { showToast('שגיאת רשת', 'error'); }
   };
 
   // Active duel state

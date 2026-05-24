@@ -257,10 +257,10 @@
           var modal = document.getElementById('lives-refill-modal');
           if (modal) modal.remove();
         } else if (d && d.reason === 'insufficient_funds') {
-          alert('💎 חסר ' + ((d.price || 0) - (d.balance || 0)) + '💎');
+          showToast('💎 חסר ' + ((d.price || 0) - (d.balance || 0)) + '💎', 'warning');
           if (btn) btn.disabled = false;
         } else {
-          alert('שגיאה: ' + ((d && d.reason) || 'unknown'));
+          showToast('שגיאה: ' + ((d && d.reason) || 'unknown'), 'error');
           if (btn) btn.disabled = false;
         }
       });
@@ -296,10 +296,10 @@
             var modal = document.getElementById('lives-refill-modal');
             if (modal) modal.remove();
           } else if (d && d.reason === 'already_claimed') {
-            alert('כבר השתמשת בפרסומת הזאת. נסה שוב מאוחר יותר.');
+            showToast('כבר השתמשת בפרסומת הזאת. נסה שוב מאוחר יותר', 'info');
             if (btn) btn.disabled = false;
           } else {
-            alert('שגיאה: ' + ((d && d.reason) || 'unknown'));
+            showToast('שגיאה: ' + ((d && d.reason) || 'unknown'), 'error');
             if (btn) btn.disabled = false;
           }
         });

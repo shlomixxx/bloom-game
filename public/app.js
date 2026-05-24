@@ -928,7 +928,7 @@
       startDuelGame(id, d.duel.board_seed, d.duel);
     } else {
       var msgs = { not_opponent: 'אתה לא היריב', not_pending: 'כבר קיבלת', expired: 'פג תוקף', insufficient_balance: 'אין מספיק 💎' };
-      alert(msgs[d && d.reason] || 'שגיאה');
+      showToast(msgs[d && d.reason] || 'שגיאה', 'error');
     }
   };
 
@@ -957,10 +957,10 @@
           missing_token: 'התחבר מחדש',
           bad_token: 'התחבר מחדש'
         };
-        alert(msgs[d && d.reason] || 'שגיאה');
+        showToast(msgs[d && d.reason] || 'שגיאה', 'error');
       }
     } catch (e) {
-      alert('שגיאה בחיבור');
+      showToast('שגיאה בחיבור', 'error');
     }
   };
 
@@ -982,11 +982,11 @@
       var d = await r.json();
       if (!d || !d.duels) return;
       var duel = d.duels.find(function(dd) { return dd.id === id; });
-      if (!duel || duel.status !== 'accepted') { alert('הדו-קרב לא פעיל'); return; }
+      if (!duel || duel.status !== 'accepted') { showToast('הדו-קרב לא פעיל', 'warning'); return; }
       var isChallenger = duel.challenger_device === deviceId;
       activeDuelOpponentName = isChallenger ? (duel.opponent_name || duel.opponent_code || 'יריב') : (duel.challenger_name || duel.challenger_code || 'יריב');
       startDuelGame(id, duel.board_seed, duel);
-    } catch(e) { alert('שגיאת רשת'); }
+    } catch(e) { showToast('שגיאת רשת', 'error'); }
   };
 
   // Active duel state
@@ -3116,6 +3116,40 @@
       '<input type="range" class="vol-slider" data-slider="' + kind + '" min="0" max="100" step="1" value="' + pct + '" aria-label="' + label + '" />' +
     '</div>';
   }
+
+  // ============ localStorage safe wrappers (T0.3) ============
+  // Safari Private Mode + iOS quota errors + some Android in-app browsers
+  // throw on direct localStorage access. Every site that touches a key
+  // should go through safeGet/safeSet so a thrown call never aborts the
+  // surrounding flow. Exposed on window so non-IIFE callers (admin panel,
+  // bot.js) can reuse the same defense without re-implementing.
+  function safeGet(key, fallback) {
+    try {
+      const v = localStorage.getItem(key);
+      return v === null ? (fallback === undefined ? null : fallback) : v;
+    } catch (e) { return fallback === undefined ? null : fallback; }
+  }
+  function safeSet(key, value) {
+    try { localStorage.setItem(key, value); return true; }
+    catch (e) { return false; }
+  }
+  function safeRemove(key) {
+    try { localStorage.removeItem(key); return true; }
+    catch (e) { return false; }
+  }
+  function safeGetJSON(key, fallback) {
+    const raw = safeGet(key, null);
+    if (raw === null) return fallback === undefined ? null : fallback;
+    try { return JSON.parse(raw); }
+    catch (e) { return fallback === undefined ? null : fallback; }
+  }
+  function safeSetJSON(key, value) {
+    try { return safeSet(key, JSON.stringify(value)); }
+    catch (e) { return false; }
+  }
+  try {
+    window.__bloomStorage = { safeGet, safeSet, safeRemove, safeGetJSON, safeSetJSON };
+  } catch (e) {}
 
   // ============ NAV STACK + SHELL (UX audit §2.1 + §3.1) ============
   // Lightweight navigation primitive: each non-game screen pushes itself
@@ -7534,14 +7568,14 @@
           if (btnEl) { btnEl.disabled = false; }
           var reason = (d && d.reason) || '';
           if (reason === 'insufficient_funds') {
-            alert('💎 חסר ביתרה. צריך ' + (d.price || price) + '💎, יש לך ' + (d.balance || 0) + '💎.\nתוכל לרכוש 💎 בחנות או לצבור על-ידי משחק.');
+            showToast('💎 חסר ביתרה. צריך ' + (d.price || price) + '💎, יש לך ' + (d.balance || 0) + '💎', 'warning');
           } else if (reason === 'already_premium') {
             if (_seasonCache.data) _seasonCache.data.isPremium = true;
             renderSeasonModalBody(_seasonCache.data);
           } else if (reason === 'premium_disabled') {
-            alert('Premium כבוי כרגע');
+            showToast('Premium כבוי כרגע', 'info');
           } else {
-            alert('שגיאה: ' + (reason || 'unknown'));
+            showToast('שגיאה: ' + (reason || 'unknown'), 'error');
           }
           if (btnEl) btnEl.innerHTML = '🔓 שדרג עכשיו · ' + price.toLocaleString() + '💎';
         }
@@ -19291,17 +19325,17 @@
           if (btnEl) { btnEl.disabled = false; }
           var reason = (d && d.reason) || '';
           if (reason === 'insufficient_funds') {
-            alert('💎 חסר ביתרה. צריך ' + (d.price || 0) + '💎, יש לך ' + (d.balance || 0) + '💎.');
+            showToast('💎 חסר ביתרה. צריך ' + (d.price || 0) + '💎, יש לך ' + (d.balance || 0) + '💎', 'warning');
           } else if (reason === 'already_purchased') {
-            alert('כבר קנית את חבילת הפתיחה.');
+            showToast('כבר קנית את חבילת הפתיחה', 'info');
             var b = document.getElementById('starter-pack-home-banner');
             if (b) b.remove();
           } else if (reason === 'expired') {
-            alert('⏰ פג תוקף ההצעה.');
+            showToast('⏰ פג תוקף ההצעה', 'warning');
             var b2 = document.getElementById('starter-pack-home-banner');
             if (b2) b2.remove();
           } else {
-            alert('שגיאה: ' + (reason || 'unknown'));
+            showToast('שגיאה: ' + (reason || 'unknown'), 'error');
           }
           if (btnEl) btnEl.innerHTML = '✨ קנה עכשיו';
         }
@@ -19578,15 +19612,15 @@
           if (btnEl) { btnEl.disabled = false; }
           var reason = (d && d.reason) || '';
           if (reason === 'insufficient_funds') {
-            alert('💎 חסר ביתרה. צריך ' + (d.price || 0) + '💎, יש לך ' + (d.balance || 0) + '💎.');
+            showToast('💎 חסר ביתרה. צריך ' + (d.price || 0) + '💎, יש לך ' + (d.balance || 0) + '💎', 'warning');
           } else if (reason === 'already_purchased') {
-            alert('כבר קנית את ההצעה היומית הזו.');
+            showToast('כבר קנית את ההצעה היומית הזו', 'info');
             var bb = document.getElementById('daily-deal-home-banner');
             if (bb) bb.remove();
           } else if (reason === 'wrong_deal') {
-            alert('⏰ ההצעה פגה / השתנתה. רענן את הדף.');
+            showToast('⏰ ההצעה פגה / השתנתה. רענן את הדף', 'warning');
           } else {
-            alert('שגיאה: ' + (reason || 'unknown'));
+            showToast('שגיאה: ' + (reason || 'unknown'), 'error');
           }
           if (btnEl) btnEl.innerHTML = '🛒 קנה עכשיו';
         }
@@ -19867,11 +19901,11 @@
           if (rolling) rolling.remove();
           var reason = (d && d.reason) || '';
           if (reason === 'insufficient_funds') {
-            alert('💎 חסר ביתרה. צריך ' + (d.price || 0) + '💎, יש לך ' + (d.balance || 0) + '💎.');
+            showToast('💎 חסר ביתרה. צריך ' + (d.price || 0) + '💎, יש לך ' + (d.balance || 0) + '💎', 'warning');
           } else if (reason === 'free_already_claimed') {
-            alert('🎁 כבר קיבלת את הפול החינם של היום. חוזרים מחר!');
+            showToast('🎁 כבר קיבלת את הפול החינם של היום. חוזרים מחר!', 'info');
           } else {
-            alert('שגיאה: ' + (reason || 'unknown'));
+            showToast('שגיאה: ' + (reason || 'unknown'), 'error');
           }
         }
       });
@@ -20290,10 +20324,10 @@
           var modal = document.getElementById('lives-refill-modal');
           if (modal) modal.remove();
         } else if (d && d.reason === 'insufficient_funds') {
-          alert('💎 חסר ' + ((d.price || 0) - (d.balance || 0)) + '💎');
+          showToast('💎 חסר ' + ((d.price || 0) - (d.balance || 0)) + '💎', 'warning');
           if (btn) btn.disabled = false;
         } else {
-          alert('שגיאה: ' + ((d && d.reason) || 'unknown'));
+          showToast('שגיאה: ' + ((d && d.reason) || 'unknown'), 'error');
           if (btn) btn.disabled = false;
         }
       });
@@ -20329,10 +20363,10 @@
             var modal = document.getElementById('lives-refill-modal');
             if (modal) modal.remove();
           } else if (d && d.reason === 'already_claimed') {
-            alert('כבר השתמשת בפרסומת הזאת. נסה שוב מאוחר יותר.');
+            showToast('כבר השתמשת בפרסומת הזאת. נסה שוב מאוחר יותר', 'info');
             if (btn) btn.disabled = false;
           } else {
-            alert('שגיאה: ' + ((d && d.reason) || 'unknown'));
+            showToast('שגיאה: ' + ((d && d.reason) || 'unknown'), 'error');
             if (btn) btn.disabled = false;
           }
         });
@@ -20813,7 +20847,7 @@
           });
         } else {
           if (btn) btn.disabled = false;
-          alert(d && d.reason === 'already_petted_today' ? 'כבר ליטפת היום!' : 'שגיאה');
+          showToast(d && d.reason === 'already_petted_today' ? 'כבר ליטפת היום!' : 'שגיאה', d && d.reason === 'already_petted_today' ? 'info' : 'error');
         }
       });
   }
@@ -20850,11 +20884,11 @@
         } else {
           if (btn) btn.disabled = false;
           if (d && d.reason === 'insufficient_funds') {
-            alert('💎 חסר ' + ((d.price || 0) - (d.balance || 0)) + '💎');
+            showToast('💎 חסר ' + ((d.price || 0) - (d.balance || 0)) + '💎', 'warning');
           } else if (d && d.reason === 'daily_limit_reached') {
-            alert('🍽 הגעת למקסימום האכלות יומי (' + d.feedsPerDay + ')');
+            showToast('🍽 הגעת למקסימום האכלות יומי (' + d.feedsPerDay + ')', 'info');
           } else {
-            alert('שגיאה');
+            showToast('שגיאה', 'error');
           }
         }
       });
@@ -21162,17 +21196,17 @@
           if (btnEl) { btnEl.disabled = false; }
           var reason = (d && d.reason) || '';
           if (reason === 'insufficient_funds') {
-            alert('💎 חסר ביתרה. צריך ' + (d.price || 0) + '💎, יש לך ' + (d.balance || 0) + '💎.');
+            showToast('💎 חסר ביתרה. צריך ' + (d.price || 0) + '💎, יש לך ' + (d.balance || 0) + '💎', 'warning');
           } else if (reason === 'limit_reached') {
-            alert('כבר רכשת את החבילה הזו!');
+            showToast('כבר רכשת את החבילה הזו!', 'info');
             var b2 = document.getElementById('bundle-banner-' + bundleId);
             if (b2) b2.remove();
           } else if (reason === 'expired') {
-            alert('⏰ פג תוקף החבילה.');
+            showToast('⏰ פג תוקף החבילה', 'warning');
             var b3 = document.getElementById('bundle-banner-' + bundleId);
             if (b3) b3.remove();
           } else {
-            alert('שגיאה: ' + (reason || 'unknown'));
+            showToast('שגיאה: ' + (reason || 'unknown'), 'error');
           }
           if (btnEl) btnEl.innerHTML = '🛒 קנה עכשיו';
         }
@@ -21673,7 +21707,7 @@
           });
         } else {
           if (btn) btn.disabled = false;
-          alert(d && d.reason ? d.reason : 'שגיאה');
+          showToast(d && d.reason ? d.reason : 'שגיאה', 'error');
         }
       });
   }
@@ -21890,7 +21924,7 @@
           });
         } else {
           if (btn) { btn.disabled = false; btn.innerHTML = '⭐ בצע פרסטיג\' עכשיו'; }
-          alert(d && d.reason ? d.reason : 'שגיאה');
+          showToast(d && d.reason ? d.reason : 'שגיאה', 'error');
         }
       });
   }
@@ -22455,7 +22489,7 @@
           try { if (typeof buzz === 'function') buzz([80, 60, 100]); } catch (e) {}
           if (onSuccess) onSuccess();
           // Show the new guild's modal — and show the share code!
-          alert('🎉 הקלאן נוצר! קוד שיתוף: ' + (d.guild && d.guild.code));
+          showToast('🎉 הקלאן נוצר! קוד שיתוף: ' + (d.guild && d.guild.code), 'success');
           fetchGuildState(true).then(function(fresh) {
             if (fresh) {
               maybeShowGuildTile();
@@ -22590,7 +22624,7 @@
           });
         } else {
           if (btn) { btn.disabled = false; btn.textContent = '🎁 קבל פרס יומי'; }
-          alert(d && d.reason ? d.reason : 'שגיאה');
+          showToast(d && d.reason ? d.reason : 'שגיאה', 'error');
         }
       });
   }
@@ -22611,7 +22645,7 @@
           if (tile) tile.remove();
           maybeShowGuildTile();
         } else {
-          alert(d && d.reason ? d.reason : 'שגיאה');
+          showToast(d && d.reason ? d.reason : 'שגיאה', 'error');
         }
       });
   }
@@ -23099,7 +23133,7 @@
           });
         } else {
           if (btn) btn.disabled = false;
-          alert(d && d.reason ? d.reason : 'שגיאה');
+          showToast(d && d.reason ? d.reason : 'שגיאה', 'error');
         }
       });
   }
@@ -23823,8 +23857,8 @@
         if (!d || !d.ok) {
           _spinning = false;
           if (btn) { btn.disabled = false; btn.innerHTML = '🎡 סובב!'; }
-          if (d && d.reason === 'already_spun_today') alert('כבר סובבת היום! חזור מחר.');
-          else alert(d && d.reason ? d.reason : 'שגיאה');
+          if (d && d.reason === 'already_spun_today') showToast('כבר סובבת היום! חזור מחר.', 'info');
+          else showToast(d && d.reason ? d.reason : 'שגיאה', 'error');
           return;
         }
         animateAndReveal(d);
@@ -24177,7 +24211,7 @@
       .then(function(d) {
         if (!d || !d.ok) {
           if (btn) { btn.disabled = false; btn.textContent = '🎁 קבל את הפרס'; }
-          alert(d && d.reason ? d.reason : 'שגיאה');
+          showToast(d && d.reason ? d.reason : 'שגיאה', 'error');
           return;
         }
         // Show celebration
@@ -24423,7 +24457,7 @@
       .then(function(d) {
         if (!d || !d.ok) {
           if (btn) { btn.disabled = false; btn.textContent = '🎁 שגיאה'; }
-          alert(d && d.reason ? d.reason : 'שגיאה');
+          showToast(d && d.reason ? d.reason : 'שגיאה', 'error');
           return;
         }
         if (typeof d.newBalance === 'number') {

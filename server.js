@@ -629,6 +629,16 @@ app.post('/api/score', requireDeviceAuth, async (req, res) => {
   try {
     const { date, deviceId, name, score, tier, drops, token, country } = req.body || {};
     if (!isValidDate(date)) return res.status(400).json({ error: 'bad_date' });
+    // Anti-skew: reject submissions whose date differs from the server's
+    // Asia/Jerusalem today by more than 1 day. A device with a wrong clock
+    // could otherwise farm daily seeds from the future or revive expired ones.
+    {
+      const serverToday = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' });
+      const diffDays = Math.abs((new Date(date).getTime() - new Date(serverToday).getTime()) / 86400000);
+      if (!Number.isFinite(diffDays) || diffDays > 1) {
+        return res.status(400).json({ error: 'bad_date' });
+      }
+    }
     if (typeof deviceId !== 'string' || deviceId.length < 8 || deviceId.length > 64) {
       return res.status(400).json({ error: 'bad_device' });
     }

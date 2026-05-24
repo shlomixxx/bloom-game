@@ -219,17 +219,17 @@
           if (btnEl) { btnEl.disabled = false; }
           var reason = (d && d.reason) || '';
           if (reason === 'insufficient_funds') {
-            alert('💎 חסר ביתרה. צריך ' + (d.price || 0) + '💎, יש לך ' + (d.balance || 0) + '💎.');
+            showToast('💎 חסר ביתרה. צריך ' + (d.price || 0) + '💎, יש לך ' + (d.balance || 0) + '💎', 'warning');
           } else if (reason === 'limit_reached') {
-            alert('כבר רכשת את החבילה הזו!');
+            showToast('כבר רכשת את החבילה הזו!', 'info');
             var b2 = document.getElementById('bundle-banner-' + bundleId);
             if (b2) b2.remove();
           } else if (reason === 'expired') {
-            alert('⏰ פג תוקף החבילה.');
+            showToast('⏰ פג תוקף החבילה', 'warning');
             var b3 = document.getElementById('bundle-banner-' + bundleId);
             if (b3) b3.remove();
           } else {
-            alert('שגיאה: ' + (reason || 'unknown'));
+            showToast('שגיאה: ' + (reason || 'unknown'), 'error');
           }
           if (btnEl) btnEl.innerHTML = '🛒 קנה עכשיו';
         }

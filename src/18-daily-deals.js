@@ -241,15 +241,15 @@
           if (btnEl) { btnEl.disabled = false; }
           var reason = (d && d.reason) || '';
           if (reason === 'insufficient_funds') {
-            alert('💎 חסר ביתרה. צריך ' + (d.price || 0) + '💎, יש לך ' + (d.balance || 0) + '💎.');
+            showToast('💎 חסר ביתרה. צריך ' + (d.price || 0) + '💎, יש לך ' + (d.balance || 0) + '💎', 'warning');
           } else if (reason === 'already_purchased') {
-            alert('כבר קנית את ההצעה היומית הזו.');
+            showToast('כבר קנית את ההצעה היומית הזו', 'info');
             var bb = document.getElementById('daily-deal-home-banner');
             if (bb) bb.remove();
           } else if (reason === 'wrong_deal') {
-            alert('⏰ ההצעה פגה / השתנתה. רענן את הדף.');
+            showToast('⏰ ההצעה פגה / השתנתה. רענן את הדף', 'warning');
           } else {
-            alert('שגיאה: ' + (reason || 'unknown'));
+            showToast('שגיאה: ' + (reason || 'unknown'), 'error');
           }
           if (btnEl) btnEl.innerHTML = '🛒 קנה עכשיו';
         }

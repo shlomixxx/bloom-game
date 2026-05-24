@@ -228,7 +228,7 @@
       .then(function(d) {
         if (!d || !d.ok) {
           if (btn) { btn.disabled = false; btn.textContent = '🎁 קבל את הפרס'; }
-          alert(d && d.reason ? d.reason : 'שגיאה');
+          showToast(d && d.reason ? d.reason : 'שגיאה', 'error');
           return;
         }
         // Show celebration
