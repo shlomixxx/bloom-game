@@ -51,6 +51,15 @@ export async function initDb() {
     // A7 — 7-Day Login Calendar columns on player_profiles.
     `ALTER TABLE player_profiles ADD COLUMN IF NOT EXISTS login_cal_day INT DEFAULT 0`,
     `ALTER TABLE player_profiles ADD COLUMN IF NOT EXISTS login_cal_last_claim DATE`,
+    // A10 — Compound Interest Gem Bank (full def in schema.sql).
+    `CREATE TABLE IF NOT EXISTS gem_bank (
+      device_id          VARCHAR(64) PRIMARY KEY,
+      deposited          BIGINT NOT NULL DEFAULT 0,
+      total_interest_paid BIGINT NOT NULL DEFAULT 0,
+      last_interest_date DATE,
+      created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`,
     `ALTER TABLE duels ADD COLUMN IF NOT EXISTS difficulty_label VARCHAR(20)`,
     `ALTER TABLE duels ADD COLUMN IF NOT EXISTS difficulty_weights VARCHAR(64)`,
     `ALTER TABLE duels ADD COLUMN IF NOT EXISTS difficulty_speed_pct INT`,

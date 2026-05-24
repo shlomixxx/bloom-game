@@ -285,6 +285,34 @@ INSERT INTO game_config (key, value) VALUES ('booster_pick_price', '50')   ON CO
 INSERT INTO game_config (key, value) VALUES ('booster_pop_price',  '40')   ON CONFLICT (key) DO NOTHING;
 ALTER TABLE duels ADD COLUMN IF NOT EXISTS is_random_match BOOLEAN DEFAULT FALSE;
 
+-- A10 — Compound Interest Gem Bank. Player deposits 💎 → bank pays
+-- daily compound interest. Withdrawal costs a percentage fee. Pure
+-- behavioral economics — loss-aversion (withdrawal fee) + compound
+-- dopamine (numbers grow every day).
+--
+-- Daily interest cron runs at 03:00 Asia/Jerusalem (via server.js
+-- setInterval — same pattern as PII purge + queue cleanup).
+CREATE TABLE IF NOT EXISTS gem_bank (
+  device_id          VARCHAR(64) PRIMARY KEY,
+  deposited          BIGINT NOT NULL DEFAULT 0,
+  total_interest_paid BIGINT NOT NULL DEFAULT 0,
+  last_interest_date DATE,
+  created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+INSERT INTO game_config (key, value) VALUES ('bank_enabled',          'true') ON CONFLICT (key) DO NOTHING;
+-- 1% daily interest by default. Stored as PERCENTAGE (1 = 1%). Admin
+-- can tune (e.g. 0.5 = half percent, 2 = double).
+INSERT INTO game_config (key, value) VALUES ('bank_interest_pct_daily', '1')   ON CONFLICT (key) DO NOTHING;
+-- 5% withdrawal fee — the "stickiness" of the bank. Without this the
+-- mechanic is pointless (player just deposits/withdraws freely).
+INSERT INTO game_config (key, value) VALUES ('bank_withdrawal_fee_pct', '5')   ON CONFLICT (key) DO NOTHING;
+-- Minimum deposit to prevent spam-flow micro-transactions
+INSERT INTO game_config (key, value) VALUES ('bank_min_deposit',        '100') ON CONFLICT (key) DO NOTHING;
+-- Daily cap so a whale doesn't accumulate infinite passive income
+INSERT INTO game_config (key, value) VALUES ('bank_max_balance',        '1000000') ON CONFLICT (key) DO NOTHING;
+
 -- A7 — 7-Day Login Calendar (Genshin pattern). Separate from the
 -- existing daily-login flow (which pays streak-tiered rewards). This
 -- is a 7-day cycle: day 1 → 2 → ... → 7 → 1, with escalating gem

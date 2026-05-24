@@ -7097,6 +7097,200 @@ app.get('/api/trophies/state', async (req, res) => {
 // fires — see hooks below. Also a direct endpoint so admin / future
 // modes can call it explicitly with a custom reason.
 // ============================================================
+// A10 — Compound Interest Gem Bank
+// Player deposits 💎 → bank pays daily compound interest.
+// Withdrawal costs a percentage fee (loss-aversion stickiness).
+// Cron runs once a day at 03:00 IL to credit interest.
+// ============================================================
+async function _loadBankConfig() {
+  try { return await getCachedConfigPrefix('bank_'); }
+  catch (e) { return {}; }
+}
+
+app.get('/api/bank/state', async (req, res) => {
+  try {
+    const deviceId = String(req.query.deviceId || '').slice(0, 64);
+    if (!deviceId || deviceId.length < 8) return res.status(400).json({ error: 'bad_device' });
+    const cfg = await _loadBankConfig();
+    if (cfg.bank_enabled === 'false') return res.json({ ok: true, enabled: false });
+    // Lazy-ensure row exists.
+    await pool.query(`INSERT INTO gem_bank (device_id) VALUES ($1) ON CONFLICT DO NOTHING`, [deviceId]);
+    const r = await pool.query(`SELECT deposited, total_interest_paid, last_interest_date FROM gem_bank WHERE device_id = $1`, [deviceId]);
+    const row = r.rows[0] || { deposited: 0, total_interest_paid: 0, last_interest_date: null };
+    // Compute when the NEXT interest payment is due. Cron runs daily at
+    // 03:00 IL, so the answer depends on whether today's 03:00 has passed.
+    const ilNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Jerusalem' }));
+    const nextRun = new Date(ilNow);
+    nextRun.setHours(3, 0, 0, 0);
+    if (nextRun <= ilNow) nextRun.setDate(nextRun.getDate() + 1);
+    const msUntilNext = nextRun.getTime() - ilNow.getTime();
+    res.json({
+      ok: true,
+      enabled: true,
+      deposited: Number(row.deposited) || 0,
+      totalInterestPaid: Number(row.total_interest_paid) || 0,
+      lastInterestDate: row.last_interest_date,
+      interestPctDaily: parseFloat(cfg.bank_interest_pct_daily) || 1,
+      withdrawalFeePct: parseFloat(cfg.bank_withdrawal_fee_pct) || 5,
+      minDeposit: parseInt(cfg.bank_min_deposit, 10) || 100,
+      maxBalance: parseInt(cfg.bank_max_balance, 10) || 1000000,
+      msUntilNextInterest: msUntilNext
+    });
+  } catch (e) {
+    console.error('GET /api/bank/state', e);
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
+app.post('/api/bank/deposit', requireDeviceAuth, async (req, res) => {
+  const deviceId = req.deviceId;
+  if (!checkRateLimit('bank_deposit', deviceId, 30, 60 * 60 * 1000)) {
+    return res.json({ ok: false, reason: 'rate_limited' });
+  }
+  try {
+    const amount = parseInt((req.body && req.body.amount) || 0, 10);
+    if (!Number.isFinite(amount) || amount <= 0) return res.json({ ok: false, reason: 'bad_amount' });
+    const cfg = await _loadBankConfig();
+    if (cfg.bank_enabled === 'false') return res.json({ ok: false, reason: 'disabled' });
+    const minDep = parseInt(cfg.bank_min_deposit, 10) || 100;
+    const maxBal = parseInt(cfg.bank_max_balance, 10) || 1000000;
+    if (amount < minDep) return res.json({ ok: false, reason: 'below_min', minDeposit: minDep });
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      // Ensure bank row exists then check max-balance cap.
+      await client.query(`INSERT INTO gem_bank (device_id) VALUES ($1) ON CONFLICT DO NOTHING`, [deviceId]);
+      const cur = await client.query(`SELECT deposited FROM gem_bank WHERE device_id = $1 FOR UPDATE`, [deviceId]);
+      const curBal = Number(cur.rows[0].deposited) || 0;
+      if (curBal + amount > maxBal) {
+        await client.query('ROLLBACK');
+        return res.json({ ok: false, reason: 'exceeds_max', max: maxBal, current: curBal });
+      }
+      // Atomic deduct from wallet; if insufficient, fail.
+      const ded = await client.query(
+        `UPDATE player_profiles SET balance = balance - $1, total_spent = total_spent + $1
+          WHERE device_id = $2 AND balance >= $1
+          RETURNING balance`,
+        [amount, deviceId]
+      );
+      if (!ded.rows.length) {
+        await client.query('ROLLBACK');
+        return res.json({ ok: false, reason: 'insufficient_balance' });
+      }
+      // Credit bank deposit.
+      const newBank = curBal + amount;
+      await client.query(
+        `UPDATE gem_bank SET deposited = $1, updated_at = NOW() WHERE device_id = $2`,
+        [newBank, deviceId]
+      );
+      await client.query('COMMIT');
+      res.json({ ok: true, deposited: newBank, newBalance: Number(ded.rows[0].balance) });
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  } catch (e) {
+    console.error('POST /api/bank/deposit', e);
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
+app.post('/api/bank/withdraw', requireDeviceAuth, async (req, res) => {
+  const deviceId = req.deviceId;
+  if (!checkRateLimit('bank_withdraw', deviceId, 30, 60 * 60 * 1000)) {
+    return res.json({ ok: false, reason: 'rate_limited' });
+  }
+  try {
+    const amount = parseInt((req.body && req.body.amount) || 0, 10);
+    if (!Number.isFinite(amount) || amount <= 0) return res.json({ ok: false, reason: 'bad_amount' });
+    const cfg = await _loadBankConfig();
+    if (cfg.bank_enabled === 'false') return res.json({ ok: false, reason: 'disabled' });
+    const feePct = parseFloat(cfg.bank_withdrawal_fee_pct) || 5;
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const cur = await client.query(`SELECT deposited FROM gem_bank WHERE device_id = $1 FOR UPDATE`, [deviceId]);
+      if (!cur.rows.length || Number(cur.rows[0].deposited) < amount) {
+        await client.query('ROLLBACK');
+        return res.json({ ok: false, reason: 'insufficient_bank_balance' });
+      }
+      const fee = Math.ceil(amount * feePct / 100);
+      const netPayout = amount - fee;
+      // Deduct from bank.
+      const newBank = Number(cur.rows[0].deposited) - amount;
+      await client.query(
+        `UPDATE gem_bank SET deposited = $1, updated_at = NOW() WHERE device_id = $2`,
+        [newBank, deviceId]
+      );
+      // Credit wallet (net of fee).
+      const ded = await client.query(
+        `UPDATE player_profiles SET balance = balance + $1, total_earned = total_earned + $1
+          WHERE device_id = $2 RETURNING balance`,
+        [netPayout, deviceId]
+      );
+      await client.query('COMMIT');
+      res.json({
+        ok: true,
+        withdrew: amount,
+        fee,
+        netPayout,
+        depositedRemaining: newBank,
+        newBalance: ded.rows[0] ? Number(ded.rows[0].balance) : null
+      });
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  } catch (e) {
+    console.error('POST /api/bank/withdraw', e);
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
+// Daily interest cron. Runs every hour and credits interest only to
+// players whose `last_interest_date` is < today (Asia/Jerusalem). One
+// run lands on the first hourly tick after 03:00 IL each day; subsequent
+// ticks no-op because last_interest_date is already today.
+async function _runDailyBankInterest() {
+  try {
+    const cfg = await _loadBankConfig();
+    if (cfg.bank_enabled === 'false') return;
+    const pct = parseFloat(cfg.bank_interest_pct_daily) || 1;
+    if (pct <= 0) return;
+    // Only run between 03:00 and 04:00 IL — gives the cron a 1-hour window
+    // to fire on the first tick of the day. Cheap idempotency check.
+    const ilNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Jerusalem' }));
+    if (ilNow.getHours() !== 3) return;
+    const today = ilNow.toISOString().slice(0, 10);
+    // Atomic mass-update: credit interest to every account whose
+    // last_interest_date != today. The deposited amount grows by pct%.
+    // Cap accrued interest per day (don't pay if at max_balance).
+    const maxBal = parseInt(cfg.bank_max_balance, 10) || 1000000;
+    const r = await pool.query(
+      `UPDATE gem_bank
+          SET deposited = LEAST($2, deposited + GREATEST(1, FLOOR(deposited * $1 / 100))),
+              total_interest_paid = total_interest_paid + LEAST($2 - deposited, GREATEST(1, FLOOR(deposited * $1 / 100))),
+              last_interest_date = $3,
+              updated_at = NOW()
+        WHERE deposited > 0 AND (last_interest_date IS NULL OR last_interest_date < $3::date)
+        RETURNING device_id`,
+      [pct, maxBal, today]
+    );
+    if (r.rows.length > 0) {
+      console.log('[bank] Daily interest paid to', r.rows.length, 'accounts at', pct + '%');
+    }
+  } catch (e) { console.warn('[bank] daily interest cron', e.message); }
+}
+// Run every hour. The internal check ensures it only fires once per day.
+setInterval(_runDailyBankInterest, 60 * 60 * 1000);
+// Initial run 30s after boot (catches restarts at 03:xx).
+setTimeout(_runDailyBankInterest, 30 * 1000);
+
+// ============================================================
 // A7 — 7-Day Login Calendar (Genshin pattern)
 // Separate from existing daily-login. Tracks a 7-day cycle on
 // player_profiles. Each day pays a configured reward; missing a

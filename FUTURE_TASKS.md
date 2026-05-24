@@ -1,7 +1,7 @@
 # 📋 BLOOM — משימות עתידיות
 
 > **מסמך מרכזי לכל מה שעדיין לא נבנה.**
-> עודכן: 2026-05-24 · 44 שלבים חיים בפרודקשן · 9 משימות פתוחות (A1+A2+A3+A4+A6+A7 ✅)
+> עודכן: 2026-05-24 · 45 שלבים חיים בפרודקשן · 8 משימות פתוחות (A1+A2+A3+A4+A6+A7+A10 ✅)
 >
 > 🎯 **איך להשתמש**: בשיחה חדשה תגיד "בוא נבנה A1" / "המשך עם הכי ממכר" / "תעשה A2 + A3 ביחד" ואני אדע בדיוק על מה אתה מדבר.
 
@@ -176,21 +176,17 @@
 
 ---
 
-### A10 · 💰 Compound Interest Gem Bank
-**מאמץ**: 1 יום · **השפעה**: ★★★
+### A10 · 💰 Compound Interest Gem Bank ✅ נבנה (24.05.2026)
+**מאמץ**: 1 יום · **השפעה**: ★★★ · **סטטוס: חי בייצור**
 
-**מה זה**:
-שחקן "מפקיד" 💎 בבנק וצובר **1%/יום ריבית פסיבית**. ככל שמשאיר יותר זמן — צובר יותר. יציאה עולה 5% עמלה (מונע חיסכון קצר).
-
-**למה לבנות**:
-- Behavioral economics — שחקנים שונאים להחסיר רווחים
-- מצדיק "סתם להיכנס לבית" כל יום (לראות כמה צבר)
-- שילוב מעניין של חיסכון + רטנשן
-
-**טכני**:
-- טבלה `gem_bank` (device_id, balance, deposited_at)
-- Cron יומי לחישוב ריבית
-- 2 endpoints: deposit / withdraw
+**מה נבנה**:
+- Tile ירוק-זוהר במסך הבית (L8+). הצגה: "💰 בבנק: 1,500💎 · ⏰ ריבית הבאה: בעוד 14ש"
+- Modal: יתרה בארנק + יתרה בבנק + total earned. שתי שורות action (הפקדה / משיכה) עם 25%/50%/הכל preset buttons.
+- "💡 מחר תהיה לך X💎" projection — psychological hook.
+- Schema: טבלה `gem_bank` (device_id PK, deposited, total_interest_paid, last_interest_date) + 5 config keys (enabled, interest_pct=1, fee_pct=5, min_deposit=100, max_balance=1M).
+- Server: 3 endpoints — GET /state (lazy-creates row, computes msUntilNext), POST /deposit (atomic UPDATE עם balance>=amount guard), POST /withdraw (atomic, fee deducted). Daily cron בorder of 03:00 IL — UPDATE כל ה-rows עם last_interest_date < today.
+- Client: [src/42-gem-bank.js](src/42-gem-bank.js). 1% ריבית מצטברת → אחרי 30 יום על 1,000💎 → 1,348💎.
+- Loss aversion: עמלת 5% בכל משיכה. השחקן יחשוב פעמיים לפני שמוציא.
 
 ---
 

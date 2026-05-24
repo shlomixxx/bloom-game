@@ -369,6 +369,11 @@
       setTimeout(function() { try { window.__bloomLoginCal.maybeShow(); } catch (e) {} }, 550);
     }
 
+    // A10 — Compound Interest Gem Bank tile (L8+, always shown).
+    if (window.__bloomBank && typeof window.__bloomBank.maybeShow === 'function') {
+      setTimeout(function() { try { window.__bloomBank.maybeShow(); } catch (e) {} }, 600);
+    }
+
     // Tier-icons tap → reveal stats bubble (same behaviour as v1)
     var iconsTap = document.getElementById('home-icons-tap');
     if (iconsTap) {

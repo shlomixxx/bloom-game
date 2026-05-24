@@ -4023,3 +4023,211 @@ html[data-theme="dark"] .fc-list-empty-title { color: #E8E6E2; }
   pointer-events: none;
   z-index: 1;
 }
+
+/* ── A10 — Gem Bank: home tile + modal ── */
+.gem-bank-tile {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 14px 16px;
+  margin-top: 10px;
+  background: linear-gradient(135deg, #1B5E20 0%, #2E7D32 50%, #66BB6A 100%);
+  border: 2px solid rgba(255, 217, 61, 0.5);
+  border-radius: 14px;
+  cursor: pointer;
+  color: #FFF;
+  text-align: right;
+  font-family: inherit;
+  box-shadow: 0 6px 18px rgba(46, 125, 50, 0.35);
+  transition: all 0.15s ease;
+}
+.gem-bank-tile:active { transform: scale(0.98); }
+.gem-bank-tile.has-deposit {
+  animation: bankTilePulse 2.5s ease-in-out infinite;
+  border-color: #FFD93D;
+}
+@keyframes bankTilePulse {
+  0%, 100% { box-shadow: 0 6px 18px rgba(255, 217, 61, 0.4); }
+  50%      { box-shadow: 0 10px 28px rgba(255, 217, 61, 0.7); }
+}
+.gem-bank-tile-main { flex: 1; min-width: 0; }
+.gem-bank-tile-title { font-size: 16px; font-weight: 900; text-shadow: 0 1px 2px rgba(0,0,0,0.4); }
+.gem-bank-tile-sub { font-size: 11.5px; opacity: 0.95; margin-top: 2px; }
+.gem-bank-tile-sub strong { color: #FFD93D; }
+.gem-bank-tile-interest {
+  font-size: 10.5px;
+  opacity: 0.9;
+  margin-top: 3px;
+  color: #FFE9A0;
+}
+.gem-bank-tile-arrow { font-size: 24px; opacity: 0.7; flex-shrink: 0; }
+
+/* Modal */
+.gem-bank-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0, 0, 0, 0.75);
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  backdrop-filter: blur(4px);
+  animation: streakCalFade 0.2s ease-out;
+}
+.gem-bank-card {
+  background: linear-gradient(160deg, #0F2A12 0%, #2E5C34 100%);
+  border-radius: 22px;
+  max-width: 440px;
+  width: 100%;
+  max-height: 92vh;
+  overflow-y: auto;
+  padding: 24px 18px 18px;
+  position: relative;
+  color: #FFF;
+  border: 2px solid rgba(255, 217, 61, 0.4);
+  box-shadow: 0 22px 56px rgba(46, 125, 50, 0.5);
+}
+.gem-bank-close {
+  position: absolute;
+  top: 10px; left: 14px;
+  background: rgba(255, 255, 255, 0.18);
+  color: #FFF;
+  border: none;
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  font-size: 22px;
+  cursor: pointer;
+  line-height: 1;
+}
+.gem-bank-title { font-size: 22px; font-weight: 900; text-align: center; margin-bottom: 4px; }
+.gem-bank-sub { text-align: center; font-size: 12px; opacity: 0.85; margin-bottom: 16px; }
+
+.gem-bank-balances {
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 14px;
+  padding: 12px 14px;
+  margin-bottom: 14px;
+}
+.gem-bank-bal-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 0;
+  font-size: 14px;
+}
+.gem-bank-bal-row + .gem-bank-bal-row { border-top: 1px solid rgba(255, 255, 255, 0.1); }
+.gem-bank-bal-label { opacity: 0.85; }
+.gem-bank-bal-val { font-size: 17px; font-weight: 900; font-variant-numeric: tabular-nums; }
+.gem-bank-bal-bank .gem-bank-bal-val { color: #FFD93D; }
+.gem-bank-bal-interest .gem-bank-bal-val { color: #95E89A; }
+
+.gem-bank-rate-card {
+  background: rgba(255, 217, 61, 0.12);
+  border: 1px solid rgba(255, 217, 61, 0.35);
+  border-radius: 12px;
+  padding: 10px 12px;
+  margin-bottom: 14px;
+}
+.gem-bank-rate-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 0;
+  font-size: 13px;
+}
+.gem-bank-rate-row strong { color: #FFD93D; font-size: 14px; }
+.gem-bank-projection {
+  border-top: 1px dashed rgba(255, 217, 61, 0.35);
+  margin-top: 4px;
+  padding-top: 8px;
+}
+.gem-bank-projection strong { font-size: 16px; }
+
+.gem-bank-action-card {
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+.gem-bank-action-withdraw {
+  background: rgba(232, 70, 96, 0.15);
+  border-color: rgba(232, 70, 96, 0.4);
+}
+.gem-bank-action-title {
+  font-size: 14px;
+  font-weight: 800;
+  margin-bottom: 8px;
+}
+.gem-bank-amount-row {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+.gem-bank-amount-row input[type=number] {
+  flex: 1;
+  min-width: 100px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 9px;
+  background: rgba(0, 0, 0, 0.35);
+  color: #FFF;
+  font-family: monospace;
+  font-size: 15px;
+  font-weight: 800;
+  text-align: center;
+}
+.gem-bank-amount-row input[type=number]:focus { outline: 2px solid rgba(255, 217, 61, 0.6); border-color: transparent; }
+.gem-bank-amount-btn {
+  background: rgba(255, 255, 255, 0.15);
+  color: #FFF;
+  border: none;
+  padding: 8px 10px;
+  border-radius: 9px;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  font-family: inherit;
+}
+.gem-bank-amount-btn:active { transform: scale(0.94); }
+.gem-bank-do-btn {
+  width: 100%;
+  padding: 12px;
+  border: none;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 900;
+  cursor: pointer;
+  font-family: inherit;
+}
+.gem-bank-deposit-btn {
+  background: linear-gradient(135deg, #FFD93D, #FF9F2E);
+  color: #1F1100;
+  box-shadow: 0 4px 14px rgba(255, 217, 61, 0.45);
+}
+.gem-bank-withdraw-btn {
+  background: linear-gradient(135deg, #FF8DA1, #E84660);
+  color: #FFF;
+  box-shadow: 0 4px 14px rgba(232, 70, 96, 0.45);
+}
+.gem-bank-do-btn:active { transform: scale(0.97); }
+.gem-bank-do-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.gem-bank-hint {
+  font-size: 10.5px;
+  opacity: 0.7;
+  margin-top: 6px;
+  text-align: center;
+}
+.gem-bank-hint-warn { color: #FF8DA1; opacity: 0.95; }
+.gem-bank-tip {
+  font-size: 11.5px;
+  opacity: 0.8;
+  text-align: center;
+  padding: 10px;
+  background: rgba(255, 217, 61, 0.1);
+  border-radius: 9px;
+  border: 1px dashed rgba(255, 217, 61, 0.3);
+}
+.gem-bank-loading, .gem-bank-empty { padding: 40px 20px; text-align: center; opacity: 0.7; }
