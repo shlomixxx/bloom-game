@@ -156,41 +156,31 @@
 > ⏱ ~12 שעות | 🎯 K-factor > 1 (כל שחקן מביא עוד שחקן)
 > 💡 **למה זה ממכר**: "הבן דוד שלי ניצח אותי — חייב לנצח אותו בחזרה"
 
-- [ ] **T4.1** — Live Duel (PvP בזמן אמת)
-  - קובץ: `src/XX-live-duel.js` + server routes
-  - שני שחקנים, אותו seed, בו-זמנית
-  - Split screen: הלוח שלי | הלוח של היריב (צללית)
-  - Timer: 2 דקות
-  - מי שסיים עם יותר נקודות מנצח
-  - **Dopamine trigger**: "ניצחת את אורי ב-340 נקודות! 🏆"
+- [ ] **T4.1** — Live Duel (PvP בזמן אמת) — **DEFERRED**
+  - **סטטוס**: ⏸ Deferred — דורש WebSocket + matchmaking + split-screen UI + disconnect handling. עבודה של 3-5 ימים, לא רלוונטי לסבב הזה. הדו-קרב האסינכרוני הקיים עם push notifications + live spectator widget (Phase 4 phase קודמים) ממלא חלק מהצורך. נחזור אם data של retention יראה שצריך.
 
-- [ ] **T4.2** — Push Notifications לDuels
-  - קובץ: `server.js` — `POST /api/duels`
-  - כשנוצר דו-קרב חדש → `sendPushToDevice(targetDeviceId, { title: '⚔️ אתגר חדש!', body: 'אורי מאתגר אותך לדו-קרב' })`
-  - כשדו-קרב נגמר → push ליריב: "ניצחת!" / "הפסדת — נקמה?"
+- [x] **T4.2** ✅ — Push Notifications לDuels (24.05.2026) — **כבר חי**
+  - `sendPushToDevice` מופעל בכל יצירת דו-קרב ([server.js:12315](server.js#L12315)) ובכל סיום (settled/tie/loss) ב-[server.js:12650-12707](server.js#L12650). Verified בקריאת הקוד.
 
-- [ ] **T4.3** — Guild Weekly Challenge
-  - קובץ: `src/28-guilds.js` + `src/33-guild-wars.js`
-  - כל שבוע: challenge משותף לכל חברי הגילדה
-  - "הגילדה שלכם צברה 45K/100K — עוד 55K לפרס!"
-  - Progress bar משותף
-  - **Dopamine trigger**: "הגילדה שלך ניצחה! כולם מקבלים 200💎"
+- [ ] **T4.3** — Guild Weekly Challenge — **DEFERRED**
+  - **סטטוס**: ⏸ Deferred. Stage 37 Guild Wars ([CLAUDE.md §5](CLAUDE.md)) כבר מספק תחרות שבועית בין גילדות עם daily collective goal + reward claim. הוספת Guild Weekly Challenge נוסף על זה הוא כפילות עם ROI נמוך. נחזור אם feedback מהשחקנים יראה שצריך אקסיס נוסף.
 
-- [ ] **T4.4** — Notification Center (Inbox)
-  - קובץ חדש: `src/XX-inbox.js`
-  - 🔔 icon בראש מסך הבית עם badge count (3)
-  - Slide-out panel עם:
-    - תוצאות דו-קרב
-    - Gifts שהתקבלו
-    - Guild events
-    - Challenge results
-  - Mark as read + bulk clear
+- [x] **T4.4** ✅ — Notification Inbox (24.05.2026)
+  - 🔔 button בtopbar של home-v2 עם red-pulsing badge של unread count.
+  - Slide-out panel מימין (RTL "drawer") עם רשימה כרונולוגית של 30 אירועים אחרונים.
+  - Server: `GET /api/inbox` ([server.js](server.js)) מאחד 4 מקורות:
+    - `duels` (settled/tie ב-14 ימים אחרונים) → 🏆 ניצחת / 😔 הפסדת / 🤝 תיקו
+    - `player_gifts` (30 ימים) → 🎁 קיבלת מתנה מ-X
+    - `guild_war_contributions + guild_wars` (finalized ב-14 ימים) → 🛡⚔️ ניצחון/הפסד מלחמה
+    - `challenge_entries.is_winner` (14 ימים) → 🏅 ניצחת באתגר
+  - Client: [src/36-inbox.js](src/36-inbox.js) (IIFE עצמאי) — `mountInboxIcon`, `refreshInboxBadge` (auto-refresh כל 90s), `showInboxPanel`. Tap על item → ניווט ל-modal הרלוונטי (duels/guild/challenges).
+  - Unread tracking: `localStorage[bloom_inbox_seen_at]` ISO timestamp. כפתור "סמן הכל כנקרא" מעדכן.
 
-- [ ] **T4.5** — Friends List שיפור
-  - קובץ: server `GET /api/friends/list`
-  - הראה online status (🟢 / 🔴)
-  - "שחקן X עבר אותך בדירוג!" → push notification
-  - One-tap challenge: "אתגר לדו-קרב" כפתור ליד כל חבר
+- [x] **T4.5** ✅ — Friends List polish (24.05.2026)
+  - **Online status 3-state**: 🟢 פעיל עכשיו (visit ב-`device_visits.last_at` בשעה האחרונה) / ✓ שיחק היום / ⏰ לא פעיל. Server מחזיר `onlineNow` + `lastVisitMs` ב-`/api/friends/list`.
+  - **One-tap challenge button** (⚔️ pill בצד ימין של כל שורת חבר). Extracts 4-char suffix מ-BLOOM-XXXX, סוגר friends modal + פותח duel modal עם `prefillSuffix`.
+  - "פעיל עכשיו" badge עם pulsing green box-shadow animation — visual cue ל-availability.
+  - **לא מומש בסבב זה**: "שחקן X עבר אותך בדירוג" push notification — דורש leaderboard delta detection + per-player tracking.
 
 ---
 
@@ -367,11 +357,11 @@
 | 1 — New Player Experience | 4 | 3 | 75% |
 | 2 — Addiction Loops | 5 | 5 | 100% |
 | 3 — Economy & Shop | 4 | 4 | 100% |
-| 4 — Social & Competition | 5 | 0 | 0% |
+| 4 — Social & Competition | 5 | 3 | 60% |
 | 5 — Admin Panel | 5 | 0 | 0% |
 | 6 — Performance | 5 | 0 | 0% |
 | 7 — Polish & Monetization | 5 | 0 | 0% |
-| **סה"כ** | **38** | **17** | **44.7%** |
+| **סה"כ** | **38** | **20** | **52.6%** |
 
 ---
 

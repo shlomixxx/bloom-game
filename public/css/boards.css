@@ -2495,6 +2495,37 @@ html[data-theme="dark"] .dyn-friends-headline { color: #FFD1DC; }
   background: #F4F1E8;
   color: #6F6E68;
 }
+/* T4.5 — Friends list polish: online-now badge + challenge button */
+.dyn-friend-row-status-online {
+  background: linear-gradient(135deg, #B3F0C2, #6FD688);
+  color: #103D1A;
+  animation: friendStatusPulse 2s ease-in-out infinite;
+}
+@keyframes friendStatusPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(111, 214, 136, 0.5); }
+  50%      { box-shadow: 0 0 0 4px rgba(111, 214, 136, 0); }
+}
+.dyn-friend-row-challenge {
+  background: linear-gradient(135deg, #FFD96A, #FF9F2E);
+  color: #1C1A18;
+  border: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  font-size: 16px;
+  font-weight: 800;
+  cursor: pointer;
+  margin-right: 4px;
+  box-shadow: 0 2px 6px rgba(255, 159, 46, 0.35);
+  transition: transform 0.12s ease;
+  flex-shrink: 0;
+}
+.dyn-friend-row-challenge:active { transform: scale(0.92); }
+.dyn-friend-row-challenge:hover { transform: translateY(-1px); }
+html[data-theme="dark"] .dyn-friend-row-challenge {
+  background: linear-gradient(135deg, #FAC775, #BA7517);
+  color: #FFF;
+}
 
 html[data-theme="dark"] .dyn-friends-modal-card { background: #2A2724; }
 html[data-theme="dark"] .dyn-friends-list-host { background: #2A2724; }

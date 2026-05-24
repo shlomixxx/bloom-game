@@ -8575,12 +8575,15 @@ app.get('/api/friends/list', async (req, res) => {
          CASE WHEN f.device_a = $1 THEN pb.display_name ELSE pa.display_name END AS friend_name,
          CASE WHEN f.device_a = $1 THEN pb.player_code  ELSE pa.player_code  END AS friend_code,
          CASE WHEN f.device_a = $1 THEN f.device_b ELSE f.device_a END AS friend_device,
-         CASE WHEN f.device_a = $1 THEN ab.date     ELSE aa.date     END AS friend_last_active
+         CASE WHEN f.device_a = $1 THEN ab.date     ELSE aa.date     END AS friend_last_active,
+         CASE WHEN f.device_a = $1 THEN vb.last_at  ELSE va.last_at  END AS friend_last_visit
        FROM friendships f
        LEFT JOIN player_profiles pa ON pa.device_id = f.device_a
        LEFT JOIN player_profiles pb ON pb.device_id = f.device_b
        LEFT JOIN player_daily_dyn_activity aa ON aa.device_id = f.device_a AND aa.date = $2
        LEFT JOIN player_daily_dyn_activity ab ON ab.device_id = f.device_b AND ab.date = $2
+       LEFT JOIN device_visits va ON va.device_id = f.device_a AND va.date = $2
+       LEFT JOIN device_visits vb ON vb.device_id = f.device_b AND vb.date = $2
        WHERE f.device_a = $1 OR f.device_b = $1
        ORDER BY f.created_at DESC
        LIMIT 100`,
@@ -8592,16 +8595,27 @@ app.get('/api/friends/list', async (req, res) => {
       [deviceId, today]
     );
     const iPlayedToday = myAct.rows.length > 0;
+    // T4.5 — "online now" signal: friend visited the site in the last hour.
+    // /api/ping updates device_visits.last_at on every page boot so this is
+    // accurate within ~30 minutes (visits cooldown is 30/hr/device).
+    const ONLINE_THRESHOLD_MS = 60 * 60 * 1000;
+    const nowMs = Date.now();
     res.json({
       ok: true,
       iPlayedToday,
-      friends: r.rows.map(row => ({
-        deviceId: row.friend_device,
-        name: row.friend_name || 'אנונימי',
-        code: row.friend_code ? ('BLOOM-' + row.friend_code) : null,
-        playedToday: !!row.friend_last_active,
-        createdAt: row.created_at
-      }))
+      friends: r.rows.map(row => {
+        const lastVisitMs = row.friend_last_visit ? new Date(row.friend_last_visit).getTime() : 0;
+        const onlineNow = lastVisitMs > 0 && (nowMs - lastVisitMs < ONLINE_THRESHOLD_MS);
+        return {
+          deviceId: row.friend_device,
+          name: row.friend_name || 'אנונימי',
+          code: row.friend_code ? ('BLOOM-' + row.friend_code) : null,
+          playedToday: !!row.friend_last_active,
+          onlineNow,
+          lastVisitMs: lastVisitMs || null,
+          createdAt: row.created_at
+        };
+      })
     });
   } catch (e) {
     console.error('GET /api/friends/list', e);
@@ -11897,6 +11911,153 @@ app.post('/api/player/spend', requireDeviceAuth, async (req, res) => {
     }
     res.json({ ok: true, newBalance: r.rows[0].balance });
   } catch (e) {
+    res.status(500).json({ ok: false, error: 'server' });
+  }
+});
+
+// T4.4 — Notification Inbox. Aggregates recent events from 4 sources
+// (duels / gifts / guild wars / challenge wins) into one chronological
+// feed. The client renders a unified list + a single "last seen" timestamp
+// in localStorage drives the unread badge — no per-item dedup table needed.
+app.get('/api/inbox', async (req, res) => {
+  const deviceId = String(req.query.deviceId || '').slice(0, 64);
+  if (!deviceId || deviceId.length < 8) return res.status(400).json({ error: 'missing_device' });
+  try {
+    const items = [];
+    // 1. Recent duel results (settled / tie) — last 14 days, max 15.
+    // duels table has no settled_at column; we use created_at as the
+    // sort key (settlement usually happens within hours, close enough).
+    try {
+      const r = await pool.query(
+        `SELECT id, status, winner_device, challenger_device, opponent_device,
+                challenger_name, opponent_name, challenger_score, opponent_score,
+                amount, created_at
+         FROM duels
+         WHERE (challenger_device = $1 OR opponent_device = $1)
+           AND status IN ('settled', 'tie')
+           AND created_at > NOW() - INTERVAL '14 days'
+         ORDER BY created_at DESC
+         LIMIT 15`,
+        [deviceId]
+      );
+      for (const d of r.rows) {
+        const isChallenger = d.challenger_device === deviceId;
+        const myScore = isChallenger ? d.challenger_score : d.opponent_score;
+        const oppScore = isChallenger ? d.opponent_score : d.challenger_score;
+        const oppName = isChallenger ? (d.opponent_name || 'יריב') : (d.challenger_name || 'יריב');
+        let kind, title, body;
+        if (d.status === 'tie') {
+          kind = 'duel_tie';
+          title = '🤝 תיקו';
+          body = oppName + ' · ' + (myScore || 0) + ' לעומת ' + (oppScore || 0);
+        } else if (d.winner_device === deviceId) {
+          kind = 'duel_win';
+          title = '🏆 ניצחת!';
+          body = 'מול ' + oppName + (d.amount > 0 ? ' · +' + (Math.round(d.amount * 2 * 0.95) | 0) + '💎' : '');
+        } else {
+          kind = 'duel_loss';
+          title = '😔 הפסדת';
+          body = 'מול ' + oppName + ' · ' + (oppScore || 0) + ' מול ' + (myScore || 0);
+        }
+        items.push({
+          kind,
+          title,
+          body,
+          created_at: d.created_at,
+          ref: 'duel:' + d.id,
+          action: 'open_duels'
+        });
+      }
+    } catch (e) { /* duels table may be empty */ }
+    // 2. Gifts received in last 30 days (regardless of seen).
+    try {
+      const g = await pool.query(
+        `SELECT id, sender_code, sender_name, amount, message, created_at, seen_at
+         FROM player_gifts
+         WHERE recipient_device = $1
+           AND created_at > NOW() - INTERVAL '30 days'
+         ORDER BY created_at DESC
+         LIMIT 15`,
+        [deviceId]
+      );
+      for (const row of g.rows) {
+        items.push({
+          kind: 'gift',
+          title: '🎁 קיבלת מתנה',
+          body: (row.sender_name || row.sender_code || 'חבר') + ' שלח/ה לך ' + row.amount + '💎' +
+                (row.message ? ' · "' + String(row.message).slice(0, 40) + '"' : ''),
+          created_at: row.created_at,
+          ref: 'gift:' + row.id,
+          action: null
+        });
+      }
+    } catch (e) {}
+    // 3. Guild war finals where I contributed — last 14 days. Uses the
+    // contribution row's guild_id (snapshot of which side I was on)
+    // rather than re-deriving from current membership.
+    try {
+      const w = await pool.query(
+        `SELECT gw.id, gw.guild_a_id, gw.guild_b_id, gw.winner_guild_id, gw.finalized_at,
+                gwc.score_contribution AS my_contrib, gwc.guild_id AS my_guild,
+                ga.name AS a_name, gb.name AS b_name
+         FROM guild_war_contributions gwc
+         JOIN guild_wars gw ON gw.id = gwc.war_id
+         LEFT JOIN guilds ga ON ga.id = gw.guild_a_id
+         LEFT JOIN guilds gb ON gb.id = gw.guild_b_id
+         WHERE gwc.device_id = $1
+           AND gw.status = 'finalized'
+           AND gw.finalized_at > NOW() - INTERVAL '14 days'
+         ORDER BY gw.finalized_at DESC
+         LIMIT 10`,
+        [deviceId]
+      );
+      for (const row of w.rows) {
+        const myGuildName = row.my_guild === row.guild_a_id ? row.a_name : row.b_name;
+        const isWinner = row.winner_guild_id === row.my_guild;
+        items.push({
+          kind: isWinner ? 'war_win' : 'war_loss',
+          title: isWinner ? '🛡⚔️ מלחמת קלאן — ניצחון!' : '🛡 מלחמת קלאן — הפסד',
+          body: (myGuildName || 'הקלאן שלך') + ' · תרמת ' + (row.my_contrib | 0) + ' נקודות',
+          created_at: row.finalized_at,
+          ref: 'war:' + row.id,
+          action: 'open_guild'
+        });
+      }
+    } catch (e) {}
+    // 4. Challenge wins — last 14 days. The entries table has no
+    // created_at; we fall back to started_at when completed_at is null.
+    try {
+      const ch = await pool.query(
+        `SELECT ce.challenge_id, ce.winner_rank, ce.is_winner,
+                COALESCE(ce.completed_at, ce.started_at) AS at_,
+                c.name AS challenge_name, c.prize_text
+         FROM challenge_entries ce
+         JOIN challenges c ON c.id = ce.challenge_id
+         WHERE ce.device_id = $1
+           AND ce.is_winner = TRUE
+           AND COALESCE(ce.completed_at, ce.started_at) > NOW() - INTERVAL '14 days'
+         ORDER BY COALESCE(ce.completed_at, ce.started_at) DESC
+         LIMIT 10`,
+        [deviceId]
+      );
+      for (const row of ch.rows) {
+        items.push({
+          kind: 'challenge_win',
+          title: '🏆 ניצחת באתגר!',
+          body: (row.challenge_name || 'אתגר') + (row.winner_rank ? ' · מקום ' + row.winner_rank : '') + (row.prize_text ? ' · ' + String(row.prize_text).slice(0, 30) : ''),
+          created_at: row.at_,
+          ref: 'challenge:' + row.challenge_id,
+          action: 'open_challenges'
+        });
+      }
+    } catch (e) {}
+    // Merge + sort newest first, return top 30.
+    items.sort(function(a, b) {
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    });
+    res.json({ ok: true, items: items.slice(0, 30) });
+  } catch (e) {
+    console.error('GET /api/inbox', e.message);
     res.status(500).json({ ok: false, error: 'server' });
   }
 });

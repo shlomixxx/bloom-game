@@ -424,6 +424,20 @@
       }, 1800);
     }
 
+    // T4.4 — Notification Inbox icon. Mounts the 🔔 button into the
+    // topbar and kicks off the badge fetch. Re-refresh badge every
+    // 90s while home is open so a duel that settled in the background
+    // surfaces without requiring a navigation.
+    if (window.__bloomInbox && typeof window.__bloomInbox.mount === 'function') {
+      try { window.__bloomInbox.mount(); } catch (e) {}
+      setInterval(function() {
+        if (!document.getElementById('home-screen')) return;
+        if (window.__bloomInbox && typeof window.__bloomInbox.refresh === 'function') {
+          try { window.__bloomInbox.refresh(); } catch (e) {}
+        }
+      }, 90 * 1000);
+    }
+
     playMusic('lobby');
 
     // Daily login reward — same delay as v1

@@ -2366,19 +2366,55 @@
         }
         var html = '<div class="dyn-friends-list-title">החברים שלך · ' + list.length + '</div>';
         list.forEach(function(f) {
-          var todayPill = f.playedToday
-            ? '<span class="dyn-friend-row-today dyn-friend-row-today-yes">✓ שיחק היום</span>'
-            : '<span class="dyn-friend-row-today dyn-friend-row-today-no">⏰ עדיין לא היום</span>';
+          // T4.5 — three-state status: 🟢 online now (visit <1h) /
+          // 🟡 played today / ⚫ offline. Most "alive" state wins.
+          var statusPill;
+          if (f.onlineNow) {
+            statusPill = '<span class="dyn-friend-row-today dyn-friend-row-status-online">🟢 פעיל עכשיו</span>';
+          } else if (f.playedToday) {
+            statusPill = '<span class="dyn-friend-row-today dyn-friend-row-today-yes">✓ שיחק היום</span>';
+          } else {
+            statusPill = '<span class="dyn-friend-row-today dyn-friend-row-today-no">⏰ לא פעיל</span>';
+          }
+          // T4.5 — one-tap challenge. Extract the 4-char suffix from
+          // BLOOM-XXXX and pass to the duel modal pre-fill helper.
+          var suffix = '';
+          if (f.code) {
+            var m = String(f.code).match(/BLOOM-([A-HJ-NP-Z2-9]{4})/i);
+            if (m) suffix = m[1].toUpperCase();
+          }
+          // suffix is already constrained to [A-HJ-NP-Z2-9]{4} by the regex
+          // above, so no need to escape — the chars are HTML/attr-safe by
+          // construction. No XSS surface.
+          var challengeBtn = suffix
+            ? '<button class="dyn-friend-row-challenge" data-suffix="' + suffix + '" title="אתגר לדו-קרב">⚔️</button>'
+            : '';
           html += '<div class="dyn-friend-row">' +
             '<div class="dyn-friend-row-avatar">👤</div>' +
             '<div class="dyn-friend-row-body">' +
               '<div class="dyn-friend-row-name">' + escapeHtml(f.name || 'אנונימי') + '</div>' +
               '<div class="dyn-friend-row-code">' + escapeHtml(f.code || '') + '</div>' +
             '</div>' +
-            todayPill +
+            statusPill +
+            challengeBtn +
           '</div>';
         });
         host.innerHTML = html;
+        // T4.5 — wire one-tap challenge buttons. Closes the friends
+        // modal then opens the duel modal pre-filled with the friend's
+        // 4-char BLOOM suffix. showDuelModal({prefillSuffix}) is the
+        // existing public API.
+        host.querySelectorAll('.dyn-friend-row-challenge').forEach(function(btn) {
+          btn.onclick = function(e) {
+            e.stopPropagation();
+            var suffix = btn.getAttribute('data-suffix');
+            if (!suffix) return;
+            if (typeof closeFriendsModal === 'function') closeFriendsModal();
+            if (typeof showDuelModal === 'function') {
+              showDuelModal({ prefillSuffix: suffix });
+            }
+          };
+        });
       });
     }
     renderFriendsList();
