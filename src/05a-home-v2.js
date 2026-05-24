@@ -379,6 +379,11 @@
       setTimeout(function() { try { window.__bloomSquad.maybeShow(); } catch (e) {} }, 650);
     }
 
+    // A9 — Ghost Mode tile (L8+, always shown for L8+ players).
+    if (window.__bloomGhostMode && typeof window.__bloomGhostMode.maybeShow === 'function') {
+      setTimeout(function() { try { window.__bloomGhostMode.maybeShow(); } catch (e) {} }, 700);
+    }
+
     // Tier-icons tap → reveal stats bubble (same behaviour as v1)
     var iconsTap = document.getElementById('home-icons-tap');
     if (iconsTap) {

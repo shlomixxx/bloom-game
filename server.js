@@ -681,18 +681,35 @@ app.post('/api/score', requireDeviceAuth, async (req, res) => {
         );
       } catch (e) { /* table may not have the column on legacy DBs */ }
     }
+    // A9 — Ghost Mode: capture drops_sequence (array of column indices)
+    // if the client provided it. Validated: array of small ints, max
+    // 200 entries (sanity), each 0-3 (board cols). On parse failure we
+    // silently store NULL — never block the score submission.
+    let cleanDropsSeq = null;
+    const rawDropsSeq = req.body && req.body.drops_sequence;
+    if (Array.isArray(rawDropsSeq) && rawDropsSeq.length > 0 && rawDropsSeq.length <= 200) {
+      const validated = [];
+      let ok = true;
+      for (const c of rawDropsSeq) {
+        const ci = parseInt(c, 10);
+        if (!Number.isFinite(ci) || ci < 0 || ci > 3) { ok = false; break; }
+        validated.push(ci);
+      }
+      if (ok) cleanDropsSeq = JSON.stringify(validated);
+    }
     await pool.query(
-      `INSERT INTO daily_scores (date, device_id, name, score, tier, country, drops)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `INSERT INTO daily_scores (date, device_id, name, score, tier, country, drops, drops_sequence)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)
        ON CONFLICT (date, device_id) DO UPDATE
          SET name = EXCLUDED.name,
              score = EXCLUDED.score,
              tier = EXCLUDED.tier,
              country = COALESCE(EXCLUDED.country, daily_scores.country),
              drops = EXCLUDED.drops,
+             drops_sequence = COALESCE(EXCLUDED.drops_sequence, daily_scores.drops_sequence),
              updated_at = NOW()
          WHERE daily_scores.score < EXCLUDED.score`,
-      [date, deviceId, safeName, Math.floor(score), Math.floor(tier), safeCountry, dropsN]
+      [date, deviceId, safeName, Math.floor(score), Math.floor(tier), safeCountry, dropsN, cleanDropsSeq]
     );
     // Keep player_profiles.display_name in sync so admin/duel/profile always
     // shows the same name the player picked on the daily leaderboard.
@@ -908,9 +925,22 @@ app.post('/api/score/practice', requireDeviceAuth, async (req, res) => {
         );
       } catch (e) {}
     }
+    // A9 — Ghost Mode: capture drops_sequence (same validation as /api/score).
+    let cleanDropsSeq = null;
+    const rawDropsSeq = req.body && req.body.drops_sequence;
+    if (Array.isArray(rawDropsSeq) && rawDropsSeq.length > 0 && rawDropsSeq.length <= 200) {
+      const validated = [];
+      let ok = true;
+      for (const c of rawDropsSeq) {
+        const ci = parseInt(c, 10);
+        if (!Number.isFinite(ci) || ci < 0 || ci > 3) { ok = false; break; }
+        validated.push(ci);
+      }
+      if (ok) cleanDropsSeq = JSON.stringify(validated);
+    }
     await pool.query(
-      `INSERT INTO difficulty_scores (date, device_id, difficulty_label, name, score, tier, country, source, drops)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      `INSERT INTO difficulty_scores (date, device_id, difficulty_label, name, score, tier, country, source, drops, drops_sequence)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb)
        ON CONFLICT (date, device_id, difficulty_label) DO UPDATE
          SET name = EXCLUDED.name,
              score = EXCLUDED.score,
@@ -918,9 +948,10 @@ app.post('/api/score/practice', requireDeviceAuth, async (req, res) => {
              country = COALESCE(EXCLUDED.country, difficulty_scores.country),
              source = EXCLUDED.source,
              drops = EXCLUDED.drops,
+             drops_sequence = COALESCE(EXCLUDED.drops_sequence, difficulty_scores.drops_sequence),
              updated_at = NOW()
          WHERE difficulty_scores.score < EXCLUDED.score`,
-      [date, deviceId, safeDiff, safeName, Math.floor(score), Math.floor(tier), safeCountry, safeSource, dropsN]
+      [date, deviceId, safeDiff, safeName, Math.floor(score), Math.floor(tier), safeCountry, safeSource, dropsN, cleanDropsSeq]
     );
     res.json({ ok: true });
     // A2 — Auto-resolve friend challenges (practice + duel both write here).
@@ -7098,6 +7129,76 @@ app.get('/api/trophies/state', async (req, res) => {
 // Granted automatically when /api/score (daily) or /api/score/practice
 // fires — see hooks below. Also a direct endpoint so admin / future
 // modes can call it explicitly with a custom reason.
+// ============================================================
+// A9 — Ghost Mode
+// Returns a recent run's drops_sequence + final_score for the
+// requesting player to "race against". Prefers friends-of-player,
+// falls back to random global runs. Daily mode only — needs shared
+// seed so the ghost makes sense.
+// ============================================================
+app.get('/api/ghost/random', async (req, res) => {
+  try {
+    const deviceId = String(req.query.deviceId || '').slice(0, 64);
+    const date = String(req.query.date || '');
+    if (!deviceId || deviceId.length < 8) return res.status(400).json({ error: 'bad_device' });
+    if (!isValidDate(date)) return res.status(400).json({ error: 'bad_date' });
+    const cfg = await getCachedConfigPrefix('ghost_').catch(() => ({}));
+    if (cfg.ghost_enabled === 'false') return res.json({ ok: true, enabled: false });
+    const minDrops = parseInt(cfg.ghost_min_drops, 10) || 5;
+    // Step 1: prefer a FRIEND's recent daily run (same date, has drops_sequence).
+    const friendR = await pool.query(
+      `SELECT ds.device_id, ds.name, ds.score, ds.tier, ds.drops, ds.drops_sequence, ds.country
+         FROM friendships f
+         JOIN daily_scores ds ON ds.device_id = CASE
+                                                 WHEN f.device_a = $1 THEN f.device_b
+                                                 ELSE f.device_a
+                                               END
+        WHERE (f.device_a = $1 OR f.device_b = $1)
+          AND ds.date = $2
+          AND ds.drops_sequence IS NOT NULL
+          AND jsonb_array_length(ds.drops_sequence) >= $3
+          AND ds.device_id != $1
+        ORDER BY RANDOM()
+        LIMIT 1`,
+      [deviceId, date, minDrops]
+    ).catch(() => ({ rows: [] }));
+    let ghost = friendR.rows[0];
+    let isFriend = !!ghost;
+    // Step 2: fallback — random global ghost from the same date.
+    if (!ghost) {
+      const anyR = await pool.query(
+        `SELECT device_id, name, score, tier, drops, drops_sequence, country
+           FROM daily_scores
+          WHERE date = $1
+            AND drops_sequence IS NOT NULL
+            AND jsonb_array_length(drops_sequence) >= $2
+            AND device_id != $3
+          ORDER BY RANDOM()
+          LIMIT 1`,
+        [date, minDrops, deviceId]
+      ).catch(() => ({ rows: [] }));
+      ghost = anyR.rows[0];
+    }
+    if (!ghost) return res.json({ ok: true, enabled: true, ghost: null });
+    res.json({
+      ok: true,
+      enabled: true,
+      isFriend,
+      ghost: {
+        name: ghost.name || 'אנונימי',
+        country: ghost.country || null,
+        score: ghost.score | 0,
+        tier: ghost.tier | 0,
+        drops: ghost.drops | 0,
+        dropsSequence: ghost.drops_sequence || []
+      }
+    });
+  } catch (e) {
+    console.error('GET /api/ghost/random', e);
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
 // ============================================================
 // A8 — Squad Tournaments (4-guild weekly bracket)
 // Auto-matched Sunday morning. Score-aggregation over the week.

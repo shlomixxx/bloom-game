@@ -115,6 +115,8 @@
     if (mode === 'practice') sessionDifficulty = readPracticeDifficulty();
     grid = Array.from({length: getBoardRows()}, function() { return Array(getBoardCols()).fill(0); });
     score = 0; highestTier = 1; busy = false; dropsCount = 0;
+    // A9 — Reset ghost-mode drop recording for this fresh game.
+    try { window.__bloomDropsSeq = []; } catch (e) {}
     window.__bloomGameOver = false; // new game = active again
     currentGameMaxChain = 0;
     tierUpHit = {};   // reset milestone-bonus tracker for this fresh game
@@ -635,7 +637,11 @@
       tier: highestTier,
       drops: dropsCount | 0,
       token: deviceToken,
-      country: getCountry() || null
+      country: getCountry() || null,
+      // A9 — Ghost Mode: include the column-by-column drop record so
+      // other players can race this run later. Server validates +
+      // truncates; sending it is best-effort.
+      drops_sequence: Array.isArray(window.__bloomDropsSeq) ? window.__bloomDropsSeq.slice(0, 200) : null
     };
     // T2.3 — retry-with-backoff + persistent queue. Network blips on
     // mobile are the #1 reason scores silently disappear; the queue
@@ -784,7 +790,9 @@
           token: deviceToken,
           country: getCountry() || null,
           difficulty: label,
-          source: source
+          source: source,
+          // A9 — Ghost Mode: practice ghosts also tracked.
+          drops_sequence: Array.isArray(window.__bloomDropsSeq) ? window.__bloomDropsSeq.slice(0, 200) : null
         })
       }).catch(function() {});
     } catch (e) {}
@@ -2580,6 +2588,16 @@
     }, 5000);
     queuedCol = -1;
     dropsCount++;
+    // A9 — Ghost Mode: record the column of every drop so the player's
+    // run can be replayed as a ghost by another player later. Stored
+    // in-memory; serialized into the score submission payload at game-over.
+    try {
+      if (!Array.isArray(window.__bloomDropsSeq)) window.__bloomDropsSeq = [];
+      window.__bloomDropsSeq.push(col | 0);
+    } catch (e) {}
+    // Ghost playback tick: advance the ghost to the matching drop index
+    // and update the score-vs-score HUD.
+    try { if (typeof __bloomGhostTick === 'function') __bloomGhostTick(dropsCount); } catch (e) {}
     ensureAudio();
     playMusic('game');
     soundDrop();

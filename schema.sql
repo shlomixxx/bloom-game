@@ -285,6 +285,19 @@ INSERT INTO game_config (key, value) VALUES ('booster_pick_price', '50')   ON CO
 INSERT INTO game_config (key, value) VALUES ('booster_pop_price',  '40')   ON CONFLICT (key) DO NOTHING;
 ALTER TABLE duels ADD COLUMN IF NOT EXISTS is_random_match BOOLEAN DEFAULT FALSE;
 
+-- A9 — Ghost Mode. Stores the column-index sequence of every drop in
+-- a game so other players can "race the ghost" of someone who finished
+-- the same daily/practice run earlier. Storage is minimal (~30 ints per
+-- game = <100 bytes JSON per row).
+ALTER TABLE daily_scores ADD COLUMN IF NOT EXISTS drops_sequence JSONB;
+ALTER TABLE difficulty_scores ADD COLUMN IF NOT EXISTS drops_sequence JSONB;
+
+INSERT INTO game_config (key, value) VALUES ('ghost_enabled', 'true') ON CONFLICT (key) DO NOTHING;
+-- Minimum drops for a ghost to be "raceable" (3 drops = trivial game, skip).
+INSERT INTO game_config (key, value) VALUES ('ghost_min_drops', '5') ON CONFLICT (key) DO NOTHING;
+-- Reward for the racing player when they beat the ghost.
+INSERT INTO game_config (key, value) VALUES ('ghost_beat_reward', '30') ON CONFLICT (key) DO NOTHING;
+
 -- A8 — Squad Tournaments. Weekly 4-guild bracket competition. Auto-matched
 -- Sunday morning. 4 guilds play through the week → Wednesday evening
 -- semifinals (top-2 scores per pair) → Saturday evening final → winner

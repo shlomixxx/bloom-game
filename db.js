@@ -51,6 +51,9 @@ export async function initDb() {
     // A7 — 7-Day Login Calendar columns on player_profiles.
     `ALTER TABLE player_profiles ADD COLUMN IF NOT EXISTS login_cal_day INT DEFAULT 0`,
     `ALTER TABLE player_profiles ADD COLUMN IF NOT EXISTS login_cal_last_claim DATE`,
+    // A9 — Ghost Mode drops_sequence columns (full def in schema.sql).
+    `ALTER TABLE daily_scores ADD COLUMN IF NOT EXISTS drops_sequence JSONB`,
+    `ALTER TABLE difficulty_scores ADD COLUMN IF NOT EXISTS drops_sequence JSONB`,
     // A8 — Squad Tournaments (full def in schema.sql).
     `CREATE TABLE IF NOT EXISTS squad_tournaments (
       id              BIGSERIAL PRIMARY KEY,

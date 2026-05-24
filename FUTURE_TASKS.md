@@ -1,7 +1,7 @@
 # 📋 BLOOM — משימות עתידיות
 
 > **מסמך מרכזי לכל מה שעדיין לא נבנה.**
-> עודכן: 2026-05-24 · 46 שלבים חיים בפרודקשן · 7 משימות פתוחות (A1+A2+A3+A4+A6+A7+A8+A10 ✅)
+> עודכן: 2026-05-24 · 47 שלבים חיים בפרודקשן · 6 משימות פתוחות (A1+A2+A3+A4+A6+A7+A8+A9+A10 ✅ · רק A5 פתוח ב-pure-addiction)
 >
 > 🎯 **איך להשתמש**: בשיחה חדשה תגיד "בוא נבנה A1" / "המשך עם הכי ממכר" / "תעשה A2 + A3 ביחד" ואני אדע בדיוק על מה אתה מדבר.
 
@@ -157,21 +157,20 @@
 
 ---
 
-### A9 · 👻 Ghost Mode
-**מאמץ**: 2 ימים · **השפעה**: ★★★
+### A9 · 👻 Ghost Mode ✅ נבנה (24.05.2026)
+**מאמץ**: 2 ימים · **השפעה**: ★★★ · **סטטוס: חי בייצור**
 
-**מה זה**:
-תוך כדי משחק, רואה shadow/overlay חלש של ה-tile placements של חבר על אותו לוח. "נצח את הרוח שלו".
+**מה נבנה** (Mario Kart pattern):
+- Schema: `ALTER daily_scores + difficulty_scores ADD drops_sequence JSONB` (array of column indices). 3 config keys.
+- בכל drop של שחקן ב-`11-game.js`, `window.__bloomDropsSeq.push(col)` שומר את העמודה. נשלח אל ה-server יחד עם הציון.
+- Server validates: array of ints 0-3, max 200 entries. נשמר בעמודה הJSONB יחד עם daily/practice score upsert.
+- Endpoint חדש `GET /api/ghost/random?date=&deviceId=`: עדיפות חבר → fallback לglobal random ghost מאותו תאריך.
+- Client tile (L8+) "👻 שחק נגד רוח" → fetch random ghost → confirm modal עם stats → arm ghost → init('daily')
+- בזמן המשחק: HUD floating "👻 דניאל: 38,400 vs אתה: 42,200" (gold כשמובילים, אדום כשמאחורי). Column indicator שקוף סגול-לבן מציין את העמודה הבאה שדניאל יזרוק עליה.
+- כשעוברים את ה-final-score של דניאל → toast גדול "🏆 עברת את דניאל! +3,000" + 5-pulse buzz + soundMilestone(5).
+- Client: [src/44-ghost-mode.js](src/44-ghost-mode.js). Disarm אוטומטי כשעוברים מ-daily למצב אחר (interval watcher).
 
-**למה לבנות**:
-- מנגנון "intimate competition" — מרגיש כאילו החבר שם איתך
-- מאתגר אבל לא מפריע
-- מאריך זמן משחק
-
-**טכני**:
-- צריך לתעד drop sequences (כבר נעשה חלקית ב-spectator)
-- Visual: tiles בצבע אפור-שקוף בעמודות בהם החבר זרק
-- אפשרות להפעיל/לכבות
+**הגבלות v1**: daily/practice בלבד (לא contest/duel). הציון של הרוח מתפלג ליניארית (לא time-based) — כי לא שומרים timestamps פר-drop.
 
 ---
 
