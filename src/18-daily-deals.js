@@ -152,6 +152,22 @@
         '</div>' +
       '</div>';
     }).join('');
+    // T3.3 — "saved" badge with absolute number ("חסכת 450💎"), plus
+    // value-multiplier sticker when the deal is at least 3× as much
+    // value as the price. Anchoring psychology: number is more visceral
+    // than percentage.
+    var savedAmount = (deal.originalValue && deal.originalValue > deal.priceGems)
+      ? (deal.originalValue - deal.priceGems)
+      : 0;
+    var savedHtml = savedAmount > 0
+      ? '<div class="dd-modal-saved">💰 חסכת <strong>' + savedAmount.toLocaleString() + '💎</strong>!</div>'
+      : '';
+    var valueMult = (deal.originalValue && deal.priceGems > 0)
+      ? (deal.originalValue / deal.priceGems)
+      : 0;
+    var multHtml = valueMult >= 3
+      ? '<div class="dd-modal-multiplier">×' + Math.floor(valueMult) + ' ערך!</div>'
+      : '';
     var modal = document.createElement('div');
     modal.id = 'daily-deal-modal';
     modal.className = 'daily-deal-modal-overlay';
@@ -161,6 +177,7 @@
         (deal.discountPct
           ? '<div class="dd-modal-ribbon">-' + deal.discountPct + '%</div>'
           : '<div class="dd-modal-ribbon">דיל היום</div>') +
+        multHtml +
         '<div class="dd-modal-icon">' + (deal.emoji || '🔥') + '</div>' +
         '<div class="dd-modal-title">' + escapeHtml(deal.name) + '</div>' +
         (deal.description ? '<div class="dd-modal-sub">' + escapeHtml(deal.description) + '</div>' : '') +
@@ -172,6 +189,7 @@
             ? '<s class="dd-modal-price-orig">' + deal.originalValue.toLocaleString() + '💎</s>'
             : '') +
         '</div>' +
+        savedHtml +
         '<button class="dd-modal-buy-btn ' + (hasFunds ? '' : 'disabled') + '" id="dd-modal-buy">' +
           (hasFunds
             ? '🛒 קנה עכשיו · ' + deal.priceGems.toLocaleString() + '💎'
@@ -187,17 +205,21 @@
     if (buyBtn && hasFunds) {
       buyBtn.onclick = function() { buyDailyDeal(deal.id, buyBtn, close); };
     }
-    // Live countdown
+    // Live countdown — T3.3 adds urgency styling in last hour.
     var cd = document.getElementById('dd-modal-countdown');
     var modalTicker = setInterval(function() {
       if (!document.body.contains(modal)) { clearInterval(modalTicker); return; }
       var newMs = new Date(data.expiresAt).getTime() - Date.now();
       if (newMs <= 0) {
         cd.textContent = '⏰ פג תוקף';
+        cd.classList.add('dd-countdown-expired');
         if (buyBtn) buyBtn.disabled = true;
         clearInterval(modalTicker);
         return;
       }
+      // Less than 1 hour left → urgency state.
+      if (newMs < 60 * 60 * 1000) cd.classList.add('dd-countdown-urgent');
+      else cd.classList.remove('dd-countdown-urgent');
       cd.textContent = '⏰ נשאר: ' + fmtDealCountdown(newMs);
     }, 1000);
   }

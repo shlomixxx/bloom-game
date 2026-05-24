@@ -129,6 +129,24 @@
         '</div>' +
         '<div class="gacha-pity-bar"><div class="gacha-pity-fill" style="width:' + pityPct + '%"></div></div>' +
       '</div>';
+    // T3.4 — Collection progress card. Completionist drive — "12 / 17"
+    // shows the player exactly how far they are from "I own them all".
+    // Card hidden when totalSkins is unknown or zero (defensive).
+    var collectionHtml = '';
+    if (data.totalSkins && data.totalSkins > 0) {
+      var collPct = Math.min(100, Math.round((data.ownedSkinsCount / data.totalSkins) * 100));
+      var remaining = data.totalSkins - data.ownedSkinsCount;
+      var hintText = remaining === 0
+        ? '👑 איסוף מלא!'
+        : (remaining <= 3
+           ? '🔥 עוד ' + remaining + ' להשלמת האוסף!'
+           : 'עוד ' + remaining + ' סקינים לאסוף');
+      collectionHtml =
+        '<div class="gacha-collection-card' + (remaining === 0 ? ' gacha-collection-complete' : '') + '">' +
+          '<div class="gacha-collection-label">📚 אוסף: <strong>' + data.ownedSkinsCount + ' / ' + data.totalSkins + '</strong> · ' + hintText + '</div>' +
+          '<div class="gacha-collection-bar"><div class="gacha-collection-fill" style="width:' + collPct + '%"></div></div>' +
+        '</div>';
+    }
     var bal = (typeof playerBalance !== 'undefined') ? playerBalance : 0;
     var singleAffordable = bal >= data.priceSingle;
     var tenAffordable = bal >= data.priceTen;
@@ -157,6 +175,7 @@
         '<div class="gacha-modal-sub">5 רמות נדירות · נדיר מובטח כל ' + data.pityThreshold + ' פולים</div>' +
         featuredHtml +
         pityHtml +
+        collectionHtml +
         '<div class="gacha-rates-grid">' + ratesHtml + '</div>' +
         '<div class="gacha-pull-buttons">' +
           freeBtn +

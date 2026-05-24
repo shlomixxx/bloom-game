@@ -14,10 +14,8 @@
 ## PHASE 0 — תיקונים קריטיים (חובה לפני הכל)
 > ⏱ ~3 שעות | 🎯 בלי זה כלום לא עובד כמו שצריך
 
-- [ ] **T0.1** — GA_MEASUREMENT_ID: החלף את הplaceholder ב-`public/index.html` ב-ID אמיתי מ-GA4. בלי זה אתה עיוור.
-  - קובץ: `public/index.html` שורות 6-10
-  - החלף `GA_MEASUREMENT_ID` ב-ID שנוצר ב-analytics.google.com
-  - **סטטוס**: ⏸ ממתין ל-GA ID אמיתי מהמשתמש. אחרי שיהיה — שינוי של 2 דקות.
+- [x] **T0.1** ✅ — GA_MEASUREMENT_ID הוטמע (24.05.2026)
+  - `G-KTRD0NCTX8` (property: bloom-game) הוחלף בכל 3 המופעים ב-[public/index.html](public/index.html) (שורות 6-10). `trackEvent()` עכשיו שולח אירועים אמיתיים ל-GA4. כל ה-`gtag('event', ...)` שכבר היו בקוד (`game_start`, `game_over`, `purchase`, `level_up`, וכו') יתחילו לזרום.
 
 - [x] **T0.2** ✅ — XP/Level ב-schema.sql נוספו (24.05.2026)
   - שתי שורות `ALTER TABLE player_profiles ADD COLUMN IF NOT EXISTS xp/level` נוספו ב-schema.sql אחרי ה-`updated_at` ALTER. `db.js` כבר ריצה את אותו migrate ב-boot, אבל עכשיו fresh `psql schema.sql` יקבל גם את העמודות.
@@ -125,36 +123,32 @@
 > ⏱ ~10 שעות | 🎯 שחקנים מרגישים שהgems שווים משהו
 > 💡 **למה זה ממכר**: Economy loop = earn → want → spend → need more → play more
 
-- [ ] **T3.1** — Booster System (5 boosters)
-  - קובץ חדש: `src/XX-boosters.js`
-  - 5 boosters שנקנים בgems ומשתמשים לפני/תוך כדי משחק:
-    1. 🔀 **ערבב** (30💎) — shuffle all tiles on board
-    2. 🎯 **בחר** (50💎) — pick exact next piece (tier 1-4)
-    3. 💥 **פיצוץ** (40💎) — remove one specific tile
-    4. ×2 **כפול** (60💎) — 30 seconds double points
-    5. 🛡 **הגנה** (80💎) — extra row before game-over
-  - UI: row של booster icons מתחת ללוח, tap לשימוש
-  - Server: `POST /api/player/use-booster` — deduct + validate
-  - **Dopamine trigger**: "שמרת עצמך עם 🛡! המשחק ממשיך!"
+- [x] **T3.1** ✅ — Booster System v1 (24.05.2026)
+  - 2 boosters בטוחים שלא נוגעים במנוע ה-merge:
+    1. 🎯 **בחר** (50💎) — modal עם 4 כפתורי tier 1-4, מגדיר את `nextPiece` ישירות.
+    2. 💥 **הסר** (40💎) — tap-mode על הלוח, בחירה בתא לא-ריק מנקה אותו + applyGravity + render.
+  - הצורות שלא מומשו ב-v1 (נדחו כי נוגעות בלוגיקת merge/scoring/game-over): 🔀 shuffle, ×2 double, 🛡 save.
+  - Server: `POST /api/player/use-booster` ב-[server.js](server.js) עם allowlist `['pick','pop']`, פרייסינג מ-`booster_{id}_price` config, atomic UPDATE deduct, rate-limit 60/hr.
+  - 4 config keys: `booster_enabled` (master toggle), `booster_pick_price`, `booster_pop_price`.
+  - Client: [src/35-boosters.js](src/35-boosters.js) — חדש, בתוך ה-main IIFE (לא wrapped, גישה ישירה ל-grid/nextPiece/applyGravity). `maybeMountBoosterStrip` נקרא בסוף init() אחרי ה-render הראשון.
+  - Mode gating: practice + dynamic בלבד. NOT daily/contest/duel/challenge (fairness). NOT bot/skin-trial.
+  - Per-game once: `_boostersUsedThisGame` מאופס בכל init.
 
-- [ ] **T3.2** — Skin Shop שיפור
-  - קובץ: `public/app.js` — `showSkinShop()` (שורה ~450)
-  - הוסף preview מלא — tap על skin → רואה את כל 8 ה-tiers
-  - "הכי פופולרי" badge
-  - "מוגבל!" timer על skins מיוחדים
-  - Trial timer ברור (60 שניות) + countdown ויזואלי
+- [x] **T3.2** ✅ — Skin Shop polish (24.05.2026)
+  - Full preview: 8 tiers (was 5) ב-22px each, נכנס בנוחות ב-modal 360px.
+  - Badges: `⭐ פופולרי` (classic), `💎 פרימיום` (price ≥ 400), `🆕 חדש` (אם s.tag === 'new').
+  - Trial timer ויזואלי: 60s countdown bar עם class `.skin-trial-urgent` ב-10 השניות האחרונות (אדום פולסי). Auto-ends הניסיון. Persisted ב-`localStorage[bloom_skin_trial_end]` כך שרענון לא מאריך.
+  - סוגר בעיית UX8 — trial היה open-ended.
 
-- [ ] **T3.3** — Daily Deals שיפור UI
-  - קובץ: `src/18-daily-deals.js`
-  - "מחיר מקורי" בקו חוצה + "הנחה 40%!" badge
-  - Timer "נגמר בעוד 6:42:18" ← urgency
-  - Bundle deals: "×3 value!" sticker
+- [x] **T3.3** ✅ — Daily Deals UI polish (24.05.2026)
+  - 💰 "חסכת N💎" pill מתחת למחיר (anchoring psychology — מספר אבסולוטי חזק יותר מאחוז).
+  - "×N ערך!" sticker מסובב 8° עם pulse animation כש-originalValue / priceGems ≥ 3.
+  - Last-hour urgency: ה-countdown אדום-פולסי כשנשארה פחות משעה. Expired state אפור.
 
-- [ ] **T3.4** — Gacha/Loot Box UX
-  - קובץ: `src/19-skin-gacha.js`
-  - Pull animation — spinning reel + reveal
-  - Pity system explanation ברור: "פול בטוח בעוד 3 סיבובים"
-  - Collection progress: "12/20 סקינים נאספו"
+- [x] **T3.4** ✅ — Gacha UX collection progress (24.05.2026)
+  - Card חדש "📚 אוסף: 12 / 17 · עוד 5 סקינים לאסוף" בין pity ל-rates.
+  - הצגה דינמית: "🔥 עוד N להשלמת האוסף!" כש≤3 חסרים, "👑 איסוף מלא!" כשהכל נאסף (gold gradient).
+  - Server: `/api/gacha/state` החזיר `ownedSkinsCount` + `totalSkins` מ-`skin_configurations` JOIN על `player_skins`.
 
 ---
 
@@ -369,15 +363,15 @@
 
 | Phase | משימות | הושלמו | % |
 |-------|--------|--------|---|
-| 0 — Critical Fixes | 5 | 4 | 80% |
+| 0 — Critical Fixes | 5 | 5 | 100% |
 | 1 — New Player Experience | 4 | 3 | 75% |
 | 2 — Addiction Loops | 5 | 5 | 100% |
-| 3 — Economy & Shop | 4 | 0 | 0% |
+| 3 — Economy & Shop | 4 | 4 | 100% |
 | 4 — Social & Competition | 5 | 0 | 0% |
 | 5 — Admin Panel | 5 | 0 | 0% |
 | 6 — Performance | 5 | 0 | 0% |
 | 7 — Polish & Monetization | 5 | 0 | 0% |
-| **סה"כ** | **38** | **12** | **31.6%** |
+| **סה"כ** | **38** | **17** | **44.7%** |
 
 ---
 

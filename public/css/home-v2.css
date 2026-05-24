@@ -2265,3 +2265,322 @@ html[data-theme="dark"] .polish-tooltip-body {
   0%   { transform: translateY(0) rotate(0); opacity: 1; }
   100% { transform: translateY(110vh) rotate(540deg); opacity: 0.2; }
 }
+
+/* ── T3.2 — Skin shop badges + trial urgency ── */
+.skin-shop-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 800;
+  padding: 2px 7px;
+  border-radius: 999px;
+  line-height: 1.4;
+  letter-spacing: 0.2px;
+}
+.skin-badge-popular {
+  background: linear-gradient(135deg, #FFE9A0, #FFD93D);
+  color: #5C3A00;
+  box-shadow: 0 1px 3px rgba(255, 200, 0, 0.4);
+}
+.skin-badge-premium {
+  background: linear-gradient(135deg, #C5B5FA, #7A5FE0);
+  color: #FFF;
+  box-shadow: 0 1px 3px rgba(122, 95, 224, 0.4);
+}
+.skin-badge-new {
+  background: linear-gradient(135deg, #FF7DAF, #FF4D6D);
+  color: #FFF;
+  box-shadow: 0 1px 3px rgba(255, 77, 109, 0.5);
+}
+
+/* Trial countdown — last 10 seconds glow red + pulse */
+.skin-trial-banner.skin-trial-urgent {
+  background: linear-gradient(135deg, #FF6B6B 0%, #FAC775 100%);
+  animation: skinTrialUrgentPulse 0.8s ease-in-out infinite;
+}
+.skin-trial-banner #skin-trial-countdown.skin-trial-urgent {
+  color: #FFF !important;
+  font-weight: 900;
+  font-size: 14px;
+}
+@keyframes skinTrialUrgentPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 107, 107, 0.5); }
+  50%      { box-shadow: 0 0 0 6px rgba(255, 107, 107, 0); }
+}
+
+/* ── T3.3 — Daily Deals polish: saved-amount + value-multiplier + urgency ── */
+.dd-modal-saved {
+  text-align: center;
+  font-size: 13px;
+  font-weight: 700;
+  color: #2E8B6F;
+  background: rgba(46, 139, 111, 0.12);
+  border: 1px solid rgba(46, 139, 111, 0.4);
+  padding: 6px 10px;
+  border-radius: 9px;
+  margin: -2px 0 10px;
+}
+.dd-modal-saved strong { color: #1F6E55; }
+.dd-modal-multiplier {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  background: linear-gradient(135deg, #FF6B9D, #FF4D6D);
+  color: #FFF;
+  font-size: 12px;
+  font-weight: 900;
+  padding: 5px 12px;
+  border-radius: 999px;
+  transform: rotate(-8deg);
+  box-shadow: 0 4px 12px rgba(255, 77, 109, 0.45);
+  animation: ddMultBounce 1.4s ease-in-out infinite;
+  z-index: 2;
+}
+@keyframes ddMultBounce {
+  0%, 100% { transform: rotate(-8deg) scale(1); }
+  50%      { transform: rotate(-6deg) scale(1.06); }
+}
+.dd-modal-countdown.dd-countdown-urgent {
+  background: linear-gradient(135deg, #FF6B6B, #FF4D6D);
+  color: #FFF !important;
+  font-weight: 900;
+  animation: ddCountdownPulse 1.0s ease-in-out infinite;
+}
+@keyframes ddCountdownPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 77, 109, 0.5); }
+  50%      { box-shadow: 0 0 0 6px rgba(255, 77, 109, 0); }
+}
+.dd-modal-countdown.dd-countdown-expired {
+  background: #ccc;
+  color: #555 !important;
+}
+
+/* ── T3.4 — Gacha collection progress card ── */
+.gacha-collection-card {
+  background: linear-gradient(135deg, rgba(122, 95, 224, 0.18), rgba(192, 159, 250, 0.12));
+  border: 1px solid rgba(122, 95, 224, 0.4);
+  border-radius: 12px;
+  padding: 10px 12px;
+  margin: 8px 0;
+}
+.gacha-collection-label {
+  font-size: 12px;
+  color: #4A2C8A;
+  margin-bottom: 6px;
+  font-weight: 600;
+}
+.gacha-collection-label strong { color: #1F1448; }
+.gacha-collection-bar {
+  height: 8px;
+  background: rgba(255, 255, 255, 0.4);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.gacha-collection-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #B59FFA, #7A5FE0);
+  border-radius: 999px;
+  transition: width 0.5s ease-out;
+}
+.gacha-collection-card.gacha-collection-complete {
+  background: linear-gradient(135deg, #FFE9A0, #FFD93D);
+  border-color: #FAC775;
+  box-shadow: 0 4px 14px rgba(255, 217, 61, 0.3);
+}
+.gacha-collection-complete .gacha-collection-label { color: #5C3A00; }
+.gacha-collection-complete .gacha-collection-fill { background: linear-gradient(90deg, #FFD93D, #FAC775); }
+
+/* Dark mode tweaks */
+html[data-theme="dark"] .gacha-collection-label { color: #C5B5FA; }
+html[data-theme="dark"] .gacha-collection-label strong { color: #FFF; }
+
+/* ── T3.1 — Booster strip + modals ── */
+.booster-strip {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  margin: 8px auto 6px;
+  max-width: 380px;
+  padding: 0 4px;
+  direction: rtl;
+}
+.booster-btn {
+  flex: 1;
+  background: linear-gradient(135deg, #FFF8E7, #FAE8B0);
+  border: 2px solid #FAC775;
+  border-radius: 14px;
+  padding: 8px 6px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  font-family: inherit;
+  transition: all 0.15s ease;
+  position: relative;
+  min-width: 0;
+}
+.booster-btn:active { transform: scale(0.96); }
+.booster-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  filter: grayscale(0.45);
+}
+.booster-btn.booster-used {
+  background: linear-gradient(135deg, #E0F2E5, #BFE3CB);
+  border-color: #6FC585;
+  opacity: 0.85;
+}
+.booster-btn.booster-cant-afford {
+  filter: grayscale(0.6);
+  opacity: 0.55;
+}
+.booster-btn-emoji {
+  font-size: 20px;
+  line-height: 1;
+}
+.booster-btn-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #5C3A00;
+  letter-spacing: 0.2px;
+}
+.booster-btn-price {
+  font-size: 10px;
+  font-weight: 800;
+  color: #8B5A00;
+  background: rgba(255, 217, 61, 0.4);
+  padding: 1px 6px;
+  border-radius: 8px;
+}
+.booster-btn.booster-used .booster-btn-price {
+  background: rgba(111, 197, 133, 0.4);
+  color: #1A5A2E;
+}
+
+/* PICK modal */
+.booster-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  backdrop-filter: blur(4px);
+  animation: streakCalFade 0.2s ease-out;
+}
+.booster-modal-card {
+  background: linear-gradient(160deg, #FFFAEC 0%, #FFEFB8 100%);
+  border-radius: 22px;
+  padding: 24px;
+  max-width: 340px;
+  width: 100%;
+  position: relative;
+  text-align: center;
+  border: 2px solid rgba(255, 217, 61, 0.7);
+  box-shadow: 0 20px 50px rgba(255, 168, 0, 0.4);
+  direction: rtl;
+}
+.booster-modal-close {
+  position: absolute;
+  top: 8px;
+  left: 14px;
+  background: rgba(0, 0, 0, 0.08);
+  border: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  font-size: 20px;
+  cursor: pointer;
+  line-height: 1;
+  color: #5C3A00;
+}
+.booster-modal-title {
+  font-size: 18px;
+  font-weight: 900;
+  color: #5C3A00;
+  margin-bottom: 4px;
+}
+.booster-modal-sub {
+  font-size: 12px;
+  color: #8B6A00;
+  margin-bottom: 16px;
+}
+.booster-pick-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+.booster-pick-option {
+  border: 2px solid rgba(0, 0, 0, 0.12);
+  border-radius: 14px;
+  padding: 14px 6px 8px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.15s ease;
+  font-family: inherit;
+}
+.booster-pick-option:active { transform: scale(0.94); }
+.booster-pick-option:hover { transform: translateY(-2px); box-shadow: 0 6px 14px rgba(0,0,0,0.15); }
+.bp-tier-icon { font-size: 28px; line-height: 1; }
+.bp-tier-label { font-size: 10px; font-weight: 700; opacity: 0.8; }
+
+/* POP banner + grid-mode */
+.booster-pop-banner {
+  position: fixed;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: linear-gradient(135deg, #FF6B9D, #FF4D6D);
+  color: #FFF;
+  padding: 10px 14px;
+  border-radius: 14px;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+  font-size: 13px;
+  box-shadow: 0 10px 24px rgba(255, 77, 109, 0.35);
+  direction: rtl;
+  animation: streakCalFade 0.2s ease-out;
+}
+.booster-pop-cancel {
+  background: rgba(255, 255, 255, 0.22);
+  border: none;
+  color: #FFF;
+  padding: 4px 10px;
+  border-radius: 9px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+}
+/* While pop-mode is active, cells get a faint red ring + cursor pointer */
+.grid.booster-pop-mode .cell {
+  cursor: crosshair;
+  position: relative;
+}
+.grid.booster-pop-mode .cell.filled::after {
+  content: '';
+  position: absolute;
+  inset: 2px;
+  border: 2px dashed rgba(255, 77, 109, 0.75);
+  border-radius: 8px;
+  pointer-events: none;
+  animation: boosterPopRing 1.2s ease-in-out infinite;
+}
+@keyframes boosterPopRing {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 77, 109, 0.5); }
+  50%      { box-shadow: 0 0 0 4px rgba(255, 77, 109, 0); }
+}
+
+html[data-theme="dark"] .booster-btn { background: linear-gradient(135deg, #3A2D14, #5C4520); color: #FFE9A0; }
+html[data-theme="dark"] .booster-btn-label { color: #FFE9A0; }
+html[data-theme="dark"] .booster-modal-card { background: linear-gradient(160deg, #2A2410 0%, #3D341A 100%); color: #FFE9A0; }
+html[data-theme="dark"] .booster-modal-title { color: #FFE9A0; }
+html[data-theme="dark"] .booster-modal-sub { color: #C5A560; }
+html[data-theme="dark"] .booster-modal-close { background: rgba(255, 255, 255, 0.15); color: #FFE9A0; }

@@ -303,6 +303,12 @@
     if (!restoredContestState) nextPiece = pickPiece();
     updateModeBar();
     render();
+    // T3.1 — Booster strip mount (practice + dynamic only). Reset per-game
+    // usage flags so each new game starts fresh. The strip itself does its
+    // own mode check via boostersAreEnabled() so a stale call in daily/
+    // contest is a no-op.
+    try { if (typeof clearBoostersThisGame === 'function') clearBoostersThisGame(); } catch (e) {}
+    try { if (typeof maybeMountBoosterStrip === 'function') maybeMountBoosterStrip(); } catch (e) {}
     // Toast at game start when a special board is active — the "wow"
     // moment that turns a routine daily into "today is different!".
     if (window._activeSpecialBoard && typeof showSpecialBoardToast === 'function') {

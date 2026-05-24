@@ -4225,6 +4225,21 @@ app.get('/api/gacha/state', async (req, res) => {
     );
     const featuredId = parseInt(cfg.gacha_featured_id || '', 10);
     const featured = Number.isFinite(featuredId) ? poolR.rows.find(p => p.id === featuredId) : null;
+    // T3.4 — Collection progress: total unique skins available in the
+    // game (from skin_configurations) vs how many the player owns. This
+    // gives the gacha modal a "completionist" anchor: "12 / 17 סקינים".
+    let totalSkins = 0;
+    let ownedSkinsCount = 0;
+    try {
+      const tR = await pool.query(`SELECT COUNT(*)::int AS n FROM skin_configurations WHERE is_enabled = TRUE`);
+      totalSkins = (tR.rows[0] && tR.rows[0].n) | 0;
+    } catch (e) { /* table optional */ }
+    if (deviceId && deviceId.length >= 8 && totalSkins > 0) {
+      try {
+        const oR = await pool.query(`SELECT COUNT(DISTINCT ps.skin_id)::int AS n FROM player_skins ps JOIN skin_configurations sc ON sc.skin_id = ps.skin_id WHERE ps.device_id = $1 AND sc.is_enabled = TRUE`, [deviceId]);
+        ownedSkinsCount = (oR.rows[0] && oR.rows[0].n) | 0;
+      } catch (e) {}
+    }
     res.json({
       ok: true,
       enabled,
@@ -4235,6 +4250,8 @@ app.get('/api/gacha/state', async (req, res) => {
       pityCounter: state.pity_counter | 0,
       pityRemaining: Math.max(0, (parseInt(cfg.gacha_pity_threshold || '50', 10) || 50) - (state.pity_counter | 0)),
       totalPulls: state.total_pulls | 0,
+      ownedSkinsCount,
+      totalSkins,
       freeAvailable,
       featured: featured ? {
         id: featured.id, rarity: featured.rarity,
@@ -11880,6 +11897,40 @@ app.post('/api/player/spend', requireDeviceAuth, async (req, res) => {
     }
     res.json({ ok: true, newBalance: r.rows[0].balance });
   } catch (e) {
+    res.status(500).json({ ok: false, error: 'server' });
+  }
+});
+
+// T3.1 — In-game boosters. Atomic gem deduct against a server-priced
+// allowlist of booster ids. Returns new balance + the actual cost so
+// the client never has to trust its own price calc.
+app.post('/api/player/use-booster', requireDeviceAuth, async (req, res) => {
+  const { deviceId, boosterId } = req.body || {};
+  if (!deviceId || !boosterId) return res.status(400).json({ error: 'missing_params' });
+  const allowlist = ['pick', 'pop'];
+  if (!allowlist.includes(boosterId)) return res.json({ ok: false, reason: 'invalid_booster' });
+  if (!checkRateLimit('booster:use', deviceId, 60, 60 * 60 * 1000)) {
+    return res.json({ ok: false, reason: 'rate_limited' });
+  }
+  try {
+    // Master toggle check.
+    const onR = await pool.query(`SELECT value FROM game_config WHERE key = 'booster_enabled'`);
+    if (onR.rows[0] && onR.rows[0].value === 'false') return res.json({ ok: false, reason: 'disabled' });
+    // Look up the price.
+    const priceR = await pool.query(`SELECT value FROM game_config WHERE key = $1`, ['booster_' + boosterId + '_price']);
+    const cost = parseInt((priceR.rows[0] || {}).value, 10) || 0;
+    if (cost <= 0) return res.json({ ok: false, reason: 'booster_disabled' });
+    const r = await pool.query(
+      `UPDATE player_profiles SET balance = balance - $1 WHERE device_id = $2 AND balance >= $1 RETURNING balance`,
+      [cost, deviceId]
+    );
+    if (!r.rows.length) {
+      const balR = await pool.query(`SELECT balance FROM player_profiles WHERE device_id = $1`, [deviceId]);
+      return res.json({ ok: false, reason: 'insufficient', balance: (balR.rows[0] && balR.rows[0].balance) | 0, cost });
+    }
+    res.json({ ok: true, cost, newBalance: r.rows[0].balance });
+  } catch (e) {
+    console.error('POST /api/player/use-booster', e);
     res.status(500).json({ ok: false, error: 'server' });
   }
 });

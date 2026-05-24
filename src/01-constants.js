@@ -464,9 +464,24 @@
       var owned = ownedSkins.indexOf(id) >= 0;
       var active = activeSkinId === id;
       var tiers = s.tiers || TIERS;
+      // T3.2 — full preview of all 8 tiers (was 5). 22px each fits in the
+      // shop row at 360px modal width even on small phones.
       var preview = '';
-      for (var t = 1; t <= Math.min(5, tiers.length - 1); t++) {
-        preview += '<div style="width:28px;height:28px;border-radius:8px;background:' + tiers[t].bg + ';color:' + tiers[t].fg + ';display:flex;align-items:center;justify-content:center">' + tiers[t].svg + '</div>';
+      for (var t = 1; t <= Math.min(8, tiers.length - 1); t++) {
+        preview += '<div style="width:22px;height:22px;border-radius:6px;background:' + tiers[t].bg + ';color:' + tiers[t].fg + ';display:flex;align-items:center;justify-content:center;font-size:11px">' + tiers[t].svg + '</div>';
+      }
+      // T3.2 — badges. "הכי פופולרי" on classic (it's the default everyone
+      // starts with and the cleanest design). "פרימיום" on price >= 400 to
+      // signal "this is the high-end stuff" without inventing fake scarcity.
+      // "חדש" if the active-skin definition has a `tag` field with that value.
+      var badges = '';
+      if (id === 'classic') {
+        badges += '<span class="skin-shop-badge skin-badge-popular">⭐ פופולרי</span>';
+      } else if ((s.price | 0) >= 400) {
+        badges += '<span class="skin-shop-badge skin-badge-premium">💎 פרימיום</span>';
+      }
+      if (s.tag === 'new' || s.isNew) {
+        badges += '<span class="skin-shop-badge skin-badge-new">🆕 חדש</span>';
       }
       var btnsHtml = '';
       var sellable = s.isSellable !== false;
@@ -478,15 +493,15 @@
         btnsHtml = '<button class="btn sm" disabled style="opacity:0.55;min-width:60px;font-size:11px">לא זמין כרגע</button>';
       } else {
         btnsHtml = '<div style="display:flex;gap:4px">' +
-          '<button class="btn sm skin-try-btn" data-skin="' + id + '" style="min-width:50px;font-size:11px">נסה</button>' +
+          '<button class="btn sm skin-try-btn" data-skin="' + id + '" style="min-width:50px;font-size:11px">נסה 60ש</button>' +
           '<button class="btn sm skin-buy-btn" data-skin="' + id + '" style="background:#BA7517;color:#FFF;min-width:60px">' + s.price + ' 💎</button>' +
         '</div>';
       }
 
       html += '<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid rgba(0,0,0,0.06)">' +
         '<div style="flex:1">' +
-          '<div style="font-size:13px;font-weight:600">' + s.name + '</div>' +
-          '<div style="display:flex;gap:3px;margin-top:4px">' + preview + '</div>' +
+          '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><span style="font-size:13px;font-weight:600">' + s.name + '</span>' + badges + '</div>' +
+          '<div style="display:flex;gap:3px;margin-top:6px">' + preview + '</div>' +
         '</div>' +
         btnsHtml +
       '</div>';
@@ -558,11 +573,24 @@
     });
   }
 
+  // T3.2 — Skin trial timer state. Closes audit UX8: trial used to be
+  // open-ended → closing the tab kept the trial alive forever. Now a
+  // 60s timer auto-ends. Also persisted to localStorage so a refresh
+  // mid-trial doesn't reset the clock (player can't game the system
+  // by refreshing every 59s to extend).
+  var skinTrialEndAt = 0;
+  var skinTrialTimerHandle = null;
+  var SKIN_TRIAL_DURATION_MS = 60 * 1000;
+  var SKIN_TRIAL_DEADLINE_KEY = 'bloom_skin_trial_end';
+
   function startSkinTrial(skinId) {
     skinTrialOriginal = activeSkinId;
     skinTrialId = skinId;
     skinTrialMode = true;
     activeSkinId = skinId;
+    // T3.2 — set deadline 60s from now, persisted so refresh doesn't reset.
+    skinTrialEndAt = Date.now() + SKIN_TRIAL_DURATION_MS;
+    try { localStorage.setItem(SKIN_TRIAL_DEADLINE_KEY, String(skinTrialEndAt)); } catch(e) {}
     syncBodySkinClass();
     buildTierBar(true);
     hideHome(); // close home screen → enter game directly
@@ -582,13 +610,45 @@
     banner.innerHTML =
       '<div class="trial-info">' +
         '<div class="trial-title">🎨 ניסיון · ' + pack.name + '</div>' +
-        '<div class="trial-sub">ניקוד לא נשמר</div>' +
+        '<div class="trial-sub" id="skin-trial-countdown">⏱ 60ש</div>' +
       '</div>' +
       '<div class="trial-btns">' +
         '<button class="btn sm skin-trial-end-btn" style="font-size:11px;padding:6px 12px">סיים</button>' +
         '<button class="btn sm skin-trial-buy-btn" style="background:#BA7517;color:#FFF;font-size:11px;padding:6px 12px">' + pack.price + ' 💎</button>' +
       '</div>';
     document.body.appendChild(banner);
+
+    // T3.2 — Live countdown ticker that auto-ends the trial when it
+    // hits 0. Runs at 250ms to keep the visual smooth. Self-stops when
+    // the banner is removed (no zombie interval).
+    function tickTrialCountdown() {
+      var sub = document.getElementById('skin-trial-countdown');
+      if (!sub) {
+        if (skinTrialTimerHandle) { clearInterval(skinTrialTimerHandle); skinTrialTimerHandle = null; }
+        return;
+      }
+      var msLeft = skinTrialEndAt - Date.now();
+      if (msLeft <= 0) {
+        sub.textContent = '⌛ הסתיים';
+        if (skinTrialTimerHandle) { clearInterval(skinTrialTimerHandle); skinTrialTimerHandle = null; }
+        // Defer endSkinTrial by one tick so the user sees the "ended" text.
+        setTimeout(function() { try { endSkinTrial(); } catch(e) {} }, 350);
+        return;
+      }
+      var secLeft = Math.ceil(msLeft / 1000);
+      // Last 10 seconds: red pulse + bigger text via class.
+      if (secLeft <= 10) {
+        sub.classList.add('skin-trial-urgent');
+        banner.classList.add('skin-trial-urgent');
+      } else {
+        sub.classList.remove('skin-trial-urgent');
+        banner.classList.remove('skin-trial-urgent');
+      }
+      sub.textContent = '⏱ ' + secLeft + 'ש';
+    }
+    tickTrialCountdown();
+    if (skinTrialTimerHandle) clearInterval(skinTrialTimerHandle);
+    skinTrialTimerHandle = setInterval(tickTrialCountdown, 250);
 
     banner.querySelector('.skin-trial-buy-btn').onclick = function() {
       if (playerBalance < pack.price) {
@@ -631,6 +691,10 @@
     skinTrialMode = false;
     skinTrialId = null;
     skinTrialOriginal = null;
+    // T3.2 — clear the timer + deadline storage so a fresh trial can start.
+    if (skinTrialTimerHandle) { clearInterval(skinTrialTimerHandle); skinTrialTimerHandle = null; }
+    skinTrialEndAt = 0;
+    try { localStorage.removeItem(SKIN_TRIAL_DEADLINE_KEY); } catch(e) {}
     removeSkinTrialBanner();
     buildTierBar(true);
     init('practice', { fresh: true }); // fresh game so trial score doesn't leak

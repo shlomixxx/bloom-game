@@ -464,9 +464,24 @@
       var owned = ownedSkins.indexOf(id) >= 0;
       var active = activeSkinId === id;
       var tiers = s.tiers || TIERS;
+      // T3.2 — full preview of all 8 tiers (was 5). 22px each fits in the
+      // shop row at 360px modal width even on small phones.
       var preview = '';
-      for (var t = 1; t <= Math.min(5, tiers.length - 1); t++) {
-        preview += '<div style="width:28px;height:28px;border-radius:8px;background:' + tiers[t].bg + ';color:' + tiers[t].fg + ';display:flex;align-items:center;justify-content:center">' + tiers[t].svg + '</div>';
+      for (var t = 1; t <= Math.min(8, tiers.length - 1); t++) {
+        preview += '<div style="width:22px;height:22px;border-radius:6px;background:' + tiers[t].bg + ';color:' + tiers[t].fg + ';display:flex;align-items:center;justify-content:center;font-size:11px">' + tiers[t].svg + '</div>';
+      }
+      // T3.2 — badges. "הכי פופולרי" on classic (it's the default everyone
+      // starts with and the cleanest design). "פרימיום" on price >= 400 to
+      // signal "this is the high-end stuff" without inventing fake scarcity.
+      // "חדש" if the active-skin definition has a `tag` field with that value.
+      var badges = '';
+      if (id === 'classic') {
+        badges += '<span class="skin-shop-badge skin-badge-popular">⭐ פופולרי</span>';
+      } else if ((s.price | 0) >= 400) {
+        badges += '<span class="skin-shop-badge skin-badge-premium">💎 פרימיום</span>';
+      }
+      if (s.tag === 'new' || s.isNew) {
+        badges += '<span class="skin-shop-badge skin-badge-new">🆕 חדש</span>';
       }
       var btnsHtml = '';
       var sellable = s.isSellable !== false;
@@ -478,15 +493,15 @@
         btnsHtml = '<button class="btn sm" disabled style="opacity:0.55;min-width:60px;font-size:11px">לא זמין כרגע</button>';
       } else {
         btnsHtml = '<div style="display:flex;gap:4px">' +
-          '<button class="btn sm skin-try-btn" data-skin="' + id + '" style="min-width:50px;font-size:11px">נסה</button>' +
+          '<button class="btn sm skin-try-btn" data-skin="' + id + '" style="min-width:50px;font-size:11px">נסה 60ש</button>' +
           '<button class="btn sm skin-buy-btn" data-skin="' + id + '" style="background:#BA7517;color:#FFF;min-width:60px">' + s.price + ' 💎</button>' +
         '</div>';
       }
 
       html += '<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid rgba(0,0,0,0.06)">' +
         '<div style="flex:1">' +
-          '<div style="font-size:13px;font-weight:600">' + s.name + '</div>' +
-          '<div style="display:flex;gap:3px;margin-top:4px">' + preview + '</div>' +
+          '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><span style="font-size:13px;font-weight:600">' + s.name + '</span>' + badges + '</div>' +
+          '<div style="display:flex;gap:3px;margin-top:6px">' + preview + '</div>' +
         '</div>' +
         btnsHtml +
       '</div>';
@@ -558,11 +573,24 @@
     });
   }
 
+  // T3.2 — Skin trial timer state. Closes audit UX8: trial used to be
+  // open-ended → closing the tab kept the trial alive forever. Now a
+  // 60s timer auto-ends. Also persisted to localStorage so a refresh
+  // mid-trial doesn't reset the clock (player can't game the system
+  // by refreshing every 59s to extend).
+  var skinTrialEndAt = 0;
+  var skinTrialTimerHandle = null;
+  var SKIN_TRIAL_DURATION_MS = 60 * 1000;
+  var SKIN_TRIAL_DEADLINE_KEY = 'bloom_skin_trial_end';
+
   function startSkinTrial(skinId) {
     skinTrialOriginal = activeSkinId;
     skinTrialId = skinId;
     skinTrialMode = true;
     activeSkinId = skinId;
+    // T3.2 — set deadline 60s from now, persisted so refresh doesn't reset.
+    skinTrialEndAt = Date.now() + SKIN_TRIAL_DURATION_MS;
+    try { localStorage.setItem(SKIN_TRIAL_DEADLINE_KEY, String(skinTrialEndAt)); } catch(e) {}
     syncBodySkinClass();
     buildTierBar(true);
     hideHome(); // close home screen → enter game directly
@@ -582,13 +610,45 @@
     banner.innerHTML =
       '<div class="trial-info">' +
         '<div class="trial-title">🎨 ניסיון · ' + pack.name + '</div>' +
-        '<div class="trial-sub">ניקוד לא נשמר</div>' +
+        '<div class="trial-sub" id="skin-trial-countdown">⏱ 60ש</div>' +
       '</div>' +
       '<div class="trial-btns">' +
         '<button class="btn sm skin-trial-end-btn" style="font-size:11px;padding:6px 12px">סיים</button>' +
         '<button class="btn sm skin-trial-buy-btn" style="background:#BA7517;color:#FFF;font-size:11px;padding:6px 12px">' + pack.price + ' 💎</button>' +
       '</div>';
     document.body.appendChild(banner);
+
+    // T3.2 — Live countdown ticker that auto-ends the trial when it
+    // hits 0. Runs at 250ms to keep the visual smooth. Self-stops when
+    // the banner is removed (no zombie interval).
+    function tickTrialCountdown() {
+      var sub = document.getElementById('skin-trial-countdown');
+      if (!sub) {
+        if (skinTrialTimerHandle) { clearInterval(skinTrialTimerHandle); skinTrialTimerHandle = null; }
+        return;
+      }
+      var msLeft = skinTrialEndAt - Date.now();
+      if (msLeft <= 0) {
+        sub.textContent = '⌛ הסתיים';
+        if (skinTrialTimerHandle) { clearInterval(skinTrialTimerHandle); skinTrialTimerHandle = null; }
+        // Defer endSkinTrial by one tick so the user sees the "ended" text.
+        setTimeout(function() { try { endSkinTrial(); } catch(e) {} }, 350);
+        return;
+      }
+      var secLeft = Math.ceil(msLeft / 1000);
+      // Last 10 seconds: red pulse + bigger text via class.
+      if (secLeft <= 10) {
+        sub.classList.add('skin-trial-urgent');
+        banner.classList.add('skin-trial-urgent');
+      } else {
+        sub.classList.remove('skin-trial-urgent');
+        banner.classList.remove('skin-trial-urgent');
+      }
+      sub.textContent = '⏱ ' + secLeft + 'ש';
+    }
+    tickTrialCountdown();
+    if (skinTrialTimerHandle) clearInterval(skinTrialTimerHandle);
+    skinTrialTimerHandle = setInterval(tickTrialCountdown, 250);
 
     banner.querySelector('.skin-trial-buy-btn').onclick = function() {
       if (playerBalance < pack.price) {
@@ -631,6 +691,10 @@
     skinTrialMode = false;
     skinTrialId = null;
     skinTrialOriginal = null;
+    // T3.2 — clear the timer + deadline storage so a fresh trial can start.
+    if (skinTrialTimerHandle) { clearInterval(skinTrialTimerHandle); skinTrialTimerHandle = null; }
+    skinTrialEndAt = 0;
+    try { localStorage.removeItem(SKIN_TRIAL_DEADLINE_KEY); } catch(e) {}
     removeSkinTrialBanner();
     buildTierBar(true);
     init('practice', { fresh: true }); // fresh game so trial score doesn't leak
@@ -13641,6 +13705,12 @@
     if (!restoredContestState) nextPiece = pickPiece();
     updateModeBar();
     render();
+    // T3.1 — Booster strip mount (practice + dynamic only). Reset per-game
+    // usage flags so each new game starts fresh. The strip itself does its
+    // own mode check via boostersAreEnabled() so a stale call in daily/
+    // contest is a no-op.
+    try { if (typeof clearBoostersThisGame === 'function') clearBoostersThisGame(); } catch (e) {}
+    try { if (typeof maybeMountBoosterStrip === 'function') maybeMountBoosterStrip(); } catch (e) {}
     // Toast at game start when a special board is active — the "wow"
     // moment that turns a routine daily into "today is different!".
     if (window._activeSpecialBoard && typeof showSpecialBoardToast === 'function') {
@@ -20007,6 +20077,22 @@
         '</div>' +
       '</div>';
     }).join('');
+    // T3.3 — "saved" badge with absolute number ("חסכת 450💎"), plus
+    // value-multiplier sticker when the deal is at least 3× as much
+    // value as the price. Anchoring psychology: number is more visceral
+    // than percentage.
+    var savedAmount = (deal.originalValue && deal.originalValue > deal.priceGems)
+      ? (deal.originalValue - deal.priceGems)
+      : 0;
+    var savedHtml = savedAmount > 0
+      ? '<div class="dd-modal-saved">💰 חסכת <strong>' + savedAmount.toLocaleString() + '💎</strong>!</div>'
+      : '';
+    var valueMult = (deal.originalValue && deal.priceGems > 0)
+      ? (deal.originalValue / deal.priceGems)
+      : 0;
+    var multHtml = valueMult >= 3
+      ? '<div class="dd-modal-multiplier">×' + Math.floor(valueMult) + ' ערך!</div>'
+      : '';
     var modal = document.createElement('div');
     modal.id = 'daily-deal-modal';
     modal.className = 'daily-deal-modal-overlay';
@@ -20016,6 +20102,7 @@
         (deal.discountPct
           ? '<div class="dd-modal-ribbon">-' + deal.discountPct + '%</div>'
           : '<div class="dd-modal-ribbon">דיל היום</div>') +
+        multHtml +
         '<div class="dd-modal-icon">' + (deal.emoji || '🔥') + '</div>' +
         '<div class="dd-modal-title">' + escapeHtml(deal.name) + '</div>' +
         (deal.description ? '<div class="dd-modal-sub">' + escapeHtml(deal.description) + '</div>' : '') +
@@ -20027,6 +20114,7 @@
             ? '<s class="dd-modal-price-orig">' + deal.originalValue.toLocaleString() + '💎</s>'
             : '') +
         '</div>' +
+        savedHtml +
         '<button class="dd-modal-buy-btn ' + (hasFunds ? '' : 'disabled') + '" id="dd-modal-buy">' +
           (hasFunds
             ? '🛒 קנה עכשיו · ' + deal.priceGems.toLocaleString() + '💎'
@@ -20042,17 +20130,21 @@
     if (buyBtn && hasFunds) {
       buyBtn.onclick = function() { buyDailyDeal(deal.id, buyBtn, close); };
     }
-    // Live countdown
+    // Live countdown — T3.3 adds urgency styling in last hour.
     var cd = document.getElementById('dd-modal-countdown');
     var modalTicker = setInterval(function() {
       if (!document.body.contains(modal)) { clearInterval(modalTicker); return; }
       var newMs = new Date(data.expiresAt).getTime() - Date.now();
       if (newMs <= 0) {
         cd.textContent = '⏰ פג תוקף';
+        cd.classList.add('dd-countdown-expired');
         if (buyBtn) buyBtn.disabled = true;
         clearInterval(modalTicker);
         return;
       }
+      // Less than 1 hour left → urgency state.
+      if (newMs < 60 * 60 * 1000) cd.classList.add('dd-countdown-urgent');
+      else cd.classList.remove('dd-countdown-urgent');
       cd.textContent = '⏰ נשאר: ' + fmtDealCountdown(newMs);
     }, 1000);
   }
@@ -20275,6 +20367,24 @@
         '</div>' +
         '<div class="gacha-pity-bar"><div class="gacha-pity-fill" style="width:' + pityPct + '%"></div></div>' +
       '</div>';
+    // T3.4 — Collection progress card. Completionist drive — "12 / 17"
+    // shows the player exactly how far they are from "I own them all".
+    // Card hidden when totalSkins is unknown or zero (defensive).
+    var collectionHtml = '';
+    if (data.totalSkins && data.totalSkins > 0) {
+      var collPct = Math.min(100, Math.round((data.ownedSkinsCount / data.totalSkins) * 100));
+      var remaining = data.totalSkins - data.ownedSkinsCount;
+      var hintText = remaining === 0
+        ? '👑 איסוף מלא!'
+        : (remaining <= 3
+           ? '🔥 עוד ' + remaining + ' להשלמת האוסף!'
+           : 'עוד ' + remaining + ' סקינים לאסוף');
+      collectionHtml =
+        '<div class="gacha-collection-card' + (remaining === 0 ? ' gacha-collection-complete' : '') + '">' +
+          '<div class="gacha-collection-label">📚 אוסף: <strong>' + data.ownedSkinsCount + ' / ' + data.totalSkins + '</strong> · ' + hintText + '</div>' +
+          '<div class="gacha-collection-bar"><div class="gacha-collection-fill" style="width:' + collPct + '%"></div></div>' +
+        '</div>';
+    }
     var bal = (typeof playerBalance !== 'undefined') ? playerBalance : 0;
     var singleAffordable = bal >= data.priceSingle;
     var tenAffordable = bal >= data.priceTen;
@@ -20303,6 +20413,7 @@
         '<div class="gacha-modal-sub">5 רמות נדירות · נדיר מובטח כל ' + data.pityThreshold + ' פולים</div>' +
         featuredHtml +
         pityHtml +
+        collectionHtml +
         '<div class="gacha-rates-grid">' + ratesHtml + '</div>' +
         '<div class="gacha-pull-buttons">' +
           freeBtn +
@@ -25200,6 +25311,260 @@
   window.fetchTrophyState = fetchTrophyState;
   window.grantTrophiesForGame = grantTrophiesForGame;
 })();
+// ============================================================
+// Phase 3 / T3.1 — In-Game Booster System (May 2026)
+//
+// 2 boosters in v1 (PICK + POP). Both are mid-game spends in 💎
+// that alter the current run without touching the merge engine
+// itself. Each is max-1-per-game on the client (server allows
+// repeats so a player who paid double on accident isn't refunded
+// confusingly). Available only in `practice` and `dynamic` modes
+// — explicitly NOT in daily/contest/duel/challenge for fairness.
+//
+//   🎯 PICK — choose the next piece's tier (1..4). 50💎.
+//             Sets nextPiece directly + re-rolls visual.
+//   💥 POP  — tap any non-empty cell to clear it + gravity. 40💎.
+//             No engine surgery — just mutates grid + calls the
+//             existing applyGravity() + render().
+//
+// Lives INSIDE the main IIFE (no wrapper) so it can read `grid`,
+// `mode`, `nextPiece`, and call applyGravity/render directly. The
+// server endpoint /api/player/use-booster is the source of truth
+// for price + balance check (atomic deduction). Client-side flag
+// `_boostersUsedThisGame` prevents accidental double-spending.
+// ============================================================
+
+// Per-game booster usage flags. Reset by init() via clearBoostersThisGame().
+let _boostersUsedThisGame = {};
+
+function clearBoostersThisGame() { _boostersUsedThisGame = {}; }
+
+function boostersAreEnabled() {
+  // Master toggle from server config.
+  if (gameConfig && gameConfig.booster_enabled === 'false') return false;
+  // Mode gate: practice + dynamic only.
+  if (mode !== 'practice' && mode !== 'dynamic') return false;
+  // Duels run on practice mode; skip them too.
+  if (window._duelMode) return false;
+  // Skin trial games are throwaway — no spending.
+  if (skinTrialMode) return false;
+  // Bot games — no real player to spend.
+  if (window.__bloomBotActive) return false;
+  return true;
+}
+
+function getBoosterPrice(id) {
+  if (!gameConfig) return 0;
+  return parseInt(gameConfig['booster_' + id + '_price'], 10) || 0;
+}
+
+function maybeMountBoosterStrip() {
+  // Tear down any previous strip so a mode-switch doesn't leave a stale one.
+  var existing = document.getElementById('booster-strip');
+  if (existing) existing.remove();
+  if (!boostersAreEnabled()) return;
+  var anchor = document.getElementById('grid-wrap');
+  if (!anchor) return;
+  var strip = document.createElement('div');
+  strip.id = 'booster-strip';
+  strip.className = 'booster-strip';
+  strip.innerHTML = renderBoosterStripInner();
+  anchor.parentNode.insertBefore(strip, anchor);
+  wireBoosterStrip(strip);
+}
+
+function renderBoosterStripInner() {
+  var pickUsed = !!_boostersUsedThisGame.pick;
+  var popUsed = !!_boostersUsedThisGame.pop;
+  var pickPrice = getBoosterPrice('pick');
+  var popPrice = getBoosterPrice('pop');
+  return (
+    boosterBtnHtml('pick', '🎯', 'בחר', pickPrice, pickUsed) +
+    boosterBtnHtml('pop',  '💥', 'הסר', popPrice,  popUsed)
+  );
+}
+
+function boosterBtnHtml(id, emoji, label, price, used) {
+  var bal = (typeof playerBalance !== 'undefined') ? playerBalance : 0;
+  var affordable = bal >= price;
+  var disabled = used || !affordable || price <= 0;
+  var stateClass = used ? 'booster-used' : (affordable ? '' : 'booster-cant-afford');
+  return (
+    '<button class="booster-btn ' + stateClass + '" data-booster="' + id + '"' +
+      (disabled ? ' disabled' : '') + '>' +
+      '<span class="booster-btn-emoji">' + emoji + '</span>' +
+      '<span class="booster-btn-label">' + label + '</span>' +
+      '<span class="booster-btn-price">' + (used ? '✓' : (price + '💎')) + '</span>' +
+    '</button>'
+  );
+}
+
+function wireBoosterStrip(strip) {
+  strip.querySelectorAll('.booster-btn').forEach(function(btn) {
+    btn.onclick = function() {
+      if (btn.disabled) return;
+      var id = btn.getAttribute('data-booster');
+      if (!id) return;
+      activateBooster(id, btn);
+    };
+  });
+}
+
+function refreshBoosterStrip() {
+  var strip = document.getElementById('booster-strip');
+  if (!strip) return;
+  strip.innerHTML = renderBoosterStripInner();
+  wireBoosterStrip(strip);
+}
+
+// Spend → apply effect. The server is the source of truth for price.
+// On a successful spend we ALWAYS mark the booster as used on this game
+// (even if the apply effect later fails) so the player can't double-spend.
+function activateBooster(id, btnEl) {
+  if (_boostersUsedThisGame[id]) return;
+  if (btnEl) { btnEl.disabled = true; }
+  fetch('/api/player/use-booster', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ deviceId: deviceId, token: deviceToken, boosterId: id })
+  }).then(function(r) { return r.json(); })
+    .catch(function() { return null; })
+    .then(function(d) {
+      if (!d || !d.ok) {
+        if (btnEl) btnEl.disabled = false;
+        var reason = (d && d.reason) || 'error';
+        if (reason === 'insufficient') {
+          showToast('💎 חסר ' + ((d.cost || 0) - (d.balance || 0)) + '💎', 'warning');
+        } else if (reason === 'rate_limited') {
+          showToast('⏰ נסה שוב בעוד דקה', 'warning');
+        } else {
+          showToast('שגיאה: ' + reason, 'error');
+        }
+        return;
+      }
+      // Persist new balance + animate widget.
+      playerBalance = d.newBalance;
+      try { localStorage.setItem(PLAYER_BALANCE_KEY, String(d.newBalance)); } catch (e) {}
+      try { if (typeof updateBalanceDisplay === 'function') updateBalanceDisplay(); } catch (e) {}
+      try { if (typeof window.__bloomBumpBal === 'function') window.__bloomBumpBal(d.newBalance, -d.cost); } catch (e) {}
+      _boostersUsedThisGame[id] = true;
+      refreshBoosterStrip();
+      // Apply the effect.
+      try {
+        if (id === 'pick') applyPickBooster();
+        else if (id === 'pop') applyPopBooster();
+      } catch (e) {
+        console.error('[booster] apply', id, e);
+        showToast('שגיאה בהפעלת ה-Booster', 'error');
+      }
+    });
+}
+
+// ── 🎯 PICK BOOSTER ────────────────────────────────────────
+// Modal with 4 tier buttons (1..4). Choosing one sets nextPiece + re-rolls.
+function applyPickBooster() {
+  var existing = document.getElementById('booster-pick-modal');
+  if (existing) existing.remove();
+  var modal = document.createElement('div');
+  modal.id = 'booster-pick-modal';
+  modal.className = 'booster-modal-overlay';
+  var tiersList = getActiveTiers();
+  var optionsHtml = '';
+  for (var t = 1; t <= 4; t++) {
+    var tier = tiersList[t];
+    if (!tier) continue;
+    optionsHtml +=
+      '<button class="booster-pick-option" data-tier="' + t + '" style="background:' + tier.bg + ';color:' + tier.fg + '">' +
+        '<span class="bp-tier-icon">' + tier.svg + '</span>' +
+        '<span class="bp-tier-label">tier ' + t + '</span>' +
+      '</button>';
+  }
+  modal.innerHTML =
+    '<div class="booster-modal-card">' +
+      '<button class="booster-modal-close" aria-label="סגור">×</button>' +
+      '<div class="booster-modal-title">🎯 בחר את החלק הבא</div>' +
+      '<div class="booster-modal-sub">הטיל הבא יהיה ה-tier שבחרת</div>' +
+      '<div class="booster-pick-grid">' + optionsHtml + '</div>' +
+    '</div>';
+  document.body.appendChild(modal);
+  var close = function() { try { modal.remove(); } catch (e) {} };
+  modal.querySelector('.booster-modal-close').onclick = function() {
+    // Refund-by-courtesy is NOT done — server already deducted. The booster
+    // marker stays "used" so they don't get to retry for free either.
+    close();
+  };
+  modal.addEventListener('click', function(e) { if (e.target === modal) close(); });
+  modal.querySelectorAll('.booster-pick-option').forEach(function(opt) {
+    opt.onclick = function() {
+      var t = parseInt(opt.getAttribute('data-tier'), 10) | 0;
+      if (t < 1 || t > 8) { close(); return; }
+      nextPiece = t;
+      try { if (typeof highlightNextTier === 'function') highlightNextTier(t); } catch (e) {}
+      try { if (typeof render === 'function') render(); } catch (e) {}
+      try { if (typeof soundMilestone === 'function') soundMilestone(3); } catch (e) {}
+      try { if (typeof buzz === 'function') buzz([30, 20, 40]); } catch (e) {}
+      close();
+    };
+  });
+}
+
+// ── 💥 POP BOOSTER ─────────────────────────────────────────
+// Enters tap-mode. The next tap on any non-empty grid cell wipes it
+// then runs gravity + render. Banner shows the prompt + cancel button.
+function applyPopBooster() {
+  var gridEl = document.getElementById('grid');
+  if (!gridEl) return;
+  // Mount a top-of-viewport banner so the player knows what to do.
+  var banner = document.createElement('div');
+  banner.id = 'booster-pop-banner';
+  banner.className = 'booster-pop-banner';
+  banner.innerHTML =
+    '<span>💥 הקש על אריח כדי להסיר אותו</span>' +
+    '<button class="booster-pop-cancel">ביטול</button>';
+  document.body.appendChild(banner);
+  gridEl.classList.add('booster-pop-mode');
+  // Single-shot handler. We attach to the grid via capture so it fires
+  // before any other click handler in the cell tree.
+  var onCellClick = function(e) {
+    var cellEl = e.target.closest('.cell');
+    if (!cellEl) return;
+    e.stopPropagation();
+    e.preventDefault();
+    var r = parseInt(cellEl.getAttribute('data-r'), 10);
+    var c = parseInt(cellEl.getAttribute('data-c'), 10);
+    if (!Number.isFinite(r) || !Number.isFinite(c)) { cleanup(); return; }
+    // Empty cells can't be popped; locked/frozen/shape-void also skipped.
+    if (!grid[r] || !grid[r][c]) {
+      showToast('בחר אריח עם תוכן', 'warning');
+      return;
+    }
+    try { if (typeof isLockedAt === 'function' && isLockedAt(r, c)) { showToast('לא ניתן להסיר אריח נעול', 'warning'); return; } } catch (e) {}
+    try { if (typeof isFrozenAt === 'function' && isFrozenAt(r, c)) { showToast('לא ניתן להסיר אריח קפוא', 'warning'); return; } } catch (e) {}
+    // Remove + gravity + render. Sounds + buzz for satisfying feedback.
+    grid[r][c] = 0;
+    try { if (typeof applyGravity === 'function') applyGravity(); } catch (e) {}
+    try { if (typeof render === 'function') render(); } catch (e) {}
+    try { if (typeof soundMerge === 'function') soundMerge(1); } catch (e) {}
+    try { if (typeof buzz === 'function') buzz([20, 20, 40]); } catch (e) {}
+    cleanup();
+  };
+  var cleanup = function() {
+    gridEl.removeEventListener('click', onCellClick, true);
+    gridEl.classList.remove('booster-pop-mode');
+    try { banner.remove(); } catch (e) {}
+  };
+  banner.querySelector('.booster-pop-cancel').onclick = cleanup;
+  gridEl.addEventListener('click', onCellClick, true);
+}
+
+// Expose to outside callers: init() resets per-game state; the mount
+// hook is called from init() too after the grid is in place.
+try {
+  window.__bloomBoosters = {
+    mount: maybeMountBoosterStrip,
+    reset: clearBoostersThisGame
+  };
+} catch (e) {}
 // ============================================================
 // Stage 39 — UX Polish + Addiction Maximizer (May 2026)
 //

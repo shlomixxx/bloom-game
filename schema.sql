@@ -275,6 +275,14 @@ INSERT INTO game_config (key, value) VALUES ('daily_login_reward', '25')
 -- it meaningful but not exploitable (max 100/day per device).
 INSERT INTO game_config (key, value) VALUES ('checklist_all_done_reward', '100')
   ON CONFLICT (key) DO NOTHING;
+-- T3.1 — In-game booster prices. Boosters are spent gems mid-game to
+-- alter the current run. v1 ships PICK (choose next piece tier) + POP
+-- (remove any tile). Available only in practice + dynamic modes (NOT
+-- daily/contest/duel for fairness). Each booster max once per game on
+-- the client; server allows multiple buys to keep schema simple.
+INSERT INTO game_config (key, value) VALUES ('booster_enabled',    'true') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('booster_pick_price', '50')   ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('booster_pop_price',  '40')   ON CONFLICT (key) DO NOTHING;
 -- Tiered daily-login rewards — the client overlay escalates the displayed
 -- amount with streak (25 → 50 → 100 → 200), so the server payment now
 -- mirrors the same tiers. Without these tiers the overlay said +200 while
