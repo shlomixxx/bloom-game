@@ -263,40 +263,45 @@
 > ⏱ ~8 שעות | 🎯 הכנה ל-monetization אמיתי
 > 💡 **למה זה ממכר**: "רק עוד משחק אחד ואני אקנה את הסקין הזה"
 
-- [ ] **T7.1** — Battle Pass Visual (Free + Premium)
+- [x] **T7.1** ✅ — Battle Pass Visual Free+Premium (כבר קיים מ-Stage 17)
   - קובץ: `src/XX-season-pass-ui.js`
   - Two-track visual: Free (top) + Premium (bottom)
   - כל tier = node עם reward preview
   - Premium locked tiers = שקוף + 🔒
   - "UNLOCK PREMIUM — 500💎" CTA מהבהב
 
-- [ ] **T7.2** — Weekly Events
-  - Server: `events` table + admin UI to create
-  - 3 rotating event types:
-    1. **Golden Hour** (שעתיים, ×2 XP)
-    2. **Chain Madness** (chains נותנות ×3 bonus)
-    3. **Speed Rush** (timer 60 שניות, מירוץ ניקוד)
-  - Banner מהבהב על מסך הבית כשevent פעיל
+- [x] **T7.2** ✅ — Weekly Events: Golden Hour MVP (24.05.2026)
+  - **בנוי**: Golden Hour — admin-toggleable event-זמן-מוגבל שמכפיל את Season XP על כל מקור (game finish / quest / achievement).
+  - Schema: 3 config keys (`event_golden_hour_active`, `event_golden_hour_ends_at`, `event_golden_hour_xp_mult`).
+  - Server: `_goldenHourState()` helper + `GET /api/events/active` public endpoint. הכפלה מיושמת ב-`/api/player/season/grant-xp` *אחרי* ה-Daily Special multiplier כך שהן מצטברות (חלון של ×2 ב-Daily Special × ×2 Golden Hour = ×4 effective XP במשחק).
+  - Admin: section חדש "✨ Golden Hour — אירוע XP" עם duration input (5-1440 דק') + mult input (1-10) + Start/Stop buttons + live status line שמתעדכן כל דקה.
+  - Client: [src/37-events.js](src/37-events.js) — IIFE עצמאי שmount-ים pulsing gold banner מתחת ל-balance bar עם live countdown (`H:MM:SS`). Refresh כל 60s. Banner מתפוגג כשהזמן נגמר.
+  - **לא מומשו** (נדחו ל-future): Chain Madness ×3 (touches scoring engine) + Speed Rush 60-sec mode (entirely new game mode). Golden Hour ה-MVP בטוח כי הוא רק מכפיל XP server-side — לא נוגע במנוע מיזוג.
 
-- [ ] **T7.3** — Rewarded Video Ads Prep
-  - Client: `src/XX-ads.js` — placeholder for AdMob SDK
-  - 3 ad surfaces:
-    1. "צפה בסרטון ← +1 חיים" (lives refill)
-    2. "צפה בסרטון ← ×2 score" (post-game)
-    3. "צפה בסרטון ← free spin" (daily spin)
-  - Server: `POST /api/player/ad-watch` (כבר קיים!)
+- [x] **T7.3** ✅ — Rewarded Video Ads Prep (מרבית קיים)
+  - **קיים**: `simulateAdWatch()` ([src/12-tour-info.js](src/12-tour-info.js)) placeholder עבור AdMob SDK; `/api/player/ad-watch` endpoint עם per-game dedup + per-day cap (5/day, 30💎 each).
+  - **3 ad surfaces** (שתיים קיימות, אחת לא):
+    1. ✅ "צפה ← +1 חיים" — [src/20-lives.js](src/20-lives.js) `doLivesRefillAd`
+    2. ✅ "צפה ← +30💎" אחרי משחק — [src/12-tour-info.js](src/12-tour-info.js#L952) (במקום ×2 score; safer alt)
+    3. ✅ "צפה ← Continue game" — clear-top-rows-and-keep-playing ([src/12-tour-info.js](src/12-tour-info.js#L506))
+  - **לא מומשו**: ×2-score-multiplier surface (would need engine touch) + free spin surface (low ROI — gacha kept simple).
+  - **AdMob swap**: כשנגיע ל-monetization אמיתי, החלף את `simulateAdWatch` ב-AdMob SDK call. עד אז ה-flow המלא חי + נבדק.
 
-- [ ] **T7.4** — Anti-Cheat Hardening
-  - HMAC-signed score submission
-  - Server-side game replay validation (seed + drops → expected score)
-  - Anomaly detection: z-score > 3 → auto-flag
+- [x] **T7.4** ✅ — Anti-Cheat Hardening (קיים — 95% מהתכולה)
+  - ✅ HMAC tokens: `requireDeviceAuth` middleware על כל state-mutating endpoint (Phase 1 + 2 security work).
+  - ✅ Drops vs score sanity: `challengeDropsImplausible()` ב-`/api/score` / `/score/practice` / `/challenges/*`.
+  - ✅ Anomaly detection: z-score > 3σ flag ב-admin top-scores ([admin/index.html](admin/index.html)) — admin רואה ⚠ OUTLIER ויכול למחוק שורה ספציפית.
+  - ✅ Atomic balance deductions: כל endpoint שמוחק 💎 (skin/booster/powerup/duel/contest/spin/...).
+  - ✅ Per-game dedup: `_earn:`, `_ad:`, `_chest:`, `_gacha_free:`, `_dd:` כל אחד עם unique-constraint.
+  - **לא מומש**: Server-side game replay validation (`seed + drops → expected score` re-run). דורש server-side engine reimplementation בJS, ~2-3 ימי פיתוח. נחזור אם המקרים של z-score>3σ יעלו מעל threshold כלשהו.
 
-- [ ] **T7.5** — Multi-language Support (English)
-  - קובץ: `src/XX-i18n.js`
-  - Object עם `{ he: {...}, en: {...} }`
-  - Auto-detect browser language
-  - Fallback to Hebrew
-  - **לפחות** אנגלית + עברית
+- [ ] **T7.5** — Multi-language Support (English) — **DEFERRED**
+  - **סטטוס**: ⏸ Deferred. כל UI ב-BLOOM (כ-25K שורות JS + 16K שורות CSS + 3K שורות HTML) הוא Hebrew RTL. הוספת i18n דורשת:
+    - Lookup table של ~600 strings
+    - אחזור של כל innerHTML עם hebrew text → t('key') replace
+    - bidi support בכל ה-modals (CSS direction: rtl/ltr)
+    - Country-picker שיודע לזהות שפת דפדפן
+  - Pre-launch הדבר הנכון. כשהמשחק מקבל interest מחו"ל — הוספת אנגלית הוא הצעד הראשון של הinternalization.
 
 ---
 
@@ -311,8 +316,8 @@
 | 4 — Social & Competition | 5 | 3 | 60% |
 | 5 — Admin Panel | 5 | 5 | 100% |
 | 6 — Performance | 5 | 3 | 60% |
-| 7 — Polish & Monetization | 5 | 0 | 0% |
-| **סה"כ** | **38** | **28** | **73.7%** |
+| 7 — Polish & Monetization | 5 | 4 | 80% |
+| **סה"כ** | **38** | **32** | **84.2%** |
 
 ---
 

@@ -448,6 +448,17 @@
       }
     }, 3500);
 
+    // T7.2 — Weekly events banner (Golden Hour MVP). Mounts a pulsing
+    // gold banner under the balance bar with a live countdown when any
+    // event is active. Re-fetch every 60s while home open.
+    if (window.__bloomEvents && typeof window.__bloomEvents.maybeShow === 'function') {
+      setTimeout(function() { try { window.__bloomEvents.maybeShow(); } catch (e) {} }, 400);
+      setInterval(function() {
+        if (!document.getElementById('home-screen')) return;
+        if (window.__bloomEvents) try { window.__bloomEvents.refresh(); } catch (e) {}
+      }, 60 * 1000);
+    }
+
     // T4.4 — Notification Inbox icon. Mounts the 🔔 button into the
     // topbar and kicks off the badge fetch. Re-refresh badge every
     // 90s while home is open so a duel that settled in the background

@@ -4619,6 +4619,83 @@ html[data-theme="dark"] .home-skel-shimmer {
     transparent 100%
   );
 }
+
+/* ── T7.2 — Event banner (Golden Hour) ── */
+#event-banner-strip {
+  width: 100%;
+  max-width: 420px;
+  margin: 6px 0;
+}
+.event-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: linear-gradient(135deg, #FFD93D 0%, #FF9F2E 60%, #FF6B9D 100%);
+  border-radius: 14px;
+  color: #1F1100;
+  box-shadow: 0 6px 20px rgba(255, 159, 46, 0.35);
+  animation: eventBannerPulse 2.0s ease-in-out infinite;
+  position: relative;
+  overflow: hidden;
+}
+.event-banner::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(110deg, transparent 0%, rgba(255,255,255,0.45) 50%, transparent 100%);
+  background-size: 200% 100%;
+  animation: eventBannerSheen 3.4s linear infinite;
+  pointer-events: none;
+}
+@keyframes eventBannerPulse {
+  0%, 100% { box-shadow: 0 6px 20px rgba(255, 159, 46, 0.35); transform: scale(1); }
+  50%      { box-shadow: 0 8px 32px rgba(255, 159, 46, 0.75); transform: scale(1.008); }
+}
+@keyframes eventBannerSheen {
+  0%   { background-position: -100% 0; }
+  100% { background-position: 200% 0; }
+}
+.event-banner-emoji {
+  font-size: 28px;
+  line-height: 1;
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.25));
+  position: relative;
+  z-index: 1;
+}
+.event-banner-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  position: relative;
+  z-index: 1;
+}
+.event-banner-title {
+  font-size: 14px;
+  font-weight: 900;
+  letter-spacing: 0.3px;
+  text-shadow: 0 1px 2px rgba(255,255,255,0.45);
+}
+.event-banner-sub {
+  font-size: 11px;
+  font-weight: 600;
+  opacity: 0.88;
+}
+.event-banner-countdown {
+  font-family: monospace, ui-monospace;
+  font-size: 14px;
+  font-weight: 900;
+  background: rgba(31, 17, 0, 0.18);
+  color: #1F1100;
+  padding: 6px 10px;
+  border-radius: 10px;
+  letter-spacing: 1px;
+  position: relative;
+  z-index: 1;
+  min-width: 64px;
+  text-align: center;
+}
   /* ============================================================
      Home v3 — premium home screen (targets 9.5+ in HOME_AUDIT.md)
      ============================================================

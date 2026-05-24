@@ -3324,6 +3324,20 @@ app.post('/api/player/season/grant-xp', requireDeviceAuth, async (req, res) => {
         }
       } catch (specErr) { /* soft-fail — base XP still grants */ }
     }
+    // T7.2 — Golden Hour stacks ON TOP of everything else. Cap re-applied
+    // generously so a Daily Special + Golden Hour combo can land big XP
+    // without exploding the season pass curve.
+    let goldenHourApplied = false;
+    let goldenHourMult = 1;
+    try {
+      const gh = _goldenHourState();
+      if (gh.active) {
+        goldenHourMult = gh.mult;
+        const combinedMult = dailySpecialMult * goldenHourMult;
+        xpGain = Math.min(maxPerGame * Math.ceil(combinedMult), Math.round(xpGain * goldenHourMult));
+        goldenHourApplied = true;
+      }
+    } catch (ghErr) {}
     // Per-game/per-quest dedup — uses gameId or a synthetic key per source.
     const dedupId = String(gameId || (source + ':' + (meta && meta.id) || '')).slice(0, 64);
     // Ensure row exists.
@@ -3363,7 +3377,9 @@ app.post('/api/player/season/grant-xp', requireDeviceAuth, async (req, res) => {
       currentTier: newTier,
       leveledUp: newTier > oldTier,
       dailySpecialApplied,
-      dailySpecialMult
+      dailySpecialMult,
+      goldenHourApplied,
+      goldenHourMult
     });
   } catch (e) {
     console.error('POST /api/player/season/grant-xp', e);
@@ -9842,6 +9858,48 @@ if (ADMIN_PATH && ADMIN_PASSWORD) {
       res.status(500).json({ error: 'server' });
     }
   });
+  // T7.2 — Golden Hour admin controls: start with a duration, or stop now.
+  // Atomic: starts set active=true + ends_at = NOW() + duration in one
+  // transaction; stop clears active=false + ends_at=''. Bust config cache
+  // so /api/events/active reflects within seconds.
+  adminRouter.post('/api/events/golden-hour/start', async (req, res) => {
+    try {
+      const minutes = Math.max(5, Math.min(24 * 60, parseInt((req.body && req.body.minutes) || 60, 10) || 60));
+      const mult = Math.max(1, Math.min(10, parseFloat((req.body && req.body.mult) || 2) || 2));
+      const endsAt = new Date(Date.now() + minutes * 60 * 1000).toISOString();
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        await client.query(`INSERT INTO game_config (key, value, updated_at) VALUES ('event_golden_hour_active', 'true', NOW()) ON CONFLICT (key) DO UPDATE SET value = 'true', updated_at = NOW()`);
+        await client.query(`INSERT INTO game_config (key, value, updated_at) VALUES ('event_golden_hour_ends_at', $1, NOW()) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`, [endsAt]);
+        await client.query(`INSERT INTO game_config (key, value, updated_at) VALUES ('event_golden_hour_xp_mult', $1, NOW()) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`, [String(mult)]);
+        await client.query('COMMIT');
+      } catch (err) {
+        await client.query('ROLLBACK');
+        throw err;
+      } finally {
+        client.release();
+      }
+      _configCache = {}; _configCacheTs = 0;
+      await logAdminAction('event.golden_hour.start', 'game_config', 'event_golden_hour', { endsAt, mult, minutes });
+      res.json({ ok: true, endsAt, mult, minutes });
+    } catch (e) {
+      console.error('admin/events/golden-hour/start', e);
+      res.status(500).json({ error: 'server' });
+    }
+  });
+  adminRouter.post('/api/events/golden-hour/stop', async (_req, res) => {
+    try {
+      await pool.query(`UPDATE game_config SET value = 'false', updated_at = NOW() WHERE key = 'event_golden_hour_active'`);
+      await pool.query(`UPDATE game_config SET value = '', updated_at = NOW() WHERE key = 'event_golden_hour_ends_at'`);
+      _configCache = {}; _configCacheTs = 0;
+      await logAdminAction('event.golden_hour.stop', 'game_config', 'event_golden_hour', {});
+      res.json({ ok: true });
+    } catch (e) {
+      res.status(500).json({ error: 'server' });
+    }
+  });
+
   adminRouter.patch('/api/config/:key', async (req, res) => {
     try {
       // game_config.key is VARCHAR(255) since the round-2 dedup-key widening,
@@ -11902,6 +11960,46 @@ app.post('/api/player/spend', requireDeviceAuth, async (req, res) => {
       return res.json({ ok: false, reason: exists.rows.length ? 'insufficient' : 'not_found' });
     }
     res.json({ ok: true, newBalance: r.rows[0].balance });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: 'server' });
+  }
+});
+
+// T7.2 — Golden Hour event helpers. Returns {active, msLeft, mult} for
+// the current Golden Hour window. Reads from the global config cache
+// (zero DB hit). Treats expired window (ends_at in the past) as inactive
+// regardless of the `active` flag — defensive against admin who forgot
+// to flip the toggle.
+function _goldenHourState() {
+  const cfg = _configCache || {};
+  if (cfg.event_golden_hour_active !== 'true') return { active: false, mult: 1 };
+  const endsAt = cfg.event_golden_hour_ends_at || '';
+  if (!endsAt) return { active: false, mult: 1 };
+  const endsMs = new Date(endsAt).getTime();
+  if (!Number.isFinite(endsMs) || endsMs <= Date.now()) return { active: false, mult: 1 };
+  const mult = Math.max(1, Math.min(10, parseFloat(cfg.event_golden_hour_xp_mult) || 2));
+  return { active: true, mult, msLeft: endsMs - Date.now(), endsAt };
+}
+
+// Public endpoint for the home banner. Returns whichever events are
+// currently active (Golden Hour for now, expand as new event types ship).
+app.get('/api/events/active', async (_req, res) => {
+  try {
+    await loadConfig();
+    const out = { ok: true, events: [] };
+    const gh = _goldenHourState();
+    if (gh.active) {
+      out.events.push({
+        id: 'golden_hour',
+        emoji: '✨',
+        name: 'Golden Hour',
+        description: '×' + gh.mult + ' XP על כל משחק',
+        endsAt: gh.endsAt,
+        msLeft: gh.msLeft,
+        mult: gh.mult
+      });
+    }
+    res.json(out);
   } catch (e) {
     res.status(500).json({ ok: false, error: 'server' });
   }

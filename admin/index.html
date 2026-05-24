@@ -844,6 +844,27 @@
     </div>
   </section>
 
+  <!-- ✨ Golden Hour event (T7.2) -->
+  <section id="golden-hour-section" style="margin-top:14px;background:linear-gradient(135deg,rgba(255,217,61,0.12),rgba(255,107,157,0.08));border-radius:12px;padding:14px 16px;border:1px solid rgba(255,217,61,0.4)">
+    <h2 style="margin:0 0 6px 0;display:flex;align-items:center;gap:8px">✨ Golden Hour — אירוע XP <button class="tip-btn" data-tip-text="<strong>✨ Golden Hour</strong><br>אירוע מוגבל-זמן שמכפיל את ה-Season XP על כל משחק שמסיים שחקן.<div class=&quot;tip-example&quot;>💡 <strong>איך זה עובד</strong>: לוחצים ״הפעל לשעה״ → בכל פעם ששחקן מסיים משחק בזמן הזה, ה-XP מוכפל בפי 2 (או הכפלן שתבחר). מצטבר על הDaily Special אם פעיל.<br><br>⏰ <strong>חלון</strong>: בחר משך — 30 דק׳ עד 24 שעות. בזמן הריצה, השחקנים רואים באנר זוהב מהבהב עם countdown במסך הבית.<br><br>📊 <strong>מתי להפעיל</strong>:<br>• שעה אחרי שמשחק עולה ל-store/marketplace חדש — Welcome boost<br>• מוצאי שבת 20-23 (שעת השיא של הדאשבורד שלך)<br>• אחרי dip של 7 ימים ב-DAU<br>• פתיחת batch של בוטים — כדי שהשחקנים יראו פעילות + יהיו מתוגמלים<br><br>⚠ זה משפיע על Season Pass curve — אם תפעיל יותר מ-3 פעמים בעונה הקצב יתעוות. שמור את זה לאירועים בודדים.</div>">?</button></h2>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:10px">
+      הפעלה תזיז את <code>event_golden_hour_active=true</code> + <code>event_golden_hour_ends_at = NOW() + duration</code>. כל שחקן שיסיים משחק בחלון יקבל ×N XP על כל מקור (game finish / quest / achievement).
+    </div>
+    <div id="gh-status-line" style="padding:10px;background:var(--card);border-radius:8px;font-size:13px;margin-bottom:10px">⏳ טוען...</div>
+    <div style="display:flex;gap:10px;align-items:end;flex-wrap:wrap">
+      <label style="flex:1;min-width:120px">
+        <div style="font-size:11px;color:var(--muted);margin-bottom:4px">משך (דקות)</div>
+        <input id="gh-minutes" type="number" min="5" max="1440" step="5" value="60" style="width:100%;padding:8px;border-radius:8px;border:1px solid rgba(0,0,0,0.12);font-family:inherit">
+      </label>
+      <label style="flex:1;min-width:80px">
+        <div style="font-size:11px;color:var(--muted);margin-bottom:4px">מכפיל XP</div>
+        <input id="gh-mult" type="number" min="1" max="10" step="0.5" value="2" style="width:100%;padding:8px;border-radius:8px;border:1px solid rgba(0,0,0,0.12);font-family:inherit">
+      </label>
+      <button id="gh-start" type="button" class="btn" style="background:linear-gradient(135deg,#FFD93D,#FF9F2E);color:#1F1100;font-weight:900">✨ הפעל</button>
+      <button id="gh-stop" type="button" class="btn secondary">🛑 עצור עכשיו</button>
+    </div>
+  </section>
+
   <!-- 🤖 Smart Notifications (stage 31) -->
   <section id="smart-push-section" style="margin-top:14px;background:var(--card);border-radius:12px;padding:14px 16px;border:1px solid rgba(168,85,247,0.25)">
     <h2 style="margin:0 0 6px 0;display:flex;align-items:center;gap:8px">🤖 התראות חכמות אוטומטיות <button class="tip-btn" data-tip-text="<strong>🤖 Smart Notifications</strong><br>Scheduler אוטומטי שסורק שחקנים, בוחר את הסיגנל הכי רגשי לכל אחד, ושולח push חכם.<div class=&quot;tip-example&quot;>💡 <strong>שונה מ-Broadcast</strong>: בעוד שהמערכת למעלה שולחת לכולם את אותה הודעה — מערכת זו בוחרת <strong>למי לשלוח, מתי, ולמה</strong> באופן אישי לכל שחקן.<br><br>📊 8 סיגנלים לפי דירוג רגשי: 😢 פרח עצוב > 🏆 טורניר נגמר > 👥 חבר שיחק > 🔥 רצף בסכנה > 🎖 BP unclaimed > 👋 קאמבק > 🌟 daily special > משחק יומי.<br><br>⏰ הסקריפט רץ כל 30 דק\' אבל שולח רק בשעות 9-22 (שעון ישראל). cooldown של 12 שעות בין הודעה להודעה לאותו device.</div>">?</button></h2>
@@ -7259,6 +7280,52 @@
       broadcastBtn.innerHTML = '🚀 שלח לכל המנויים';
     }
   };
+
+  // ── T7.2 — Golden Hour event controls ──
+  async function refreshGoldenHourStatus() {
+    var line = $('gh-status-line');
+    if (!line) return;
+    try {
+      var r = await fetch('/api/events/active');
+      var d = r.ok ? await r.json() : null;
+      var gh = d && d.events && d.events.find(function(e) { return e.id === 'golden_hour'; });
+      if (gh) {
+        var endsAt = new Date(gh.endsAt).toLocaleString('he-IL', { timeZone: 'Asia/Jerusalem' });
+        line.innerHTML = '🟢 <strong>פעיל</strong> · ×' + gh.mult + ' XP · נשאר עד <code>' + endsAt + '</code>';
+        line.style.color = '#7AC97A';
+      } else {
+        line.textContent = '⚪ לא פעיל';
+        line.style.color = '#999';
+      }
+    } catch (e) {
+      line.textContent = '⚠ שגיאה בקריאת סטטוס';
+    }
+  }
+  var ghStartBtn = $('gh-start');
+  if (ghStartBtn) ghStartBtn.onclick = async function() {
+    var minutes = parseInt($('gh-minutes').value, 10) || 60;
+    var mult = parseFloat($('gh-mult').value) || 2;
+    if (!confirm('להפעיל Golden Hour ×' + mult + ' למשך ' + minutes + ' דקות?')) return;
+    ghStartBtn.disabled = true;
+    var data = await api('/events/golden-hour/start', { method: 'POST', body: JSON.stringify({ minutes: minutes, mult: mult }) });
+    ghStartBtn.disabled = false;
+    if (data && data.ok) {
+      refreshGoldenHourStatus();
+    } else {
+      alert('שגיאה: ' + ((data && data.error) || 'unknown'));
+    }
+  };
+  var ghStopBtn = $('gh-stop');
+  if (ghStopBtn) ghStopBtn.onclick = async function() {
+    if (!confirm('לעצור את Golden Hour עכשיו?')) return;
+    ghStopBtn.disabled = true;
+    var data = await api('/events/golden-hour/stop', { method: 'POST' });
+    ghStopBtn.disabled = false;
+    if (data && data.ok) refreshGoldenHourStatus();
+  };
+  // Auto-refresh status on tab activation (and once on page load).
+  refreshGoldenHourStatus();
+  setInterval(refreshGoldenHourStatus, 60 * 1000);
 
   // Privacy: manual PII purge button.
   var purgeBtn = $('btn-privacy-purge');

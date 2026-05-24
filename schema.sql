@@ -283,6 +283,14 @@ INSERT INTO game_config (key, value) VALUES ('checklist_all_done_reward', '100')
 INSERT INTO game_config (key, value) VALUES ('booster_enabled',    'true') ON CONFLICT (key) DO NOTHING;
 INSERT INTO game_config (key, value) VALUES ('booster_pick_price', '50')   ON CONFLICT (key) DO NOTHING;
 INSERT INTO game_config (key, value) VALUES ('booster_pop_price',  '40')   ON CONFLICT (key) DO NOTHING;
+-- T7.2 — Golden Hour event. Admin-toggleable time-windowed XP multiplier.
+-- When `event_golden_hour_active = 'true'` AND `event_golden_hour_ends_at`
+-- is in the future, every season XP grant multiplies by `event_golden_hour_xp_mult`.
+-- Admin starts via a button that sets active=true + ends_at = NOW() + duration.
+-- Auto-deactivates server-side (lazy check at grant time when window expires).
+INSERT INTO game_config (key, value) VALUES ('event_golden_hour_active',   'false') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('event_golden_hour_ends_at',  '')      ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('event_golden_hour_xp_mult',  '2')     ON CONFLICT (key) DO NOTHING;
 -- Tiered daily-login rewards — the client overlay escalates the displayed
 -- amount with streak (25 → 50 → 100 → 200), so the server payment now
 -- mirrors the same tiers. Without these tiers the overlay said +200 while
