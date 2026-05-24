@@ -464,6 +464,13 @@
       }, 60 * 1000);
     }
 
+    // A4 — BLOOM Wrapped auto-fire on Sunday afternoon (per-week dedup).
+    // The module gates itself on day-of-week + time-of-day; this is a
+    // best-effort trigger that no-ops on every non-Sunday open.
+    if (window.__bloomWrapped && typeof window.__bloomWrapped.maybeAutoShow === 'function') {
+      setTimeout(function() { try { window.__bloomWrapped.maybeAutoShow(); } catch (e) {} }, 2200);
+    }
+
     // T4.4 — Notification Inbox icon. Mounts the 🔔 button into the
     // topbar and kicks off the badge fetch. Re-refresh badge every
     // 90s while home is open so a duel that settled in the background

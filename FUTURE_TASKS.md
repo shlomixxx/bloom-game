@@ -1,7 +1,7 @@
 # 📋 BLOOM — משימות עתידיות
 
 > **מסמך מרכזי לכל מה שעדיין לא נבנה.**
-> עודכן: 2026-05-24 · 42 שלבים חיים בפרודקשן · 11 משימות פתוחות (A1✅ + A2✅ + A3✅ + A6✅)
+> עודכן: 2026-05-24 · 43 שלבים חיים בפרודקשן · 10 משימות פתוחות (A1+A2+A3+A4+A6 ✅)
 >
 > 🎯 **איך להשתמש**: בשיחה חדשה תגיד "בוא נבנה A1" / "המשך עם הכי ממכר" / "תעשה A2 + A3 ביחד" ואני אדע בדיוק על מה אתה מדבר.
 
@@ -65,21 +65,18 @@
 
 ---
 
-### A4 · 📊 Weekly Recap ("BLOOM Wrapped")
-**מאמץ**: 1 יום · **השפעה**: ★★★★
+### A4 · 📊 Weekly Recap ("BLOOM Wrapped") ✅ נבנה (24.05.2026)
+**מאמץ**: 1 יום · **השפעה**: ★★★★ · **סטטוס: חי בייצור**
 
-**מה זה**:
-כל יום ראשון אחה"צ — מסך full-screen מסכם את השבוע: כמה משחקים שיחקת / שיא חדש / כמה trophies הרווחת / עם איזה חברים שיחקת / כמה שעות. סיום ב-image מוכן לשיתוף.
-
-**למה לבנות**:
-- Spotify Wrapped pattern — הוויראלי ביותר שיש
-- שחקנים אוהבים להתפאר במספרים שלהם
-- מעודד שיתוף = הגעה לחברים חדשים
-
-**טכני**:
-- 1 endpoint שמרכז סטטיסטיקות (קיים ב-DB)
-- Canvas-rendered share image (כמו Stage 32 replay)
-- Modal שמופיע אוטומטית בכניסה הראשונה ביום ראשון
+**מה נבנה**:
+- Auto-fires כל יום ראשון אחה"צ (12:00 IL+) בכניסה הראשונה לבית של השבוע. Per-week dedup דרך `localStorage[bloom_wrapped_seen_<YYYY-MM-DD>]`. Gate נוסף: לפחות 5 משחקים השבוע (אחרת ה-recap ייראה ריק/עצוב).
+- Modal פתיחה דרמטי בגרדיינט סגול-ורוד-זהוב עם "🌟 Wrapped" כותרת + bouncing brand + 6 stat cards:
+  - 🎮 משחקים, 🏆 שיא ניקוד, 💎 דרגת אריח מירבית (👑 = tier 8), ⚡ trophies שצברתי, 👥 חברים שיחקו איתי, 🏅 דרגה כללית
+- Activity grade: A+/A/B/C/D לפי גיימים השבוע (100+/50+/25+/10+/<10)
+- **Canvas-rendered 720×1280 PNG** מוכן לשיתוף: גרדיינט מעוצב + scattered emojis + huge grade + 6 stats + brand + URL
+- 4 share buttons: 💬 WhatsApp (pre-filled text + URL) / 📤 Native share API (אם תומך file share — שולח את ה-PNG ישירות) / 📋 Copy (text only) / 💾 Save (download PNG)
+- Server: `GET /api/weekly-recap?deviceId=` מצרף 6 sources במקבל: daily_scores + difficulty_scores + dynamic_board_scores + trophy_history + friendship_shared_days + player_profiles (כולל trophies מ-player_trophies). אפס schema חדש.
+- Client: [src/40-weekly-recap.js](src/40-weekly-recap.js) — IIFE עצמאי. Canvas render, share modal, dedup logic. `window.__bloomWrapped.openNow()` לבדיקת ה-flow ב-devtools.
 
 ---
 

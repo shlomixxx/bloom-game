@@ -7097,6 +7097,106 @@ app.get('/api/trophies/state', async (req, res) => {
 // fires — see hooks below. Also a direct endpoint so admin / future
 // modes can call it explicitly with a custom reason.
 // ============================================================
+// A4 — BLOOM Wrapped (weekly recap, Spotify-style)
+// Aggregates the player's stats from the past 7 days into a single
+// JSON payload the client renders as a shareable 9:16 image. Auto-
+// fires on the player's first home-open of each Sunday (IL time).
+// All stats come from existing tables — zero new schema.
+// ============================================================
+app.get('/api/weekly-recap', async (req, res) => {
+  try {
+    const deviceId = String(req.query.deviceId || '').slice(0, 64);
+    if (!deviceId || deviceId.length < 8) return res.status(400).json({ error: 'bad_device' });
+    // Aggregate from 5 sources in parallel — each wrapped in catch so a
+    // missing/empty table doesn't kill the whole recap.
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const [dailyR, diffR, dynR, trophyR, friendsR, playerR] = await Promise.all([
+      pool.query(
+        `SELECT COUNT(*)::int AS games, MAX(score)::int AS best, MAX(tier)::int AS top_tier
+           FROM daily_scores
+          WHERE device_id = $1 AND created_at > $2`,
+        [deviceId, sevenDaysAgo]
+      ).catch(() => ({ rows: [{ games: 0, best: 0, top_tier: 0 }] })),
+      pool.query(
+        `SELECT COUNT(*)::int AS games, MAX(score)::int AS best, MAX(tier)::int AS top_tier
+           FROM difficulty_scores
+          WHERE device_id = $1 AND created_at > $2`,
+        [deviceId, sevenDaysAgo]
+      ).catch(() => ({ rows: [{ games: 0, best: 0, top_tier: 0 }] })),
+      pool.query(
+        `SELECT COUNT(*)::int AS games, MAX(score)::int AS best, MAX(tier)::int AS top_tier
+           FROM dynamic_board_scores
+          WHERE device_id = $1 AND updated_at > $2`,
+        [deviceId, sevenDaysAgo]
+      ).catch(() => ({ rows: [{ games: 0, best: 0, top_tier: 0 }] })),
+      pool.query(
+        `SELECT
+            COALESCE(SUM(change_amount), 0)::int AS net_change,
+            COALESCE(SUM(GREATEST(change_amount, 0)), 0)::int AS gained,
+            COUNT(*)::int AS games_with_trophies
+          FROM trophy_history
+          WHERE device_id = $1 AND created_at > $2`,
+        [deviceId, sevenDaysAgo]
+      ).catch(() => ({ rows: [{ net_change: 0, gained: 0, games_with_trophies: 0 }] })),
+      pool.query(
+        `SELECT COUNT(DISTINCT CASE WHEN device_a = $1 THEN device_b ELSE device_a END)::int AS friends_played
+           FROM friendship_shared_days
+          WHERE (device_a = $1 OR device_b = $1) AND date > (NOW() - INTERVAL '7 days')::date`,
+        [deviceId]
+      ).catch(() => ({ rows: [{ friends_played: 0 }] })),
+      pool.query(
+        `SELECT display_name, player_code, country, level, xp,
+                (SELECT trophies FROM player_trophies WHERE device_id = $1) AS trophies
+           FROM player_profiles WHERE device_id = $1`,
+        [deviceId]
+      ).catch(() => ({ rows: [{}] }))
+    ]);
+    const daily = dailyR.rows[0] || {};
+    const diff = diffR.rows[0] || {};
+    const dyn = dynR.rows[0] || {};
+    const trophy = trophyR.rows[0] || {};
+    const fr = friendsR.rows[0] || {};
+    const pl = playerR.rows[0] || {};
+
+    const totalGames = (daily.games | 0) + (diff.games | 0) + (dyn.games | 0);
+    const bestScore = Math.max(daily.best | 0, diff.best | 0, dyn.best | 0);
+    const topTier = Math.max(daily.top_tier | 0, diff.top_tier | 0, dyn.top_tier | 0);
+
+    // Activity grade: A+/A/B/C/D based on games played this week.
+    let grade = 'D';
+    if (totalGames >= 100) grade = 'A+';
+    else if (totalGames >= 50) grade = 'A';
+    else if (totalGames >= 25) grade = 'B';
+    else if (totalGames >= 10) grade = 'C';
+
+    res.json({
+      ok: true,
+      enabled: true,
+      weekStart: sevenDaysAgo,
+      stats: {
+        games: totalGames,
+        bestScore,
+        topTier,
+        trophiesGained: trophy.gained | 0,
+        netTrophyChange: trophy.net_change | 0,
+        friendsPlayed: fr.friends_played | 0,
+        grade
+      },
+      player: {
+        displayName: pl.display_name || 'אנונימי',
+        playerCode: pl.player_code || null,
+        country: pl.country || null,
+        level: pl.level | 0,
+        trophies: pl.trophies | 0
+      }
+    });
+  } catch (e) {
+    console.error('GET /api/weekly-recap', e);
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
+// ============================================================
 // A6 — Skill-based Duel Matchmaking ("🎲 דו-קרב אקראי")
 // Solo players hit "find random opponent" → server pairs them
 // with another waiting player in similar trophy range.
