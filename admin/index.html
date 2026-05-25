@@ -2524,6 +2524,14 @@
   // We never hardcode the secret slug — it comes from the URL the admin loaded.
   const BASE = location.pathname.replace(/\/index\.html$/, '').replace(/\/$/, '');
   const API  = BASE + '/api';
+  // ADMIN_PATH is the slug-only form (no leading slash). ~23 call sites
+  // throughout the admin script use the pattern fetch('/' + ADMIN_PATH +
+  // '/api/...'), but the variable was never defined — every one of those
+  // calls threw "Can't find variable: ADMIN_PATH" inside try/catch blocks
+  // that silently swallowed the error, leaving the relevant tab cards
+  // stuck on "טוען..." indefinitely. Defining it here repairs all 23 in
+  // a single line.
+  const ADMIN_PATH = BASE.replace(/^\//, '');
 
   function $(id) { return document.getElementById(id); }
   function escHtml(s) {
@@ -9086,7 +9094,14 @@
       summaryEl.__hasClick = true;
       summaryEl.onclick = function() { refreshBotStatus(); toast('🔄 מרענן...'); };
     }
-    console.log('[admin] refreshBotStatus:', d);
+    // Only log when something interesting changed — every 3s log was
+    // flooding the console (20+ logs/minute). Keep error/state-change
+    // logging, drop the steady-state polling noise.
+    var _stateSig = d ? (d.count + '|' + d.running) : 'no-data';
+    if (refreshBotStatus.__lastSig !== _stateSig) {
+      refreshBotStatus.__lastSig = _stateSig;
+      console.log('[admin] refreshBotStatus:', d);
+    }
 
     if (!d) {
       summaryEl.innerHTML = '⚠️ שגיאת חיבור לשרת — נסה שוב';
