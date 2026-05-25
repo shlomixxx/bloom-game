@@ -15,6 +15,12 @@
     }
     stopEventSystem(); // don't run events behind home screen
     if (typeof purgeEventOverlays === 'function') purgeEventOverlays();
+    // TB.1 — strip is fixed-position on body, so it would float over the
+    // home screen until the next game starts. Tear down explicitly here.
+    try {
+      var __bsHomeV1 = document.getElementById('booster-strip');
+      if (__bsHomeV1) __bsHomeV1.remove();
+    } catch (e) {}
     const app = document.querySelector('.app');
     if (!app || document.getElementById('home-screen')) return;
     // Mark the app so CSS can hide the game UI behind the home overlay.

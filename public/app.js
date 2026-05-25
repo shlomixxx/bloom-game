@@ -4525,6 +4525,12 @@
     }
     stopEventSystem(); // don't run events behind home screen
     if (typeof purgeEventOverlays === 'function') purgeEventOverlays();
+    // TB.1 — strip is fixed-position on body, so it would float over the
+    // home screen until the next game starts. Tear down explicitly here.
+    try {
+      var __bsHomeV1 = document.getElementById('booster-strip');
+      if (__bsHomeV1) __bsHomeV1.remove();
+    } catch (e) {}
     const app = document.querySelector('.app');
     if (!app || document.getElementById('home-screen')) return;
     // Mark the app so CSS can hide the game UI behind the home overlay.
@@ -4843,6 +4849,12 @@
   function showHomeV2() {
     stopEventSystem();
     if (typeof purgeEventOverlays === 'function') purgeEventOverlays();
+    // TB.1 — strip is fixed-position on body, so it would float over the
+    // home screen until the next game starts. Tear down explicitly here.
+    try {
+      var __bsHome = document.getElementById('booster-strip');
+      if (__bsHome) __bsHome.remove();
+    } catch (e) {}
     // Going home = leaving any dynamic-board session. Next game starts vanilla.
     if (typeof clearDynamicBoardSession === 'function') clearDynamicBoardSession();
     const app = document.querySelector('.app');
@@ -16509,6 +16521,12 @@
         window.__bloomGameOver = true; // stop heartbeat
         if (window.endHeartbeat) window.endHeartbeat(); // remove from admin live view
         stopEventSystem();
+        // TB.1 — tear down the floating booster strip so it doesn't sit
+        // on top of the over screen's share / play-again buttons.
+        try {
+          var __bs1 = document.getElementById('booster-strip');
+          if (__bs1) __bs1.remove();
+        } catch (e) {}
         // Save best score BEFORE rendering game-over
         var isNewBest = score > best && !skinTrialMode;
         if (isNewBest) { best = score; localStorage.setItem(BEST_KEY, String(best)); }
@@ -16791,6 +16809,12 @@
       window.__bloomGameOver = true; // stop heartbeat
       if (window.endHeartbeat) window.endHeartbeat(); // remove from admin live view
       stopEventSystem();
+      // TB.1 — tear down the floating booster strip so the over screen
+      // isn't obscured by a stuck tool tray.
+      try {
+        var __bs2 = document.getElementById('booster-strip');
+        if (__bs2) __bs2.remove();
+      } catch (e) {}
       // TA.1 — snapshot for refresh-restore (practice/dynamic/contest).
       saveLastGameSnapshot({ isNewBest: isNewBest });
       soundGameOver();
@@ -26146,13 +26170,22 @@ function maybeMountBoosterStrip() {
   var existing = document.getElementById('booster-strip');
   if (existing) existing.remove();
   if (!boostersAreEnabled()) return;
-  var anchor = document.getElementById('grid-wrap');
-  if (!anchor) return;
+  // TB.1 — game-over guard. After game-over the strip would float over
+  // the over screen, which (a) is useless (boosters need an in-progress
+  // game) and (b) overlays the share / play-again CTAs. Bail early.
+  if (window.__bloomGameOver) return;
+  // TB.1 — bottom floating bar instead of an in-flow strip above the
+  // grid. The old position cost ~73px from the grid height (margin +
+  // padding + emoji + label + price), shrinking each cell ~20% on
+  // average phones. Floating it at the bottom returns that real estate
+  // to the playable board and matches the "tool tray" pattern of
+  // Match Masters / Royal Match. We mount on document.body (not on
+  // grid-wrap's parent) so it's never affected by .app's flex flow.
   var strip = document.createElement('div');
   strip.id = 'booster-strip';
-  strip.className = 'booster-strip';
+  strip.className = 'booster-strip booster-strip-bottom';
   strip.innerHTML = renderBoosterStripInner();
-  anchor.parentNode.insertBefore(strip, anchor);
+  document.body.appendChild(strip);
   wireBoosterStrip(strip);
 }
 

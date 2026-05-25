@@ -50,13 +50,22 @@ function maybeMountBoosterStrip() {
   var existing = document.getElementById('booster-strip');
   if (existing) existing.remove();
   if (!boostersAreEnabled()) return;
-  var anchor = document.getElementById('grid-wrap');
-  if (!anchor) return;
+  // TB.1 — game-over guard. After game-over the strip would float over
+  // the over screen, which (a) is useless (boosters need an in-progress
+  // game) and (b) overlays the share / play-again CTAs. Bail early.
+  if (window.__bloomGameOver) return;
+  // TB.1 — bottom floating bar instead of an in-flow strip above the
+  // grid. The old position cost ~73px from the grid height (margin +
+  // padding + emoji + label + price), shrinking each cell ~20% on
+  // average phones. Floating it at the bottom returns that real estate
+  // to the playable board and matches the "tool tray" pattern of
+  // Match Masters / Royal Match. We mount on document.body (not on
+  // grid-wrap's parent) so it's never affected by .app's flex flow.
   var strip = document.createElement('div');
   strip.id = 'booster-strip';
-  strip.className = 'booster-strip';
+  strip.className = 'booster-strip booster-strip-bottom';
   strip.innerHTML = renderBoosterStripInner();
-  anchor.parentNode.insertBefore(strip, anchor);
+  document.body.appendChild(strip);
   wireBoosterStrip(strip);
 }
 

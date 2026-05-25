@@ -253,8 +253,10 @@ function animateScore(el, target) {
 > ⏱ ~2 שעות | 🎯 לוח גדול = משחק שאוהבים לשחק
 > 💡 **למה זה ממכר**: גודל = רושם של איכות. תאים גדולים = משחק שמרגיש יוקרתי.
 
-### - [ ] **TB.1** — העבר Booster Strip ל-Bottom Floating Bar
+### - [x] **TB.1** — העבר Booster Strip ל-Bottom Floating Bar ✅
 > 🚨 ה-strip הזה לוקח 73px מהלוח. הזז אותו לתחתית = +30% גודל לוח.
+>
+> **בוצע (2026-05-25)**: `maybeMountBoosterStrip()` ב-`src/35-boosters.js` עוברת מ-`anchor.parentNode.insertBefore` ל-`document.body.appendChild` עם class `booster-strip-bottom`. CSS חדש ב-`public/css/home-v2.css` עם `position: fixed`, `bottom: calc(8px + env(safe-area-inset-bottom))`, `transform: translateX(-50%)`, `backdrop-filter: blur(10px)`, `z-index: var(--z-floating)`, ו-`animation: boosterStripIn 0.32s` לכניסה חלקה. גדלים מוקטנים בתוך floating bar (emoji 18px → 18px, label 11 → 10, price 10 → 9) כדי שלא יסתיר. Guard ב-`maybeMountBoosterStrip` נגד `window.__bloomGameOver` כך שלא נטען על מסך game-over. שתי נקודות game-over ב-`src/11-game.js` מסירות באופן מפורש את ה-strip כשהוא קיים. `showHome` + `showHomeV2` מסירים את ה-strip לפני הצגת הבית (כי `position: fixed` היה צף מעליו). Dark mode override. Engine self-test: 200 games / 14,007 drops / 0 floating tiles. ה-grid חוזר לגודל המלא — ~73px מוחזרים ל-`fitGrid`.
 
 **מיקום**: `src/35-boosters.js` + `public/styles.css`
 
@@ -328,8 +330,10 @@ if (window.__bloomGameOver) {
 
 ---
 
-### - [ ] **TB.2** — צמצם Col-Mult-Bar Height
+### - [x] **TB.2** — צמצם Col-Mult-Bar Height ✅
 > ירידה קטנה בגובה ה-multipliers bar = עוד 7-10px ללוח.
+>
+> **בוצע (2026-05-25)**: `public/css/boards.css` — `.col-mult-bar` margin שונה מ-`2px auto 6px` ל-`1px auto 2px` (חיסכון ~5px), `.col-mult-pill` height 22→18 + font-size 13→11 (חיסכון נוסף ~4-7px). סה"כ הבר ירד מ-~30px ל-~21px בלי לאבד קריאות. מסביר את הכפתורים החזותית קיים — `tier-2x` mint, `tier-4x` gold עם pulse, `tier-6x` gold→pink עם glow.
 
 **מיקום**: `public/styles.css` — `.col-mult-bar` ו-`.col-mult-pill`
 
@@ -580,10 +584,10 @@ cron יומי שמוצא שחקנים עם streak ≥ 3 שלא שיחקו 12+ ש
 | Phase | משימות | הושלמו | חומרה |
 |-------|--------|--------|--------|
 | **A — Game-Over Persist + Exploit** | 4 | 1 | 🔴 קריטית |
-| **B — Display Size** | 3 | 0 | 🔴 קריטית |
+| **B — Display Size** | 3 | 2 | 🔴 קריטית |
 | **C — Stuck Screens** | 6 | 0 | 🟡 בינונית |
 | **D — Addiction Boosters** | 3 | 0 | 🟢 אופציונלי |
-| **סה"כ** | **16** | **1** | |
+| **סה"כ** | **16** | **3** | |
 
 ---
 

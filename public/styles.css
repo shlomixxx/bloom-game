@@ -4257,6 +4257,57 @@ html[data-theme="dark"] .gacha-collection-label strong { color: #FFF; }
   color: #1A5A2E;
 }
 
+/* ── TB.1 — Floating bottom booster bar ── */
+/* Returns ~73px of grid height that the in-flow strip was eating.
+   Sits over the bottom of the viewport, never affects board layout. */
+.booster-strip.booster-strip-bottom {
+  position: fixed;
+  bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: var(--z-floating, 200);
+  margin: 0;
+  padding: 6px 8px;
+  max-width: 280px;
+  width: auto;
+  background: rgba(255, 248, 231, 0.97);
+  backdrop-filter: blur(10px) saturate(1.05);
+  -webkit-backdrop-filter: blur(10px) saturate(1.05);
+  border: 1px solid rgba(250, 199, 117, 0.55);
+  border-radius: 18px;
+  box-shadow: 0 8px 24px rgba(60, 30, 0, 0.18);
+  /* Slight slide-up entrance so the strip doesn't pop in jarringly. */
+  animation: boosterStripIn 0.32s cubic-bezier(.18,1.08,.4,1);
+}
+@keyframes boosterStripIn {
+  from { opacity: 0; transform: translate(-50%, 14px); }
+  to   { opacity: 1; transform: translate(-50%, 0); }
+}
+.booster-strip.booster-strip-bottom .booster-btn {
+  padding: 6px 10px;
+  border-radius: 12px;
+  border-width: 1.5px;
+}
+.booster-strip.booster-strip-bottom .booster-btn-emoji { font-size: 18px; }
+.booster-strip.booster-strip-bottom .booster-btn-label { font-size: 10px; letter-spacing: 0.15px; }
+.booster-strip.booster-strip-bottom .booster-btn-price { font-size: 9px; padding: 1px 5px; }
+
+/* Hide automatically when the game ends. The over screen sets
+   __bloomGameOver and maybeMountBoosterStrip refuses to mount, but
+   if the strip was already mounted at the moment of game-over,
+   .app[data-game-over="1"] makes it instantly disappear too. */
+.app[data-game-over="1"] ~ .booster-strip.booster-strip-bottom,
+body[data-game-over="1"] .booster-strip.booster-strip-bottom {
+  display: none;
+}
+
+/* Dark mode overrides */
+html[data-theme="dark"] .booster-strip.booster-strip-bottom {
+  background: rgba(30, 26, 22, 0.92);
+  border-color: rgba(255, 217, 130, 0.22);
+  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.55);
+}
+
 /* PICK modal */
 .booster-modal-overlay {
   position: fixed;
@@ -9757,7 +9808,10 @@ html[data-theme="dark"] .fc-list-empty-title { color: #E8E6E2; }
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 5px;                /* matches .grid gap so pills line up with columns */
-  margin: 2px auto 6px;
+  /* TB.2 — slim margin (was 2px/6px → 1px/2px) reclaims ~5px of grid
+     height. Combined with the shorter pill height below, the bar
+     drops from ~30px → ~21px total without losing legibility. */
+  margin: 1px auto 2px;
   padding: 0 6px;          /* matches .grid-wrap horizontal padding so widths line up perfectly */
   pointer-events: none;
   box-sizing: content-box;
@@ -9768,10 +9822,11 @@ html[data-theme="dark"] .fc-list-empty-title { color: #E8E6E2; }
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 22px;
+  /* TB.2 — height 22 → 18 + font 13 → 11 returns ~4-7px to the grid. */
+  height: 18px;
   border-radius: var(--radius-sm, 6px);
   font-weight: 800;
-  font-size: 13px;
+  font-size: 11px;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.02em;
   background: var(--color-surface-2, rgba(0, 0, 0, 0.04));

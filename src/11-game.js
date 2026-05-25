@@ -2537,6 +2537,12 @@
         window.__bloomGameOver = true; // stop heartbeat
         if (window.endHeartbeat) window.endHeartbeat(); // remove from admin live view
         stopEventSystem();
+        // TB.1 — tear down the floating booster strip so it doesn't sit
+        // on top of the over screen's share / play-again buttons.
+        try {
+          var __bs1 = document.getElementById('booster-strip');
+          if (__bs1) __bs1.remove();
+        } catch (e) {}
         // Save best score BEFORE rendering game-over
         var isNewBest = score > best && !skinTrialMode;
         if (isNewBest) { best = score; localStorage.setItem(BEST_KEY, String(best)); }
@@ -2819,6 +2825,12 @@
       window.__bloomGameOver = true; // stop heartbeat
       if (window.endHeartbeat) window.endHeartbeat(); // remove from admin live view
       stopEventSystem();
+      // TB.1 — tear down the floating booster strip so the over screen
+      // isn't obscured by a stuck tool tray.
+      try {
+        var __bs2 = document.getElementById('booster-strip');
+        if (__bs2) __bs2.remove();
+      } catch (e) {}
       // TA.1 — snapshot for refresh-restore (practice/dynamic/contest).
       saveLastGameSnapshot({ isNewBest: isNewBest });
       soundGameOver();

@@ -10,7 +10,10 @@
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 5px;                /* matches .grid gap so pills line up with columns */
-  margin: 2px auto 6px;
+  /* TB.2 — slim margin (was 2px/6px → 1px/2px) reclaims ~5px of grid
+     height. Combined with the shorter pill height below, the bar
+     drops from ~30px → ~21px total without losing legibility. */
+  margin: 1px auto 2px;
   padding: 0 6px;          /* matches .grid-wrap horizontal padding so widths line up perfectly */
   pointer-events: none;
   box-sizing: content-box;
@@ -21,10 +24,11 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 22px;
+  /* TB.2 — height 22 → 18 + font 13 → 11 returns ~4-7px to the grid. */
+  height: 18px;
   border-radius: var(--radius-sm, 6px);
   font-weight: 800;
-  font-size: 13px;
+  font-size: 11px;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.02em;
   background: var(--color-surface-2, rgba(0, 0, 0, 0.04));

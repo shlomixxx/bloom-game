@@ -52,6 +52,12 @@
   function showHomeV2() {
     stopEventSystem();
     if (typeof purgeEventOverlays === 'function') purgeEventOverlays();
+    // TB.1 — strip is fixed-position on body, so it would float over the
+    // home screen until the next game starts. Tear down explicitly here.
+    try {
+      var __bsHome = document.getElementById('booster-strip');
+      if (__bsHome) __bsHome.remove();
+    } catch (e) {}
     // Going home = leaving any dynamic-board session. Next game starts vanilla.
     if (typeof clearDynamicBoardSession === 'function') clearDynamicBoardSession();
     const app = document.querySelector('.app');

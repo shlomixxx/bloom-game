@@ -256,8 +256,8 @@ grep -rn "alert(" src/*.js | grep -v "//"  | wc -l
 | **Exploit: continue** | 🔴 פגיע | גבוהה |
 | **Game-Over persist (daily)** | 🟢 עובד | — |
 | **Game-Over persist (practice/dynamic)** | 🟢 תוקן (TA.1, 2026-05-25) | — |
-| **Display size — booster strip** | 🔴 מקטין 30% | קריטית |
-| **Display size — col-mult-bar** | 🟡 מקטין 7% | בינונית |
+| **Display size — booster strip** | 🟢 תוקן (TB.1, 2026-05-25) | — |
+| **Display size — col-mult-bar** | 🟢 תוקן (TB.2, 2026-05-25) | — |
 | **Z-index war** | 🟡 30+ ערכים | בינונית |
 | **Modal close (ESC/back)** | 🟡 חלקי | בינונית |
 | **Heartbeat cleanup** | 🟡 חלקי | נמוכה |
