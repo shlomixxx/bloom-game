@@ -8784,8 +8784,10 @@
     if (_adminScriptCache !== null) return _adminScriptCache;
     try {
       var html = await (await fetch(location.href, { credentials: 'include' })).text();
-      // Strip out the <script>...</script> blocks and concatenate
-      var m, out = '', rx = /<script[^>]*>([\s\S]*?)<\/script>/gi;
+      // Extract <scr\x69pt>...<\/scr\x69pt> blocks (intentional letter
+      // mangling — a literal closing tag here would end the OUTER
+      // script block at this point in the file and break the page).
+      var m, out = '', rx = new RegExp('<scr' + 'ipt[^>]*>([\\s\\S]*?)<\\/scr' + 'ipt>', 'gi');
       while ((m = rx.exec(html))) out += m[1] + '\n';
       _adminScriptCache = out;
     } catch (e) { _adminScriptCache = ''; }
