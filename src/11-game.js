@@ -85,6 +85,50 @@
     return false;
   }
 
+  // TA.1 — Game-Over Persistence. Mode allowlist: practice + dynamic +
+  // contest. Daily already persists via DAILY_PLAYED_PREFIX. Challenge is
+  // forfeit-on-close by design. Skin-trial and bot games never write.
+  function lastGameModeRestorable(m) {
+    return m === 'practice' || m === 'dynamic' || m === 'contest';
+  }
+  function saveLastGameSnapshot(extra) {
+    try {
+      if (skinTrialMode || window.__bloomBotActive) return;
+      if (!lastGameModeRestorable(mode)) return;
+      var snap = {
+        mode: mode,
+        score: score | 0,
+        highestTier: highestTier | 0,
+        isNewBest: !!(extra && extra.isNewBest),
+        dailyRank: (extra && extra.dailyRank) || null,
+        dailyTotal: (extra && extra.dailyTotal) || null,
+        gameId: (typeof getCurrentGameId === 'function') ? getCurrentGameId() : '',
+        boardId: (window._activeDynamicBoard && window._activeDynamicBoard.id) || null,
+        boardName: (window._activeDynamicBoard && window._activeDynamicBoard.name) || null,
+        contestCode: (mode === 'contest') ? (activeContestCode || null) : null,
+        contestName: (mode === 'contest' && activeContestData) ? (activeContestData.name || null) : null,
+        ts: Date.now()
+      };
+      safeSet(LAST_GAME_KEY, JSON.stringify(snap));
+    } catch (e) {}
+  }
+  function loadLastGameSnapshot() {
+    try {
+      var raw = safeGet(LAST_GAME_KEY, null);
+      if (!raw) return null;
+      var snap = JSON.parse(raw);
+      if (!snap || !snap.mode) return null;
+      var ageMs = Date.now() - (snap.ts || 0);
+      if (ageMs < 0 || ageMs > LAST_GAME_TTL_MS) return null;
+      return snap;
+    } catch (e) { return null; }
+  }
+  function clearLastGameSnapshot() { try { safeRemove(LAST_GAME_KEY); } catch (e) {} }
+  try {
+    window.__bloomClearLastGame = clearLastGameSnapshot;
+    window.__bloomLoadLastGame = loadLastGameSnapshot;
+  } catch (e) {}
+
   async function init(nextMode, opts) {
     opts = opts || {};
     const fresh = !!opts.fresh;
@@ -93,6 +137,11 @@
     // re-inits (e.g., daily-already-played replay screen, contest mode
     // restore) keep the existing id so refreshing doesn't issue a new one.
     if (fresh && typeof regenerateGameId === 'function') regenerateGameId();
+    // TA.1 — Fresh game means the player explicitly moved past any prior
+    // game-over. Drop the snapshot so a mid-game refresh of the NEW run
+    // doesn't trip the restore branch and yank the player back to the
+    // OLD over screen.
+    if (fresh) { try { safeRemove(LAST_GAME_KEY); } catch (e) {} }
     // Sweep any celebration banners left over from the previous round —
     // setTimeout can be paused by tab-blur or skipped on page-hide, leaving
     // a stuck modal over the board. clearTransientBanners is idempotent.
@@ -167,6 +216,48 @@
     } else {
       rng = Math.random;
       dailySubmitted = false;
+    }
+    // TA.1 — Game-Over Persistence. If a non-daily game ended within the
+    // TTL window AND this init isn't fresh AND the mode matches, restore
+    // the over screen instead of starting a new game. This is purely
+    // visual — no resubmits, no server calls. The actual score landed in
+    // the leaderboard at game-over time; we only restore what the player
+    // sees so a refresh doesn't drop them into an empty grid that looks
+    // like a brand-new run.
+    if (!fresh && lastGameModeRestorable(mode) && !window.__bloomBotActive && !skinTrialMode) {
+      var __last = loadLastGameSnapshot();
+      if (__last && __last.mode === mode) {
+        // For dynamic mode, require the same board so a refresh that loses
+        // the picker context doesn't replay an unrelated board's over screen.
+        var __boardMatch = (mode !== 'dynamic') ||
+          (window._activeDynamicBoard && __last.boardId &&
+            window._activeDynamicBoard.id === __last.boardId);
+        // For contest mode, require the same contest code.
+        var __contestMatch = (mode !== 'contest') ||
+          (activeContestCode && __last.contestCode === activeContestCode);
+        if (__boardMatch && __contestMatch) {
+          score = __last.score | 0;
+          highestTier = __last.highestTier | 0;
+          if (__last.dailyRank) dailyRank = __last.dailyRank;
+          if (__last.dailyTotal) dailyTotal = __last.dailyTotal;
+          // Mark game-over so the engine doesn't accept further drops on
+          // a restored over screen.
+          window.__bloomGameOver = true;
+          busy = true;
+          // Reuse the prior game's id so the ad-watch dedup carries
+          // through a refresh — a player can't re-claim the ad by
+          // reloading the page on the over screen.
+          try {
+            if (__last.gameId && typeof sessionStorage !== 'undefined') {
+              sessionStorage.setItem('bloom_active_game_id', __last.gameId);
+            }
+          } catch (e) {}
+          nextPiece = pickPiece();
+          updateModeBar();
+          render({ over: true, isNewBest: !!__last.isNewBest, restored: true });
+          return;
+        }
+      }
     }
     let restoredContestState = false;
     // Reset all live-broadcast state for a fresh game in this contest. The
@@ -2449,6 +2540,9 @@
         // Save best score BEFORE rendering game-over
         var isNewBest = score > best && !skinTrialMode;
         if (isNewBest) { best = score; localStorage.setItem(BEST_KEY, String(best)); }
+        // TA.1 — snapshot for refresh-restore. Practice/dynamic/contest
+        // only; daily is excluded (DAILY_PLAYED_PREFIX handles it).
+        saveLastGameSnapshot({ isNewBest: isNewBest });
         // Stage 20 — Starter Pack trigger: fire when player crosses trigger
         // score for the first time. Throttled inside maybeOfferStarterPack.
         // We fire it with the CURRENT game score (not best) so the trigger
@@ -2725,6 +2819,8 @@
       window.__bloomGameOver = true; // stop heartbeat
       if (window.endHeartbeat) window.endHeartbeat(); // remove from admin live view
       stopEventSystem();
+      // TA.1 — snapshot for refresh-restore (practice/dynamic/contest).
+      saveLastGameSnapshot({ isNewBest: isNewBest });
       soundGameOver();
       buzz([60, 80, 100]);
       playMusic('fail');

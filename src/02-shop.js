@@ -2310,6 +2310,12 @@
   const NAME_KEY = 'bloom_player_name';
   const DEVICE_KEY = 'bloom_device_id';
   const DAILY_PLAYED_PREFIX = 'bloom_daily_';
+  // TA.1 — Game-Over Persistence. Saved at the moment a game-over fires
+  // for practice/dynamic/contest so a refresh restores the over screen
+  // instead of dropping back to a fresh playable grid. Daily has its own
+  // long-lived gate via DAILY_PLAYED_PREFIX so it's excluded here.
+  const LAST_GAME_KEY = 'bloom_last_game_v1';
+  const LAST_GAME_TTL_MS = 30 * 60 * 1000;
   const MUTE_KEY = 'bloom_muted';
   const MUSIC_MUTE_KEY = 'bloom_muted_music';
   const SFX_MUTE_KEY = 'bloom_muted_sfx';

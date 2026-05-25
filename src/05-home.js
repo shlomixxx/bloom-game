@@ -93,7 +93,9 @@
       hideHome();
       const wrap = document.getElementById('grid-wrap');
       const onOverScreen = wrap && wrap.querySelector('.overlay');
-      if (onOverScreen) init('practice');
+      // TA.1 — fresh:true ensures a click on home's play button always
+      // starts a NEW game rather than restoring the prior over screen.
+      if (onOverScreen) init('practice', { fresh: true });
       playMusic('game');
       // Start/restart event system when entering the game
       startEventSystem();

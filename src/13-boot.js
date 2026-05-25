@@ -105,6 +105,52 @@
   // Challenge can't be resumed, contest needs fresh fetch — safe to restore daily/practice.
   if (savedMode !== 'daily' && savedMode !== 'practice') savedMode = 'daily';
 
+  // TA.1 — Game-Over Persistence on boot. If the player's last action
+  // was a game-over in practice/dynamic/contest within the TTL window,
+  // override savedMode + rehydrate the per-mode context (board, contest
+  // code) so init() can paint the over screen instead of dropping the
+  // player into a fresh game. Engine state is NOT restored — just the
+  // visual game-over with the final score.
+  var __lastGameForBoot = null;
+  try {
+    if (typeof window.__bloomLoadLastGame === 'function') {
+      __lastGameForBoot = window.__bloomLoadLastGame();
+    }
+  } catch (e) { __lastGameForBoot = null; }
+  if (__lastGameForBoot && (__lastGameForBoot.mode === 'practice' ||
+                            __lastGameForBoot.mode === 'dynamic' ||
+                            __lastGameForBoot.mode === 'contest')) {
+    savedMode = __lastGameForBoot.mode;
+    // Dynamic mode needs window._activeDynamicBoard set BEFORE init() so
+    // the restore branch can match boardId. We seed a minimal placeholder
+    // (id + name) — the full definition is only needed when the player
+    // starts a fresh game, and we fetch it lazily on that path.
+    if (__lastGameForBoot.mode === 'dynamic' && __lastGameForBoot.boardId) {
+      window._activeDynamicBoard = {
+        id: __lastGameForBoot.boardId,
+        name: __lastGameForBoot.boardName || 'לוח דינמי',
+        definition: {},
+        _placeholder: true  // marker so click-to-restart can re-fetch
+      };
+      // Fire-and-forget upgrade: pull the full board so the over screen's
+      // "New Game" button has a real definition by the time it's clicked.
+      try {
+        if (typeof fetch === 'function') {
+          fetch('/api/boards/available').then(function(r) { return r.json(); })
+            .then(function(d) {
+              if (!d || !d.boards) return;
+              for (var i = 0; i < d.boards.length; i++) {
+                if (d.boards[i].id === __lastGameForBoot.boardId) {
+                  window._activeDynamicBoard = d.boards[i];
+                  break;
+                }
+              }
+            }).catch(function() {});
+        }
+      } catch (e) {}
+    }
+  }
+
   // ============================================================
   // EARLY: Admin spectator check — must happen BEFORE init/home/contest
   // so the spectator doesn't accidentally trigger user's game state,

@@ -497,7 +497,12 @@
       // gets ONE attempt per day). In practice/contest/duel modes, you can always
       // continue as long as usedContinue is false.
       var continuePrice = getEventNum('continue_price', 200);
-      var continueBlockedByMode = (mode === 'daily' && opts.alreadyPlayed) || mode === 'challenge';
+      // TA.1 — block "continue" on restored over screens. The grid is
+      // empty after restore (we only restored visual score+tier), so
+      // continuing would hand the player a free fresh game with the
+      // prior score preserved — clear exploit. Force a fresh start
+      // via the "משחק חדש" button instead.
+      var continueBlockedByMode = (mode === 'daily' && opts.alreadyPlayed) || mode === 'challenge' || !!opts.restored;
       var canContinue = !continueBlockedByMode && !usedContinue && score > 5000;
       var continueHtml = '';
       if (canContinue) {
@@ -596,8 +601,25 @@
       }
       // ====================================================================
 
+      // TA.1 — Restored banner. Renders when the over screen was rebuilt
+      // from a refresh-survival snapshot rather than a freshly-finished
+      // game. Gives the player a clear "this is your last game" anchor
+      // plus an explicit fresh-restart CTA so they don't feel trapped.
+      var restoredBannerHtml = '';
+      if (opts.restored) {
+        restoredBannerHtml =
+          '<div class="over-restored-banner">' +
+            '<div class="over-restored-icon">💾</div>' +
+            '<div class="over-restored-body">' +
+              '<div class="over-restored-title">המשחק שלך נשמר</div>' +
+              '<div class="over-restored-sub">חזרת אחרי רענון · הציון והשיא נשמרו</div>' +
+            '</div>' +
+            '<button class="over-restored-new btn" id="over-restored-new">🎮 משחק חדש</button>' +
+          '</div>';
+      }
       wrap.innerHTML =
         '<div class="overlay">' +
+          restoredBannerHtml +
           '<div class="over-title">' + title + '</div>' +
           '<div class="over-score">' + score.toLocaleString() + '</div>' +
           '<div class="over-sub">הגעת ל' + getActiveTiers()[highestTier].name + ' · ' + highestTier + '/' + MAX_TIER + ' דרגות</div>' +
@@ -841,8 +863,23 @@
         '</div>';
       document.getElementById('again').onclick = function() {
         if (isContestOver) init('contest', { fresh: true });
+        else if (mode === 'dynamic' && window._activeDynamicBoard) init('dynamic', { fresh: true });
         else init('practice', { fresh: true });
       };
+      // TA.1 — Restored game-over: explicit "🎮 משחק חדש" CTA in the
+      // restored banner. Clears the snapshot so a click can't re-enter
+      // the restored over screen, then inits a fresh game in the same
+      // mode so a refresh-survival doesn't shove the player into a
+      // different mode than they were playing.
+      var restoredNewBtn = document.getElementById('over-restored-new');
+      if (restoredNewBtn) {
+        restoredNewBtn.onclick = function() {
+          try { if (typeof window.__bloomClearLastGame === 'function') window.__bloomClearLastGame(); } catch (e) {}
+          if (mode === 'contest') init('contest', { fresh: true });
+          else if (mode === 'dynamic') init('dynamic', { fresh: true });
+          else init('practice', { fresh: true });
+        };
+      }
       // Stage 32 — Replay share button (only present when score crossed threshold).
       var replayBtn = document.getElementById('over-replay-share');
       if (replayBtn && typeof showReplayShareModal === 'function') {

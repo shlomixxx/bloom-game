@@ -225,7 +225,10 @@
       hideHomeV2();
       const wrap = document.getElementById('grid-wrap');
       const onOverScreen = wrap && wrap.querySelector('.overlay');
-      if (onOverScreen) init('practice');
+      // TA.1 — fresh:true ensures a click on home's play button always
+      // starts a NEW game rather than restoring the prior over screen
+      // from the LAST_GAME_KEY snapshot.
+      if (onOverScreen) init('practice', { fresh: true });
       playMusic('game');
       startEventSystem();
       if (mode === 'contest' && activeContestCode && !overtakeTimer) {
