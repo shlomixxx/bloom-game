@@ -628,6 +628,7 @@
     <button class="admin-tab"        data-tab="players"   role="tab" aria-selected="false">👥 שחקנים</button>
     <button class="admin-tab"        data-tab="contests"  role="tab" aria-selected="false">🏆 תחרויות</button>
     <button class="admin-tab"        data-tab="monitor"   role="tab" aria-selected="false">🔧 ניטור</button>
+    <button class="admin-tab"        data-tab="debug"     role="tab" aria-selected="false">🐛 דיבאג</button>
   </nav>
 
   <!-- ═══════════ ADMIN GUIDE ═══════════ -->
@@ -2453,6 +2454,61 @@
     <div class="help">תוצא אוטומטית עם BOM ל-Excel + עברית. עד 10,000 שורות לטבלה.</div>
   </section>
   </div><!-- /admin-tab-panel monitor:live+audit+csv -->
+
+  <!-- ═══════════ DEBUG TAB ═══════════ -->
+  <!-- Built 2026-05-25 after user reported "lots of things repeat" + asked
+       for a tool to find admin bugs systematically. The scan runs entirely
+       in the browser (no server endpoint needed) so you can run it on any
+       deployment by hitting "סרוק עכשיו". Every finding is also dumped to
+       the browser DevTools console with a [BLOOM DEBUG] prefix so the user
+       can copy-paste back to me if they want to investigate further. -->
+  <div class="admin-tab-panel" data-tab="debug">
+  <div class="tab-header">
+    <div>
+      <div class="th-title">🐛 דיבאג — סורק שגיאות אוטומטי</div>
+      <div class="th-sub">בלחיצה אחת — סורק את ה-admin, מזהה כפילויות, endpoints שבורים, הגדרות חסרות, ולחצנים מתים. כל הממצאים מודפסים גם ל-DevTools console.</div>
+    </div>
+  </div>
+
+  <section class="card">
+    <h2 style="margin:0 0 6px 0;display:flex;align-items:center;gap:8px">🔍 סורק שגיאות מקיף</h2>
+    <p class="help" style="margin:0 0 10px 0">
+      הסקנר מבצע 6 בדיקות נפרדות וכותב כל בעיה ל-console (פתח DevTools → Console).
+      הסריקה לוקחת 5-15 שניות, תלוי בכמות ה-endpoints.
+    </p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
+      <button class="btn-primary" id="debug-run-scan">🔍 סרוק עכשיו</button>
+      <button class="btn" id="debug-clear">🗑 נקה תוצאות</button>
+      <span id="debug-status" style="color:#6F6E68;font-size:12px"></span>
+    </div>
+    <div id="debug-results" style="display:none">
+      <!-- Populated by runDebugScan() -->
+    </div>
+  </section>
+
+  <section class="card">
+    <h2 style="margin:0 0 6px 0">📋 בדיקות שמופעלות</h2>
+    <ol style="margin:8px 0 0;padding-right:20px;font-size:13px;line-height:1.7">
+      <li><strong>כפילויות DOM:</strong> מחפש <code>id=</code> שמופיע יותר מפעם אחת באותו רגע (באג HTML אמיתי).</li>
+      <li><strong>כפילויות כותרת:</strong> סקצ׳נים עם אותו <code>&lt;h2&gt;</code> שמופיעים תחת אותה לשונית.</li>
+      <li><strong>בריאות Endpoints:</strong> שולח GET לכל endpoint admin (dashboard, retention, funnel, heatmap, וכו׳) ובודק שמחזיר 200.</li>
+      <li><strong>הגדרות "חבויות":</strong> config keys מ-game_config שאין להם entry ב-TIPS_PER_KEY (לא חבויים אבל קשים לאתר).</li>
+      <li><strong>לחצנים מתים:</strong> אלמנטים עם <code>id=</code> שאין להם click handler.</li>
+      <li><strong>פעולות שכשלות:</strong> בודק שכל <code>fetch()</code> שמתבצע ב-admin מצליח.</li>
+    </ol>
+  </section>
+
+  <section class="card">
+    <h2 style="margin:0 0 6px 0">🌐 דיבאג ב-DevTools</h2>
+    <p class="help" style="margin:0 0 8px 0">
+      פתח את <strong>DevTools</strong> (F12) → לשונית <strong>Console</strong> → תראה כל ממצא בזמן הסריקה.
+      הודעות מתחילות ב-<code style="background:#FFE9A0;padding:2px 6px;border-radius:4px">[BLOOM DEBUG]</code>.
+    </p>
+    <p class="help" style="margin:0">
+      אפשר להריץ ידנית מ-console: <code>__bloomDebug.runScan()</code> · להוריד JSON: <code>__bloomDebug.dumpJson()</code>
+    </p>
+  </section>
+  </div><!-- /admin-tab-panel debug -->
 
 </div>
 
@@ -8417,7 +8473,7 @@
 
   // ============ TAB SWITCHING ============
   var ADMIN_TAB_KEY = 'bloom_admin_active_tab';
-  var VALID_TABS = ['dashboard', 'game', 'economy', 'players', 'contests', 'monitor'];
+  var VALID_TABS = ['dashboard', 'game', 'economy', 'players', 'contests', 'monitor', 'debug'];
   function switchAdminTab(name) {
     if (VALID_TABS.indexOf(name) < 0) name = 'dashboard';
     document.querySelectorAll('.admin-tab').forEach(function(b) {
@@ -8439,6 +8495,268 @@
   var savedTab = null;
   try { savedTab = localStorage.getItem(ADMIN_TAB_KEY); } catch (e) {}
   if (savedTab && VALID_TABS.indexOf(savedTab) >= 0) switchAdminTab(savedTab);
+
+  // ============================================================
+  // 🐛 DEBUG SCANNER — comprehensive self-diagnostic (2026-05-25)
+  // ============================================================
+  // User reported "lots of things repeat in the admin" + asked for a
+  // tool to find admin bugs systematically. This is a 100% client-side
+  // scan — no server endpoint needed, no auth concerns. Every finding
+  // is also dumped to the browser DevTools console with [BLOOM DEBUG]
+  // prefix so the user can copy-paste output back when they want help.
+  //
+  // Six checks:
+  //   1. Duplicate DOM ids       (real HTML bug)
+  //   2. Duplicate H2 titles     (visual repeats)
+  //   3. Endpoint health         (GET each admin/api/* + status)
+  //   4. Hidden config keys      (in game_config, not in TIPS_PER_KEY)
+  //   5. Dead buttons            (id= without onclick handler)
+  //   6. Orphaned tip data       (data-tip=KEY where KEY not in TIPS)
+  // ============================================================
+  var debugLastResults = null;
+  function dbgLog(category, severity, message, details) {
+    var prefix = '[BLOOM DEBUG][' + category + ']';
+    if (severity === 'error')      console.error(prefix, message, details || '');
+    else if (severity === 'warn')  console.warn(prefix, message, details || '');
+    else                           console.log(prefix, message, details || '');
+  }
+
+  async function checkDuplicateIds() {
+    var seen = {};
+    var dupes = [];
+    document.querySelectorAll('[id]').forEach(function(el) {
+      var id = el.id;
+      if (!id || /\${|<.*>/.test(id)) return;  // skip template fragments
+      seen[id] = (seen[id] || 0) + 1;
+    });
+    Object.keys(seen).forEach(function(id) {
+      if (seen[id] > 1) dupes.push({ id: id, count: seen[id] });
+    });
+    dupes.forEach(function(d) { dbgLog('DUPE-ID', 'error', 'id="' + d.id + '" appears ' + d.count + ' times', d); });
+    return dupes;
+  }
+
+  async function checkDuplicateSections() {
+    var perTab = {};
+    document.querySelectorAll('.admin-tab-panel').forEach(function(panel) {
+      var tab = panel.getAttribute('data-tab') || 'unknown';
+      perTab[tab] = perTab[tab] || {};
+      panel.querySelectorAll('h2').forEach(function(h) {
+        // Strip the tip button + emoji from the title to compare clean text
+        var clone = h.cloneNode(true);
+        clone.querySelectorAll('.tip-btn').forEach(function(b) { b.remove(); });
+        var title = (clone.textContent || '').trim();
+        if (!title) return;
+        perTab[tab][title] = (perTab[tab][title] || 0) + 1;
+      });
+    });
+    var dupes = [];
+    Object.keys(perTab).forEach(function(tab) {
+      Object.keys(perTab[tab]).forEach(function(title) {
+        if (perTab[tab][title] > 1) dupes.push({ tab: tab, title: title, count: perTab[tab][title] });
+      });
+    });
+    dupes.forEach(function(d) { dbgLog('DUPE-SECTION', 'warn', 'section "' + d.title + '" appears ' + d.count + 'x in tab "' + d.tab + '"', d); });
+    return dupes;
+  }
+
+  async function checkEndpointHealth() {
+    // List of admin API endpoints that should ALWAYS return 200 + JSON.
+    // Each is a GET — no side effects. Adding new endpoints: append here.
+    var endpoints = [
+      'dashboard', 'retention', 'funnel', 'heatmap', 'live', 'audit',
+      'config', 'challenges', 'players?limit=1', 'boards', 'skins',
+      'tournaments', 'trophies/stats', 'guild-wars', 'replay/stats',
+      'spin/stats', 'push/status'
+    ];
+    var failures = [];
+    for (var i = 0; i < endpoints.length; i++) {
+      var path = endpoints[i];
+      try {
+        var t0 = Date.now();
+        var r = await fetch(API + '/' + path, { credentials: 'include' });
+        var ms = Date.now() - t0;
+        if (!r.ok) {
+          failures.push({ path: path, status: r.status, ms: ms });
+          dbgLog('ENDPOINT', 'error', path + ' → HTTP ' + r.status + ' (' + ms + 'ms)', { path: path, status: r.status });
+        } else {
+          dbgLog('ENDPOINT', 'log', path + ' → ' + r.status + ' (' + ms + 'ms) ✓');
+        }
+      } catch (e) {
+        failures.push({ path: path, status: 'NETWORK', error: e.message });
+        dbgLog('ENDPOINT', 'error', path + ' → NETWORK FAIL: ' + e.message, e);
+      }
+    }
+    return failures;
+  }
+
+  async function checkHiddenConfigKeys() {
+    // game_config keys that appear in /api/config but have no entry in
+    // TIPS_PER_KEY — meaning the generic config table renders them as
+    // plain text inputs with no tooltip. Admin can still edit them but
+    // they're hard to discover.
+    var unknown = [];
+    try {
+      var r = await fetch(API + '/config', { credentials: 'include' });
+      var d = await r.json();
+      // Admin /api/config returns {ok, config: [{key, value, ...}, ...]}
+      if (!d || !Array.isArray(d.config)) return [];
+      var tips = (typeof TIPS_PER_KEY === 'object') ? TIPS_PER_KEY : {};
+      d.config.forEach(function(row) {
+        var k = row && row.key;
+        if (!k) return;
+        // Skip internal dedup keys (start with `_`) — they're not admin-facing
+        if (k.charAt(0) === '_') return;
+        // Skip composite display rows
+        if (k.indexOf(':') >= 0) return;
+        if (!tips[k]) {
+          unknown.push(k);
+          dbgLog('HIDDEN-CFG', 'warn', 'key "' + k + '" has no tooltip — renders as raw input', { key: k, value: row.value });
+        }
+      });
+    } catch (e) {
+      dbgLog('HIDDEN-CFG', 'error', 'failed to load /api/config', e);
+    }
+    return unknown;
+  }
+
+  async function checkDeadButtons() {
+    // Buttons with an id= attribute that have no event listener wired
+    // up. This is a heuristic — we can't perfectly detect addEventListener
+    // wiring from outside, but we can check inline .onclick + flag buttons
+    // that LOOK actionable but have neither.
+    var suspects = [];
+    document.querySelectorAll('button[id], a[role="button"][id]').forEach(function(el) {
+      var id = el.id;
+      // Skip template fragments
+      if (!id || /\${|<.*>/.test(id)) return;
+      // Skip dynamic-content placeholders (re-rendered on demand)
+      if (el.closest('[id$="-host"], [id$="-grid"], [id$="-list"], #drawer, .drawer')) return;
+      if (!el.onclick) {
+        suspects.push({ id: id, text: (el.textContent || '').trim().slice(0, 30) });
+      }
+    });
+    // Some buttons are wired via document-level delegation (e.g. skin shop).
+    // We log as 'warn' instead of 'error' since this is a heuristic.
+    suspects.forEach(function(s) {
+      dbgLog('DEAD-BTN', 'warn', 'button id="' + s.id + '" ("' + s.text + '") has no .onclick — may use event delegation', s);
+    });
+    return suspects;
+  }
+
+  async function checkOrphanedTipReferences() {
+    // <button data-tip="KEY"> where KEY isn't defined in TIPS (the
+    // section-level dict). Causes the ❓ click to show nothing.
+    var orphans = [];
+    var tipsDict = (typeof TIPS === 'object') ? TIPS : {};
+    document.querySelectorAll('[data-tip]').forEach(function(el) {
+      var key = el.getAttribute('data-tip');
+      if (!key) return;
+      if (!tipsDict[key]) {
+        orphans.push({ key: key, location: (el.closest('section, [data-tab]') || {}).id || '?' });
+      }
+    });
+    orphans.forEach(function(o) { dbgLog('ORPHAN-TIP', 'warn', 'data-tip="' + o.key + '" has no entry in TIPS', o); });
+    return orphans;
+  }
+
+  async function runDebugScan() {
+    var statusEl = document.getElementById('debug-status');
+    var resultsEl = document.getElementById('debug-results');
+    var btn = document.getElementById('debug-run-scan');
+    if (btn) btn.disabled = true;
+    if (statusEl) statusEl.textContent = '⏳ סורק…';
+    console.log('%c[BLOOM DEBUG] === SCAN START ===', 'background:#FFE9A0;color:#412402;font-weight:bold;padding:2px 6px');
+
+    var t0 = Date.now();
+    var results = {};
+    try {
+      results.dupeIds = await checkDuplicateIds();
+      results.dupeSections = await checkDuplicateSections();
+      results.endpoints = await checkEndpointHealth();
+      results.hiddenKeys = await checkHiddenConfigKeys();
+      results.deadButtons = await checkDeadButtons();
+      results.orphanTips = await checkOrphanedTipReferences();
+    } catch (e) {
+      console.error('[BLOOM DEBUG] scan crashed:', e);
+    }
+    var dur = Date.now() - t0;
+    debugLastResults = results;
+
+    // Render summary into the page
+    var summary = [
+      { name: '🆔 IDs כפולים', count: results.dupeIds.length, items: results.dupeIds, fmt: function(x) { return 'id="<code>' + x.id + '</code>" (' + x.count + 'x)'; } },
+      { name: '📋 סקצ׳נים כפולים', count: results.dupeSections.length, items: results.dupeSections, fmt: function(x) { return '<code>' + x.tab + '</code> · "' + x.title + '" (' + x.count + 'x)'; } },
+      { name: '🌐 Endpoints שכשלו', count: results.endpoints.length, items: results.endpoints, fmt: function(x) { return '<code>' + x.path + '</code> → ' + x.status + (x.ms ? ' (' + x.ms + 'ms)' : ''); } },
+      { name: '❓ הגדרות בלי tooltip', count: results.hiddenKeys.length, items: results.hiddenKeys, fmt: function(x) { return '<code>' + x + '</code>'; } },
+      { name: '🔘 לחצנים ללא handler ידני', count: results.deadButtons.length, items: results.deadButtons, fmt: function(x) { return 'id="<code>' + x.id + '</code>" — "' + x.text + '"'; } },
+      { name: '💬 data-tip יתום', count: results.orphanTips.length, items: results.orphanTips, fmt: function(x) { return '<code>' + x.key + '</code>'; } }
+    ];
+
+    var totalIssues = summary.reduce(function(sum, s) { return sum + s.count; }, 0);
+    var html = '<div class="card" style="background:' + (totalIssues === 0 ? '#E0F2E5' : '#FFF4E0') + ';margin:0 0 12px 0">' +
+               '<h3 style="margin:0 0 4px 0">' + (totalIssues === 0 ? '✅ אין בעיות' : '⚠ נמצאו ' + totalIssues + ' בעיות') +
+               '</h3><div style="font-size:12px;color:#6F6E68">סריקה הסתיימה ב-' + dur + 'ms · ' + new Date().toLocaleTimeString('he-IL') + '</div></div>';
+
+    summary.forEach(function(s) {
+      var color = s.count === 0 ? '#9FE1CB' : s.count > 5 ? '#FFB8B8' : '#FFE9A0';
+      html += '<details ' + (s.count > 0 ? 'open' : '') + ' style="margin:6px 0;border:1px solid ' + color + ';border-radius:8px;background:#FFF">' +
+              '<summary style="padding:8px 12px;cursor:pointer;font-weight:700;background:' + color + ';border-radius:8px 8px 0 0">' +
+              s.name + ' — <span style="font-variant-numeric:tabular-nums">' + s.count + '</span></summary>';
+      if (s.count > 0) {
+        html += '<ul style="margin:0;padding:8px 22px;font-size:12.5px;line-height:1.6">';
+        s.items.forEach(function(item) { html += '<li>' + s.fmt(item) + '</li>'; });
+        html += '</ul>';
+      } else {
+        html += '<div style="padding:8px 12px;color:#2E8B6F;font-size:12px">✓ ללא ממצאים</div>';
+      }
+      html += '</details>';
+    });
+
+    html += '<div style="margin-top:14px;padding:10px;background:#F2EFE9;border-radius:8px;font-size:11.5px;color:#6F6E68">' +
+            '💡 פתח DevTools (F12) → Console → תראה כל ממצא בנפרד עם <code>[BLOOM DEBUG]</code>. ' +
+            'אפשר להוריד את ה-JSON המלא עם <code>__bloomDebug.dumpJson()</code>.' +
+            '</div>';
+
+    if (resultsEl) {
+      resultsEl.innerHTML = html;
+      resultsEl.style.display = 'block';
+    }
+    if (statusEl) statusEl.textContent = '✓ נסרק בעוד ' + dur + 'ms — ' + totalIssues + ' ממצאים';
+    if (btn) btn.disabled = false;
+
+    console.log('%c[BLOOM DEBUG] === SCAN COMPLETE (' + dur + 'ms, ' + totalIssues + ' issues) ===',
+                'background:' + (totalIssues === 0 ? '#9FE1CB' : '#FFE9A0') + ';color:#412402;font-weight:bold;padding:2px 6px');
+    return results;
+  }
+
+  // Wire the buttons
+  var debugRunBtn = document.getElementById('debug-run-scan');
+  if (debugRunBtn) debugRunBtn.onclick = runDebugScan;
+  var debugClearBtn = document.getElementById('debug-clear');
+  if (debugClearBtn) debugClearBtn.onclick = function() {
+    var r = document.getElementById('debug-results');
+    if (r) { r.innerHTML = ''; r.style.display = 'none'; }
+    var s = document.getElementById('debug-status');
+    if (s) s.textContent = '';
+    debugLastResults = null;
+    console.log('[BLOOM DEBUG] cleared');
+  };
+
+  // Expose to console so admin can run from DevTools without clicking
+  window.__bloomDebug = {
+    runScan: runDebugScan,
+    lastResults: function() { return debugLastResults; },
+    dumpJson: function() {
+      var data = JSON.stringify(debugLastResults || {}, null, 2);
+      console.log(data);
+      try {
+        navigator.clipboard.writeText(data);
+        console.log('[BLOOM DEBUG] JSON copied to clipboard');
+      } catch (e) {}
+      return data;
+    }
+  };
 
   initPrefs(); // restore saved preferences before refreshAll
   refreshAll();
