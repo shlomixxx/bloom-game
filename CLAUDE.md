@@ -58,7 +58,7 @@ Quick-scan map of the addiction-loop work. **Update this table whenever a stage 
 |---|---|---|
 | — | (User picking which stage to test from 35-38 first) | Live to verify the addiction loop |
 
-> 📋 **Full future-tasks roadmap lives in [FUTURE_TASKS.md](FUTURE_TASKS.md)** — that's the single source of truth for what's NOT yet built. Update it whenever a backlog item ships or a new one is added.
+> 📋 **All task files live under [tasks/ACTIVE/](tasks/ACTIVE/)** — single source of truth for what's NOT yet built. Hot files: [BLOOM_TASKS.md](tasks/ACTIVE/BLOOM_TASKS.md), [FUTURE_TASKS.md](tasks/ACTIVE/FUTURE_TASKS.md), [MONETIZATION_TASKS.md](tasks/ACTIVE/MONETIZATION_TASKS.md), [MANUAL_TASKS.md](tasks/ACTIVE/MANUAL_TASKS.md). New task files go into `tasks/ACTIVE/` per [tasks/README.md](tasks/README.md) convention. Update the relevant file whenever a backlog item ships.
 
 ### 📋 Backlog — PURE ADDICTION (no real money needed — ready to ship)
 | Rank | Stage | What it does | Effort | Impact |
@@ -174,8 +174,24 @@ bloom-game/
 ├── schema.sql          # All tables (idempotent, runs on boot)
 ├── package.json        # type:module, deps: express + pg
 ├── CLAUDE.md           # This file
-└── README.md           # Human-facing
+├── README.md           # Human-facing
+├── RESUME.md           # 30-second session-start brief
+└── tasks/              # ALL task files live here (NOT in repo root)
+    ├── README.md       # Convention guide — read this if adding a new task file
+    ├── ACTIVE/         # Hot task files I read every session
+    │   ├── BLOOM_TASKS.md
+    │   ├── FUTURE_TASKS.md
+    │   ├── MONETIZATION_TASKS.md
+    │   └── MANUAL_TASKS.md
+    └── ARCHIVE/        # Old/superseded roadmaps — historical reference only
 ```
+
+**Task-files convention** (load-bearing — don't break):
+- ALL task tracking lives under `tasks/`. The repo root has exactly 3 .md files: `RESUME.md`, `CLAUDE.md`, `README.md`.
+- New task file = `tasks/ACTIVE/<DOMAIN>_TASKS.md` (e.g. `MARKETING_TASKS.md`). Naming: SCREAMING_SNAKE_CASE + `_TASKS.md` suffix.
+- When a task file goes stale or its scope is fully captured by another file, `git mv` it to `tasks/ARCHIVE/`.
+- Add a one-line pointer to the new file in [RESUME.md](RESUME.md) §"הקבצים שאני עובד לפיהם" so the next session finds it.
+- See [tasks/README.md](tasks/README.md) for the full convention.
 
 ### Frontend internal map (line numbers will drift — use grep)
 

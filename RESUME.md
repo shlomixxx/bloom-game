@@ -31,33 +31,26 @@
 
 ## 📂 הקבצים שאני עובד לפיהם
 
-### 1. [BLOOM_TASKS.md](BLOOM_TASKS.md) — Roadmap מקורי (38 משימות, 8 שלבים)
-זה ה-audit-driven roadmap שהתחלתי ממנו. Phase 0 → Phase 7. **כמעט נסגר** (4 deferred).
+> **כל המשימות חיות ב-[tasks/](tasks/)**. שורש הפרויקט שמור ל-RESUME.md / CLAUDE.md / README.md בלבד. ראה [tasks/README.md](tasks/README.md) לקונבנציה מלאה (איך להוסיף קובץ משימות חדש, מבנה התיקיות, סדר קריאה).
 
-**4 משימות פתוחות** (כולן בכוונה — לא לפספס):
-- **T4.1 Live PvP** — דורש WebSocket + matchmaking + split-screen. סשן ייעודי (3-5 ימים).
-- **T6.1 home-state API** — perf gain שולי אחרי T6.3 cache. רק אם profiling יראה latency.
-- **T6.5 server.js split** — refactor טהור. אפס user value. אל תיגע אלא אם תוסיף TypeScript/tests.
-- **T7.5 i18n אנגלית** — multi-day. Pre-launch לחו"ל בלבד.
+### 📋 tasks/ACTIVE/ — המשימות החיות (הקבצים שאני קורא בכל סשן)
 
-### 2. [FUTURE_TASKS.md](FUTURE_TASKS.md) — Backlog (10 pure-addiction + 4 monetization)
-אחרי שסיימתי את ה-roadmap, עברתי לזה. **6/10 כבר נבנו** ב-A1/A2/A3/A4/A6/A7.
+**1. [tasks/ACTIVE/BLOOM_TASKS.md](tasks/ACTIVE/BLOOM_TASKS.md)** — Roadmap מקורי (38 משימות, 8 שלבים). 34/38 הושלמו. 4 פתוחות בכוונה:
+- T4.1 Live PvP, T6.1 home-state API, T6.5 server.js split, T7.5 i18n אנגלית
 
-**🎉 כל ה-10 משימות pure-addiction הושלמו!** A5 Live PvP Race שיודרגה למעלה הוטמעה כ-MVP polling-based (במקום true WebSocket — חוויה כמעט זהה, סקופ קטן פי 4).
+**2. [tasks/ACTIVE/FUTURE_TASKS.md](tasks/ACTIVE/FUTURE_TASKS.md)** — Backlog. 🎉 **כל ה-10 משימות pure-addiction (A1-A10) הושלמו**. נשאר רק monetization שעבר ל-MONETIZATION_TASKS.md.
 
-ה-backlog שנשאר הוא monetization בלבד — דורש החלטות עסקיות + Stripe + יועץ משפטי.
+**3. [tasks/ACTIVE/MONETIZATION_TASKS.md](tasks/ACTIVE/MONETIZATION_TASKS.md)** — 7 שלבים M1-M7:
+- ✅ M1 Self-Promo (הושלם 2026-05-25)
+- ⏳ M2 Stripe Foundation (~3 ימים — דורש חשבון Stripe מהמשתמש)
+- ⏳ M3 RM per-product wiring · M4 Legal · M5 Self-Promo+RM · M6 VIP · M7 Analytics
 
-**4 משימות monetization** (real money — דורש Stripe + יעוץ משפטי):
-- 17b Stripe IAP — תשתית לכל השאר. ~3-4 ימים.
-- 22 VIP subscription — $4.99/mo MRR. אחרי 17b.
-- 23 RM cosmetic shop — IAP-only skins. אחרי 17b.
-- 24 Wager / RM tournaments — דורש legal certification של מדינה.
+**4. [tasks/ACTIVE/MANUAL_TASKS.md](tasks/ACTIVE/MANUAL_TASKS.md)** — מה המשתמש צריך לעשות ידנית (GA4 / Stripe / domain).
 
-### 3. [CLAUDE.md](CLAUDE.md) — Living spec של הפרויקט
-ה-truth של כל פיצ'ר שנבנה אי פעם. §0 = retention stages tracker (44 stages עכשיו). §5 = current features. **אם הוספת stage חדש — חובה להוסיף entry ב-§5 + טבלה ב-§0.**
+### 📚 קבצי context (לא משימות — הקשר היסטורי)
 
-### 4. [BLOOM_FULL_AUDIT.md](BLOOM_FULL_AUDIT.md) — הביקורת המקורית
-הצוקנע של 40+ בעיות שהיו. רובן נפתרו. שמור לרפרנס היסטורי.
+- **[CLAUDE.md](CLAUDE.md)** — Living spec של הפרויקט. §0 = retention stages tracker (49 stages). §5 = current features.
+- **[tasks/ARCHIVE/](tasks/ARCHIVE/)** — 14 קבצי roadmap/audit ישנים. אני לא קורא אוטומטית — שמור לרפרנס היסטורי.
 
 ---
 
