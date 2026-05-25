@@ -2906,9 +2906,14 @@
     ghost_min_drops:               [3, 5, 8, 12, 20],
     ghost_beat_reward:             [10, 20, 30, 50, 100],
     ghost_push_min_lead:           [250, 500, 1000, 2000],
-    // A6 Random Duel Matchmaking — actual server keys (corrected)
+    // A6 Random Duel Matchmaking — actual server keys
+    random_match_range_initial:    [25, 50, 100, 200],
+    random_match_range_widen:      [50, 100, 150, 300, 500],
     random_match_max_wait_secs:    [15, 30, 60, 120],
     random_match_wager:            [0, 25, 50, 100, 200],
+    // Home variants (Stage 35)
+    home_variant:                  ['standard', 'carousel', 'hero', 'jit'],
+    home_jit_unlock_games:         ['3,7,13,26', '2,5,10,20', '5,10,20,40'],
     // A2 Friend Challenges
     friend_challenge_expires_hours: [12, 24, 48, 72],
     friend_challenge_max_pending:  [5, 10, 20, 30],
@@ -3427,8 +3432,13 @@
     ghost_push_min_lead: 'מרווח מינימלי בנקודות שצריך כדי שה-push יישלח (מסנן הבדלים זניחים).<div class="tip-example">📊 <code>500</code> (ברירת מחדל)=הבדל משמעותי, <code>250</code>=push גם על הבדלים קטנים, <code>2000+</code>=רק push דרמטיים.<br>💡 ערך נמוך מדי = spam, גבוה מדי = מפסידים מומנטים.</div>',
     // ─── A6 Random Duel Matchmaking ───
     random_match_enabled: 'מתג ל-duels אקראיים (Skill-based matchmaking).<div class="tip-example">✅ <code>true</code>: כפתור "🎲 דו-קרב אקראי" במודאל ה-duel.<br>❌ <code>false</code>: רק duels עם חברים (קוד-BLOOM).<br>💡 פותח את ה-duel pool לשחקנים בלי חברים — חיוני ל-DAU מוקדם.</div>',
+    random_match_range_initial: 'טווח trophies התחלתי לחיפוש יריב (skill-based).<div class="tip-example">🏆 <code>50</code> (ברירת מחדל)=הוגן ביותר, <code>25</code>=מאוד צמוד, <code>200+</code>=פתיחה רחבה.<br>💡 ככל שצר יותר — match הוגן יותר, אבל זמן המתנה ארוך יותר.</div>',
+    random_match_range_widen: 'בכמה הטווח גדל בכל סבב polling אם אין match.<div class="tip-example">📊 <code>150</code> (ברירת מחדל)=הרחבה בינונית, <code>50</code>=זהיר, <code>500</code>=match כמעט מובטח בסבב 2-3.</div>',
     random_match_max_wait_secs: 'שניות מקסימום בתור לפני פתיחת ה-range (match עם כל אחד).<div class="tip-example">⏱ <code>30</code> (ברירת מחדל)=מאוזן, <code>15</code>=דחוף יותר, <code>120</code>=סבלני.<br>💡 הגדרת הטווח מתרחבת אוטומטית אחרי הזמן הזה.</div>',
     random_match_wager: 'גיוסת ב-💎 ל-duels אקראיים. <code>0</code> = ללא wager.<div class="tip-example">📊 <code>0</code> (ברירת מחדל)=duels אקראיים ללא wager (פתוח לכולם), <code>50-200</code>=duels תחרותיים.<br>💡 wager מגביל את ה-pool רק לשחקנים שיש להם 💎.</div>',
+    // ─── Home variant (Stage 35) ───
+    home_variant: 'איזה layout של בית מוצג לכל השחקנים.<div class="tip-example">🏠 4 אופציות:<br>• <code>standard</code> — v2 הרגיל<br>• <code>carousel</code> — שורת "חם עכשיו" מעל<br>• <code>hero</code> — כרטיס ענק יחיד + שאר הכלים מאחורי expander<br>• <code>jit</code> (Just-In-Time) — פתיחה הדרגתית של פיצ׳רים לפי games_played<br>💡 שינוי כאן משפיע על כל השחקנים בו-זמנית. עשה A/B test לפני שינוי דרסטי.</div>',
+    home_jit_unlock_games: 'ספי games_played לפתיחת פיצ׳רים ב-jit variant. CSV של 4 מספרים.<div class="tip-example">📊 <code>3,7,13,26</code> (ברירת מחדל)=פתיחה מהירה. <code>2,5,10,20</code>=אגרסיבי יותר. <code>5,10,20,40</code>=שמרני (פחות overload בתחילת המסע).<br>💡 רק רלוונטי כאשר <code>home_variant=jit</code>.</div>',
     // ─── A2 Friend Challenges ───
     friend_challenge_enabled: 'מתג ל-friend challenges (אתגרי ציון בין חברים).<div class="tip-example">✅ <code>true</code>: כפתור 🎯 ליד כל חבר ב-friends modal.<br>💡 viral K-factor: 1 אתגר = ~0.4-0.7 revenge challenges. השאר on.</div>',
     friend_challenge_expires_hours: 'שעות עד שאתגר friend פוקע.<div class="tip-example">⏱ <code>24</code> (ברירת מחדל)=יום שלם, <code>12</code>=דחיפות גבוהה, <code>48-72</code>=נינוח.<br>💡 24 שעות = sweet spot. דחוף מספיק כדי שיזכרו, רחב מספיק לסבב צעיר אחד.</div>',
