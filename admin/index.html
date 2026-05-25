@@ -2906,14 +2906,17 @@
     ghost_min_drops:               [3, 5, 8, 12, 20],
     ghost_beat_reward:             [10, 20, 30, 50, 100],
     ghost_push_min_lead:           [250, 500, 1000, 2000],
-    // A6 Random Duel Matchmaking
-    random_match_range_initial:    [25, 50, 100, 200],
-    random_match_range_widen:      [50, 100, 200, 500],
-    random_match_max_polls:        [2, 4, 6, 10],
+    // A6 Random Duel Matchmaking — actual server keys (corrected)
+    random_match_max_wait_secs:    [15, 30, 60, 120],
+    random_match_wager:            [0, 25, 50, 100, 200],
     // A2 Friend Challenges
     friend_challenge_expires_hours: [12, 24, 48, 72],
     friend_challenge_max_pending:  [5, 10, 20, 30],
     friend_challenge_win_reward:   [25, 50, 100, 200],
+    // Friends invite (Stage 13)
+    friends_signup_bonus:          [100, 200, 300, 500],
+    friends_shared_day_bonus:      [50, 100, 150, 200],
+    friends_max_per_device:        [25, 50, 100, 200],
     // A10 Gem Bank
     bank_interest_pct_daily:       ['0.5', '1', '1.5', '2', '3'],
     bank_max_balance:              [10000, 50000, 100000, 500000, 1000000],
@@ -2924,22 +2927,35 @@
     squad_tournament_winner_reward: [500, 1000, 2000, 5000],
     squad_tournament_finalist_reward: [100, 300, 500, 1000],
     squad_tournament_semi_reward:  [50, 100, 200, 500],
-    // A7 7-Day Login Calendar
-    login_cal_day_1: [25, 50, 100],
-    login_cal_day_2: [50, 100, 150],
-    login_cal_day_3: [100, 200, 300],
-    login_cal_day_4: [200, 500, 750],
-    login_cal_day_5: [500, 1000, 1500],
-    login_cal_day_6: [1000, 2000, 3000],
-    login_cal_day_7: [2500, 5000, 10000],
-    // Trophy Road
-    trophies_per_win:              [10, 15, 20, 30],
-    trophies_per_loss:             [-3, -5, -8, -12],
+    // A7 7-Day Login Calendar — actual server keys (corrected: each is *_reward)
+    login_cal_day_1_reward: [25, 50, 100],
+    login_cal_day_2_reward: [50, 100, 150],
+    login_cal_day_3_reward: [100, 200, 300],
+    login_cal_day_4_reward: [200, 500, 750],
+    login_cal_day_5_reward: [500, 1000, 1500],
+    login_cal_day_6_reward: [1000, 2000, 3000],
+    login_cal_day_7_reward: [2500, 5000, 10000],
+    // Trophy Road — actual server keys (corrected with _base / _personal_best suffixes)
+    trophies_per_win_base:         [10, 15, 20, 30],
+    trophies_per_loss_base:        [-3, -5, -8, -12],
     trophies_per_crown_bonus:      [20, 40, 60, 100],
-    trophies_per_pb_bonus:         [10, 25, 50, 100],
-    trophies_min_score_for_win:    [250, 500, 1000, 2000],
-    trophies_max_score_for_loss:   [50, 100, 200, 500],
-    trophies_protect_below:        [25, 50, 100, 200],
+    trophies_per_personal_best:    [10, 25, 50, 100],
+    trophies_min_score_to_gain:    [250, 500, 1000, 2000],
+    trophies_min_score_to_lose:    [50, 100, 200, 500],
+    trophies_protect_under:        [25, 50, 100, 200],
+    trophies_safe_floor:           [0, 50, 100, 200],
+    trophies_celebrate_threshold:  [10, 20, 50, 100],
+    // Trophy milestones (10 tiers)
+    trophies_milestone_1_at: [25, 50, 100], trophies_milestone_1_gems: [25, 50, 100],
+    trophies_milestone_2_at: [100, 150, 200], trophies_milestone_2_gems: [50, 100, 200],
+    trophies_milestone_3_at: [200, 300, 500], trophies_milestone_3_gems: [100, 200, 400],
+    trophies_milestone_4_at: [400, 600, 1000], trophies_milestone_4_gems: [200, 400, 800],
+    trophies_milestone_5_at: [800, 1000, 1500], trophies_milestone_5_gems: [400, 800, 1500],
+    trophies_milestone_6_at: [1500, 1800, 2500], trophies_milestone_6_gems: [750, 1500, 3000],
+    trophies_milestone_7_at: [2500, 3000, 4000], trophies_milestone_7_gems: [1250, 2500, 5000],
+    trophies_milestone_8_at: [4000, 5000, 7000], trophies_milestone_8_gems: [2000, 4000, 8000],
+    trophies_milestone_9_at: [6000, 8000, 10000], trophies_milestone_9_gems: [3000, 6000, 12000],
+    trophies_milestone_10_at: [10000, 15000, 20000], trophies_milestone_10_gems: [5000, 15000, 25000],
     // Daily Spin Wheel
     daily_spin_streak_bonus_pct:   [5, 10, 15, 20],
     daily_spin_streak_max_pct:     [100, 150, 200, 300],
@@ -2947,14 +2963,52 @@
     continue_daily_cap:            [1, 2, 3, 5, 10],
     continue_cooldown_seconds:     [0, 15, 30, 60, 120],
     ad_cooldown_seconds:           [0, 15, 30, 60, 120],
-    // Score milestones (per-tier rewards)
-    score_milestone_reward_2:   [1, 2, 5, 10],
-    score_milestone_reward_3:   [2, 3, 5, 10],
-    score_milestone_reward_5:   [3, 5, 10, 20],
-    score_milestone_reward_10:  [5, 10, 20, 50],
-    score_milestone_reward_25:  [10, 25, 50, 100],
-    score_milestone_reward_50:  [25, 50, 100, 200],
-    score_milestone_reward_100: [50, 100, 200, 500]
+    // Score milestones — actual server keys (corrected: by score threshold)
+    score_milestone_reward_10000:   [1, 2, 5, 10],
+    score_milestone_reward_25000:   [2, 3, 5, 10],
+    score_milestone_reward_50000:   [3, 5, 10, 20],
+    score_milestone_reward_100000:  [5, 10, 20, 50],
+    score_milestone_reward_250000:  [10, 25, 50, 100],
+    score_milestone_reward_500000:  [25, 50, 100, 200],
+    score_milestone_reward_1000000: [50, 100, 200, 500],
+    // Daily login streak tiers
+    daily_login_reward_streak_3:    [25, 50, 100],
+    daily_login_reward_streak_7:    [50, 100, 200],
+    daily_login_reward_streak_30:   [100, 200, 500, 1000],
+    // Booster prices (Phase 3 / T3.1)
+    booster_pick_price:             [25, 50, 100, 200],
+    booster_pop_price:              [20, 40, 80, 150],
+    // Live PvP Race (Stage 48)
+    live_race_duration:             [30, 60, 90, 120],
+    live_race_winner_reward:        [25, 50, 100, 200],
+    // Promo engine (M1)
+    promo_cooldown_minutes:         [30, 60, 120, 240],
+    // Checklist completion bonus (Stage 26)
+    checklist_all_done_reward:      [50, 100, 200, 500],
+    // Chest tier rewards (Stage 8)
+    chest_common_gems_min:    [25, 50, 100],
+    chest_common_gems_max:    [100, 150, 200],
+    chest_common_minutes:     [60, 120, 240, 360],
+    chest_rare_gems_min:      [100, 200, 300],
+    chest_rare_gems_max:      [300, 500, 750],
+    chest_rare_minutes:       [240, 480, 720],
+    chest_legendary_gems_min: [500, 1000, 1500],
+    chest_legendary_gems_max: [1500, 3000, 5000],
+    chest_legendary_minutes:  [720, 1440, 2880],
+    chest_weight_common:      [50, 65, 75, 85],
+    chest_weight_rare:        [15, 28, 40, 55],
+    chest_weight_legendary:   [2, 7, 12, 20],
+    chest_earn_chance_pct:    [25, 50, 75, 100],
+    chest_min_score:          [250, 500, 1000, 2000],
+    chest_max_slots:          [2, 4, 6, 8],
+    // Season Pass meta (managed via dedicated table for tiers, but
+    // these top-level keys deserve their own toggles + tooltips)
+    season_xp_game_finish:    [5, 10, 15, 25],
+    season_xp_per_10k_score:  [2, 5, 10, 20],
+    season_xp_crown_bonus:    [10, 25, 50, 100],
+    season_xp_quest_done:     [15, 30, 50, 100],
+    season_xp_achievement:    [25, 50, 100, 200],
+    season_xp_max_per_game:   [50, 100, 200, 500]
   };
 
   // Boolean keys — render as a 2-button toggle (פעיל / כבוי) instead of an input.
@@ -2977,8 +3031,19 @@
     squad_tournament_enabled: 1,
     login_cal_enabled: 1,
     trophies_enabled: 1,
+    trophies_show_on_home: 1,
     daily_spin_enabled: 1,
-    tournament_enabled: 1
+    daily_spin_show_on_home: 1,
+    tournament_enabled: 1,
+    // Round 3 backfill (2026-05-25 second pass after debug scanner output)
+    friends_enabled: 1,
+    live_race_enabled: 1,
+    promo_enabled: 1,
+    push_enabled: 1,
+    booster_enabled: 1,
+    chest_enabled: 1,
+    chest_milestone_legendary: 1,
+    season_pass_enabled: 1
   };
 
   // Per-key explanations for the giant config table.
@@ -3362,9 +3427,8 @@
     ghost_push_min_lead: 'מרווח מינימלי בנקודות שצריך כדי שה-push יישלח (מסנן הבדלים זניחים).<div class="tip-example">📊 <code>500</code> (ברירת מחדל)=הבדל משמעותי, <code>250</code>=push גם על הבדלים קטנים, <code>2000+</code>=רק push דרמטיים.<br>💡 ערך נמוך מדי = spam, גבוה מדי = מפסידים מומנטים.</div>',
     // ─── A6 Random Duel Matchmaking ───
     random_match_enabled: 'מתג ל-duels אקראיים (Skill-based matchmaking).<div class="tip-example">✅ <code>true</code>: כפתור "🎲 דו-קרב אקראי" במודאל ה-duel.<br>❌ <code>false</code>: רק duels עם חברים (קוד-BLOOM).<br>💡 פותח את ה-duel pool לשחקנים בלי חברים — חיוני ל-DAU מוקדם.</div>',
-    random_match_range_initial: 'טווח trophies התחלתי לחיפוש יריב (skill-based).<div class="tip-example">🏆 <code>50</code> (ברירת מחדל)=הוגן ביותר, <code>25</code>=מאוד צמוד, <code>200+</code>=פתיחה רחבה.<br>💡 ככל שצר יותר — match הוגן יותר, אבל זמן המתנה ארוך יותר.</div>',
-    random_match_range_widen: 'בכמה הטווח גדל בכל סבב polling (אחרי 3 שניות בלי match).<div class="tip-example">📊 <code>100</code> (ברירת מחדל)=הרחבה בינונית, <code>50</code>=זהיר, <code>500+</code>=match כמעט מובטח בסבב 2-3.<br>💡 ברירת מחדל = 50→200→350→500→∞ אחרי 4 פולס (~12 שניות).</div>',
-    random_match_max_polls: 'מקסימום פולס לפני "פתיחה אינסופית" (match עם כל אחד).<div class="tip-example">📊 ערכים: 2-10. ברירת מחדל 4 (אחרי ~12s פותחים את הטווח).<br>💡 גבוה = שחקנים מחכים יותר אבל matches יותר הוגנים.</div>',
+    random_match_max_wait_secs: 'שניות מקסימום בתור לפני פתיחת ה-range (match עם כל אחד).<div class="tip-example">⏱ <code>30</code> (ברירת מחדל)=מאוזן, <code>15</code>=דחוף יותר, <code>120</code>=סבלני.<br>💡 הגדרת הטווח מתרחבת אוטומטית אחרי הזמן הזה.</div>',
+    random_match_wager: 'גיוסת ב-💎 ל-duels אקראיים. <code>0</code> = ללא wager.<div class="tip-example">📊 <code>0</code> (ברירת מחדל)=duels אקראיים ללא wager (פתוח לכולם), <code>50-200</code>=duels תחרותיים.<br>💡 wager מגביל את ה-pool רק לשחקנים שיש להם 💎.</div>',
     // ─── A2 Friend Challenges ───
     friend_challenge_enabled: 'מתג ל-friend challenges (אתגרי ציון בין חברים).<div class="tip-example">✅ <code>true</code>: כפתור 🎯 ליד כל חבר ב-friends modal.<br>💡 viral K-factor: 1 אתגר = ~0.4-0.7 revenge challenges. השאר on.</div>',
     friend_challenge_expires_hours: 'שעות עד שאתגר friend פוקע.<div class="tip-example">⏱ <code>24</code> (ברירת מחדל)=יום שלם, <code>12</code>=דחיפות גבוהה, <code>48-72</code>=נינוח.<br>💡 24 שעות = sweet spot. דחוף מספיק כדי שיזכרו, רחב מספיק לסבב צעיר אחד.</div>',
@@ -3382,24 +3446,48 @@
     squad_tournament_winner_reward: 'תגמול לכל חבר בקלאן מנצח.<div class="tip-example">💎 <code>1000</code> (ברירת מחדל)=ראוי לשבוע של מאמץ, <code>500</code>=מתון, <code>5000+</code>=פרס יוקרתי.</div>',
     squad_tournament_finalist_reward: 'תגמול לכל חבר בקלאן שהגיע לגמר (לא ניצח).<div class="tip-example">💎 <code>300</code> (ברירת מחדל)=נחמה משמעותית, <code>100</code>=סמלי.</div>',
     squad_tournament_semi_reward: 'תגמול לכל חבר בקלאן שעלה לחצי גמר.<div class="tip-example">💎 <code>100</code> (ברירת מחדל). מטרה: שגם קלאנים שלא ניצחו ירגישו progress.</div>',
-    // ─── A7 7-Day Login Calendar ───
+    // ─── A7 7-Day Login Calendar (actual keys end with _reward) ───
     login_cal_enabled: 'מתג לקלנדר ההתחברות (יומי × 7 ימים).<div class="tip-example">✅ <code>true</code>: בית מציג tile של 7 ימים, ריצוף 50→100→200→500→1000→2000→<strong>5000</strong>💎.<br>💡 הפסקת יום = reset ליום 1 — FOMO חזק על day-7 jackpot.</div>',
-    login_cal_day_1: 'תגמול ליום 1 בקלנדר.<div class="tip-example">💎 ברירת מחדל 50💎. ה-onramp הנמוך.</div>',
-    login_cal_day_2: 'תגמול ליום 2.<div class="tip-example">💎 ברירת מחדל 100💎. ה-escalation מתחיל.</div>',
-    login_cal_day_3: 'תגמול ליום 3.<div class="tip-example">💎 ברירת מחדל 200💎.</div>',
-    login_cal_day_4: 'תגמול ליום 4.<div class="tip-example">💎 ברירת מחדל 500💎. מתחיל להיות משמעותי.</div>',
-    login_cal_day_5: 'תגמול ליום 5.<div class="tip-example">💎 ברירת מחדל 1000💎.</div>',
-    login_cal_day_6: 'תגמול ליום 6 — לפני ה-jackpot.<div class="tip-example">💎 ברירת מחדל 2000💎. השחקן רואה את ה-jackpot מתקרב.</div>',
-    login_cal_day_7: '🏆 ה-jackpot של יום 7 — הפרס הגדול ביותר.<div class="tip-example">💎 <code>5000</code> (ברירת מחדל)=מרגש, <code>2500</code>=מתון, <code>10000</code>=וויראלי.<br>💡 ה-day-7 jackpot הוא המנוע של ה-feature — חייב להיות יותר משמעותי מסכום ימים 1-6 ביחד.</div>',
-    // ─── Trophy Road ───
+    login_cal_day_1_reward: 'תגמול ליום 1 בקלנדר.<div class="tip-example">💎 ברירת מחדל 50💎. ה-onramp הנמוך.</div>',
+    login_cal_day_2_reward: 'תגמול ליום 2.<div class="tip-example">💎 ברירת מחדל 100💎. ה-escalation מתחיל.</div>',
+    login_cal_day_3_reward: 'תגמול ליום 3.<div class="tip-example">💎 ברירת מחדל 200💎.</div>',
+    login_cal_day_4_reward: 'תגמול ליום 4.<div class="tip-example">💎 ברירת מחדל 500💎. מתחיל להיות משמעותי.</div>',
+    login_cal_day_5_reward: 'תגמול ליום 5.<div class="tip-example">💎 ברירת מחדל 1000💎.</div>',
+    login_cal_day_6_reward: 'תגמול ליום 6 — לפני ה-jackpot.<div class="tip-example">💎 ברירת מחדל 2000💎. השחקן רואה את ה-jackpot מתקרב.</div>',
+    login_cal_day_7_reward: '🏆 ה-jackpot של יום 7 — הפרס הגדול ביותר.<div class="tip-example">💎 <code>5000</code> (ברירת מחדל)=מרגש, <code>2500</code>=מתון, <code>10000</code>=וויראלי.<br>💡 ה-day-7 jackpot הוא המנוע של ה-feature — חייב להיות יותר משמעותי מסכום ימים 1-6 ביחד.</div>',
+    // ─── Trophy Road (actual server keys) ───
     trophies_enabled: 'מתג ל-Trophy Road (Clash Royale pattern).<div class="tip-example">✅ trophies יכולים לעלות OR לרדת. ה-engagement #1 ב-mobile gaming.<br>💡 חיוני ל-D7+ retention. השאר on.</div>',
-    trophies_per_win: 'trophies נוספים על ניצחון (ציון ≥ min_score_for_win).<div class="tip-example">🏆 <code>15</code> (ברירת מחדל)=progress יציב, <code>30</code>=מהיר, <code>10</code>=איטי.<br>💡 ערכים גבוהים = שחקן ירוץ דרך ה-arenas מהר → פחות long-term grind.</div>',
-    trophies_per_loss: 'trophies שמורידים על הפסד (ערך שלילי).<div class="tip-example">📉 <code>-8</code> (ברירת מחדל), <code>-3</code>=סלחני, <code>-12</code>=קשה.<br>💡 ה-loss aversion של trophies = הסיבה ש-Trophy Road עובד. אם אין הפסד, אין עוצמה.</div>',
+    trophies_per_win_base: 'trophies נוספים על ניצחון (ציון ≥ min_score_to_gain).<div class="tip-example">🏆 <code>15</code> (ברירת מחדל)=progress יציב, <code>30</code>=מהיר, <code>10</code>=איטי.<br>💡 ערכים גבוהים = שחקן ירוץ דרך ה-arenas מהר → פחות long-term grind.</div>',
+    trophies_per_loss_base: 'trophies שמורידים על הפסד (ערך שלילי).<div class="tip-example">📉 <code>-8</code> (ברירת מחדל), <code>-3</code>=סלחני, <code>-12</code>=קשה.<br>💡 ה-loss aversion של trophies = הסיבה ש-Trophy Road עובד. אם אין הפסד, אין עוצמה.</div>',
     trophies_per_crown_bonus: 'בונוס trophies על משחק שהגיע ל-crown (tier 8).<div class="tip-example">🏆 <code>40</code> (ברירת מחדל). מתגמל הישג נדיר.</div>',
-    trophies_per_pb_bonus: 'בונוס trophies על שיא אישי חדש.<div class="tip-example">🏆 <code>25</code> (ברירת מחדל). מעודד לדחוף קדימה.</div>',
-    trophies_min_score_for_win: 'ציון מינימלי לכך שמשחק יחשב "win" (יוסיף trophies).<div class="tip-example">📊 <code>500</code> (ברירת מחדל). מתחת = לא win, לא loss.</div>',
-    trophies_max_score_for_loss: 'ציון מקסימלי שמעליו לא מורידים trophies (אפילו בלי win).<div class="tip-example">📊 <code>100</code> (ברירת מחדל). מתחת לזה = הפסד.</div>',
-    trophies_protect_below: 'מתחת לכמות trophies הזו — אין loss אפילו על הפסד (הגנת שחקן חדש).<div class="tip-example">🛡 <code>50</code> (ברירת מחדל). שחקנים חדשים לא נופלים ל-negative trophies.</div>',
+    trophies_per_personal_best: 'בונוס trophies על שיא אישי חדש.<div class="tip-example">🏆 <code>25</code> (ברירת מחדל). מעודד לדחוף קדימה.</div>',
+    trophies_min_score_to_gain: 'ציון מינימלי לכך שמשחק יחשב "win" (יוסיף trophies).<div class="tip-example">📊 <code>500</code> (ברירת מחדל). מתחת = לא win, לא loss.</div>',
+    trophies_min_score_to_lose: 'ציון מקסימלי שמתחתיו מורידים trophies (הפסד).<div class="tip-example">📊 <code>100</code> (ברירת מחדל). מתחת לזה = הפסד.</div>',
+    trophies_protect_under: 'מתחת לכמות trophies הזו — אין loss אפילו על הפסד (הגנת שחקן חדש).<div class="tip-example">🛡 <code>50</code> (ברירת מחדל). שחקנים חדשים לא נופלים ל-negative trophies.</div>',
+    trophies_safe_floor: 'הרצפה — מתחת לכמות הזו trophies לא יורדים יותר.<div class="tip-example">🛡 <code>0</code> (ברירת מחדל). אם תרצה buffer חזק יותר → 50-100.</div>',
+    trophies_celebrate_threshold: 'כמות trophies בהשגה אחת שמפעילה אנימציית celebration.<div class="tip-example">🎉 <code>20</code> (ברירת מחדל). מנע מ-spam — רק רווחים גדולים מקבלים celebration.</div>',
+    trophies_show_on_home: 'הצג את ה-Trophy Road tile בבית.<div class="tip-example">✅ <code>true</code> (ברירת מחדל). ביטול = השחקן עדיין צובר trophies, פשוט בלי tile.</div>',
+    // Trophy milestones (10 tiers)
+    trophies_milestone_1_at: 'סף trophies למילסטון #1 (הראשון).<div class="tip-example">🏆 ברירת מחדל 50. הראשון = onboarding מהיר.</div>',
+    trophies_milestone_1_gems: 'תגמול 💎 למילסטון #1.<div class="tip-example">💎 ברירת מחדל 50💎.</div>',
+    trophies_milestone_2_at: 'סף trophies למילסטון #2.<div class="tip-example">🏆 ברירת מחדל 150.</div>',
+    trophies_milestone_2_gems: 'תגמול 💎 למילסטון #2.<div class="tip-example">💎 ברירת מחדל 100💎.</div>',
+    trophies_milestone_3_at: 'סף למילסטון #3.<div class="tip-example">🏆 ברירת מחדל 300.</div>',
+    trophies_milestone_3_gems: 'תגמול #3.<div class="tip-example">💎 ברירת מחדל 200💎.</div>',
+    trophies_milestone_4_at: 'סף למילסטון #4.<div class="tip-example">🏆 ברירת מחדל 600.</div>',
+    trophies_milestone_4_gems: 'תגמול #4.<div class="tip-example">💎 ברירת מחדל 400💎.</div>',
+    trophies_milestone_5_at: 'סף למילסטון #5 (חצי הדרך).<div class="tip-example">🏆 ברירת מחדל 1000.</div>',
+    trophies_milestone_5_gems: 'תגמול #5.<div class="tip-example">💎 ברירת מחדל 800💎.</div>',
+    trophies_milestone_6_at: 'סף למילסטון #6.<div class="tip-example">🏆 ברירת מחדל 1800.</div>',
+    trophies_milestone_6_gems: 'תגמול #6.<div class="tip-example">💎 ברירת מחדל 1500💎.</div>',
+    trophies_milestone_7_at: 'סף למילסטון #7.<div class="tip-example">🏆 ברירת מחדל 3000.</div>',
+    trophies_milestone_7_gems: 'תגמול #7.<div class="tip-example">💎 ברירת מחדל 2500💎.</div>',
+    trophies_milestone_8_at: 'סף למילסטון #8.<div class="tip-example">🏆 ברירת מחדל 5000.</div>',
+    trophies_milestone_8_gems: 'תגמול #8.<div class="tip-example">💎 ברירת מחדל 4000💎.</div>',
+    trophies_milestone_9_at: 'סף למילסטון #9.<div class="tip-example">🏆 ברירת מחדל 8000.</div>',
+    trophies_milestone_9_gems: 'תגמול #9.<div class="tip-example">💎 ברירת מחדל 6000💎.</div>',
+    trophies_milestone_10_at: '🏆 ה-jackpot — סף trophies הגבוה ביותר.<div class="tip-example">🏆 ברירת מחדל 15000. ה-end-game goal.</div>',
+    trophies_milestone_10_gems: '🏆 ה-jackpot — תגמול הגבוה ביותר.<div class="tip-example">💎 ברירת מחדל 15000💎. שחקן שמגיע לכאן ראוי לפרס ענק.</div>',
     // ─── Daily Spin Wheel ───
     daily_spin_enabled: 'מתג לגלגל היומי (Coin Master pattern).<div class="tip-example">✅ <code>true</code> (ברירת מחדל): סיבוב יומי חינם. ה-mechanic הכי ממכר ב-F2P puzzle.<br>💡 השאר on לפחות לפני tournament/event.</div>',
     daily_spin_streak_bonus_pct: 'בונוס באחוזים על trophies לכל יום רצוף של ספין.<div class="tip-example">📊 <code>10</code> (ברירת מחדל)=ימי 1=+0%, 2=+10%, 3=+20%... עד הקאפ.</div>',
@@ -3410,14 +3498,69 @@
     ad_cooldown_seconds: 'שניות cooldown בין צפיית פרסומת לפרסומת.<div class="tip-example">⏱ <code>30</code> (ברירת מחדל)=אנטי-spam, <code>0</code>=ללא cooldown, <code>120</code>=מאוד מגביל.</div>',
     continue_daily_cap: 'מקסימום continues ב-יום אחד (after a refresh exploit fix).<div class="tip-example">📊 <code>3</code> (ברירת מחדל)=מאוזן. ערך נמוך = מגביל, גבוה = פתיחה לאקספלויט.</div>',
     continue_cooldown_seconds: 'שניות cooldown בין continue ל-continue.<div class="tip-example">⏱ <code>30</code> (ברירת מחדל). מונע spam של continues בזה אחר זה.</div>',
-    // ─── Score Milestones ───
-    score_milestone_reward_2: 'תגמול 💎 על השגת 2,000 נקודות במשחק (מילסטון ראשון).<div class="tip-example">💎 <code>2</code> (ברירת מחדל). תגמול סמלי לשחקנים חדשים.</div>',
-    score_milestone_reward_3: 'תגמול על 3,000 נקודות.<div class="tip-example">💎 <code>3</code> (ברירת מחדל).</div>',
-    score_milestone_reward_5: 'תגמול על 5,000 נקודות.<div class="tip-example">💎 <code>5</code> (ברירת מחדל).</div>',
-    score_milestone_reward_10: 'תגמול על 10,000 נקודות.<div class="tip-example">💎 <code>10</code> (ברירת מחדל). שחקן צריך משחק טוב בשביל לקבל.</div>',
-    score_milestone_reward_25: 'תגמול על 25,000 נקודות.<div class="tip-example">💎 <code>25</code> (ברירת מחדל). מילסטון משמעותי.</div>',
-    score_milestone_reward_50: 'תגמול על 50,000 נקודות.<div class="tip-example">💎 <code>50</code> (ברירת מחדל). שחקן מיומן.</div>',
-    score_milestone_reward_100: '🏆 תגמול על 100,000 נקודות (שיא).<div class="tip-example">💎 <code>100</code> (ברירת מחדל). הציון הזה הוא הישג רציני — תגמול ראוי.</div>'
+    // ─── Score Milestones (actual server keys — by score threshold) ───
+    score_milestone_reward_10000: 'תגמול 💎 על השגת 10,000 נקודות במשחק (מילסטון ראשון).<div class="tip-example">💎 <code>2</code> (ברירת מחדל). תגמול סמלי לשחקנים חדשים.</div>',
+    score_milestone_reward_25000: 'תגמול על 25,000 נקודות.<div class="tip-example">💎 <code>3</code> (ברירת מחדל).</div>',
+    score_milestone_reward_50000: 'תגמול על 50,000 נקודות.<div class="tip-example">💎 <code>5</code> (ברירת מחדל).</div>',
+    score_milestone_reward_100000: 'תגמול על 100,000 נקודות.<div class="tip-example">💎 <code>10</code> (ברירת מחדל). שחקן צריך משחק טוב בשביל לקבל.</div>',
+    score_milestone_reward_250000: 'תגמול על 250,000 נקודות.<div class="tip-example">💎 <code>25</code> (ברירת מחדל). מילסטון משמעותי.</div>',
+    score_milestone_reward_500000: 'תגמול על 500,000 נקודות.<div class="tip-example">💎 <code>50</code> (ברירת מחדל). שחקן מיומן.</div>',
+    score_milestone_reward_1000000: '🏆 תגמול על 1,000,000 נקודות (שיא).<div class="tip-example">💎 <code>100</code> (ברירת מחדל). הציון הזה הוא הישג רציני — תגמול ראוי.</div>',
+    // ─── Friends invite (Stage 13) ───
+    friends_enabled: 'מתג ל-friends system (Stage 13).<div class="tip-example">✅ <code>true</code>: כפתורי הזמנת חברים, friend codes, shared streak bonus.<br>💡 ה-K-factor הראשי. השאר on.</div>',
+    friends_signup_bonus: 'בונוס לשני הצדדים כשחבר חדש מצטרף עם קוד הזמנה.<div class="tip-example">💎 ברירת מחדל 200💎 לכל אחד. הכי משפיע על viral growth.</div>',
+    friends_shared_day_bonus: 'בונוס יומי כששני חברים שיחקו באותו יום.<div class="tip-example">💎 ברירת מחדל 100💎. לטווח ארוך.</div>',
+    friends_max_per_device: 'מקסימום חברים לאדם (anti-spam).<div class="tip-example">📊 ברירת מחדל 50. לרוב מתאים.</div>',
+    // ─── Live PvP Race (Stage 48) ───
+    live_race_enabled: 'מתג ל-Live PvP Race (60-שניות 1v1 race).<div class="tip-example">✅ <code>true</code>: כפתור "⚡ דו-קרב חי 60 שניות" במודאל ה-duel.<br>💡 ה-feature הכי מרגש במשחק. הקצר ביותר. השאר on.</div>',
+    live_race_duration: 'משך ה-race בשניות.<div class="tip-example">⏱ <code>60</code> (ברירת מחדל)=מאוזן, <code>30</code>=פיצוץ אדרנלין, <code>120</code>=stamina test.<br>💡 מתחת ל-30 = השחקנים לא מצליחים לבנות chains.</div>',
+    live_race_winner_reward: 'תגמול למנצח ב-Live Race.<div class="tip-example">💎 ברירת מחדל 50💎.</div>',
+    // ─── Promo Engine (M1) ───
+    promo_enabled: 'מתג ל-Self-Promo Engine (פרסומות פנימיות במקום AdSense).<div class="tip-example">✅ <code>true</code>: פרסומות פנימיות מציעות פיצ׳רים של המשחק עצמו.<br>💡 כשתפעיל AdSense אמיתי → תוכל לכבות.</div>',
+    promo_cooldown_minutes: 'דקות בין פרסומת לפרסומת.<div class="tip-example">⏱ ברירת מחדל 60 דק׳. ערך נמוך = יותר חשיפה, גבוה = פחות annoying.</div>',
+    // ─── Push Notifications (Stage 10) ───
+    push_enabled: 'מתג ראשי לכל ה-push notifications.<div class="tip-example">✅ <code>true</code>: smart-push + duel pushes + ghost-replay pushes + streak-freeze pushes כולם פעילים.<br>❌ <code>false</code>: כיבוי גורף.<br>⚠ דורש VAPID keys מוגדרים ב-Railway env.</div>',
+    // ─── Daily Spin (top-level) ───
+    daily_spin_show_on_home: 'הצג את כפתור הספין היומי בבית.<div class="tip-example">✅ <code>true</code> (ברירת מחדל). ביטול = השחקן עדיין יכול לסבוב, פשוט בלי tile בבית.</div>',
+    // ─── Daily Login Streak Rewards ───
+    daily_login_reward_streak_3: 'תגמול daily login לימים 3+ ברצף.<div class="tip-example">💎 ברירת מחדל 50💎. גדל למילסטון 7 ואחר כך 30.</div>',
+    daily_login_reward_streak_7: 'תגמול daily login לימים 7+ ברצף.<div class="tip-example">💎 ברירת מחדל 100💎.</div>',
+    daily_login_reward_streak_30: 'תגמול daily login לימים 30+ ברצף.<div class="tip-example">💎 ברירת מחדל 200💎. הסף הגבוה ביותר.</div>',
+    // ─── Booster Prices (Phase 3 / T3.1) ───
+    booster_enabled: 'מתג ל-in-game boosters (🎯 PICK + 💥 POP).<div class="tip-example">✅ <code>true</code> (ברירת מחדל): boosters מוצגים ב-floating strip בתחתית במצב practice/dynamic.<br>💡 monetization driver.</div>',
+    booster_pick_price: 'מחיר 💎 ל-🎯 PICK booster (בחר את ה-tier הבא).<div class="tip-example">💎 ברירת מחדל 50💎. ערך גבוה = משמעותי, נמוך = שכיח.</div>',
+    booster_pop_price: 'מחיר 💎 ל-💥 POP booster (מסיר אריח בודד).<div class="tip-example">💎 ברירת מחדל 40💎. בדרך כלל זול מ-PICK כי פחות אסטרטגי.</div>',
+    // ─── Checklist (Stage 26) ───
+    checklist_all_done_reward: 'תגמול בונוס כשהשחקן משלים את כל 5 משימות היומיות.<div class="tip-example">💎 ברירת מחדל 100💎. ה-"completionist drive" — שחקן שיגיע לכאן ירצה לחזור מחר.</div>',
+    // ─── Chest System (Stage 8) ───
+    chest_enabled: 'מתג ל-chest system (Mystery Chest + Trophy Chest).<div class="tip-example">✅ <code>true</code> (ברירת מחדל).</div>',
+    chest_min_score: 'ציון מינימלי במשחק כדי לקבל chest.<div class="tip-example">📊 ברירת מחדל 500. מתחת = אין chest (נמוך מדי).</div>',
+    chest_max_slots: 'מקסימום chests שנשמרים בו-זמנית.<div class="tip-example">📊 ברירת מחדל 4. ה-Clash Royale pattern.</div>',
+    chest_earn_chance_pct: 'אחוז סיכוי לקבל chest על משחק עם ציון מספיק.<div class="tip-example">📊 <code>50</code> (ברירת מחדל) = חצי מהמשחקים. <code>100</code> = תמיד.</div>',
+    chest_milestone_legendary: 'הענקת legendary chest אוטומטית במילסטונים גדולים.<div class="tip-example">✅ <code>true</code>: arena promotion / trophy milestone = legendary chest בטוח.</div>',
+    chest_weight_common: 'משקל הסתברות לcommon chest.<div class="tip-example">📊 <code>65</code> (ברירת מחדל). חישוב: weight÷total.</div>',
+    chest_weight_rare: 'משקל הסתברות ל-rare chest.<div class="tip-example">📊 <code>28</code> (ברירת מחדל).</div>',
+    chest_weight_legendary: 'משקל הסתברות ל-legendary chest.<div class="tip-example">📊 <code>7</code> (ברירת מחדל). נדיר.</div>',
+    chest_common_gems_min: 'מינימום 💎 ב-common chest.<div class="tip-example">💎 ברירת מחדל 50💎.</div>',
+    chest_common_gems_max: 'מקסימום 💎 ב-common chest.<div class="tip-example">💎 ברירת מחדל 150💎.</div>',
+    chest_common_minutes: 'דקות לפתיחת common chest.<div class="tip-example">⏱ ברירת מחדל 240 (4 שעות).</div>',
+    chest_rare_gems_min: 'מינימום 💎 ב-rare chest.<div class="tip-example">💎 ברירת מחדל 200💎.</div>',
+    chest_rare_gems_max: 'מקסימום 💎 ב-rare chest.<div class="tip-example">💎 ברירת מחדל 500💎.</div>',
+    chest_rare_minutes: 'דקות לפתיחת rare chest.<div class="tip-example">⏱ ברירת מחדל 480 (8 שעות).</div>',
+    chest_legendary_gems_min: 'מינימום 💎 ב-legendary chest.<div class="tip-example">💎 ברירת מחדל 1000💎. ה-pay-off הגדול.</div>',
+    chest_legendary_gems_max: 'מקסימום 💎 ב-legendary chest.<div class="tip-example">💎 ברירת מחדל 3000💎.</div>',
+    chest_legendary_minutes: 'דקות לפתיחת legendary chest.<div class="tip-example">⏱ ברירת מחדל 1440 (24 שעות). הזמן הארוך = ה-anticipation.</div>',
+    // ─── Season Pass top-level XP rates (tiers managed separately) ───
+    season_pass_enabled: 'מתג ל-Season Pass / Battle Pass.<div class="tip-example">✅ <code>true</code> (ברירת מחדל). #1 monetization driver.</div>',
+    season_pass_season_id: 'מזהה ייחודי לעונה הנוכחית (S1/S2/...).<div class="tip-example">📝 שינוי = התחלת עונה חדשה (player_season_progress מתאפס לעונה החדשה).</div>',
+    season_pass_name: 'שם תצוגה לעונה הנוכחית.<div class="tip-example">📝 דוגמה: "🌸 עונה 1 — הפריחה". יוצג בכל המקומות שמראים את העונה.</div>',
+    season_pass_ends_at: 'מתי העונה מסתיימת (ISO date או ריק).<div class="tip-example">📅 ריק = ללא סוף. תאריך = countdown מוצג לשחקן.</div>',
+    season_xp_game_finish: 'XP פר משחק שמסיים (בסיס).<div class="tip-example">📊 ברירת מחדל 10.</div>',
+    season_xp_per_10k_score: 'XP נוסף לכל 10K נקודות במשחק.<div class="tip-example">📊 ברירת מחדל 5. רקורסיבי על 100K = +50 XP נוסף.</div>',
+    season_xp_crown_bonus: 'XP בונוס למשחק שהגיע ל-crown.<div class="tip-example">📊 ברירת מחדל 25.</div>',
+    season_xp_quest_done: 'XP על השלמת quest יומי.<div class="tip-example">📊 ברירת מחדל 30.</div>',
+    season_xp_achievement: 'XP על פתיחת achievement.<div class="tip-example">📊 ברירת מחדל 50.</div>',
+    season_xp_max_per_game: 'מקסימום XP פר משחק יחיד (anti-abuse).<div class="tip-example">📊 ברירת מחדל 100. מונע איסוף XP מטורף ממשחק אחד.</div>'
   };
 
   // Wire all .tip-btn elements after DOM load. Two modes:
@@ -8602,13 +8745,27 @@
       // Admin /api/config returns {ok, config: [{key, value, ...}, ...]}
       if (!d || !Array.isArray(d.config)) return [];
       var tips = (typeof TIPS_PER_KEY === 'object') ? TIPS_PER_KEY : {};
+      // Structured-editor patterns. Keys matching these are managed by
+      // dedicated UI panels (Season Pass 20-tier table, Spin Wheel
+      // 12-segment editor, Golden Hour controls) — they don't NEED a
+      // generic-table tooltip because the admin doesn't edit them
+      // through the giant config table.
+      var STRUCTURED_PATTERNS = [
+        /^daily_spin_seg_\d+_/,       // 12 segments × 6 props
+        /^season_tier_\d+_/,          // 20 tiers × 3 props
+        /^event_golden_hour_/,        // managed by Golden Hour panel
+        /^challenge_/,                // managed by Challenges section
+        /^_/                          // internal dedup keys
+      ];
       d.config.forEach(function(row) {
         var k = row && row.key;
         if (!k) return;
-        // Skip internal dedup keys (start with `_`) — they're not admin-facing
-        if (k.charAt(0) === '_') return;
         // Skip composite display rows
         if (k.indexOf(':') >= 0) return;
+        // Skip structured-editor groups
+        for (var i = 0; i < STRUCTURED_PATTERNS.length; i++) {
+          if (STRUCTURED_PATTERNS[i].test(k)) return;
+        }
         if (!tips[k]) {
           unknown.push(k);
           dbgLog('HIDDEN-CFG', 'warn', 'key "' + k + '" has no tooltip — renders as raw input', { key: k, value: row.value });
@@ -8620,26 +8777,48 @@
     return unknown;
   }
 
+  // Cached: the admin's own script source as a string, used to detect
+  // addEventListener / event-delegation wiring that .onclick doesn't see.
+  var _adminScriptCache = null;
+  async function getAdminScriptText() {
+    if (_adminScriptCache !== null) return _adminScriptCache;
+    try {
+      var html = await (await fetch(location.href, { credentials: 'include' })).text();
+      // Strip out the <script>...</script> blocks and concatenate
+      var m, out = '', rx = /<script[^>]*>([\s\S]*?)<\/script>/gi;
+      while ((m = rx.exec(html))) out += m[1] + '\n';
+      _adminScriptCache = out;
+    } catch (e) { _adminScriptCache = ''; }
+    return _adminScriptCache;
+  }
+
   async function checkDeadButtons() {
-    // Buttons with an id= attribute that have no event listener wired
-    // up. This is a heuristic — we can't perfectly detect addEventListener
-    // wiring from outside, but we can check inline .onclick + flag buttons
-    // that LOOK actionable but have neither.
+    // Buttons with an id= attribute that have NO wiring anywhere.
+    // .onclick handles the common case. For addEventListener + event
+    // delegation we scan the admin's own script text for the id literal —
+    // if it appears in the JS at all, the button is almost certainly
+    // wired (we accept the rare false-positive over the many
+    // false-negatives my old detector produced).
+    var script = await getAdminScriptText();
     var suspects = [];
     document.querySelectorAll('button[id], a[role="button"][id]').forEach(function(el) {
       var id = el.id;
-      // Skip template fragments
-      if (!id || /\${|<.*>/.test(id)) return;
-      // Skip dynamic-content placeholders (re-rendered on demand)
+      if (!id || /\${|<.*>/.test(id)) return;  // skip template fragments
       if (el.closest('[id$="-host"], [id$="-grid"], [id$="-list"], #drawer, .drawer')) return;
-      if (!el.onclick) {
-        suspects.push({ id: id, text: (el.textContent || '').trim().slice(0, 30) });
-      }
+      if (el.onclick) return;                   // wired via .onclick
+      if (el.dataset && el.dataset.wired) return; // explicit "wired" marker
+      // Search the admin's JS for the id literal — appears in
+      //   $('id')         — admin-style getElementById helper
+      //   getElementById('id')
+      //   e.target.id === 'id'
+      //   ['id']
+      // All four mean the button is wired somewhere. We accept any match.
+      var idPattern = new RegExp("['\"`]" + id.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&') + "['\"`]");
+      if (script && idPattern.test(script)) return;
+      suspects.push({ id: id, text: (el.textContent || '').trim().slice(0, 30) });
     });
-    // Some buttons are wired via document-level delegation (e.g. skin shop).
-    // We log as 'warn' instead of 'error' since this is a heuristic.
     suspects.forEach(function(s) {
-      dbgLog('DEAD-BTN', 'warn', 'button id="' + s.id + '" ("' + s.text + '") has no .onclick — may use event delegation', s);
+      dbgLog('DEAD-BTN', 'error', 'button id="' + s.id + '" ("' + s.text + '") — no handler found anywhere', s);
     });
     return suspects;
   }
