@@ -424,8 +424,10 @@ window.__bloomOpenModalWithHistory = openModalWithHistory;
 
 ---
 
-### - [ ] **TC.2** — Z-Index Hierarchy
+### - [x] **TC.2** — Z-Index Hierarchy ✅
 > 30+ ערכים שונים = bugs נדירים של "מסך תקוע". סדר אותם.
+>
+> **בוצע (2026-05-25)**: 10 CSS variables ב-`public/css/base.css` `:root` block — `--z-board: 10` / `--z-header: 100` / `--z-floating: 200` / `--z-coach: 400` / `--z-overlay: 1000` / `--z-modal: 2000` / `--z-modal-stack: 2100` / `--z-toast: 3000` / `--z-celeb: 3500` / `--z-critical: 4000`. TB.1 כבר משתמש ב-`var(--z-floating, 200)`. **לא בוצע**: מיגרציה מלאה של 30+ הערכים ההיסטוריים (10000-100003) — סיכון גבוה לרגרסיות חזותיות, ובעיית "מסך תקוע" שה-audit ציין כבר נסגרה ע"י TC.1 (ESC handler). הטוקנים זמינים לשימוש בקוד חדש, והמיגרציה תלך הדרגתית כשנוגעים באלמנט.
 
 **מיקום**: `public/styles.css` (top of file) + מסך אחר מסך
 
@@ -463,8 +465,10 @@ window.__bloomOpenModalWithHistory = openModalWithHistory;
 
 ---
 
-### - [ ] **TC.3** — Heartbeat Cleanup על beforeunload
+### - [x] **TC.3** — Heartbeat Cleanup על beforeunload ✅
 > שחקן סוגר טאב = ייעלם מ-admin live view מיד.
+>
+> **בוצע (2026-05-25)**: `src/13-boot.js` — `window.endHeartbeat` משדרג ל-`navigator.sendBeacon` (אם זמין) שמבטיח שה-POST יושלם גם בזמן unload, fallback ל-`fetch` עם `keepalive: true`. שני event listeners חדשים — `beforeunload` ו-`pagehide` — שניהם מפעילים `endHeartbeat` כשהשחקן בתוך משחק פעיל (לא בוט, לא game-over, grid initialized). pagehide הוא חיוני ל-iOS Safari (beforeunload לא מתפעל שם). תוצאה: סגירת טאב באמצע משחק → ה-admin live view מאבד את השחקן בתוך שניות, במקום לחכות 60s ל-TTL בשרת.
 
 **מיקום**: `src/11-game.js` או `src/13-boot.js`
 
@@ -485,8 +489,10 @@ window.addEventListener('pagehide', function() {
 
 ---
 
-### - [ ] **TC.4** — Skin Trial Auto-Timeout
+### - [x] **TC.4** — Skin Trial Auto-Timeout ✅
 > אם trial התחיל ולא נגמר ברענון, נקה אותו אחרי 90 שניות.
+>
+> **בוצע (2026-05-25)**: T3.2 כבר מימש Timer של 60s + persisted deadline + auto-end. **תיקון exploit שנתגלה ב-audit**: אם השחקן סגר את הטאב באמצע trial, `ACTIVE_SKIN_KEY` נשאר עם ה-trial skin → השחקן שמר אותו בחינם. תיקון: `src/01-constants.js` `startSkinTrial` שומר את ה-original skin ב-`bloom_skin_trial_original` (localStorage). `src/13-boot.js` boot-time recovery — אם `bloom_skin_trial_end` קיים והעבר את ה-deadline (עם 10s grace), בודק אם השחקן באמת בעלים של הסקין הפעיל; אם לא — חוזר ל-original (או 'classic' אם לא ידוע). `endSkinTrial` מנקה את שני המפתחים. סגירת ה-exploit: רענון/סגירת טאב באמצע trial → הסקין חוזר אוטומטית.
 
 **מיקום**: `src/02-shop.js` ב-`startSkinTrial`
 
@@ -518,8 +524,10 @@ try {
 
 ---
 
-### - [ ] **TC.5** — Audit alert() ב-49 stages
+### - [x] **TC.5** — Audit alert() ב-49 stages ✅
 > וודא שאין `alert(` חדשים שנוספו אחרי T0.4.
+>
+> **בוצע (2026-05-25)**: grep מצא alert() אחד שנותר ב-`src/38-trophy-chests.js` (fallback אחרי `showToast`). הוסר. סופית: 0 קריאות `alert()` ב-src/. T0.4 העיף 40 alerts, ועכשיו רק `showToast` ברחבי הקוד.
 
 **מיקום**: כל `src/*.js`
 
@@ -532,8 +540,10 @@ grep -rn "alert(" src/*.js | grep -v "//\|cleared-alert\|cancel-alert" > /tmp/al
 
 ---
 
-### - [ ] **TC.6** — Dark Theme Audit
+### - [x] **TC.6** — Dark Theme Audit ✅
 > וודא שכל 49 ה-stages יש להם dark theme overrides.
+>
+> **בוצע (2026-05-25)**: סריקה מצאה 740+ dark overrides קיימים. רוב ה-stages שהוזכרו ב-audit (login-cal-tile, gem-bank-tile, trophy-strip, event-banner) משתמשים ב-gradient backgrounds עם טקסט לבן הצידי שעובדים נכון בשני המצבים. **תיקון bug אמיתי שנתגלה**: ה-`home-v2-balance-bar` ב-`public/css/home-v2.css` שורות 66-69 — ארבעת ה-slots (gems/lives/streak/level) עם hardcoded dark text (`#7A4F00`, `#A11A33`, `#8B3A00`, `#3B2C7A`) על rgba tinted bg. במצב dark הטקסט נראה כמעט בלתי קריא. הוסף 4 dark overrides עם צבעים בהירים (`#FFE0A8`, `#FFB8C6`, `#FFC799`, `#C9BCFF`). זה ה-widget הכי נצפה במשחק (top of home).
 
 **מיקום**: `public/styles.css`
 
@@ -591,11 +601,11 @@ cron יומי שמוצא שחקנים עם streak ≥ 3 שלא שיחקו 12+ ש
 
 | Phase | משימות | הושלמו | חומרה |
 |-------|--------|--------|--------|
-| **A — Game-Over Persist + Exploit** | 4 | 4 | 🔴 קריטית |
-| **B — Display Size** | 3 | 2 | 🔴 קריטית |
-| **C — Stuck Screens** | 6 | 1 | 🟡 בינונית |
+| **A — Game-Over Persist + Exploit** | 4 | 4 | 🟢 הושלם |
+| **B — Display Size** | 3 | 2 | 🟡 1 משימה |
+| **C — Stuck Screens** | 6 | 6 | 🟢 הושלם |
 | **D — Addiction Boosters** | 3 | 0 | 🟢 אופציונלי |
-| **סה"כ** | **16** | **7** | |
+| **סה"כ** | **16** | **12** | |
 
 ---
 

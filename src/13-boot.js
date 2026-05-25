@@ -1,4 +1,48 @@
   // ============================================================
+  // TC.4 — Orphaned skin-trial recovery (May 2026)
+  // ============================================================
+  // If a player started a trial and closed the tab before the 60s
+  // timer fired (or right around the 60s mark, where the timer
+  // might not have a chance to run), ACTIVE_SKIN_KEY in localStorage
+  // is still set to the trial skin — meaning they keep using it
+  // free. We catch this at boot: any persisted SKIN_TRIAL_DEADLINE
+  // means the trial wasn't cleanly closed. Revert ACTIVE_SKIN_KEY
+  // to whatever SKIN_TRIAL_ORIGINAL_KEY remembers (or 'classic' as
+  // a safe default), unless the player has since legitimately
+  // purchased that skin (the ownedSkins array has the truth).
+  try {
+    var __trialEndRaw = safeGet('bloom_skin_trial_end', null);
+    if (__trialEndRaw) {
+      var __trialEnd = parseInt(__trialEndRaw, 10) || 0;
+      // Add a small grace (10s) past the deadline to avoid racing the
+      // legitimate auto-end pathway when the user reloads right at
+      // the moment the timer fires.
+      var __expired = !__trialEnd || (Date.now() > __trialEnd + 10 * 1000);
+      if (__expired) {
+        var __currentSkin = safeGet('bloom_active_skin', 'classic') || 'classic';
+        var __ownedRaw = safeGet('bloom_owned_skins', '[]');
+        var __owned = [];
+        try { __owned = JSON.parse(__ownedRaw) || []; } catch (e) { __owned = []; }
+        // Only revert if the player doesn't legitimately own this skin
+        // (e.g. they bought it during the trial through a separate flow).
+        if (__currentSkin !== 'classic' && __owned.indexOf(__currentSkin) === -1) {
+          var __original = safeGet('bloom_skin_trial_original', 'classic') || 'classic';
+          // Defensive: if "original" happens to be the same trial skin
+          // or also unowned, fall back to 'classic'.
+          if (__original !== 'classic' && __owned.indexOf(__original) === -1) {
+            __original = 'classic';
+          }
+          try { localStorage.setItem('bloom_active_skin', __original); } catch (e) {}
+          // Re-sync the in-memory active skin so the next render uses it.
+          try { activeSkinId = __original; if (typeof syncBodySkinClass === 'function') syncBodySkinClass(); } catch (e) {}
+        }
+        safeRemove('bloom_skin_trial_end');
+        safeRemove('bloom_skin_trial_original');
+      }
+    }
+  } catch (e) {}
+
+  // ============================================================
   // PLAYER HEARTBEAT — tells the server this player is active
   // so the admin live view shows ALL players, not just contests.
   // ============================================================
@@ -33,13 +77,42 @@
   // Called from game-over to immediately remove player from admin live view
   window.endHeartbeat = function() {
     try {
-      fetch(API_BASE + '/api/heartbeat/end', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ deviceId: deviceId, token: deviceToken })
-      }).catch(function() {});
+      // Use sendBeacon when available so the request survives the tab
+      // closing (regular fetch() is killed when the page unloads, and
+      // the admin live view would keep showing the dead player until
+      // the 60s server-side TTL expired).
+      if (navigator.sendBeacon) {
+        var payload = new Blob([JSON.stringify({ deviceId: deviceId, token: deviceToken })],
+                               { type: 'application/json' });
+        navigator.sendBeacon(API_BASE + '/api/heartbeat/end', payload);
+      } else {
+        fetch(API_BASE + '/api/heartbeat/end', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ deviceId: deviceId, token: deviceToken }),
+          keepalive: true
+        }).catch(function() {});
+      }
     } catch(e) {}
   };
+
+  // TC.3 — beforeunload + pagehide fire endHeartbeat so a closed tab
+  // disappears from admin's live view within seconds instead of sitting
+  // there for the full 60s server TTL. beforeunload doesn't fire on
+  // iOS Safari mobile (browser quirk); pagehide is the cross-platform
+  // catch-all. Only fires when actually in a game (grid initialized,
+  // not game-over, not bot) — closing the tab from home doesn't need
+  // teardown since no heartbeat was ever sent.
+  function __teardownHeartbeatOnUnload() {
+    try {
+      if (window.__bloomBotActive) return;
+      if (window.__bloomGameOver) return;
+      if (!Array.isArray(grid) || grid.length === 0) return;
+      window.endHeartbeat();
+    } catch (e) {}
+  }
+  window.addEventListener('beforeunload', __teardownHeartbeatOnUnload);
+  window.addEventListener('pagehide', __teardownHeartbeatOnUnload);
 
   // Register the service worker for offline play. Silent if unsupported
   // (older Safari) — the game still works fine without it.

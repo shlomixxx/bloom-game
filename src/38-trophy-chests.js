@@ -252,8 +252,10 @@
         if (btn) { btn.disabled = false; btn.textContent = '▶ התחל לפתוח'; }
         var reason = (d && d.reason) || 'error';
         if (reason === 'another_unlocking') {
+          // TC.5 — showToast only; the alert() fallback was a leftover
+          // from before T0.4 swept the codebase. showToast is now in
+          // scope everywhere thanks to 04-ui-utils.js init order.
           if (typeof showToast === 'function') showToast('יש תיבה אחרת בפתיחה — חכה שתסיים', 'warning');
-          else alert('יש תיבה אחרת בפתיחה — חכה שתסיים');
         } else {
           if (typeof showToast === 'function') showToast('שגיאה: ' + reason, 'error');
         }

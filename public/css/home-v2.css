@@ -68,6 +68,15 @@
   .home-v2-bal-streak { background: rgba(255, 130, 50, 0.15); color: #8B3A00; }
   .home-v2-bal-level { background: rgba(110, 90, 200, 0.16); color: #3B2C7A; }
 
+  /* TC.6 — dark mode override. Slot text colors were hardcoded for
+     light mode (dark brown on light gold tint, etc.) which on a dark
+     surface read as near-invisible. Bumping to brighter analogues so
+     each slot stays readable on the dark background. */
+  html[data-theme="dark"] .home-v2-bal-gems   { background: rgba(255, 200, 80, 0.22); color: #FFE0A8; }
+  html[data-theme="dark"] .home-v2-bal-lives  { background: rgba(232, 70, 96, 0.20); color: #FFB8C6; }
+  html[data-theme="dark"] .home-v2-bal-streak { background: rgba(255, 130, 50, 0.20); color: #FFC799; }
+  html[data-theme="dark"] .home-v2-bal-level  { background: rgba(140, 120, 230, 0.22); color: #C9BCFF; }
+
   /* Streak slot is now a button (T2.2 — opens calendar modal). */
   .home-v2-bal-slot.home-v2-bal-streak {
     border: none;

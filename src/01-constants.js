@@ -582,6 +582,12 @@
   var skinTrialTimerHandle = null;
   var SKIN_TRIAL_DURATION_MS = 60 * 1000;
   var SKIN_TRIAL_DEADLINE_KEY = 'bloom_skin_trial_end';
+  // TC.4 — track the ORIGINAL skin in localStorage too. The old impl only
+  // kept it in-memory (skinTrialOriginal), so a closed tab + reopened
+  // browser left ACTIVE_SKIN_KEY = trial-skin with no way to revert,
+  // meaning the player kept the trial skin "for free". This adds the
+  // missing breadcrumb so boot-time recovery can revert properly.
+  var SKIN_TRIAL_ORIGINAL_KEY = 'bloom_skin_trial_original';
 
   function startSkinTrial(skinId) {
     skinTrialOriginal = activeSkinId;
@@ -591,6 +597,9 @@
     // T3.2 — set deadline 60s from now, persisted so refresh doesn't reset.
     skinTrialEndAt = Date.now() + SKIN_TRIAL_DURATION_MS;
     try { localStorage.setItem(SKIN_TRIAL_DEADLINE_KEY, String(skinTrialEndAt)); } catch(e) {}
+    // TC.4 — remember the original skin id so a closed-tab scenario
+    // can revert to the right one (not blindly to 'classic').
+    try { localStorage.setItem(SKIN_TRIAL_ORIGINAL_KEY, skinTrialOriginal || 'classic'); } catch(e) {}
     syncBodySkinClass();
     buildTierBar(true);
     hideHome(); // close home screen → enter game directly
@@ -695,6 +704,10 @@
     if (skinTrialTimerHandle) { clearInterval(skinTrialTimerHandle); skinTrialTimerHandle = null; }
     skinTrialEndAt = 0;
     try { localStorage.removeItem(SKIN_TRIAL_DEADLINE_KEY); } catch(e) {}
+    // TC.4 — clear the original-skin breadcrumb. Failing to remove
+    // would mean the next boot tries to "revert" to a skin that's
+    // already active, which is a no-op but technically incorrect state.
+    try { localStorage.removeItem(SKIN_TRIAL_ORIGINAL_KEY); } catch(e) {}
     removeSkinTrialBanner();
     buildTierBar(true);
     init('practice', { fresh: true }); // fresh game so trial score doesn't leak

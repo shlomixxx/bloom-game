@@ -43,6 +43,35 @@
     --shadow-sm: 0 2px 6px rgba(0,0,0,0.06);
     --shadow-md: 0 6px 20px rgba(0,0,0,0.10);
     --shadow-glow: 0 0 0 6px var(--color-accent-glow);
+
+    /* ── TC.2 — Z-index hierarchy (audit complaint C1) ──
+       Before this, 30+ files had hardcoded z-index values ranging
+       from 10 to 100003 in an escalating war. Result: when two
+       overlays stacked, the wrong close button became unclickable
+       and the player got stuck. This 8-level system covers every
+       legitimate stacking need — use these tokens, never raw ints.
+       Layer logic:
+         board       game board + tile animations
+         header      top bar + score
+         floating    bottom action bars (booster tray, etc.)
+         coach       in-game hints
+         overlay     full-screen but dismissable (info, daily-reward)
+         modal       interactive modals (most surfaces)
+         modal-stack nested-modal nieces (gem-bank inside shop)
+         toast       transient banners (above modals)
+         celeb       celebration overlays (above toasts but
+                     never blocking modal close)
+         critical    push permission prompt, system-blocking only */
+    --z-board:       10;
+    --z-header:      100;
+    --z-floating:    200;
+    --z-coach:       400;
+    --z-overlay:     1000;
+    --z-modal:       2000;
+    --z-modal-stack: 2100;
+    --z-toast:       3000;
+    --z-celeb:       3500;
+    --z-critical:    4000;
   }
 
   html[data-theme="dark"] {
@@ -1867,6 +1896,15 @@
   .home-v2-bal-lives { background: rgba(232, 70, 96, 0.16); color: #A11A33; }
   .home-v2-bal-streak { background: rgba(255, 130, 50, 0.15); color: #8B3A00; }
   .home-v2-bal-level { background: rgba(110, 90, 200, 0.16); color: #3B2C7A; }
+
+  /* TC.6 — dark mode override. Slot text colors were hardcoded for
+     light mode (dark brown on light gold tint, etc.) which on a dark
+     surface read as near-invisible. Bumping to brighter analogues so
+     each slot stays readable on the dark background. */
+  html[data-theme="dark"] .home-v2-bal-gems   { background: rgba(255, 200, 80, 0.22); color: #FFE0A8; }
+  html[data-theme="dark"] .home-v2-bal-lives  { background: rgba(232, 70, 96, 0.20); color: #FFB8C6; }
+  html[data-theme="dark"] .home-v2-bal-streak { background: rgba(255, 130, 50, 0.20); color: #FFC799; }
+  html[data-theme="dark"] .home-v2-bal-level  { background: rgba(140, 120, 230, 0.22); color: #C9BCFF; }
 
   /* Streak slot is now a button (T2.2 — opens calendar modal). */
   .home-v2-bal-slot.home-v2-bal-streak {

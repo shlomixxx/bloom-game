@@ -258,10 +258,10 @@ grep -rn "alert(" src/*.js | grep -v "//"  | wc -l
 | **Game-Over persist (practice/dynamic)** | 🟢 תוקן (TA.1, 2026-05-25) | — |
 | **Display size — booster strip** | 🟢 תוקן (TB.1, 2026-05-25) | — |
 | **Display size — col-mult-bar** | 🟢 תוקן (TB.2, 2026-05-25) | — |
-| **Z-index war** | 🟡 30+ ערכים | בינונית |
+| **Z-index war** | 🟢 token system (TC.2, 2026-05-25) — TC.1 ESC כבר פתר את ה-bug | — |
 | **Modal close (ESC/back)** | 🟢 תוקן (TC.1, 2026-05-25) | — |
-| **Heartbeat cleanup** | 🟡 חלקי | נמוכה |
-| **Dark theme drift** | 🟡 דורש audit | נמוכה |
+| **Heartbeat cleanup** | 🟢 תוקן (TC.3, 2026-05-25) | — |
+| **Dark theme drift** | 🟢 audit + balance-widget תוקן (TC.6, 2026-05-25) | — |
 | **Game-over share card** | 🟢 קיים (Stage 32) + confetti (TA.3, 2026-05-25) | — |
 | **Streak escalation visible** | 🟡 חלקי | בינונית |
 | **Mystery box visibility** | 🟡 חלקי | בינונית |
