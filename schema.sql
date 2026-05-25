@@ -1032,6 +1032,14 @@ INSERT INTO game_config (key, value) VALUES ('ad_cooldown_seconds', '30') ON CON
 -- not game-breaking.
 INSERT INTO game_config (key, value) VALUES ('ad_daily_cap', '5') ON CONFLICT (key) DO NOTHING;
 
+-- TA.2 — Continue-ad dedup. Same exploit class as ad-watch: a player
+-- who refreshes mid-game-over screen could re-claim the "watch ad to
+-- continue" use because the client-only usedContinue flag reset on
+-- every init(). Server now enforces per-game dedup + daily cap +
+-- cooldown via _cont:* / _cont_count:* / _cont_rate:* keys.
+INSERT INTO game_config (key, value) VALUES ('continue_daily_cap', '3') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('continue_cooldown_seconds', '30') ON CONFLICT (key) DO NOTHING;
+
 -- Economy rebalance: applied once during 2026-05-17 migration.
 -- These UPDATEs are commented out to prevent overwriting admin changes
 -- on every deploy. Originals are kept here for reference only.

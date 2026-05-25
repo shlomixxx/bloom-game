@@ -253,7 +253,7 @@ grep -rn "alert(" src/*.js | grep -v "//"  | wc -l
 | קטגוריה | מצב | חומרה |
 |---------|-----|--------|
 | **Exploit: ad-watch** | 🟢 מוגן | — |
-| **Exploit: continue** | 🔴 פגיע | גבוהה |
+| **Exploit: continue** | 🟢 תוקן (TA.2, 2026-05-25) | — |
 | **Game-Over persist (daily)** | 🟢 עובד | — |
 | **Game-Over persist (practice/dynamic)** | 🟢 תוקן (TA.1, 2026-05-25) | — |
 | **Display size — booster strip** | 🟢 תוקן (TB.1, 2026-05-25) | — |

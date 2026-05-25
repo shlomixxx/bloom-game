@@ -96,8 +96,10 @@ init(mode, { fresh: true });
 
 ---
 
-### - [ ] **TA.2** — Continue Button Dedup (Server-Side)
+### - [x] **TA.2** — Continue Button Dedup (Server-Side) ✅
 > 🚨 שחקן יכול לעשות רענון ולקבל continue שוב ושוב.
+>
+> **בוצע (2026-05-25)**: endpoint חדש `POST /api/player/continue-ad` ב-`server.js` (אחרי `/api/player/ad-watch`) שמנהל dedup ברמת השרת — תבנית זהה ל-ad-watch: dedup לפי `_cont:<deviceId>:<gameId>` (אחד פעם לכל gameId לנצח), cap יומי `_cont_count:<deviceId>:<date>` (ברירת מחדל 3 דרך `continue_daily_cap`), cooldown `_cont_rate:<deviceId>` (30s דרך `continue_cooldown_seconds`). שני config keys חדשים ב-`schema.sql` (idempotent INSERT). הלקוח ב-`src/12-tour-info.js` (`continue-ad` button) קורא לשרת **לפני** `simulateAdWatch` — אם השרת מחזיר `already_continued` / `daily_cap` / `rate_limited`, הכפתור מציג הודעה מתאימה ולא נטענת פרסומת. ה-`getCurrentGameId()` כבר משומר ב-sessionStorage גם דרך רענון (TA.1 שומר את ה-gameId הקודם), אז ה-dedup מחזיק גם אחרי F5. שחקן רגיל עדיין יכול להמשיך פעם אחת במשחק. ה-exploit סגור: 100 ריענונים = 100×0 פרסומות חינמיות (במקום 100×continue free).
 
 **מיקום**: `server.js` + `src/12-tour-info.js`
 
@@ -583,11 +585,11 @@ cron יומי שמוצא שחקנים עם streak ≥ 3 שלא שיחקו 12+ ש
 
 | Phase | משימות | הושלמו | חומרה |
 |-------|--------|--------|--------|
-| **A — Game-Over Persist + Exploit** | 4 | 1 | 🔴 קריטית |
+| **A — Game-Over Persist + Exploit** | 4 | 2 | 🔴 קריטית |
 | **B — Display Size** | 3 | 2 | 🔴 קריטית |
 | **C — Stuck Screens** | 6 | 0 | 🟡 בינונית |
 | **D — Addiction Boosters** | 3 | 0 | 🟢 אופציונלי |
-| **סה"כ** | **16** | **3** | |
+| **סה"כ** | **16** | **4** | |
 
 ---
 

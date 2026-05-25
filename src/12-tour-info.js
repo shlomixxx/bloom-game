@@ -929,21 +929,58 @@
       var continueAdBtn = document.getElementById('continue-ad');
       var continuePayBtn = document.getElementById('continue-pay');
       if (continueAdBtn) continueAdBtn.onclick = function() {
-        this.disabled = true; this.textContent = '⏳ טוען פרסומת...';
-        simulateAdWatch(function() {
-          usedContinue = true;
-          // Clear top 2 rows
-          for (var r = 0; r < 2; r++)
-            for (var c = 0; c < getBoardCols(); c++) grid[r][c] = 0;
-          applyGravity();
-          busy = false;
-          startEventSystem();
-          playMusic('game');
-          render();
-          showEventBanner('💪 חיים נוספים!', 'המשך לשחק!', 'continue');
-          shakeGrid(3);
-          if (mode === 'practice') savePracticeGameState();
-        });
+        var btn = this;
+        // TA.2 — server-side dedup before the ad runs. Closes the
+        // refresh-spam exploit where a player could keep re-claiming
+        // the continue by reloading the over screen. `usedContinue`
+        // resets every init() so the client-only flag wasn't enough.
+        var gid = (typeof getCurrentGameId === 'function') ? getCurrentGameId() : null;
+        if (!gid) {
+          // Old gameId helper not loaded — bail safely so the player
+          // sees an error instead of a silent half-broken flow.
+          btn.textContent = 'שגיאה';
+          btn.disabled = true;
+          return;
+        }
+        btn.disabled = true; btn.textContent = '⏳ טוען פרסומת...';
+        fetch(API_BASE + '/api/player/continue-ad', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Device-Id': deviceId, 'X-Device-Token': deviceToken },
+          body: JSON.stringify({ deviceId: deviceId, token: deviceToken, gameId: gid })
+        }).then(function(r) { return r.json(); })
+          .catch(function() { return null; })
+          .then(function(d) {
+            if (!d || !d.ok) {
+              var reason = (d && d.reason) || 'error';
+              if (reason === 'already_continued') {
+                btn.textContent = '✓ כבר השתמשת';
+              } else if (reason === 'daily_cap') {
+                btn.textContent = 'הגעת ל-' + (d.dailyCap || 3) + ' המשכים היום';
+              } else if (reason === 'rate_limited') {
+                var sec = Math.ceil(((d && d.cooldownMs) || 30000) / 1000);
+                btn.textContent = '⏰ עוד ' + sec + ' שניות';
+              } else {
+                btn.textContent = 'לא ניתן כעת';
+              }
+              return;
+            }
+            // Server gave the green light → run the actual ad + apply
+            // the row-clear effect. usedContinue still gates client
+            // re-clicks in the same session for instant feedback.
+            simulateAdWatch(function() {
+              usedContinue = true;
+              for (var r = 0; r < 2; r++)
+                for (var c = 0; c < getBoardCols(); c++) grid[r][c] = 0;
+              applyGravity();
+              busy = false;
+              startEventSystem();
+              playMusic('game');
+              render();
+              showEventBanner('💪 חיים נוספים!', 'המשך לשחק!', 'continue');
+              shakeGrid(3);
+              if (mode === 'practice') savePracticeGameState();
+            });
+          });
       };
       if (continuePayBtn) continuePayBtn.onclick = function() {
         var price = getEventNum('continue_price', 200);

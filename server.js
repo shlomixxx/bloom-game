@@ -14015,6 +14015,88 @@ app.post('/api/player/ad-watch', requireDeviceAuth, async (req, res) => {
   }
 });
 
+// TA.2 — POST /api/player/continue-ad — claim a "watch ad to continue
+// the game" use. Same exploit pattern as /ad-watch: refresh → game-over
+// modal again → re-claim the continue. Pre-fix the client-only
+// usedContinue flag was reset every init() so a refresh wiped it. Now
+// the server enforces per-game dedup + daily cap + cooldown so a player
+// can't keep clearing rows by spamming refresh. This endpoint does NOT
+// credit gems — it returns ok=true so the client knows it's safe to
+// run the ad + apply the row-clear effect. Gameplay is still client
+// state; the server is just the source of truth for "did this game
+// already get a continue?"
+app.post('/api/player/continue-ad', requireDeviceAuth, async (req, res) => {
+  const deviceId = req.deviceId;
+  const gameId = String((req.body && req.body.gameId) || '').slice(0, 64);
+  if (!gameId || !/^[A-Za-z0-9_-]{8,64}$/.test(gameId)) {
+    return res.status(400).json({ error: 'bad_game_id' });
+  }
+  try {
+    // Per-game dedup. One continue per (device, gameId), forever.
+    const dedupKey = '_cont:' + deviceId + ':' + gameId;
+    const dup = await pool.query(`SELECT 1 FROM game_config WHERE key = $1`, [dedupKey]);
+    if (dup.rows.length) return res.json({ ok: false, reason: 'already_continued' });
+
+    // Config read.
+    const cfgRows = await pool.query(
+      `SELECT key, value FROM game_config WHERE key IN
+       ('continue_daily_cap','continue_cooldown_seconds')`);
+    const cfg = {};
+    for (const r of cfgRows.rows) cfg[r.key] = r.value;
+    const dailyCap  = Math.max(1, parseInt(cfg.continue_daily_cap, 10) || 3);
+    const cooldownS = Math.max(0, parseInt(cfg.continue_cooldown_seconds, 10) || 30);
+
+    // Cooldown gate. Isolated from /ad-watch's rate key so the two
+    // surfaces don't starve each other.
+    const rateKey = '_cont_rate:' + deviceId;
+    const rateRow = await pool.query(`SELECT value FROM game_config WHERE key = $1`, [rateKey]);
+    if (rateRow.rows.length && cooldownS > 0) {
+      const lastTs = parseInt(rateRow.rows[0].value, 10) || 0;
+      const waitMs = cooldownS * 1000 - (Date.now() - lastTs);
+      if (waitMs > 0) return res.json({ ok: false, reason: 'rate_limited', cooldownMs: waitMs });
+    }
+
+    // Per-day cap.
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' });
+    const countKey = '_cont_count:' + deviceId + ':' + today;
+    const countRow = await pool.query(`SELECT value FROM game_config WHERE key = $1`, [countKey]);
+    const usedToday = countRow.rows.length ? (parseInt(countRow.rows[0].value, 10) || 0) : 0;
+    if (usedToday >= dailyCap) {
+      return res.json({ ok: false, reason: 'daily_cap', dailyCap, usedToday });
+    }
+
+    // Atomic claim via the dedup key. PK on game_config.key serializes
+    // concurrent requests — exactly one INSERT lands, the other gets
+    // 0 rows back and returns already_continued.
+    const dedupInsert = await pool.query(
+      `INSERT INTO game_config (key, value) VALUES ($1, $2)
+       ON CONFLICT (key) DO NOTHING
+       RETURNING 1`,
+      [dedupKey, '1']);
+    if (!dedupInsert.rows.length) {
+      return res.json({ ok: false, reason: 'already_continued' });
+    }
+
+    // Mark cooldown + bump per-day counter.
+    await pool.query(
+      `INSERT INTO game_config (key, value) VALUES ($1, $2)
+       ON CONFLICT (key) DO UPDATE SET value = $2, updated_at = NOW()`,
+      [rateKey, String(Date.now())]);
+    await pool.query(
+      `INSERT INTO game_config (key, value) VALUES ($1, $2)
+       ON CONFLICT (key) DO UPDATE SET value = (game_config.value::int + 1)::text, updated_at = NOW()`,
+      [countKey, String(usedToday + 1)]);
+    res.json({
+      ok: true,
+      dailyRemaining: Math.max(0, dailyCap - usedToday - 1),
+      dailyCap
+    });
+  } catch (e) {
+    console.error('player/continue-ad', e.message);
+    res.status(500).json({ error: 'server' });
+  }
+});
+
 // POST /api/player/gift-friend — player-to-player gem gift.
 // Sender → recipient transfer + creates a player_gifts row that the
 // recipient sees as a notification banner on next app open.
