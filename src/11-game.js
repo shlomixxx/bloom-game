@@ -939,9 +939,22 @@
   const LB_SCOPE_KEY = 'bloom_lb_scope';
   const LB_PERIOD_KEY = 'bloom_lb_period';
   const LB_DIFF_KEY = 'bloom_lb_difficulty';
-  let lbModalScope = localStorage.getItem(LB_SCOPE_KEY) || 'world';
+  // Admin defaults: the audit caught that leaderboard_default_tab +
+  // leaderboard_default_difficulty were saved in /admin but never
+  // consulted here. localStorage still wins (returning player lands
+  // on their last selection), but the admin's default is now what a
+  // brand-new player or someone who cleared storage gets.
+  function _lbAdminDefault(key, fallback) {
+    try {
+      var v = (typeof gameConfig === 'object' && gameConfig && gameConfig[key]) || '';
+      return v ? String(v) : fallback;
+    } catch (e) { return fallback; }
+  }
+  let lbModalScope = localStorage.getItem(LB_SCOPE_KEY) ||
+                     _lbAdminDefault('leaderboard_default_tab', 'world');
   let lbModalPeriod = localStorage.getItem(LB_PERIOD_KEY) || 'day';
-  let lbModalDifficulty = localStorage.getItem(LB_DIFF_KEY) || 'default';
+  let lbModalDifficulty = localStorage.getItem(LB_DIFF_KEY) ||
+                          _lbAdminDefault('leaderboard_default_difficulty', 'default');
   let lbModalList = [];
   let lbModalLoading = false;
   let lbModalRange = null;
@@ -968,6 +981,16 @@
   function openLeaderboardModal() {
     const wrap = document.getElementById('grid-wrap');
     if (!wrap || document.getElementById('lb-modal')) return;
+    // Re-resolve admin defaults at open time — gameConfig is fetched
+    // async after boot, so the module-init values may have used the
+    // hardcoded fallback. Only override when the player has no
+    // localStorage preference (first-time visitor).
+    if (!localStorage.getItem(LB_SCOPE_KEY)) {
+      lbModalScope = _lbAdminDefault('leaderboard_default_tab', 'world');
+    }
+    if (!localStorage.getItem(LB_DIFF_KEY)) {
+      lbModalDifficulty = _lbAdminDefault('leaderboard_default_difficulty', 'default');
+    }
     const enabled = getEnabledLbTabs();
     if (enabled.indexOf(lbModalScope) < 0) lbModalScope = enabled[0];
     const modal = document.createElement('div');
