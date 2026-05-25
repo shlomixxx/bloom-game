@@ -866,6 +866,59 @@
         else if (mode === 'dynamic' && window._activeDynamicBoard) init('dynamic', { fresh: true });
         else init('practice', { fresh: true });
       };
+      // TA.4 — Count-up animation on the over-score. The score jumps
+      // from 0 to its final value with an ease-out cubic curve over
+      // ~1.2s. Skipped for restored over-screens (the player already
+      // saw the number before the refresh — re-animating would feel
+      // like the game is gaslighting them about their score) and for
+      // the "already-played-today" daily case (same logic).
+      try {
+        var __overScoreEl = document.getElementById('over-score-num') ||
+                            (function() {
+                              var el = document.querySelector('.over-score');
+                              if (el && !el.id) el.id = 'over-score-num';
+                              return el;
+                            })();
+        if (__overScoreEl && !opts.restored && !opts.alreadyPlayed && (score | 0) > 0) {
+          var __finalScore = score | 0;
+          // Render 0 immediately so the eye catches the climb from
+          // the start rather than seeing the final number flash and
+          // then re-animate down.
+          __overScoreEl.textContent = '0';
+          var __animStart = 0;
+          var __animDur = 1200;
+          var __animTick = function(now) {
+            if (!__animStart) __animStart = now;
+            var t = Math.min(1, (now - __animStart) / __animDur);
+            // ease-out cubic
+            var eased = 1 - Math.pow(1 - t, 3);
+            __overScoreEl.textContent = Math.floor(__finalScore * eased).toLocaleString();
+            if (t < 1) requestAnimationFrame(__animTick);
+          };
+          // Small delay (~120ms) so the over-screen entrance settles
+          // before the digits start climbing — feels more deliberate.
+          setTimeout(function() { requestAnimationFrame(__animTick); }, 120);
+        }
+      } catch (e) {}
+      // TA.3 — Personal-best celebration. The existing Stage 32 already
+      // mounts a 📤 share button when the score crosses its threshold;
+      // this block adds the missing dopamine pop that the audit called
+      // out: confetti shower + stronger sound when isNewBest is true.
+      // Skipped for restored over-screens (the player already saw the
+      // celebration once — replaying it would feel hollow), bot games,
+      // and skin trials. Lands ~250ms after the count-up starts so the
+      // confetti drops over the climbing digits.
+      try {
+        if (opts.isNewBest && !opts.restored && !opts.alreadyPlayed &&
+            !window.__bloomBotActive && !skinTrialMode &&
+            typeof showConfetti === 'function') {
+          setTimeout(function() {
+            try { showConfetti(48); } catch (e) {}
+            try { if (typeof soundMilestone === 'function') soundMilestone(7); } catch (e) {}
+            try { if (typeof buzz === 'function') buzz([40, 30, 60, 30, 90]); } catch (e) {}
+          }, 250);
+        }
+      } catch (e) {}
       // TA.1 — Restored game-over: explicit "🎮 משחק חדש" CTA in the
       // restored banner. Clears the snapshot so a click can't re-enter
       // the restored over screen, then inits a fresh game in the same

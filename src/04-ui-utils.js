@@ -884,4 +884,115 @@
     body.innerHTML = html;
   }
 
+  // ============================================================
+  // TC.1 — Global ESC + browser-back modal handlers (May 2026)
+  // ============================================================
+  // The audit flagged that BLOOM has 58+ different overlay classes,
+  // each with its own close button. There was no unified way for
+  // a player to dismiss the topmost modal — pressing ESC did
+  // nothing, and tapping the browser back button on mobile (the
+  // most common "go back" gesture for ~95% of players) navigated
+  // away from the app entirely.
+  //
+  // The fix: a single keydown listener that catches ESC, finds
+  // the topmost modal by DOM order (last one mounted = topmost),
+  // and clicks its close button OR removes it. A popstate listener
+  // does the same for the back gesture. Both are wired once at
+  // boot — modals don't need to opt in; they work automatically
+  // as long as they use one of the recognized overlay classes.
+  //
+  // Allowlist principle: any class ending in `-modal-overlay` or
+  // any class in the curated additions list is dismissible. The
+  // exclusions block keeps in-game animations / FTUE / celebration
+  // overlays untouched (those have their own dismiss timing and
+  // shouldn't disappear on ESC).
+  // ============================================================
+  function __bloomGetCloseableModals() {
+    // Generic match: any class ending in -modal-overlay.
+    var generic = document.querySelectorAll('[class*="modal-overlay"]');
+    // Curated additions for overlays that don't use the "modal" suffix
+    // but still act as modals (player can dismiss them).
+    var extras = document.querySelectorAll(
+      '.board-lb-overlay, .dyn-boards-overlay, .dyn-comeback-overlay, ' +
+      '.dyn-friends-modal-overlay, .gem-bank-overlay, .ghost-confirm-overlay, ' +
+      '.gacha-history-overlay, .squad-modal-overlay, .squad-tournament-modal-overlay, ' +
+      '.rivalry-modal-overlay, .leagues-modal-overlay'
+    );
+    // Exclusions — overlays that LOOK like modals but are actually
+    // in-game animations, celebrations, or the FTUE. ESC should NOT
+    // dismiss them.
+    var EXCLUDE = {
+      'event-cell-overlay': 1, 'fx-overlay': 1, 'chest-celebration-overlay': 1,
+      'cl-celeb-overlay': 1, 'gacha-reveal-overlay': 1, 'gacha-rolling-overlay': 1,
+      'dyn-chest-overlay': 1, 'ftue-overlay': 1, 'over-restored-banner': 1,
+      'spin-reveal-overlay': 1, 'trophy-arena-overlay': 1, 'gw-claim-overlay': 1,
+      'sp-claim-overlay': 1, 'sq-claim-overlay': 1, 'login-cal-claim-overlay': 1,
+      'wrapped-share-overlay': 1
+    };
+    var out = [];
+    var seen = new Set();
+    var consider = function(el) {
+      if (!el || seen.has(el)) return;
+      seen.add(el);
+      // Check if any of the element's classes are excluded.
+      var cls = (el.className || '').split(/\s+/);
+      for (var i = 0; i < cls.length; i++) {
+        if (EXCLUDE[cls[i]]) return;
+      }
+      // Sanity: ignore detached / hidden nodes.
+      if (!el.isConnected) return;
+      var st = window.getComputedStyle ? window.getComputedStyle(el) : null;
+      if (st && (st.display === 'none' || st.visibility === 'hidden')) return;
+      out.push(el);
+    };
+    generic.forEach(consider);
+    extras.forEach(consider);
+    return out;
+  }
+  function __bloomDismissTopmostModal() {
+    var modals = __bloomGetCloseableModals();
+    if (!modals.length) return false;
+    // Topmost = last in document order. (DOM is built in mount order;
+    // newer modals come later. Z-index variance is mostly harmonized
+    // via :root --z-modal so we don't need to sort by computed z.)
+    var top = modals[modals.length - 1];
+    // Try the modal's own close button first — preserves any
+    // cleanup logic the modal already wires (refunds, telemetry,
+    // analytics, etc.). Falls back to a direct remove() if none.
+    var closeBtn =
+      top.querySelector('.modal-close, .info-close, [id$="modal-close"], [data-close-modal]') ||
+      top.querySelector('button[aria-label="סגור"], button[aria-label="Close"]');
+    if (closeBtn) {
+      try { closeBtn.click(); return true; }
+      catch (e) {}
+    }
+    try { top.remove(); return true; } catch (e) { return false; }
+  }
+  // Wire the global listeners ONCE per page load. The flag guards
+  // against any code that might re-include this file's logic.
+  if (!window.__bloomModalCloseWired) {
+    window.__bloomModalCloseWired = true;
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape' || e.keyCode === 27) {
+        if (__bloomDismissTopmostModal()) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+      }
+    });
+    window.addEventListener('popstate', function() {
+      // Best-effort: if a modal is open, eat the back gesture by
+      // closing it. If no modal, popstate's default behavior runs.
+      __bloomDismissTopmostModal();
+    });
+    // Public helper: any modal that wants to participate in the back
+    // gesture without already being wired calls this on open. We
+    // push a synthetic history entry so the back button has
+    // something to consume before leaving the app. Safe no-op when
+    // history.pushState is blocked.
+    window.__bloomOpenModalWithHistory = function(modalEl) {
+      try { history.pushState({ bloomModal: true }, ''); } catch (e) {}
+    };
+  }
+
   /* ============ HOME SCREEN ============ */

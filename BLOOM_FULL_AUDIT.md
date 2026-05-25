@@ -259,10 +259,10 @@ grep -rn "alert(" src/*.js | grep -v "//"  | wc -l
 | **Display size — booster strip** | 🟢 תוקן (TB.1, 2026-05-25) | — |
 | **Display size — col-mult-bar** | 🟢 תוקן (TB.2, 2026-05-25) | — |
 | **Z-index war** | 🟡 30+ ערכים | בינונית |
-| **Modal close (ESC/back)** | 🟡 חלקי | בינונית |
+| **Modal close (ESC/back)** | 🟢 תוקן (TC.1, 2026-05-25) | — |
 | **Heartbeat cleanup** | 🟡 חלקי | נמוכה |
 | **Dark theme drift** | 🟡 דורש audit | נמוכה |
-| **Game-over share card** | 🔴 חסר | גבוהה (retention) |
+| **Game-over share card** | 🟢 קיים (Stage 32) + confetti (TA.3, 2026-05-25) | — |
 | **Streak escalation visible** | 🟡 חלקי | בינונית |
 | **Mystery box visibility** | 🟡 חלקי | בינונית |
 

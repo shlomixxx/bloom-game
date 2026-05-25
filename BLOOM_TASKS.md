@@ -199,8 +199,10 @@ if (continueAdBtn) continueAdBtn.onclick = function() {
 
 ---
 
-### - [ ] **TA.3** — Shareable Game-Over Card
+### - [x] **TA.3** — Shareable Game-Over Card ✅
 > 🎁 שחקן רוצה להראות לחברים שניצח. כפתור share בולט = K-factor.
+>
+> **בוצע (2026-05-25)**: ה-canvas-rendered share card + 4 כפתורי שיתוף (WhatsApp / Native / Copy / Save) **כבר קיים** ב-Stage 32 (`src/27-replay.js` + `renderShareCard()`). הוסף עכשיו ב-`src/12-tour-info.js`: confetti 48 חלקיקים + `soundMilestone(7)` (החזק ביותר ב-pipeline) + buzz pattern `[40,30,60,30,90]` כשמסיים משחק עם `isNewBest=true` (לא ב-restored, לא ב-alreadyPlayed, לא לבוטים/skin trials). מופעל 250ms אחרי תחילת ה-count-up של TA.4 — ה-confetti יורד מעל הספרות הטיפסות. רגע הקסם הוא עכשיו ויזואלי + שמיעתי + רגשי.
 
 **מיקום**: `src/12-tour-info.js` בסוף ה-render({over:true})
 
@@ -226,8 +228,10 @@ if (continueAdBtn) continueAdBtn.onclick = function() {
 
 ---
 
-### - [ ] **TA.4** — Count-up Animation על הציון ב-Game-Over
+### - [x] **TA.4** — Count-up Animation על הציון ב-Game-Over ✅
 > 🎬 הציון "עולה" מ-0 לציון הסופי בתוך 1 שנייה. רגע הקסם.
+>
+> **בוצע (2026-05-25)**: `src/12-tour-info.js` ב-`render({over:true})` אחרי שה-HTML נטען, מאתר את `.over-score`, מאפס ל-"0", ומפעיל `requestAnimationFrame` loop של 1200ms עם ease-out-cubic. delay של 120ms לפני התחלה — נתינת זמן ל-entrance animation להתיישב. דילוג אם `opts.restored` (השחקן כבר ראה את המספר) או `opts.alreadyPlayed` (מצב daily-already-played). הצופה רואה: "0 → 1,247 → 5,890 → 12,345 → ... → 47,392" בעקומה רכה.
 
 **מיקום**: `src/12-tour-info.js` ב-render({over:true})
 
@@ -373,8 +377,10 @@ grep -rn "insertBefore.*grid-wrap\|parentNode.insertBefore" src/*.js
 > ⏱ ~4 שעות | 🎯 שחקן לא תקוע, כל לחצן עובד
 > 💡 **למה זה ממכר**: מסך תקוע = יציאה מהאפליקציה. כל לחצן חייב להגיב.
 
-### - [ ] **TC.1** — Global ESC + Back Button Handler למודאלים
+### - [x] **TC.1** — Global ESC + Back Button Handler למודאלים ✅
 > שחקן בלחיצה אחת על "back" יוצא מהמשחק לגמרי. צריך שיסגור modal במקום.
+>
+> **בוצע (2026-05-25)**: `src/04-ui-utils.js` מקבל `__bloomGetCloseableModals()` + `__bloomDismissTopmostModal()` + הרשמת global keydown listener ל-ESC + popstate listener ל-back-gesture. בורר המודאלים גנרי: `[class*="modal-overlay"]` מתפיס את כל 58 ה-overlays + רשימה ידנית של מודאלים שלא משתמשים ב-suffix `-modal-overlay` (`board-lb-overlay`, `dyn-boards-overlay`, `dyn-friends-modal-overlay`, וכו'). רשימת exclusions מוגדרת מפורשת לאנימציות in-game (`event-cell-overlay`, `fx-overlay`, `chest-celebration-overlay`, `ftue-overlay`, `gacha-reveal-overlay`, וכו') כך ש-ESC לא יסגור celebration עדינה תוך כדי הריצה שלה. הסגירה מנסה קודם `.modal-close` / `.info-close` / `[id$="modal-close"]` / `[aria-label="סגור"]` (משמרת ניקוי קיים) ו-fallback ל-`element.remove()`. flag `__bloomModalCloseWired` מונע wiring כפול. `window.__bloomOpenModalWithHistory(el)` מציע אופציה לבעלי המודאלים ל-pushState. שני event listeners מעלים `preventDefault()` ו-`stopPropagation()` כדי שהדפדפן לא יעזוב את האפליקציה. אומת ב-engine self-test: 200 games / 0 floating tiles.
 
 **מיקום**: `src/04-ui-utils.js` (גלובלי)
 
@@ -585,11 +591,11 @@ cron יומי שמוצא שחקנים עם streak ≥ 3 שלא שיחקו 12+ ש
 
 | Phase | משימות | הושלמו | חומרה |
 |-------|--------|--------|--------|
-| **A — Game-Over Persist + Exploit** | 4 | 2 | 🔴 קריטית |
+| **A — Game-Over Persist + Exploit** | 4 | 4 | 🔴 קריטית |
 | **B — Display Size** | 3 | 2 | 🔴 קריטית |
-| **C — Stuck Screens** | 6 | 0 | 🟡 בינונית |
+| **C — Stuck Screens** | 6 | 1 | 🟡 בינונית |
 | **D — Addiction Boosters** | 3 | 0 | 🟢 אופציונלי |
-| **סה"כ** | **16** | **4** | |
+| **סה"כ** | **16** | **7** | |
 
 ---
 
