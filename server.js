@@ -774,6 +774,12 @@ app.post('/api/score', requireDeviceAuth, async (req, res) => {
     if (typeof _resolveFriendChallengesForGame === 'function') {
       _resolveFriendChallengesForGame(deviceId, score, { boardId: null }).catch(function() {});
     }
+    // TD.2 — Ghost Replay push: notify friends whose daily score this
+    // submission overtook by 500+. Per-day dedup so improving the score
+    // multiple times sends at most one push per (sender, recipient).
+    if (typeof _notifyFriendsBeatenOnDaily === 'function') {
+      _notifyFriendsBeatenOnDaily(deviceId, score, safeName, date).catch(function() {});
+    }
   } catch (e) {
     console.error('POST /api/score', e);
     res.status(500).json({ error: 'server' });
@@ -6218,7 +6224,12 @@ app.post('/api/lifetime/prestige', requireDeviceAuth, async (req, res) => {
 // ============================================================
 async function _loadSmartPushConfig() {
   try {
-    const r = await pool.query(`SELECT key, value FROM game_config WHERE key LIKE 'smart_push_%'`);
+    // TD.3 — also pull dyn_streak_freeze_* so the streak_danger signal
+    // can dynamically offer the freeze option when the player can
+    // afford it. Two LIKEs cost the same as one in practice.
+    const r = await pool.query(
+      `SELECT key, value FROM game_config
+        WHERE key LIKE 'smart_push_%' OR key LIKE 'dyn_streak_freeze_%'`);
     const out = {};
     r.rows.forEach(row => { out[row.key] = row.value; });
     return out;
@@ -6330,6 +6341,22 @@ async function _pickSmartPushFor(deviceId, cfg) {
         return d.toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' });
       })();
       if (lastIso === yesterdayIsr) {
+        // TD.3 — offer the streak freeze as the safety net. If the
+        // player can afford it (>=200💎) the push specifically
+        // mentions the freeze option; otherwise it falls back to the
+        // generic "don't lose your streak" copy. The freeze price
+        // is read from dyn_streak_freeze_price (default 200).
+        const balance = parseInt(profile.balance, 10) || 0;
+        const freezePrice = parseInt((cfg && cfg.dyn_streak_freeze_price), 10) || 200;
+        const freezeOn = (cfg && cfg.dyn_streak_freeze_enabled) !== 'false';
+        if (freezeOn && balance >= freezePrice) {
+          return {
+            reason: 'streak_freeze_offer',
+            title: '🛡 הקפא את הרצף שלך',
+            body: (playerName ? playerName + ' — ' : '') + 'יש לך ' + freezePrice + '💎? הקפא את הרצף ל-24 שעות נוספות',
+            url: '/'
+          };
+        }
         return {
           reason: 'streak_danger',
           title: '🔥 שמור על הרצף שלך!',
@@ -8914,6 +8941,59 @@ async function _resolveFriendChallengesForGame(deviceId, score, opts) {
     }
     return passed;
   } catch (e) { console.warn('_resolveFriendChallengesForGame', e.message); return []; }
+}
+
+// ============================================================
+// TD.2 — Ghost Replay push notification
+// ============================================================
+// When player A submits a daily score that beats a friend's score on
+// the SAME date by a meaningful margin (default 500+), push to that
+// friend: "A passed you! Come race the ghost". Fire-and-forget — never
+// blocks the score submission. Per-day dedup so the sender improving
+// their score 5 times doesn't send 5 pushes.
+async function _notifyFriendsBeatenOnDaily(senderDeviceId, senderScore, senderName, date) {
+  try {
+    const cfg = await getCachedConfigPrefix('ghost_push_');
+    if (cfg.ghost_push_enabled === 'false') return;
+    const minLead = parseInt(cfg.ghost_push_min_lead, 10) || 500;
+    // Find friends whose daily score on this date is meaningfully lower
+    // than the sender's. Mutual-friendship via symmetric storage: row
+    // exists iff (LEAST, GREATEST) of the two device ids matches.
+    const beatenR = await pool.query(
+      `SELECT ds.device_id AS recipient_device, ds.score AS recipient_score
+         FROM daily_scores ds
+         JOIN friendships f
+           ON (LEAST(f.device_a, f.device_b), GREATEST(f.device_a, f.device_b))
+              = (LEAST($1, ds.device_id), GREATEST($1, ds.device_id))
+        WHERE ds.date = $2
+          AND ds.device_id <> $1
+          AND ds.score + $3 <= $4
+        LIMIT 20`,
+      [senderDeviceId, date, minLead, senderScore | 0]
+    );
+    if (!beatenR.rows.length) return;
+    for (const row of beatenR.rows) {
+      // Per-day dedup: one push per (sender, recipient, date) so the
+      // sender's incremental improvements don't spam. Key fits the
+      // 255-char game_config column comfortably.
+      const dedupKey = '_ghost_push:' + senderDeviceId + ':' + row.recipient_device + ':' + date;
+      const ins = await pool.query(
+        `INSERT INTO game_config (key, value) VALUES ($1, '1')
+         ON CONFLICT (key) DO NOTHING RETURNING 1`,
+        [dedupKey]
+      );
+      if (!ins.rows.length) continue;  // already pushed today
+      // sendPushToDevice is silently no-op when VAPID isn't configured,
+      // so this is safe even on dev/local. The URL deep-links to the
+      // daily challenge so the recipient lands on the right board.
+      sendPushToDevice(row.recipient_device, {
+        title: (senderName || 'חבר') + ' עבר אותך! 👑',
+        body: 'הוא הצליח ' + (senderScore | 0).toLocaleString() + ' באתגר היומי. בוא תחזיר את הכבוד',
+        tag: 'ghost-passed-' + date + '-' + senderDeviceId,
+        data: { url: '/?mode=daily', kind: 'ghost_passed', sender: senderName || '' }
+      }).catch(function() {});
+    }
+  } catch (e) { console.warn('_notifyFriendsBeatenOnDaily', e.message); }
 }
 
 // ============================================================

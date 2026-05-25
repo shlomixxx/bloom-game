@@ -2072,6 +2072,50 @@
     margin-top: 2px;
     line-height: 1.3;
   }
+  /* TD.1 — Tomorrow Preview pill inside the streak hero card. Shows
+     the player exactly what reward they're leaving on the table by
+     skipping a day → escalation + loss-aversion in one glance. */
+  .hero-tomorrow {
+    margin-top: 6px;
+    font-size: 11.5px;
+    color: var(--color-text-muted, #6F6E68);
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    border-radius: 999px;
+    background: rgba(186, 117, 23, 0.08);
+    font-weight: 600;
+  }
+  .hero-tomorrow strong {
+    color: var(--color-accent, #BA7517);
+    font-weight: 800;
+  }
+  .hero-tomorrow.hero-tomorrow-up {
+    background: linear-gradient(135deg, rgba(255, 217, 61, 0.22), rgba(255, 159, 46, 0.18));
+    color: #5C3A00;
+    animation: heroTomorrowPulse 2.4s ease-in-out infinite;
+  }
+  .hero-tomorrow.hero-tomorrow-up strong { color: #8B3A00; }
+  .hero-tomorrow-bump {
+    opacity: 0.7;
+    font-size: 10.5px;
+    font-weight: 500;
+  }
+  @keyframes heroTomorrowPulse {
+    0%, 100% { transform: translateY(0); box-shadow: 0 0 0 0 rgba(255, 159, 46, 0); }
+    50%      { transform: translateY(-1px); box-shadow: 0 2px 8px rgba(255, 159, 46, 0.32); }
+  }
+  html[data-theme="dark"] .hero-tomorrow {
+    background: rgba(255, 217, 61, 0.12);
+    color: #FFE0A8;
+  }
+  html[data-theme="dark"] .hero-tomorrow strong { color: #FFCF63; }
+  html[data-theme="dark"] .hero-tomorrow.hero-tomorrow-up {
+    background: linear-gradient(135deg, rgba(255, 217, 61, 0.20), rgba(255, 159, 46, 0.18));
+    color: #FFE0A8;
+  }
+  html[data-theme="dark"] .hero-tomorrow.hero-tomorrow-up strong { color: #FFCF63; }
   /* Streak (mid) */
   .hero-card-streak {
     background: linear-gradient(135deg, rgba(186,117,23,0.06) 0%, rgba(250,199,117,0.08) 100%);

@@ -434,6 +434,14 @@ INSERT INTO game_config (key, value) VALUES ('ghost_min_drops', '5') ON CONFLICT
 -- Reward for the racing player when they beat the ghost.
 INSERT INTO game_config (key, value) VALUES ('ghost_beat_reward', '30') ON CONFLICT (key) DO NOTHING;
 
+-- TD.2 — Ghost Replay push notification. When a player A submits a
+-- daily score that overtakes friend B's score on the same date, B
+-- gets a push: "A passed you! He scored 12,500. Come race the ghost".
+-- One push per (sender, recipient, date) to avoid spam when the
+-- sender keeps improving.
+INSERT INTO game_config (key, value) VALUES ('ghost_push_enabled', 'true') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('ghost_push_min_lead', '500') ON CONFLICT (key) DO NOTHING;
+
 -- A8 — Squad Tournaments. Weekly 4-guild bracket competition. Auto-matched
 -- Sunday morning. 4 guilds play through the week → Wednesday evening
 -- semifinals (top-2 scores per pair) → Saturday evening final → winner

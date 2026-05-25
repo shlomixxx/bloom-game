@@ -5827,12 +5827,37 @@
       return;
     }
 
+    // TD.1 — Tomorrow Preview helper. Builds the "מחר: +N💎" pill that
+    // sits inside the streak hero card. Returns empty string when the
+    // delta isn't meaningful (e.g. day-30+ where the reward already
+    // caps). Loss-aversion + escalation visible in one glance.
+    var tomorrowPreviewHtml = function() {
+      try {
+        if (typeof getDailyRewardAmount !== 'function') return '';
+        var todayDay = todayPlayed ? streak.count : Math.max(1, streak.count);
+        var tomorrowDay = todayPlayed ? streak.count + 1 : Math.max(1, streak.count + 1);
+        var todayReward = getDailyRewardAmount(todayDay);
+        var tomorrowReward = getDailyRewardAmount(tomorrowDay);
+        // Only surface the preview if tomorrow pays MORE — that's the
+        // hook. Once the streak caps at day-30 (200💎 forever) there's
+        // no upgrade to dangle.
+        if (tomorrowReward <= todayReward) {
+          return '<div class="hero-tomorrow">מחר: <strong>+' + tomorrowReward + '💎</strong></div>';
+        }
+        return '<div class="hero-tomorrow hero-tomorrow-up">' +
+                 'מחר: <strong>+' + tomorrowReward + '💎</strong> ' +
+                 '<span class="hero-tomorrow-bump">(במקום +' + todayReward + ')</span>' +
+               '</div>';
+      } catch (e) { return ''; }
+    };
+
     if (streak.count >= 7) {
       html = '<div class="hero-card hero-card-streak hero-card-hot">' +
         '<span class="hero-icon">🔥🔥</span>' +
         '<div class="hero-body">' +
           '<div class="hero-title">יום ' + streak.count + ' ברצף!</div>' +
           '<div class="hero-sub">' + (todayPlayed ? 'כל הכבוד — חזרת היום' : 'אל תאבד את הרצף — יש לך עד חצות') + '</div>' +
+          tomorrowPreviewHtml() +
         '</div>' +
       '</div>';
     } else if (streak.count >= 3) {
@@ -5841,6 +5866,7 @@
         '<div class="hero-body">' +
           '<div class="hero-title">יום ' + streak.count + ' ברצף</div>' +
           '<div class="hero-sub">' + (todayPlayed ? 'נשמר ליום נוסף ✓' : 'שחק היום ותגיע ליום ' + (streak.count + 1)) + '</div>' +
+          tomorrowPreviewHtml() +
         '</div>' +
       '</div>';
     } else if (bestEver >= 5000 && !todayPlayed) {

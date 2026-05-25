@@ -263,7 +263,7 @@ grep -rn "alert(" src/*.js | grep -v "//"  | wc -l
 | **Heartbeat cleanup** | 🟢 תוקן (TC.3, 2026-05-25) | — |
 | **Dark theme drift** | 🟢 audit + balance-widget תוקן (TC.6, 2026-05-25) | — |
 | **Game-over share card** | 🟢 קיים (Stage 32) + confetti (TA.3, 2026-05-25) | — |
-| **Streak escalation visible** | 🟡 חלקי | בינונית |
+| **Streak escalation visible** | 🟢 תוקן (TD.1, 2026-05-25) | — |
 | **Mystery box visibility** | 🟡 חלקי | בינונית |
 
 ---
