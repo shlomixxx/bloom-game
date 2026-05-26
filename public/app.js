@@ -19236,7 +19236,14 @@
     // screen. Returning players (anyone with the bloom_ftue_done flag,
     // or anyone with games_played > 0) skip straight to home.
     if (typeof ftueShouldRun === 'function' && ftueShouldRun() && !hasHistory) {
-      startFTUE(function() { showHome(); });
+      // Defer FTUE init to the next macrotask so the rest of the IIFE
+      // can finish initializing the let/const/var bindings declared in
+      // 15-ftue.js (FTUE_KEY, FTUE_STEPS, ftueState, etc.). 13-boot.js
+      // is concatenated BEFORE 15-ftue.js, so at this point those
+      // declarations exist as `undefined` (hoisted var) or in TDZ
+      // (let/const). Without this defer, startFTUE → renderStep reads
+      // FTUE_STEPS[0] on `undefined` and crashes the boot.
+      setTimeout(function() { startFTUE(function() { showHome(); }); }, 0);
     } else {
       showHome();
     }
