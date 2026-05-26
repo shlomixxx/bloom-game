@@ -15432,7 +15432,7 @@ async function expireStaleAcceptedDuels() {
               ['DUEL:' + row.id, row.challenger_device, prize]);
           }
           await pool.query(
-            `UPDATE duels SET status = 'settled', winner_device = $1, settled_at = NOW()
+            `UPDATE duels SET status = 'settled', winner_device = $1
               WHERE id = $2 AND status = 'accepted'`,
             [row.challenger_device, row.id]);
           if (row.challenger_device) {
@@ -15457,7 +15457,7 @@ async function expireStaleAcceptedDuels() {
               ['DUEL:' + row.id, row.opponent_device, prize]);
           }
           await pool.query(
-            `UPDATE duels SET status = 'settled', winner_device = $1, settled_at = NOW()
+            `UPDATE duels SET status = 'settled', winner_device = $1
               WHERE id = $2 AND status = 'accepted'`,
             [row.opponent_device, row.id]);
           if (row.opponent_device) {
