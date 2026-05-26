@@ -979,7 +979,11 @@
   function lbPeriodLabel(p) { return p === 'month' ? 'חודשי' : p === 'week' ? 'שבועי' : 'יומי'; }
 
   function openLeaderboardModal() {
-    const wrap = document.getElementById('grid-wrap');
+    // Mount on body so the modal is visible regardless of which
+    // screen is active. grid-wrap is display:none while home is
+    // showing, which previously made this modal invisible when
+    // opened from the home screen.
+    const wrap = document.body;
     if (!wrap || document.getElementById('lb-modal')) return;
     // Re-resolve admin defaults at open time — gameConfig is fetched
     // async after boot, so the module-init values may have used the
@@ -1247,8 +1251,10 @@
   // never again unless the user reopens it from the leaderboard modal. Null
   // (skipped) is a valid final state: country tab simply excludes those rows.
   function promptForCountry(cb) {
-    var wrap = document.getElementById('grid-wrap');
-    if (!wrap || document.getElementById('country-modal')) { cb && cb(); return; }
+    // Mount on body — see openLeaderboardModal / promptForName for
+    // the same rationale (grid-wrap is hidden when home is showing).
+    var wrap = document.body;
+    if (document.getElementById('country-modal')) { cb && cb(); return; }
     var modal = document.createElement('div');
     modal.id = 'country-modal';
     modal.className = 'info-modal';
@@ -1303,11 +1309,19 @@
 
   function promptForName(cb, opts) {
     opts = opts || {};
-    const wrap = document.getElementById('grid-wrap') || document.body;
-    if (!wrap || document.getElementById('name-modal')) { cb && cb(); return; }
+    // BUG FIX (May 2026): used to mount into #grid-wrap, which is set
+    // `display:none` while the home screen is showing. That made the
+    // edit-name modal invisible when clicking the ✏️ on the home pid
+    // line. Always mount on body so the modal lives at viewport level
+    // regardless of which screen is currently visible.
+    if (document.getElementById('name-modal')) { cb && cb(); return; }
+    const wrap = document.body;
     const modal = document.createElement('div');
     modal.id = 'name-modal';
     modal.className = 'info-modal';
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    modal.setAttribute('aria-labelledby', 'name-modal-title');
     const isEdit = !!opts.edit;
     const prefillVal = (opts.prefill || (isEdit ? (playerName || '') : '')).replace(/"/g, '&quot;');
     modal.innerHTML =
@@ -1319,6 +1333,26 @@
         '<button class="btn secondary" id="name-skip">' + (isEdit ? 'בטל' : 'דלג') + '</button>' +
       '</div>';
     wrap.appendChild(modal);
+    // A11y post-process: tag the title for aria-labelledby + ensure
+    // buttons explicitly type="button" so they don't trigger a form
+    // submit when the modal is mounted inside any future form context.
+    var __titleEl = modal.querySelector('.info-title');
+    if (__titleEl) __titleEl.id = 'name-modal-title';
+    var __inputEl = modal.querySelector('.name-input');
+    if (__inputEl) __inputEl.setAttribute('aria-label', 'השם שלך');
+    var __saveBtn = modal.querySelector('#name-save');
+    var __skipBtn = modal.querySelector('#name-skip');
+    if (__saveBtn) __saveBtn.type = 'button';
+    if (__skipBtn) {
+      __skipBtn.type = 'button';
+      // Lets the global ESC handler ([data-close-modal] / aria-label
+      // selector in __bloomDismissTopmostModal) close via skip(), which
+      // restores focus + chains the country picker correctly.
+      __skipBtn.setAttribute('data-close-modal', '1');
+    }
+    // Save the element that had focus before opening so we can restore
+    // it on close — keeps keyboard users in place.
+    var __prevFocus = document.activeElement;
     const input = document.getElementById('name-input');
     setTimeout(function() {
       if (input) {
@@ -1326,6 +1360,20 @@
         try { input.setSelectionRange(input.value.length, input.value.length); } catch (e) {}
       }
     }, 50);
+    // Tab focus trap — keeps Tab/Shift+Tab cycling within the modal.
+    modal.addEventListener('keydown', function(ev) {
+      if (ev.key !== 'Tab') return;
+      var focusables = modal.querySelectorAll('button, input, select, textarea, [tabindex]:not([tabindex="-1"])');
+      var visible = Array.prototype.filter.call(focusables, function(el) { return !el.disabled && el.offsetParent !== null; });
+      if (!visible.length) return;
+      var first = visible[0], last = visible[visible.length - 1];
+      if (ev.shiftKey && document.activeElement === first) { last.focus(); ev.preventDefault(); }
+      else if (!ev.shiftKey && document.activeElement === last) { first.focus(); ev.preventDefault(); }
+    });
+    // Backdrop click → skip (treats outside-tap like cancel).
+    modal.addEventListener('click', function(ev) {
+      if (ev.target === modal) { try { skip(); } catch (_) {} }
+    });
     function maybeChainCountry(after) {
       // Only chain the flag picker on the very first name-pick (no stored
       // country yet). Returning users keep the picker behind the leaderboard
@@ -1344,6 +1392,9 @@
         }).catch(function() {});
       } catch (e) {}
     }
+    function restoreFocus() {
+      try { if (__prevFocus && typeof __prevFocus.focus === 'function') __prevFocus.focus({ preventScroll: true }); } catch (_) {}
+    }
     function save() {
       const v = (input.value || '').trim().slice(0, 24);
       if (v) {
@@ -1352,6 +1403,7 @@
         syncServerName(v);
       }
       modal.remove();
+      restoreFocus();
       maybeChainCountry(function() { cb && cb(); });
     }
     function skip() {
@@ -1359,6 +1411,7 @@
       // ("שחקן XXXX"), so we don't fall back to "אנונימי" anymore. Skipping
       // simply leaves whatever was there (default or previously-saved name).
       modal.remove();
+      restoreFocus();
       if (isEdit) { cb && cb(); return; }
       maybeChainCountry(function() { cb && cb(); });
     }

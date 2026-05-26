@@ -223,8 +223,10 @@
   }
 
   function showInfo() {
-    const wrap = document.getElementById('grid-wrap');
-    if (!wrap || document.getElementById('info-modal')) return;
+    // Mount on body — grid-wrap is display:none while home is showing,
+    // which would otherwise make this info modal invisible.
+    const wrap = document.body;
+    if (document.getElementById('info-modal')) return;
     const rows = [];
     for (let t = 1; t <= MAX_TIER; t++) {
       const ti = getActiveTiers()[t];

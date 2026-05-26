@@ -819,8 +819,10 @@
   }
 
   function openAchievementsModal() {
-    const wrap = document.getElementById('grid-wrap');
-    if (!wrap || document.getElementById('ach-modal')) return;
+    // Mount on body — see promptForName / openLeaderboardModal for
+    // the same rationale (grid-wrap is hidden when home is showing).
+    const wrap = document.body;
+    if (document.getElementById('ach-modal')) return;
     const modal = document.createElement('div');
     modal.id = 'ach-modal';
     modal.className = 'info-modal';
@@ -917,6 +919,10 @@
       '.dyn-friends-modal-overlay, .gem-bank-overlay, .ghost-confirm-overlay, ' +
       '.gacha-history-overlay, .squad-modal-overlay, .squad-tournament-modal-overlay, ' +
       '.rivalry-modal-overlay, .leagues-modal-overlay, ' +
+      // .info-modal is the legacy class used by 14+ surfaces (name prompt,
+      // country picker, score info, share dialog, shop, etc.). Adding here
+      // so ESC + back-gesture close all of them through the unified path.
+      '.info-modal, ' +
       // Full-screen views (not modals, but ESC/back-gesture should exit them
       // back to home — they intentionally have a small absolute-positioned
       // back arrow that's easy to miss). Adding here so the global handler

@@ -1096,6 +1096,99 @@
   }
 
   /* (drop-target removed — clean board is better on 4-column grid) */
+
+  /* ════════════════════════════════════════════════════════════
+     UNIVERSAL MODAL HARDENING (May 2026)
+     ════════════════════════════════════════════════════════════
+     Applies to every modal across the app via class selectors, so we
+     don't need a JS refactor across 40+ existing modal call sites.
+     Each modal still uses its own backdrop class (.info-modal,
+     .dyn-boards-overlay, .gem-bank-overlay, .rivalry-modal-overlay,
+     etc.) — these rules add cross-cutting mobile/RTL/a11y fixes that
+     were missing or inconsistent.
+
+     Based on 2026 best practices (Bram.us, CSS-Tricks, W3C ARIA APG):
+     - Use `dvh` not `vh` for max-height — `vh` ignores iOS Safari's
+       address bar so a "100vh" modal gets clipped on small screens.
+     - `overscroll-behavior: contain` on the modal so reaching the
+       end of the inner scroll doesn't bubble to the page (rubber-
+       band scrolling on iOS that breaks the modal feel).
+     - `touch-action: pan-y` so swipe-Y reaches the scroll area
+       cleanly without browser interpreting horizontal noise.
+     - Logical properties (inset-inline-end) where applicable for
+       clean RTL flipping.
+     - Min 44×44 touch target on close buttons (Apple HIG / WCAG).
+  ════════════════════════════════════════════════════════════ */
+
+  /* Common overlay polish — every modal backdrop gets these. */
+  .info-modal,
+  .dyn-boards-overlay,
+  .board-lb-overlay,
+  .dyn-comeback-overlay,
+  .dyn-friends-modal-overlay,
+  .gem-bank-overlay,
+  .ghost-confirm-overlay,
+  .gacha-history-overlay,
+  .squad-modal-overlay,
+  .squad-tournament-modal-overlay,
+  .rivalry-modal-overlay,
+  .leagues-modal-overlay,
+  [class*="modal-overlay"] {
+    /* Prevent body scroll while modal is open. Combined with iOS
+       Safari's modern rules, this replaces the old position:fixed
+       body hack and works without breaking the address-bar UI. */
+    overscroll-behavior: contain;
+  }
+
+  /* Universal card scroll: cap height, allow scroll, smooth touch.
+     The 92dvh ceiling leaves room for OS chrome on phones. */
+  .info-card,
+  .dyn-boards-modal,
+  .board-lb-modal,
+  .dyn-comeback-card,
+  .dyn-friends-modal,
+  .gem-bank-modal,
+  .ghost-confirm-card,
+  .gacha-history-modal,
+  .squad-modal,
+  .squad-tournament-modal,
+  .rivalry-modal,
+  .leagues-modal {
+    max-height: min(92dvh, 720px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    touch-action: pan-y;
+    /* iOS scrollbar polish — modern Safari renders thin native bars,
+       Chrome desktop benefits from a slim gutter. */
+    scrollbar-width: thin;
+    scrollbar-color: rgba(0,0,0,0.25) transparent;
+  }
+  .info-card::-webkit-scrollbar,
+  .dyn-boards-modal::-webkit-scrollbar,
+  .board-lb-modal::-webkit-scrollbar {
+    width: 6px;
+  }
+  .info-card::-webkit-scrollbar-thumb,
+  .dyn-boards-modal::-webkit-scrollbar-thumb,
+  .board-lb-modal::-webkit-scrollbar-thumb {
+    background: rgba(0,0,0,0.22);
+    border-radius: 3px;
+  }
+
+  /* Larger touch targets on every "close X" button across the app.
+     WCAG 2.5.5 requires 44×44px minimum for primary interactive UI;
+     several modals had 28-32px close buttons that were finger-miss
+     prone on phones. */
+  .dyn-boards-close,
+  .info-card .info-close,
+  [class$="modal-close"],
+  [aria-label="סגור"]:not(.no-min-target) {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  /* When the original styling already gave a small box, keep the
+     visual size + just expand the hit-area via padding-only. */
+  .dyn-boards-close { padding: 6px; }
   /* ============ TOUR / TUTORIAL ("סייר") ============ */
   .tour-card {
     background: #FFFFFF; border-radius: 18px; padding: 0;
