@@ -1747,6 +1747,30 @@
     </div>
   </section>
 
+  <!-- 💰 Gem Bank (stage 45 / A10) — admin control panel -->
+  <section id="bank-section" style="margin-bottom:12px">
+    <h2>💰 בנק יהלומים / Gem Bank <button class="tip-btn" data-tip-text="<strong>💰 Gem Bank — behavioral-economics retention</strong><br>השחקן מפקיד 💎 בבנק → מקבל ריבית יומית compound. משיכה עולה אחוז קנס.<div class=&quot;tip-example&quot;>💡 <strong>למה זה ממכר</strong>: loss-aversion stickiness — שחקן עם 💎 בבנק יחזור כל יום כדי לראות את הריבית מצטברת. ה-pattern של Coin Master + Hay Day.<br><br>📊 <strong>חישוב</strong> (default): 1% יומי על 1,000💎 → 1,348💎 ב-30 יום (compound interest).<br><br>⚠ <strong>אזהרה</strong>: ריבית >5% יוצרת inflation לא מאוזנת. ה-cap על max_balance מונע מ-whales לצבור מספרים אסטרונומיים.<br><br>📊 cron ב-03:00 IL מחדש את הריבית פעם ביום. הקנס על משיכה (5%) יוצר loss-aversion — שחקן יהסס לפני שמושך.</div>">?</button></h2>
+    <div style="padding:12px 16px;background:var(--card);border-radius:10px;margin-top:8px">
+
+      <div style="margin-bottom:12px">
+        <div style="font-size:13px;font-weight:700;color:var(--gold);margin-bottom:6px">⚙️ הגדרות בסיס</div>
+        <div class="rewards-grid" data-keys="bank_enabled,bank_interest_pct_daily"></div>
+      </div>
+
+      <div style="margin-bottom:12px">
+        <div style="font-size:13px;font-weight:700;color:var(--gold);margin-bottom:6px">💎 גבולות סכומים</div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:6px">מקסימום יתרה (anti-whale) + מינימום הפקדה לפעולה</div>
+        <div class="rewards-grid" data-keys="bank_max_balance,bank_min_deposit"></div>
+      </div>
+
+      <div style="margin-bottom:8px">
+        <div style="font-size:13px;font-weight:700;color:var(--gold);margin-bottom:6px">💸 קנס משיכה</div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:6px">אחוז קנס שמנוכה מהסכום בעת משיכה. הקנס יוצר loss-aversion — שחקן יהסס.</div>
+        <div class="rewards-grid" data-keys="bank_withdrawal_fee_pct"></div>
+      </div>
+    </div>
+  </section>
+
   <!-- 🛡 Guilds / Clans (stage 27) -->
   <section id="guilds-section" style="margin-bottom:12px">
     <h2>🛡 קלאנים / Guilds <button class="tip-btn" data-tip-text="<strong>🛡 Guilds / Clans</strong><br>Peer-pressure retention.<div class=&quot;tip-example&quot;>💡 <strong>למה זה ממכר</strong>: שחקנים בקלאן משחקים פי 3.4 יותר מסולואיים, +35% D30 retention. ה-pattern: יעד יומי משותף (30 כתרים) + פרס לכל מי שתורם כשהיעד מושג. שחקן שלא תורם מרגיש שהוא עוצר את הקבוצה.<br><br>📊 <strong>v1 scope</strong>: create/join/leave + יעד יומי + claim per-member + leaderboard. <strong>Skipped</strong>: chat, wars, leagues.<br><br>📊 יצירת קלאן עולה 500💎 (anti-spam). הצטרפות חינמית. תרומה אוטומטית מ-game-over כשתופסים כתר.</div>">?</button></h2>

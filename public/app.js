@@ -22032,7 +22032,9 @@
   }
 
   function doLivesRefillGems(btn) {
-    if (btn) { btn.disabled = true; btn.innerHTML = '⏳'; }
+    if (!btn) return;
+    var originalHtml = btn.innerHTML;
+    btn.disabled = true; btn.innerHTML = '⏳';
     var deviceId = (typeof getDeviceId === 'function') ? getDeviceId() : '';
     var token = (typeof deviceToken !== 'undefined') ? deviceToken : null;
     fetch('/api/player/lives/refill-gems', {
@@ -22047,6 +22049,8 @@
           if (typeof d.newBalance === 'number') {
             try { if (typeof playerBalance !== 'undefined') playerBalance = d.newBalance; } catch (e) {}
             try { if (typeof updateBalanceDisplay === 'function') updateBalanceDisplay(); } catch (e) {}
+            // 2026-05-26: bump home balance widget so the spend shows on home.
+            try { if (typeof window.__bloomBumpBal === 'function') window.__bloomBumpBal(d.newBalance, -(d.cost || 0)); } catch (e) {}
           }
           if (_livesCache.data) {
             _livesCache.data.currentLives = d.currentLives;
@@ -22057,12 +22061,15 @@
           try { if (typeof buzz === 'function') buzz([40, 30, 60]); } catch (e) {}
           var modal = document.getElementById('lives-refill-modal');
           if (modal) modal.remove();
-        } else if (d && d.reason === 'insufficient_funds') {
-          showToast('💎 חסר ' + ((d.price || 0) - (d.balance || 0)) + '💎', 'warning');
-          if (btn) btn.disabled = false;
         } else {
-          showToast('שגיאה: ' + ((d && d.reason) || 'unknown'), 'error');
-          if (btn) btn.disabled = false;
+          // 2026-05-26: was leaving btn stuck on '⏳' forever. Restore original.
+          btn.disabled = false;
+          btn.innerHTML = originalHtml;
+          if (d && d.reason === 'insufficient_funds') {
+            showToast('💎 חסר ' + ((d.price || 0) - (d.balance || 0)) + '💎', 'warning');
+          } else {
+            showToast('שגיאה: ' + ((d && d.reason) || 'unknown'), 'error');
+          }
         }
       });
   }
@@ -22631,8 +22638,25 @@
     if (feedBtn && data.canFeed && canAffordFeed) feedBtn.onclick = function() { doFeedAction(feedBtn); };
   }
 
+  // 2026-05-26: rewrote the pet/feed action handlers because the old
+  // flow looked broken to the user:
+  //   • Success path: only tiny heart burst (60px area) + sound + no
+  //     toast → player clicked button, saw nothing change in the modal
+  //     for ~500ms while waiting for re-render. Thought it didn't work.
+  //   • Error path: btn left as '⏳' forever (only btn.disabled reset).
+  //     Subsequent clicks also did nothing because the button looked
+  //     "loading". Hence "לוחץ ולא קורה כלום".
+  //
+  // New flow:
+  //   • Save original innerHTML before swapping to ⏳ so we can restore
+  //     on error.
+  //   • On success: swap button to "✓ קיבלת +20💎" + show floating +N
+  //     badge inside the modal. THIS is the dopamine moment.
+  //   • On error: restore original innerHTML + show toast.
   function doPetAction(btn) {
-    if (btn) { btn.disabled = true; btn.innerHTML = '⏳'; }
+    if (!btn) return;
+    var originalHtml = btn.innerHTML;
+    btn.disabled = true; btn.innerHTML = '<div style="font-size:24px">⏳</div>';
     var deviceId = (typeof getDeviceId === 'function') ? getDeviceId() : '';
     var token = (typeof deviceToken !== 'undefined') ? deviceToken : null;
     fetch('/api/pet/pet', {
@@ -22649,26 +22673,85 @@
             try { if (typeof updateBalanceDisplay === 'function') updateBalanceDisplay(); } catch (e) {}
             try { if (typeof window.__bloomBumpBal === 'function') window.__bloomBumpBal(d.newBalance, d.reward || 0); } catch (e) {}
           }
-          try { if (typeof soundMilestone === 'function') soundMilestone(3); } catch (e) {}
-          try { if (typeof buzz === 'function') buzz([40, 30, 60]); } catch (e) {}
-          // Heart burst animation
+          try { if (typeof soundMilestone === 'function') soundMilestone(5); } catch (e) {}
+          try { if (typeof buzz === 'function') buzz([60, 40, 80, 40, 120]); } catch (e) {}
           showPetHeartBurst();
+          // Immediate visual confirmation BEFORE the modal re-render.
+          var reward = d.reward || 20;
+          btn.innerHTML =
+            '<div style="font-size:28px">✓</div>' +
+            '<div style="font-weight:900;font-size:13px">קיבלת!</div>' +
+            '<div style="color:#FFD700;font-weight:800;font-size:14px">+' + reward + '💎</div>';
+          showPetRewardFloater(reward);
           fetchPetState(true).then(function(fresh) {
             if (fresh) {
               updatePetWidget(fresh);
-              // Re-render modal with updated state.
-              setTimeout(function() { showPetModal(fresh); }, 400);
+              setTimeout(function() { showPetModal(fresh); }, 1500);
             }
           });
         } else {
-          if (btn) btn.disabled = false;
-          showToast(d && d.reason === 'already_petted_today' ? 'כבר ליטפת היום!' : 'שגיאה', d && d.reason === 'already_petted_today' ? 'info' : 'error');
+          // Restore original button content so player can see what state
+          // the button is in instead of being stuck on '⏳'.
+          btn.disabled = false;
+          btn.innerHTML = originalHtml;
+          var reason = d && d.reason;
+          if (reason === 'already_petted_today') {
+            if (typeof showToast === 'function') showToast('💗 כבר ליטפת היום! בוא מחר', 'info');
+          } else if (reason === 'disabled') {
+            if (typeof showToast === 'function') showToast('הפיצ׳ר כבוי כרגע', 'warning');
+          } else {
+            if (typeof showToast === 'function') showToast('שגיאה — נסה שוב', 'error');
+          }
+          // Force re-fetch so the modal updates to canPet=false on next open.
+          fetchPetState(true).then(function(fresh) {
+            if (fresh) { updatePetWidget(fresh); setTimeout(function() { showPetModal(fresh); }, 300); }
+          });
         }
       });
   }
 
+  // Big "+N💎" badge that floats up from the modal center. Used by
+  // both pet and feed actions so the dopamine moment is impossible
+  // to miss even if the home-widget bump is off-screen.
+  function showPetRewardFloater(amount) {
+    var modal = document.getElementById('pet-modal');
+    if (!modal) return;
+    var card = modal.querySelector('.pet-modal-card') || modal;
+    var floater = document.createElement('div');
+    // Accept (number) — formatted as +N💎 / -N💎, or (string) — used as-is.
+    var isNumber = (typeof amount === 'number');
+    var text, color;
+    if (isNumber) {
+      text = (amount < 0 ? '' : '+') + amount + '💎';
+      color = amount < 0 ? '#E84A5F' : '#FFD700';
+    } else {
+      text = String(amount);
+      color = '#9FE1CB';
+    }
+    floater.style.cssText =
+      'position:absolute;top:42%;left:50%;transform:translate(-50%,-50%);' +
+      'font-size:32px;font-weight:900;color:' + color + ';' +
+      'text-shadow:0 4px 16px rgba(0,0,0,0.6),0 0 24px rgba(255,215,0,0.7);' +
+      'pointer-events:none;z-index:1000;direction:ltr;' +
+      'animation:petRewardFloat 1.5s ease-out forwards';
+    floater.textContent = text;
+    if (!document.getElementById('pet-reward-floater-style')) {
+      var st = document.createElement('style');
+      st.id = 'pet-reward-floater-style';
+      st.textContent = '@keyframes petRewardFloat{0%{opacity:0;transform:translate(-50%,-30%) scale(0.5)}20%{opacity:1;transform:translate(-50%,-50%) scale(1.15)}60%{opacity:1;transform:translate(-50%,-90%) scale(1)}100%{opacity:0;transform:translate(-50%,-160%) scale(0.85)}}';
+      document.head.appendChild(st);
+    }
+    if (card.style.position !== 'absolute' && card.style.position !== 'relative') {
+      card.style.position = 'relative';
+    }
+    card.appendChild(floater);
+    setTimeout(function() { try { floater.remove(); } catch (e) {} }, 1600);
+  }
+
   function doFeedAction(btn) {
-    if (btn) { btn.disabled = true; btn.innerHTML = '⏳'; }
+    if (!btn) return;
+    var originalHtml = btn.innerHTML;
+    btn.disabled = true; btn.innerHTML = '<div style="font-size:24px">⏳</div>';
     var deviceId = (typeof getDeviceId === 'function') ? getDeviceId() : '';
     var token = (typeof deviceToken !== 'undefined') ? deviceToken : null;
     fetch('/api/pet/feed', {
@@ -22683,30 +22766,42 @@
           if (typeof d.newBalance === 'number') {
             try { if (typeof playerBalance !== 'undefined') playerBalance = d.newBalance; } catch (e) {}
             try { if (typeof updateBalanceDisplay === 'function') updateBalanceDisplay(); } catch (e) {}
-            // Pet feed costs gems (negative delta for the bump animation).
             try { if (typeof window.__bloomBumpBal === 'function') window.__bloomBumpBal(d.newBalance, -(d.feedCost || 0)); } catch (e) {}
           }
-          try { if (typeof soundMilestone === 'function') soundMilestone(d.leveledUp ? 5 : 3); } catch (e) {}
-          try { if (typeof buzz === 'function') buzz(d.leveledUp ? [80, 60, 100, 60, 120] : [40, 30, 60]); } catch (e) {}
+          try { if (typeof soundMilestone === 'function') soundMilestone(d.leveledUp ? 7 : 5); } catch (e) {}
+          try { if (typeof buzz === 'function') buzz(d.leveledUp ? [80, 60, 100, 60, 120, 60, 160] : [60, 40, 80, 40, 100]); } catch (e) {}
           showPetSparkleBurst();
+          // Visible confirmation: -N💎 (spend) and +N XP, plus level-up.
+          var spent = d.feedCost || 10;
+          var xpGain = d.xpGain || 50;
+          btn.innerHTML =
+            '<div style="font-size:28px">✓</div>' +
+            '<div style="font-weight:900;font-size:13px">האכלת!</div>' +
+            '<div style="color:#9FE1CB;font-weight:800;font-size:13px">+' + xpGain + ' XP</div>';
+          showPetRewardFloater(-spent);
+          setTimeout(function() { showPetRewardFloater(xpGain + ' XP'); }, 350);
           if (d.leveledUp) {
             showPetLevelUpToast(d.newLevel, d.stage);
           }
           fetchPetState(true).then(function(fresh) {
             if (fresh) {
               updatePetWidget(fresh);
-              setTimeout(function() { showPetModal(fresh); }, 400);
+              setTimeout(function() { showPetModal(fresh); }, 1500);
             }
           });
         } else {
-          if (btn) btn.disabled = false;
+          btn.disabled = false;
+          btn.innerHTML = originalHtml;
           if (d && d.reason === 'insufficient_funds') {
-            showToast('💎 חסר ' + ((d.price || 0) - (d.balance || 0)) + '💎', 'warning');
+            if (typeof showToast === 'function') showToast('💎 חסר ' + ((d.price || 0) - (d.balance || 0)) + '💎', 'warning');
           } else if (d && d.reason === 'daily_limit_reached') {
-            showToast('🍽 הגעת למקסימום האכלות יומי (' + d.feedsPerDay + ')', 'info');
+            if (typeof showToast === 'function') showToast('🍽 הגעת למקסימום האכלות יומי (' + d.feedsPerDay + ')', 'info');
           } else {
-            showToast('שגיאה', 'error');
+            if (typeof showToast === 'function') showToast('שגיאה — נסה שוב', 'error');
           }
+          fetchPetState(true).then(function(fresh) {
+            if (fresh) { updatePetWidget(fresh); setTimeout(function() { showPetModal(fresh); }, 300); }
+          });
         }
       });
   }

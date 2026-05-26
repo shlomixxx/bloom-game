@@ -231,7 +231,9 @@
   }
 
   function doLivesRefillGems(btn) {
-    if (btn) { btn.disabled = true; btn.innerHTML = '⏳'; }
+    if (!btn) return;
+    var originalHtml = btn.innerHTML;
+    btn.disabled = true; btn.innerHTML = '⏳';
     var deviceId = (typeof getDeviceId === 'function') ? getDeviceId() : '';
     var token = (typeof deviceToken !== 'undefined') ? deviceToken : null;
     fetch('/api/player/lives/refill-gems', {
@@ -246,6 +248,8 @@
           if (typeof d.newBalance === 'number') {
             try { if (typeof playerBalance !== 'undefined') playerBalance = d.newBalance; } catch (e) {}
             try { if (typeof updateBalanceDisplay === 'function') updateBalanceDisplay(); } catch (e) {}
+            // 2026-05-26: bump home balance widget so the spend shows on home.
+            try { if (typeof window.__bloomBumpBal === 'function') window.__bloomBumpBal(d.newBalance, -(d.cost || 0)); } catch (e) {}
           }
           if (_livesCache.data) {
             _livesCache.data.currentLives = d.currentLives;
@@ -256,12 +260,15 @@
           try { if (typeof buzz === 'function') buzz([40, 30, 60]); } catch (e) {}
           var modal = document.getElementById('lives-refill-modal');
           if (modal) modal.remove();
-        } else if (d && d.reason === 'insufficient_funds') {
-          showToast('💎 חסר ' + ((d.price || 0) - (d.balance || 0)) + '💎', 'warning');
-          if (btn) btn.disabled = false;
         } else {
-          showToast('שגיאה: ' + ((d && d.reason) || 'unknown'), 'error');
-          if (btn) btn.disabled = false;
+          // 2026-05-26: was leaving btn stuck on '⏳' forever. Restore original.
+          btn.disabled = false;
+          btn.innerHTML = originalHtml;
+          if (d && d.reason === 'insufficient_funds') {
+            showToast('💎 חסר ' + ((d.price || 0) - (d.balance || 0)) + '💎', 'warning');
+          } else {
+            showToast('שגיאה: ' + ((d && d.reason) || 'unknown'), 'error');
+          }
         }
       });
   }
