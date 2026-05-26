@@ -4,39 +4,14 @@
 
 ---
 
-## 1. 🔑 הפעלת Google Analytics (5 דקות)
+## ✅ 1. Google Analytics — כבר מופעל
 
-### מה זה נותן:
-נתונים על כל מה שקורה במשחק — כמה שחקנים, מאיפה הם מגיעים, כמה זמן משחקים, מה הם עושים.
+**Measurement ID:** `G-KTRD0NCTX8` (property: `bloom-game`)
 
-### שלב 1 — יצירת חשבון GA4:
-1. פתח https://analytics.google.com
-2. לחץ "Start measuring" (או "התחל למדוד")
-3. שם חשבון: `BLOOM`
-4. שם Property: `BLOOM Game`
-5. בחר timezone: `Israel` ומטבע: `ILS`
-6. לחץ "Create"
+ה-gtag.js נטען ישירות מ-[public/index.html](../../public/index.html) בכל פתיחה של דף. כל קריאות `trackEvent()` בקוד שולחות אירועים אמיתיים ל-GA4: `game_start`, `game_over`, `contest_join`, `challenge_enter`, `tutorial_complete`, `share`, `daily_login_claimed`, `level_up`, `purchase`.
 
-### שלב 2 — יצירת Web Stream:
-1. בתפריט השמאלי: Admin → Data Streams → Add Stream → Web
-2. כתובת: `bloom-web-production-f3bd.up.railway.app`
-3. שם: `BLOOM Web`
-4. לחץ "Create Stream"
-5. **העתק את ה-MEASUREMENT ID** — מתחיל ב-`G-` (למשל: `G-ABC123XYZ`)
-
-### שלב 3 — הגדרה ב-Railway:
-1. פתח https://railway.app → הפרויקט שלך → bloom-web
-2. לחץ על הטאב "Variables"
-3. לחץ "New Variable"
-4. **Key:** `GA_ID`
-5. **Value:** הדבק את ה-Measurement ID (למשל `G-ABC123XYZ`)
-6. לחץ "Add"
-7. Railway יעשה redeploy אוטומטית
-
-### איך לבדוק שעובד:
-1. פתח את המשחק בדפדפן
-2. חזור ל-Google Analytics → Realtime
-3. אתה צריך לראות "1 user" בלוח
+**איפה לראות:** https://analytics.google.com → Property "bloom-game" → Realtime
+**אומת לייב:** 26/05/2026 — `G-KTRD0NCTX8` חי במקור ה-HTML של ה-production.
 
 ---
 
@@ -108,14 +83,85 @@
 
 ---
 
-## סיכום — מה לעשות עכשיו:
+## 4. 🚨 ERROR_WEBHOOK — התראות crash (אופציונלי, 3 דקות)
 
-| עדיפות | משימה | זמן |
-|--------|-------|-----|
-| 🔴 | GA4 — הגדר `GA_ID` ב-Railway | 5 דק' |
-| 🟡 | דומיין — קנה והגדר | 15 דק' |
-| 🟢 | App Store — הכן screenshots | כשתהיה מוכן |
+### מה זה נותן:
+כשה-server קורס או נופל → הודעה מיידית ב-Discord/Slack/WhatsApp. בלי זה — אתה לומד על קריסה רק כששחקן מתלונן.
+
+הקוד כבר מחובר ב-[server.js](../../server.js): `unhandledRejection` + `uncaughtException` שולחים POST ל-URL מה-env var `ERROR_WEBHOOK`. אם לא מוגדר — לוג בלבד.
+
+### הכי קל — Discord webhook (3 דקות):
+1. אם אין חשבון Discord: https://discord.com → Register
+2. פתח Discord → צור Server פרטי (Server → Create My Own → For me and my friends)
+3. לחץ ימני על ערוץ #general → **Edit Channel** → **Integrations** → **Create Webhook**
+4. שם: `BLOOM Alerts` · **Copy Webhook URL**
+5. שלח לי את ה-URL ואני אגדיר ב-Railway אוטומטית — או הוסף בעצמך:
+   ```
+   Railway → bloom-web → Variables → New Variable
+   Key: ERROR_WEBHOOK
+   Value: https://discord.com/api/webhooks/...
+   ```
+
+### חלופה — Slack webhook:
+https://api.slack.com/messaging/webhooks → Create app → Incoming Webhooks → Add to Channel → Copy URL.
 
 ---
 
-*עודכן: מאי 2026*
+## 5. 💳 Stripe IAP — שילוב תשלום אמיתי (כשתהיה מוכן למוניטיזציה)
+
+### מה זה נותן:
+שחקנים יוכלו לקנות בכסף אמיתי (USD/ILS) — premium battle pass, gem packs, VIP, real-money cosmetic skins. הקוד הנוכחי הכל gems-only. צריך 3-4 ימי עבודה משולבת.
+
+### מה צריך ממך לפני שאני אתחיל:
+1. **חשבון Stripe** (https://dashboard.stripe.com) — verify business identity (15 דק' + 24h אישור).
+2. **חשבון בנק עסקי בישראל** — Stripe ישראל דורש הוכחת זהות עסקית.
+3. **מע"מ ID + ע.ע.מ.** — לחשבוניות אוטומטיות.
+4. **תקנון משחק + מדיניות החזרים** — חוקי הגנת הצרכן IL דורשים תקופת ביטול 14 יום.
+
+### מה אני אבנה אחרי שתאשר:
+- `POST /api/iap/checkout` עם `priceId` מאושר → Stripe Checkout session → webhook → atomic gem credit + entitlement.
+- `POST /webhooks/stripe` עם signature verification.
+- Admin: dashboard מכירות יומי/חודשי, refund tooling, dispute alerts.
+- Client: 2 כפתורי תשלום ליד כל "buy with gems" (USD path + ILS path).
+
+### עדיפות:
+לא דחוף. עדיף לקבל קודם 100-200 שחקנים אמיתיים עם נתוני retention טובים (>40% D1, >20% D7) — אז המוניטיזציה הופכת ל-ROI חיובי. בלי משתמשים אין מה למנטז.
+
+---
+
+## 6. 🏆 VIP Subscription ($4.99/חודש) — אחרי Stripe
+
+תוכנית חודשית עם ×2 daily login, ×3 quest rewards, exclusive skin pack, ad-free, חודש בחינם בהזמנה ראשונה. MRR יציב.
+
+---
+
+## 7. 🎨 Real-Money Cosmetic Shop — אחרי Stripe
+
+חנות סקינים פרימיום שמשלמים ב-$ ישירות (לא דרך gems). Targeting collectors. רווח גבוה (60-80% margin).
+
+---
+
+## 8. 💰 Wager / Real-Money Tournaments — דרושה הסמכה משפטית
+
+טורנירים ב-$1 entry, 70% prize pool. דורש:
+- אישור משפטי שזה לא "הימור" לפי חוק ההגרלות והמשחקים האסורים (ישראל).
+- בד"כ skill-based exemption — אבל צריך עורך דין שיאשר.
+- KYC לזוכים מעל ₪200.
+
+---
+
+## סיכום — מה לעשות עכשיו:
+
+| עדיפות | משימה | זמן | סטטוס |
+|--------|-------|-----|-------|
+| ✅ | GA4 | — | כבר עובד (G-KTRD0NCTX8) |
+| 🟡 | ERROR_WEBHOOK | 3 דק' | ממתין ל-URL ממך |
+| 🟡 | דומיין | 15 דק' | ממתין |
+| 🟢 | Stripe IAP | 3-4 ימים | ממתין לאישור עסקי |
+| 🟢 | VIP / Cosmetic Shop | יום | אחרי Stripe |
+| 🟢 | Wager Tournaments | יום + ייעוץ משפטי | אחרי Stripe |
+| 🟢 | App Store screenshots | יום | כשתהיה מוכן |
+
+---
+
+*עודכן: 26/05/2026 — סוקר אוטומטית: GA4 פעיל, orphan DBs נמחקו, Issue Tracker חי.*
