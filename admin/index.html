@@ -8604,18 +8604,33 @@
       });
       if (r && r.ok) {
         toast(key + ' → ' + val);
-        // Refresh active states for this row only
+        // Refresh active states. The legacy config table uses
+        // <tr data-config-key="X">; the inline grid uses buttons
+        // tagged with data-key="X". Search both shapes.
         var row = host.querySelector('tr[data-config-key="' + key + '"]');
-        if (row) {
-          row.querySelectorAll('.cfg-toggle-btn').forEach(function(b) {
+        var scopes = [row].filter(Boolean);
+        if (!scopes.length) {
+          // Inline-grid case: scope is anything with data-key matching.
+          // Look up to the cell container so toggle + preset siblings
+          // both get refreshed.
+          var anyMarker = host.querySelector('[data-key="' + key + '"]');
+          if (anyMarker) {
+            var cell = anyMarker.closest('.cfg-grid-cell') || anyMarker.parentNode;
+            if (cell) scopes.push(cell);
+          }
+        }
+        scopes.forEach(function(scope) {
+          scope.querySelectorAll('.cfg-toggle-btn[data-key="' + key + '"]').forEach(function(b) {
             var bv = b.getAttribute('data-val');
             b.classList.remove('on-true', 'on-false');
             if (bv === val) b.classList.add(val === 'true' ? 'on-true' : 'on-false');
           });
-          row.querySelectorAll('.cfg-preset-btn').forEach(function(b) {
+          scope.querySelectorAll('.cfg-preset-btn[data-key="' + key + '"]').forEach(function(b) {
             b.classList.toggle('on', b.getAttribute('data-val') === val);
           });
-        }
+        });
+        // Also refresh the cached map so re-renders see the new value.
+        if (_rewardsConfigCache) _rewardsConfigCache[key] = val;
         return true;
       }
       toast('שגיאה בשמירה');
@@ -8686,6 +8701,114 @@
       });
     } catch(e) { host.innerHTML = 'שגיאת רשת'; }
   };
+
+  // ============================================================
+  // 🔧 INLINE CONFIG GRIDS — populate <div class="rewards-grid"
+  //    data-keys="..."> placeholders scattered across the admin.
+  // ============================================================
+  // 49 placeholders in the markup said "render config inputs for
+  // these keys here", but no JS ever populated them — so the user
+  // saw Starter Pack, Daily Special, Calendar, Replay Share, Smart
+  // Push, Season Pass, Lifetime, etc. as section titles + help text
+  // with an EMPTY hole where the toggles should be. This renderer
+  // walks every such placeholder, fetches the matching config
+  // values, and injects rendered cells inline using the same
+  // renderConfigValueCell/persistConfigValue helpers that power
+  // the giant "כל ההגדרות" table.
+  //
+  // Caches the config fetch for 30s so multiple placeholders on the
+  // same tab don't each round-trip to the server.
+  var _rewardsConfigCache = null;
+  var _rewardsConfigFetchedAt = 0;
+  async function _getConfigMap(force) {
+    var now = Date.now();
+    if (!force && _rewardsConfigCache && (now - _rewardsConfigFetchedAt) < 30000) {
+      return _rewardsConfigCache;
+    }
+    var d = await api('/config');
+    if (!d || !Array.isArray(d.config)) return _rewardsConfigCache || {};
+    var map = {};
+    d.config.forEach(function(row) { map[row.key] = row.value; });
+    _rewardsConfigCache = map;
+    _rewardsConfigFetchedAt = now;
+    return map;
+  }
+
+  function _wireGridCellHandlers(host) {
+    host.querySelectorAll('.cfg-toggle-btn').forEach(function(btn) {
+      if (btn.dataset.wired) return;
+      btn.dataset.wired = '1';
+      btn.onclick = async function() {
+        var key = btn.getAttribute('data-key');
+        var val = btn.getAttribute('data-val');
+        await persistConfigValue(host, key, val);
+      };
+    });
+    host.querySelectorAll('.cfg-preset-btn').forEach(function(btn) {
+      if (btn.dataset.wired) return;
+      btn.dataset.wired = '1';
+      btn.onclick = async function() {
+        var key = btn.getAttribute('data-key');
+        var val = btn.getAttribute('data-val');
+        await persistConfigValue(host, key, val);
+      };
+    });
+    host.querySelectorAll('.cfg-save-inline').forEach(function(btn) {
+      if (btn.dataset.wired) return;
+      btn.dataset.wired = '1';
+      btn.onclick = async function() {
+        var key = btn.getAttribute('data-key');
+        var input = host.querySelector('input.cfg-val[data-key="' + key + '"]');
+        if (input) await persistConfigValue(host, key, input.value);
+      };
+    });
+  }
+
+  async function renderRewardsGrids(rootEl) {
+    var root = rootEl || document;
+    var grids = root.querySelectorAll('.rewards-grid[data-keys]');
+    if (!grids.length) return;
+    var cfgMap = await _getConfigMap();
+    grids.forEach(function(grid) {
+      // Don't re-render a grid that's already populated. Use a marker
+      // attribute so a tab switch that calls renderRewardsGrids again
+      // doesn't wipe the user's in-flight edits.
+      if (grid.dataset.rendered === '1') return;
+      var keys = (grid.getAttribute('data-keys') || '').split(',')
+        .map(function(s) { return s.trim(); })
+        .filter(Boolean);
+      if (!keys.length) return;
+      var html = '';
+      keys.forEach(function(key) {
+        var value = (cfgMap[key] != null) ? cfgMap[key] : '';
+        var tip = TIPS_PER_KEY[key];
+        var tipBtn = tip
+          ? ' <button class="tip-btn" data-tip-text="' + escHtml(tip) + '" style="font-size:10px;width:18px;height:18px;line-height:1">?</button>'
+          : '';
+        html += '<div class="cfg-grid-cell" style="display:flex;flex-direction:column;gap:4px;padding:6px 8px;background:rgba(0,0,0,0.02);border-radius:6px;border:1px solid var(--border)">' +
+          '<label style="font-size:10.5px;font-family:monospace;direction:ltr;color:var(--gold);font-weight:700;display:flex;justify-content:space-between;align-items:center">' +
+            '<span>' + escHtml(key) + '</span>' + tipBtn +
+          '</label>' +
+          renderConfigValueCell(key, value) +
+          (BOOL_KEYS[key] || (value === 'true' || value === 'false') || (PRESETS_PER_KEY[key] && PRESETS_PER_KEY[key].length)
+            ? ''
+            : '<button class="btn sm cfg-save-inline" data-key="' + escHtml(key) + '" style="font-size:10px;padding:3px 8px;align-self:flex-end">שמור</button>') +
+        '</div>';
+      });
+      // Match the existing parent layout: most placeholders sit inside
+      // a flex/grid container of their own, so we just stack vertically
+      // with a small gap. If the parent had grid-template-columns set,
+      // the cells inherit that already.
+      grid.style.display = 'grid';
+      grid.style.gridTemplateColumns = 'repeat(auto-fit, minmax(160px, 1fr))';
+      grid.style.gap = '8px';
+      grid.innerHTML = html;
+      grid.dataset.rendered = '1';
+      _wireGridCellHandlers(grid);
+      // Wire the ? tooltip buttons we just injected.
+      if (typeof wireTips === 'function') wireTips();
+    });
+  }
 
   // ============ TAB SWITCHING ============
   var ADMIN_TAB_KEY = 'bloom_admin_active_tab';
@@ -9078,6 +9201,10 @@
   // tab. Tab switching fires the new tab's loaders on first visit.
   // Was: refreshAll() — fired all 28 loaders unconditionally.
   refreshActiveTab();
+  // Render the 49 inline config grids scattered across all tabs in
+  // ONE pass. They live in DOM at boot so a single pass populates
+  // everything — no need to re-run per tab.
+  try { renderRewardsGrids(); } catch (e) { console.warn('[admin] renderRewardsGrids', e); }
 
   // ====== MONETIZATION PANEL ======
   // Load current values
