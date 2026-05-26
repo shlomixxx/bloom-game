@@ -610,6 +610,24 @@ Treat the following as load-bearing. If a task seems to require touching any of 
 
 ---
 
+## 10b. UX gate — 5 questions every new surface MUST pass (auto-applied)
+
+This is a **standing rule, applied automatically**, even when the user doesn't explicitly ask for a UX review. The prime directive is "המשחק חייב להיות ממכר" — and after 48+ shipped retention stages, the biggest threat to addiction is **UI overload**, not missing features. Every new modal / banner / tile / button / floating widget / overlay must pass all 5 questions before shipping. If any answer is "no" or "not sure" — redesign or hold back.
+
+**The 5 questions** (must answer YES to all):
+
+1. **Does it add to the next session?** — Will the player be more likely to return tomorrow because this surface exists today? If it only serves this one session, it's noise.
+2. **Does the player understand it in <3 seconds?** — Without reading docs, without prior context, without thinking. A new player landing on it should know what to do.
+3. **Does it not cover something more important?** — Stage 35 home variants + Stage 39 Priority Calmer exist precisely because we hit overload. New surface must not steal attention from a higher-emotion signal (streak-danger > trophy-claim > rivalry-behind > free-spin > daily-deal > passive tiles).
+4. **Is there ONE clear way to close it?** — ESC + visible close button (≥40px, with label, not just an icon) + backdrop tap. The global TC.1 ESC handler covers `[class*="modal-overlay"]` + the curated full-screen views (`#contest-screen`, `#challenge-screen`, `#spectator-screen`). NEW full-screen views must be added to the selector in `src/04-ui-utils.js` `__bloomGetCloseableModals()`.
+5. **Is it visible ONLY when relevant?** — Empty board → no boosters / no "claim" badges / no "buy" prompts. First-time player (level < 5) → JIT-unlock gates everything advanced. After game-over → strips that need an in-progress game (booster strip, etc.) get torn down. Mode-specific surfaces (e.g. dynamic-board picker) must not appear in daily/contest/duel.
+
+**What this rule replaces**: dozens of after-the-fact UX fixes. Each post-ship "user reported X doesn't make sense" carries a real retention cost — a confused player leaves. The 5 questions are the pre-ship filter that prevents that loss.
+
+**When the user says "find similar problems"**: this is the lens. Walk every visible surface (home, in-game header, mode-bar, picker, all modals, all banners, all floating widgets) and check each against the 5. Surface failures get fixed in the same sprint.
+
+---
+
 ## 11. Current progress
 
 - **v1 core gameplay** — shipped.
