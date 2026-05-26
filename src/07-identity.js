@@ -501,7 +501,17 @@
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ deviceId: deviceId, token: deviceToken, action: action, meta: meta || null })
-    }).then(function(r) { return r.json(); }).then(function(d) {
+    }).then(function(r) {
+      // Surface non-2xx so an admin can compensate. The server-side auto-issue
+      // middleware also catches 500s — this is the redundant client view that
+      // captures cases where the response body never reaches us cleanly.
+      if (!r.ok && r.status >= 500) {
+        try { __bloomReportIssue({ kind: 'earn_http_' + r.status, severity: 'high',
+          title: 'earnCredits HTTP ' + r.status + ' · ' + action,
+          detail: 'action=' + action + ', status=' + r.status, context: { action: action, status: r.status, meta: meta || null }}); } catch (e) {}
+      }
+      return r.json();
+    }).then(function(d) {
       if (d && d.ok && d.reward > 0) {
         playerBalance = d.newBalance;
         try { localStorage.setItem(PLAYER_BALANCE_KEY, String(d.newBalance)); } catch(e) {}
@@ -524,7 +534,13 @@
         }
         updateBalanceDisplay();
       }
-    }).catch(function() {});
+    }).catch(function(err) {
+      // Network-level failure — player can lose gems silently. Report it.
+      try { __bloomReportIssue({ kind: 'earn_network_fail', severity: 'high',
+        title: 'שגיאת רשת ב-earnCredits · ' + action,
+        detail: 'action=' + action + ' err=' + (err && err.message || err),
+        context: { action: action, meta: meta || null }}); } catch (e) {}
+    });
   }
   function showLevelUpToast(level) {
     trackEvent('level_up', { level: level.level, title: level.title });

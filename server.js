@@ -157,6 +157,56 @@ app.use('/api', (req, res, next) => {
 app.use(express.json({ limit: '4kb' }));
 
 // ============================================================
+// AUTO-ISSUE: catch 500-level failures + explicit credit-fail
+// bodies on ALL credit-affecting POSTs and surface them in the
+// admin 🚨 תקלות tab. Player can be compensated in 1 click.
+// ============================================================
+const _ISSUE_RECENT = new Map(); // dedup per (device,path) for 5min
+const _ISSUE_EXCL = /^\/api\/(ping|heartbeat|live-score|live-state|watch|unwatch|issues\/report|push\/|smart-push\/preview|health|profile\/(country|name)|register)/;
+const _ISSUE_FAIL_REASONS = /^(credit_failed|db_error|internal|internal_error|tx_failed|transaction_failed|server_error|grant_failed)$/;
+app.use((req, res, next) => {
+  if (req.method !== 'POST' || !req.path.startsWith('/api/') || _ISSUE_EXCL.test(req.path)) {
+    return next();
+  }
+  const _origJson = res.json.bind(res);
+  res.json = function (body) {
+    setImmediate(() => {
+      try {
+        const status = res.statusCode || 200;
+        const explicitFail = body && body.ok === false && _ISSUE_FAIL_REASONS.test(String(body.reason || ''));
+        if (status < 500 && !explicitFail) return;
+        const deviceId = req.deviceId || (req.body && req.body.deviceId);
+        if (!deviceId || typeof deviceId !== 'string' || deviceId.length < 4) return;
+        const dedupKey = deviceId + ':' + req.path;
+        const last = _ISSUE_RECENT.get(dedupKey);
+        if (last && Date.now() - last < 5 * 60 * 1000) return;
+        _ISSUE_RECENT.set(dedupKey, Date.now());
+        if (_ISSUE_RECENT.size > 5000) {
+          const cutoff = Date.now() - 60 * 60 * 1000;
+          for (const [k, t] of _ISSUE_RECENT) if (t < cutoff) _ISSUE_RECENT.delete(k);
+        }
+        const kindSlug = req.path.replace(/^\/api\//, '').replace(/\/:?[a-z0-9_-]+/gi, '_x').replace(/\//g, '_').replace(/[^a-z0-9_]/gi, '').slice(0, 30);
+        // Strip token from context to keep it lean
+        const safeBody = (req.body && typeof req.body === 'object') ? Object.assign({}, req.body) : {};
+        delete safeBody.token;
+        if (safeBody.deviceId) safeBody.deviceId = String(safeBody.deviceId).slice(0, 12) + '…';
+        _reportIssue({
+          deviceId,
+          kind: 'api_' + kindSlug,
+          severity: status >= 500 ? 'high' : 'medium',
+          title: 'שגיאת שרת ב-' + req.path,
+          detail: 'HTTP ' + status + ' · reason=' + (body && body.reason || 'unknown'),
+          context: { path: req.path, status, reason: body && body.reason, body: safeBody },
+          source: 'auto'
+        }).catch(() => {});
+      } catch (e) {}
+    });
+    return _origJson(body);
+  };
+  next();
+});
+
+// ============================================================
 // SEO: robots.txt + sitemap.xml
 // ============================================================
 app.get('/robots.txt', (_req, res) => {

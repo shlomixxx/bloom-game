@@ -12316,7 +12316,17 @@
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ deviceId: deviceId, token: deviceToken, action: action, meta: meta || null })
-    }).then(function(r) { return r.json(); }).then(function(d) {
+    }).then(function(r) {
+      // Surface non-2xx so an admin can compensate. The server-side auto-issue
+      // middleware also catches 500s — this is the redundant client view that
+      // captures cases where the response body never reaches us cleanly.
+      if (!r.ok && r.status >= 500) {
+        try { __bloomReportIssue({ kind: 'earn_http_' + r.status, severity: 'high',
+          title: 'earnCredits HTTP ' + r.status + ' · ' + action,
+          detail: 'action=' + action + ', status=' + r.status, context: { action: action, status: r.status, meta: meta || null }}); } catch (e) {}
+      }
+      return r.json();
+    }).then(function(d) {
       if (d && d.ok && d.reward > 0) {
         playerBalance = d.newBalance;
         try { localStorage.setItem(PLAYER_BALANCE_KEY, String(d.newBalance)); } catch(e) {}
@@ -12339,7 +12349,13 @@
         }
         updateBalanceDisplay();
       }
-    }).catch(function() {});
+    }).catch(function(err) {
+      // Network-level failure — player can lose gems silently. Report it.
+      try { __bloomReportIssue({ kind: 'earn_network_fail', severity: 'high',
+        title: 'שגיאת רשת ב-earnCredits · ' + action,
+        detail: 'action=' + action + ' err=' + (err && err.message || err),
+        context: { action: action, meta: meta || null }}); } catch (e) {}
+    });
   }
   function showLevelUpToast(level) {
     trackEvent('level_up', { level: level.level, title: level.title });
@@ -19469,6 +19485,48 @@
 
   // Android: catch beforeinstallprompt
   window.addEventListener('beforeinstallprompt', function(e) { e.preventDefault(); });
+
+  // ============================================================
+  // 🚨 Global JS error capture — surface to admin 🚨 תקלות tab
+  // ============================================================
+  // Any uncaught exception or unhandled promise rejection from any
+  // module ends up here. We dedup per-session by (msg, source) so a
+  // tight loop doesn't spam the server.
+  var _jsErrSeen = {};
+  function _reportJsError(kind, msg, source, line, col, stack) {
+    try {
+      if (!window.__bloomReportIssue) return;
+      var sig = String(msg || '').slice(0, 80) + '@' + String(source || '').slice(-40) + ':' + (line || '');
+      if (_jsErrSeen[sig]) return;
+      _jsErrSeen[sig] = Date.now();
+      // Cap to 25 unique errors/session so a runaway page doesn't flood
+      if (Object.keys(_jsErrSeen).length > 25) return;
+      window.__bloomReportIssue({
+        kind: kind,
+        severity: 'medium',
+        title: String(msg || 'JS error').slice(0, 200),
+        detail: 'src=' + (source || '?') + ':' + (line || 0) + ':' + (col || 0) +
+                (stack ? '\n' + String(stack).slice(0, 600) : ''),
+        context: { url: location.href, ua: (navigator.userAgent || '').slice(0, 200) }
+      });
+    } catch (e) {}
+  }
+  window.addEventListener('error', function(ev) {
+    try {
+      var msg = ev && ev.message;
+      // Ignore ResizeObserver chrome noise + script-tag load failures we can't act on
+      if (!msg || /ResizeObserver|Script error/.test(msg)) return;
+      _reportJsError('js_error', msg, ev.filename, ev.lineno, ev.colno, ev.error && ev.error.stack);
+    } catch (e) {}
+  });
+  window.addEventListener('unhandledrejection', function(ev) {
+    try {
+      var r = ev && ev.reason;
+      var msg = r && (r.message || String(r)) || 'unhandled rejection';
+      var stack = r && r.stack;
+      _reportJsError('js_rejection', msg, '', 0, 0, stack);
+    } catch (e) {}
+  });
   // ============================================================
   // EVENT DROPS — special items that appear on the board
   // ============================================================
