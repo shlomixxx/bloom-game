@@ -20419,7 +20419,11 @@
   // animation keyframes (pop/merge) as the real game so the muscle
   // memory transfers cleanly to first real play.
 
-  const FTUE_KEY = 'bloom_ftue_done';
+  // `var` (not `const`) — read by ftueAlreadyDone() which is called from
+  // 13-boot.js at module-eval time (BEFORE this file evaluates). const would
+  // be in TDZ; var hoists with `undefined` so the localStorage.getItem call
+  // gracefully no-ops (returns null) in the catch path.
+  var FTUE_KEY = 'bloom_ftue_done';
   function ftueAlreadyDone() {
     try { return !!localStorage.getItem(FTUE_KEY); } catch (e) { return false; }
   }
@@ -20443,7 +20447,10 @@
   //   after: { type, col, row, mergedTier, chain } — what the engine should
   //          *animate* after the player taps. type ∈ 'drop' / 'merge' / 'chain'.
   //   cheer: the celebration text + sound + extra effects (vibrate/confetti).
-  const FTUE_STEPS = [
+  // `var` (not `const`) — read by renderStep() which is reached through
+  // startFTUE() → buildOverlay() → renderStep(0) when 13-boot.js triggers
+  // first-time FTUE at module-eval time. const would be in TDZ at that point.
+  var FTUE_STEPS = [
     {
       pre:   [0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0],
       next:  1,
@@ -20476,7 +20483,11 @@
     }
   ];
 
-  let ftueState = null; // { stepIdx, overlay, gridEl, nextEl, bubbleEl, arrowEl, onDone, locked }
+  // Note: must be `var` (not `let`) because 13-boot.js — which is concatenated
+  // BEFORE this file — calls startFTUE() at module-eval time on first-time
+  // visitors (no localStorage history). `let` would be in TDZ at that point;
+  // `var` is hoisted with `undefined` so `if (ftueState) return;` still works.
+  var ftueState = null; // { stepIdx, overlay, gridEl, nextEl, bubbleEl, arrowEl, onDone, locked }
 
   function startFTUE(onDone) {
     if (ftueState) return; // already running
