@@ -3082,13 +3082,23 @@ app.post('/api/boards/chest/open', requireDeviceAuth, async (req, res) => {
         [amount, deviceId]
       );
       if (!credit.rows.length) {
-        // Player has no profile row yet — refuse the chest so client
-        // doesn't show "won" with nothing to show for it.
+        _reportIssue({
+          deviceId, kind: 'chest_no_profile', severity: 'high',
+          title: 'תיבת הפתעה נכשלה — אין פרופיל שחקן',
+          detail: 'השחקן זכה ב-' + amount + '💎 אבל אין שורת player_profiles. הפרס לא ניתן.',
+          context: { amount, tier: chosenTier }
+        });
         return res.status(409).json({ ok: false, reason: 'no_profile' });
       }
       newBalance = credit.rows[0].balance;
     } catch (e) {
       console.error('chest credit failed', e && e.message);
+      _reportIssue({
+        deviceId, kind: 'chest_credit_failed', severity: 'critical',
+        title: 'תיבת הפתעה נכשלה ב-DB — ' + amount + '💎 לא הוענקו',
+        detail: 'UPDATE player_profiles נכשל עם השגיאה: ' + (e && e.message),
+        context: { amount, tier: chosenTier, error: e && e.message }
+      });
       return res.status(500).json({ ok: false, reason: 'credit_failed' });
     }
     await pool.query(
@@ -9007,6 +9017,81 @@ async function _notifyFriendsBeatenOnDaily(senderDeviceId, senderScore, senderNa
 }
 
 // ============================================================
+// 🚨 ISSUE TRACKER — admin support + player compensation (May 2026)
+// ============================================================
+// Every server-side error path that the user-facing UI couldn't fully
+// recover from (chest credit failed, duel orphan, balance race, etc.)
+// calls _reportIssue() so the admin can see it in 🚨 תקלות, refund
+// the player, and track issue patterns.
+//
+// Severity ladder:
+//   'low'      — minor inconvenience, no money lost (cosmetic glitch)
+//   'medium'   — feature didn't work but no value lost (button stuck)
+//   'high'     — value at risk (claim returned ok but balance race)
+//   'critical' — money/gems actually lost (chest credit UPDATE failed)
+//
+// Returns the inserted issue id, or null on insert failure (issues
+// table missing on first deploy etc.). Always fire-and-forget — never
+// blocks the calling endpoint.
+async function _reportIssue(opts) {
+  try {
+    if (!opts || !opts.deviceId || !opts.kind) return null;
+    const sev = ['low','medium','high','critical'].indexOf(opts.severity) >= 0 ? opts.severity : 'medium';
+    // Snapshot player_code + display_name for human readability in admin.
+    let code = null, name = null;
+    try {
+      const r = await pool.query(
+        `SELECT player_code, display_name FROM player_profiles WHERE device_id = $1`,
+        [opts.deviceId]);
+      if (r.rows[0]) { code = r.rows[0].player_code; name = r.rows[0].display_name; }
+    } catch (e) {}
+    const ins = await pool.query(
+      `INSERT INTO player_issues
+         (device_id, player_code, display_name, kind, severity, title, detail, context, source)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9)
+       RETURNING id`,
+      [
+        String(opts.deviceId).slice(0, 64),
+        code,
+        name,
+        String(opts.kind).slice(0, 40),
+        sev,
+        String(opts.title || opts.kind).slice(0, 200),
+        opts.detail ? String(opts.detail).slice(0, 1000) : null,
+        opts.context ? JSON.stringify(opts.context) : null,
+        opts.source || 'auto'
+      ]
+    );
+    return (ins.rows[0] && ins.rows[0].id) || null;
+  } catch (e) { console.warn('_reportIssue', e.message); return null; }
+}
+
+// Public endpoint — client-side error reporting. Rate-limited per
+// device-hour so a buggy client can't DDoS the issues table.
+app.post('/api/issues/report', requireDeviceAuth, async (req, res) => {
+  try {
+    const deviceId = req.deviceId;
+    if (!checkRateLimit('issue:report', deviceId, 10, 60 * 60 * 1000)) {
+      return res.status(429).json({ error: 'rate_limited' });
+    }
+    const body = req.body || {};
+    const id = await _reportIssue({
+      deviceId,
+      kind: body.kind,
+      severity: body.severity,
+      title: body.title,
+      detail: body.detail,
+      context: body.context,
+      source: 'client'
+    });
+    res.json({ ok: true, id });
+  } catch (e) {
+    console.error('POST /api/issues/report', e.message);
+    res.status(500).json({ error: 'server' });
+  }
+});
+
+// ============================================================
 // A3 — Trophy Chests (Clash Royale "must-return" pattern)
 // ============================================================
 async function _loadChestConfig() {
@@ -11823,6 +11908,134 @@ if (ADMIN_PATH && ADMIN_PASSWORD) {
       res.status(500).json({ error: 'server' });
     }
   });
+
+  // ============================================================
+  // 🚨 ISSUE TRACKER ADMIN — list / resolve / stats / compensate
+  // ============================================================
+  // GET /admin/api/issues?status=open&kind=&limit=50&offset=0
+  adminRouter.get('/api/issues', async (req, res) => {
+    try {
+      const status = String(req.query.status || '').slice(0, 15);
+      const kind = String(req.query.kind || '').slice(0, 40);
+      const severity = String(req.query.severity || '').slice(0, 10);
+      const limit = Math.min(200, Math.max(1, parseInt(req.query.limit, 10) || 50));
+      const offset = Math.max(0, parseInt(req.query.offset, 10) || 0);
+      const where = [], params = [];
+      if (status)   { params.push(status);   where.push(`status = $${params.length}`); }
+      if (kind)     { params.push(kind);     where.push(`kind = $${params.length}`); }
+      if (severity) { params.push(severity); where.push(`severity = $${params.length}`); }
+      const whereSql = where.length ? 'WHERE ' + where.join(' AND ') : '';
+      params.push(limit, offset);
+      const r = await pool.query(
+        `SELECT id, device_id, player_code, display_name, kind, severity, title,
+                detail, context, source, reported_at, status, resolved_at,
+                resolution_notes, compensation_amount, compensation_paid
+           FROM player_issues
+           ${whereSql}
+          ORDER BY
+            CASE severity WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END,
+            reported_at DESC
+          LIMIT $${params.length - 1} OFFSET $${params.length}`,
+        params
+      );
+      const stats = await pool.query(`
+        SELECT
+          COUNT(*) FILTER (WHERE status='open') AS open_count,
+          COUNT(*) FILTER (WHERE status='open' AND severity='critical') AS critical_count,
+          COUNT(*) FILTER (WHERE status='open' AND severity='high') AS high_count,
+          COUNT(*) FILTER (WHERE reported_at > NOW() - INTERVAL '24 hours') AS last_24h,
+          COALESCE(SUM(compensation_amount) FILTER (WHERE compensation_paid = TRUE), 0) AS total_compensated
+        FROM player_issues
+      `);
+      res.json({ ok: true, issues: r.rows, stats: stats.rows[0] });
+    } catch (e) {
+      console.error('admin GET /issues', e);
+      res.status(500).json({ error: 'server' });
+    }
+  });
+
+  // POST /admin/api/issues/:id/resolve
+  //   body: { compensation: 0|N, notes: '...', dismiss: bool }
+  // Atomic: marks the issue resolved + credits gems to the player (if
+  // compensation > 0) + appends to admin_actions audit log.
+  adminRouter.post('/api/issues/:id/resolve', async (req, res) => {
+    try {
+      const issueId = parseInt(req.params.id, 10);
+      if (!issueId) return res.status(400).json({ error: 'bad_id' });
+      const comp = Math.max(0, Math.min(100000, parseInt((req.body && req.body.compensation) || 0, 10) || 0));
+      const notes = String((req.body && req.body.notes) || '').slice(0, 1000);
+      const dismiss = !!(req.body && req.body.dismiss);
+      const newStatus = dismiss ? 'dismissed' : 'resolved';
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        const issue = await client.query(
+          `SELECT id, device_id, status, player_code, display_name
+             FROM player_issues WHERE id = $1 FOR UPDATE`,
+          [issueId]);
+        if (!issue.rows.length) {
+          await client.query('ROLLBACK');
+          return res.status(404).json({ error: 'not_found' });
+        }
+        if (issue.rows[0].status !== 'open') {
+          await client.query('ROLLBACK');
+          return res.json({ ok: false, reason: 'already_resolved' });
+        }
+        let newBal = null;
+        if (comp > 0 && !dismiss) {
+          // Atomic compensation credit. RETURNING balance so admin sees
+          // the player's post-comp wallet on next refresh.
+          const updR = await client.query(
+            `UPDATE player_profiles
+                SET balance = balance + $1, total_earned = total_earned + $1, updated_at = NOW()
+              WHERE device_id = $2 RETURNING balance`,
+            [comp, issue.rows[0].device_id]);
+          if (updR.rows[0]) newBal = updR.rows[0].balance;
+        }
+        await client.query(
+          `UPDATE player_issues
+              SET status = $1, resolved_at = NOW(),
+                  resolution_notes = $2,
+                  compensation_amount = $3,
+                  compensation_paid = $4
+            WHERE id = $5`,
+          [newStatus, notes || null, comp, comp > 0 && !dismiss, issueId]);
+        await client.query('COMMIT');
+        await logAdminAction(
+          dismiss ? 'issue.dismiss' : 'issue.resolve',
+          'player_issues',
+          String(issueId),
+          { compensation: comp, notes: notes ? notes.slice(0, 100) : null }
+        );
+        res.json({ ok: true, status: newStatus, compensation: comp, newBalance: newBal });
+      } catch (err) {
+        await client.query('ROLLBACK');
+        throw err;
+      } finally {
+        client.release();
+      }
+    } catch (e) {
+      console.error('admin POST /issues/:id/resolve', e);
+      res.status(500).json({ error: 'server' });
+    }
+  });
+
+  // GET /admin/api/issues/stats — quick count for the top-nav badge.
+  adminRouter.get('/api/issues/stats', async (_req, res) => {
+    try {
+      const r = await pool.query(`
+        SELECT
+          COUNT(*) FILTER (WHERE status='open') AS open_count,
+          COUNT(*) FILTER (WHERE status='open' AND severity IN ('critical','high')) AS urgent_count
+        FROM player_issues
+      `);
+      res.json({ ok: true, openCount: parseInt(r.rows[0].open_count, 10) || 0,
+                 urgentCount: parseInt(r.rows[0].urgent_count, 10) || 0 });
+    } catch (e) {
+      res.json({ ok: true, openCount: 0, urgentCount: 0 });
+    }
+  });
+
   // Per-row delete for contest entries (full member list) — alias used by the
   // contest-leaderboard view in admin.
   adminRouter.get('/api/contest/:code/scores', async (req, res) => {
@@ -15417,6 +15630,15 @@ app.post('/api/duels/:id/score', requireDeviceAuth, async (req, res) => {
     }
   } catch (e) {
     console.error('duels/score', e.message);
+    // 🚨 Track as issue so admin can review + comp the player.
+    _reportIssue({
+      deviceId: req.deviceId || (req.body && req.body.deviceId),
+      kind: 'duel_score_server_error',
+      severity: 'high',
+      title: 'דו-קרב #' + duelId + ' — שגיאת שרת בשליחת ציון',
+      detail: 'POST /api/duels/:id/score crashed: ' + e.message,
+      context: { duelId, score: req.body && req.body.score, error: e.message }
+    });
     res.status(500).json({ error: 'server' });
   }
 });

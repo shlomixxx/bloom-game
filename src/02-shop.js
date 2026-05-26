@@ -1213,12 +1213,24 @@
         pollDuelUntilSettled(duelId, finalScore, oppName);
         attachDuelLiveSpectator(duelId, finalScore, oppName);
       }
-    }).catch(function() {
+    }).catch(function(err) {
       // Network failure → show waiting overlay + start polling. Don't
       // give up — the score may have landed server-side anyway.
       showDuelResultOverlay({ result: 'waiting' }, finalScore, oppName);
       pollDuelUntilSettled(duelId, finalScore, oppName);
       attachDuelLiveSpectator(duelId, finalScore, oppName);
+      // 🚨 Issue: client couldn't reach server during duel score submit.
+      try {
+        if (typeof window.__bloomReportIssue === 'function') {
+          window.__bloomReportIssue({
+            kind: 'duel_score_network_fail',
+            severity: 'high',
+            title: 'דו-קרב #' + duelId + ' — שליחת ציון נכשלה ברשת',
+            detail: 'fetch לדואל ' + duelId + ' עם score=' + finalScore + ' זרק שגיאה. השחקן ראה "ממתין ליריב".',
+            context: { duelId: duelId, score: finalScore, error: err && err.message }
+          });
+        }
+      } catch (e) {}
     });
   }
 
@@ -1243,6 +1255,19 @@
           result: 'unresolved',
           opponentName: oppName
         }, myScore, oppName);
+        // 🚨 Log to admin issue tracker — player waited 5 minutes for
+        // an opponent that never finished. Admin can comp them.
+        try {
+          if (typeof window.__bloomReportIssue === 'function') {
+            window.__bloomReportIssue({
+              kind: 'duel_unresolved_5min',
+              severity: 'medium',
+              title: 'דו-קרב #' + duelId + ' לא נפתר ב-5 דקות',
+              detail: 'השחקן סיים את ציונו (' + myScore + ') אבל היריב לא שיחק. השחקן ראה מסך "ממתין".',
+              context: { duelId: duelId, myScore: myScore, oppName: oppName }
+            });
+          }
+        } catch (e) {}
         return;
       }
       fetch(API_BASE + '/api/duels/' + duelId + '?deviceId=' + encodeURIComponent(deviceId), { method: 'GET' })

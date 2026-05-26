@@ -445,6 +445,51 @@
     return window.location.origin + (playerCode ? '/?ref=' + playerCode : '');
   }
   var _earnedThisSession = {};
+
+  // ============================================================
+  // 🚨 __bloomReportIssue — client-side issue tracker (May 2026)
+  // ============================================================
+  // Fire-and-forget endpoint that ships a structured error/anomaly
+  // report to the server's player_issues table. The admin sees it in
+  // 🚨 תקלות tab + can refund + track patterns.
+  //
+  // Usage anywhere in the IIFE:
+  //   __bloomReportIssue({
+  //     kind: 'duel_orphan_score',
+  //     severity: 'high',
+  //     title: 'דו-קרב הוצג כ-"..." מעבר ל-5 דקות',
+  //     detail: 'duelId=' + id + ', server returned: ' + reason,
+  //     context: { duelId, finalScore, oppName }
+  //   });
+  //
+  // Throttled by sessionStorage so a buggy loop can't spam the server.
+  // Server-side rate-limit (10/hr/device) is the backstop.
+  var _issueReportedThisSession = {};
+  function __bloomReportIssue(opts) {
+    try {
+      if (!opts || !opts.kind) return;
+      // Dedup per-session-key (kind + maybe a context fingerprint).
+      // Prevents 100 identical "duel_orphan" issues from one stuck poll.
+      var key = String(opts.kind) + ':' + (opts.context && opts.context.id ? opts.context.id : '');
+      if (_issueReportedThisSession[key]) return;
+      _issueReportedThisSession[key] = Date.now();
+      fetch(API_BASE + '/api/issues/report', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          deviceId: deviceId,
+          token: deviceToken,
+          kind: String(opts.kind).slice(0, 40),
+          severity: opts.severity || 'medium',
+          title: String(opts.title || opts.kind).slice(0, 200),
+          detail: opts.detail ? String(opts.detail).slice(0, 1000) : null,
+          context: opts.context || null
+        })
+      }).catch(function() { /* fire-and-forget */ });
+    } catch (e) { /* never let issue-reporting throw */ }
+  }
+  try { window.__bloomReportIssue = __bloomReportIssue; } catch (e) {}
+
   function earnCredits(action, meta) {
     // Client-side session dedup — except event_gift which can fire multiple times
     if (action !== 'event_gift') {

@@ -644,6 +644,7 @@
     <button class="admin-tab"        data-tab="players"   role="tab" aria-selected="false">👥 שחקנים</button>
     <button class="admin-tab"        data-tab="contests"  role="tab" aria-selected="false">🏆 תחרויות</button>
     <button class="admin-tab"        data-tab="monitor"   role="tab" aria-selected="false">🔧 ניטור</button>
+    <button class="admin-tab"        data-tab="issues"    role="tab" aria-selected="false">🚨 תקלות <span id="issues-tab-badge" style="display:none;background:#DC2626;color:#FFF;border-radius:999px;padding:1px 8px;font-size:10px;font-weight:900;margin-right:4px;vertical-align:middle">0</span></button>
     <button class="admin-tab"        data-tab="debug"     role="tab" aria-selected="false">🐛 דיבאג</button>
   </nav>
 
@@ -2496,6 +2497,76 @@
   </div><!-- /admin-tab-panel monitor:live+audit+csv -->
 
   <!-- ═══════════ DEBUG TAB ═══════════ -->
+  <!-- ═══════════ ISSUES TAB ═══════════ -->
+  <!-- Built 2026-05-26 — player-side issue tracker + compensation. -->
+  <div class="admin-tab-panel" data-tab="issues">
+    <div class="tab-header">
+      <div>
+        <div class="th-title">🚨 תקלות שחקנים — מעקב + פיצוי</div>
+        <div class="th-sub">תקלות שזוהו אוטומטית בצד-השרת + תקלות שדווחו מצד-הלקוח. אתה רואה כל בעיה שיש לשחקנים — וקליק אחד מפצה אותם ב-💎.</div>
+      </div>
+    </div>
+
+    <section class="card" id="issues-stats-card" style="margin-bottom:14px">
+      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;font-size:12px">
+        <div style="text-align:center;padding:10px;background:#FFF;border-radius:8px;border:1px solid var(--border)">
+          <div style="font-size:22px;font-weight:900;color:#DC2626" id="issues-stat-open">—</div>
+          <div style="color:var(--muted)">פתוחות</div>
+        </div>
+        <div style="text-align:center;padding:10px;background:#FFF;border-radius:8px;border:1px solid var(--border)">
+          <div style="font-size:22px;font-weight:900;color:#991B1B" id="issues-stat-critical">—</div>
+          <div style="color:var(--muted)">קריטיות</div>
+        </div>
+        <div style="text-align:center;padding:10px;background:#FFF;border-radius:8px;border:1px solid var(--border)">
+          <div style="font-size:22px;font-weight:900;color:#EA580C" id="issues-stat-high">—</div>
+          <div style="color:var(--muted)">חמורות</div>
+        </div>
+        <div style="text-align:center;padding:10px;background:#FFF;border-radius:8px;border:1px solid var(--border)">
+          <div style="font-size:22px;font-weight:900;color:var(--gold)" id="issues-stat-24h">—</div>
+          <div style="color:var(--muted)">ב-24ש</div>
+        </div>
+        <div style="text-align:center;padding:10px;background:#FFF;border-radius:8px;border:1px solid var(--border)">
+          <div style="font-size:22px;font-weight:900;color:var(--gold)" id="issues-stat-compensated">—</div>
+          <div style="color:var(--muted)">💎 פוצו</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card" style="margin-bottom:14px">
+      <h2 style="margin:0 0 10px 0;display:flex;align-items:center;justify-content:space-between;gap:8px">
+        <span>📋 רשימת תקלות</span>
+        <span style="display:flex;gap:6px;align-items:center;font-size:11px">
+          <select id="issues-filter-status" style="padding:4px 8px;border:1px solid var(--border);border-radius:6px;font-size:11px;background:#FFF">
+            <option value="open">פתוחות</option>
+            <option value="">כולן</option>
+            <option value="resolved">נפתרו</option>
+            <option value="dismissed">בוטלו</option>
+          </select>
+          <select id="issues-filter-severity" style="padding:4px 8px;border:1px solid var(--border);border-radius:6px;font-size:11px;background:#FFF">
+            <option value="">כל החומרות</option>
+            <option value="critical">🔴 קריטי</option>
+            <option value="high">🟠 חמור</option>
+            <option value="medium">🟡 בינוני</option>
+            <option value="low">🟢 קל</option>
+          </select>
+          <button class="btn sm" id="issues-refresh">↻ רענן</button>
+        </span>
+      </h2>
+      <div id="issues-list" style="display:flex;flex-direction:column;gap:8px;min-height:80px">
+        <div style="color:var(--muted);text-align:center;padding:14px">⏳ טוען...</div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2 style="margin:0 0 6px 0">⚙️ הגדרות פיצוי</h2>
+      <p class="help" style="margin:0 0 8px 0;font-size:11.5px">
+        סכום ברירת המחדל בלחיצת "פצה" + מגבלת דיווחים מצד-לקוח לשעה (anti-DDoS).
+      </p>
+      <div class="rewards-grid" data-keys="issues_default_compensation,issues_client_report_max_per_hour"></div>
+    </section>
+  </div><!-- /admin-tab-panel issues -->
+
+  <!-- ═══════════ DEBUG TAB ═══════════ -->
   <!-- Built 2026-05-25 after user reported "lots of things repeat" + asked
        for a tool to find admin bugs systematically. The scan runs entirely
        in the browser (no server endpoint needed) so you can run it on any
@@ -3995,6 +4066,165 @@
     });
   }
 
+  // ============================================================
+  // 🚨 ISSUES — player-side issue tracker + compensation (May 2026)
+  // ============================================================
+  var SEVERITY_META = {
+    critical: { emoji: '🔴', color: '#991B1B', bg: '#FEE2E2', label: 'קריטי' },
+    high:     { emoji: '🟠', color: '#9A3412', bg: '#FED7AA', label: 'חמור' },
+    medium:   { emoji: '🟡', color: '#854D0E', bg: '#FEF3C7', label: 'בינוני' },
+    low:      { emoji: '🟢', color: '#166534', bg: '#D1FAE5', label: 'קל' }
+  };
+  function _issueRelTime(iso) {
+    try {
+      var ms = Date.now() - new Date(iso).getTime();
+      var min = Math.floor(ms / 60000);
+      if (min < 1) return 'עכשיו';
+      if (min < 60) return 'לפני ' + min + ' ד׳';
+      var h = Math.floor(min / 60);
+      if (h < 24) return 'לפני ' + h + ' ש׳';
+      var d = Math.floor(h / 24);
+      return 'לפני ' + d + ' י׳';
+    } catch (e) { return ''; }
+  }
+  async function loadIssues() {
+    var statusF = $('issues-filter-status') ? $('issues-filter-status').value : 'open';
+    var sevF = $('issues-filter-severity') ? $('issues-filter-severity').value : '';
+    var qs = [];
+    if (statusF) qs.push('status=' + encodeURIComponent(statusF));
+    if (sevF) qs.push('severity=' + encodeURIComponent(sevF));
+    var d = await api('/issues' + (qs.length ? '?' + qs.join('&') : ''));
+    var listEl = $('issues-list');
+    if (!d || !d.ok) {
+      if (listEl) listEl.innerHTML = '<div style="color:var(--muted);text-align:center;padding:14px">שגיאת רשת</div>';
+      return;
+    }
+    // Stats card
+    var s = d.stats || {};
+    $('issues-stat-open').textContent = (s.open_count | 0).toLocaleString();
+    $('issues-stat-critical').textContent = (s.critical_count | 0).toLocaleString();
+    $('issues-stat-high').textContent = (s.high_count | 0).toLocaleString();
+    $('issues-stat-24h').textContent = (s.last_24h | 0).toLocaleString();
+    $('issues-stat-compensated').textContent = (s.total_compensated | 0).toLocaleString();
+    // Top-nav badge
+    refreshIssuesBadge();
+    // List
+    if (!d.issues.length) {
+      listEl.innerHTML =
+        '<div style="text-align:center;padding:30px;color:var(--muted);background:#F0FDF4;border-radius:10px">' +
+          '<div style="font-size:42px;margin-bottom:8px">✅</div>' +
+          '<div style="font-weight:800;font-size:14px;color:#166534">אין תקלות פתוחות</div>' +
+          '<div style="font-size:11.5px;margin-top:4px">כל השחקנים שלך מקבלים את מה שהם זוכים בו</div>' +
+        '</div>';
+      return;
+    }
+    listEl.innerHTML = d.issues.map(function(i) {
+      var sev = SEVERITY_META[i.severity] || SEVERITY_META.medium;
+      var statusBadge = i.status === 'open'
+        ? '<span style="padding:2px 8px;background:#DC2626;color:#FFF;border-radius:6px;font-size:10px;font-weight:700">⚠️ פתוחה</span>'
+        : i.status === 'resolved'
+          ? '<span style="padding:2px 8px;background:#9FE1CB;color:#04342C;border-radius:6px;font-size:10px;font-weight:700">✓ נפתרה' + (i.compensation_paid && i.compensation_amount > 0 ? ' · +' + i.compensation_amount + '💎' : '') + '</span>'
+          : '<span style="padding:2px 8px;background:rgba(0,0,0,0.1);color:var(--muted);border-radius:6px;font-size:10px;font-weight:700">⊘ בוטלה</span>';
+      var ctxStr = '';
+      if (i.context && Object.keys(i.context).length) {
+        try { ctxStr = '<pre style="background:#F5F2EC;padding:6px 10px;border-radius:6px;font-size:10.5px;color:#1C1A18;direction:ltr;text-align:left;white-space:pre-wrap;word-break:break-all;margin:6px 0;max-height:160px;overflow:auto">' + escHtml(JSON.stringify(i.context, null, 2)) + '</pre>'; }
+        catch (e) {}
+      }
+      var actions = i.status === 'open'
+        ? '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">' +
+            '<input type="number" id="comp-' + i.id + '" value="100" min="0" max="100000" style="width:80px;padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;text-align:center" placeholder="💎"/>' +
+            '<button class="btn sm" data-issue-comp="' + i.id + '" style="background:#10B981;color:#FFF;font-weight:700;font-size:11px">💎 פצה</button>' +
+            '<button class="btn sm" data-issue-resolve="' + i.id + '" style="background:#9FE1CB;color:#04342C;font-weight:700;font-size:11px">✓ סמן כתוקן</button>' +
+            '<button class="btn sm" data-issue-dismiss="' + i.id + '" style="background:rgba(0,0,0,0.05);color:var(--muted);font-size:11px">⊘ בטל</button>' +
+          '</div>'
+        : (i.resolution_notes ? '<div style="margin-top:6px;font-size:11px;color:var(--muted)">📝 ' + escHtml(i.resolution_notes) + '</div>' : '');
+      return '<div style="padding:12px 14px;background:' + sev.bg + ';border-radius:10px;border:1px solid var(--border);direction:rtl">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px">' +
+          '<div style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:800;color:' + sev.color + '">' +
+            '<span style="font-size:16px">' + sev.emoji + '</span>' +
+            '<span>' + escHtml(i.title) + '</span>' +
+          '</div>' +
+          statusBadge +
+        '</div>' +
+        '<div style="font-size:11px;color:#4B5563;display:flex;gap:10px;flex-wrap:wrap">' +
+          '<span>👤 ' + escHtml(i.display_name || 'אנונימי') + (i.player_code ? ' <code style="background:#FFF;padding:1px 4px;border-radius:4px;font-size:10px">' + escHtml(i.player_code) + '</code>' : '') + '</span>' +
+          '<span>🏷 <code>' + escHtml(i.kind) + '</code></span>' +
+          '<span>⏰ ' + _issueRelTime(i.reported_at) + '</span>' +
+          '<span>📡 ' + (i.source === 'client' ? 'מהלקוח' : i.source === 'manual' ? 'ידני' : 'אוטו') + '</span>' +
+        '</div>' +
+        (i.detail ? '<div style="font-size:12px;color:#1F2937;margin-top:6px;line-height:1.5">' + escHtml(i.detail) + '</div>' : '') +
+        ctxStr +
+        actions +
+      '</div>';
+    }).join('');
+    // Wire action buttons.
+    listEl.querySelectorAll('[data-issue-comp]').forEach(function(b) {
+      b.onclick = function() {
+        var id = b.getAttribute('data-issue-comp');
+        var inp = $('comp-' + id);
+        var comp = inp ? (parseInt(inp.value, 10) || 0) : 0;
+        if (comp <= 0) { toast('הזן סכום פיצוי חיובי'); return; }
+        resolveIssue(id, comp, '', false);
+      };
+    });
+    listEl.querySelectorAll('[data-issue-resolve]').forEach(function(b) {
+      b.onclick = function() {
+        var id = b.getAttribute('data-issue-resolve');
+        resolveIssue(id, 0, '', false);
+      };
+    });
+    listEl.querySelectorAll('[data-issue-dismiss]').forEach(function(b) {
+      b.onclick = function() {
+        if (!confirm('לבטל את הדיווח? (לא יינתן פיצוי לשחקן)')) return;
+        var id = b.getAttribute('data-issue-dismiss');
+        resolveIssue(id, 0, '', true);
+      };
+    });
+  }
+  async function resolveIssue(issueId, compensation, notes, dismiss) {
+    var r = await api('/issues/' + issueId + '/resolve', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ compensation: compensation, notes: notes || '', dismiss: !!dismiss })
+    });
+    if (r && r.ok) {
+      toast(dismiss ? '⊘ הדיווח בוטל' : (compensation > 0 ? '✓ ' + compensation + '💎 ניתנו לשחקן' : '✓ סומן כתוקן'));
+      loadIssues();
+    } else if (r && r.reason === 'already_resolved') {
+      toast('הדיווח כבר טופל');
+      loadIssues();
+    } else {
+      toast('שגיאה בטיפול');
+    }
+  }
+  // Top-nav badge — pulls a lightweight count endpoint every 60s.
+  async function refreshIssuesBadge() {
+    try {
+      var d = await api('/issues/stats');
+      var badge = $('issues-tab-badge');
+      if (!badge) return;
+      var n = (d && d.openCount) | 0;
+      if (n > 0) {
+        badge.textContent = n > 99 ? '99+' : String(n);
+        badge.style.display = '';
+        // Pulse red when there are critical/high issues
+        var urgent = (d && d.urgentCount) | 0;
+        badge.style.background = urgent > 0 ? '#DC2626' : '#F59E0B';
+      } else {
+        badge.style.display = 'none';
+      }
+    } catch (e) {}
+  }
+  // Hourly refresh of the badge so admin sees new issues without
+  // refreshing the whole admin. Cheap endpoint.
+  setInterval(refreshIssuesBadge, 60 * 1000);
+  // Also wire filter changes.
+  setTimeout(function() {
+    var sf = $('issues-filter-status'); if (sf) sf.onchange = loadIssues;
+    var svf = $('issues-filter-severity'); if (svf) svf.onchange = loadIssues;
+    var rf = $('issues-refresh'); if (rf) rf.onclick = loadIssues;
+  }, 100);
+
   // ---------- LIVE ----------
   async function loadLive() {
     const data = await api('/live');
@@ -4401,6 +4631,7 @@
       players:   [loadPlayers, loadTopScores],
       contests:  [loadContests, loadChallenges],
       monitor:   [loadLive, loadAudit],
+      issues:    [loadIssues],
       debug:     []
     };
   }
@@ -8836,7 +9067,7 @@
 
   // ============ TAB SWITCHING ============
   var ADMIN_TAB_KEY = 'bloom_admin_active_tab';
-  var VALID_TABS = ['dashboard', 'game', 'economy', 'players', 'contests', 'monitor', 'debug'];
+  var VALID_TABS = ['dashboard', 'game', 'economy', 'players', 'contests', 'monitor', 'issues', 'debug'];
   function switchAdminTab(name) {
     if (VALID_TABS.indexOf(name) < 0) name = 'dashboard';
     document.querySelectorAll('.admin-tab').forEach(function(b) {

@@ -2534,3 +2534,38 @@ INSERT INTO game_config (key, value) VALUES ('trophies_milestone_9_at',     '800
 INSERT INTO game_config (key, value) VALUES ('trophies_milestone_9_gems',   '6000')   ON CONFLICT (key) DO NOTHING;
 INSERT INTO game_config (key, value) VALUES ('trophies_milestone_10_at',    '15000')  ON CONFLICT (key) DO NOTHING;
 INSERT INTO game_config (key, value) VALUES ('trophies_milestone_10_gems',  '15000')  ON CONFLICT (key) DO NOTHING;
+
+-- ============================================================
+-- 🚨 player_issues — automatic + manual issue tracking (May 2026)
+-- ============================================================
+-- Every time a known error path fires (chest credit failed, duel
+-- result lost, balance update conflict, etc.) we log a row here.
+-- Admin sees them all in the 🚨 תקלות tab + can resolve / refund /
+-- give compensation gems in one click. Turns the admin into a
+-- proper player-support system instead of "lost in console logs".
+CREATE TABLE IF NOT EXISTS player_issues (
+  id                  BIGSERIAL PRIMARY KEY,
+  device_id           VARCHAR(64) NOT NULL,
+  player_code         VARCHAR(20),
+  display_name        VARCHAR(120),
+  kind                VARCHAR(40) NOT NULL,        -- e.g. 'chest_credit_failed', 'duel_orphan'
+  severity            VARCHAR(10) NOT NULL DEFAULT 'medium',  -- 'low' | 'medium' | 'high' | 'critical'
+  title               TEXT NOT NULL,               -- Hebrew, short
+  detail              TEXT,                        -- longer description
+  context             JSONB,                       -- arbitrary snapshot (gameId, score, etc.)
+  source              VARCHAR(20) DEFAULT 'auto',  -- 'auto' | 'client' | 'manual'
+  reported_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  status              VARCHAR(15) NOT NULL DEFAULT 'open',  -- 'open' | 'resolved' | 'dismissed'
+  resolved_at         TIMESTAMPTZ,
+  resolution_notes    TEXT,
+  compensation_amount INT DEFAULT 0,
+  compensation_paid   BOOLEAN DEFAULT FALSE
+);
+CREATE INDEX IF NOT EXISTS idx_player_issues_status ON player_issues (status, reported_at DESC);
+CREATE INDEX IF NOT EXISTS idx_player_issues_device ON player_issues (device_id, reported_at DESC);
+CREATE INDEX IF NOT EXISTS idx_player_issues_kind ON player_issues (kind, reported_at DESC);
+
+-- Issue auto-compensation defaults (admin can tune)
+INSERT INTO game_config (key, value) VALUES ('issues_default_compensation',      '100') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('issues_client_report_max_per_hour','10')  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('issues_auto_compensate_critical',  'false') ON CONFLICT (key) DO NOTHING;

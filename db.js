@@ -251,6 +251,28 @@ export async function initDb() {
       meta               JSONB,
       created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )`,
+    // 🚨 player_issues (May 2026) — issue tracker + compensation log.
+    `CREATE TABLE IF NOT EXISTS player_issues (
+      id                  BIGSERIAL PRIMARY KEY,
+      device_id           VARCHAR(64) NOT NULL,
+      player_code         VARCHAR(20),
+      display_name        VARCHAR(120),
+      kind                VARCHAR(40) NOT NULL,
+      severity            VARCHAR(10) NOT NULL DEFAULT 'medium',
+      title               TEXT NOT NULL,
+      detail              TEXT,
+      context             JSONB,
+      source              VARCHAR(20) DEFAULT 'auto',
+      reported_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      status              VARCHAR(15) NOT NULL DEFAULT 'open',
+      resolved_at         TIMESTAMPTZ,
+      resolution_notes    TEXT,
+      compensation_amount INT DEFAULT 0,
+      compensation_paid   BOOLEAN DEFAULT FALSE
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_player_issues_status ON player_issues (status, reported_at DESC)`,
+    `CREATE INDEX IF NOT EXISTS idx_player_issues_device ON player_issues (device_id, reported_at DESC)`,
+    `CREATE INDEX IF NOT EXISTS idx_player_issues_kind ON player_issues (kind, reported_at DESC)`,
     // A6 — Skill-based Duel Matchmaking queue (full def in schema.sql).
     `CREATE TABLE IF NOT EXISTS duel_matchmaking_queue (
       device_id        VARCHAR(64) PRIMARY KEY,

@@ -1964,12 +1964,24 @@
         pollDuelUntilSettled(duelId, finalScore, oppName);
         attachDuelLiveSpectator(duelId, finalScore, oppName);
       }
-    }).catch(function() {
+    }).catch(function(err) {
       // Network failure → show waiting overlay + start polling. Don't
       // give up — the score may have landed server-side anyway.
       showDuelResultOverlay({ result: 'waiting' }, finalScore, oppName);
       pollDuelUntilSettled(duelId, finalScore, oppName);
       attachDuelLiveSpectator(duelId, finalScore, oppName);
+      // 🚨 Issue: client couldn't reach server during duel score submit.
+      try {
+        if (typeof window.__bloomReportIssue === 'function') {
+          window.__bloomReportIssue({
+            kind: 'duel_score_network_fail',
+            severity: 'high',
+            title: 'דו-קרב #' + duelId + ' — שליחת ציון נכשלה ברשת',
+            detail: 'fetch לדואל ' + duelId + ' עם score=' + finalScore + ' זרק שגיאה. השחקן ראה "ממתין ליריב".',
+            context: { duelId: duelId, score: finalScore, error: err && err.message }
+          });
+        }
+      } catch (e) {}
     });
   }
 
@@ -1994,6 +2006,19 @@
           result: 'unresolved',
           opponentName: oppName
         }, myScore, oppName);
+        // 🚨 Log to admin issue tracker — player waited 5 minutes for
+        // an opponent that never finished. Admin can comp them.
+        try {
+          if (typeof window.__bloomReportIssue === 'function') {
+            window.__bloomReportIssue({
+              kind: 'duel_unresolved_5min',
+              severity: 'medium',
+              title: 'דו-קרב #' + duelId + ' לא נפתר ב-5 דקות',
+              detail: 'השחקן סיים את ציונו (' + myScore + ') אבל היריב לא שיחק. השחקן ראה מסך "ממתין".',
+              context: { duelId: duelId, myScore: myScore, oppName: oppName }
+            });
+          }
+        } catch (e) {}
         return;
       }
       fetch(API_BASE + '/api/duels/' + duelId + '?deviceId=' + encodeURIComponent(deviceId), { method: 'GET' })
@@ -12235,6 +12260,51 @@
     return window.location.origin + (playerCode ? '/?ref=' + playerCode : '');
   }
   var _earnedThisSession = {};
+
+  // ============================================================
+  // 🚨 __bloomReportIssue — client-side issue tracker (May 2026)
+  // ============================================================
+  // Fire-and-forget endpoint that ships a structured error/anomaly
+  // report to the server's player_issues table. The admin sees it in
+  // 🚨 תקלות tab + can refund + track patterns.
+  //
+  // Usage anywhere in the IIFE:
+  //   __bloomReportIssue({
+  //     kind: 'duel_orphan_score',
+  //     severity: 'high',
+  //     title: 'דו-קרב הוצג כ-"..." מעבר ל-5 דקות',
+  //     detail: 'duelId=' + id + ', server returned: ' + reason,
+  //     context: { duelId, finalScore, oppName }
+  //   });
+  //
+  // Throttled by sessionStorage so a buggy loop can't spam the server.
+  // Server-side rate-limit (10/hr/device) is the backstop.
+  var _issueReportedThisSession = {};
+  function __bloomReportIssue(opts) {
+    try {
+      if (!opts || !opts.kind) return;
+      // Dedup per-session-key (kind + maybe a context fingerprint).
+      // Prevents 100 identical "duel_orphan" issues from one stuck poll.
+      var key = String(opts.kind) + ':' + (opts.context && opts.context.id ? opts.context.id : '');
+      if (_issueReportedThisSession[key]) return;
+      _issueReportedThisSession[key] = Date.now();
+      fetch(API_BASE + '/api/issues/report', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          deviceId: deviceId,
+          token: deviceToken,
+          kind: String(opts.kind).slice(0, 40),
+          severity: opts.severity || 'medium',
+          title: String(opts.title || opts.kind).slice(0, 200),
+          detail: opts.detail ? String(opts.detail).slice(0, 1000) : null,
+          context: opts.context || null
+        })
+      }).catch(function() { /* fire-and-forget */ });
+    } catch (e) { /* never let issue-reporting throw */ }
+  }
+  try { window.__bloomReportIssue = __bloomReportIssue; } catch (e) {}
+
   function earnCredits(action, meta) {
     // Client-side session dedup — except event_gift which can fire multiple times
     if (action !== 'event_gift') {
