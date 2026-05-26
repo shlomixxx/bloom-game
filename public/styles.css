@@ -11028,9 +11028,18 @@ html[data-theme="dark"] .hvar-drawer-section-sub { color: #BFA9A2; }
   border-radius: 18px;
   width: 100%;
   max-width: 440px;
-  max-height: 88vh;
-  display: flex; flex-direction: column;
-  overflow: hidden;
+  max-height: 92vh;
+  /* Scroll the entire modal as one unit. The head accumulated up to
+     8 banners (Daily Special / Tournament / Friends / Season / Quests
+     / Achievements / Streak / Freeze) which on a phone consumed ~560px
+     and squeezed the boards list to ~6px tall — invisible. Single
+     scrollbar across head + list is the most intuitive UX; close-X
+     scrolls away with the head but the bottom "חזרה לבית" button is
+     sticky so the exit is always reachable. */
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
   direction: rtl;
   box-shadow: 0 28px 70px rgba(0, 0, 0, 0.35);
   animation: dynBoardsSlideUp 0.22s ease-out;
@@ -11060,9 +11069,14 @@ html[data-theme="dark"] .hvar-drawer-section-sub { color: #BFA9A2; }
 
 .dyn-boards-list {
   padding: 12px 14px;
-  overflow-y: auto;
-  flex: 1 1 auto;
+  /* The modal owns the scroll now (see .dyn-boards-modal). The list
+     just flows naturally; without this, two nested scroll contexts
+     conflict and the list either gets squeezed to 0 (legacy bug) or
+     scrolls separately from the head (confusing). */
+  overflow: visible;
+  flex: none;
   display: flex; flex-direction: column; gap: 8px;
+  min-height: 120px;
 }
 .dyn-boards-card {
   display: flex; align-items: center; gap: 12px;
@@ -13393,6 +13407,13 @@ html[data-theme="dark"] .board-lb-row-top-1 .board-lb-rank { color: #6B3D00; }
   padding: 12px 14px 14px;
   border-top: 1px solid #F2EFE6;
   background: #FAFAF6;
+  /* Always-reachable exit. Sticks to bottom of the scrolling modal
+     so "חזרה לבית" never scrolls out of reach even when the head
+     has many banners stacked. */
+  position: sticky;
+  bottom: 0;
+  z-index: 3;
+  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.05);
 }
 .dyn-boards-cancel {
   width: 100%; padding: 11px;
