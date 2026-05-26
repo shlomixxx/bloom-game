@@ -17,3 +17,4 @@ public/__*.html
 # Local DB backups — never commit (contain production player data)
 railway-backups-*/
 *.dump
+bloom-*.png
