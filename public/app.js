@@ -1931,21 +1931,45 @@
         token: deviceToken
       })
     }).then(function(r) { return r.json(); }).then(function(d) {
+      // 2026-05-26: sync the local balance from server's newBalance
+      // when present (winner path now includes it). Without this the
+      // home gem widget didn't move after "🏆 ניצחת +150💎" → looked
+      // like the prize never landed.
+      if (d && d.ok && typeof d.newBalance === 'number') {
+        try { if (typeof playerBalance !== 'undefined') playerBalance = d.newBalance; } catch (e) {}
+        try { if (typeof localStorage !== 'undefined') localStorage.setItem(PLAYER_BALANCE_KEY, String(d.newBalance)); } catch (e) {}
+        try { if (typeof updateBalanceDisplay === 'function') updateBalanceDisplay(); } catch (e) {}
+        try { if (typeof window.__bloomBumpBal === 'function') window.__bloomBumpBal(d.newBalance, d.prize || 0); } catch (e) {}
+      }
+      // 2026-05-26: if the server returned an unknown shape (e.g.
+      // ok:false, reason:'already_submitted' OR ok:false from any
+      // error path), the overlay landed in the "דו-קרב נשלח" fallback
+      // forever with no polling. Now we ALWAYS start polling when the
+      // duel isn't in a terminal state — even if d.result is missing.
+      var terminal = d && (d.result === 'settled' || d.result === 'tie' ||
+                           d.result === 'declined' || d.result === 'expired');
+      if (!terminal) {
+        // Normalize: if server returned ok:false with no result, treat
+        // as 'waiting' so the UI shows the friendly waiting overlay
+        // and the poller can sort it out.
+        if (!d || !d.result) d = { result: 'waiting', yourScore: finalScore };
+      }
       showDuelResultOverlay(d, finalScore, oppName);
       if (d && (d.result === 'tie' || (d.result === 'settled' && d.winner === 'you'))) fetchPlayerCode();
       trackEvent('duel_score', { duelId: duelId, result: d && d.result });
-      // If we're still 'waiting' for the opponent, poll the duel state so we
-      // can flip the overlay from "..." to the real result the moment the
-      // opponent finishes. Bug 4: previously the overlay stayed stuck on
-      // "ממתין ליריב..." forever, even after opponent had submitted.
-      // ALSO: attach a live spectator view of the opponent's actual game so
-      // the player can watch instead of staring at a "..." spinner.
-      if (d && d.result === 'waiting') {
+      // Always poll when not terminal — covers 'waiting' AND any
+      // ambiguous error response from above. Without polling, the
+      // player gets stuck on "..." forever.
+      if (!terminal) {
         pollDuelUntilSettled(duelId, finalScore, oppName);
         attachDuelLiveSpectator(duelId, finalScore, oppName);
       }
     }).catch(function() {
-      showDuelResultOverlay({ result: 'error' }, finalScore, oppName);
+      // Network failure → show waiting overlay + start polling. Don't
+      // give up — the score may have landed server-side anyway.
+      showDuelResultOverlay({ result: 'waiting' }, finalScore, oppName);
+      pollDuelUntilSettled(duelId, finalScore, oppName);
+      attachDuelLiveSpectator(duelId, finalScore, oppName);
     });
   }
 
@@ -1995,6 +2019,39 @@
               prize: prize
             }, myScore, oppName);
             if (winner === 'you' || u.status === 'tie') fetchPlayerCode();
+            // 2026-05-26: when the poller catches a settle, the server
+            // already credited the winner — but THIS client never saw
+            // a response with newBalance (the credit happened in the
+            // OTHER player's score-submission transaction). Refetch
+            // balance so the home widget reflects the prize. Use
+            // /api/player/state if it exists, else just bump locally.
+            if (winner === 'you' && prize > 0) {
+              try {
+                if (typeof playerBalance !== 'undefined') {
+                  playerBalance = (playerBalance | 0) + prize;
+                  if (typeof localStorage !== 'undefined' && typeof PLAYER_BALANCE_KEY !== 'undefined') {
+                    localStorage.setItem(PLAYER_BALANCE_KEY, String(playerBalance));
+                  }
+                }
+                if (typeof updateBalanceDisplay === 'function') updateBalanceDisplay();
+                if (typeof window.__bloomBumpBal === 'function') {
+                  window.__bloomBumpBal(typeof playerBalance !== 'undefined' ? playerBalance : prize, prize);
+                }
+              } catch (e) {}
+            } else if (u.status === 'tie' && (u.amount | 0) > 0) {
+              try {
+                if (typeof playerBalance !== 'undefined') {
+                  playerBalance = (playerBalance | 0) + (u.amount | 0);
+                  if (typeof localStorage !== 'undefined' && typeof PLAYER_BALANCE_KEY !== 'undefined') {
+                    localStorage.setItem(PLAYER_BALANCE_KEY, String(playerBalance));
+                  }
+                }
+                if (typeof updateBalanceDisplay === 'function') updateBalanceDisplay();
+                if (typeof window.__bloomBumpBal === 'function') {
+                  window.__bloomBumpBal(typeof playerBalance !== 'undefined' ? playerBalance : 0, u.amount | 0);
+                }
+              } catch (e) {}
+            }
             return;
           }
           // NEW: opponent declined, or duel auto-expired past its TTL.
@@ -22679,14 +22736,57 @@
         '</div>' +
       '</div>';
     document.body.appendChild(modal);
-    var close = function() { try { modal.remove(); } catch (e) {} };
+    // 2026-05-26: mark the modal as currently open so the post-action
+    // setTimeout that re-shows the modal can be cancelled when the
+    // user closes mid-flight (previously the modal popped up every
+    // second after every action).
+    _petModalOpen = true;
+    var close = function() {
+      _petModalOpen = false;
+      // Cancel any pending re-show timer.
+      if (_pendingReshowTimer) { clearTimeout(_pendingReshowTimer); _pendingReshowTimer = null; }
+      try { modal.remove(); } catch (e) {}
+    };
     modal.querySelector('.pet-modal-close').onclick = close;
     modal.addEventListener('click', function(e) { if (e.target === modal) close(); });
+    // 2026-05-26: ALWAYS wire onclick for both buttons. If canPet=false
+    // we still want the click to fire a toast "כבר ליטפת היום!" instead
+    // of the click being silently absorbed (the user's bug — they
+    // clicked "ליטוף יומי" but the count stayed at 0 because data.canPet
+    // had drifted to false due to stale cache or earlier race).
     var petBtn = document.getElementById('pet-action-pet');
-    if (petBtn && data.canPet) petBtn.onclick = function() { doPetAction(petBtn); };
+    if (petBtn) {
+      petBtn.onclick = function() {
+        if (!data.canPet) {
+          // Don't fire fetch — server would reject anyway. But show
+          // user-friendly toast so the click feels acknowledged.
+          if (typeof showToast === 'function') showToast('💗 כבר ליטפת היום! בוא מחר', 'info');
+          return;
+        }
+        doPetAction(petBtn);
+      };
+    }
     var feedBtn = document.getElementById('pet-action-feed');
-    if (feedBtn && data.canFeed && canAffordFeed) feedBtn.onclick = function() { doFeedAction(feedBtn); };
+    if (feedBtn) {
+      feedBtn.onclick = function() {
+        if (!data.canFeed) {
+          if (typeof showToast === 'function') showToast('🍽 הגעת למקסימום האכלות יומי (' + data.feedsPerDay + ')', 'info');
+          return;
+        }
+        if (!canAffordFeed) {
+          if (typeof showToast === 'function') showToast('💎 חסר ' + (data.feedPrice - bal) + '💎 כדי להאכיל', 'warning');
+          return;
+        }
+        doFeedAction(feedBtn);
+      };
+    }
   }
+
+  // 2026-05-26: shared state for cancelling the re-show timer when
+  // the modal closes. Without this the setTimeout fired regardless,
+  // re-creating the modal even after the user clicked ✕.
+  var _petModalOpen = false;
+  var _pendingReshowTimer = null;
 
   // 2026-05-26: rewrote the pet/feed action handlers because the old
   // flow looked broken to the user:
@@ -22736,7 +22836,14 @@
           fetchPetState(true).then(function(fresh) {
             if (fresh) {
               updatePetWidget(fresh);
-              setTimeout(function() { showPetModal(fresh); }, 1500);
+              // 2026-05-26: only re-show the modal if the player
+              // hasn't already closed it. Track via _pendingReshowTimer
+              // so the close handler can cancel.
+              if (_pendingReshowTimer) clearTimeout(_pendingReshowTimer);
+              _pendingReshowTimer = setTimeout(function() {
+                _pendingReshowTimer = null;
+                if (_petModalOpen) showPetModal(fresh);
+              }, 1500);
             }
           });
         } else {
@@ -22752,9 +22859,10 @@
           } else {
             if (typeof showToast === 'function') showToast('שגיאה — נסה שוב', 'error');
           }
-          // Force re-fetch so the modal updates to canPet=false on next open.
+          // Update widget but DON'T re-show the modal on error — that's
+          // what created the "modal pops up every second" loop.
           fetchPetState(true).then(function(fresh) {
-            if (fresh) { updatePetWidget(fresh); setTimeout(function() { showPetModal(fresh); }, 300); }
+            if (fresh) updatePetWidget(fresh);
           });
         }
       });
@@ -22836,7 +22944,11 @@
           fetchPetState(true).then(function(fresh) {
             if (fresh) {
               updatePetWidget(fresh);
-              setTimeout(function() { showPetModal(fresh); }, 1500);
+              if (_pendingReshowTimer) clearTimeout(_pendingReshowTimer);
+              _pendingReshowTimer = setTimeout(function() {
+                _pendingReshowTimer = null;
+                if (_petModalOpen) showPetModal(fresh);
+              }, 1500);
             }
           });
         } else {
@@ -22850,7 +22962,7 @@
             if (typeof showToast === 'function') showToast('שגיאה — נסה שוב', 'error');
           }
           fetchPetState(true).then(function(fresh) {
-            if (fresh) { updatePetWidget(fresh); setTimeout(function() { showPetModal(fresh); }, 300); }
+            if (fresh) updatePetWidget(fresh);
           });
         }
       });

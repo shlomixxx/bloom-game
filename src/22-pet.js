@@ -205,14 +205,57 @@
         '</div>' +
       '</div>';
     document.body.appendChild(modal);
-    var close = function() { try { modal.remove(); } catch (e) {} };
+    // 2026-05-26: mark the modal as currently open so the post-action
+    // setTimeout that re-shows the modal can be cancelled when the
+    // user closes mid-flight (previously the modal popped up every
+    // second after every action).
+    _petModalOpen = true;
+    var close = function() {
+      _petModalOpen = false;
+      // Cancel any pending re-show timer.
+      if (_pendingReshowTimer) { clearTimeout(_pendingReshowTimer); _pendingReshowTimer = null; }
+      try { modal.remove(); } catch (e) {}
+    };
     modal.querySelector('.pet-modal-close').onclick = close;
     modal.addEventListener('click', function(e) { if (e.target === modal) close(); });
+    // 2026-05-26: ALWAYS wire onclick for both buttons. If canPet=false
+    // we still want the click to fire a toast "כבר ליטפת היום!" instead
+    // of the click being silently absorbed (the user's bug — they
+    // clicked "ליטוף יומי" but the count stayed at 0 because data.canPet
+    // had drifted to false due to stale cache or earlier race).
     var petBtn = document.getElementById('pet-action-pet');
-    if (petBtn && data.canPet) petBtn.onclick = function() { doPetAction(petBtn); };
+    if (petBtn) {
+      petBtn.onclick = function() {
+        if (!data.canPet) {
+          // Don't fire fetch — server would reject anyway. But show
+          // user-friendly toast so the click feels acknowledged.
+          if (typeof showToast === 'function') showToast('💗 כבר ליטפת היום! בוא מחר', 'info');
+          return;
+        }
+        doPetAction(petBtn);
+      };
+    }
     var feedBtn = document.getElementById('pet-action-feed');
-    if (feedBtn && data.canFeed && canAffordFeed) feedBtn.onclick = function() { doFeedAction(feedBtn); };
+    if (feedBtn) {
+      feedBtn.onclick = function() {
+        if (!data.canFeed) {
+          if (typeof showToast === 'function') showToast('🍽 הגעת למקסימום האכלות יומי (' + data.feedsPerDay + ')', 'info');
+          return;
+        }
+        if (!canAffordFeed) {
+          if (typeof showToast === 'function') showToast('💎 חסר ' + (data.feedPrice - bal) + '💎 כדי להאכיל', 'warning');
+          return;
+        }
+        doFeedAction(feedBtn);
+      };
+    }
   }
+
+  // 2026-05-26: shared state for cancelling the re-show timer when
+  // the modal closes. Without this the setTimeout fired regardless,
+  // re-creating the modal even after the user clicked ✕.
+  var _petModalOpen = false;
+  var _pendingReshowTimer = null;
 
   // 2026-05-26: rewrote the pet/feed action handlers because the old
   // flow looked broken to the user:
@@ -262,7 +305,14 @@
           fetchPetState(true).then(function(fresh) {
             if (fresh) {
               updatePetWidget(fresh);
-              setTimeout(function() { showPetModal(fresh); }, 1500);
+              // 2026-05-26: only re-show the modal if the player
+              // hasn't already closed it. Track via _pendingReshowTimer
+              // so the close handler can cancel.
+              if (_pendingReshowTimer) clearTimeout(_pendingReshowTimer);
+              _pendingReshowTimer = setTimeout(function() {
+                _pendingReshowTimer = null;
+                if (_petModalOpen) showPetModal(fresh);
+              }, 1500);
             }
           });
         } else {
@@ -278,9 +328,10 @@
           } else {
             if (typeof showToast === 'function') showToast('שגיאה — נסה שוב', 'error');
           }
-          // Force re-fetch so the modal updates to canPet=false on next open.
+          // Update widget but DON'T re-show the modal on error — that's
+          // what created the "modal pops up every second" loop.
           fetchPetState(true).then(function(fresh) {
-            if (fresh) { updatePetWidget(fresh); setTimeout(function() { showPetModal(fresh); }, 300); }
+            if (fresh) updatePetWidget(fresh);
           });
         }
       });
@@ -362,7 +413,11 @@
           fetchPetState(true).then(function(fresh) {
             if (fresh) {
               updatePetWidget(fresh);
-              setTimeout(function() { showPetModal(fresh); }, 1500);
+              if (_pendingReshowTimer) clearTimeout(_pendingReshowTimer);
+              _pendingReshowTimer = setTimeout(function() {
+                _pendingReshowTimer = null;
+                if (_petModalOpen) showPetModal(fresh);
+              }, 1500);
             }
           });
         } else {
@@ -376,7 +431,7 @@
             if (typeof showToast === 'function') showToast('שגיאה — נסה שוב', 'error');
           }
           fetchPetState(true).then(function(fresh) {
-            if (fresh) { updatePetWidget(fresh); setTimeout(function() { showPetModal(fresh); }, 300); }
+            if (fresh) updatePetWidget(fresh);
           });
         }
       });

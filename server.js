@@ -15324,9 +15324,12 @@ app.post('/api/duels/:id/score', requireDeviceAuth, async (req, res) => {
         else if (u.opponent_score > u.challenger_score) winner = u.opponent_device;
 
         if (!winner) {
+          let myTieBalance = null;
           if ((u.amount | 0) > 0) {
-            await client.query(`UPDATE player_profiles SET balance = balance + $1 WHERE device_id = $2`, [u.amount, u.challenger_device]);
-            await client.query(`UPDATE player_profiles SET balance = balance + $1 WHERE device_id = $2`, [u.amount, u.opponent_device]);
+            const c1 = await client.query(`UPDATE player_profiles SET balance = balance + $1 WHERE device_id = $2 RETURNING balance`, [u.amount, u.challenger_device]);
+            const c2 = await client.query(`UPDATE player_profiles SET balance = balance + $1 WHERE device_id = $2 RETURNING balance`, [u.amount, u.opponent_device]);
+            if (deviceId === u.challenger_device && c1.rows[0]) myTieBalance = c1.rows[0].balance;
+            else if (deviceId === u.opponent_device && c2.rows[0]) myTieBalance = c2.rows[0].balance;
           }
           // status-guard prevents a double-settle if two requests race here.
           await client.query(`UPDATE duels SET status = 'tie', winner_device = NULL WHERE id = $1 AND status IN ('pending','accepted')`, [duelId]);
@@ -15354,11 +15357,21 @@ app.post('/api/duels/:id/score', requireDeviceAuth, async (req, res) => {
             result: 'tie',
             refunded: true,
             yourScore: s,
-            opponentScore: isChallenger ? u.opponent_score : u.challenger_score
+            opponentScore: isChallenger ? u.opponent_score : u.challenger_score,
+            newBalance: myTieBalance
           });
         }
+        // 2026-05-26: capture RETURNING balance so the winner's
+        // client can sync to the truth instead of just trusting the
+        // animation. Without this newBalance the player saw
+        // "🏆 ניצחת +150💎" but the home gem counter didn't move →
+        // looked like the prize wasn't credited.
+        let myNewBalance = null;
         if (prize > 0) {
-          await client.query(`UPDATE player_profiles SET balance = balance + $1, total_earned = total_earned + $1 WHERE device_id = $2`, [prize, winner]);
+          const updR = await client.query(
+            `UPDATE player_profiles SET balance = balance + $1, total_earned = total_earned + $1 WHERE device_id = $2 RETURNING balance`,
+            [prize, winner]);
+          if (winner === deviceId && updR.rows[0]) myNewBalance = updR.rows[0].balance;
         }
         await client.query(`UPDATE duels SET status = 'settled', winner_device = $1 WHERE id = $2 AND status IN ('pending','accepted')`, [winner, duelId]);
         await client.query('COMMIT');
@@ -15371,7 +15384,8 @@ app.post('/api/duels/:id/score', requireDeviceAuth, async (req, res) => {
           winner: winner === deviceId ? 'you' : 'opponent',
           prize,
           yourScore: s,
-          opponentScore: isChallenger ? u.opponent_score : u.challenger_score
+          opponentScore: isChallenger ? u.opponent_score : u.challenger_score,
+          newBalance: myNewBalance
         });
         // Push both players with personalised win/lose copy.
         const winnerIsChall = (winner === u.challenger_device);
