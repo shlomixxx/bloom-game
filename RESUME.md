@@ -47,6 +47,8 @@
 
 **4. [tasks/ACTIVE/MANUAL_TASKS.md](tasks/ACTIVE/MANUAL_TASKS.md)** — מה המשתמש צריך לעשות ידנית (GA4 / Stripe / domain).
 
+**5. [tasks/ACTIVE/ADMIN_TASKS.md](tasks/ACTIVE/ADMIN_TASKS.md)** — Admin panel audit (2026-05-26): ~165 פערים ב-9 phases (A-I). Phase A+B+C = MVP למניעת נטישה (שבועיים, ~25% churn reduction). Drill-down לשחקן בודד + per-player actions + churn detection dashboard עדיין חסרים.
+
 ### 📚 קבצי context (לא משימות — הקשר היסטורי)
 
 - **[CLAUDE.md](CLAUDE.md)** — Living spec של הפרויקט. §0 = retention stages tracker (49 stages). §5 = current features.

@@ -64,7 +64,7 @@ Quick-scan map of the addiction-loop work. **Update this table whenever a stage 
 |---|---|---|
 | — | (User picking which stage to test from 35-38 first) | Live to verify the addiction loop |
 
-> 📋 **All task files live under [tasks/ACTIVE/](tasks/ACTIVE/)** — single source of truth for what's NOT yet built. Hot files: [BLOOM_TASKS.md](tasks/ACTIVE/BLOOM_TASKS.md), [FUTURE_TASKS.md](tasks/ACTIVE/FUTURE_TASKS.md), [MONETIZATION_TASKS.md](tasks/ACTIVE/MONETIZATION_TASKS.md), [MANUAL_TASKS.md](tasks/ACTIVE/MANUAL_TASKS.md). New task files go into `tasks/ACTIVE/` per [tasks/README.md](tasks/README.md) convention. Update the relevant file whenever a backlog item ships.
+> 📋 **All task files live under [tasks/ACTIVE/](tasks/ACTIVE/)** — single source of truth for what's NOT yet built. Hot files: [BLOOM_TASKS.md](tasks/ACTIVE/BLOOM_TASKS.md), [FUTURE_TASKS.md](tasks/ACTIVE/FUTURE_TASKS.md), [MONETIZATION_TASKS.md](tasks/ACTIVE/MONETIZATION_TASKS.md), [MANUAL_TASKS.md](tasks/ACTIVE/MANUAL_TASKS.md), [ADMIN_TASKS.md](tasks/ACTIVE/ADMIN_TASKS.md). New task files go into `tasks/ACTIVE/` per [tasks/README.md](tasks/README.md) convention. Update the relevant file whenever a backlog item ships.
 
 ### 📋 Backlog — PURE ADDICTION (no real money needed — ready to ship)
 | Rank | Stage | What it does | Effort | Impact |
