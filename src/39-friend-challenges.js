@@ -274,7 +274,11 @@
         if (typeof showToast === 'function') showToast('האתגר נדחה', 'info');
         fetchChallenges(true).then(renderListBody);
       } else {
+        // 2026-05-26: was silent on error — button bounced back to
+        // "דחה" with no feedback, looked like a no-op click. Now
+        // restores the button AND shows a toast.
         if (btn) { btn.disabled = false; btn.textContent = 'דחה'; }
+        if (typeof showToast === 'function') showToast('לא ניתן לדחות כרגע — נסה שוב', 'error');
       }
     });
   }

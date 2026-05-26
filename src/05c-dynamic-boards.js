@@ -1763,6 +1763,10 @@
     var deviceId = (typeof getDeviceId === 'function') ? getDeviceId() : '';
     var token    = (typeof deviceToken !== 'undefined') ? deviceToken : null;
     if (!deviceId) return;
+    // 2026-05-26: save originalHtml so error path can restore the
+    // gold "🎁 קבל" CTA instead of overwriting it with a raw English
+    // server reason like "already_claimed".
+    var originalHtml = btnEl ? btnEl.innerHTML : '';
     if (btnEl) { btnEl.disabled = true; btnEl.innerHTML = '⏳'; }
     fetch('/api/player/season/claim-tier', {
       method: 'POST',
@@ -1789,6 +1793,7 @@
           if (typeof d.newBalance === 'number') {
             try { if (typeof playerBalance !== 'undefined') playerBalance = d.newBalance; } catch (e) {}
             try { if (typeof updateBalanceDisplay === 'function') updateBalanceDisplay(); } catch (e) {}
+            try { if (typeof window.__bloomBumpBal === 'function') window.__bloomBumpBal(d.newBalance, d.reward || 0); } catch (e) {}
           }
           try { if (typeof soundMilestone === 'function') soundMilestone(track === 'premium' ? 5 : 4); } catch (e) {}
           try { if (typeof buzz === 'function') buzz([40, 40, 60]); } catch (e) {}
@@ -1797,7 +1802,13 @@
             try { updateHomeSeasonPassTile(); } catch (e) {}
           }
         } else {
-          if (btnEl) { btnEl.disabled = false; btnEl.innerHTML = (d && d.reason) || 'שגיאה'; }
+          if (btnEl) { btnEl.disabled = false; btnEl.innerHTML = originalHtml; }
+          var reason = d && d.reason;
+          var msg = reason === 'already_claimed' ? 'הפרס כבר נאסף' :
+                    reason === 'not_unlocked' ? 'דרגה זו עוד לא נפתחה' :
+                    reason === 'not_premium' ? 'דרוש Premium Battle Pass' :
+                    'שגיאה — נסה שוב';
+          if (typeof showToast === 'function') showToast(msg, 'warning');
         }
       });
   }
@@ -1827,6 +1838,7 @@
           if (typeof d.newBalance === 'number') {
             try { if (typeof playerBalance !== 'undefined') playerBalance = d.newBalance; } catch (e) {}
             try { if (typeof updateBalanceDisplay === 'function') updateBalanceDisplay(); } catch (e) {}
+            try { if (typeof window.__bloomBumpBal === 'function') window.__bloomBumpBal(d.newBalance, -(d.price || price)); } catch (e) {}
           }
           if (_seasonCache.data) _seasonCache.data.isPremium = true;
           try { if (typeof soundMilestone === 'function') soundMilestone(6); } catch (e) {}

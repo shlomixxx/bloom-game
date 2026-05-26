@@ -532,7 +532,12 @@
           return;
         }
         var self = this;
-        self.disabled = true; self.textContent = '...';
+        // 2026-05-26: capture original label so we can restore it on
+        // error. Old code left the button stuck on '...' or on the
+        // raw English server reason ('insufficient_funds') forever.
+        var originalText = self.textContent;
+        self.disabled = true; self.textContent = '⏳ ...';
+        var resetBtn = function() { self.disabled = false; self.textContent = originalText; };
         fetch(API_BASE + '/api/player/buy-skin', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -541,6 +546,7 @@
           if (d && d.ok) {
             playerBalance = d.newBalance;
             try { localStorage.setItem(PLAYER_BALANCE_KEY, String(d.newBalance)); } catch(e) {}
+            try { if (typeof window.__bloomBumpBal === 'function') window.__bloomBumpBal(d.newBalance, -(d.cost || pack.price)); } catch(e) {}
             ownedSkins.push(skinId);
             try { localStorage.setItem(OWNED_SKINS_KEY, JSON.stringify(ownedSkins)); } catch(e) {}
             activeSkinId = skinId;
@@ -553,9 +559,19 @@
             render();
             trackEvent('purchase', { item: 'skin', skin: skinId, cost: d.cost | 0 });
           } else {
-            self.textContent = d.reason || 'שגיאה';
+            resetBtn();
+            var reason = d && d.reason;
+            var msg = reason === 'insufficient_funds' ? '💎 חסר יהלומים' :
+                      reason === 'already_owned' ? 'כבר ברשותך' :
+                      reason === 'skin_disabled' ? 'הסקין כבוי כרגע' :
+                      reason === 'not_sellable' ? 'הסקין לא למכירה כרגע' :
+                      'שגיאה — נסה שוב';
+            if (typeof showToast === 'function') showToast(msg, 'error');
           }
-        }).catch(function() { self.textContent = 'שגיאה'; });
+        }).catch(function() {
+          resetBtn();
+          if (typeof showToast === 'function') showToast('שגיאת רשת — נסה שוב', 'error');
+        });
       };
     });
 
@@ -660,11 +676,17 @@
     skinTrialTimerHandle = setInterval(tickTrialCountdown, 250);
 
     banner.querySelector('.skin-trial-buy-btn').onclick = function() {
+      var self = this;
       if (playerBalance < pack.price) {
-        this.textContent = 'אין מספיק 💎';
+        self.textContent = 'אין מספיק 💎';
         return;
       }
-      this.disabled = true; this.textContent = '...';
+      // 2026-05-26: was disabled+'...' with NO else branch and a
+      // .catch(function(){}) that swallowed every error. On any
+      // failure the trial-buy button was stuck on '...' forever.
+      var originalText = self.textContent;
+      self.disabled = true; self.textContent = '⏳ ...';
+      var resetBtn = function() { self.disabled = false; self.textContent = originalText; };
       fetch(API_BASE + '/api/player/buy-skin', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -673,6 +695,7 @@
         if (d && d.ok) {
           playerBalance = d.newBalance;
           try { localStorage.setItem(PLAYER_BALANCE_KEY, String(d.newBalance)); } catch(e) {}
+          try { if (typeof window.__bloomBumpBal === 'function') window.__bloomBumpBal(d.newBalance, -(d.cost || pack.price)); } catch(e) {}
           ownedSkins.push(skinId);
           try { localStorage.setItem(OWNED_SKINS_KEY, JSON.stringify(ownedSkins)); } catch(e) {}
           try { localStorage.setItem(ACTIVE_SKIN_KEY, skinId); } catch(e) {}
@@ -682,8 +705,14 @@
           updateModeBar();
           showCreditToast(-pack.price, pack.name + ' נרכש!');
           trackEvent('purchase', { item: 'skin', skin: skinId, cost: pack.price });
+        } else {
+          resetBtn();
+          if (typeof showToast === 'function') showToast('שגיאה ברכישה — נסה שוב', 'error');
         }
-      }).catch(function() {});
+      }).catch(function() {
+        resetBtn();
+        if (typeof showToast === 'function') showToast('שגיאת רשת', 'error');
+      });
     };
 
     banner.querySelector('.skin-trial-end-btn').onclick = function() {

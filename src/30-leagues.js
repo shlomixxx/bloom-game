@@ -181,6 +181,7 @@
   }
 
   function doLeagueClaim(btn) {
+    var originalHtml = btn ? btn.innerHTML : '';
     if (btn) { btn.disabled = true; btn.innerHTML = '⏳'; }
     var deviceId = (typeof getDeviceId === 'function') ? getDeviceId() : '';
     var token = (typeof deviceToken !== 'undefined') ? deviceToken : null;
@@ -206,8 +207,12 @@
             }
           });
         } else {
-          if (btn) btn.disabled = false;
-          showToast(d && d.reason ? d.reason : 'שגיאה', 'error');
+          if (btn) { btn.disabled = false; btn.innerHTML = originalHtml; }
+          var reason = d && d.reason;
+          var msg = reason === 'already_claimed' ? 'הפרס כבר נאסף' :
+                    reason === 'no_unclaimed_reward' ? 'אין פרס לאיסוף' :
+                    'שגיאה — נסה שוב';
+          if (typeof showToast === 'function') showToast(msg, 'warning');
         }
       });
   }

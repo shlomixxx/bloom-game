@@ -237,6 +237,7 @@
   }
 
   function doAlbumClaim(claimType, targetId, btn) {
+    var originalHtml = btn ? btn.innerHTML : '';
     if (btn) { btn.disabled = true; btn.innerHTML = '⏳'; }
     var deviceId = (typeof getDeviceId === 'function') ? getDeviceId() : '';
     var token = (typeof deviceToken !== 'undefined') ? deviceToken : null;
@@ -267,8 +268,14 @@
             }
           });
         } else {
-          if (btn) btn.disabled = false;
-          showToast(d && d.reason ? d.reason : 'שגיאה', 'error');
+          // 2026-05-26: restore original button content instead of leaving
+          // it stuck on '⏳'. Translate technical reasons to Hebrew.
+          if (btn) { btn.disabled = false; btn.innerHTML = originalHtml; }
+          var reason = d && d.reason;
+          var msg = reason === 'already_claimed' ? 'הפרס כבר נאסף' :
+                    reason === 'not_complete' ? 'עוד לא השלמת — המשך לאסוף' :
+                    'שגיאה — נסה שוב';
+          if (typeof showToast === 'function') showToast(msg, 'warning');
         }
       });
   }

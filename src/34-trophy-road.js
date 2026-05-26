@@ -237,6 +237,10 @@
   }
 
   function doMilestoneClaim(idx, btn) {
+    // 2026-05-26: capture original label so error restores the gold
+    // "🎁 קבל +N💎" CTA instead of the dead "🎁 שגיאה" that hardcoded
+    // a permanent-looking error label.
+    var originalText = btn ? btn.textContent : '';
     if (btn) { btn.disabled = true; btn.textContent = '⏳'; }
     var deviceId = (typeof getDeviceId === 'function') ? getDeviceId() : '';
     var token = (typeof deviceToken !== 'undefined') ? deviceToken : null;
@@ -247,8 +251,12 @@
     }).then(function(r) { return r.json(); }).catch(function() { return null; })
       .then(function(d) {
         if (!d || !d.ok) {
-          if (btn) { btn.disabled = false; btn.textContent = '🎁 שגיאה'; }
-          showToast(d && d.reason ? d.reason : 'שגיאה', 'error');
+          if (btn) { btn.disabled = false; btn.textContent = originalText; }
+          var reason = d && d.reason;
+          var msg = reason === 'already_claimed' ? 'המילסטון כבר נאסף' :
+                    reason === 'not_reached' ? 'עוד לא הגעת לסף הזה' :
+                    'שגיאה — נסה שוב';
+          if (typeof showToast === 'function') showToast(msg, 'warning');
           return;
         }
         if (typeof d.newBalance === 'number') {

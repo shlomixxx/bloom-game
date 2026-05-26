@@ -191,6 +191,10 @@
   }
 
   function buyStarterPack(btnEl, onSuccess) {
+    // 2026-05-26: capture original so error path restores the full
+    // "✨ קנה עכשיו · 500💎" label, not the generic "✨ קנה עכשיו" that
+    // was hardcoded (it lost the price suffix the button originally had).
+    var originalHtml = btnEl ? btnEl.innerHTML : '';
     if (btnEl) { btnEl.disabled = true; btnEl.innerHTML = '⏳ מעבד...'; }
     var deviceId = (typeof getDeviceId === 'function') ? getDeviceId() : '';
     var token    = (typeof deviceToken !== 'undefined') ? deviceToken : null;
@@ -207,6 +211,9 @@
           if (typeof d.newBalance === 'number') {
             try { if (typeof playerBalance !== 'undefined') playerBalance = d.newBalance; } catch (e) {}
             try { if (typeof updateBalanceDisplay === 'function') updateBalanceDisplay(); } catch (e) {}
+            // 2026-05-26: bump home widget. d.delta = rewardGems - price (net change).
+            var __spDelta = (typeof d.rewardGems === 'number' && typeof d.price === 'number') ? (d.rewardGems - d.price) : 0;
+            try { if (typeof window.__bloomBumpBal === 'function') window.__bloomBumpBal(d.newBalance, __spDelta); } catch (e) {}
           }
           // Grant skin client-side cache so it shows in shop instantly.
           try {
@@ -246,7 +253,9 @@
           } else {
             showToast('שגיאה: ' + (reason || 'unknown'), 'error');
           }
-          if (btnEl) btnEl.innerHTML = '✨ קנה עכשיו';
+          // 2026-05-26: restore the FULL original label (was hardcoded
+          // generic "✨ קנה עכשיו" which lost the price suffix).
+          if (btnEl) btnEl.innerHTML = originalHtml;
         }
       });
   }

@@ -532,7 +532,12 @@
           return;
         }
         var self = this;
-        self.disabled = true; self.textContent = '...';
+        // 2026-05-26: capture original label so we can restore it on
+        // error. Old code left the button stuck on '...' or on the
+        // raw English server reason ('insufficient_funds') forever.
+        var originalText = self.textContent;
+        self.disabled = true; self.textContent = '⏳ ...';
+        var resetBtn = function() { self.disabled = false; self.textContent = originalText; };
         fetch(API_BASE + '/api/player/buy-skin', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -541,6 +546,7 @@
           if (d && d.ok) {
             playerBalance = d.newBalance;
             try { localStorage.setItem(PLAYER_BALANCE_KEY, String(d.newBalance)); } catch(e) {}
+            try { if (typeof window.__bloomBumpBal === 'function') window.__bloomBumpBal(d.newBalance, -(d.cost || pack.price)); } catch(e) {}
             ownedSkins.push(skinId);
             try { localStorage.setItem(OWNED_SKINS_KEY, JSON.stringify(ownedSkins)); } catch(e) {}
             activeSkinId = skinId;
@@ -553,9 +559,19 @@
             render();
             trackEvent('purchase', { item: 'skin', skin: skinId, cost: d.cost | 0 });
           } else {
-            self.textContent = d.reason || 'שגיאה';
+            resetBtn();
+            var reason = d && d.reason;
+            var msg = reason === 'insufficient_funds' ? '💎 חסר יהלומים' :
+                      reason === 'already_owned' ? 'כבר ברשותך' :
+                      reason === 'skin_disabled' ? 'הסקין כבוי כרגע' :
+                      reason === 'not_sellable' ? 'הסקין לא למכירה כרגע' :
+                      'שגיאה — נסה שוב';
+            if (typeof showToast === 'function') showToast(msg, 'error');
           }
-        }).catch(function() { self.textContent = 'שגיאה'; });
+        }).catch(function() {
+          resetBtn();
+          if (typeof showToast === 'function') showToast('שגיאת רשת — נסה שוב', 'error');
+        });
       };
     });
 
@@ -660,11 +676,17 @@
     skinTrialTimerHandle = setInterval(tickTrialCountdown, 250);
 
     banner.querySelector('.skin-trial-buy-btn').onclick = function() {
+      var self = this;
       if (playerBalance < pack.price) {
-        this.textContent = 'אין מספיק 💎';
+        self.textContent = 'אין מספיק 💎';
         return;
       }
-      this.disabled = true; this.textContent = '...';
+      // 2026-05-26: was disabled+'...' with NO else branch and a
+      // .catch(function(){}) that swallowed every error. On any
+      // failure the trial-buy button was stuck on '...' forever.
+      var originalText = self.textContent;
+      self.disabled = true; self.textContent = '⏳ ...';
+      var resetBtn = function() { self.disabled = false; self.textContent = originalText; };
       fetch(API_BASE + '/api/player/buy-skin', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -673,6 +695,7 @@
         if (d && d.ok) {
           playerBalance = d.newBalance;
           try { localStorage.setItem(PLAYER_BALANCE_KEY, String(d.newBalance)); } catch(e) {}
+          try { if (typeof window.__bloomBumpBal === 'function') window.__bloomBumpBal(d.newBalance, -(d.cost || pack.price)); } catch(e) {}
           ownedSkins.push(skinId);
           try { localStorage.setItem(OWNED_SKINS_KEY, JSON.stringify(ownedSkins)); } catch(e) {}
           try { localStorage.setItem(ACTIVE_SKIN_KEY, skinId); } catch(e) {}
@@ -682,8 +705,14 @@
           updateModeBar();
           showCreditToast(-pack.price, pack.name + ' נרכש!');
           trackEvent('purchase', { item: 'skin', skin: skinId, cost: pack.price });
+        } else {
+          resetBtn();
+          if (typeof showToast === 'function') showToast('שגיאה ברכישה — נסה שוב', 'error');
         }
-      }).catch(function() {});
+      }).catch(function() {
+        resetBtn();
+        if (typeof showToast === 'function') showToast('שגיאת רשת', 'error');
+      });
     };
 
     banner.querySelector('.skin-trial-end-btn').onclick = function() {
@@ -8607,6 +8636,10 @@
     var deviceId = (typeof getDeviceId === 'function') ? getDeviceId() : '';
     var token    = (typeof deviceToken !== 'undefined') ? deviceToken : null;
     if (!deviceId) return;
+    // 2026-05-26: save originalHtml so error path can restore the
+    // gold "🎁 קבל" CTA instead of overwriting it with a raw English
+    // server reason like "already_claimed".
+    var originalHtml = btnEl ? btnEl.innerHTML : '';
     if (btnEl) { btnEl.disabled = true; btnEl.innerHTML = '⏳'; }
     fetch('/api/player/season/claim-tier', {
       method: 'POST',
@@ -8633,6 +8666,7 @@
           if (typeof d.newBalance === 'number') {
             try { if (typeof playerBalance !== 'undefined') playerBalance = d.newBalance; } catch (e) {}
             try { if (typeof updateBalanceDisplay === 'function') updateBalanceDisplay(); } catch (e) {}
+            try { if (typeof window.__bloomBumpBal === 'function') window.__bloomBumpBal(d.newBalance, d.reward || 0); } catch (e) {}
           }
           try { if (typeof soundMilestone === 'function') soundMilestone(track === 'premium' ? 5 : 4); } catch (e) {}
           try { if (typeof buzz === 'function') buzz([40, 40, 60]); } catch (e) {}
@@ -8641,7 +8675,13 @@
             try { updateHomeSeasonPassTile(); } catch (e) {}
           }
         } else {
-          if (btnEl) { btnEl.disabled = false; btnEl.innerHTML = (d && d.reason) || 'שגיאה'; }
+          if (btnEl) { btnEl.disabled = false; btnEl.innerHTML = originalHtml; }
+          var reason = d && d.reason;
+          var msg = reason === 'already_claimed' ? 'הפרס כבר נאסף' :
+                    reason === 'not_unlocked' ? 'דרגה זו עוד לא נפתחה' :
+                    reason === 'not_premium' ? 'דרוש Premium Battle Pass' :
+                    'שגיאה — נסה שוב';
+          if (typeof showToast === 'function') showToast(msg, 'warning');
         }
       });
   }
@@ -8671,6 +8711,7 @@
           if (typeof d.newBalance === 'number') {
             try { if (typeof playerBalance !== 'undefined') playerBalance = d.newBalance; } catch (e) {}
             try { if (typeof updateBalanceDisplay === 'function') updateBalanceDisplay(); } catch (e) {}
+            try { if (typeof window.__bloomBumpBal === 'function') window.__bloomBumpBal(d.newBalance, -(d.price || price)); } catch (e) {}
           }
           if (_seasonCache.data) _seasonCache.data.isPremium = true;
           try { if (typeof soundMilestone === 'function') soundMilestone(6); } catch (e) {}
@@ -20967,6 +21008,10 @@
   }
 
   function buyStarterPack(btnEl, onSuccess) {
+    // 2026-05-26: capture original so error path restores the full
+    // "✨ קנה עכשיו · 500💎" label, not the generic "✨ קנה עכשיו" that
+    // was hardcoded (it lost the price suffix the button originally had).
+    var originalHtml = btnEl ? btnEl.innerHTML : '';
     if (btnEl) { btnEl.disabled = true; btnEl.innerHTML = '⏳ מעבד...'; }
     var deviceId = (typeof getDeviceId === 'function') ? getDeviceId() : '';
     var token    = (typeof deviceToken !== 'undefined') ? deviceToken : null;
@@ -20983,6 +21028,9 @@
           if (typeof d.newBalance === 'number') {
             try { if (typeof playerBalance !== 'undefined') playerBalance = d.newBalance; } catch (e) {}
             try { if (typeof updateBalanceDisplay === 'function') updateBalanceDisplay(); } catch (e) {}
+            // 2026-05-26: bump home widget. d.delta = rewardGems - price (net change).
+            var __spDelta = (typeof d.rewardGems === 'number' && typeof d.price === 'number') ? (d.rewardGems - d.price) : 0;
+            try { if (typeof window.__bloomBumpBal === 'function') window.__bloomBumpBal(d.newBalance, __spDelta); } catch (e) {}
           }
           // Grant skin client-side cache so it shows in shop instantly.
           try {
@@ -21022,7 +21070,9 @@
           } else {
             showToast('שגיאה: ' + (reason || 'unknown'), 'error');
           }
-          if (btnEl) btnEl.innerHTML = '✨ קנה עכשיו';
+          // 2026-05-26: restore the FULL original label (was hardcoded
+          // generic "✨ קנה עכשיו" which lost the price suffix).
+          if (btnEl) btnEl.innerHTML = originalHtml;
         }
       });
   }
@@ -23601,6 +23651,7 @@
   }
 
   function doAlbumClaim(claimType, targetId, btn) {
+    var originalHtml = btn ? btn.innerHTML : '';
     if (btn) { btn.disabled = true; btn.innerHTML = '⏳'; }
     var deviceId = (typeof getDeviceId === 'function') ? getDeviceId() : '';
     var token = (typeof deviceToken !== 'undefined') ? deviceToken : null;
@@ -23631,8 +23682,14 @@
             }
           });
         } else {
-          if (btn) btn.disabled = false;
-          showToast(d && d.reason ? d.reason : 'שגיאה', 'error');
+          // 2026-05-26: restore original button content instead of leaving
+          // it stuck on '⏳'. Translate technical reasons to Hebrew.
+          if (btn) { btn.disabled = false; btn.innerHTML = originalHtml; }
+          var reason = d && d.reason;
+          var msg = reason === 'already_claimed' ? 'הפרס כבר נאסף' :
+                    reason === 'not_complete' ? 'עוד לא השלמת — המשך לאסוף' :
+                    'שגיאה — נסה שוב';
+          if (typeof showToast === 'function') showToast(msg, 'warning');
         }
       });
   }
@@ -25054,6 +25111,7 @@
   }
 
   function doLeagueClaim(btn) {
+    var originalHtml = btn ? btn.innerHTML : '';
     if (btn) { btn.disabled = true; btn.innerHTML = '⏳'; }
     var deviceId = (typeof getDeviceId === 'function') ? getDeviceId() : '';
     var token = (typeof deviceToken !== 'undefined') ? deviceToken : null;
@@ -25079,8 +25137,12 @@
             }
           });
         } else {
-          if (btn) btn.disabled = false;
-          showToast(d && d.reason ? d.reason : 'שגיאה', 'error');
+          if (btn) { btn.disabled = false; btn.innerHTML = originalHtml; }
+          var reason = d && d.reason;
+          var msg = reason === 'already_claimed' ? 'הפרס כבר נאסף' :
+                    reason === 'no_unclaimed_reward' ? 'אין פרס לאיסוף' :
+                    'שגיאה — נסה שוב';
+          if (typeof showToast === 'function') showToast(msg, 'warning');
         }
       });
   }
@@ -26458,6 +26520,10 @@
   }
 
   function doMilestoneClaim(idx, btn) {
+    // 2026-05-26: capture original label so error restores the gold
+    // "🎁 קבל +N💎" CTA instead of the dead "🎁 שגיאה" that hardcoded
+    // a permanent-looking error label.
+    var originalText = btn ? btn.textContent : '';
     if (btn) { btn.disabled = true; btn.textContent = '⏳'; }
     var deviceId = (typeof getDeviceId === 'function') ? getDeviceId() : '';
     var token = (typeof deviceToken !== 'undefined') ? deviceToken : null;
@@ -26468,8 +26534,12 @@
     }).then(function(r) { return r.json(); }).catch(function() { return null; })
       .then(function(d) {
         if (!d || !d.ok) {
-          if (btn) { btn.disabled = false; btn.textContent = '🎁 שגיאה'; }
-          showToast(d && d.reason ? d.reason : 'שגיאה', 'error');
+          if (btn) { btn.disabled = false; btn.textContent = originalText; }
+          var reason = d && d.reason;
+          var msg = reason === 'already_claimed' ? 'המילסטון כבר נאסף' :
+                    reason === 'not_reached' ? 'עוד לא הגעת לסף הזה' :
+                    'שגיאה — נסה שוב';
+          if (typeof showToast === 'function') showToast(msg, 'warning');
           return;
         }
         if (typeof d.newBalance === 'number') {
@@ -27940,7 +28010,11 @@ try {
         if (typeof showToast === 'function') showToast('האתגר נדחה', 'info');
         fetchChallenges(true).then(renderListBody);
       } else {
+        // 2026-05-26: was silent on error — button bounced back to
+        // "דחה" with no feedback, looked like a no-op click. Now
+        // restores the button AND shows a toast.
         if (btn) { btn.disabled = false; btn.textContent = 'דחה'; }
+        if (typeof showToast === 'function') showToast('לא ניתן לדחות כרגע — נסה שוב', 'error');
       }
     });
   }
