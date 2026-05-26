@@ -2567,23 +2567,50 @@
     return String.fromCodePoint(0x1F1E6 + up.charCodeAt(0) - 65, 0x1F1E6 + up.charCodeAt(1) - 65);
   }
 
+  // Session-expired guard. After the first 401/403 we set this flag,
+  // stop the interval pollers, and refuse subsequent api() calls. Old
+  // behavior was location.reload() — but with 28 parallel calls in
+  // refreshAll() that triggered a reload storm (each call hit the
+  // expired session and re-fired the reload). Now we show ONE overlay
+  // and let the admin re-authenticate explicitly.
+  var _sessionDead = false;
+  function _showSessionExpired() {
+    if (document.getElementById('session-expired-overlay')) return;
+    var ov = document.createElement('div');
+    ov.id = 'session-expired-overlay';
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px';
+    ov.innerHTML =
+      '<div style="background:#FFFFFF;border-radius:14px;padding:24px;max-width:380px;text-align:center;direction:rtl">' +
+        '<div style="font-size:42px;margin-bottom:8px">🔒</div>' +
+        '<div style="font-size:18px;font-weight:800;margin-bottom:6px">פג תוקף ההזדהות</div>' +
+        '<div style="font-size:13px;color:#6F6E68;margin-bottom:16px">הסשן ב-admin פג. רענן את העמוד והזן שוב את הסיסמה.</div>' +
+        '<button onclick="location.reload()" style="background:#BA7517;color:#FFFFFF;border:none;padding:10px 24px;border-radius:10px;font-weight:700;cursor:pointer;font-family:inherit;font-size:14px">🔄 רענן ועבור להזדהות</button>' +
+      '</div>';
+    document.body.appendChild(ov);
+  }
+
   async function api(path, opts) {
+    if (_sessionDead) return null;
     opts = opts || {};
-    // Ensure Content-Type for body-carrying methods so the server parses JSON.
-    // Without this, POST/PATCH bodies arrive empty.
     if (opts.method && opts.method !== 'GET' && !opts.headers) {
       opts.headers = { 'Content-Type': 'application/json' };
     }
-    // Cache-bust every admin request so reads after writes always reflect
-    // the latest server state — closes a class of "I just saved but it
-    // looks stale" complaints across every admin section, not just boards.
     opts.cache = opts.cache || 'no-store';
     const sep = path.indexOf('?') === -1 ? '?' : '&';
     const url = API + path + sep + '_t=' + Date.now();
-    const res = await fetch(url, opts);
-    if (res.status === 401 || res.status === 403) { location.reload(); return null; }
-    if (!res.ok) { toast('שגיאת שרת: ' + res.status); return null; }
-    return res.json();
+    try {
+      const res = await fetch(url, opts);
+      if (res.status === 401 || res.status === 403) {
+        _sessionDead = true;
+        _showSessionExpired();
+        return null;
+      }
+      if (!res.ok) { toast('שגיאת שרת: ' + res.status); return null; }
+      return res.json();
+    } catch (e) {
+      toast('שגיאת רשת');
+      return null;
+    }
   }
 
   function toast(msg) {
@@ -4331,36 +4358,48 @@
   }
 
   // ---------- WIRING ----------
+  // 2026-05-26 lazy-load: instead of firing all 28 loaders on boot,
+  // each loader is grouped by its owning tab. Only the active tab's
+  // loaders run on boot + on tab switch.
+  //
+  // TAB_LOADERS is built LAZILY (function returning the map) because
+  // function declarations are hoisted but their identity isn't pinned
+  // until the IIFE has finished defining them. By the time loadTab()
+  // runs, all the load* functions exist in scope and the map of refs
+  // resolves correctly.
+  function _buildTabLoaders() {
+    return {
+      dashboard: [loadDashboard, loadFunnel, loadRetention, loadHeatmap, loadEngagementOverview],
+      game:      [loadBoards, loadSkins, loadDailySpecialPicker, loadHomeVariant],
+      economy:   [loadSeasonPassTiers, loadDailyDeals, loadGachaPool, loadCalendarEvents,
+                  loadBundles, loadAchLb, loadSmartPush, loadReplayStats, loadGuildsAdmin,
+                  loadRivalryStats, loadSpinStats, loadGuildWars, loadPromos, loadTrophyStats],
+      players:   [loadPlayers, loadTopScores],
+      contests:  [loadContests, loadChallenges],
+      monitor:   [loadLive, loadAudit],
+      debug:     []
+    };
+  }
+  var _loadedTabs = {};
+  function loadTab(tabName, force) {
+    var loaders = _buildTabLoaders();
+    var list = loaders[tabName] || [];
+    if (!force && _loadedTabs[tabName]) return;
+    _loadedTabs[tabName] = true;
+    list.forEach(function(fn) {
+      try { if (typeof fn === 'function') fn(); }
+      catch (e) { console.warn('[admin] loadTab loader threw', e); }
+    });
+  }
   function refreshAll() {
-    loadDashboard();
-    loadFunnel();
-    loadRetention();
-    loadHeatmap();
-    loadTopScores();
-    loadContests();
-    loadChallenges();
-    loadPlayers();
-    loadLive();
-    loadAudit();
-    loadBoards();
-    loadSkins();
-    loadSeasonPassTiers();
-    loadDailySpecialPicker();
-    loadDailyDeals();
-    loadGachaPool();
-    loadCalendarEvents();
-    loadBundles();
-    loadAchLb();
-    loadSmartPush();
-    loadReplayStats();
-    loadGuildsAdmin();
-    loadRivalryStats();
-    loadHomeVariant();
-    loadSpinStats();
-    loadGuildWars();
-    loadPromos();
-    loadTrophyStats();
-    loadEngagementOverview();
+    var loaders = _buildTabLoaders();
+    Object.keys(loaders).forEach(function(t) { loadTab(t, true); });
+  }
+  function refreshActiveTab() {
+    var active = null;
+    try { active = localStorage.getItem(ADMIN_TAB_KEY); } catch (e) {}
+    if (!active || !_buildTabLoaders()[active]) active = 'dashboard';
+    loadTab(active);
   }
 
   // ============================================================
@@ -4475,7 +4514,7 @@
         var winrate = r.total_games > 0 ? Math.round(r.total_wins / r.total_games * 100) : 0;
         return '<div style="display:grid;grid-template-columns:auto 1fr auto auto;gap:10px;align-items:center;padding:6px 10px;background:var(--bg);border-radius:6px;border:1px solid var(--border)">' +
           '<span style="font-size:14px;min-width:28px">' + medal + '</span>' +
-          '<span style="font-weight:700">' + r.name + '</span>' +
+          '<span style="font-weight:700">' + escHtml(r.name || '') + '</span>' +
           '<span style="color:var(--gold);font-weight:800">🏆 ' + r.trophies.toLocaleString() + '</span>' +
           '<span style="font-size:10px;opacity:0.65">' + winrate + '% (' + r.total_games + ' מ׳)</span>' +
         '</div>';
@@ -4500,8 +4539,8 @@
         else if (w.status === 'finalized') statusBadge = '<span style="padding:2px 8px;background:#FAC775;color:#1C1A18;border-radius:6px;font-size:10px;font-weight:700">✓ הסתיים</span>';
         else statusBadge = '<span style="padding:2px 8px;background:rgba(255,255,255,0.1);color:var(--muted);border-radius:6px;font-size:10px">' + w.status + '</span>';
         var winnerStr = '';
-        if (w.winner_guild_id === w.guild_a_id) winnerStr = ' · 🏆 ' + (w.guild_a_emoji || '') + ' ' + w.guild_a_name;
-        else if (w.winner_guild_id === w.guild_b_id) winnerStr = ' · 🏆 ' + (w.guild_b_emoji || '') + ' ' + w.guild_b_name;
+        if (w.winner_guild_id === w.guild_a_id) winnerStr = ' · 🏆 ' + (w.guild_a_emoji || '') + ' ' + escHtml(w.guild_a_name || '');
+        else if (w.winner_guild_id === w.guild_b_id) winnerStr = ' · 🏆 ' + (w.guild_b_emoji || '') + ' ' + escHtml(w.guild_b_name || '');
         else if (w.status === 'finalized') winnerStr = ' · 🤝 תיקו';
         var actionBtn = w.status === 'active'
           ? '<button class="btn sm" style="font-size:10px;padding:4px 8px" onclick="finalizeWar(' + w.id + ')">💰 סיים עכשיו</button>'
@@ -4512,9 +4551,9 @@
             actionBtn +
           '</div>' +
           '<div style="font-size:11px">' +
-            (w.guild_a_emoji || '🛡') + ' <strong>' + w.guild_a_name + '</strong>: ' + Number(w.guild_a_score).toLocaleString() + ' נק׳ (' + w.guild_a_games + ' מ׳)' +
+            (w.guild_a_emoji || '🛡') + ' <strong>' + escHtml(w.guild_a_name || '') + '</strong>: ' + Number(w.guild_a_score).toLocaleString() + ' נק׳ (' + w.guild_a_games + ' מ׳)' +
             ' &nbsp;⚔️ ' +
-            (w.guild_b_emoji || '⚔️') + ' <strong>' + w.guild_b_name + '</strong>: ' + Number(w.guild_b_score).toLocaleString() + ' נק׳ (' + w.guild_b_games + ' מ׳)' +
+            (w.guild_b_emoji || '⚔️') + ' <strong>' + escHtml(w.guild_b_name || '') + '</strong>: ' + Number(w.guild_b_score).toLocaleString() + ' נק׳ (' + w.guild_b_games + ' מ׳)' +
           '</div>' +
           '<div style="font-size:10px;opacity:0.6;margin-top:2px">' + new Date(w.starts_at).toLocaleString('he-IL') + ' → ' + new Date(w.ends_at).toLocaleString('he-IL') + '</div>' +
         '</div>';
@@ -4905,7 +4944,7 @@
           var medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : ('#' + (i + 1));
           return '<div style="display:grid;grid-template-columns:50px 1fr auto auto;gap:10px;padding:6px 10px;background:var(--bg);border-radius:6px;align-items:center">' +
             '<div style="font-weight:900;text-align:center;color:var(--gold)">' + medal + '</div>' +
-            '<div style="font-weight:700;color:var(--fg);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + p.name + '</div>' +
+            '<div style="font-weight:700;color:var(--fg);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escHtml(p.name) + '</div>' +
             '<div style="font-size:10px;color:var(--muted)">שיא: ' + (p.best_shared_score || 0).toLocaleString() + '</div>' +
             '<div style="font-weight:900;color:var(--gold)">📤 ' + p.share_count + '</div>' +
           '</div>';
@@ -5014,7 +5053,7 @@
             : '';
           return '<div style="display:grid;grid-template-columns:50px 1fr auto auto;gap:10px;padding:8px 12px;background:var(--bg);border-radius:8px;align-items:center">' +
             '<div style="font-weight:900;font-size:14px;color:var(--gold);text-align:center">' + rankBadge + '</div>' +
-            '<div style="font-weight:700;color:var(--fg)">' + flag + p.name + (p.player_code ? ' <span style="font-size:10px;color:var(--muted);font-family:monospace">' + p.player_code + '</span>' : '') + '</div>' +
+            '<div style="font-weight:700;color:var(--fg)">' + flag + escHtml(p.name) + (p.player_code ? ' <span style="font-size:10px;color:var(--muted);font-family:monospace">' + escHtml(p.player_code) + '</span>' : '') + '</div>' +
             '<div style="color:var(--muted);font-size:11px">' + lastUnlocked + '</div>' +
             '<div style="font-weight:900;color:var(--gold)">🏅 ' + p.ach_count + '</div>' +
           '</div>';
@@ -5280,8 +5319,8 @@
             '<div style="font-size:20px">' + (e.emoji || '📅') + '</div>' +
             '<div style="font-size:11px;font-weight:700;color:var(--gold);padding:3px 8px;background:rgba(0,0,0,0.04);border-radius:6px;font-variant-numeric:tabular-nums">' + date + '</div>' +
             '<div style="min-width:0">' +
-              '<div style="font-weight:700;color:var(--fg);font-size:12px">' + e.title + ' ' + status + '</div>' +
-              (e.description ? '<div style="font-size:10px;color:var(--muted);margin-top:2px">' + e.description.substring(0, 80) + '</div>' : '') +
+              '<div style="font-weight:700;color:var(--fg);font-size:12px">' + escHtml(e.title || '') + ' ' + status + '</div>' +
+              (e.description ? '<div style="font-size:10px;color:var(--muted);margin-top:2px">' + escHtml(e.description.substring(0, 80)) + '</div>' : '') +
             '</div>' +
             '<button class="btn-secondary" data-cal-edit="' + e.id + '" style="padding:4px 10px;font-size:11px">✏️</button>' +
             '<button class="btn-danger" data-cal-delete="' + e.id + '" style="padding:4px 10px;font-size:11px">🗑</button>' +
@@ -8664,6 +8703,9 @@
     try { localStorage.setItem(ADMIN_TAB_KEY, name); } catch (e) {}
     closeTip();
     window.scrollTo(0, 0);
+    // 2026-05-26 lazy-load: fire this tab's loaders on first visit.
+    // _loadedTabs caches so quick toggles don't re-fire fetches.
+    try { if (typeof loadTab === 'function') loadTab(name); } catch (e) {}
   }
   document.querySelectorAll('.admin-tab').forEach(function(b) {
     b.onclick = function() { switchAdminTab(b.getAttribute('data-tab')); };
@@ -8672,6 +8714,64 @@
   var savedTab = null;
   try { savedTab = localStorage.getItem(ADMIN_TAB_KEY); } catch (e) {}
   if (savedTab && VALID_TABS.indexOf(savedTab) >= 0) switchAdminTab(savedTab);
+
+  // ============================================================
+  // GLOBAL MODAL CLOSE — ESC + backdrop (2026-05-26 audit fix)
+  // ============================================================
+  // The admin has ~10 modal-style editors (bundle/challenge/calendar/
+  // board/skin/etc.) that mount as inline DOM with position:fixed +
+  // inset:0 + rgba(0,0,0,0.7) backdrop. None of them had ESC or
+  // click-on-backdrop close, so admins were stuck clicking the small
+  // × in the corner. This delegated handler covers all of them at
+  // once — any overlay with inset:0 + dark backdrop is dismissable
+  // by ESC or backdrop click.
+  function _topmostModalOverlay() {
+    // Heuristic: find the latest-mounted full-screen-style overlay.
+    // Editor modals use a div with style "position:fixed;inset:0;
+    // background:rgba(0,0,0,..." — match that.
+    var nodes = document.querySelectorAll('div');
+    var found = null;
+    for (var i = nodes.length - 1; i >= 0; i--) {
+      var el = nodes[i];
+      var st = el.style;
+      if (st && st.position === 'fixed' && st.inset === '0px' &&
+          st.background && st.background.indexOf('rgba(0, 0, 0') === 0) {
+        if (el.id === 'session-expired-overlay') continue;  // never auto-close
+        found = el;
+        break;
+      }
+    }
+    return found;
+  }
+  function _closeTopmostModal() {
+    var modal = _topmostModalOverlay();
+    if (!modal) return false;
+    // Prefer the modal's own close button (preserves cleanup hooks).
+    var closeBtn = modal.querySelector('[id$="-close"], .modal-close, [aria-label="סגור"], [aria-label="Close"]');
+    if (closeBtn) { try { closeBtn.click(); return true; } catch (e) {} }
+    try { modal.remove(); return true; } catch (e) { return false; }
+  }
+  if (!window.__bloomAdminModalCloseWired) {
+    window.__bloomAdminModalCloseWired = true;
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape' || e.keyCode === 27) {
+        if (_closeTopmostModal()) { e.preventDefault(); e.stopPropagation(); }
+      }
+    });
+    // Backdrop click: handler delegated at document level. When the
+    // click target IS the overlay div itself (not a child), close.
+    document.addEventListener('click', function(e) {
+      var t = e.target;
+      if (!t || t.nodeType !== 1) return;
+      var st = t.style;
+      if (st && st.position === 'fixed' && st.inset === '0px' &&
+          st.background && st.background.indexOf('rgba(0, 0, 0') === 0 &&
+          t.id !== 'session-expired-overlay') {
+        // Only fire when the click target IS the backdrop, not a child.
+        _closeTopmostModal();
+      }
+    }, true);
+  }
 
   // ============================================================
   // 🐛 DEBUG SCANNER — comprehensive self-diagnostic (2026-05-25)
@@ -8973,8 +9073,11 @@
     }
   };
 
-  initPrefs(); // restore saved preferences before refreshAll
-  refreshAll();
+  initPrefs(); // restore saved preferences before initial load
+  // 2026-05-26: lazy-load — boot only fires loaders for the active
+  // tab. Tab switching fires the new tab's loaders on first visit.
+  // Was: refreshAll() — fired all 28 loaders unconditionally.
+  refreshActiveTab();
 
   // ====== MONETIZATION PANEL ======
   // Load current values
@@ -9265,13 +9368,9 @@
     }
   };
   refreshBotStatus();
-  // Auto-refresh every 3 seconds for a live feel. Stops polling if the
-  // checkbox is unchecked or the bot is not running (refreshBotStatus
-  // returns quickly when there's nothing to render).
-  setInterval(function() {
-    var auto = $('bots-auto-refresh');
-    if (!auto || auto.checked) refreshBotStatus();
-  }, 3000);
+  // NOTE: a second setInterval(3s) used to live here, duplicating the
+  // _botsAutoTimer above. That pushed idle traffic to ~40 req/min on
+  // /api/bots alone. Removed in the 2026-05-26 audit pass.
 
   // Player management
   // Wager management
@@ -9391,12 +9490,12 @@
       '<tr style="background:rgba(0,0,0,0.03)"><th style="padding:4px">קוד</th><th>שם</th><th>💎</th><th>Lv</th><th>XP</th><th>פעולה</th></tr>';
     players.forEach(function(p) {
       html += '<tr style="border-top:1px solid rgba(0,0,0,0.05)">' +
-        '<td style="padding:4px;font-weight:700;font-size:10px;letter-spacing:0.05em">' + (p.player_code || '—') + '</td>' +
-        '<td>' + (p.display_name || 'אנונימי') + '</td>' +
+        '<td style="padding:4px;font-weight:700;font-size:10px;letter-spacing:0.05em">' + escHtml(p.player_code || '—') + '</td>' +
+        '<td>' + escHtml(p.display_name || 'אנונימי') + '</td>' +
         '<td style="font-weight:700">' + (p.balance || 0) + '</td>' +
         '<td style="font-weight:600;color:#6C3483">' + (p.level || 1) + '</td>' +
         '<td style="font-size:10px;color:#6F6E68">' + (p.xp || 0) + '</td>' +
-        '<td><button class="btn sm" style="font-size:9px;padding:2px 6px" onclick="document.getElementById(\'gift-code\').value=\'' + (p.player_code || '') + '\'">🎁</button></td>' +
+        '<td><button class="btn sm" style="font-size:9px;padding:2px 6px" onclick="document.getElementById(\'gift-code\').value=\'' + escHtml(p.player_code || '') + '\'">🎁</button></td>' +
       '</tr>';
     });
     html += '</table>';
@@ -9415,8 +9514,8 @@
     d.referrals.forEach(function(r) {
       var dt = new Date(r.created_at);
       html += '<tr style="border-top:1px solid rgba(0,0,0,0.05)">' +
-        '<td style="padding:4px">' + (r.referrer_name || r.referrer_code) + '</td>' +
-        '<td>' + (r.referred_name || '?') + '</td>' +
+        '<td style="padding:4px">' + escHtml(r.referrer_name || r.referrer_code || '') + '</td>' +
+        '<td>' + escHtml(r.referred_name || '?') + '</td>' +
         '<td style="font-weight:700">' + (r.credits_awarded || 0) + '</td>' +
         '<td style="font-size:10px;color:#A8A6A0">' + dt.toLocaleDateString('he-IL') + '</td>' +
       '</tr>';
