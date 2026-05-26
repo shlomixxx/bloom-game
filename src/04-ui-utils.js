@@ -916,7 +916,12 @@
       '.board-lb-overlay, .dyn-boards-overlay, .dyn-comeback-overlay, ' +
       '.dyn-friends-modal-overlay, .gem-bank-overlay, .ghost-confirm-overlay, ' +
       '.gacha-history-overlay, .squad-modal-overlay, .squad-tournament-modal-overlay, ' +
-      '.rivalry-modal-overlay, .leagues-modal-overlay'
+      '.rivalry-modal-overlay, .leagues-modal-overlay, ' +
+      // Full-screen views (not modals, but ESC/back-gesture should exit them
+      // back to home — they intentionally have a small absolute-positioned
+      // back arrow that's easy to miss). Adding here so the global handler
+      // catches them and routes through the existing back button.
+      '#contest-screen, #challenge-screen, #spectator-screen, #my-contests-list'
     );
     // Exclusions — overlays that LOOK like modals but are actually
     // in-game animations, celebrations, or the FTUE. ESC should NOT
@@ -961,7 +966,11 @@
     // analytics, etc.). Falls back to a direct remove() if none.
     var closeBtn =
       top.querySelector('.modal-close, .info-close, [id$="modal-close"], [data-close-modal]') ||
-      top.querySelector('button[aria-label="סגור"], button[aria-label="Close"]');
+      top.querySelector('button[aria-label="סגור"], button[aria-label="Close"]') ||
+      // Full-screen views like #contest-screen use a back button
+      // with a different class. Click it to route through the
+      // existing back-handler (preserves saveContestGameState etc).
+      top.querySelector('.contest-back-btn, [data-back]');
     if (closeBtn) {
       try { closeBtn.click(); return true; }
       catch (e) {}

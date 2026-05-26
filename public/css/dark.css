@@ -119,7 +119,8 @@
   html[data-theme="dark"] .name-input:focus { background: #2C2A28; border-color: #FAC775; }
   html[data-theme="dark"] .contest-submit-btn { background: #F2EFE9; color: #1A1816; }
   html[data-theme="dark"] .contest-secondary-btn { background: #2C2A28; color: #F2EFE9; }
-  html[data-theme="dark"] .contest-back-btn { background: #2C2A28; color: #F2EFE9; border-color: rgba(255,255,255,0.1); }
+  html[data-theme="dark"] .contest-back-btn { background: linear-gradient(135deg, #2C2A28 0%, #1F1D1B 100%); color: #F2EFE9; border-color: rgba(255,255,255,0.15); box-shadow: 0 2px 8px rgba(0,0,0,0.4); }
+  html[data-theme="dark"] .contest-back-btn svg { color: #F2EFE9; }
   html[data-theme="dark"] .contest-card-title { color: #F2EFE9; }
   html[data-theme="dark"] .contest-card-desc { color: #8E8A82; }
   html[data-theme="dark"] .contest-code-pill { background: #3D2E0A; color: #FAC775; border-color: rgba(250,199,117,0.4); }
