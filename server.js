@@ -15417,84 +15417,68 @@ async function expireStaleAcceptedDuels() {
       if (bothPresent) continue; // let normal settle catch it
       try {
         // Single-flip race guard: status check inside UPDATE.
-        // Case (b): one side has score → forfeit win to that side.
-        if (cs != null && os == null && row.challenger_device) {
-          // Challenger wins by forfeit. Prize = both wagers.
-          const prize = bet * 2;
-          if (prize > 0) {
-            await pool.query(
-              `UPDATE player_profiles SET balance = balance + $1, total_earned = total_earned + $1
-                WHERE device_id = $2`,
-              [prize, row.challenger_device]);
-            await pool.query(
-              `INSERT INTO wager_settlements (contest_code, device_id, amount, type)
-               VALUES ($1, $2, $3, 'duel_forfeit_win')`,
-              ['DUEL:' + row.id, row.challenger_device, prize]);
-          }
+        // IDEMPOTENCY GUARANTEE — flip duels.status FIRST with status='accepted'
+        // guard + RETURNING. If the UPDATE didn't change anything (concurrent
+        // call already settled, or a previous run already flipped), skip the
+        // credit. Pattern protects against the double-credit bug we hit during
+        // the initial deploy when the UPDATE was throwing.
+        let prize = bet * 2;
+        let winnerDevice = null;
+        let isExpire = false;
+        if (cs != null && os == null && row.challenger_device) winnerDevice = row.challenger_device;
+        else if (os != null && cs == null && row.opponent_device) winnerDevice = row.opponent_device;
+        else isExpire = true;
+        const flip = await pool.query(
+          isExpire
+            ? `UPDATE duels SET status = 'expired'
+                WHERE id = $1 AND status = 'accepted' RETURNING id`
+            : `UPDATE duels SET status = 'settled', winner_device = $1
+                WHERE id = $2 AND status = 'accepted' RETURNING id`,
+          isExpire ? [row.id] : [winnerDevice, row.id]);
+        if (!flip.rows.length) continue; // somebody else flipped it — skip credit
+        // Now safe to credit — the flip succeeded, this run owns the row.
+        if (!isExpire && winnerDevice && prize > 0) {
           await pool.query(
-            `UPDATE duels SET status = 'settled', winner_device = $1
-              WHERE id = $2 AND status = 'accepted'`,
-            [row.challenger_device, row.id]);
+            `UPDATE player_profiles SET balance = balance + $1, total_earned = total_earned + $1
+              WHERE device_id = $2`,
+            [prize, winnerDevice]);
+          await pool.query(
+            `INSERT INTO wager_settlements (contest_code, device_id, amount, type)
+             VALUES ($1, $2, $3, 'duel_forfeit_win')`,
+            ['DUEL:' + row.id, winnerDevice, prize]);
+        }
+        if (isExpire && bet > 0) {
           if (row.challenger_device) {
-            sendPushToDevice(row.challenger_device, {
-              title: '🏆 ניצחת בברירת מחדל!',
-              body: 'היריב לא סיים את המשחק' + (prize > 0 ? ' · קיבלת ' + prize + '💎' : ''),
-              tag: 'duel-forfeit-' + row.id,
-              data: { url: '/?action=duels', kind: 'duel_forfeit_win', duelId: row.id }
-            });
-          }
-        } else if (os != null && cs == null && row.opponent_device) {
-          // Opponent wins by forfeit.
-          const prize = bet * 2;
-          if (prize > 0) {
             await pool.query(
-              `UPDATE player_profiles SET balance = balance + $1, total_earned = total_earned + $1
+              `UPDATE player_profiles SET balance = balance + $1, total_spent = total_spent - $1
                 WHERE device_id = $2`,
-              [prize, row.opponent_device]);
+              [bet, row.challenger_device]);
             await pool.query(
               `INSERT INTO wager_settlements (contest_code, device_id, amount, type)
-               VALUES ($1, $2, $3, 'duel_forfeit_win')`,
-              ['DUEL:' + row.id, row.opponent_device, prize]);
+               VALUES ($1, $2, $3, 'duel_expire_refund')`,
+              ['DUEL:' + row.id, row.challenger_device, bet]);
           }
-          await pool.query(
-            `UPDATE duels SET status = 'settled', winner_device = $1
-              WHERE id = $2 AND status = 'accepted'`,
-            [row.opponent_device, row.id]);
           if (row.opponent_device) {
-            sendPushToDevice(row.opponent_device, {
-              title: '🏆 ניצחת בברירת מחדל!',
-              body: 'היריב לא סיים את המשחק' + (prize > 0 ? ' · קיבלת ' + prize + '💎' : ''),
-              tag: 'duel-forfeit-' + row.id,
-              data: { url: '/?action=duels', kind: 'duel_forfeit_win', duelId: row.id }
-            });
+            await pool.query(
+              `UPDATE player_profiles SET balance = balance + $1, total_spent = total_spent - $1
+                WHERE device_id = $2`,
+              [bet, row.opponent_device]);
+            await pool.query(
+              `INSERT INTO wager_settlements (contest_code, device_id, amount, type)
+               VALUES ($1, $2, $3, 'duel_expire_refund')`,
+              ['DUEL:' + row.id, row.opponent_device, bet]);
           }
-        } else {
-          // Case (c): no scores → expire + refund both sides.
-          if (bet > 0) {
-            if (row.challenger_device) {
-              await pool.query(
-                `UPDATE player_profiles SET balance = balance + $1, total_spent = total_spent - $1
-                  WHERE device_id = $2`,
-                [bet, row.challenger_device]);
-              await pool.query(
-                `INSERT INTO wager_settlements (contest_code, device_id, amount, type)
-                 VALUES ($1, $2, $3, 'duel_expire_refund')`,
-                ['DUEL:' + row.id, row.challenger_device, bet]);
-            }
-            if (row.opponent_device) {
-              await pool.query(
-                `UPDATE player_profiles SET balance = balance + $1, total_spent = total_spent - $1
-                  WHERE device_id = $2`,
-                [bet, row.opponent_device]);
-              await pool.query(
-                `INSERT INTO wager_settlements (contest_code, device_id, amount, type)
-                 VALUES ($1, $2, $3, 'duel_expire_refund')`,
-                ['DUEL:' + row.id, row.opponent_device, bet]);
-            }
-          }
-          await pool.query(
-            `UPDATE duels SET status = 'expired' WHERE id = $1 AND status = 'accepted'`,
-            [row.id]);
+        }
+        // Push notifications (best-effort, post-credit)
+        if (!isExpire && winnerDevice) {
+          sendPushToDevice(winnerDevice, {
+            title: '🏆 ניצחת בברירת מחדל!',
+            body: 'היריב לא סיים את המשחק' + (prize > 0 ? ' · קיבלת ' + prize + '💎' : ''),
+            tag: 'duel-forfeit-' + row.id,
+            data: { url: '/?action=duels', kind: 'duel_forfeit_win', duelId: row.id }
+          });
+        }
+        if (isExpire) {
           for (const dev of [row.challenger_device, row.opponent_device]) {
             if (dev) sendPushToDevice(dev, {
               title: '⏰ דו-קרב פג תוקף',
