@@ -250,6 +250,11 @@
           if (typeof d.newBalance === 'number') {
             try { if (typeof playerBalance !== 'undefined') playerBalance = d.newBalance; } catch (e) {}
             try { if (typeof updateBalanceDisplay === 'function') updateBalanceDisplay(); } catch (e) {}
+            // 2026-05-26: also bump the home v2 balance widget so the
+            // player sees their gems jump immediately. Without this the
+            // home tile shows the OLD balance after claim → looks like
+            // "won prize but didn't get gems".
+            try { if (typeof window.__bloomBumpBal === 'function') window.__bloomBumpBal(d.newBalance, d.reward || 0); } catch (e) {}
           }
           try { if (typeof soundMilestone === 'function') soundMilestone(5); } catch (e) {}
           try { if (typeof buzz === 'function') buzz([60, 40, 80, 40, 120]); } catch (e) {}

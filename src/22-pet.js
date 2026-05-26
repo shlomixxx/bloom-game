@@ -230,6 +230,7 @@
           if (typeof d.newBalance === 'number') {
             try { if (typeof playerBalance !== 'undefined') playerBalance = d.newBalance; } catch (e) {}
             try { if (typeof updateBalanceDisplay === 'function') updateBalanceDisplay(); } catch (e) {}
+            try { if (typeof window.__bloomBumpBal === 'function') window.__bloomBumpBal(d.newBalance, d.reward || 0); } catch (e) {}
           }
           try { if (typeof soundMilestone === 'function') soundMilestone(3); } catch (e) {}
           try { if (typeof buzz === 'function') buzz([40, 30, 60]); } catch (e) {}
@@ -265,6 +266,8 @@
           if (typeof d.newBalance === 'number') {
             try { if (typeof playerBalance !== 'undefined') playerBalance = d.newBalance; } catch (e) {}
             try { if (typeof updateBalanceDisplay === 'function') updateBalanceDisplay(); } catch (e) {}
+            // Pet feed costs gems (negative delta for the bump animation).
+            try { if (typeof window.__bloomBumpBal === 'function') window.__bloomBumpBal(d.newBalance, -(d.feedCost || 0)); } catch (e) {}
           }
           try { if (typeof soundMilestone === 'function') soundMilestone(d.leveledUp ? 5 : 3); } catch (e) {}
           try { if (typeof buzz === 'function') buzz(d.leveledUp ? [80, 60, 100, 60, 120] : [40, 30, 60]); } catch (e) {}

@@ -293,6 +293,10 @@
     if (typeof result.newBalance === 'number') {
       try { if (typeof playerBalance !== 'undefined') playerBalance = result.newBalance; } catch (e) {}
       try { if (typeof updateBalanceDisplay === 'function') updateBalanceDisplay(); } catch (e) {}
+      // 2026-05-26: bump home balance widget so the spin reward
+      // visibly hits the gem counter on the home screen.
+      var __spinDelta = (reward && reward.type === 'gems') ? (reward.amount || 0) : 0;
+      try { if (typeof window.__bloomBumpBal === 'function') window.__bloomBumpBal(result.newBalance, __spinDelta); } catch (e) {}
     }
     if (reward.type === 'freeze') {
       try {

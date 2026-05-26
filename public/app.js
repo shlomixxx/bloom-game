@@ -7983,6 +7983,9 @@
         if (typeof d.newBalance === 'number') {
           try { if (typeof playerBalance !== 'undefined') playerBalance = d.newBalance; } catch (e) {}
           try { if (typeof updateBalanceDisplay === 'function') updateBalanceDisplay(); } catch (e) {}
+          // 2026-05-26: bump home widget so the chest reward visibly
+          // jumps the gem counter on the home screen too.
+          try { if (typeof window.__bloomBumpBal === 'function') window.__bloomBumpBal(d.newBalance, d.amount || 0); } catch (e) {}
         }
         return d;
       });
@@ -21605,6 +21608,8 @@
           if (typeof d.newBalance === 'number') {
             try { if (typeof playerBalance !== 'undefined') playerBalance = d.newBalance; } catch (e) {}
             try { if (typeof updateBalanceDisplay === 'function') updateBalanceDisplay(); } catch (e) {}
+            // Gacha pull = spend (negative). Free pull = 0.
+            try { if (typeof window.__bloomBumpBal === 'function') window.__bloomBumpBal(d.newBalance, -(d.cost || 0)); } catch (e) {}
           }
           // Update cache for the next modal render.
           if (_gachaCache.data) {
@@ -22642,6 +22647,7 @@
           if (typeof d.newBalance === 'number') {
             try { if (typeof playerBalance !== 'undefined') playerBalance = d.newBalance; } catch (e) {}
             try { if (typeof updateBalanceDisplay === 'function') updateBalanceDisplay(); } catch (e) {}
+            try { if (typeof window.__bloomBumpBal === 'function') window.__bloomBumpBal(d.newBalance, d.reward || 0); } catch (e) {}
           }
           try { if (typeof soundMilestone === 'function') soundMilestone(3); } catch (e) {}
           try { if (typeof buzz === 'function') buzz([40, 30, 60]); } catch (e) {}
@@ -22677,6 +22683,8 @@
           if (typeof d.newBalance === 'number') {
             try { if (typeof playerBalance !== 'undefined') playerBalance = d.newBalance; } catch (e) {}
             try { if (typeof updateBalanceDisplay === 'function') updateBalanceDisplay(); } catch (e) {}
+            // Pet feed costs gems (negative delta for the bump animation).
+            try { if (typeof window.__bloomBumpBal === 'function') window.__bloomBumpBal(d.newBalance, -(d.feedCost || 0)); } catch (e) {}
           }
           try { if (typeof soundMilestone === 'function') soundMilestone(d.leveledUp ? 5 : 3); } catch (e) {}
           try { if (typeof buzz === 'function') buzz(d.leveledUp ? [80, 60, 100, 60, 120] : [40, 30, 60]); } catch (e) {}
@@ -23511,6 +23519,11 @@
           if (typeof d.newBalance === 'number') {
             try { if (typeof playerBalance !== 'undefined') playerBalance = d.newBalance; } catch (e) {}
             try { if (typeof updateBalanceDisplay === 'function') updateBalanceDisplay(); } catch (e) {}
+            // 2026-05-26: also bump the home v2 balance widget so the
+            // player sees their gems jump immediately. Without this the
+            // home tile shows the OLD balance after claim → looks like
+            // "won prize but didn't get gems".
+            try { if (typeof window.__bloomBumpBal === 'function') window.__bloomBumpBal(d.newBalance, d.reward || 0); } catch (e) {}
           }
           try { if (typeof soundMilestone === 'function') soundMilestone(5); } catch (e) {}
           try { if (typeof buzz === 'function') buzz([60, 40, 80, 40, 120]); } catch (e) {}
@@ -23731,6 +23744,8 @@
           if (typeof d.newBalance === 'number') {
             try { if (typeof playerBalance !== 'undefined') playerBalance = d.newBalance; } catch (e) {}
             try { if (typeof updateBalanceDisplay === 'function') updateBalanceDisplay(); } catch (e) {}
+            // 2026-05-26: bump home balance widget on successful claim.
+            try { if (typeof window.__bloomBumpBal === 'function') window.__bloomBumpBal(d.newBalance, d.rewardGems || 0); } catch (e) {}
           }
           try { if (typeof soundMilestone === 'function') soundMilestone(7); } catch (e) {}
           try { if (typeof buzz === 'function') buzz([100, 80, 120, 80, 160, 80, 200]); } catch (e) {}
@@ -24548,11 +24563,19 @@
         rd.resolved.forEach(function(r) {
           if (r.outcome === 'won' && r.rewardGranted > 0) {
             showRivalWinCelebration(r.rewardGranted);
-            // Update balance immediately (server already credited).
+            // 2026-05-26: server now returns r.newBalance (truth). The
+            // old code locally added rewardGranted which drifted when
+            // multiple resolutions fired together. Prefer server value
+            // when present; fall back to local addition otherwise.
             try {
-              if (typeof playerBalance !== 'undefined') {
+              if (typeof r.newBalance === 'number') {
+                if (typeof playerBalance !== 'undefined') playerBalance = r.newBalance;
+              } else if (typeof playerBalance !== 'undefined') {
                 playerBalance = (playerBalance || 0) + r.rewardGranted;
-                if (typeof updateBalanceDisplay === 'function') updateBalanceDisplay();
+              }
+              if (typeof updateBalanceDisplay === 'function') updateBalanceDisplay();
+              if (typeof window.__bloomBumpBal === 'function') {
+                window.__bloomBumpBal(typeof r.newBalance === 'number' ? r.newBalance : playerBalance, r.rewardGranted);
               }
             } catch (e) {}
           }
@@ -24949,6 +24972,7 @@
           if (typeof d.newBalance === 'number') {
             try { if (typeof playerBalance !== 'undefined') playerBalance = d.newBalance; } catch (e) {}
             try { if (typeof updateBalanceDisplay === 'function') updateBalanceDisplay(); } catch (e) {}
+            try { if (typeof window.__bloomBumpBal === 'function') window.__bloomBumpBal(d.newBalance, d.reward || 0); } catch (e) {}
           }
           try { if (typeof soundMilestone === 'function') soundMilestone(5); } catch (e) {}
           try { if (typeof buzz === 'function') buzz([80, 60, 100, 60, 120]); } catch (e) {}
@@ -25772,6 +25796,10 @@
     if (typeof result.newBalance === 'number') {
       try { if (typeof playerBalance !== 'undefined') playerBalance = result.newBalance; } catch (e) {}
       try { if (typeof updateBalanceDisplay === 'function') updateBalanceDisplay(); } catch (e) {}
+      // 2026-05-26: bump home balance widget so the spin reward
+      // visibly hits the gem counter on the home screen.
+      var __spinDelta = (reward && reward.type === 'gems') ? (reward.amount || 0) : 0;
+      try { if (typeof window.__bloomBumpBal === 'function') window.__bloomBumpBal(result.newBalance, __spinDelta); } catch (e) {}
     }
     if (reward.type === 'freeze') {
       try {
@@ -26056,6 +26084,7 @@
         if (typeof d.newBalance === 'number') {
           try { if (typeof playerBalance !== 'undefined') playerBalance = d.newBalance; } catch (e) {}
           try { if (typeof updateBalanceDisplay === 'function') updateBalanceDisplay(); } catch (e) {}
+          try { if (typeof window.__bloomBumpBal === 'function') window.__bloomBumpBal(d.newBalance, d.reward || 0); } catch (e) {}
         }
         _warCache.data = null;
         _claimedThisSession = true;
@@ -26351,6 +26380,7 @@
         if (typeof d.newBalance === 'number') {
           try { if (typeof playerBalance !== 'undefined') playerBalance = d.newBalance; } catch (e) {}
           try { if (typeof updateBalanceDisplay === 'function') updateBalanceDisplay(); } catch (e) {}
+          try { if (typeof window.__bloomBumpBal === 'function') window.__bloomBumpBal(d.newBalance, d.reward || 0); } catch (e) {}
         }
         try {
           if (typeof soundMilestone === 'function') soundMilestone(5);
@@ -27136,10 +27166,12 @@ try {
   }
 
   // Mount or refresh the home tile. Hidden when no chests exist (so
-  // the tile doesn't add visual noise for a new player). Level-gated
-  // at L10 (alongside Trophy Road).
+  // the tile doesn't add visual noise for a new player).
+  // 2026-05-26: removed L10 level gate. The old gate hid earned chests
+  // from L<10 players entirely — they were getting "📦 קיבלת תיבה!"
+  // toasts with no way to find/open the chests, looking like a bug.
+  // Now: tile renders whenever chests exist, regardless of level.
   function maybeShowChestTile() {
-    try { if (typeof getPlayerLevel === 'function' && getPlayerLevel() < 10) return; } catch (e) {}
     var home = document.getElementById('home-screen-v2') || document.getElementById('home-screen');
     if (!home) return;
     fetchChestState(false).then(function(d) {
@@ -27467,7 +27499,12 @@ try {
   // that the trophy module calls.
   function onChestEarnedFromGame(chestInfo) {
     if (!chestInfo) return;
-    try { if (typeof showToast === 'function') showToast('📦 קיבלת תיבת ' + chestLabel(chestInfo.type) + '!', 'success'); } catch (e) {}
+    // 2026-05-26: replaced the tiny toast with a tap-to-open banner.
+    // Old toast: "📦 קיבלת תיבת אגדי!" — 2s pill, no instruction
+    // where to find it. Players reported "won a chest but where?".
+    // New: a sticky banner at the top with an explicit "פתח עכשיו"
+    // button that takes them straight to the chests modal.
+    showChestEarnedBanner(chestInfo);
     try { if (typeof soundMilestone === 'function') soundMilestone(chestInfo.type === 'legendary' ? 6 : 4); } catch (e) {}
     try { if (typeof buzz === 'function') buzz([50, 30, 80]); } catch (e) {}
     // Refresh tile + modal if open.
@@ -27475,6 +27512,53 @@ try {
     if (document.getElementById('chests-modal')) {
       fetchChestState(true).then(renderChestsModalBody);
     }
+  }
+
+  // Sticky banner at the top of the viewport. Auto-dismisses after 10s
+  // OR on click → opens the chests modal. The point: player KNOWS
+  // there's a chest waiting AND knows exactly how to get to it.
+  function showChestEarnedBanner(chestInfo) {
+    var existing = document.getElementById('chest-earned-banner');
+    if (existing) existing.remove();
+    var type = chestInfo.type || 'common';
+    var color = type === 'legendary' ? 'linear-gradient(135deg,#F59E0B,#DC2626)'
+              : type === 'rare'      ? 'linear-gradient(135deg,#8B5CF6,#6366F1)'
+              : 'linear-gradient(135deg,#10B981,#059669)';
+    var label = chestLabel(type);
+    var banner = document.createElement('button');
+    banner.id = 'chest-earned-banner';
+    banner.type = 'button';
+    banner.style.cssText =
+      'position:fixed;top:max(12px,env(safe-area-inset-top));left:50%;' +
+      'transform:translateX(-50%);z-index:9000;' +
+      'background:' + color + ';color:#FFFFFF;border:none;' +
+      'padding:12px 18px;border-radius:18px;font-weight:800;font-size:14px;' +
+      'display:flex;align-items:center;gap:10px;cursor:pointer;direction:rtl;' +
+      'box-shadow:0 10px 32px rgba(0,0,0,0.32),0 0 0 3px rgba(255,255,255,0.25);' +
+      'font-family:inherit;max-width:92vw;' +
+      'animation:chestBannerPop 0.4s cubic-bezier(.18,1.2,.4,1)';
+    banner.innerHTML =
+      '<span style="font-size:24px">📦</span>' +
+      '<div style="text-align:right">' +
+        '<div>זכית בתיבת ' + label + '!</div>' +
+        '<div style="font-size:11px;opacity:0.92;font-weight:600">לחץ לפתוח 🎁</div>' +
+      '</div>';
+    if (!document.getElementById('chest-banner-style')) {
+      var st = document.createElement('style');
+      st.id = 'chest-banner-style';
+      st.textContent = '@keyframes chestBannerPop{from{opacity:0;transform:translate(-50%,-20px) scale(0.85)}to{opacity:1;transform:translate(-50%,0) scale(1)}}@keyframes chestBannerOut{to{opacity:0;transform:translate(-50%,-12px) scale(0.92)}}';
+      document.head.appendChild(st);
+    }
+    document.body.appendChild(banner);
+    var dismiss = function() {
+      banner.style.animation = 'chestBannerOut 0.25s ease-out forwards';
+      setTimeout(function() { try { banner.remove(); } catch (e) {} }, 260);
+    };
+    banner.onclick = function() {
+      dismiss();
+      try { showChestsModal(); } catch (e) {}
+    };
+    setTimeout(dismiss, 10000);
   }
 
   try {

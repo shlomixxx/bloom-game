@@ -239,6 +239,8 @@
           if (typeof d.newBalance === 'number') {
             try { if (typeof playerBalance !== 'undefined') playerBalance = d.newBalance; } catch (e) {}
             try { if (typeof updateBalanceDisplay === 'function') updateBalanceDisplay(); } catch (e) {}
+            // Gacha pull = spend (negative). Free pull = 0.
+            try { if (typeof window.__bloomBumpBal === 'function') window.__bloomBumpBal(d.newBalance, -(d.cost || 0)); } catch (e) {}
           }
           // Update cache for the next modal render.
           if (_gachaCache.data) {

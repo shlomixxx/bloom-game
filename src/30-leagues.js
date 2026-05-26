@@ -194,6 +194,7 @@
           if (typeof d.newBalance === 'number') {
             try { if (typeof playerBalance !== 'undefined') playerBalance = d.newBalance; } catch (e) {}
             try { if (typeof updateBalanceDisplay === 'function') updateBalanceDisplay(); } catch (e) {}
+            try { if (typeof window.__bloomBumpBal === 'function') window.__bloomBumpBal(d.newBalance, d.reward || 0); } catch (e) {}
           }
           try { if (typeof soundMilestone === 'function') soundMilestone(5); } catch (e) {}
           try { if (typeof buzz === 'function') buzz([80, 60, 100, 60, 120]); } catch (e) {}

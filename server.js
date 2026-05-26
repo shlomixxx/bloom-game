@@ -3070,6 +3070,10 @@ app.post('/api/boards/chest/open', requireDeviceAuth, async (req, res) => {
     const maxV = chestConfigInt(cfg, `dyn_chest_${chosenTier}_max`, Math.max(minV, 1));
     const amount = Math.floor(minV + Math.random() * Math.max(0, maxV - minV + 1));
     // Atomic credit + counter bump (two queries, second is dedup-safe).
+    // 2026-05-26: was wrapped in try/catch that swallowed the error and
+    // still returned ok:true,amount:N,newBalance:null. The animation
+    // played but no gems hit the player's wallet. Now: credit failure
+    // fails the whole call so the client knows + can retry.
     let newBalance = null;
     try {
       const credit = await pool.query(
@@ -3077,9 +3081,15 @@ app.post('/api/boards/chest/open', requireDeviceAuth, async (req, res) => {
           WHERE device_id = $2 RETURNING balance`,
         [amount, deviceId]
       );
-      if (credit.rows[0]) newBalance = credit.rows[0].balance;
+      if (!credit.rows.length) {
+        // Player has no profile row yet — refuse the chest so client
+        // doesn't show "won" with nothing to show for it.
+        return res.status(409).json({ ok: false, reason: 'no_profile' });
+      }
+      newBalance = credit.rows[0].balance;
     } catch (e) {
       console.error('chest credit failed', e && e.message);
+      return res.status(500).json({ ok: false, reason: 'credit_failed' });
     }
     await pool.query(
       `INSERT INTO game_config (key, value) VALUES ($1, $2)
@@ -9932,6 +9942,7 @@ app.post('/api/rival/resolve', requireDeviceAuth, async (req, res) => {
       if (!outcome) continue;
       // Atomic: mark resolved + grant reward if won.
       const client = await pool.connect();
+      let newBalance = null;
       try {
         await client.query('BEGIN');
         await client.query(
@@ -9940,12 +9951,16 @@ app.post('/api/rival/resolve', requireDeviceAuth, async (req, res) => {
           [outcome, row.id]
         );
         if (outcome === 'won') {
-          await client.query(
+          // 2026-05-26: capture RETURNING balance so the client can sync
+          // exactly to the server's truth instead of locally adding the
+          // reward (which drifts when multiple resolutions happen at once).
+          const upd = await client.query(
             `UPDATE player_profiles SET balance = balance + $1, total_earned = total_earned + $1, updated_at = NOW()
-              WHERE device_id = $2`,
+              WHERE device_id = $2 RETURNING balance`,
             [winReward, deviceId]
           );
           rewardGranted = winReward;
+          if (upd.rows[0]) newBalance = upd.rows[0].balance;
         }
         await client.query('COMMIT');
       } catch (err) {
@@ -9954,7 +9969,7 @@ app.post('/api/rival/resolve', requireDeviceAuth, async (req, res) => {
       } finally {
         client.release();
       }
-      resolved.push({ id: row.id, outcome, rewardGranted });
+      resolved.push({ id: row.id, outcome, rewardGranted, newBalance });
     }
     res.json({ ok: true, resolved });
   } catch (e) {
@@ -13935,11 +13950,15 @@ app.post('/api/player/earn', requireDeviceAuth, async (req, res) => {
     const newLevel = calcLevel(newXp);
     const leveledUp = newLevel.level > oldLevel.level;
 
-    await pool.query(
-      `UPDATE player_profiles SET balance = balance + $1, total_earned = total_earned + $1, xp = COALESCE(xp, 0) + $2, level = $3 WHERE device_id = $4`,
+    // 2026-05-26: was SELECT then UPDATE then return (snapshot + reward).
+    // Under concurrent claims the returned newBalance could be LOWER than
+    // reality — and the client used it to overwrite playerBalance, so
+    // legitimate credits were "disappearing". Now: atomic UPDATE with
+    // RETURNING balance — single round-trip, single source of truth.
+    const updR = await pool.query(
+      `UPDATE player_profiles SET balance = balance + $1, total_earned = total_earned + $1, xp = COALESCE(xp, 0) + $2, level = $3 WHERE device_id = $4 RETURNING balance`,
       [reward, xpGain, newLevel.level, deviceId]);
-
-    const newBal = player.rows[0].balance + reward;
+    const newBal = (updR.rows && updR.rows[0]) ? updR.rows[0].balance : (player.rows[0].balance + reward);
     const responseBody = { ok: true, action, reward, xpGain, newBalance: newBal, level: newLevel, leveledUp };
     // Stage 14 — attach daily_login multiplier breakdown if the handler stashed it.
     if (res.locals && res.locals.dailyLoginBreakdown) {

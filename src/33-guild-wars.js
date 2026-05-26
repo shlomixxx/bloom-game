@@ -242,6 +242,7 @@
         if (typeof d.newBalance === 'number') {
           try { if (typeof playerBalance !== 'undefined') playerBalance = d.newBalance; } catch (e) {}
           try { if (typeof updateBalanceDisplay === 'function') updateBalanceDisplay(); } catch (e) {}
+          try { if (typeof window.__bloomBumpBal === 'function') window.__bloomBumpBal(d.newBalance, d.reward || 0); } catch (e) {}
         }
         _warCache.data = null;
         _claimedThisSession = true;

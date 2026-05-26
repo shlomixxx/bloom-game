@@ -195,6 +195,8 @@
           if (typeof d.newBalance === 'number') {
             try { if (typeof playerBalance !== 'undefined') playerBalance = d.newBalance; } catch (e) {}
             try { if (typeof updateBalanceDisplay === 'function') updateBalanceDisplay(); } catch (e) {}
+            // 2026-05-26: bump home balance widget on successful claim.
+            try { if (typeof window.__bloomBumpBal === 'function') window.__bloomBumpBal(d.newBalance, d.rewardGems || 0); } catch (e) {}
           }
           try { if (typeof soundMilestone === 'function') soundMilestone(7); } catch (e) {}
           try { if (typeof buzz === 'function') buzz([100, 80, 120, 80, 160, 80, 200]); } catch (e) {}

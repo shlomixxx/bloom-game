@@ -53,10 +53,12 @@
   }
 
   // Mount or refresh the home tile. Hidden when no chests exist (so
-  // the tile doesn't add visual noise for a new player). Level-gated
-  // at L10 (alongside Trophy Road).
+  // the tile doesn't add visual noise for a new player).
+  // 2026-05-26: removed L10 level gate. The old gate hid earned chests
+  // from L<10 players entirely — they were getting "📦 קיבלת תיבה!"
+  // toasts with no way to find/open the chests, looking like a bug.
+  // Now: tile renders whenever chests exist, regardless of level.
   function maybeShowChestTile() {
-    try { if (typeof getPlayerLevel === 'function' && getPlayerLevel() < 10) return; } catch (e) {}
     var home = document.getElementById('home-screen-v2') || document.getElementById('home-screen');
     if (!home) return;
     fetchChestState(false).then(function(d) {
@@ -384,7 +386,12 @@
   // that the trophy module calls.
   function onChestEarnedFromGame(chestInfo) {
     if (!chestInfo) return;
-    try { if (typeof showToast === 'function') showToast('📦 קיבלת תיבת ' + chestLabel(chestInfo.type) + '!', 'success'); } catch (e) {}
+    // 2026-05-26: replaced the tiny toast with a tap-to-open banner.
+    // Old toast: "📦 קיבלת תיבת אגדי!" — 2s pill, no instruction
+    // where to find it. Players reported "won a chest but where?".
+    // New: a sticky banner at the top with an explicit "פתח עכשיו"
+    // button that takes them straight to the chests modal.
+    showChestEarnedBanner(chestInfo);
     try { if (typeof soundMilestone === 'function') soundMilestone(chestInfo.type === 'legendary' ? 6 : 4); } catch (e) {}
     try { if (typeof buzz === 'function') buzz([50, 30, 80]); } catch (e) {}
     // Refresh tile + modal if open.
@@ -392,6 +399,53 @@
     if (document.getElementById('chests-modal')) {
       fetchChestState(true).then(renderChestsModalBody);
     }
+  }
+
+  // Sticky banner at the top of the viewport. Auto-dismisses after 10s
+  // OR on click → opens the chests modal. The point: player KNOWS
+  // there's a chest waiting AND knows exactly how to get to it.
+  function showChestEarnedBanner(chestInfo) {
+    var existing = document.getElementById('chest-earned-banner');
+    if (existing) existing.remove();
+    var type = chestInfo.type || 'common';
+    var color = type === 'legendary' ? 'linear-gradient(135deg,#F59E0B,#DC2626)'
+              : type === 'rare'      ? 'linear-gradient(135deg,#8B5CF6,#6366F1)'
+              : 'linear-gradient(135deg,#10B981,#059669)';
+    var label = chestLabel(type);
+    var banner = document.createElement('button');
+    banner.id = 'chest-earned-banner';
+    banner.type = 'button';
+    banner.style.cssText =
+      'position:fixed;top:max(12px,env(safe-area-inset-top));left:50%;' +
+      'transform:translateX(-50%);z-index:9000;' +
+      'background:' + color + ';color:#FFFFFF;border:none;' +
+      'padding:12px 18px;border-radius:18px;font-weight:800;font-size:14px;' +
+      'display:flex;align-items:center;gap:10px;cursor:pointer;direction:rtl;' +
+      'box-shadow:0 10px 32px rgba(0,0,0,0.32),0 0 0 3px rgba(255,255,255,0.25);' +
+      'font-family:inherit;max-width:92vw;' +
+      'animation:chestBannerPop 0.4s cubic-bezier(.18,1.2,.4,1)';
+    banner.innerHTML =
+      '<span style="font-size:24px">📦</span>' +
+      '<div style="text-align:right">' +
+        '<div>זכית בתיבת ' + label + '!</div>' +
+        '<div style="font-size:11px;opacity:0.92;font-weight:600">לחץ לפתוח 🎁</div>' +
+      '</div>';
+    if (!document.getElementById('chest-banner-style')) {
+      var st = document.createElement('style');
+      st.id = 'chest-banner-style';
+      st.textContent = '@keyframes chestBannerPop{from{opacity:0;transform:translate(-50%,-20px) scale(0.85)}to{opacity:1;transform:translate(-50%,0) scale(1)}}@keyframes chestBannerOut{to{opacity:0;transform:translate(-50%,-12px) scale(0.92)}}';
+      document.head.appendChild(st);
+    }
+    document.body.appendChild(banner);
+    var dismiss = function() {
+      banner.style.animation = 'chestBannerOut 0.25s ease-out forwards';
+      setTimeout(function() { try { banner.remove(); } catch (e) {} }, 260);
+    };
+    banner.onclick = function() {
+      dismiss();
+      try { showChestsModal(); } catch (e) {}
+    };
+    setTimeout(dismiss, 10000);
   }
 
   try {

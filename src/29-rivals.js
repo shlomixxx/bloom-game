@@ -67,11 +67,19 @@
         rd.resolved.forEach(function(r) {
           if (r.outcome === 'won' && r.rewardGranted > 0) {
             showRivalWinCelebration(r.rewardGranted);
-            // Update balance immediately (server already credited).
+            // 2026-05-26: server now returns r.newBalance (truth). The
+            // old code locally added rewardGranted which drifted when
+            // multiple resolutions fired together. Prefer server value
+            // when present; fall back to local addition otherwise.
             try {
-              if (typeof playerBalance !== 'undefined') {
+              if (typeof r.newBalance === 'number') {
+                if (typeof playerBalance !== 'undefined') playerBalance = r.newBalance;
+              } else if (typeof playerBalance !== 'undefined') {
                 playerBalance = (playerBalance || 0) + r.rewardGranted;
-                if (typeof updateBalanceDisplay === 'function') updateBalanceDisplay();
+              }
+              if (typeof updateBalanceDisplay === 'function') updateBalanceDisplay();
+              if (typeof window.__bloomBumpBal === 'function') {
+                window.__bloomBumpBal(typeof r.newBalance === 'number' ? r.newBalance : playerBalance, r.rewardGranted);
               }
             } catch (e) {}
           }

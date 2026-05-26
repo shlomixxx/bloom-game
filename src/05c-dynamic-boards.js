@@ -1139,6 +1139,9 @@
         if (typeof d.newBalance === 'number') {
           try { if (typeof playerBalance !== 'undefined') playerBalance = d.newBalance; } catch (e) {}
           try { if (typeof updateBalanceDisplay === 'function') updateBalanceDisplay(); } catch (e) {}
+          // 2026-05-26: bump home widget so the chest reward visibly
+          // jumps the gem counter on the home screen too.
+          try { if (typeof window.__bloomBumpBal === 'function') window.__bloomBumpBal(d.newBalance, d.amount || 0); } catch (e) {}
         }
         return d;
       });
