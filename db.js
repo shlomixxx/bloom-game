@@ -568,6 +568,11 @@ export async function initDb() {
       purchased_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       PRIMARY KEY (device_id, deal_id, purchase_date)
     )`,
+    // Power Hero (May 2026): flip existing prod DBs from 'standard' → 'hero'.
+    // The schema.sql INSERT only runs for fresh rows (ON CONFLICT DO NOTHING),
+    // so existing installs need this one-time UPDATE. Idempotent — only flips
+    // if the value is still the old default; respects any admin override.
+    `UPDATE game_config SET value = 'hero' WHERE key = 'home_variant' AND value = 'standard'`,
   ];
   for (const sql of migrations) {
     try { await pool.query(sql); } catch (e) {

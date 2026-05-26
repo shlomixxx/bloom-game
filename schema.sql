@@ -2316,7 +2316,11 @@ INSERT INTO game_config (key, value) VALUES ('daily_special_override_id',  '')  
 --   'hero'      → massive single-action card + collapse other tiles
 --   'jit'       → Just-In-Time: tiles unlock progressively by games played
 -- ============================================================
-INSERT INTO game_config (key, value) VALUES ('home_variant',           'standard') ON CONFLICT (key) DO NOTHING;
+-- Power Hero (May 2026): default flipped from 'standard' to 'hero' after user
+-- reported the home was too crowded. The hero variant collapses 14+ secondary
+-- tiles behind a categorized drawer + surfaces the single hottest signal as
+-- a massive card above the primary CTA. Admin can still flip back via this key.
+INSERT INTO game_config (key, value) VALUES ('home_variant',           'hero')     ON CONFLICT (key) DO NOTHING;
 INSERT INTO game_config (key, value) VALUES ('home_jit_unlock_games',  '3,7,13,26') ON CONFLICT (key) DO NOTHING;
 
 -- ============================================================

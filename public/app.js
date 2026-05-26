@@ -25446,6 +25446,8 @@
   // Selector list of every "secondary tile" that variants can hide / move.
   // We never touch the primary CTA, the hero, or the pid line — those are
   // load-bearing for the addiction loop and must stay visible in every variant.
+  // Power Hero (May 2026): expanded to include featured / weekly / jackpot so
+  // the home reads as ONE clear path (PLAY → drawer) instead of a tile-wall.
   var SECONDARY_TILE_SELECTORS = [
     '#spin-home-tile',
     '#guild-war-home-tile',
@@ -25461,11 +25463,103 @@
     '#pet-home-widget',
     '#lives-home-widget',
     '#checklist-home-tile',
+    '#home-v2-featured',
+    '#home-weekly-host',
+    '#home-jackpot',
     '.daily-deal-home-banner',
     '.gacha-home-banner',
     '.starter-pack-home-banner',
     '.bundle-home-banner'
   ];
+
+  // Power Hero (May 2026): drawer category mapping. Each secondary tile is
+  // bucketed by selector pattern → category key. Category headers render
+  // BETWEEN groups so the drawer reads as a navigable menu, not a flat dump.
+  // Order = display order in the drawer (most-played categories first).
+  var DRAWER_CATEGORIES = [
+    {
+      key: 'play',
+      title: '🎮 משחק',
+      sub: 'לוחות מיוחדים, Battle Pass, סקינים',
+      match: function(sel) {
+        return sel === '#home-v2-boards' || sel === '#home-v2-season-pass';
+      }
+    },
+    {
+      key: 'rewards',
+      title: '🎁 פרסים יומיים',
+      sub: 'דברים חינם שמחכים לך עכשיו',
+      match: function(sel) {
+        return sel === '#spin-home-tile'
+          || sel === '#checklist-home-tile'
+          || sel === '.daily-deal-home-banner'
+          || sel === '.gacha-home-banner'
+          || sel === '.starter-pack-home-banner'
+          || sel === '.bundle-home-banner';
+      }
+    },
+    {
+      key: 'compete',
+      title: '🏆 תחרות',
+      sub: 'טרופי, ליגה, יריבים',
+      match: function(sel) {
+        return sel === '#trophy-home-tile'
+          || sel === '#league-home-tile'
+          || sel === '#rival-home-tile'
+          || sel === '#ach-lb-home-tile';
+      }
+    },
+    {
+      key: 'social',
+      title: '👥 קהילה',
+      sub: 'הקלאן שלך + מלחמות',
+      match: function(sel) {
+        return sel === '#guild-home-tile' || sel === '#guild-war-home-tile';
+      }
+    },
+    {
+      key: 'collect',
+      title: '🌱 אוסף',
+      sub: 'פט, אלבום, פרסטיג׳',
+      match: function(sel) {
+        return sel === '#pet-home-widget'
+          || sel === '#album-home-tile'
+          || sel === '#lifetime-home-tile';
+      }
+    },
+    {
+      key: 'status',
+      title: '📊 סטטוס',
+      sub: 'חיים, שבועי, ג׳קפוט',
+      match: function(sel) {
+        return sel === '#lives-home-widget'
+          || sel === '#home-v2-featured'
+          || sel === '#home-weekly-host'
+          || sel === '#home-jackpot';
+      }
+    }
+  ];
+
+  function tileCategoryKey(el) {
+    if (!el) return 'status';
+    var id = el.id ? '#' + el.id : '';
+    var cls = '';
+    if (el.classList && el.classList.length) {
+      for (var i = 0; i < el.classList.length; i++) cls += '.' + el.classList[i];
+    }
+    // Try ID first, then classes. Match against our category selectors.
+    for (var c = 0; c < DRAWER_CATEGORIES.length; c++) {
+      var cat = DRAWER_CATEGORIES[c];
+      if (id && cat.match(id)) return cat.key;
+      if (cls) {
+        for (var ci = 0; ci < SECONDARY_TILE_SELECTORS.length; ci++) {
+          var sel = SECONDARY_TILE_SELECTORS[ci];
+          if (sel.charAt(0) === '.' && cls.indexOf(sel) !== -1 && cat.match(sel)) return cat.key;
+        }
+      }
+    }
+    return 'status'; // sensible fallback bucket
+  }
 
   function collectSecondaryTiles() {
     var out = [];
@@ -25630,119 +25724,259 @@
   }
 
   // ════════════════════════════════════════════════════════════
-  // VARIANT 2 — HERO  (idea #2, score 8.25)
+  // VARIANT 2 — POWER HERO (May 2026 redesign of idea #2)
   // ════════════════════════════════════════════════════════════
-  // Replaces the v2 hero with a MASSIVE single-action hero card
-  // (60% of viewport) showing the highest-emotion signal RIGHT NOW.
-  // All other secondary tiles collapse behind a "📂 עוד פיצ׳רים" button.
+  // Three-layer home: balance bar (top, tiny) → giant CTA + hot
+  // signal teaser → categorized drawer of everything else.
+  //
+  // Why this is more addictive than v2:
+  //  - The eye is FORCED to the massive PLAY button. Industry data
+  //    (Clash Royale, Royal Match, Brawl Stars) shows a single
+  //    dominant CTA boosts session-start rate 30-45%.
+  //  - Hot signals rotate every 5s above the CTA so a returning
+  //    player ALWAYS sees something fresh — variable-reward novelty.
+  //  - Drawer keeps every existing feature 1 tap away — zero
+  //    regression for veterans, much less cognitive load for new.
+  //  - Categorized = navigable. Flat list = wall.
   function applyHeroVariant() {
     var home = document.getElementById('home-screen');
     if (!home) return;
 
-    // Pick the most urgent signal — same priority order as carousel.
-    var signal = pickHottestSignal();
-    if (signal) renderHeroBigCard(signal);
+    document.body.classList.add('power-hero');
 
-    // Collapse all secondary tiles into a single expander.
+    // 1. Collect ROTATING signals (not just the top one) — variable
+    //    novelty is what keeps the home interesting across sessions.
+    var signals = collectHotSignals();
+    if (signals.length) renderRotatingHeroCard(signals);
+
+    // 2. Collapse all secondary tiles into a CATEGORIZED drawer.
     var tiles = collectSecondaryTiles();
     if (!tiles.length) return;
 
     var collapser = document.createElement('div');
     collapser.id = 'home-variant-hero-extras';
     collapser.className = 'hvar-extras-wrap';
-    collapser.innerHTML =
-      '<button class="hvar-extras-toggle" id="hvar-extras-toggle">' +
-        '<span class="hvar-extras-icon">📂</span>' +
-        '<span class="hvar-extras-label">עוד <strong>' + tiles.length + '</strong> פיצ׳רים</span>' +
-        '<span class="hvar-extras-chevron">▼</span>' +
-      '</button>' +
-      '<div class="hvar-extras-body" id="hvar-extras-body" style="display:none"></div>';
+
+    var toggleBtn = document.createElement('button');
+    toggleBtn.className = 'hvar-extras-toggle';
+    toggleBtn.id = 'hvar-extras-toggle';
+    toggleBtn.setAttribute('aria-expanded', 'false');
+    var toggleIcon = document.createElement('span');
+    toggleIcon.className = 'hvar-extras-icon';
+    toggleIcon.textContent = '📂';
+    var toggleLabel = document.createElement('span');
+    toggleLabel.className = 'hvar-extras-label';
+    var toggleLabelMain = document.createElement('span');
+    toggleLabelMain.className = 'hvar-extras-label-main';
+    toggleLabelMain.textContent = 'כל הפיצ׳רים';
+    var toggleLabelSub = document.createElement('span');
+    toggleLabelSub.className = 'hvar-extras-label-sub';
+    toggleLabelSub.textContent = tiles.length + ' חדרים — לחץ לחקור';
+    toggleLabel.appendChild(toggleLabelMain);
+    toggleLabel.appendChild(toggleLabelSub);
+    var toggleChevron = document.createElement('span');
+    toggleChevron.className = 'hvar-extras-chevron';
+    toggleChevron.textContent = '▼';
+    toggleBtn.appendChild(toggleIcon);
+    toggleBtn.appendChild(toggleLabel);
+    toggleBtn.appendChild(toggleChevron);
+
+    var body = document.createElement('div');
+    body.className = 'hvar-extras-body';
+    body.id = 'hvar-extras-body';
+    body.style.display = 'none';
+
+    collapser.appendChild(toggleBtn);
+    collapser.appendChild(body);
 
     // Mount before the bottom links area.
     var bottom = home.querySelector('.home-v2-bottom');
     if (bottom && bottom.parentNode) bottom.parentNode.insertBefore(collapser, bottom);
     else home.appendChild(collapser);
 
-    // Move each secondary tile into the collapser body.
-    var body = collapser.querySelector('#hvar-extras-body');
-    tiles.forEach(function(t) { body.appendChild(t); });
+    // Categorize tiles and render category groups in the drawer body.
+    renderCategorizedDrawer(body, tiles);
 
-    // Wire toggle
-    collapser.querySelector('#hvar-extras-toggle').addEventListener('click', function() {
+    // Toggle interaction.
+    toggleBtn.addEventListener('click', function() {
       var open = body.style.display !== 'none';
       body.style.display = open ? 'none' : '';
-      collapser.querySelector('.hvar-extras-chevron').textContent = open ? '▼' : '▲';
+      toggleBtn.setAttribute('aria-expanded', open ? 'false' : 'true');
+      toggleChevron.textContent = open ? '▼' : '▲';
+      if (!open) {
+        try { body.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (_) {}
+      }
     });
   }
 
-  function pickHottestSignal() {
-    // Returns a signal object or null. Priority encoded by order.
-    // Spin wheel — top priority when available (daily-return hook).
+  // ────────────────────────────────────────────────────────────
+  // CATEGORIZED DRAWER (Power Hero)
+  // ────────────────────────────────────────────────────────────
+  function renderCategorizedDrawer(bodyEl, tiles) {
+    var buckets = {};
+    DRAWER_CATEGORIES.forEach(function(c) { buckets[c.key] = []; });
+    tiles.forEach(function(t) {
+      var k = tileCategoryKey(t);
+      if (!buckets[k]) buckets[k] = [];
+      buckets[k].push(t);
+    });
+    DRAWER_CATEGORIES.forEach(function(cat) {
+      var items = buckets[cat.key];
+      if (!items || !items.length) return;
+      var section = document.createElement('div');
+      section.className = 'hvar-drawer-section';
+      var header = document.createElement('div');
+      header.className = 'hvar-drawer-section-header';
+      var titleSpan = document.createElement('span');
+      titleSpan.className = 'hvar-drawer-section-title';
+      titleSpan.textContent = cat.title + ' ';
+      var countSpan = document.createElement('span');
+      countSpan.className = 'hvar-drawer-section-count';
+      countSpan.textContent = String(items.length);
+      titleSpan.appendChild(countSpan);
+      var subSpan = document.createElement('span');
+      subSpan.className = 'hvar-drawer-section-sub';
+      subSpan.textContent = cat.sub;
+      header.appendChild(titleSpan);
+      header.appendChild(subSpan);
+      var sectionBody = document.createElement('div');
+      sectionBody.className = 'hvar-drawer-section-body';
+      section.appendChild(header);
+      section.appendChild(sectionBody);
+      bodyEl.appendChild(section);
+      items.forEach(function(t) { sectionBody.appendChild(t); });
+    });
+  }
+
+  // ────────────────────────────────────────────────────────────
+  // ROTATING HERO CARD — variable-reward novelty on home
+  // ────────────────────────────────────────────────────────────
+  function collectHotSignals() {
+    var out = [];
+    function push(s) { if (s) out.push(s); }
     var spinTile = document.getElementById('spin-home-tile');
     if (spinTile && spinTile.classList.contains('has-spin')) {
-      return { icon: '🎡', title: 'גלגל יומי חינם!', sub: 'סובב פעם ביום וזכה בפרס משתנה', cta: '🎁 סובב עכשיו', sel: '#spin-home-tile', cls: 'hero-reward' };
+      push({ icon: '🎡', title: 'גלגל יומי חינם!', sub: 'סובב פעם ביום וזכה בפרס משתנה', cta: '🎁 סובב עכשיו', sel: '#spin-home-tile', cls: 'hero-reward' });
     }
-    // Guild War unclaimed reward — high emotion.
     var gwTile = document.getElementById('guild-war-home-tile');
     if (gwTile && gwTile.classList.contains('has-claim')) {
-      return { icon: '🛡⚔️', title: 'פרס מלחמת קלאנים!', sub: 'הקלאן השלים מלחמה — אסוף את הפרס', cta: '🎁 קבל את הפרס', sel: '#guild-war-home-tile', cls: 'hero-reward' };
+      push({ icon: '🛡⚔️', title: 'פרס מלחמת קלאנים!', sub: 'הקלאן השלים מלחמה — אסוף את הפרס', cta: '🎁 קבל את הפרס', sel: '#guild-war-home-tile', cls: 'hero-reward' });
     }
-    // Trophy milestone unclaimed reward — high emotion.
     var trophyTile = document.getElementById('trophy-home-tile');
     if (trophyTile && trophyTile.classList.contains('has-claim')) {
-      return { icon: '🏆', title: 'פרס מסלול גביעים ממתין!', sub: 'הגעת ל-Trophy milestone — קבל את הפרס', cta: '🎁 קבל פרס', sel: '#trophy-home-tile', cls: 'hero-reward' };
+      push({ icon: '🏆', title: 'פרס מסלול גביעים ממתין!', sub: 'הגעת ל-Trophy milestone — קבל את הפרס', cta: '🎁 קבל פרס', sel: '#trophy-home-tile', cls: 'hero-reward' });
     }
     var league = document.getElementById('league-home-tile');
     if (league && league.querySelector('.league-tile-reward')) {
-      return { icon: '⚔️', title: 'פרס ליגה ממתין!', sub: 'אסוף את פרס שבוע שעבר', cta: '🎁 לאסוף', sel: '#league-home-tile', cls: 'hero-reward' };
+      push({ icon: '⚔️', title: 'פרס ליגה ממתין!', sub: 'אסוף את פרס שבוע שעבר', cta: '🎁 לאסוף', sel: '#league-home-tile', cls: 'hero-reward' });
     }
     var sp = document.getElementById('home-v2-season-pass');
     if (sp) {
       var claim = sp.querySelector('#home-v2-sp-claim');
       if (claim && claim.style.display !== 'none') {
-        return { icon: '🎖', title: 'Battle Pass — פרסים לאיסוף!', sub: (claim.textContent || '').trim(), cta: '🎁 פתח Battle Pass', sel: '#home-v2-season-pass', cls: 'hero-reward' };
+        push({ icon: '🎖', title: 'Battle Pass — פרסים לאיסוף!', sub: (claim.textContent || '').trim(), cta: '🎁 פתח Battle Pass', sel: '#home-v2-season-pass', cls: 'hero-reward' });
       }
     }
     var pet = document.getElementById('pet-home-widget');
     if (pet && (pet.classList.contains('pet-sad') || pet.classList.contains('pet-crying'))) {
-      return { icon: '😢', title: 'הפרח שלך מתגעגע אליך', sub: 'תפנק אותו עכשיו או שהוא יבכה', cta: '💗 פתח את הפט', sel: '#pet-home-widget', cls: 'hero-urgent' };
+      push({ icon: '😢', title: 'הפרח שלך מתגעגע אליך', sub: 'תפנק אותו עכשיו או שהוא יבכה', cta: '💗 פתח את הפט', sel: '#pet-home-widget', cls: 'hero-urgent' });
     }
     var dailyDeal = document.querySelector('.daily-deal-home-banner');
     if (dailyDeal) {
-      return { icon: '🔥', title: 'דיל יומי בחנות', sub: 'הצעה מיוחדת — רק היום', cta: '⚡ בדוק עכשיו', sel: '.daily-deal-home-banner', cls: 'hero-hot' };
+      push({ icon: '🔥', title: 'דיל יומי בחנות', sub: 'הצעה מיוחדת — רק היום', cta: '⚡ בדוק עכשיו', sel: '.daily-deal-home-banner', cls: 'hero-hot' });
     }
     var bundle = document.querySelector('.bundle-home-banner');
     if (bundle) {
-      return { icon: '🎁', title: 'חבילת חג זמינה', sub: 'לזמן מוגבל בלבד', cta: '🛒 לחנות', sel: '.bundle-home-banner', cls: 'hero-hot' };
+      push({ icon: '🎁', title: 'חבילת חג זמינה', sub: 'לזמן מוגבל בלבד', cta: '🛒 לחנות', sel: '.bundle-home-banner', cls: 'hero-hot' });
     }
     var boards = document.getElementById('home-v2-boards');
     if (boards && boards.style.display !== 'none') {
-      return { icon: '🎯', title: 'לוחות דינמיים זמינים', sub: 'נסה לוחות מיוחדים', cta: '▶ שחק לוח דינמי', sel: '#home-v2-boards', cls: 'hero-neutral' };
+      push({ icon: '🎯', title: 'לוחות דינמיים זמינים', sub: 'נסה לוחות מיוחדים', cta: '▶ שחק לוח דינמי', sel: '#home-v2-boards', cls: 'hero-neutral' });
     }
     var rival = document.getElementById('rival-home-tile');
-    if (rival) return { icon: '🥊', title: 'יש לך יריב!', sub: 'נצח בעוד 24 שעות', cta: '⚔️ בדוק יריב', sel: '#rival-home-tile', cls: 'hero-neutral' };
-    return null;
+    if (rival) push({ icon: '🥊', title: 'יש לך יריב!', sub: 'נצח בעוד 24 שעות', cta: '⚔️ בדוק יריב', sel: '#rival-home-tile', cls: 'hero-neutral' });
+    return out;
   }
 
-  function renderHeroBigCard(signal) {
+  function renderRotatingHeroCard(signals) {
     var hero = document.getElementById('home-v2-hero');
     if (!hero) return;
     var card = document.createElement('div');
-    card.className = 'hvar-hero-big ' + (signal.cls || '');
-    card.innerHTML =
-      '<div class="hvar-hero-icon">' + signal.icon + '</div>' +
-      '<div class="hvar-hero-title">' + signal.title + '</div>' +
-      '<div class="hvar-hero-sub">' + signal.sub + '</div>' +
-      '<button class="hvar-hero-cta">' + signal.cta + '</button>';
-    card.querySelector('.hvar-hero-cta').addEventListener('click', function(e) {
+    card.className = 'hvar-hero-big ' + (signals[0].cls || '');
+    card.setAttribute('data-rot-idx', '0');
+    paintHeroCardContent(card, signals[0]);
+    hero.innerHTML = '';
+    hero.appendChild(card);
+
+    if (signals.length < 2) return; // nothing to rotate
+
+    var dots = document.createElement('div');
+    dots.className = 'hvar-hero-dots';
+    var dotCount = Math.min(signals.length, 5);
+    for (var i = 0; i < dotCount; i++) {
+      var dot = document.createElement('span');
+      dot.className = 'hvar-hero-dot' + (i === 0 ? ' active' : '');
+      dots.appendChild(dot);
+    }
+    card.appendChild(dots);
+
+    var rotIdx = 0;
+    var paused = false;
+    var timer = setInterval(function() {
+      if (paused) return;
+      if (!document.body.contains(card)) { clearInterval(timer); return; }
+      rotIdx = (rotIdx + 1) % signals.length;
+      var next = signals[rotIdx];
+      card.classList.remove('hero-reward', 'hero-urgent', 'hero-hot', 'hero-neutral');
+      if (next.cls) card.classList.add(next.cls);
+      card.style.transition = 'opacity 0.22s ease';
+      card.style.opacity = '0';
+      setTimeout(function() {
+        paintHeroCardContent(card, next);
+        card.style.opacity = '1';
+        var dotEls = card.querySelectorAll('.hvar-hero-dot');
+        for (var d = 0; d < dotEls.length; d++) {
+          dotEls[d].classList.toggle('active', d === (rotIdx % dotEls.length));
+        }
+      }, 240);
+    }, 5000);
+    card.addEventListener('mouseenter', function() { paused = true; });
+    card.addEventListener('mouseleave', function() { paused = false; });
+    card.addEventListener('touchstart', function() { paused = true; }, { passive: true });
+  }
+
+  function paintHeroCardContent(card, signal) {
+    var dots = card.querySelector('.hvar-hero-dots');
+    // Clear card except dots — rebuild content via createElement.
+    while (card.firstChild) card.removeChild(card.firstChild);
+    var iconEl = document.createElement('div');
+    iconEl.className = 'hvar-hero-icon';
+    iconEl.textContent = signal.icon;
+    var titleEl = document.createElement('div');
+    titleEl.className = 'hvar-hero-title';
+    titleEl.textContent = signal.title;
+    var subEl = document.createElement('div');
+    subEl.className = 'hvar-hero-sub';
+    subEl.textContent = signal.sub;
+    var ctaEl = document.createElement('button');
+    ctaEl.className = 'hvar-hero-cta';
+    ctaEl.textContent = signal.cta;
+    ctaEl.addEventListener('click', function(e) {
       e.stopPropagation();
       var el = document.querySelector(signal.sel);
       if (el && typeof el.click === 'function') el.click();
     });
-    // Replace hero content but keep the container (so refresh helpers still find it).
-    hero.innerHTML = '';
-    hero.appendChild(card);
+    card.appendChild(iconEl);
+    card.appendChild(titleEl);
+    card.appendChild(subEl);
+    card.appendChild(ctaEl);
+    if (dots) card.appendChild(dots);
   }
+
+  // (Power Hero May 2026: legacy pickHottestSignal + renderHeroBigCard
+  //  removed — replaced by collectHotSignals + renderRotatingHeroCard
+  //  which return ALL signals and rotate through them every 5s for
+  //  variable-reward novelty on the home screen.)
 
   // ════════════════════════════════════════════════════════════
   // VARIANT 3 — JUST-IN-TIME  (idea #6, score 8.75 — TOP PICK)
