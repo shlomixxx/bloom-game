@@ -182,7 +182,7 @@
   // origin tile. The original tiles stay below — just less prominent.
   function applyCarouselVariant() {
     var home = document.getElementById('home-screen');
-    if (!home || document.getElementById('home-variant-carousel')) return;
+    if (!home || document.getElementById('home-variant-carousel')) return; // re-entry guard
 
     var cards = buildCarouselCards();
     if (!cards.length) return;
@@ -320,6 +320,12 @@
   function applyHeroVariant() {
     var home = document.getElementById('home-screen');
     if (!home) return;
+    // Re-entry guard: applyHomeVariant may be called twice (once at home
+    // mount, once after /api/config resolves and lands gameConfig). The
+    // first call may have already mounted the drawer + rotating card.
+    // Without this guard, the second call would mount a duplicate drawer
+    // and a duplicate hero card, breaking layout.
+    if (document.getElementById('home-variant-hero-extras')) return;
 
     document.body.classList.add('power-hero');
 

@@ -3176,7 +3176,20 @@
   (function loadGameConfig() {
     fetch(API_BASE + '/api/config').then(function(r) { return r.json(); })
       .then(function(d) {
-        if (d && d.config) gameConfig = d.config;
+        if (d && d.config) {
+          gameConfig = d.config;
+          // Race-condition fix (May 2026): showHomeV2 calls
+          // applyHomeVariant() at end of mount, but this fetch is async.
+          // If the page loaded slowly enough that home mounted BEFORE the
+          // fetch resolved, applyHomeVariant read `gameConfig.home_variant`
+          // as undefined → fell back to 'standard' → Power Hero never
+          // applied. Now we re-fire whenever the config lands AND a home
+          // screen is currently visible. applyHeroVariant has its own
+          // re-entry guard so this won't duplicate the drawer.
+          if (document.getElementById('home-screen') && typeof window.applyHomeVariant === 'function') {
+            try { window.applyHomeVariant(); } catch (e) {}
+          }
+        }
       })
       .catch(function() {});
   })();
@@ -25682,7 +25695,7 @@
   // origin tile. The original tiles stay below — just less prominent.
   function applyCarouselVariant() {
     var home = document.getElementById('home-screen');
-    if (!home || document.getElementById('home-variant-carousel')) return;
+    if (!home || document.getElementById('home-variant-carousel')) return; // re-entry guard
 
     var cards = buildCarouselCards();
     if (!cards.length) return;
@@ -25820,6 +25833,12 @@
   function applyHeroVariant() {
     var home = document.getElementById('home-screen');
     if (!home) return;
+    // Re-entry guard: applyHomeVariant may be called twice (once at home
+    // mount, once after /api/config resolves and lands gameConfig). The
+    // first call may have already mounted the drawer + rotating card.
+    // Without this guard, the second call would mount a duplicate drawer
+    // and a duplicate hero card, breaking layout.
+    if (document.getElementById('home-variant-hero-extras')) return;
 
     document.body.classList.add('power-hero');
 

@@ -44,8 +44,10 @@
     align-items: center;
     justify-content: center;
     gap: 4px;
-    padding: 6px 4px;
-    min-height: 30px;
+    padding: 8px 4px;
+    /* Was 30px — too short for fingers when the slot is a button
+       (streak slot opens the streak calendar). 44px = WCAG tap-target. */
+    min-height: 44px;
     border-radius: 10px;
     font-size: 13px;
     font-weight: 700;
@@ -130,7 +132,8 @@
     margin-bottom: 4px;
   }
   .home-v2-mute {
-    width: 36px; height: 36px;
+    /* WCAG 2.5.5 — was 36×36 (slightly small for fingers). 44×44 now. */
+    width: 44px; height: 44px;
     border-radius: 50%;
     background: transparent;
     border: 1px solid var(--color-border, rgba(0,0,0,0.08));
@@ -140,7 +143,7 @@
     transition: all 0.15s ease;
   }
   .home-v2-mute:hover { background: var(--color-surface, #F2EFE9); }
-  .home-v2-mute svg { width: 16px; height: 16px; }
+  .home-v2-mute svg { width: 18px; height: 18px; }
   .home-v2-live-pulse {
     flex: 1;
     display: inline-flex;
@@ -353,11 +356,20 @@
   .pid2-edit {
     background: transparent;
     border: 1px solid var(--color-border, rgba(0,0,0,0.08));
-    border-radius: 6px;
-    padding: 2px 6px;
-    font-size: 12px;
+    border-radius: 8px;
+    /* WCAG 2.5.5 — 44×44 minimum tap target. The ✏️ button was 26×22
+       (way too small) before this. Padding-based growth keeps visual
+       weight modest while giving fingers room to land. */
+    padding: 10px 12px;
+    min-height: 44px;
+    min-width: 44px;
+    font-size: 14px;
     cursor: pointer;
     color: var(--color-text-muted, #6F6E68);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
   }
   .pid2-edit:hover { background: var(--color-surface, #F2EFE9); }
   .pid2-edit-prompt {
@@ -598,12 +610,17 @@
     background: transparent;
     border: none;
     color: var(--color-text-muted, #6F6E68);
-    font-size: 12px;
+    font-size: 13px;
     font-family: inherit;
     cursor: pointer;
-    padding: 6px 8px;
+    /* WCAG 2.5.5 — was 27-28px tall (too short for fingers). Now 44px
+       minimum so bottom footer links are reliably tappable. */
+    padding: 12px 10px;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
     text-decoration: none;
-    border-radius: 6px;
+    border-radius: 8px;
     transition: all 0.15s ease;
   }
   .home-v2-link:hover {
