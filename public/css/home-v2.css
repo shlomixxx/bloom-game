@@ -389,8 +389,13 @@
     cursor: pointer;
     color: inherit;
     font: inherit;
-    padding: 2px 4px;
-    border-radius: 4px;
+    /* WCAG 2.5.5 — was 80×18 (way too thin for fingers). Padding gives
+       a 44px-tall hit area while visual weight stays light. */
+    padding: 12px 10px;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    border-radius: 8px;
     transition: background 0.15s ease;
   }
   .pid2-code:hover { background: var(--color-surface, #F2EFE9); }
@@ -399,10 +404,14 @@
   .pid2-meta-item { color: var(--color-text, #1C1A18); font-weight: 600; }
   .pid2-line-profile { margin-top: 4px; }
   .pid2-profile-link {
-    font-size: 12px;
+    font-size: 13px;
     color: var(--color-text-muted, #6F6E68);
     text-decoration: none;
-    padding: 4px 10px;
+    /* WCAG 2.5.5 — was 94×24 (too short for fingers). 44px min-height. */
+    padding: 12px 12px;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
     border-radius: 8px;
     transition: all 0.15s ease;
   }
