@@ -6,6 +6,22 @@
 <meta name="robots" content="noindex,nofollow">
 <title>BLOOM אדמין</title>
 <style>
+  /* ─── CSS design tokens (2026-05-26 fix) ────────────────────────
+     509 var() usages across the file reference --card / --bg / --fg /
+     --muted / --gold / --border but none of them were ever defined.
+     Result: modals rendered with transparent backgrounds (the user's
+     "semi-transparent unclear screen" complaint), section cards
+     missing tints, text-color inheritance breaking on tooltips.
+     Defining them here repairs every dependent section at once.   */
+  :root {
+    --bg:     #FFFFFF;            /* card / panel background */
+    --card:   #FFFFFF;            /* modal + nested card bg */
+    --fg:     #1C1A18;            /* primary text */
+    --muted:  #6F6E68;            /* secondary text + placeholder */
+    --gold:   #BA7517;            /* brand accent (matches game) */
+    --border: rgba(0, 0, 0, 0.10); /* hairline divider */
+  }
+
   *, *::before, *::after { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; }
   body {
