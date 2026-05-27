@@ -19554,6 +19554,42 @@
 
   init(savedMode);
 
+  // Stage B7 (May 2026) — Tier-bar visibility toggle.
+  // The in-game tier ladder (8 tile icons + their merge scores) lived
+  // ALWAYS-ON above the grid, consuming ~50-60px of vertical space.
+  // It's useful for new players learning the ladder, but ~3-game-old
+  // veterans don't need it. Toggle button in .top-buttons lets the
+  // player hide it. Default = hidden (B7's stated goal: reclaim grid
+  // space). First-time players still get it via FTUE which explains
+  // the ladder explicitly.
+  var TIER_BAR_KEY = 'bloom_tier_bar_visible';
+  function applyTierBarPref() {
+    var visible = false;
+    try {
+      var raw = localStorage.getItem(TIER_BAR_KEY);
+      // Default to HIDDEN. Players who explicitly turned it ON before
+      // get raw === '1' and we honor that.
+      visible = raw === '1';
+    } catch (e) {}
+    document.body.classList.toggle('tier-bar-hidden', !visible);
+    var btn = document.getElementById('tier-bar-toggle');
+    if (btn) btn.setAttribute('aria-pressed', visible ? 'true' : 'false');
+  }
+  applyTierBarPref();
+  var __tierBarBtn = document.getElementById('tier-bar-toggle');
+  if (__tierBarBtn) {
+    __tierBarBtn.addEventListener('click', function() {
+      var current = !document.body.classList.contains('tier-bar-hidden');
+      var next = !current;
+      try { localStorage.setItem(TIER_BAR_KEY, next ? '1' : '0'); } catch (e) {}
+      applyTierBarPref();
+      // Re-fit the grid so cells grow into the reclaimed space.
+      if (typeof fitGrid === 'function') {
+        try { fitGrid(); } catch (e) {}
+      }
+    });
+  }
+
   // Show home only for genuine first-timers or if the player was idle.
   // Returning mid-game players go straight to their game.
   var hasHistory = loadGamesPlayed() > 0;

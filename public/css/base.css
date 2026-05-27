@@ -201,6 +201,29 @@
     flex-direction: column;
   }
   .top, .mode-bar, .tier-bar { flex-shrink: 0; }
+
+  /* B7 (May 2026) — tier-bar default-hidden via body class.
+     Toggle button in .top-buttons flips it. Saves ~50-60px of
+     vertical space → bigger grid cells. First-time players see
+     it during FTUE; veterans get it on demand. */
+  body.tier-bar-hidden .tier-bar { display: none; }
+  /* Active state on the toggle button when bar is visible. */
+  #tier-bar-toggle[aria-pressed="true"] {
+    background: var(--color-accent-glow, rgba(250,199,117,0.18));
+    color: var(--color-accent, #BA7517);
+  }
+
+  /* B7 — compact mode bar. The sub-text "אותו דאנג'ן לכולם היום"
+     is informational but redundant for veterans. Hide it on small
+     screens; bigger screens keep it. Tight padding reclaims ~10-15px. */
+  .mode-bar { padding: 6px 12px !important; }
+  .mode-info { gap: 8px !important; }
+  .mode-icon { width: 28px !important; height: 28px !important; }
+  .mode-icon svg { width: 16px !important; height: 16px !important; }
+  .mode-title { font-size: 13px !important; }
+  @media (max-width: 480px) {
+    .mode-sub { display: none !important; }
+  }
   /* On phones (no body padding) — kill the rounded corners + box-shadow
      so the app uses every pixel of the viewport edge-to-edge. */
   @media (max-width: 420px) {
