@@ -442,8 +442,55 @@
   setTimeout(migrateOwnedSkinsOnce, 800);
 
   function getShareLink() {
-    return window.location.origin + (playerCode ? '/?ref=' + playerCode : '');
+    return buildShareUrl('/');
   }
+
+  // Universal share-URL builder. Every share surface in the app should
+  // funnel through this so the user's personal BLOOM-XXXX code is in
+  // every link they send out — that's what makes the referral counter
+  // increment + the push-back-to-the-referrer fire when their invitee
+  // registers. Without it, shares are "viral with no attribution".
+  //
+  // path: leading slash, defaults to '/'. Example: '/' or '/?c=ABC'
+  // extraParams: object merged into the query string. Keys with empty
+  //              values are skipped.
+  function buildShareUrl(path, extraParams) {
+    var base = window.location.origin + (path || '/');
+    var params = {};
+    // Carry forward any pre-existing query string from `path` (e.g.
+    // contest invite has '?c=ABC'). We do this by splitting + re-merging.
+    var qIdx = base.indexOf('?');
+    var beforeQ = qIdx === -1 ? base : base.slice(0, qIdx);
+    var existingQS = qIdx === -1 ? '' : base.slice(qIdx + 1);
+    if (existingQS) {
+      existingQS.split('&').forEach(function(pair) {
+        var eq = pair.indexOf('=');
+        if (eq === -1) { if (pair) params[pair] = ''; return; }
+        params[pair.slice(0, eq)] = pair.slice(eq + 1);
+      });
+    }
+    if (extraParams && typeof extraParams === 'object') {
+      Object.keys(extraParams).forEach(function(k) {
+        var v = extraParams[k];
+        if (v === '' || v === null || v === undefined) return;
+        params[k] = encodeURIComponent(String(v));
+      });
+    }
+    if (playerCode) params.ref = encodeURIComponent(playerCode);
+    var qs = Object.keys(params).map(function(k) {
+      return params[k] === '' ? k : (k + '=' + params[k]);
+    }).join('&');
+    return qs ? (beforeQ + '?' + qs) : beforeQ;
+  }
+
+  function getMyShareCode() {
+    return playerCode || null;
+  }
+
+  // Expose to window so cross-file callers (replay.js, weekly-recap.js,
+  // contests.js) can use it without grep-and-replace risk.
+  window.__bloomBuildShareUrl = buildShareUrl;
+  window.__bloomGetShareCode  = getMyShareCode;
   var _earnedThisSession = {};
 
   // ============================================================

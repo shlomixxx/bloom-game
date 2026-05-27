@@ -102,6 +102,13 @@
   }
 
   function buildContestShareLink(code) {
+    // Funnel through the universal share-URL builder so the host's
+    // BLOOM-XXXX code rides along as ?ref= alongside the contest code.
+    // Invitees who tap the link both JOIN the contest AND get attributed
+    // to the host's referral counter — double K-factor lever.
+    if (typeof window.__bloomBuildShareUrl === 'function') {
+      return window.__bloomBuildShareUrl('/', { c: code });
+    }
     const origin = window.location.origin + window.location.pathname;
     return origin + '?c=' + encodeURIComponent(code);
   }

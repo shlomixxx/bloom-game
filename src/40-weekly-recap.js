@@ -249,8 +249,15 @@
     var modal = document.createElement('div');
     modal.id = 'wr-share-modal';
     modal.className = 'wr-share-overlay';
+    // Build the share URL via the universal builder so the user's
+    // personal BLOOM-XXXX rides along as ?ref= — every Wrapped share
+    // counts toward their referral total + fires push when an invitee
+    // registers via this link.
+    var shareUrl = (typeof window.__bloomBuildShareUrl === 'function')
+      ? window.__bloomBuildShareUrl('/')
+      : (location.origin || 'https://bloom-game.co.il');
     var shareText = '🌟 השבוע ב-BLOOM שיחקתי ' + stats.games + ' משחקים, שיא ' + stats.bestScore.toLocaleString() + '! ' +
-                    'נסה לעבור אותי: ' + (location.origin || 'https://bloom-game.co.il');
+                    'נסה לעבור אותי: ' + shareUrl;
     modal.innerHTML =
       '<div class="wr-share-card">' +
         '<button class="wr-share-close" aria-label="סגור">×</button>' +

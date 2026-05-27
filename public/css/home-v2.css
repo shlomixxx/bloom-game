@@ -5377,3 +5377,225 @@ html[data-theme="dark"] .hvar-extras-label-sub { color: #C0AA90; }
 html[data-theme="dark"] .hvar-drawer-section { border-bottom-color: rgba(250, 199, 117, 0.18); }
 html[data-theme="dark"] .hvar-drawer-section-title { color: #F2EFE9; }
 html[data-theme="dark"] .hvar-drawer-section-sub { color: #BFA9A2; }
+
+/* ════════════════════════════════════════════════════════════
+   REFERRALS PILL + MODAL (May 2026)
+   ════════════════════════════════════════════════════════════
+   Pill: sits next to "👤 הפרופיל שלי" on the home pid line. Shows
+   the player's referral count. Pulses gold when the count grew
+   since last view — that's the "צופר" emotional bump the user
+   asked for when an invitee joins via their personal link.
+   ────────────────────────────────────────────────────────────── */
+.pid2-referrals {
+  /* WCAG tap target — 44px min-height via padding. */
+  background: rgba(255, 246, 220, 0.6);
+  border: 1px solid rgba(186, 117, 23, 0.25);
+  border-radius: 14px;
+  padding: 10px 12px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  font: inherit;
+  color: #4A2C0A;
+  font-weight: 700;
+  font-size: 13px;
+  margin-inline-start: 8px;
+  transition: background 0.15s ease, transform 0.12s ease, box-shadow 0.18s ease;
+}
+.pid2-referrals:hover { background: rgba(255, 232, 184, 0.9); }
+.pid2-referrals:active { transform: scale(0.97); }
+.pid2-referrals-icon { font-size: 16px; }
+.pid2-referrals-count {
+  background: linear-gradient(180deg, #FFD93D, #F5AD2E);
+  color: #2E1A1A;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 900;
+  min-width: 22px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.pid2-referrals-label { font-size: 12px; opacity: 0.85; }
+.pid2-referrals.pid2-referrals-has {
+  background: linear-gradient(160deg, rgba(255, 230, 180, 0.85), rgba(255, 210, 140, 0.85));
+  border-color: rgba(186, 117, 23, 0.5);
+}
+.pid2-referrals.pid2-referrals-fresh {
+  background: linear-gradient(160deg, #FFE9A3, #F5C24B);
+  border-color: #C9911A;
+  box-shadow: 0 4px 14px rgba(201, 145, 26, 0.4), 0 0 0 0 rgba(245, 173, 46, 0);
+  animation: referralsPulse 1.4s ease-in-out infinite;
+}
+@keyframes referralsPulse {
+  0%, 100% { box-shadow: 0 4px 14px rgba(201, 145, 26, 0.4), 0 0 0 0 rgba(245, 173, 46, 0); }
+  50%      { box-shadow: 0 6px 18px rgba(201, 145, 26, 0.55), 0 0 0 10px rgba(245, 173, 46, 0.18); }
+}
+html[data-theme="dark"] .pid2-referrals {
+  background: rgba(80, 50, 30, 0.5);
+  border-color: rgba(250, 199, 117, 0.4);
+  color: #F0E8E2;
+}
+html[data-theme="dark"] .pid2-referrals:hover { background: rgba(100, 65, 40, 0.7); }
+html[data-theme="dark"] .pid2-referrals-label { color: #F0E8E2; }
+
+/* Referrals modal — opened by clicking the pill. */
+.referrals-modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(28, 26, 24, 0.65);
+  z-index: 9100;
+  display: flex; align-items: center; justify-content: center;
+  padding: 20px;
+  overscroll-behavior: contain;
+  animation: refModalFadeIn 0.18s ease-out;
+}
+@keyframes refModalFadeIn { from { opacity: 0; } to { opacity: 1; } }
+.referrals-modal-card {
+  background: #FFFFFF;
+  border-radius: 18px;
+  width: 100%;
+  max-width: 440px;
+  max-height: min(92dvh, 720px);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  padding: 22px 18px 18px;
+  position: relative;
+  direction: rtl;
+  box-shadow: 0 28px 70px rgba(0, 0, 0, 0.35);
+  animation: refModalSlideUp 0.22s ease-out;
+}
+@keyframes refModalSlideUp {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+.referrals-modal-close {
+  position: absolute; top: 12px; left: 12px;
+  width: 44px; height: 44px;
+  background: rgba(28, 26, 24, 0.08);
+  border: none; border-radius: 50%;
+  font-size: 18px; color: #1C1A18;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+.referrals-modal-close:hover { background: rgba(28, 26, 24, 0.15); }
+.referrals-modal-title {
+  font-size: 20px;
+  font-weight: 900;
+  text-align: center;
+  color: #1C1A18;
+  margin-top: 6px;
+}
+.referrals-modal-sub {
+  font-size: 13px;
+  color: #6F6E68;
+  text-align: center;
+  line-height: 1.5;
+  margin: 6px 0 14px;
+  padding: 0 16px;
+}
+.referrals-modal-stats {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.referrals-modal-stat-big {
+  flex: 1;
+  background: linear-gradient(160deg, #FFF7E6, #FFE8B8);
+  border: 1px solid rgba(186, 117, 23, 0.25);
+  border-radius: 14px;
+  padding: 12px 8px;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 4px;
+}
+.referrals-modal-stat-num {
+  font-size: 24px;
+  font-weight: 900;
+  color: #4A2C0A;
+  font-variant-numeric: tabular-nums;
+}
+.referrals-modal-stat-lbl {
+  font-size: 11px;
+  color: #7A551E;
+  font-weight: 600;
+}
+.referrals-modal-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
+.referrals-modal-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: #FAFAF6;
+  border: 1px solid #E5E1D5;
+  border-radius: 10px;
+  font-size: 13px;
+}
+.referrals-modal-row-name {
+  flex: 1; font-weight: 700; color: #1C1A18;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.referrals-modal-row-code {
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+  color: #7A551E;
+  padding: 2px 6px;
+  background: rgba(255, 232, 184, 0.6);
+  border-radius: 4px;
+}
+.referrals-modal-row-when {
+  font-size: 11px;
+  color: #6F6E68;
+}
+.referrals-modal-row-credit {
+  font-weight: 800;
+  color: #4A8B36;
+  font-variant-numeric: tabular-nums;
+}
+.referrals-modal-empty {
+  text-align: center;
+  padding: 24px 16px;
+  color: #6F6E68;
+  font-size: 13px;
+  background: #FAFAF6;
+  border: 1px dashed #E5E1D5;
+  border-radius: 12px;
+}
+.referrals-modal-share {
+  width: 100%;
+  padding: 14px;
+  background: linear-gradient(180deg, #2E1A1A, #1A0F0F);
+  color: #FFD93D;
+  border: none;
+  border-radius: 14px;
+  font: inherit;
+  font-size: 16px;
+  font-weight: 800;
+  cursor: pointer;
+  margin-top: 6px;
+}
+.referrals-modal-share:active { transform: scale(0.98); }
+html[data-theme="dark"] .referrals-modal-card { background: #2A1F22; color: #F0E8E2; }
+html[data-theme="dark"] .referrals-modal-title { color: #F2EFE9; }
+html[data-theme="dark"] .referrals-modal-sub { color: #BFA9A2; }
+html[data-theme="dark"] .referrals-modal-stat-big {
+  background: linear-gradient(160deg, #4A3220, #5A3F1F);
+  border-color: #C9911A;
+}
+html[data-theme="dark"] .referrals-modal-stat-num { color: #FFE9A3; }
+html[data-theme="dark"] .referrals-modal-stat-lbl { color: #FAC775; }
+html[data-theme="dark"] .referrals-modal-row {
+  background: rgba(80, 50, 30, 0.4);
+  border-color: rgba(250, 199, 117, 0.2);
+  color: #F0E8E2;
+}
+html[data-theme="dark"] .referrals-modal-row-name { color: #F2EFE9; }
+html[data-theme="dark"] .referrals-modal-row-code { background: rgba(250, 199, 117, 0.2); color: #FAC775; }
+html[data-theme="dark"] .referrals-modal-empty {
+  background: rgba(80, 50, 30, 0.3);
+  border-color: rgba(250, 199, 117, 0.3);
+  color: #BFA9A2;
+}

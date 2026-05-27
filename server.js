@@ -15185,9 +15185,70 @@ app.post('/api/referral', requireDeviceAuth, async (req, res) => {
     await pool.query(
       `UPDATE player_profiles SET balance = balance + $1, total_earned = total_earned + $1,
        referred_by = $2 WHERE device_id = $3`, [bonus, refCode, deviceId]);
+    // Fire push notification to the REFERRER so they get an instant
+    // "ping" when someone joins via their link — this is the "צופר"
+    // the user asked for. Best-effort: never blocks the response.
+    setImmediate(async () => {
+      try {
+        const newPlayer = await pool.query(
+          `SELECT display_name FROM player_profiles WHERE device_id = $1`, [deviceId]);
+        const nm = (newPlayer.rows[0] && newPlayer.rows[0].display_name) || 'שחקן חדש';
+        // Count total referrals now (for the body text + the home pill).
+        const totalQ = await pool.query(
+          `SELECT COUNT(*)::int AS n FROM referrals WHERE referrer_device = $1`, [referrerDevice]);
+        const total = (totalQ.rows[0] && totalQ.rows[0].n) || 1;
+        if (typeof sendPushToDevice === 'function') {
+          sendPushToDevice(referrerDevice, {
+            title: '🎁 חבר חדש הצטרף בזכותך!',
+            body: nm + ' פתח/ה את BLOOM דרך הקוד שלך · +' + reward + '💎 בחשבון שלך · סה"כ הזמנת ' + total + ' חברים',
+            url: '/?referrals=open',
+            tag: 'referral_join',
+            requireInteraction: false
+          }).catch(() => {});
+        }
+      } catch (pushErr) {
+        console.warn('[referral push]', pushErr && pushErr.message);
+      }
+    });
     res.json({ ok: true, referrerReward: reward, referredReward: bonus });
   } catch (e) {
     console.error('referral', e.message);
+    res.status(500).json({ error: 'server' });
+  }
+});
+
+// GET /api/referrals/mine — counter + list for the home pill / friends
+// modal "my referrals" section. Returns total count + most-recent 20.
+app.get('/api/referrals/mine', async (req, res) => {
+  const deviceId = (req.query.deviceId || '').toString().trim();
+  if (!deviceId) return res.status(400).json({ error: 'missing_device' });
+  try {
+    const r = await pool.query(
+      `SELECT r.referred_device, r.created_at, r.credits_awarded,
+              COALESCE(p.display_name, 'אנונימי') AS name,
+              p.player_code, p.country
+         FROM referrals r
+         LEFT JOIN player_profiles p ON p.device_id = r.referred_device
+        WHERE r.referrer_device = $1
+        ORDER BY r.created_at DESC
+        LIMIT 20`, [deviceId]);
+    const totalQ = await pool.query(
+      `SELECT COUNT(*)::int AS n, COALESCE(SUM(credits_awarded), 0)::int AS earned
+         FROM referrals WHERE referrer_device = $1`, [deviceId]);
+    res.json({
+      ok: true,
+      total: (totalQ.rows[0] && totalQ.rows[0].n) || 0,
+      totalEarned: (totalQ.rows[0] && totalQ.rows[0].earned) || 0,
+      recent: r.rows.map(row => ({
+        name: row.name,
+        code: row.player_code,
+        country: row.country,
+        creditsAwarded: row.credits_awarded,
+        createdAt: row.created_at
+      }))
+    });
+  } catch (e) {
+    console.error('GET /api/referrals/mine', e.message);
     res.status(500).json({ error: 'server' });
   }
 });

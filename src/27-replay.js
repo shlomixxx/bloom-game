@@ -132,10 +132,22 @@
   }
 
   function buildShareText(template, score, tier, url) {
+    // Append the user's personal BLOOM code to the URL so this share
+    // counts toward THEIR referral total. The admin-configured base URL
+    // (`replay_share_game_url`) stays neutral — we append ?ref= at
+    // share-time per the universal builder.
+    var withRef = url || '';
+    try {
+      var code = (typeof window.__bloomGetShareCode === 'function') ? window.__bloomGetShareCode() : null;
+      if (code) {
+        var sep = withRef.indexOf('?') === -1 ? '?' : '&';
+        withRef = withRef + sep + 'ref=' + encodeURIComponent(code);
+      }
+    } catch (e) {}
     return (template || '🌸 שברתי שיא ב-BLOOM! הגעתי ל-{score} נקודות. נסה לשבור אותי 👉 {url}')
       .replace('{score}', (score | 0).toLocaleString())
       .replace('{tier}', tier ? String(tier) : '')
-      .replace('{url}', url || '');
+      .replace('{url}', withRef);
   }
 
   function trackShare(via, opts) {

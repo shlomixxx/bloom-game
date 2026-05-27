@@ -539,6 +539,18 @@
       if (typeof pollGiftInbox === 'function') pollGiftInbox();
     }, 1500);
 
+    // Deep-link from referral-join push notification — when the player
+    // taps "🎁 חבר חדש הצטרף בזכותך!" the URL becomes /?referrals=open
+    // and we want to land them straight in the referrals modal.
+    try {
+      var params = new URLSearchParams(window.location.search);
+      if (params.get('referrals') === 'open') {
+        setTimeout(function() {
+          if (typeof showReferralsModal === 'function') showReferralsModal();
+        }, 800);
+      }
+    } catch (e) {}
+
     // Auto-tour for first-time visitors (mirrors v1 behaviour)
     if (!hasSeenTour() && getOnboardStep() === 0) {
       setTimeout(function() {
@@ -1011,6 +1023,11 @@
       (code ?
         '<div class="pid2-line pid2-line-profile">' +
           '<a class="pid2-profile-link" href="/player/' + encodeURIComponent(code) + '" target="_blank" rel="noopener">👤 הפרופיל שלי</a>' +
+          '<button class="pid2-referrals" type="button" id="pid2-referrals-btn" aria-label="הפניות שלי">' +
+            '<span class="pid2-referrals-icon">👥</span>' +
+            '<span class="pid2-referrals-count" id="pid2-referrals-count">0</span>' +
+            '<span class="pid2-referrals-label">הזמנת</span>' +
+          '</button>' +
         '</div>' : '');
 
     const editBtn = el.querySelector('.pid2-edit');
@@ -1027,7 +1044,171 @@
         setTimeout(function() { codeBtn.textContent = orig; }, 1400);
       }
     };
+    const refBtn = el.querySelector('#pid2-referrals-btn');
+    if (refBtn) refBtn.onclick = function() {
+      if (typeof window.__bloomShowReferralsModal === 'function') {
+        window.__bloomShowReferralsModal();
+      }
+    };
+    fetchReferralCount();
   }
+
+  // Fetches the player's current referral count and paints it onto the
+  // home pill. When the count grew since last view, fires a toast +
+  // gold pulse — the "צופר" the user asked for when an invitee joins.
+  function fetchReferralCount() {
+    var did = (typeof deviceId !== 'undefined' && deviceId) ? deviceId : null;
+    if (!did) return;
+    fetch('/api/referrals/mine?deviceId=' + encodeURIComponent(did))
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        if (!d || !d.ok) return;
+        var pill = document.getElementById('pid2-referrals-count');
+        if (!pill) return;
+        var prev = parseInt(localStorage.getItem('bloom_ref_count_seen') || '0', 10) || 0;
+        var now = d.total | 0;
+        pill.textContent = String(now);
+        if (now > prev) {
+          pill.parentElement.classList.add('pid2-referrals-fresh');
+          try { localStorage.setItem('bloom_ref_count_seen', String(now)); } catch (e) {}
+          if (typeof __bloomToast === 'function') {
+            var delta = now - prev;
+            __bloomToast('🎁 ' + delta + ' ' + (delta === 1 ? 'חבר חדש הצטרף' : 'חברים חדשים הצטרפו') + ' בזכותך!', 'success');
+          }
+        } else if (now > 0) {
+          pill.parentElement.classList.add('pid2-referrals-has');
+        }
+      })
+      .catch(function() {});
+  }
+
+  function showReferralsModal() {
+    var existing = document.getElementById('referrals-modal');
+    if (existing) existing.remove();
+    var did = (typeof deviceId !== 'undefined' && deviceId) ? deviceId : null;
+    if (!did) return;
+    // Build everything with createElement + textContent so no data ever
+    // crosses an innerHTML boundary — XSS-safe even if a future server
+    // change lets unsanitized names slip into the API response.
+    var ov = document.createElement('div');
+    ov.id = 'referrals-modal';
+    ov.className = 'referrals-modal-overlay';
+    ov.setAttribute('role', 'dialog');
+    ov.setAttribute('aria-modal', 'true');
+    ov.setAttribute('aria-labelledby', 'referrals-modal-title');
+
+    var card = document.createElement('div');
+    card.className = 'referrals-modal-card';
+
+    var closeBtn = document.createElement('button');
+    closeBtn.className = 'referrals-modal-close';
+    closeBtn.type = 'button';
+    closeBtn.setAttribute('aria-label', 'סגור');
+    closeBtn.setAttribute('data-close-modal', '1');
+    closeBtn.textContent = '✕';
+
+    var titleEl = document.createElement('div');
+    titleEl.className = 'referrals-modal-title';
+    titleEl.id = 'referrals-modal-title';
+    titleEl.textContent = '👥 חברים שהזמנת';
+
+    var subEl = document.createElement('div');
+    subEl.className = 'referrals-modal-sub';
+    subEl.textContent = 'כל אחד שמצטרף דרך הקישור שלך = שניכם מקבלים 💎 + צופר אצלך';
+
+    var statsEl = document.createElement('div');
+    statsEl.className = 'referrals-modal-stats';
+    statsEl.id = 'referrals-modal-stats';
+    statsEl.textContent = 'טוען…';
+
+    var listEl = document.createElement('div');
+    listEl.className = 'referrals-modal-list';
+    listEl.id = 'referrals-modal-list';
+
+    var shareBtn = document.createElement('button');
+    shareBtn.className = 'referrals-modal-share';
+    shareBtn.type = 'button';
+    shareBtn.textContent = '📤 שלח לעוד חברים';
+
+    card.appendChild(closeBtn);
+    card.appendChild(titleEl);
+    card.appendChild(subEl);
+    card.appendChild(statsEl);
+    card.appendChild(listEl);
+    card.appendChild(shareBtn);
+    ov.appendChild(card);
+    document.body.appendChild(ov);
+
+    var close = function() { ov.remove(); };
+    closeBtn.onclick = close;
+    ov.addEventListener('click', function(e) { if (e.target === ov) close(); });
+    shareBtn.onclick = function() {
+      close();
+      if (typeof shareInviteViaNative === 'function') shareInviteViaNative();
+      else if (typeof shareInviteViaWhatsApp === 'function') shareInviteViaWhatsApp();
+    };
+
+    fetch('/api/referrals/mine?deviceId=' + encodeURIComponent(did))
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        if (!d || !d.ok) return;
+        // Stats — 2 big numbers via createElement + textContent.
+        while (statsEl.firstChild) statsEl.removeChild(statsEl.firstChild);
+        function makeStat(num, lbl) {
+          var box = document.createElement('div');
+          box.className = 'referrals-modal-stat-big';
+          var n = document.createElement('span');
+          n.className = 'referrals-modal-stat-num';
+          n.textContent = num;
+          var l = document.createElement('span');
+          l.className = 'referrals-modal-stat-lbl';
+          l.textContent = lbl;
+          box.appendChild(n);
+          box.appendChild(l);
+          return box;
+        }
+        statsEl.appendChild(makeStat(String(d.total | 0), 'חברים'));
+        statsEl.appendChild(makeStat('💎 ' + (d.totalEarned | 0).toLocaleString(), 'הרווחת'));
+
+        while (listEl.firstChild) listEl.removeChild(listEl.firstChild);
+        if (!d.recent || !d.recent.length) {
+          var empty = document.createElement('div');
+          empty.className = 'referrals-modal-empty';
+          empty.textContent = 'עדיין לא הזמנת חברים. שתף את הקוד שלך ותתחיל לצבור!';
+          listEl.appendChild(empty);
+        } else {
+          d.recent.forEach(function(row) {
+            var rowEl = document.createElement('div');
+            rowEl.className = 'referrals-modal-row';
+            var nameEl = document.createElement('span');
+            nameEl.className = 'referrals-modal-row-name';
+            nameEl.textContent = row.name || 'אנונימי';
+            var codeEl = document.createElement('span');
+            codeEl.className = 'referrals-modal-row-code';
+            codeEl.textContent = row.code || '';
+            var whenEl = document.createElement('span');
+            whenEl.className = 'referrals-modal-row-when';
+            var when = new Date(row.createdAt);
+            try {
+              var mins = Math.round((Date.now() - when.getTime()) / 60000);
+              if (mins < 60) whenEl.textContent = mins + ' דק׳';
+              else if (mins < 1440) whenEl.textContent = Math.round(mins / 60) + ' שע׳';
+              else whenEl.textContent = Math.round(mins / 1440) + ' ימים';
+            } catch (e) { whenEl.textContent = ''; }
+            var creditEl = document.createElement('span');
+            creditEl.className = 'referrals-modal-row-credit';
+            creditEl.textContent = '+' + (row.creditsAwarded | 0) + '💎';
+            rowEl.appendChild(nameEl);
+            rowEl.appendChild(codeEl);
+            rowEl.appendChild(whenEl);
+            rowEl.appendChild(creditEl);
+            listEl.appendChild(rowEl);
+          });
+        }
+      })
+      .catch(function() {});
+  }
+  window.__bloomShowReferralsModal = showReferralsModal;
 
   // ── Your week stats — small scannable line ──
   // T1.3 — Balance bar render. Reads live state from in-IIFE vars when
