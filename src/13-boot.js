@@ -241,22 +241,26 @@
 
   init(savedMode);
 
-  // Stage B7 (May 2026) — Tier-bar visibility toggle.
-  // The in-game tier ladder (8 tile icons + their merge scores) lived
-  // ALWAYS-ON above the grid, consuming ~50-60px of vertical space.
-  // It's useful for new players learning the ladder, but ~3-game-old
-  // veterans don't need it. Toggle button in .top-buttons lets the
-  // player hide it. Default = hidden (B7's stated goal: reclaim grid
-  // space). First-time players still get it via FTUE which explains
-  // the ladder explicitly.
+  // Stage B7 (May 2026 — REVISED): Tier-bar visibility toggle.
+  // The in-game tier ladder shows ALL 8 tiers in order (rock → leaf →
+  // flower → fire → bolt → star → diamond → crown) with the active
+  // "next piece" highlighted. This is the teaching strip — players
+  // (especially new ones) use it to learn what merges into what.
+  //
+  // ORIGINAL B7 default: HIDDEN (to reclaim grid space). But user
+  // feedback was "the strip disappeared, I can't see what tile comes
+  // next". Reverted: default = VISIBLE. Opt-out via the 📊 toggle for
+  // veterans who want maximum grid space. The data-home="active" CSS
+  // rule still hides it on the home screen (no game running) so it
+  // doesn't clutter home.
   var TIER_BAR_KEY = 'bloom_tier_bar_visible';
   function applyTierBarPref() {
-    var visible = false;
+    var visible = true; // DEFAULT VISIBLE — teaches the ladder during play
     try {
       var raw = localStorage.getItem(TIER_BAR_KEY);
-      // Default to HIDDEN. Players who explicitly turned it ON before
-      // get raw === '1' and we honor that.
-      visible = raw === '1';
+      // Explicit '0' = user opted to hide. Anything else (null / '1')
+      // honors the default-visible.
+      if (raw === '0') visible = false;
     } catch (e) {}
     document.body.classList.toggle('tier-bar-hidden', !visible);
     var btn = document.getElementById('tier-bar-toggle');
