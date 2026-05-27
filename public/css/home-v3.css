@@ -32,7 +32,11 @@
   .app[data-home="active"] > .top,
   .app[data-home="active"] > .mode-bar,
   .app[data-home="active"] > .tier-bar,
-  .app[data-home="active"] > .grid-wrap {
+  .app[data-home="active"] > .grid-wrap,
+  /* B0 May 2026: col-mult-bar is an in-game widget that lived as a
+     sibling of #grid-wrap but wasn't in this hide list, so it kept
+     peeking through at the top of bottom-nav tab screens. */
+  .app[data-home="active"] > .col-mult-bar {
     display: none !important;
   }
 
