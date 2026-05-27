@@ -18,3 +18,4 @@ public/__*.html
 railway-backups-*/
 *.dump
 bloom-*.png
+.tmp-*
