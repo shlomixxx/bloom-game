@@ -344,19 +344,18 @@
 
     // Stage B1 (May 2026): when the Bottom Nav is mounted, the old
     // Power Hero drawer is redundant — tabs replace it. Skip drawer
-    // creation; the bottom-nav module is responsible for moving tiles
-    // into their target tabs. The rotating hero card still mounts
-    // because it's the home-tab's centerpiece signal.
+    // creation. Tile routing is owned by the bottom-nav module via
+    // its own MutationObserver on #home-screen. We just mount the
+    // rotating hero card (the home-tab's centerpiece signal).
     var bottomNavActive = !!document.body.getAttribute('data-active-tab');
     if (bottomNavActive) {
       var signalsForNav = collectHotSignals();
       if (signalsForNav.length) renderRotatingHeroCard(signalsForNav);
-      // Hand off tile reorganization to the bottom-nav module — it has
-      // the same category mapping and will migrate tiles to the right
-      // tabs on first activation.
+      // Safety: ask the bottom-nav module to rescan in case any tiles
+      // slipped through before the observer attached. The observer is
+      // the primary mechanism — this is just a belt-and-suspenders.
       if (typeof window.__bloomMigrateTilesToTabs === 'function') {
-        try { window.__bloomMigrateTilesToTabs(SECONDARY_TILE_SELECTORS, DRAWER_CATEGORIES); }
-        catch (e) { console.error('[B1 migrate]', e); }
+        try { window.__bloomMigrateTilesToTabs(); } catch (e) {}
       }
       return;
     }

@@ -26158,19 +26158,18 @@
 
     // Stage B1 (May 2026): when the Bottom Nav is mounted, the old
     // Power Hero drawer is redundant — tabs replace it. Skip drawer
-    // creation; the bottom-nav module is responsible for moving tiles
-    // into their target tabs. The rotating hero card still mounts
-    // because it's the home-tab's centerpiece signal.
+    // creation. Tile routing is owned by the bottom-nav module via
+    // its own MutationObserver on #home-screen. We just mount the
+    // rotating hero card (the home-tab's centerpiece signal).
     var bottomNavActive = !!document.body.getAttribute('data-active-tab');
     if (bottomNavActive) {
       var signalsForNav = collectHotSignals();
       if (signalsForNav.length) renderRotatingHeroCard(signalsForNav);
-      // Hand off tile reorganization to the bottom-nav module — it has
-      // the same category mapping and will migrate tiles to the right
-      // tabs on first activation.
+      // Safety: ask the bottom-nav module to rescan in case any tiles
+      // slipped through before the observer attached. The observer is
+      // the primary mechanism — this is just a belt-and-suspenders.
       if (typeof window.__bloomMigrateTilesToTabs === 'function') {
-        try { window.__bloomMigrateTilesToTabs(SECONDARY_TILE_SELECTORS, DRAWER_CATEGORIES); }
-        catch (e) { console.error('[B1 migrate]', e); }
+        try { window.__bloomMigrateTilesToTabs(); } catch (e) {}
       }
       return;
     }
@@ -30772,22 +30771,24 @@ try {
   };
 })();
   // ============================================================
-  // Stage B0 — Bottom Nav skeleton (May 2026)
+  // Stage B0+B1 (May 2026) — Bottom Nav with MutationObserver
   // ============================================================
-  // 5-tab persistent navigation at the bottom of the home surface.
-  // Industry-standard pattern (Clash Royale / Royal Match / Brawl
-  // Stars): the home gets ONE clear CTA, and everything else gets
-  // organized into focused tabs the player navigates to.
+  // 5-tab persistent navigation. Owns the tile→tab mapping and uses
+  // a MutationObserver on #home-screen to catch tiles as they mount
+  // (most mount via deferred setTimeout 400-3000ms; without the
+  // observer, late tiles would be stranded in home-screen and become
+  // invisible whenever the user switches to a non-home tab).
   //
-  // For B0 the home tab still has its existing layout (we'll trim
-  // it in B1). The other 4 tabs get placeholder "Coming soon" cards
-  // until B2-B5 migrate their content.
-  //
-  // Architecture: bottom nav is mounted as a sibling of #home-screen
-  // (NOT inside it) so it survives tab switches. Each non-home tab
-  // mounts its own #tab-<id>-screen which replaces the home screen
-  // in display:flex. The body gets `data-active-tab="<id>"` so CSS
-  // can react if needed.
+  // Architecture:
+  //   - mountBottomNav: builds nav + pre-creates the 4 non-home tab
+  //     screens (hidden) + attaches MutationObserver to home-screen
+  //   - Observer: every added node tested against TILE_TO_TAB; if it
+  //     matches a tile with target != 'home', moved immediately into
+  //     the target tab's body container.
+  //   - On mount, also runs a one-time scan to migrate any tiles that
+  //     already exist (e.g. tiles mounted before observer attached).
+  //   - goToTab: just toggles screen visibility (no migration needed
+  //     — tiles already routed by observer).
   // ============================================================
   (function() {
 
@@ -30799,38 +30800,58 @@ try {
       { id: 'shop',     icon: '🛍', label: 'חנות',  ariaLabel: 'חנות' }
     ];
 
-    // Maps drawer category keys → bottom nav tab IDs.
-    // Power Hero used a single drawer; the bottom nav redistributes
-    // those categories across 4 destination tabs.
-    var CATEGORY_TO_TAB = {
-      'play':     'home',     // Boards, Battle Pass — stay near the CTA on the home tab
-      'rewards':  'rewards',  // Spin / Daily Deal / Bundles / Checklist / Gacha / Starter
-      'compete':  'progress', // Trophy Road / League / Rival / Ach LB
-      'social':   'social',   // Guild / Guild Wars
-      'collect':  'progress', // Pet / Album / Lifetime
-      'extras':   'rewards',  // Login-cal / Bank / Chest / Squad / Ghost (mostly daily-return)
-      'status':   'home'      // Lives / Weekly / Jackpot / Featured — stay near home so balance/status visible
+    // Owned tile→tab mapping. Single source of truth — independent of
+    // Power Hero's category map (which was the old approach).
+    // Maximizing addiction:
+    //  - Home: progression hooks close to PLAY (BP, boards, lives,
+    //    weekly, jackpot, featured)
+    //  - Rewards: daily-free dopamine (spin, checklist, login-cal,
+    //    chest, daily deal)
+    //  - Social: other-people surfaces (guild, war, squad, rival,
+    //    ghost mode, friends)
+    //  - Progress: my-journey indicators (trophy road, league,
+    //    lifetime/prestige, pet, album, achievements LB)
+    //  - Shop: economy + paid surfaces (gem bank, gacha, starter
+    //    pack, bundles, skins eventually)
+    var TILE_TO_TAB = {
+      // ── Home tab ──
+      '#home-v2-boards':           'home',
+      '#home-v2-season-pass':      'home',
+      '#lives-home-widget':        'home',
+      '#home-v2-featured':         'home',
+      '#home-weekly-host':         'home',
+      '#home-jackpot':             'home',
+      // ── Rewards tab ──
+      '#spin-home-tile':           'rewards',
+      '#checklist-home-tile':      'rewards',
+      '#login-cal-tile':           'rewards',
+      '#chest-home-tile':          'rewards',
+      '.daily-deal-home-banner':   'rewards',
+      // ── Social tab ──
+      '#guild-home-tile':          'social',
+      '#guild-war-home-tile':      'social',
+      '#squad-tile':               'social',
+      '#rival-home-tile':          'social',
+      '#ghost-mode-tile':          'social',
+      // ── Progress tab ──
+      '#trophy-home-tile':         'progress',
+      '#league-home-tile':         'progress',
+      '#lifetime-home-tile':       'progress',
+      '#pet-home-widget':          'progress',
+      '#album-home-tile':          'progress',
+      '#ach-lb-home-tile':         'progress',
+      // ── Shop tab ──
+      '#gem-bank-tile':            'shop',
+      '.gacha-home-banner':        'shop',
+      '.starter-pack-home-banner': 'shop',
+      '.bundle-home-banner':       'shop'
     };
-
-    // Per-tab additional selectors that Power Hero didn't categorize
-    // (e.g. specific tiles that should land in a tab regardless).
-    var EXTRA_TAB_SELECTORS = {
-      home:     [],
-      rewards:  [],
-      social:   [],
-      progress: [],
-      shop:     []
-    };
-
-    // Cached mapping built by __bloomMigrateTilesToTabs — keyed by
-    // tile selector → target tab id. Used by renderTabScreen.
-    var _tileTargetTab = {};
-    var _categoriesSource = null;
-    var _selectorsSource = null;
 
     var ACTIVE_KEY = 'bloom_active_tab';
     var _navEl = null;
     var _activeTab = 'home';
+    var _observer = null;
+    var _tabScreens = {}; // id → DOM node
 
     function loadActiveTab() {
       try {
@@ -30839,12 +30860,13 @@ try {
       } catch (e) {}
       return 'home';
     }
-
     function saveActiveTab(id) {
       try { localStorage.setItem(ACTIVE_KEY, id); } catch (e) {}
     }
 
-    // Build the nav DOM via createElement (no innerHTML for safety).
+    // ────────────────────────────────────────────────────────────
+    // BUILD: nav bar
+    // ────────────────────────────────────────────────────────────
     function buildNav() {
       var nav = document.createElement('nav');
       nav.id = 'bloom-bottom-nav';
@@ -30877,105 +30899,17 @@ try {
       return nav;
     }
 
-    function mountBottomNav() {
-      if (_navEl) return; // already mounted
-      _activeTab = loadActiveTab();
-      _navEl = buildNav();
-      document.body.appendChild(_navEl);
-      document.body.setAttribute('data-active-tab', _activeTab);
-      // If the persisted tab isn't 'home', restore that screen after
-      // showHomeV2 finishes mounting its own DOM. We defer one tick so
-      // the home elements exist (otherwise the tab function won't have
-      // a stable base to hide).
-      if (_activeTab !== 'home') {
-        setTimeout(function() { renderTabScreen(_activeTab); }, 50);
-      }
-    }
-
-    function unmountBottomNav() {
-      if (!_navEl) return;
-      try { _navEl.remove(); } catch (e) {}
-      _navEl = null;
-      // Also tear down any non-home tab screens so a fresh home
-      // mount starts clean.
-      ['rewards', 'social', 'progress', 'shop'].forEach(function(id) {
-        var el = document.getElementById('tab-' + id + '-screen');
-        if (el) el.remove();
-      });
-      document.body.removeAttribute('data-active-tab');
-    }
-
-    // Switch active tab. For 'home', restore the home screen + remove
-    // any other tab screen. For non-home tabs, hide the home screen +
-    // mount the tab's content.
-    function goToTab(id) {
-      if (!TABS.some(function(t) { return t.id === id; })) return;
-      if (_activeTab === id) return;
-      _activeTab = id;
-      saveActiveTab(id);
-      document.body.setAttribute('data-active-tab', id);
-      // Update nav button states
-      if (_navEl) {
-        _navEl.querySelectorAll('.bn-tab').forEach(function(btn) {
-          var isActive = btn.getAttribute('data-tab') === id;
-          btn.classList.toggle('bn-tab-active', isActive);
-          btn.setAttribute('aria-current', isActive ? 'page' : 'false');
-        });
-      }
-      // Hide whatever is currently shown + show target
-      hideAllTabScreens();
-      renderTabScreen(id);
-      // Sound feedback on tab switch (subtle).
-      try { if (typeof soundDrop === 'function') soundDrop(); } catch (e) {}
-    }
-
-    function hideAllTabScreens() {
-      var home = document.getElementById('home-screen');
-      if (home) home.style.display = 'none';
-      ['rewards', 'social', 'progress', 'shop'].forEach(function(id) {
-        var el = document.getElementById('tab-' + id + '-screen');
-        if (el) el.style.display = 'none';
-      });
-    }
-
-    function renderTabScreen(id) {
-      if (id === 'home') {
-        var home = document.getElementById('home-screen');
-        if (home) home.style.display = '';
-        return;
-      }
-      var screenId = 'tab-' + id + '-screen';
-      var existing = document.getElementById(screenId);
-      var screen;
-      if (existing) {
-        existing.style.display = '';
-        screen = existing;
-      } else {
-        // First-time mount → build empty shell + header. Tile migration
-        // happens below for both first mount and subsequent visits
-        // (deferred tiles may have appeared after a previous visit).
-        screen = buildEmptyTabShell(id);
-        screen.id = screenId;
-        var app = document.querySelector('.app');
-        if (app) app.appendChild(screen);
-        else document.body.appendChild(screen);
-      }
-      // Pull any tiles that belong to this tab into the body. Tiles
-      // mounted into the home screen by their respective modules get
-      // physically moved into the tab on first activation.
-      migrateTilesIntoTab(id, screen);
-      // If the body still has nothing (no tiles available yet) keep
-      // a friendly placeholder so the tab isn't an empty void.
-      ensurePlaceholderIfEmpty(id, screen);
-    }
-
-    // Build the per-tab empty shell (header + body container). Tiles
-    // get appended to the `.bn-tab-screen-body` later by migration.
-    function buildEmptyTabShell(id) {
+    // ────────────────────────────────────────────────────────────
+    // BUILD: pre-created tab screens (hidden until clicked)
+    // ────────────────────────────────────────────────────────────
+    function buildTabShell(id) {
       var tab = TABS.find(function(t) { return t.id === id; });
       var screen = document.createElement('div');
       screen.className = 'bn-tab-screen';
+      screen.id = 'tab-' + id + '-screen';
       screen.setAttribute('data-tab-id', id);
+      // Pre-created tabs start hidden; only the active tab is shown.
+      screen.style.display = (id === _activeTab && id !== 'home') ? '' : 'none';
 
       var header = document.createElement('div');
       header.className = 'bn-tab-screen-header';
@@ -31002,119 +30936,246 @@ try {
         case 'rewards':  return 'הפרסים והאתגרים היומיים שלך';
         case 'social':   return 'דו-קרבות, יריבים, חברים, קלאן';
         case 'progress': return 'המסע שלך — גביעים, ליגה, אוסף';
-        case 'shop':     return 'סקינים, גצ׳ה, בנק, בוסטרים';
+        case 'shop':     return 'חנות + כלכלת הג׳מים שלך';
       }
       return '';
     }
 
-    function ensurePlaceholderIfEmpty(id, screen) {
-      var body = screen.querySelector('.bn-tab-screen-body');
-      if (!body) return;
-      var hasTiles = body.children.length > 0;
-      var existingPlaceholder = body.querySelector('.bn-tab-placeholder-card');
-      if (hasTiles && !existingPlaceholder) return;
-      if (hasTiles && existingPlaceholder) { existingPlaceholder.remove(); return; }
-      if (existingPlaceholder) return; // already has placeholder
-      // Build a friendly empty-state card.
+    function buildPlaceholderCard(id) {
+      var tab = TABS.find(function(t) { return t.id === id; });
       var card = document.createElement('div');
       card.className = 'bn-tab-placeholder-card';
-      var icon = document.createElement('div');
-      icon.className = 'bn-tab-placeholder-icon';
-      var tab = TABS.find(function(t) { return t.id === id; });
-      icon.textContent = tab ? tab.icon : '✨';
-      var title = document.createElement('div');
-      title.className = 'bn-tab-placeholder-title';
-      title.textContent = emptyTitle(id);
-      var sub = document.createElement('div');
-      sub.className = 'bn-tab-placeholder-sub';
-      sub.textContent = emptySub(id);
-      card.appendChild(icon);
-      card.appendChild(title);
-      card.appendChild(sub);
-      body.appendChild(card);
+      var iconEl = document.createElement('div');
+      iconEl.className = 'bn-tab-placeholder-icon';
+      iconEl.textContent = tab ? tab.icon : '✨';
+      var titleEl = document.createElement('div');
+      titleEl.className = 'bn-tab-placeholder-title';
+      titleEl.textContent = emptyTitle(id);
+      var subEl = document.createElement('div');
+      subEl.className = 'bn-tab-placeholder-sub';
+      subEl.textContent = emptySub(id);
+      card.appendChild(iconEl);
+      card.appendChild(titleEl);
+      card.appendChild(subEl);
+      return card;
     }
-
     function emptyTitle(id) {
       switch (id) {
-        case 'rewards':  return 'אין פרסים זמינים כרגע';
-        case 'social':   return 'אין פעילות חברתית כרגע';
+        case 'rewards':  return 'הפרסים שלך יופיעו כאן';
+        case 'social':   return 'הקהילה שלך תופיע כאן';
         case 'progress': return 'התקדמותך תופיע כאן';
-        case 'shop':     return 'החנות תופיע בקרוב';
+        case 'shop':     return 'החנות מתעדכנת';
       }
       return '';
     }
     function emptySub(id) {
       switch (id) {
-        case 'rewards':  return 'שחק כמה משחקים — פרסים יומיים, גלגל, וDaily Deals יופיעו כאן';
-        case 'social':   return 'הזמן חבר או הצטרף לקלאן כדי לראות פעילות';
-        case 'progress': return 'הגיע ל-tier 6 או מעלה במשחק כדי לראות גביעים';
-        case 'shop':     return 'בקרוב — סקינים, חבילות מיוחדות, גצ׳ה';
+        case 'rewards':  return 'גלגל יומי, משימות, דילים — יופיעו ברגע שיהיו זמינים';
+        case 'social':   return 'הזמן חבר, הצטרף לקלאן, או שחק דו-קרב כדי לראות פעילות';
+        case 'progress': return 'שחק כמה משחקים כדי לפתוח גביעים, ליגה ואלבום';
+        case 'shop':     return 'סקינים, גצ׳ה, חבילות וכלכלת ג׳מים — בקרוב';
       }
       return '';
     }
 
-    // Move tiles from #home-screen into the matching tab body.
-    function migrateTilesIntoTab(tabId, screen) {
-      if (!_selectorsSource || !_categoriesSource) return;
+    // ────────────────────────────────────────────────────────────
+    // MIGRATION: move a tile to its target tab body
+    // ────────────────────────────────────────────────────────────
+    function moveTileToTab(el, tabId) {
+      if (!el || tabId === 'home') return;
+      // Idempotent guard — a tile element gets migrated exactly once.
+      // If the SAME element keeps trying to remount in home (via late
+      // updates), the class persists. If a brand-new element with the
+      // same selector mounts (e.g. after game-over remount), class is
+      // missing → moves correctly.
+      if (el.classList && el.classList.contains('bn-migrated')) return;
+      var screen = _tabScreens[tabId] || document.getElementById('tab-' + tabId + '-screen');
+      if (!screen) return;
       var body = screen.querySelector('.bn-tab-screen-body');
       if (!body) return;
-      for (var i = 0; i < _selectorsSource.length; i++) {
-        var sel = _selectorsSource[i];
-        var targetTab = _tileTargetTab[sel];
-        if (targetTab !== tabId) continue;
-        var els = document.querySelectorAll(sel);
-        for (var j = 0; j < els.length; j++) {
-          var el = els[j];
-          // Already in this tab? Skip.
-          if (body.contains(el)) continue;
-          // Make sure it's visible (some tiles default to display:none
-          // until their helper decides to show them; we surface them
-          // because they're now first-class tab content).
-          if (el.style.display === 'none') el.style.display = '';
-          body.appendChild(el);
+      el.classList.add('bn-migrated');
+      // Hidden tiles get unhidden — they're first-class tab content now.
+      if (el.style.display === 'none') el.style.display = '';
+      body.appendChild(el);
+      // Remove the empty-state placeholder if present (real content arrived).
+      var placeholder = body.querySelector('.bn-tab-placeholder-card');
+      if (placeholder) placeholder.remove();
+      // Subtle slide-in for the new tile arriving in a non-active tab
+      // (gives the user a visual cue if they happen to be on that tab).
+      el.classList.add('bn-tile-arrived');
+      setTimeout(function() { if (el.classList) el.classList.remove('bn-tile-arrived'); }, 700);
+    }
+
+    // ────────────────────────────────────────────────────────────
+    // OBSERVER: watch home-screen for tile mounts
+    // ────────────────────────────────────────────────────────────
+    function checkAndMigrate(node) {
+      if (!node || node.nodeType !== 1) return;
+      // Direct match on the added node itself.
+      var sels = Object.keys(TILE_TO_TAB);
+      for (var i = 0; i < sels.length; i++) {
+        var sel = sels[i];
+        try {
+          if (node.matches && node.matches(sel)) {
+            moveTileToTab(node, TILE_TO_TAB[sel]);
+            return; // matched + moved, no need to check descendants
+          }
+        } catch (e) {}
+      }
+      // Descendant match (node is a wrapper, real tile is inside).
+      for (var j = 0; j < sels.length; j++) {
+        var sel2 = sels[j];
+        try {
+          var inner = node.querySelector && node.querySelector(sel2);
+          if (inner) moveTileToTab(inner, TILE_TO_TAB[sel2]);
+        } catch (e) {}
+      }
+    }
+
+    function attachObserver() {
+      var home = document.getElementById('home-screen');
+      if (!home) return;
+      if (_observer) {
+        try { _observer.disconnect(); } catch (e) {}
+      }
+      _observer = new MutationObserver(function(mutations) {
+        mutations.forEach(function(m) {
+          for (var i = 0; i < m.addedNodes.length; i++) {
+            checkAndMigrate(m.addedNodes[i]);
+          }
+        });
+      });
+      _observer.observe(home, { childList: true, subtree: true });
+      // One-time scan for tiles that already exist (mounted before
+      // observer attached). Covers the race where boot fires showHomeV2
+      // synchronously and some tiles mount before our setTimeout-deferred
+      // mountBottomNav runs.
+      scanAndMigrateExisting();
+    }
+
+    function scanAndMigrateExisting() {
+      var home = document.getElementById('home-screen');
+      if (!home) return;
+      Object.keys(TILE_TO_TAB).forEach(function(sel) {
+        if (TILE_TO_TAB[sel] === 'home') return;
+        var els = home.querySelectorAll(sel);
+        for (var i = 0; i < els.length; i++) {
+          moveTileToTab(els[i], TILE_TO_TAB[sel]);
         }
+      });
+    }
+
+    // ────────────────────────────────────────────────────────────
+    // LIFECYCLE
+    // ────────────────────────────────────────────────────────────
+    function mountBottomNav() {
+      if (_navEl) return; // already mounted
+      _activeTab = loadActiveTab();
+
+      // 1. Build + mount the nav bar at the bottom.
+      _navEl = buildNav();
+      document.body.appendChild(_navEl);
+      document.body.setAttribute('data-active-tab', _activeTab);
+
+      // 2. Pre-create the 4 non-home tab screens (hidden until clicked).
+      //    They live inside .app as siblings of #home-screen so the same
+      //    "hide chrome when home-active" CSS applies.
+      var app = document.querySelector('.app');
+      var host = app || document.body;
+      ['rewards', 'social', 'progress', 'shop'].forEach(function(id) {
+        // Don't double-mount if a previous showHomeV2 cycle left them.
+        var existing = document.getElementById('tab-' + id + '-screen');
+        if (existing) { existing.remove(); }
+        var screen = buildTabShell(id);
+        host.appendChild(screen);
+        _tabScreens[id] = screen;
+      });
+
+      // 3. Attach MutationObserver to home-screen so late-mounting
+      //    tiles get caught + routed.
+      attachObserver();
+
+      // 4. Render placeholder cards for tabs that currently have NO
+      //    tiles (so the user sees a friendly empty state on first
+      //    visit instead of a blank screen). Placeholders auto-remove
+      //    when a real tile arrives via moveTileToTab.
+      ['rewards', 'social', 'progress', 'shop'].forEach(function(id) {
+        ensurePlaceholderIfEmpty(id);
+      });
+
+      // 5. If persisted active tab isn't home, show that screen.
+      if (_activeTab !== 'home') {
+        // Hide home, show the saved active tab's screen.
+        setTimeout(function() {
+          var home = document.getElementById('home-screen');
+          if (home) home.style.display = 'none';
+          var screen = _tabScreens[_activeTab];
+          if (screen) screen.style.display = '';
+        }, 50);
       }
     }
 
-    // Called by Power Hero applyHeroVariant: passes its category mapping
-    // so we know which tile goes where. We resolve every tile selector
-    // to a target tab id once + cache the result.
-    function migrateTilesToTabs(selectors, categories) {
-      _selectorsSource = selectors;
-      _categoriesSource = categories;
-      _tileTargetTab = {};
-      for (var i = 0; i < selectors.length; i++) {
-        var sel = selectors[i];
-        var catKey = resolveCategoryForSelector(sel, categories);
-        var tabId = CATEGORY_TO_TAB[catKey] || 'rewards';
-        _tileTargetTab[sel] = tabId;
+    function unmountBottomNav() {
+      if (_navEl) {
+        try { _navEl.remove(); } catch (e) {}
+        _navEl = null;
       }
-      // If a tab screen is currently mounted (i.e. we're on a non-home
-      // tab right now), re-migrate so newly mounted tiles land in it.
-      var current = _activeTab;
-      if (current && current !== 'home') {
-        var screen = document.getElementById('tab-' + current + '-screen');
-        if (screen) migrateTilesIntoTab(current, screen);
+      if (_observer) {
+        try { _observer.disconnect(); } catch (e) {}
+        _observer = null;
       }
+      // Tear down tab screens — they'll be rebuilt on next mount.
+      Object.keys(_tabScreens).forEach(function(id) {
+        var el = _tabScreens[id];
+        if (el && el.parentNode) el.parentNode.removeChild(el);
+      });
+      _tabScreens = {};
+      document.body.removeAttribute('data-active-tab');
     }
 
-    function resolveCategoryForSelector(sel, categories) {
-      for (var c = 0; c < categories.length; c++) {
-        var cat = categories[c];
-        if (cat.match && cat.match(sel)) return cat.key;
-      }
-      return null;
+    function ensurePlaceholderIfEmpty(id) {
+      var screen = _tabScreens[id] || document.getElementById('tab-' + id + '-screen');
+      if (!screen) return;
+      var body = screen.querySelector('.bn-tab-screen-body');
+      if (!body) return;
+      if (body.children.length > 0) return; // tiles already there
+      if (body.querySelector('.bn-tab-placeholder-card')) return; // already placeheld
+      body.appendChild(buildPlaceholderCard(id));
     }
 
-    // (B1 May 2026: legacy buildPlaceholderTab + placeholderTitle/Sub
-    //  removed — replaced by buildEmptyTabShell + ensurePlaceholderIfEmpty
-    //  which builds an empty body container that gets filled by tile
-    //  migration, falling back to an empty-state card only when no
-    //  tiles for that tab exist yet.)
+    // ────────────────────────────────────────────────────────────
+    // TAB SWITCHING
+    // ────────────────────────────────────────────────────────────
+    function goToTab(id) {
+      if (!TABS.some(function(t) { return t.id === id; })) return;
+      if (_activeTab === id) return;
+      _activeTab = id;
+      saveActiveTab(id);
+      document.body.setAttribute('data-active-tab', id);
+      // Update nav button states.
+      if (_navEl) {
+        _navEl.querySelectorAll('.bn-tab').forEach(function(btn) {
+          var isActive = btn.getAttribute('data-tab') === id;
+          btn.classList.toggle('bn-tab-active', isActive);
+          btn.setAttribute('aria-current', isActive ? 'page' : 'false');
+        });
+      }
+      // Toggle visibility: hide all + show target.
+      var home = document.getElementById('home-screen');
+      if (home) home.style.display = (id === 'home') ? '' : 'none';
+      Object.keys(_tabScreens).forEach(function(tid) {
+        var s = _tabScreens[tid];
+        if (s) s.style.display = (tid === id) ? '' : 'none';
+      });
+      // Re-ensure placeholder (in case tiles got migrated out somehow).
+      if (id !== 'home') ensurePlaceholderIfEmpty(id);
+      // Sound feedback.
+      try { if (typeof soundDrop === 'function') soundDrop(); } catch (e) {}
+    }
 
-    // Public: set the badge count/dot on a tab.
-    // count: number (shows N up to 99 then "99+"), 'dot' (just a red dot),
-    //        or null/0 to hide.
+    // ────────────────────────────────────────────────────────────
+    // BADGE
+    // ────────────────────────────────────────────────────────────
     function setBadge(tabId, value) {
       var el = document.getElementById('bn-badge-' + tabId);
       if (!el) return;
@@ -31142,14 +31203,35 @@ try {
     }
 
     // ────────────────────────────────────────────────────────────
+    // LEGACY HOOK — Power Hero used to push its mapping here. Now a
+    // no-op (we own the mapping). Kept exposed so older code paths
+    // that call it don't break.
+    // ────────────────────────────────────────────────────────────
+    function migrateTilesToTabs() {
+      // Triggered by Power Hero. We don't need the args anymore —
+      // observer handles all routing. Just do a fresh scan as a
+      // safety net in case any tiles slipped through.
+      scanAndMigrateExisting();
+    }
+
+    // ────────────────────────────────────────────────────────────
     // Exports
     // ────────────────────────────────────────────────────────────
-    window.__bloomMountBottomNav   = mountBottomNav;
-    window.__bloomUnmountBottomNav = unmountBottomNav;
-    window.__bloomGoToTab          = goToTab;
-    window.__bloomSetTabBadge      = setBadge;
-    window.__bloomGetActiveTab     = function() { return _activeTab; };
+    window.__bloomMountBottomNav     = mountBottomNav;
+    window.__bloomUnmountBottomNav   = unmountBottomNav;
+    window.__bloomGoToTab            = goToTab;
+    window.__bloomSetTabBadge        = setBadge;
+    window.__bloomGetActiveTab       = function() { return _activeTab; };
     window.__bloomMigrateTilesToTabs = migrateTilesToTabs;
+    // Debug helpers.
+    window.__bloomBNDebug = function() {
+      return {
+        activeTab: _activeTab,
+        observerAttached: !!_observer,
+        tabScreens: Object.keys(_tabScreens),
+        knownSelectors: Object.keys(TILE_TO_TAB).length
+      };
+    };
   })();
 // ============================================================
 // Stage 39 — UX Polish + Addiction Maximizer (May 2026)
