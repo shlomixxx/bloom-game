@@ -295,7 +295,22 @@
       // FTUE_STEPS[0] on `undefined` and crashes the boot.
       setTimeout(function() { startFTUE(function() { showHome(); }); }, 0);
     } else {
-      showHome();
+      // CRITICAL FIX (May 2026): also defer the direct showHome call.
+      // Files 17-45 (each its own IIFE) expose their maybeShow* helpers
+      // via window.* at the END of their own eval. boot.js (file 13)
+      // runs BEFORE files 14-99 evaluate, so a synchronous showHome()
+      // call here triggers showHomeV2 → typeof maybeShowSpinTile checks
+      // → fall back to window lookup → window.maybeShowSpinTile is NOT
+      // YET SET (file 32 hasn't run) → typeof returns 'undefined' → if
+      // check fails → no setTimeout scheduled → tile NEVER mounts.
+      // Result: home renders with only the static elements (boards,
+      // season pass, weekly, jackpot) and NONE of the dynamic tiles
+      // (bank, spin, pet, etc.) — exactly the "features disappeared"
+      // symptom the user reported.
+      // Fix: setTimeout(0) defers showHome to the next macrotask, by
+      // which point the entire IIFE has finished evaluating and every
+      // window.maybeShow* assignment has landed.
+      setTimeout(function() { showHome(); }, 0);
     }
   }
 
