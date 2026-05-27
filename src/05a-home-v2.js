@@ -564,6 +564,14 @@
     if (typeof applyHomeVariant === 'function') {
       try { applyHomeVariant(); } catch (e) { console.error('[home-variant]', e); }
     }
+
+    // Stage B0 — Bottom Nav mount. Adds the persistent 5-tab navigation
+    // bar to the bottom of the viewport. Lifecycle is tied to home —
+    // mount on showHomeV2, unmount on hideHomeV2 (so the game screen
+    // doesn't have a stray nav at the bottom).
+    if (typeof window.__bloomMountBottomNav === 'function') {
+      try { window.__bloomMountBottomNav(); } catch (e) { console.error('[bottom-nav]', e); }
+    }
   }
 
   function hideHomeV2() {
@@ -571,6 +579,10 @@
     // Stop the dynamic-boards FOMO tick so we don't keep updating a
     // detached DOM node every minute.
     if (typeof window.stopDynamicBoardsTick === 'function') window.stopDynamicBoardsTick();
+    // B0 — tear down the bottom nav too.
+    if (typeof window.__bloomUnmountBottomNav === 'function') {
+      try { window.__bloomUnmountBottomNav(); } catch (e) {}
+    }
     const h = document.getElementById('home-screen');
     if (h) h.remove();
     const app = document.querySelector('.app');

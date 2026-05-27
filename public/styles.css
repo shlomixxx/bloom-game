@@ -18819,6 +18819,226 @@ html[data-theme="dark"] .rival-tips-list { color: #D1D5DB; }
   font-weight: 900;
   cursor: pointer;
 }
+/* ════════════════════════════════════════════════════════════
+   BOTTOM NAV (Stage B0 — May 2026)
+   ════════════════════════════════════════════════════════════
+   5-tab persistent navigation. Industry-standard pattern.
+   Sticks to the bottom of the viewport via position:fixed +
+   safe-area-inset-bottom for iOS notch.
+
+   Visibility: shown when `body[data-active-tab]` is set (mounted
+   by 46-bottom-nav.js when home is active). Hidden during game.
+   ────────────────────────────────────────────────────────────── */
+
+.bloom-bottom-nav {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  /* Center within the app container width if there's a parent .app.
+     Falls back to viewport-width on desktop. */
+  width: 100%;
+  max-width: 480px;
+  margin: 0 auto;
+  /* Safe-area-inset-bottom handles iPhone home-bar */
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(12px) saturate(140%);
+  -webkit-backdrop-filter: blur(12px) saturate(140%);
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.06);
+  z-index: 2000; /* above home content, below modals (3000+) */
+  display: flex;
+  align-items: stretch;
+  justify-content: space-around;
+  direction: rtl;
+  font-family: inherit;
+  animation: bnSlideUp 0.28s ease-out;
+}
+@keyframes bnSlideUp {
+  from { transform: translateY(100%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.bn-tab {
+  flex: 1;
+  /* WCAG 44px min tap target. Full-height button. */
+  min-height: 60px;
+  padding: 8px 4px 10px;
+  background: transparent;
+  border: none;
+  font-family: inherit;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  color: var(--color-text-muted, #6F6E68);
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  position: relative;
+  transition: color 0.15s ease, transform 0.12s ease;
+}
+.bn-tab:active { transform: scale(0.94); }
+
+.bn-tab-icon {
+  font-size: 22px;
+  line-height: 1;
+  transition: transform 0.18s ease;
+}
+.bn-tab-label {
+  font-size: 11px;
+  font-weight: 700;
+  margin-top: 2px;
+  white-space: nowrap;
+}
+
+/* Active state — icon grows + label colored + top indicator bar */
+.bn-tab-active {
+  color: var(--color-accent, #BA7517);
+}
+.bn-tab-active .bn-tab-icon {
+  transform: scale(1.18) translateY(-1px);
+}
+.bn-tab-active::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 36px;
+  height: 3px;
+  border-radius: 0 0 4px 4px;
+  background: linear-gradient(90deg, var(--color-accent, #BA7517), var(--color-accent-soft, #FAC775));
+  box-shadow: 0 1px 4px rgba(186, 117, 23, 0.35);
+}
+
+/* Badge — red dot OR number pill at the top-right of the tab */
+.bn-tab-badge {
+  position: absolute;
+  top: 8px;
+  /* In RTL the icon visually sits on the right; the badge "above the
+     icon corner" reads best on the LEFT side because that's the
+     visual top-right of an RTL stack. inset-inline-start handles
+     this correctly. */
+  inset-inline-start: 26%;
+  background: #E03B3B;
+  color: #FFF;
+  font-size: 10px;
+  font-weight: 800;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 5px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  border: 2px solid #FFF;
+  box-shadow: 0 1px 3px rgba(224, 59, 59, 0.4);
+  font-variant-numeric: tabular-nums;
+  animation: bnBadgePop 0.32s ease-out;
+}
+.bn-tab-badge-dot {
+  min-width: 10px;
+  width: 10px;
+  height: 10px;
+  padding: 0;
+  /* slight pulse for the "something new" emotion */
+  animation: bnBadgeDotPulse 1.8s ease-in-out infinite;
+}
+@keyframes bnBadgePop {
+  0% { transform: scale(0); }
+  60% { transform: scale(1.2); }
+  100% { transform: scale(1); }
+}
+@keyframes bnBadgeDotPulse {
+  0%, 100% { box-shadow: 0 1px 3px rgba(224, 59, 59, 0.4), 0 0 0 0 rgba(224, 59, 59, 0); }
+  50%      { box-shadow: 0 1px 3px rgba(224, 59, 59, 0.4), 0 0 0 6px rgba(224, 59, 59, 0); }
+}
+
+/* Tab screens (non-home) — full-screen with bottom-nav padding */
+.bn-tab-screen {
+  width: 100%;
+  max-width: 460px;
+  margin: 0 auto;
+  padding: 18px 16px calc(80px + env(safe-area-inset-bottom, 0px)) 16px;
+  /* The 80px bottom padding clears the bottom nav. */
+  direction: rtl;
+  min-height: 100dvh;
+  animation: bnTabFadeIn 0.22s ease-out;
+}
+@keyframes bnTabFadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.bn-tab-screen-header {
+  margin-bottom: 18px;
+  padding: 4px 0;
+}
+.bn-tab-screen-title {
+  font-size: 22px;
+  font-weight: 900;
+  color: var(--color-text, #1C1A18);
+  text-align: center;
+}
+.bn-tab-placeholder-card {
+  background: linear-gradient(160deg, #FFF7E6 0%, #FFE8B8 100%);
+  border: 2px dashed rgba(186, 117, 23, 0.4);
+  border-radius: 18px;
+  padding: 32px 22px;
+  text-align: center;
+  margin-top: 40px;
+  box-shadow: 0 4px 14px rgba(186, 117, 23, 0.08);
+}
+.bn-tab-placeholder-icon {
+  font-size: 56px;
+  line-height: 1;
+  margin-bottom: 12px;
+}
+.bn-tab-placeholder-title {
+  font-size: 17px;
+  font-weight: 800;
+  color: #4A2C0A;
+  margin-bottom: 8px;
+}
+.bn-tab-placeholder-sub {
+  font-size: 13px;
+  color: #7A551E;
+  opacity: 0.9;
+  line-height: 1.5;
+}
+
+/* Bottom-padding for home content so the nav doesn't cover anything.
+   Applied via the data-active-tab body attribute (only when nav is mounted). */
+body[data-active-tab] #home-screen {
+  padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px));
+}
+
+/* Dark theme overrides */
+html[data-theme="dark"] .bloom-bottom-nav {
+  background: rgba(28, 26, 24, 0.96);
+  border-top-color: rgba(255, 255, 255, 0.08);
+}
+html[data-theme="dark"] .bn-tab { color: #8E8A82; }
+html[data-theme="dark"] .bn-tab-active { color: var(--color-accent-soft, #FAC775); }
+html[data-theme="dark"] .bn-tab-placeholder-card {
+  background: linear-gradient(160deg, #2A1F22 0%, #3A2530 100%);
+  border-color: rgba(250, 199, 117, 0.4);
+}
+html[data-theme="dark"] .bn-tab-placeholder-title { color: #F0E8E2; }
+html[data-theme="dark"] .bn-tab-placeholder-sub { color: #C0AA90; }
+html[data-theme="dark"] .bn-tab-screen-title { color: #F2EFE9; }
+
+/* Hide bottom nav during the game (the .app has a child .grid-wrap
+   that's display:none while home is showing; reversed during play).
+   This rule provides defense in depth: if for any reason mount/unmount
+   misses, the nav is still hidden when the game is on screen. */
+body:not([data-active-tab]) .bloom-bottom-nav {
+  display: none;
+}
   /* ============================================================
      DARK MODE
      ============================================================
