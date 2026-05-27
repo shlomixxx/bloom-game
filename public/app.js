@@ -26151,8 +26151,15 @@
   }
 
   function paintHeroCardContent(card, signal) {
+    // Preserve nav chrome (prev/next arrows + dots) across paints.
+    // Without this, auto-rotate's wipe would destroy the arrows on
+    // every cycle because paintHeroCardContent used to only re-attach
+    // dots. Bug observed: 7s after page load, the prev/next chevrons
+    // would vanish silently after the first rotation.
+    var prev = card.querySelector('.hvar-hero-nav-prev');
+    var next = card.querySelector('.hvar-hero-nav-next');
     var dots = card.querySelector('.hvar-hero-dots');
-    // Clear card except dots — rebuild content via createElement.
+    // Clear card; rebuild content via createElement; re-attach chrome.
     while (card.firstChild) card.removeChild(card.firstChild);
     var iconEl = document.createElement('div');
     iconEl.className = 'hvar-hero-icon';
@@ -26175,6 +26182,8 @@
     card.appendChild(titleEl);
     card.appendChild(subEl);
     card.appendChild(ctaEl);
+    if (prev) card.appendChild(prev);
+    if (next) card.appendChild(next);
     if (dots) card.appendChild(dots);
   }
 
