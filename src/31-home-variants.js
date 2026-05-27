@@ -337,14 +337,29 @@
   function applyHeroVariant() {
     var home = document.getElementById('home-screen');
     if (!home) return;
-    // Re-entry guard: applyHomeVariant may be called twice (once at home
-    // mount, once after /api/config resolves and lands gameConfig). The
-    // first call may have already mounted the drawer + rotating card.
-    // Without this guard, the second call would mount a duplicate drawer
-    // and a duplicate hero card, breaking layout.
+    // Re-entry guard.
     if (document.getElementById('home-variant-hero-extras')) return;
 
     document.body.classList.add('power-hero');
+
+    // Stage B1 (May 2026): when the Bottom Nav is mounted, the old
+    // Power Hero drawer is redundant — tabs replace it. Skip drawer
+    // creation; the bottom-nav module is responsible for moving tiles
+    // into their target tabs. The rotating hero card still mounts
+    // because it's the home-tab's centerpiece signal.
+    var bottomNavActive = !!document.body.getAttribute('data-active-tab');
+    if (bottomNavActive) {
+      var signalsForNav = collectHotSignals();
+      if (signalsForNav.length) renderRotatingHeroCard(signalsForNav);
+      // Hand off tile reorganization to the bottom-nav module — it has
+      // the same category mapping and will migrate tiles to the right
+      // tabs on first activation.
+      if (typeof window.__bloomMigrateTilesToTabs === 'function') {
+        try { window.__bloomMigrateTilesToTabs(SECONDARY_TILE_SELECTORS, DRAWER_CATEGORIES); }
+        catch (e) { console.error('[B1 migrate]', e); }
+      }
+      return;
+    }
 
     // 1. Collect ROTATING signals (not just the top one) — variable
     //    novelty is what keeps the home interesting across sessions.

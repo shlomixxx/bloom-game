@@ -18975,8 +18975,9 @@ html[data-theme="dark"] .rival-tips-list { color: #D1D5DB; }
   to { opacity: 1; transform: translateY(0); }
 }
 .bn-tab-screen-header {
-  margin-bottom: 18px;
-  padding: 4px 0;
+  margin-bottom: 16px;
+  padding: 4px 0 10px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
 }
 .bn-tab-screen-title {
   font-size: 22px;
@@ -18984,6 +18985,26 @@ html[data-theme="dark"] .rival-tips-list { color: #D1D5DB; }
   color: var(--color-text, #1C1A18);
   text-align: center;
 }
+.bn-tab-screen-sub {
+  font-size: 12px;
+  color: var(--color-text-muted, #6F6E68);
+  text-align: center;
+  margin-top: 4px;
+}
+.bn-tab-screen-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.bn-tab-screen-body > * {
+  /* Tiles that were mounted with width:100% etc keep their styling.
+     We just ensure they sit cleanly in the column without extra margins
+     that the home was setting. */
+  margin: 0 !important;
+  width: 100%;
+}
+html[data-theme="dark"] .bn-tab-screen-header { border-bottom-color: rgba(255, 255, 255, 0.08); }
+html[data-theme="dark"] .bn-tab-screen-sub { color: #BFA9A2; }
 .bn-tab-placeholder-card {
   background: linear-gradient(160deg, #FFF7E6 0%, #FFE8B8 100%);
   border: 2px dashed rgba(186, 117, 23, 0.4);
