@@ -568,10 +568,16 @@
     // Stage B0 — Bottom Nav mount. Adds the persistent 5-tab navigation
     // bar to the bottom of the viewport. Lifecycle is tied to home —
     // mount on showHomeV2, unmount on hideHomeV2 (so the game screen
-    // doesn't have a stray nav at the bottom).
-    if (typeof window.__bloomMountBottomNav === 'function') {
-      try { window.__bloomMountBottomNav(); } catch (e) { console.error('[bottom-nav]', e); }
-    }
+    // doesn't have a stray nav at the bottom). Deferred to next macrotask
+    // because 46-bottom-nav.js is concatenated AFTER 05a-home-v2.js,
+    // so on the FIRST boot showHomeV2 fires before the bottom-nav
+    // module has assigned its window.* exports — same trap as the
+    // FTUE TDZ bug. setTimeout(0) waits for IIFE eval to complete.
+    setTimeout(function() {
+      if (typeof window.__bloomMountBottomNav === 'function') {
+        try { window.__bloomMountBottomNav(); } catch (e) { console.error('[bottom-nav]', e); }
+      }
+    }, 0);
   }
 
   function hideHomeV2() {
