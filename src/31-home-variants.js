@@ -503,6 +503,11 @@
   function renderRotatingHeroCard(signals) {
     var hero = document.getElementById('home-v2-hero');
     if (!hero) return;
+    // renderHeroBannerV2() in showHomeV2 may have hidden this container
+    // via inline style="display:none" when there were no special hot
+    // states (paused contest / streak FOMO / etc). Power Hero wants to
+    // USE this slot for the rotating signal card, so force it visible.
+    hero.style.display = '';
     var card = document.createElement('div');
     card.className = 'hvar-hero-big ' + (signals[0].cls || '');
     card.setAttribute('data-rot-idx', '0');
