@@ -7096,22 +7096,92 @@ body.power-hero .hvar-hero-cta {
 .hvar-hero-dots {
   display: flex;
   justify-content: center;
-  gap: 6px;
+  gap: 4px;
   margin-top: 10px;
+  /* Position relative so dots stay anchored at the card bottom even
+     while content above swaps during rotation. */
+  position: relative;
+  z-index: 2;
 }
 .hvar-hero-dot {
+  /* Outer hit-box is 28×28 (WCAG-comfortable for fingers on a phone)
+     but the visible dot is just 7×7 via a ::after pseudo-element so
+     the design stays light. */
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: transform 0.2s ease;
+}
+.hvar-hero-dot::after {
+  content: "";
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: rgba(46, 26, 26, 0.25);
-  transition: background 0.3s ease, transform 0.3s ease;
+  background: rgba(46, 26, 26, 0.30);
+  transition: background 0.3s ease, transform 0.3s ease, width 0.3s ease;
 }
-.hvar-hero-dot.active {
-  background: rgba(46, 26, 26, 0.85);
-  transform: scale(1.3);
+.hvar-hero-dot.active::after {
+  background: rgba(46, 26, 26, 0.92);
+  width: 18px;
+  border-radius: 4px;
 }
-html[data-theme="dark"] .hvar-hero-dot { background: rgba(26, 10, 10, 0.3); }
-html[data-theme="dark"] .hvar-hero-dot.active { background: rgba(26, 10, 10, 0.95); }
+.hvar-hero-dot:hover::after { background: rgba(46, 26, 26, 0.55); }
+.hvar-hero-dot:active { transform: scale(0.85); }
+html[data-theme="dark"] .hvar-hero-dot::after { background: rgba(26, 10, 10, 0.35); }
+html[data-theme="dark"] .hvar-hero-dot.active::after { background: rgba(26, 10, 10, 0.95); }
+
+/* Prev/Next arrow buttons — absolute at the card's inline edges. Use
+   logical inset properties so they auto-flip in RTL with no JS work. */
+.hvar-hero-big {
+  position: relative; /* anchor for nav arrows */
+}
+.hvar-hero-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  /* WCAG 44×44 tap target. Visual circle is 40×40 with light shadow. */
+  min-width: 44px;
+  min-height: 44px;
+  width: 44px;
+  height: 44px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.78);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: rgba(46, 26, 26, 0.85);
+  font-size: 24px;
+  font-weight: 800;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+  z-index: 3;
+  transition: transform 0.12s ease, background 0.15s ease;
+}
+.hvar-hero-nav:hover { background: rgba(255, 255, 255, 0.95); }
+.hvar-hero-nav:active { transform: translateY(-50%) scale(0.92); }
+.hvar-hero-nav-prev { inset-inline-start: 6px; }
+.hvar-hero-nav-next { inset-inline-end: 6px; }
+html[data-theme="dark"] .hvar-hero-nav {
+  background: rgba(255, 240, 220, 0.92);
+  color: rgba(28, 12, 12, 0.92);
+}
+
+/* Card focus ring (keyboard nav) — subtle, doesn't break aesthetic. */
+.hvar-hero-big:focus { outline: none; }
+.hvar-hero-big:focus-visible {
+  box-shadow: 0 0 0 3px rgba(255, 215, 0, 0.55), 0 12px 30px rgba(245, 143, 106, 0.4);
+}
 
 /* Compact 2x2 → horizontal row for the actions grid so it takes
    less vertical space and stays visible without competing with

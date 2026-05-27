@@ -31,6 +31,7 @@
     '#spin-home-tile',
     '#guild-war-home-tile',
     '#trophy-home-tile',
+    '#chest-home-tile',
     '#home-v2-boards',
     '#home-v2-season-pass',
     '#league-home-tile',
@@ -42,6 +43,10 @@
     '#pet-home-widget',
     '#lives-home-widget',
     '#checklist-home-tile',
+    '#login-cal-tile',
+    '#gem-bank-tile',
+    '#ghost-mode-tile',
+    '#squad-tile',
     '#home-v2-featured',
     '#home-weekly-host',
     '#home-jackpot',
@@ -104,6 +109,18 @@
         return sel === '#pet-home-widget'
           || sel === '#album-home-tile'
           || sel === '#lifetime-home-tile';
+      }
+    },
+    {
+      key: 'extras',
+      title: '✨ מיני-משחקים',
+      sub: 'לוח כניסה / בנק / טרופי-צ׳סט / רוחות',
+      match: function(sel) {
+        return sel === '#login-cal-tile'
+          || sel === '#gem-bank-tile'
+          || sel === '#chest-home-tile'
+          || sel === '#squad-tile'
+          || sel === '#ghost-mode-tile';
       }
     },
     {
@@ -495,22 +512,48 @@
 
     if (signals.length < 2) return; // nothing to rotate
 
+    // Prev/next arrow buttons — sit at the card's RTL edges. The RTL
+    // convention is "next = left arrow" (text flows right-to-left), so
+    // the visual on-screen "next" button shows ‹. Logical inset-inline-*
+    // CSS would also work; we use absolute positioning + sign-flip in JS.
+    var dir = (getComputedStyle(document.documentElement).direction === 'rtl') ? 'rtl' : 'ltr';
+    var prevBtn = document.createElement('button');
+    prevBtn.type = 'button';
+    prevBtn.className = 'hvar-hero-nav hvar-hero-nav-prev';
+    prevBtn.setAttribute('aria-label', 'הקודם');
+    prevBtn.textContent = dir === 'rtl' ? '›' : '‹';
+    var nextBtn = document.createElement('button');
+    nextBtn.type = 'button';
+    nextBtn.className = 'hvar-hero-nav hvar-hero-nav-next';
+    nextBtn.setAttribute('aria-label', 'הבא');
+    nextBtn.textContent = dir === 'rtl' ? '‹' : '›';
+    card.appendChild(prevBtn);
+    card.appendChild(nextBtn);
+
+    // Dots row — tap any dot to jump.
     var dots = document.createElement('div');
     dots.className = 'hvar-hero-dots';
     var dotCount = Math.min(signals.length, 5);
     for (var i = 0; i < dotCount; i++) {
-      var dot = document.createElement('span');
+      var dot = document.createElement('button');
+      dot.type = 'button';
       dot.className = 'hvar-hero-dot' + (i === 0 ? ' active' : '');
+      dot.setAttribute('aria-label', 'עבור לכרטיס ' + (i + 1));
+      dot.setAttribute('data-idx', String(i));
       dots.appendChild(dot);
     }
     card.appendChild(dots);
 
+    // Single source of truth for changing the active signal.
     var rotIdx = 0;
-    var paused = false;
-    var timer = setInterval(function() {
-      if (paused) return;
-      if (!document.body.contains(card)) { clearInterval(timer); return; }
-      rotIdx = (rotIdx + 1) % signals.length;
+    var lastInteractAt = 0;
+    var animating = false;
+    function goTo(targetIdx, opts) {
+      if (animating) return;
+      targetIdx = ((targetIdx % signals.length) + signals.length) % signals.length;
+      if (targetIdx === rotIdx) return;
+      animating = true;
+      rotIdx = targetIdx;
       var next = signals[rotIdx];
       card.classList.remove('hero-reward', 'hero-urgent', 'hero-hot', 'hero-neutral');
       if (next.cls) card.classList.add(next.cls);
@@ -523,11 +566,75 @@
         for (var d = 0; d < dotEls.length; d++) {
           dotEls[d].classList.toggle('active', d === (rotIdx % dotEls.length));
         }
+        animating = false;
       }, 240);
-    }, 5000);
-    card.addEventListener('mouseenter', function() { paused = true; });
-    card.addEventListener('mouseleave', function() { paused = false; });
-    card.addEventListener('touchstart', function() { paused = true; }, { passive: true });
+      if (opts && opts.user) lastInteractAt = Date.now();
+    }
+
+    // Auto-rotate every 7s — slower than before (5s was too aggressive).
+    // Pauses for 12s after any user interaction so they can read.
+    var AUTO_MS = 7000;
+    var PAUSE_AFTER_INTERACT_MS = 12000;
+    var timer = setInterval(function() {
+      if (!document.body.contains(card)) { clearInterval(timer); return; }
+      if (Date.now() - lastInteractAt < PAUSE_AFTER_INTERACT_MS) return;
+      goTo(rotIdx + 1, { user: false });
+    }, AUTO_MS);
+
+    // Prev/Next arrow handlers (RTL-aware: visual prev = data-prev,
+    // visual next = data-next; user expectation matches direction of
+    // the chevron, not the index sign).
+    prevBtn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      goTo(rotIdx - 1, { user: true });
+    });
+    nextBtn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      goTo(rotIdx + 1, { user: true });
+    });
+
+    // Dot click → jump to that index.
+    dots.addEventListener('click', function(e) {
+      var t = e.target.closest('.hvar-hero-dot');
+      if (!t) return;
+      e.stopPropagation();
+      var idx = parseInt(t.getAttribute('data-idx'), 10);
+      if (!isFinite(idx)) return;
+      goTo(idx, { user: true });
+    });
+
+    // Swipe gesture — horizontal swipe ≥40px triggers navigation. In RTL,
+    // swiping LEFT means going to the "next" content (matches the visual
+    // ‹ arrow position). In LTR, swiping RIGHT means next.
+    var touchStartX = 0;
+    var touchStartY = 0;
+    var swipeArmed = false;
+    card.addEventListener('touchstart', function(e) {
+      if (!e.touches || !e.touches[0]) return;
+      touchStartX = e.touches[0].clientX;
+      touchStartY = e.touches[0].clientY;
+      swipeArmed = true;
+      lastInteractAt = Date.now();
+    }, { passive: true });
+    card.addEventListener('touchend', function(e) {
+      if (!swipeArmed || !e.changedTouches || !e.changedTouches[0]) return;
+      swipeArmed = false;
+      var dx = e.changedTouches[0].clientX - touchStartX;
+      var dy = e.changedTouches[0].clientY - touchStartY;
+      // Only count if horizontal-dominant and beyond threshold.
+      if (Math.abs(dx) < 40 || Math.abs(dx) < Math.abs(dy) * 1.4) return;
+      // RTL inversion: in RTL, dx>0 (swipe right) means "previous" content.
+      var sign = (dir === 'rtl') ? -1 : 1;
+      var delta = (dx > 0) ? -1 * sign : 1 * sign;
+      goTo(rotIdx + delta, { user: true });
+    }, { passive: true });
+
+    // Keyboard navigation when card is focused.
+    card.setAttribute('tabindex', '0');
+    card.addEventListener('keydown', function(e) {
+      if (e.key === 'ArrowLeft') { goTo(rotIdx + (dir === 'rtl' ? -1 : 1), { user: true }); e.preventDefault(); }
+      else if (e.key === 'ArrowRight') { goTo(rotIdx + (dir === 'rtl' ? 1 : -1), { user: true }); e.preventDefault(); }
+    });
   }
 
   function paintHeroCardContent(card, signal) {
