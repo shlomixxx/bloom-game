@@ -211,27 +211,72 @@
     // ────────────────────────────────────────────────────────────
     function moveTileToTab(el, tabId) {
       if (!el || tabId === 'home') return;
-      // Idempotent guard — a tile element gets migrated exactly once.
-      // If the SAME element keeps trying to remount in home (via late
-      // updates), the class persists. If a brand-new element with the
-      // same selector mounts (e.g. after game-over remount), class is
-      // missing → moves correctly.
+      // Idempotent guard.
       if (el.classList && el.classList.contains('bn-migrated')) return;
       var screen = _tabScreens[tabId] || document.getElementById('tab-' + tabId + '-screen');
       if (!screen) return;
       var body = screen.querySelector('.bn-tab-screen-body');
       if (!body) return;
       el.classList.add('bn-migrated');
-      // Hidden tiles get unhidden — they're first-class tab content now.
       if (el.style.display === 'none') el.style.display = '';
       body.appendChild(el);
-      // Remove the empty-state placeholder if present (real content arrived).
+      // Remove placeholder when real content arrives.
       var placeholder = body.querySelector('.bn-tab-placeholder-card');
       if (placeholder) placeholder.remove();
-      // Subtle slide-in for the new tile arriving in a non-active tab
-      // (gives the user a visual cue if they happen to be on that tab).
+      // Subtle slide-in.
       el.classList.add('bn-tile-arrived');
       setTimeout(function() { if (el.classList) el.classList.remove('bn-tile-arrived'); }, 700);
+      // **DISCOVERY**: badge the tab so the user KNOWS new content is
+      // there. Without this, tiles silently route into tabs and the
+      // user wonders where their bank/spin/pet went.
+      updateTabBadge(tabId);
+    }
+
+    // Count real tiles (excluding placeholder) in a tab body, compare
+    // to the last seen count from localStorage. If new tiles arrived
+    // since last visit → set a badge with the delta.
+    function updateTabBadge(tabId) {
+      if (tabId === _activeTab) {
+        // User is looking at this tab right now — they see the tiles.
+        // Don't badge, but DO update the seen count so future visits
+        // start fresh.
+        snapshotSeenCount(tabId);
+        return;
+      }
+      var body = document.getElementById('tab-' + tabId + '-body');
+      if (!body) return;
+      var realTiles = countRealTiles(body);
+      var lastSeen = readSeenCount(tabId);
+      var delta = realTiles - lastSeen;
+      if (delta > 0) {
+        setBadge(tabId, delta);
+      } else {
+        setBadge(tabId, 0);
+      }
+    }
+    function countRealTiles(body) {
+      var n = 0;
+      for (var i = 0; i < body.children.length; i++) {
+        var c = body.children[i];
+        if (c.classList && c.classList.contains('bn-tab-placeholder-card')) continue;
+        n++;
+      }
+      return n;
+    }
+    function readSeenCount(tabId) {
+      try { return parseInt(localStorage.getItem('bloom_tab_seen_' + tabId) || '0', 10) || 0; }
+      catch (e) { return 0; }
+    }
+    function snapshotSeenCount(tabId) {
+      var body = document.getElementById('tab-' + tabId + '-body');
+      if (!body) return;
+      var realTiles = countRealTiles(body);
+      try { localStorage.setItem('bloom_tab_seen_' + tabId, String(realTiles)); } catch (e) {}
+    }
+    function refreshAllBadges() {
+      ['rewards', 'social', 'progress', 'shop'].forEach(function(id) {
+        updateTabBadge(id);
+      });
     }
 
     // ────────────────────────────────────────────────────────────
@@ -341,6 +386,64 @@
           if (screen) screen.style.display = '';
         }, 50);
       }
+
+      // 6. Refresh badges periodically as late-mounting tiles arrive.
+      //    Most maybeShow* fire 400-3000ms. Final refresh at 3500ms.
+      [600, 1500, 2500, 3500, 5000].forEach(function(ms) {
+        setTimeout(refreshAllBadges, ms);
+      });
+
+      // 7. One-time onboarding hint pointing to the tabs. Shows ONCE
+      //    per device for returning players who used the old layout
+      //    and might think features disappeared.
+      maybeShowFirstTimeTabsTip();
+    }
+
+    function maybeShowFirstTimeTabsTip() {
+      try {
+        if (localStorage.getItem('bloom_tabs_tip_seen') === '1') return;
+        // Only show for players with prior history (the ones who used
+        // the old layout). Fresh accounts see the new layout natively.
+        var games = parseInt(localStorage.getItem('bloom_games_played') || '0', 10) | 0;
+        if (games < 1) return;
+        setTimeout(function() {
+          // After a moment, check if any tabs got tiles. Only worth
+          // showing the tip if there's something to discover.
+          var nonEmpty = 0;
+          ['rewards','social','progress','shop'].forEach(function(id) {
+            var body = document.getElementById('tab-' + id + '-body');
+            if (body && countRealTiles(body) > 0) nonEmpty++;
+          });
+          if (nonEmpty === 0) return;
+          showTabsTipBanner();
+          try { localStorage.setItem('bloom_tabs_tip_seen', '1'); } catch (e) {}
+        }, 3800);
+      } catch (e) {}
+    }
+
+    function showTabsTipBanner() {
+      if (document.getElementById('bn-tabs-tip')) return;
+      var b = document.createElement('div');
+      b.id = 'bn-tabs-tip';
+      b.className = 'bn-tabs-tip';
+      b.setAttribute('role', 'status');
+      var icon = document.createElement('span');
+      icon.className = 'bn-tabs-tip-icon';
+      icon.textContent = '👇';
+      var text = document.createElement('span');
+      text.className = 'bn-tabs-tip-text';
+      text.textContent = 'הפיצ׳רים שלך מסודרים בטאבים — לחץ כל אייקון למטה לגלות';
+      var close = document.createElement('button');
+      close.type = 'button';
+      close.className = 'bn-tabs-tip-close';
+      close.setAttribute('aria-label', 'סגור');
+      close.textContent = '✕';
+      close.onclick = function() { try { b.remove(); } catch (_) {} };
+      b.appendChild(icon);
+      b.appendChild(text);
+      b.appendChild(close);
+      document.body.appendChild(b);
+      setTimeout(function() { try { b.remove(); } catch (_) {} }, 8000);
     }
 
     function unmountBottomNav() {
@@ -397,6 +500,11 @@
       });
       // Re-ensure placeholder (in case tiles got migrated out somehow).
       if (id !== 'home') ensurePlaceholderIfEmpty(id);
+      // User saw this tab → snapshot seen count + clear badge.
+      if (id !== 'home') {
+        snapshotSeenCount(id);
+        setBadge(id, 0);
+      }
       // Sound feedback.
       try { if (typeof soundDrop === 'function') soundDrop(); } catch (e) {}
     }
