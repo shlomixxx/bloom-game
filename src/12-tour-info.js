@@ -430,7 +430,11 @@
       else if (!bestBeatenThisGame) bestEl.classList.remove('near-best');
     }
     buildTierBar();
-    highlightNextTier(nextPiece);
+    if (opts.over) {
+      highlightNextTier(highestTier || nextPiece);
+    } else {
+      highlightNextTier(nextPiece);
+    }
     const wrap = document.getElementById('grid-wrap');
 
     if (opts.over) {
