@@ -454,13 +454,19 @@
       for (let t = 1; t <= highestTier; t++) emojis.push(getActiveTiers()[t].emoji);
 
       let title;
-      if (opts.isNewBest) title = '🎉 שיא אישי חדש!';
+      // Combined achievements get combined headlines — a player who broke
+      // their best AND reached crown deserves both surfaced, not collapsed.
+      // Crown (tier 8) is THE ultimate goal; it outranks score thresholds.
+      if (opts.isNewBest && highestTier >= 8) title = '👑🎉 שיא חדש + כתר!';
+      else if (opts.isNewBest && highestTier >= 7) title = '💎🎉 שיא חדש + יהלום!';
+      else if (opts.isNewBest) title = '🎉 שיא אישי חדש!';
       else if (mode === 'daily' && opts.alreadyPlayed) title = '✅ סיימת את האתגר היומי';
+      else if (highestTier >= 8) title = '👑 הגעת לכתר!';
+      else if (highestTier >= 7) title = '💎 הגעת ליהלום!';
       else if (score >= 100000) title = '🔥 מטורף! ' + score.toLocaleString();
       else if (score >= 50000) title = '💪 משחק אדיר!';
-      else if (score >= 20000) title = '⭐ יפה מאוד!';
-      else if (highestTier >= 7) title = '💎 הגעת ליהלום!';
       else if (highestTier >= 6) title = '⭐ הגעת לכוכב!';
+      else if (score >= 20000) title = '⭐ יפה מאוד!';
       else if (score > best * 0.9 && best > 0) title = '😱 כמעט שיא!';
       else title = '🎮 סיום משחק';
 
