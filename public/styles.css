@@ -1001,6 +1001,16 @@
     50%      { transform: scale(1.03); box-shadow: 0 8px 28px rgba(255, 142, 60, 0.75); }
   }
 
+  /* LF.2 — Lifetime-first chain pill (3-4). Mythic chain 5+ uses the
+     legendary overlay's FIRST EVER label variant; this is the gentler
+     pill for the chain-3 and chain-4 first-time-ever moments. */
+  @keyframes lifetimeChainPillPop {
+    0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.4) rotate(-3deg); }
+    20%  { opacity: 1; transform: translate(-50%, -50%) scale(1.18) rotate(2deg); }
+    60%  { opacity: 1; transform: translate(-50%, -50%) scale(1) rotate(0); }
+    100% { opacity: 0; transform: translate(-50%, -80%) scale(0.92) rotate(0); }
+  }
+
   /* DG.2 — Legendary chain (5+) overlays. Flash is a quick radial pop
      that fades; text scales up with an overshoot and holds before fading. */
   @keyframes legendaryFlash {

@@ -16795,7 +16795,8 @@
     setTimeout(function() { fl.remove(); }, 1100);
   }
 
-  function showChainBadge(chainCount, multiplier) {
+  function showChainBadge(chainCount, multiplier, opts) {
+    opts = opts || {};
     var badge = document.createElement('div');
     badge.style.cssText = 'position:fixed;top:45%;left:50%;transform:translate(-50%,-50%);z-index:9999;background:#EF9F27;color:#412402;font-weight:900;font-size:' + (18 + chainCount * 2) + 'px;padding:10px 24px;border-radius:24px;letter-spacing:0.05em;pointer-events:none;text-align:center;box-shadow:0 6px 20px rgba(239,159,39,0.4);animation:chainPop 0.75s ease-out forwards';
     badge.textContent = '🔥 שרשרת ×' + multiplier;
@@ -16809,17 +16810,61 @@
     // dopamine peak matches the rarity. The most-shared screenshot
     // moments in any merge game are exactly these spikes.
     if (chainCount >= 5 && !window.__bloomBotActive) {
-      try { showLegendaryChainOverlay(chainCount); } catch (e) {}
+      try { showLegendaryChainOverlay(chainCount, !!opts.lifetimeFirst); } catch (e) {}
     }
+    // LF.2 — Lifetime-first chain ≥3. Even chains of 3-4 deserve a
+    // "first time ever!" beat if the player has never had one — but a
+    // subtler one than the legendary spectacle (legendaryFirst already
+    // amplifies chain 5+). The 3-4 path uses a small badge above the
+    // chain badge so it doesn't compete with the legendary overlay.
+    if (chainCount >= 3 && chainCount < 5 && opts.lifetimeFirst && !window.__bloomBotActive) {
+      try { showLifetimeFirstChainPill(chainCount); } catch (e) {}
+    }
+  }
+
+  // LF.2 — subtler lifetime-first marker for chain 3-4. Mythic+ (5+)
+  // gets the louder treatment via showLegendaryChainOverlay's
+  // lifetimeFirst branch — this is for the "you just hit your first
+  // chain 3!" moment that's still meaningful but doesn't deserve a
+  // full-screen takeover.
+  function showLifetimeFirstChainPill(chainCount) {
+    var pill = document.createElement('div');
+    pill.setAttribute('data-bloom-banner', 'lifetime-chain-pill');
+    pill.style.cssText =
+      'position:fixed;top:30%;left:50%;transform:translate(-50%,-50%);' +
+      'z-index:10000;pointer-events:none;text-align:center;' +
+      'background:linear-gradient(135deg,#FFE08A,#FF8E3C);color:#1C1A18;' +
+      'font-weight:900;font-size:14px;letter-spacing:0.04em;' +
+      'padding:8px 16px;border-radius:18px;direction:rtl;' +
+      'box-shadow:0 6px 20px rgba(255,142,60,0.55);' +
+      'animation:lifetimeChainPillPop 1.6s ease-out forwards';
+    pill.innerHTML = '✨ שרשרת ×' + chainCount + ' לראשונה אי-פעם!';
+    document.body.appendChild(pill);
+    setTimeout(function() { try { pill.remove(); } catch (e) {} }, 1700);
+    if (typeof soundMilestone === 'function') {
+      try { soundMilestone(Math.min(8, chainCount + 2)); } catch (e) {}
+    }
+    if (typeof buzz === 'function') {
+      try { buzz([40, 30, 60, 30, 90]); } catch (e) {}
+    }
+    try {
+      if (typeof trackEvent === 'function') {
+        trackEvent('lifetime_first_chain', { chainCount: chainCount });
+      }
+    } catch (e) {}
   }
 
   // DG.2 — chains of 5+ get a full-screen fireworks treatment. Tiers:
   //   5 = "LEGENDARY", 6 = "MYTHIC", 7+ = "GODLIKE".
   // Sound is escalated milestone tone (already used for tier-ups);
   // buzz pattern grows with chain length; confetti count scales too.
-  function showLegendaryChainOverlay(chainCount) {
+  // LF.2 — when isLifetimeFirst is true, the label gets a "FIRST TIME!"
+  // prefix and confetti is doubled. Chain of 5+ that's also lifetime-
+  // first is the strongest mid-game moment after crown.
+  function showLegendaryChainOverlay(chainCount, isLifetimeFirst) {
     var tier = chainCount >= 7 ? 'godlike' : chainCount >= 6 ? 'mythic' : 'legendary';
     var label = tier === 'godlike' ? 'GODLIKE' : tier === 'mythic' ? 'MYTHIC' : 'LEGENDARY';
+    if (isLifetimeFirst) label = '✨ ' + label + ' · FIRST EVER!';
     var emoji = tier === 'godlike' ? '💎🔥' : tier === 'mythic' ? '🌟🔥' : '🔥';
     // Full-screen radial flash — sits at z-index just under the chain
     // badge so the text still pops over the flash. Auto-removes.
@@ -16847,7 +16892,8 @@
     setTimeout(function() { try { flash.remove(); label2.remove(); } catch (e) {} }, 1300);
     // Confetti scaled to tier — godlike rains the most.
     if (typeof showConfetti === 'function') {
-      try { showConfetti(tier === 'godlike' ? 36 : tier === 'mythic' ? 28 : 22); } catch (e) {}
+      var confettiBase = tier === 'godlike' ? 36 : tier === 'mythic' ? 28 : 22;
+      try { showConfetti(isLifetimeFirst ? confettiBase * 2 : confettiBase); } catch (e) {}
     }
     // Sound — escalated milestone tone matching the chain count.
     if (typeof soundMilestone === 'function') {
@@ -17458,13 +17504,17 @@
               } catch (e) {}
               if (group.length >= 3) showMultiMergeBadge(group.length);
               if (chainCount > currentGameMaxChain) currentGameMaxChain = chainCount;
+              // LF.2 — capture lifetime-best BEFORE bumping so the celebration
+              // logic can detect "first time ever reaching chain N" moments.
+              // Pure read, no behavior change for the existing bumpLifetimeMax.
+              var prevChainBest = (typeof loadLifetimeInt === 'function') ? (loadLifetimeInt(BEST_CHAIN_KEY) || 0) : 0;
               bumpLifetimeMax(BEST_CHAIN_KEY, chainCount);
               // Onboarding: first merge → step 2; first chain (≥2) → step 3.
               if (chainCount === 1) maybeOnboardStep2();
               else if (chainCount >= 2) maybeOnboardStep3();
               if (chainCount >= 2) {
                 const m = chainCount === 2 ? 1.5 : chainCount === 3 ? 2 : chainCount === 4 ? 2.5 : 3;
-                showChainBadge(chainCount, m);
+                showChainBadge(chainCount, m, { lifetimeFirst: chainCount > prevChainBest });
                 soundChain(chainCount);
                 showComboCounter(chainCount, m);
               }
