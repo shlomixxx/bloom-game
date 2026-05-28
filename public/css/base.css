@@ -697,6 +697,54 @@
   }
   .cell:hover { background: #EFEBE2; }
   .cell.filled svg { width: 30px; height: 30px; }
+  /* DG.1 — Danger Mode. When the grid has ≤3 playable empty cells the
+     body gets .danger-mode and a red pulsing aura wraps the grid. Pure
+     loss-aversion lever: the player feels the pressure, becomes more
+     deliberate, and the resulting "I almost made it" moment drives
+     "one more try" retention. The aura sits ABOVE the grid via a
+     pseudo-element on .grid-wrap (which has overflow:hidden, so the
+     glow stays contained without bleeding into the page chrome). */
+  body.danger-mode .grid-wrap::after {
+    content: '';
+    position: absolute;
+    inset: -4px;
+    border-radius: 16px;
+    pointer-events: none;
+    border: 2px solid rgba(232, 78, 78, 0.0);
+    box-shadow: 0 0 0 0 rgba(232, 78, 78, 0.0),
+                inset 0 0 0 0 rgba(232, 78, 78, 0.0);
+    animation: dangerPulse 1.1s ease-in-out infinite;
+    z-index: 1;
+  }
+  /* Subtle red wash on cells too — but only on the empty ones, so the
+     player can SEE which slots are left. Filled cells stay fully visible. */
+  body.danger-mode .cell:not(.filled) {
+    background: rgba(232, 78, 78, 0.16);
+    animation: dangerCellPulse 1.1s ease-in-out infinite;
+  }
+  @keyframes dangerPulse {
+    0%, 100% {
+      border-color: rgba(232, 78, 78, 0.35);
+      box-shadow: 0 0 18px 2px rgba(232, 78, 78, 0.22),
+                  inset 0 0 12px 0 rgba(232, 78, 78, 0.10);
+    }
+    50% {
+      border-color: rgba(232, 78, 78, 0.85);
+      box-shadow: 0 0 36px 8px rgba(232, 78, 78, 0.55),
+                  inset 0 0 24px 0 rgba(232, 78, 78, 0.28);
+    }
+  }
+  @keyframes dangerCellPulse {
+    0%, 100% { background: rgba(232, 78, 78, 0.12); }
+    50% { background: rgba(232, 78, 78, 0.28); }
+  }
+  /* Dark theme — same red, slightly hotter contrast against dark background. */
+  html[data-theme="dark"] body.danger-mode .cell:not(.filled) {
+    background: rgba(255, 96, 96, 0.20);
+  }
+  html[data-theme="dark"] body.danger-mode .grid-wrap::after {
+    border-color: rgba(255, 96, 96, 0.50);
+  }
   .cell.appearing { animation: pop 0.22s ease-out; }
   .cell.merging { animation: merge 0.24s ease-out; }
   /* `?debug=1` — tiny row,col + tier label so the user can confirm exactly
@@ -833,6 +881,21 @@
     20%  { opacity: 1; transform: translate(-50%, -50%) scale(1.18) rotate(-2deg); }
     80%  { opacity: 1; transform: translate(-50%, -50%) scale(1) rotate(0); }
     100% { opacity: 0; transform: translate(-50%, -75%) scale(0.95) rotate(0); }
+  }
+  /* DG.2 — Legendary chain (5+) overlays. Flash is a quick radial pop
+     that fades; text scales up with an overshoot and holds before fading. */
+  @keyframes legendaryFlash {
+    0%   { opacity: 0; transform: scale(0.6); }
+    18%  { opacity: 1; transform: scale(1.05); }
+    50%  { opacity: 0.85; transform: scale(1); }
+    100% { opacity: 0; transform: scale(1.15); }
+  }
+  @keyframes legendaryText {
+    0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.3) rotate(-4deg); }
+    35%  { opacity: 1; transform: translate(-50%, -50%) scale(1.25) rotate(2deg); }
+    55%  { opacity: 1; transform: translate(-50%, -50%) scale(1.05) rotate(0); }
+    80%  { opacity: 1; transform: translate(-50%, -50%) scale(1) rotate(0); }
+    100% { opacity: 0; transform: translate(-50%, -70%) scale(1.1) rotate(0); }
   }
 
   .overlay {

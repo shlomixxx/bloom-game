@@ -435,6 +435,12 @@
     } else {
       highlightNextTier(nextPiece);
     }
+    // DG.1 — refresh danger-mode state after every render. Cheap: walks
+    // 24 cells max. The function is a no-op when the danger state hasn't
+    // changed, so no sound/buzz spam during sustained tension.
+    if (!opts.over && typeof updateDangerMode === 'function') {
+      try { updateDangerMode(); } catch (e) {}
+    }
     const wrap = document.getElementById('grid-wrap');
 
     if (opts.over) {

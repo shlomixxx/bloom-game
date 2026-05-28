@@ -349,6 +349,7 @@
   let gameStartTime = 0;      // Date.now() when game started
   let bestBeatenThisGame = false; // live best tracking
   let usedContinue = false;       // second chance (once per game)
+  let inDangerMode = false;       // DG.1 — near-game-over edge detector
   const TOTAL_PLAY_TIME_KEY = 'bloom_total_play_ms';
 
   // ──────────────────────────────────────────────────────────────────────

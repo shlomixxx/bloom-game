@@ -4109,6 +4109,7 @@
   let gameStartTime = 0;      // Date.now() when game started
   let bestBeatenThisGame = false; // live best tracking
   let usedContinue = false;       // second chance (once per game)
+  let inDangerMode = false;       // DG.1 — near-game-over edge detector
   const TOTAL_PLAY_TIME_KEY = 'bloom_total_play_ms';
 
   // ──────────────────────────────────────────────────────────────────────
@@ -14774,6 +14775,11 @@
     scoreMilestonesHit = {}; // reset score milestones
     _frozenThawProgress = {};   // reset frozen-cell thaw counters (phase 3D+)
     bestBeatenThisGame = false; // reset live best tracking
+    // DG.1 — danger-mode state. Tracks whether the grid is "near full"
+    // (≤3 playable empty cells). Used as a one-shot edge detector — fires
+    // sound + buzz ONCE when entering danger, never while sustaining.
+    inDangerMode = false;
+    try { document.body.classList.remove('danger-mode'); } catch (e) {}
     usedContinue = false; // reset second chance
     // Clear duel mode unless this init was called from startDuelGame
     if (!opts.keepDuel) { window._duelMode = false; window._duelOpponentName = ''; }
@@ -16795,6 +16801,66 @@
     badge.textContent = '🔥 שרשרת ×' + multiplier;
     document.body.appendChild(badge);
     setTimeout(function() { badge.remove(); }, 750);
+    // DG.2 — Legendary Chain. A chain of 5+ is genuinely rare (most
+    // games never see one). The standard chain badge maxes out visually
+    // around chain 4 — beyond that it reads as "same as ×4 but with a
+    // bigger number". This adds a full-screen radial gold flash + giant
+    // overlay text + 24-particle confetti + sustained buzz, so the
+    // dopamine peak matches the rarity. The most-shared screenshot
+    // moments in any merge game are exactly these spikes.
+    if (chainCount >= 5 && !window.__bloomBotActive) {
+      try { showLegendaryChainOverlay(chainCount); } catch (e) {}
+    }
+  }
+
+  // DG.2 — chains of 5+ get a full-screen fireworks treatment. Tiers:
+  //   5 = "LEGENDARY", 6 = "MYTHIC", 7+ = "GODLIKE".
+  // Sound is escalated milestone tone (already used for tier-ups);
+  // buzz pattern grows with chain length; confetti count scales too.
+  function showLegendaryChainOverlay(chainCount) {
+    var tier = chainCount >= 7 ? 'godlike' : chainCount >= 6 ? 'mythic' : 'legendary';
+    var label = tier === 'godlike' ? 'GODLIKE' : tier === 'mythic' ? 'MYTHIC' : 'LEGENDARY';
+    var emoji = tier === 'godlike' ? '💎🔥' : tier === 'mythic' ? '🌟🔥' : '🔥';
+    // Full-screen radial flash — sits at z-index just under the chain
+    // badge so the text still pops over the flash. Auto-removes.
+    var flash = document.createElement('div');
+    flash.setAttribute('data-bloom-banner', 'chain-legendary');
+    flash.style.cssText =
+      'position:fixed;inset:0;z-index:9997;pointer-events:none;' +
+      'background:radial-gradient(circle at center, rgba(255,217,106,0.55) 0%, rgba(255,142,60,0.30) 30%, rgba(255,107,157,0.0) 70%);' +
+      'animation:legendaryFlash 1.1s ease-out forwards';
+    document.body.appendChild(flash);
+    // Giant label centered. Uses dedicated keyframes so the badge above
+    // (showChainBadge) and the label here don't visually collide.
+    var label2 = document.createElement('div');
+    label2.setAttribute('data-bloom-banner', 'chain-legendary-text');
+    label2.style.cssText =
+      'position:fixed;top:32%;left:50%;transform:translate(-50%,-50%);' +
+      'z-index:9999;pointer-events:none;text-align:center;' +
+      'font-weight:900;font-size:54px;letter-spacing:0.08em;' +
+      'background:linear-gradient(135deg,#FFE08A 0%,#FF8E3C 50%,#FF4D6D 100%);' +
+      '-webkit-background-clip:text;background-clip:text;color:transparent;' +
+      'text-shadow:0 0 24px rgba(255,142,60,0.6);' +
+      'animation:legendaryText 1.2s cubic-bezier(0.17,0.67,0.21,1.4) forwards';
+    label2.innerHTML = emoji + ' ' + label + ' <span style="font-size:32px;opacity:0.85">×' + chainCount + '</span>';
+    document.body.appendChild(label2);
+    setTimeout(function() { try { flash.remove(); label2.remove(); } catch (e) {} }, 1300);
+    // Confetti scaled to tier — godlike rains the most.
+    if (typeof showConfetti === 'function') {
+      try { showConfetti(tier === 'godlike' ? 36 : tier === 'mythic' ? 28 : 22); } catch (e) {}
+    }
+    // Sound — escalated milestone tone matching the chain count.
+    if (typeof soundMilestone === 'function') {
+      try { soundMilestone(Math.min(8, chainCount + 1)); } catch (e) {}
+    }
+    // Buzz — pattern length grows with chain. Godlike gets the
+    // longest, most dramatic vibration sequence.
+    if (typeof buzz === 'function') {
+      var pat = tier === 'godlike' ? [50,40,60,40,80,40,120]
+              : tier === 'mythic'  ? [40,40,60,40,100]
+              :                     [30,40,80,40,80];
+      try { buzz(pat); } catch (e) {}
+    }
   }
 
   // First-time-tier-up celebration. Bigger, slower, gold-on-black banner.
@@ -17329,6 +17395,60 @@
       buzz([30, 40, 30]);
     }
     checkAchievements();
+  }
+
+  // DG.1 — count empty cells in the playable area (excluding shape voids
+  // and locked cells, which are walls not slots). Used by updateDangerMode
+  // to drive the near-game-over warning state.
+  function countEmptyPlayableCells() {
+    if (!Array.isArray(grid) || !grid.length) return 0;
+    var cols = getBoardCols();
+    var rows = getBoardRows();
+    var n = 0;
+    for (var r = 0; r < rows; r++) {
+      for (var c = 0; c < cols; c++) {
+        if (isShapeInactiveAt(r, c)) continue;
+        if (isLockedAt(r, c)) continue;
+        if (grid[r] && grid[r][c] === 0) n++;
+      }
+    }
+    return n;
+  }
+
+  // DG.1 — toggle body.danger-mode when the grid is near-full. Fires sound
+  // + buzz ONCE on the rising edge (entering danger) so the warning is
+  // unmissable but doesn't spam while the player struggles to recover.
+  // Skipped during onboarding (FTUE) + bot games to avoid spurious alerts.
+  function updateDangerMode() {
+    // Skip during game-over screen + before grid is initialized.
+    if (window.__bloomGameOver) return;
+    if (!Array.isArray(grid) || !grid.length) return;
+    // Skip for bot games — alarms during AI play are noise.
+    if (window.__bloomBotActive) return;
+    var empties = countEmptyPlayableCells();
+    var threshold = 3; // ≤3 empty cells = "one careless move from over"
+    var shouldBeDanger = empties > 0 && empties <= threshold;
+    if (shouldBeDanger === inDangerMode) return; // no state change
+    inDangerMode = shouldBeDanger;
+    try {
+      if (shouldBeDanger) {
+        document.body.classList.add('danger-mode');
+        // One-shot warning cue. Descending sawtooth pair (260 → 200Hz)
+        // reads as a "danger" signal distinct from drop/merge/chain
+        // pitches. Goes through tone() which already respects mute.
+        if (typeof tone === 'function') {
+          try {
+            tone({ freq: 260, duration: 0.18, type: 'sawtooth', vol: 0.10, filter: 1800 });
+            tone({ freq: 200, duration: 0.22, type: 'sawtooth', vol: 0.12, filter: 1500, delay: 0.12 });
+          } catch (e) {}
+        }
+        if (typeof buzz === 'function') {
+          try { buzz([20, 60, 20]); } catch (e) {}
+        }
+      } else {
+        document.body.classList.remove('danger-mode');
+      }
+    } catch (e) {}
   }
 
   function isGameOver() {
@@ -18490,6 +18610,12 @@
       highlightNextTier(highestTier || nextPiece);
     } else {
       highlightNextTier(nextPiece);
+    }
+    // DG.1 — refresh danger-mode state after every render. Cheap: walks
+    // 24 cells max. The function is a no-op when the danger state hasn't
+    // changed, so no sound/buzz spam during sustained tension.
+    if (!opts.over && typeof updateDangerMode === 'function') {
+      try { updateDangerMode(); } catch (e) {}
     }
     const wrap = document.getElementById('grid-wrap');
 
