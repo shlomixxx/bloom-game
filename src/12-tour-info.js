@@ -429,6 +429,45 @@
       if (best > 0 && score >= best * 0.9 && score < best) bestEl.classList.add('near-best');
       else if (!bestBeatenThisGame) bestEl.classList.remove('near-best');
     }
+    // AB.1 — continuous "above best" delta pill. After the one-shot
+    // showNewBestBanner fires, the player keeps climbing past their
+    // pre-game record but gets NO continuing feedback. This pill
+    // sits above the #best stat and updates live with "+247" — every
+    // drop above the record adds visible momentum. Pure pull from
+    // Suika/Royal Match where seeing the delta climb in real-time is
+    // the dopamine pump that drives "one more drop".
+    if (!opts.over && prevBest > 0 && score > prevBest && !skinTrialMode) {
+      var bestParent = bestEl && bestEl.parentNode;
+      if (bestParent) {
+        var pill = document.getElementById('above-best-pill');
+        if (!pill) {
+          pill = document.createElement('div');
+          pill.id = 'above-best-pill';
+          pill.className = 'above-best-pill';
+          bestParent.appendChild(pill);
+          bestParent.classList.add('has-above-best');
+        }
+        var delta = score - prevBest;
+        // Compact format for big numbers so the pill stays narrow.
+        var formatted;
+        if (delta >= 1000000) formatted = (delta / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
+        else if (delta >= 1000) formatted = (delta / 1000).toFixed(1).replace(/\.0$/, '') + 'K';
+        else formatted = delta.toLocaleString();
+        pill.textContent = '+' + formatted;
+        // Threshold-driven amplification — at +50K/+100K the pill gets
+        // a louder variant so the player feels successive milestones
+        // ON TOP of beating their best.
+        pill.classList.remove('above-best-pill-hot', 'above-best-pill-huge');
+        if (delta >= 100000) pill.classList.add('above-best-pill-huge');
+        else if (delta >= 25000) pill.classList.add('above-best-pill-hot');
+      }
+    } else {
+      var stalePill = document.getElementById('above-best-pill');
+      if (stalePill) {
+        if (stalePill.parentNode) stalePill.parentNode.classList.remove('has-above-best');
+        stalePill.remove();
+      }
+    }
     buildTierBar();
     if (opts.over) {
       highlightNextTier(highestTier || nextPiece);
