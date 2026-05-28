@@ -4978,6 +4978,27 @@ html[data-theme="dark"] .booster-modal-close { background: rgba(255, 255, 255, 0
 .inbox-icon-loss { background: rgba(255, 77, 109, 0.18); }
 .inbox-icon-tie { background: rgba(122, 95, 224, 0.18); }
 .inbox-icon-gift { background: linear-gradient(135deg, #FF6B9D, #FF4D6D); color: #FFF; }
+/* GO.1 — friend-rivalry "X passed you" pill. Pulsing red-gold gradient
+   amplifies the FOMO punch — pure social-status conflict color. */
+.inbox-icon-rival {
+  background: linear-gradient(135deg, #FFD96A 0%, #FF8E3C 50%, #C8472F 100%);
+  color: #FFF;
+  animation: inboxRivalPulse 2.4s ease-in-out infinite;
+}
+@keyframes inboxRivalPulse {
+  0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(200, 71, 47, 0); }
+  50% { transform: scale(1.08); box-shadow: 0 0 0 6px rgba(200, 71, 47, 0.18); }
+}
+/* Highlight the entire friend_beat row so the eye lands on it first
+   in the inbox list — this is the highest-emotion event. */
+.inbox-item.inbox-kind-friend_beat {
+  background: linear-gradient(90deg, rgba(255, 217, 106, 0.10), transparent 70%);
+  border-left: 3px solid #FF8E3C;
+}
+html[data-theme="dark"] .inbox-item.inbox-kind-friend_beat {
+  background: linear-gradient(90deg, rgba(255, 142, 60, 0.18), transparent 70%);
+  border-left: 3px solid #FFB347;
+}
 .inbox-item-body { flex: 1; min-width: 0; }
 .inbox-item-title {
   font-size: 14px;

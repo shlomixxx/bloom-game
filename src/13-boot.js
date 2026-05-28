@@ -648,6 +648,17 @@
   window.__bloomDebug.getColumnMultipliers = function() { return getColumnMultipliers(); };
   window.__bloomDebug.restart = function(mode) { init(mode || 'practice'); };
 
+  // GO.1 — public deep-link entry. The inbox panel + push action URLs
+  // need a clean way to jump into a specific mode without going through
+  // home. Whitelisted modes only — a stray ?ref= injection can't slip
+  // a malicious string into init().
+  window.__bloomStartMode = function(modeName, opts) {
+    var allowed = { daily: 1, practice: 1, contest: 1, dynamic: 1, challenge: 1 };
+    if (!allowed[modeName]) return false;
+    try { init(modeName, opts || { fresh: true }); return true; }
+    catch (e) { return false; }
+  };
+
   // ============ PWA INSTALL PROMPTS ============
   // iOS: show banner after 3 games (Safari doesn't auto-prompt)
   function maybeShowInstallPrompt() {

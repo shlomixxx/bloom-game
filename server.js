@@ -14840,6 +14840,79 @@ app.get('/api/inbox', async (req, res) => {
         });
       }
     } catch (e) {}
+    // 5. Tournament prize wins (last 14d). When a tournament finalizes,
+    // top-N players get `prize_claimed` populated. Surfacing this is
+    // critical — a 2500💎 prize that the player misses is a huge dopamine
+    // loss + a missed "come back to claim more" hook.
+    try {
+      const tw = await pool.query(
+        `SELECT ts.tournament_id, ts.score, ts.prize_claimed,
+                t.name AS tournament_name, t.finalized_at,
+                (SELECT 1 + COUNT(*) FROM tournament_scores ts2
+                   WHERE ts2.tournament_id = ts.tournament_id
+                     AND ts2.score > ts.score) AS my_rank
+         FROM tournament_scores ts
+         JOIN tournaments t ON t.id = ts.tournament_id
+         WHERE ts.device_id = $1
+           AND ts.prize_claimed IS NOT NULL
+           AND ts.prize_claimed > 0
+           AND t.status = 'finalized'
+           AND t.finalized_at > NOW() - INTERVAL '14 days'
+         ORDER BY t.finalized_at DESC
+         LIMIT 10`,
+        [deviceId]
+      );
+      for (const row of tw.rows) {
+        const rankEmoji = row.my_rank === 1 ? '🥇' : row.my_rank === 2 ? '🥈' : row.my_rank === 3 ? '🥉' : '🏆';
+        items.push({
+          kind: 'tournament_win',
+          title: rankEmoji + ' ניצחת בטורניר!',
+          body: (row.tournament_name || 'טורניר') + ' · מקום #' + row.my_rank + ' · +' + (row.prize_claimed | 0) + '💎',
+          created_at: row.finalized_at,
+          ref: 'tournament:' + row.tournament_id,
+          action: 'open_tournament'
+        });
+      }
+    } catch (e) {}
+    // 6. Friend rivalry — friends who BEAT my daily score TODAY.
+    // The strongest social FOMO event in the game. Per TD.2's ghost-push
+    // we already send a push when this happens, but the push gets dismissed
+    // and forgotten. The inbox row stays until the player explicitly marks
+    // it read, AND each row links to /?mode=daily where the player can
+    // race the friend's ghost (A9 Ghost Mode integration).
+    try {
+      const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jerusalem' });
+      const fr = await pool.query(
+        `WITH my_today AS (
+           SELECT score FROM daily_scores WHERE date = $1 AND device_id = $2
+         ),
+         my_friends AS (
+           SELECT CASE WHEN device_a = $2 THEN device_b ELSE device_a END AS friend_device
+           FROM friendships
+           WHERE device_a = $2 OR device_b = $2
+         )
+         SELECT ds.device_id, ds.name, ds.score, ds.tier, ds.updated_at,
+                COALESCE((SELECT score FROM my_today), 0) AS my_score
+         FROM daily_scores ds
+         JOIN my_friends mf ON mf.friend_device = ds.device_id
+         WHERE ds.date = $1
+           AND ds.score > COALESCE((SELECT score FROM my_today), 0) + 500
+         ORDER BY ds.score DESC
+         LIMIT 5`,
+        [today, deviceId]
+      );
+      for (const row of fr.rows) {
+        const delta = (row.score | 0) - (row.my_score | 0);
+        items.push({
+          kind: 'friend_beat',
+          title: '👑 ' + (row.name || 'חבר') + ' עבר אותך!',
+          body: (row.score | 0).toLocaleString() + ' · +' + delta.toLocaleString() + ' מעליך · רוץ נגד הרוח 👻',
+          created_at: row.updated_at,
+          ref: 'friend_beat:' + row.device_id + ':' + today,
+          action: 'open_daily'
+        });
+      }
+    } catch (e) {}
     // Merge + sort newest first, return top 30.
     items.sort(function(a, b) {
       return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();

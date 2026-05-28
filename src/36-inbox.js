@@ -157,7 +157,7 @@
       var isNew = ts > seenTs;
       var iconClass = iconForKind(item.kind);
       return (
-        '<div class="inbox-item ' + (isNew ? 'inbox-item-new' : '') + ' inbox-kind-' + escapeAttr(item.kind) + '" data-action="' + escapeAttr(item.action || '') + '">' +
+        '<div class="inbox-item ' + (isNew ? 'inbox-item-new' : '') + ' inbox-kind-' + escapeAttr(item.kind) + '" data-action="' + escapeAttr(item.action || '') + '" data-ref="' + escapeAttr(item.ref || '') + '">' +
           '<div class="inbox-item-icon ' + iconClass + '">' + emojiForKind(item.kind) + '</div>' +
           '<div class="inbox-item-body">' +
             '<div class="inbox-item-title">' + escapeHtml(item.title) + (isNew ? ' <span class="inbox-new-dot"></span>' : '') + '</div>' +
@@ -171,6 +171,7 @@
     host.querySelectorAll('.inbox-item[data-action]').forEach(function(el) {
       var action = el.getAttribute('data-action');
       if (!action) return;
+      var ref = el.getAttribute('data-ref') || '';
       el.style.cursor = 'pointer';
       el.onclick = function() {
         try {
@@ -178,6 +179,14 @@
           else if (action === 'open_guild' && typeof window.showGuildModal === 'function') window.showGuildModal();
           else if (action === 'open_challenges' && typeof window.showChallengesList === 'function') window.showChallengesList('inbox');
           else if (action === 'open_friend_challenges' && window.__bloomFriendChallenges) window.__bloomFriendChallenges.openListModal();
+          // GO.1 — new actions: tournaments + daily ghost race
+          else if (action === 'open_tournament' && typeof window.showTournamentModal === 'function') {
+            var tid = parseInt(String(ref).split(':')[1], 10);
+            if (Number.isFinite(tid)) window.showTournamentModal(tid);
+          }
+          else if (action === 'open_daily' && typeof window.__bloomStartMode === 'function') {
+            window.__bloomStartMode('daily');
+          }
         } catch (e) {}
         // Close the panel so the player can see what they tapped through to.
         var p = document.getElementById('inbox-panel');
@@ -187,10 +196,11 @@
   }
 
   function iconForKind(kind) {
-    if (kind === 'duel_win' || kind === 'challenge_win' || kind === 'war_win') return 'inbox-icon-win';
+    if (kind === 'duel_win' || kind === 'challenge_win' || kind === 'war_win' || kind === 'tournament_win') return 'inbox-icon-win';
     if (kind === 'duel_loss' || kind === 'war_loss') return 'inbox-icon-loss';
     if (kind === 'duel_tie') return 'inbox-icon-tie';
     if (kind === 'gift') return 'inbox-icon-gift';
+    if (kind === 'friend_beat') return 'inbox-icon-rival';
     return '';
   }
   function emojiForKind(kind) {
@@ -201,6 +211,8 @@
     if (kind === 'war_win') return '🛡⚔️';
     if (kind === 'war_loss') return '🛡';
     if (kind === 'challenge_win') return '🏅';
+    if (kind === 'tournament_win') return '🏆';
+    if (kind === 'friend_beat') return '👑';
     return '🔔';
   }
   function relativeTime(iso) {
@@ -221,8 +233,25 @@
       .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
   function escapeAttr(s) {
-    return String(s == null ? '' : s).replace(/[^a-zA-Z0-9_\-]/g, '');
+    return String(s == null ? '' : s).replace(/[^a-zA-Z0-9_\-:]/g, '');
   }
+
+  // GO.1 — auto-open the inbox when the URL carries ?action=inbox.
+  // Push notifications use this deep-link so when a player taps a
+  // "X passed you!" push they land directly on the inbox row instead
+  // of having to hunt for the bell icon. One-shot via sessionStorage so
+  // a back-button doesn't re-pop the panel forever.
+  function maybeAutoOpenFromUrl() {
+    try {
+      var qp = new URLSearchParams(window.location.search);
+      if (qp.get('action') !== 'inbox') return;
+      if (sessionStorage.getItem('bloom_inbox_url_handled')) return;
+      sessionStorage.setItem('bloom_inbox_url_handled', '1');
+      // Wait for home to mount + the icon to be wired before opening.
+      setTimeout(showInboxPanel, 1200);
+    } catch (e) {}
+  }
+  maybeAutoOpenFromUrl();
 
   // Public hooks — home-v2 mounts the icon, anything can force a refresh.
   try {
