@@ -213,17 +213,23 @@
     color: var(--color-accent, #BA7517);
   }
 
-  /* B7 — compact mode bar. The sub-text "אותו דאנג'ן לכולם היום"
-     is informational but redundant for veterans. Hide it on small
-     screens; bigger screens keep it. Tight padding reclaims ~10-15px. */
+  /* B7 — compact mode bar. Tighter padding reclaims ~10-15px.
+     We DO NOT hide .mode-sub even on phones — the sub is the home
+     of important interactive surfaces in MOST modes:
+       - practice: difficulty chip (the addiction lever)
+       - dynamic:  🏆 target + 👑 leader chips (chasing-loop)
+       - contest:  contest name + difficulty string
+       - duel:     "vs <opponent>" + difficulty
+     Only daily/challenge/skin-trial have pure-text subs that could
+     in theory be hidden, but the inconsistency would confuse users
+     (chip appears/disappears between modes). Better to keep all subs
+     visible and accept the ~12px height cost. Worth it for the
+     interactive consistency + addiction levers. */
   .mode-bar { padding: 6px 12px !important; }
   .mode-info { gap: 8px !important; }
   .mode-icon { width: 28px !important; height: 28px !important; }
   .mode-icon svg { width: 16px !important; height: 16px !important; }
   .mode-title { font-size: 13px !important; }
-  @media (max-width: 480px) {
-    .mode-sub { display: none !important; }
-  }
   /* On phones (no body padding) — kill the rounded corners + box-shadow
      so the app uses every pixel of the viewport edge-to-edge. */
   @media (max-width: 420px) {
