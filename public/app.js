@@ -17152,11 +17152,14 @@
     else if (tier === 'quad')   { label = '💥 Quad!';              badgeBg = '#FAC775';                                                              badgeColor = '#412402'; badgeFont = 28; badgeShadow = '0 10px 28px rgba(250,199,117,0.5)'; }
     else if (tier === 'mega')   { label = '🌟 MEGA!';              badgeBg = 'linear-gradient(135deg,#FFE08A 0%,#FF8E3C 100%)';                       badgeColor = '#1C1A18'; badgeFont = 32; badgeShadow = '0 12px 32px rgba(255,142,60,0.55)'; }
     else /* massive */          { label = '⚡ MASSIVE ×' + count + '!'; badgeBg = 'linear-gradient(135deg,#FFE08A 0%,#FF6B9D 50%,#C8472F 100%)';      badgeColor = '#FFF';    badgeFont = 34; badgeShadow = '0 0 28px rgba(255,217,106,0.7), 0 14px 36px rgba(200,71,47,0.5)'; }
+    // max-width:90vw guards against label overflow on 320px-wide phones
+    // (iPhone SE). The MASSIVE ×N label was the longest at 34px font.
     badge.style.cssText =
       'position:fixed;top:38%;left:50%;transform:translate(-50%,-50%);z-index:9999;' +
       'background:' + badgeBg + ';color:' + badgeColor + ';' +
       'font-weight:900;font-size:' + badgeFont + 'px;letter-spacing:0.05em;' +
       'padding:12px 28px;border-radius:24px;pointer-events:none;text-align:center;' +
+      'max-width:90vw;white-space:nowrap;' +
       'box-shadow:' + badgeShadow + ';' +
       'animation:chainPop 0.95s ease-out forwards';
     badge.textContent = label;
