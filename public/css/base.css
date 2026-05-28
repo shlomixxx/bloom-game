@@ -882,6 +882,125 @@
     80%  { opacity: 1; transform: translate(-50%, -50%) scale(1) rotate(0); }
     100% { opacity: 0; transform: translate(-50%, -75%) scale(0.95) rotate(0); }
   }
+  /* LF.1 — Lifetime-first tier card. The strongest "I'll remember this
+     moment forever" surface in the game. Crown gets the loudest variant
+     with continuous gold-to-pink breathing border + share button. */
+  .lifetime-first-card {
+    position: fixed; top: 50%; left: 50%;
+    transform: translate(-50%, -50%) scale(0.6);
+    z-index: 10002;
+    background: linear-gradient(135deg, #1C1A18 0%, #2A1F12 50%, #412402 100%);
+    color: #FAC775;
+    border: 3px solid #FAC775;
+    border-radius: 22px;
+    padding: 22px 26px 18px;
+    text-align: center; direction: rtl;
+    box-shadow: 0 0 40px 8px rgba(250, 199, 117, 0.45),
+                0 20px 60px rgba(0, 0, 0, 0.55);
+    min-width: 260px;
+    max-width: 92vw;
+    opacity: 0;
+    pointer-events: auto;
+    animation: lifetimeCardPop 0.7s cubic-bezier(0.17, 0.67, 0.21, 1.4) 0.15s forwards;
+  }
+  .lifetime-first-crown {
+    border: 3px solid transparent;
+    background:
+      linear-gradient(135deg, #1C1A18 0%, #2A1F12 50%, #412402 100%) padding-box,
+      linear-gradient(135deg, #FFD96A 0%, #FF8E3C 50%, #FF4D6D 100%) border-box;
+    box-shadow: 0 0 50px 10px rgba(255, 142, 60, 0.55),
+                0 0 90px 20px rgba(255, 77, 109, 0.30),
+                0 24px 70px rgba(0, 0, 0, 0.60);
+    animation: lifetimeCardPop 0.7s cubic-bezier(0.17, 0.67, 0.21, 1.4) 0.15s forwards,
+               lifetimeCrownBorder 3s ease-in-out 0.85s infinite;
+  }
+  .lf-eyebrow {
+    font-size: 11px; font-weight: 800;
+    color: #FFD37A; letter-spacing: 0.12em;
+    margin-bottom: 10px;
+    animation: lfEyebrowPulse 1.8s ease-in-out infinite;
+  }
+  .lifetime-first-crown .lf-eyebrow {
+    background: linear-gradient(135deg, #FFE08A 0%, #FF8E3C 50%, #FF4D6D 100%);
+    -webkit-background-clip: text; background-clip: text;
+    color: transparent;
+  }
+  .lf-emoji {
+    width: 90px; height: 90px; line-height: 90px;
+    margin: 0 auto 14px;
+    border-radius: 24px;
+    font-size: 56px;
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.35);
+    animation: lfEmojiBob 2.4s ease-in-out infinite;
+  }
+  .lifetime-first-crown .lf-emoji {
+    width: 110px; height: 110px; line-height: 110px;
+    font-size: 68px;
+    box-shadow: 0 0 30px 6px rgba(255, 217, 106, 0.55), 0 8px 22px rgba(0, 0, 0, 0.45);
+  }
+  .lf-tier-name {
+    font-size: 26px; font-weight: 900;
+    color: #FFE08A; margin-bottom: 4px;
+  }
+  .lifetime-first-crown .lf-tier-name { font-size: 30px; }
+  .lf-sub {
+    font-size: 13px; color: #C9A877;
+    margin-bottom: 16px;
+    line-height: 1.4;
+  }
+  .lifetime-first-crown .lf-sub {
+    color: #FFD37A; font-size: 14px;
+    font-weight: 600;
+  }
+  .lifetime-share-btn {
+    display: block; width: 100%;
+    background: linear-gradient(135deg, #FFD96A 0%, #FF8E3C 100%);
+    color: #1C1A18; font-weight: 800;
+    border: none; border-radius: 14px;
+    padding: 12px 18px; font-size: 15px;
+    margin-bottom: 10px; cursor: pointer;
+    font-family: inherit;
+    box-shadow: 0 6px 18px rgba(255, 142, 60, 0.5);
+    animation: lfShareBreath 1.6s ease-in-out infinite;
+  }
+  .lifetime-share-btn:active { transform: scale(0.97); }
+  .lifetime-dismiss-btn {
+    background: transparent; color: #BA7517;
+    border: 1px solid rgba(186, 117, 23, 0.4);
+    border-radius: 12px; padding: 8px 14px; font-size: 12px;
+    font-weight: 600; cursor: pointer;
+    font-family: inherit;
+  }
+  .lifetime-dismiss-btn:hover { color: #FFD37A; border-color: #FFD37A; }
+  @keyframes lifetimeFlash {
+    0%   { opacity: 0; transform: scale(0.7); }
+    20%  { opacity: 1; transform: scale(1.05); }
+    65%  { opacity: 0.85; transform: scale(1); }
+    100% { opacity: 0; transform: scale(1.15); }
+  }
+  @keyframes lifetimeCardPop {
+    0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.5) rotate(-3deg); }
+    55%  { opacity: 1; transform: translate(-50%, -50%) scale(1.06) rotate(1deg); }
+    80%  { opacity: 1; transform: translate(-50%, -50%) scale(1) rotate(0); }
+    100% { opacity: 1; transform: translate(-50%, -50%) scale(1) rotate(0); }
+  }
+  @keyframes lifetimeCrownBorder {
+    0%, 100% { box-shadow: 0 0 50px 10px rgba(255, 142, 60, 0.55), 0 0 90px 20px rgba(255, 77, 109, 0.30), 0 24px 70px rgba(0, 0, 0, 0.60); }
+    50%      { box-shadow: 0 0 80px 18px rgba(255, 142, 60, 0.80), 0 0 130px 32px rgba(255, 77, 109, 0.55), 0 24px 70px rgba(0, 0, 0, 0.60); }
+  }
+  @keyframes lfEyebrowPulse {
+    0%, 100% { opacity: 0.7; transform: translateY(0); }
+    50%      { opacity: 1;   transform: translateY(-1px); }
+  }
+  @keyframes lfEmojiBob {
+    0%, 100% { transform: translateY(0) rotate(-2deg); }
+    50%      { transform: translateY(-6px) rotate(2deg); }
+  }
+  @keyframes lfShareBreath {
+    0%, 100% { transform: scale(1); box-shadow: 0 6px 18px rgba(255, 142, 60, 0.5); }
+    50%      { transform: scale(1.03); box-shadow: 0 8px 28px rgba(255, 142, 60, 0.75); }
+  }
+
   /* DG.2 — Legendary chain (5+) overlays. Flash is a quick radial pop
      that fades; text scales up with an overshoot and holds before fading. */
   @keyframes legendaryFlash {

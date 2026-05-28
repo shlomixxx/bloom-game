@@ -16877,6 +16877,100 @@
     });
   }
 
+  // LF.1 — Lifetime-first tier celebration. Fires when the player reaches
+  // a tier (5-8) they have NEVER reached in their entire history. This is
+  // the strongest "I'll remember this moment forever" lever in the game.
+  // Crown (tier 8) lifetime-first is genuinely a once-in-a-player-lifetime
+  // event — most players never reach it. The spectacle scales: tier 5 gets
+  // a loud overlay, tier 8 gets a full-screen takeover + share prompt.
+  function showLifetimeFirstTierOverlay(tier) {
+    var t = (getActiveTiers() && getActiveTiers()[tier]) || { name: 'דרגה ' + tier, emoji: '⭐', bg: '#FAC775', fg: '#412402' };
+    var isCrown = tier >= 8;
+    var labelHe = isCrown ? 'הגעת לכתר! · האירוע הנדיר ביותר ב-BLOOM'
+                          : tier === 7 ? 'הגעת ליהלום בפעם הראשונה אי-פעם!'
+                          : tier === 6 ? 'הגעת לכוכב בפעם הראשונה אי-פעם!'
+                          :              'הגעת לדרגה חדשה לראשונה אי-פעם!';
+    // Full-screen radial flash matched to tier color. Crown gets the most
+    // saturated gold-to-pink gradient — the rest use the tier's own palette.
+    var flash = document.createElement('div');
+    flash.setAttribute('data-bloom-banner', 'lifetime-first');
+    var flashGrad = isCrown
+      ? 'radial-gradient(circle at center, rgba(255,217,106,0.70) 0%, rgba(255,142,60,0.40) 35%, rgba(255,107,157,0.10) 70%, rgba(0,0,0,0) 100%)'
+      : 'radial-gradient(circle at center, rgba(250,199,117,0.55) 0%, rgba(186,117,23,0.30) 40%, rgba(0,0,0,0) 75%)';
+    flash.style.cssText =
+      'position:fixed;inset:0;z-index:10001;pointer-events:none;' +
+      'background:' + flashGrad + ';' +
+      'animation:lifetimeFlash ' + (isCrown ? '1.8s' : '1.4s') + ' ease-out forwards';
+    document.body.appendChild(flash);
+    // Big card with tier emoji + lifetime-first label. Pointer events ON so
+    // the player can tap a "share this moment" button on crown.
+    var card = document.createElement('div');
+    card.setAttribute('data-bloom-banner', 'lifetime-first-card');
+    card.className = 'lifetime-first-card' + (isCrown ? ' lifetime-first-crown' : '');
+    var shareBtn = isCrown
+      ? '<button class="lifetime-share-btn" id="lifetime-share-btn">📤 שתף את הרגע הזה</button>'
+      : '';
+    card.innerHTML =
+      '<div class="lf-eyebrow">✨ פעם ראשונה אי-פעם ✨</div>' +
+      '<div class="lf-emoji" style="background:' + t.bg + ';color:' + t.fg + '">' + t.emoji + '</div>' +
+      '<div class="lf-tier-name">' + escapeHtml(t.name) + '</div>' +
+      '<div class="lf-sub">' + labelHe + '</div>' +
+      shareBtn +
+      '<button class="lifetime-dismiss-btn" id="lifetime-dismiss-btn">המשך לשחק →</button>';
+    document.body.appendChild(card);
+    var dismiss = function() {
+      try { flash.remove(); card.remove(); } catch (e) {}
+    };
+    // Auto-dismiss after a long hold — crown gets the longest savor time.
+    var holdMs = isCrown ? 6500 : 4500;
+    var autoTimer = setTimeout(dismiss, holdMs);
+    // Manual dismiss — both buttons close immediately.
+    var dimBtn = card.querySelector('#lifetime-dismiss-btn');
+    if (dimBtn) dimBtn.onclick = function() { clearTimeout(autoTimer); dismiss(); };
+    // Share prompt — crown only. Reuses the existing Stage 32 Replay Share
+    // pipeline if available, falls back to web-share with a canned message.
+    var shareBtnEl = card.querySelector('#lifetime-share-btn');
+    if (shareBtnEl) {
+      shareBtnEl.onclick = function() {
+        clearTimeout(autoTimer);
+        try {
+          if (window.__bloomReplay && typeof window.__bloomReplay.openShareModal === 'function') {
+            window.__bloomReplay.openShareModal({ source: 'lifetime_crown' });
+          } else if (navigator.share) {
+            navigator.share({
+              title: 'BLOOM',
+              text: '👑 הגעתי לכתר ב-BLOOM בפעם הראשונה!',
+              url: window.location.origin
+            }).catch(function() {});
+          }
+        } catch (e) {}
+        dismiss();
+      };
+    }
+    // Confetti + sound + buzz scaled to importance.
+    if (typeof showConfetti === 'function') {
+      try { showConfetti(isCrown ? 60 : 36); } catch (e) {}
+    }
+    if (typeof soundMilestone === 'function') {
+      try { soundMilestone(8); } catch (e) {}
+      if (isCrown) {
+        setTimeout(function() { try { soundMilestone(8); } catch (e) {} }, 700);
+      }
+    }
+    if (typeof buzz === 'function') {
+      var pat = isCrown
+        ? [60, 40, 80, 40, 100, 40, 120, 40, 150]
+        : [50, 40, 70, 40, 100];
+      try { buzz(pat); } catch (e) {}
+    }
+    // Analytics — flag for product-side measurement.
+    try {
+      if (typeof trackEvent === 'function') {
+        trackEvent('lifetime_first_tier', { tier: tier, crown: isCrown });
+      }
+    } catch (e) {}
+  }
+
   // Crown Merge explosion — gold wave across the row
   function showCrownExplosion(row) {
     // Full-screen gold flash — uses the same data-bloom-banner sweep so a
@@ -17286,6 +17380,23 @@
               buzz([60, 40, 80]);
               var tierShake = parseInt(getEventConfig('shake_tier_up', nt >= 7 ? '5' : '3'), 10) || 0;
               if (tierShake > 0) shakeGrid(tierShake);
+              // LF.1 — Lifetime-first detection. Compare against the
+              // persisted lifetime best (only bumped at game-end, so safe
+              // to read mid-game). When this tier has NEVER been reached
+              // in the player's entire history, fire a much louder
+              // celebration. Tier 8 (Crown) lifetime-first is the rarest
+              // event in the whole game — it gets a screenshot-prompt
+              // overlay so the player can share the moment.
+              try {
+                if (typeof loadLifetimeInt === 'function' && nt >= 5 && !window.__bloomBotActive && !skinTrialMode) {
+                  var lifetimeBest = loadLifetimeInt(BEST_TIER_KEY) || 0;
+                  if (nt > lifetimeBest) {
+                    setTimeout(function() {
+                      try { showLifetimeFirstTierOverlay(nt); } catch (e) {}
+                    }, 900); // let the per-game banner play first
+                  }
+                }
+              } catch (e) {}
             }
             merged = [kr, kc];
             mergedTier = nt;
