@@ -527,22 +527,18 @@
       };
     }
 
-    // In contest mode, the mode-info area becomes a tap target that opens
-    // the contest leaderboard — this is the fastest "show me the players"
-    // path while in-game. Chevron hints that it's interactive.
+    // B7 (May 2026 — REVISED): mode-info is ALWAYS clickable now. The
+    // old mode-tabs row (יומי / אתגרים / חברים / חופשי) was removed —
+    // it duplicated the bottom-nav's home-tab mode-picking flow. To
+    // preserve mid-game mode switching, tap on mode-info now opens
+    // a mode picker. In contest mode it ALSO offers "open leaderboard"
+    // as the first option since that's the most common contest action.
     if (infoEl) {
-      if (mode === 'contest' && activeContestCode) {
-        infoEl.classList.add('clickable');
-        if (chevEl) chevEl.style.display = '';
-        infoEl.onclick = function() {
-          saveContestGameState();
-          showContestLeaderboard(activeContestCode);
-        };
-      } else {
-        infoEl.classList.remove('clickable');
-        if (chevEl) chevEl.style.display = 'none';
-        infoEl.onclick = null;
-      }
+      infoEl.classList.add('clickable');
+      if (chevEl) chevEl.style.display = '';
+      infoEl.onclick = function() {
+        showModePicker();
+      };
     }
 
     // Build/update the segmented tab control. The "חברים" tab appears only
@@ -630,6 +626,156 @@
       };
     });
   }
+
+  // Mode picker (May 2026, B7 revised) — opens when player taps the
+  // mode-info area in the mode-bar. Replaces the always-on mode-tabs
+  // row that used to clutter the in-game UI. Same functionality, just
+  // hidden behind one tap.
+  function showModePicker() {
+    var existing = document.getElementById('mp-modal');
+    if (existing) { existing.remove(); return; }
+    var current = mode;
+
+    // Mode options. Order: most-common first.
+    var options = [];
+    // Contest is conditional — only if player has any contests.
+    var contestActive = !!activeContestCode;
+    var contestCount = (typeof myContestsCountSync === 'function') ? myContestsCountSync() : (contestActive ? 1 : 0);
+    options.push({
+      id: 'daily',
+      title: '📅 אתגר יומי',
+      sub: 'אותו דאנג׳ן לכל השחקנים. נספר ללוח המובילים.',
+      isCurrent: current === 'daily'
+    });
+    options.push({
+      id: 'practice',
+      title: '🎮 משחק חופשי',
+      sub: 'לתרגל. אפשר לבחור רמת קושי. לא נספר ללוח.',
+      isCurrent: current === 'practice'
+    });
+    if (contestCount > 0) {
+      options.push({
+        id: 'contest',
+        title: '👥 תחרות חברים' + (contestCount >= 2 ? ' (' + contestCount + ')' : ''),
+        sub: contestCount >= 2 ? 'בחר תחרות מהרשימה.' : 'נקודות מצטברות עם החברים.',
+        isCurrent: current === 'contest'
+      });
+    }
+    options.push({
+      id: 'challenge',
+      title: '🏆 אתגרי פרס',
+      sub: 'אתגרים פתוחים לכל השחקנים — פרסים אמיתיים.',
+      isCurrent: current === 'challenge'
+    });
+
+    // If in contest, offer "open leaderboard" as a quick action.
+    var contestLBOpt = (current === 'contest' && activeContestCode);
+
+    var modal = document.createElement('div');
+    modal.id = 'mp-modal';
+    modal.className = 'info-modal';
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    modal.setAttribute('aria-labelledby', 'mp-title');
+    modal.onclick = function(e) { if (e.target === modal) modal.remove(); };
+
+    // Build with createElement for XSS safety.
+    var card = document.createElement('div');
+    card.className = 'info-card';
+    card.style.maxWidth = '360px';
+    card.style.direction = 'rtl';
+
+    var titleEl = document.createElement('div');
+    titleEl.id = 'mp-title';
+    titleEl.style.fontSize = '16px';
+    titleEl.style.fontWeight = '700';
+    titleEl.style.marginBottom = '6px';
+    titleEl.textContent = '🎯 החלף מצב משחק';
+    card.appendChild(titleEl);
+
+    var subEl = document.createElement('div');
+    subEl.style.fontSize = '11px';
+    subEl.style.color = '#6F6E68';
+    subEl.style.marginBottom = '12px';
+    subEl.textContent = 'בחירת מצב תפתח משחק חדש.';
+    card.appendChild(subEl);
+
+    // If in contest, leaderboard shortcut.
+    if (contestLBOpt) {
+      var lbBtn = document.createElement('button');
+      lbBtn.className = 'mp-opt';
+      lbBtn.style.cssText = 'display:block;width:100%;text-align:right;direction:rtl;margin-bottom:8px;padding:10px 12px;border-radius:10px;border:2px solid rgba(0,0,0,0.08);background:#FFFFFF;cursor:pointer;font-family:inherit';
+      var lbTitleEl = document.createElement('div');
+      lbTitleEl.style.cssText = 'font-size:14px;font-weight:700;color:#1C1A18';
+      lbTitleEl.textContent = '📊 פתח לוח התחרות';
+      var lbSubEl = document.createElement('div');
+      lbSubEl.style.cssText = 'font-size:11px;color:#6F6E68;margin-top:2px';
+      lbSubEl.textContent = 'ראה את הרנקינג הנוכחי בלי לאבד את המשחק.';
+      lbBtn.appendChild(lbTitleEl);
+      lbBtn.appendChild(lbSubEl);
+      lbBtn.onclick = function() {
+        modal.remove();
+        if (typeof saveContestGameState === 'function') saveContestGameState();
+        if (typeof showContestLeaderboard === 'function') showContestLeaderboard(activeContestCode);
+      };
+      card.appendChild(lbBtn);
+    }
+
+    // Mode options.
+    options.forEach(function(opt) {
+      var btn = document.createElement('button');
+      btn.className = 'mp-opt';
+      btn.setAttribute('data-mode', opt.id);
+      var bg = opt.isCurrent ? '#FFF6E6' : '#FFFFFF';
+      var border = opt.isCurrent ? '#BA7517' : 'rgba(0,0,0,0.08)';
+      btn.style.cssText = 'display:block;width:100%;text-align:right;direction:rtl;margin-bottom:8px;padding:10px 12px;border-radius:10px;border:2px solid ' + border + ';background:' + bg + ';cursor:pointer;font-family:inherit';
+      var oTitle = document.createElement('div');
+      oTitle.style.cssText = 'font-size:14px;font-weight:700;color:#1C1A18';
+      oTitle.textContent = opt.title;
+      if (opt.isCurrent) {
+        var cur = document.createElement('span');
+        cur.style.cssText = 'color:#BA7517;font-size:11px;margin-inline-start:6px';
+        cur.textContent = '✓ נוכחי';
+        oTitle.appendChild(cur);
+      }
+      var oSub = document.createElement('div');
+      oSub.style.cssText = 'font-size:11px;color:#6F6E68;margin-top:2px';
+      oSub.textContent = opt.sub;
+      btn.appendChild(oTitle);
+      btn.appendChild(oSub);
+      btn.onclick = function() {
+        modal.remove();
+        if (opt.isCurrent && opt.id !== 'contest' && opt.id !== 'challenge') return;
+        if (typeof buzz === 'function') buzz([12]);
+        // Save current state if needed.
+        if (mode === 'contest' && typeof saveContestGameState === 'function') saveContestGameState();
+        if (mode === 'practice' && typeof savePracticeGameState === 'function') savePracticeGameState();
+        // Routing per old mode-tabs behavior.
+        if (opt.id === 'contest' && contestCount >= 2) {
+          if (typeof showMyContestsList === 'function') showMyContestsList();
+          return;
+        }
+        if (opt.id === 'challenge') {
+          if (typeof showChallengesList === 'function') showChallengesList('in-game');
+          return;
+        }
+        init(opt.id);
+      };
+      card.appendChild(btn);
+    });
+
+    var cancelBtn = document.createElement('button');
+    cancelBtn.className = 'btn secondary';
+    cancelBtn.setAttribute('data-close-modal', '1');
+    cancelBtn.style.cssText = 'width:100%;margin-top:6px';
+    cancelBtn.textContent = 'בטל';
+    cancelBtn.onclick = function() { modal.remove(); };
+    card.appendChild(cancelBtn);
+
+    modal.appendChild(card);
+    document.body.appendChild(modal);
+  }
+  window.showModePicker = showModePicker;
 
   function startCountdown() {
     function tick() {

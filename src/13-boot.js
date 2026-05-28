@@ -241,45 +241,13 @@
 
   init(savedMode);
 
-  // Stage B7 (May 2026 — REVISED): Tier-bar visibility toggle.
-  // The in-game tier ladder shows ALL 8 tiers in order (rock → leaf →
-  // flower → fire → bolt → star → diamond → crown) with the active
-  // "next piece" highlighted. This is the teaching strip — players
-  // (especially new ones) use it to learn what merges into what.
-  //
-  // ORIGINAL B7 default: HIDDEN (to reclaim grid space). But user
-  // feedback was "the strip disappeared, I can't see what tile comes
-  // next". Reverted: default = VISIBLE. Opt-out via the 📊 toggle for
-  // veterans who want maximum grid space. The data-home="active" CSS
-  // rule still hides it on the home screen (no game running) so it
-  // doesn't clutter home.
-  var TIER_BAR_KEY = 'bloom_tier_bar_visible';
-  function applyTierBarPref() {
-    var visible = true; // DEFAULT VISIBLE — teaches the ladder during play
-    try {
-      var raw = localStorage.getItem(TIER_BAR_KEY);
-      // Explicit '0' = user opted to hide. Anything else (null / '1')
-      // honors the default-visible.
-      if (raw === '0') visible = false;
-    } catch (e) {}
-    document.body.classList.toggle('tier-bar-hidden', !visible);
-    var btn = document.getElementById('tier-bar-toggle');
-    if (btn) btn.setAttribute('aria-pressed', visible ? 'true' : 'false');
-  }
-  applyTierBarPref();
-  var __tierBarBtn = document.getElementById('tier-bar-toggle');
-  if (__tierBarBtn) {
-    __tierBarBtn.addEventListener('click', function() {
-      var current = !document.body.classList.contains('tier-bar-hidden');
-      var next = !current;
-      try { localStorage.setItem(TIER_BAR_KEY, next ? '1' : '0'); } catch (e) {}
-      applyTierBarPref();
-      // Re-fit the grid so cells grow into the reclaimed space.
-      if (typeof fitGrid === 'function') {
-        try { fitGrid(); } catch (e) {}
-      }
-    });
-  }
+  // (B7 tier-bar toggle removed May 2026. User feedback: when the
+  //  bar was hidden, players didn't know which tiles exist or what
+  //  merges into what. Bar is now permanently visible — it's the
+  //  teaching strip. Space reclaimed instead by hiding the mode-tabs
+  //  row (יומי/אתגרים/חברים/חופשי) since the bottom nav already
+  //  handles mode navigation. CSS in base.css + the mode-info area
+  //  is now a clickable mode-picker target via a chevron indicator.)
 
   // Show home only for genuine first-timers or if the player was idle.
   // Returning mid-game players go straight to their game.

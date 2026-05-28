@@ -202,31 +202,29 @@
   }
   .top, .mode-bar, .tier-bar { flex-shrink: 0; }
 
-  /* B7 (May 2026) — tier-bar default-hidden via body class.
-     Toggle button in .top-buttons flips it. Saves ~50-60px of
-     vertical space → bigger grid cells. First-time players see
-     it during FTUE; veterans get it on demand. */
-  body.tier-bar-hidden .tier-bar { display: none; }
-  /* Active state on the toggle button when bar is visible. */
-  #tier-bar-toggle[aria-pressed="true"] {
-    background: var(--color-accent-glow, rgba(250,199,117,0.18));
-    color: var(--color-accent, #BA7517);
+  /* B7 (May 2026) — REVISED: mode-tabs row hidden (redundant with
+     bottom nav which already handles mode picking via the home
+     tab). Tier-bar stays VISIBLE always — it's the teaching strip.
+     Tap on .mode-info → mode picker modal opens. Chevron next to
+     mode title indicates this is interactive.
+     Net space reclaim: ~32-40px (mode-tabs row height). */
+  .mode-bar .mode-tabs { display: none !important; }
+  .mode-info { cursor: pointer; gap: 8px !important; }
+  /* Chevron visible always to telegraph clickability. The .mode-info-chevron
+     was inline-styled display:none in HTML for the old in-contest-only path;
+     this rule overrides to always-show during gameplay. */
+  .mode-info .mode-info-chevron {
+    display: block !important;
+    width: 14px !important;
+    height: 14px !important;
+    opacity: 0.5;
+    margin-inline-start: auto;
+    flex-shrink: 0;
   }
+  .mode-info:hover .mode-info-chevron { opacity: 0.9; }
 
-  /* B7 — compact mode bar. Tighter padding reclaims ~10-15px.
-     We DO NOT hide .mode-sub even on phones — the sub is the home
-     of important interactive surfaces in MOST modes:
-       - practice: difficulty chip (the addiction lever)
-       - dynamic:  🏆 target + 👑 leader chips (chasing-loop)
-       - contest:  contest name + difficulty string
-       - duel:     "vs <opponent>" + difficulty
-     Only daily/challenge/skin-trial have pure-text subs that could
-     in theory be hidden, but the inconsistency would confuse users
-     (chip appears/disappears between modes). Better to keep all subs
-     visible and accept the ~12px height cost. Worth it for the
-     interactive consistency + addiction levers. */
+  /* Compact mode bar. Tighter padding reclaims ~10-15px. */
   .mode-bar { padding: 6px 12px !important; }
-  .mode-info { gap: 8px !important; }
   .mode-icon { width: 28px !important; height: 28px !important; }
   .mode-icon svg { width: 16px !important; height: 16px !important; }
   .mode-title { font-size: 13px !important; }
