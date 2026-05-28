@@ -73,7 +73,7 @@ function trackEvent(n,p){try{gtag('event',n,p||{});}catch(e){}}
 })();
 </script>
 
-<link rel="stylesheet" href="/styles.css?v=20260528d">
+<link rel="stylesheet" href="/styles.css?v=20260528e">
 </head>
 <body>
 
@@ -109,14 +109,14 @@ function trackEvent(n,p){try{gtag('event',n,p||{});}catch(e){}}
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11A8.1 8.1 0 0 0 4.5 9M4 5v4h4"/><path d="M4 13a8.1 8.1 0 0 0 15.5 2M20 19v-4h-4"/></svg>
         </button>
       </div>
+      <!-- B7-revised May 2026: compact mode chip lives INSIDE .top-row so the
+           old .mode-bar can be hidden during play, freeing ~50px for the grid.
+           Hidden via CSS when body.legacy-game-ui (rollback path). -->
+      <button class="mode-chip" id="mode-chip" type="button" aria-label="החלף מצב משחק">
+        <span class="mode-chip-label" id="mode-chip-label">משחק</span>
+        <span class="mode-chip-chev">⌄</span>
+      </button>
     </div>
-    <!-- B7-revised May 2026: compact mode chip lives next to stats so the
-         old .mode-bar can be hidden during play, freeing ~50px for the grid.
-         Hidden via CSS when body.legacy-game-ui (rollback path). -->
-    <button class="mode-chip" id="mode-chip" type="button" aria-label="החלף מצב משחק">
-      <span class="mode-chip-label" id="mode-chip-label">משחק</span>
-      <span class="mode-chip-chev">⌄</span>
-    </button>
     <div class="stats">
       <div class="stat stat-primary"><div class="stat-label">ניקוד</div><div class="stat-val" id="score">0</div></div>
       <div class="stat"><div class="stat-label">שיא</div><div class="stat-val" id="best">0</div></div>
@@ -141,7 +141,7 @@ function trackEvent(n,p){try{gtag('event',n,p||{});}catch(e){}}
   <div class="grid-wrap" id="grid-wrap"><div class="grid" id="grid"></div></div>
 </div>
 
-<script src="/app.js?v=20260528c"></script>
+<script src="/app.js?v=20260528e"></script>
 
 
 <script src="/bot.js"></script>
