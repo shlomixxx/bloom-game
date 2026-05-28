@@ -213,6 +213,33 @@
   /* ── PHASE 2: hide mode-bar entirely in new UI ────────── */
   .mode-bar { display: none !important; }
 
+  /* ── ME.1 May 28 2026 — Mode-Extras strip ──────────────
+     A compact chip-host that lives between .top and .tier-bar.
+     Populated by syncModeExtrasStrip() with whatever was in
+     .mode-sub: dynamic-board target/leader chips, contest name,
+     duel opponent. Hidden when empty (JS sets display:none).
+     Legacy-UI mode hides this entirely — the real .mode-bar is
+     visible there and renders the same chips itself. */
+  .mode-extras {
+    flex-shrink: 0;
+    padding: 2px 8px 4px;
+    text-align: center;
+    direction: rtl;
+    font-size: 12px;
+    line-height: 1.4;
+    color: var(--color-text-muted, #6F6E68);
+    /* JS toggles display:none when empty so this default applies only when populated. */
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    justify-content: center;
+    align-items: center;
+  }
+  body.legacy-game-ui .mode-extras { display: none !important; }
+  /* Make sure cloned chip styling matches the original — they share the
+     same class names so no extra CSS needed; the chips define their own
+     gradients + animations in boards.css / home.css. */
+
   /* Brand "BLOOM" hidden during game in new layout — the user is in
      the app, they don't need the brand reminder. Reclaims ~70px so
      the mode-chip fits in .top-row without wrapping. The home tab

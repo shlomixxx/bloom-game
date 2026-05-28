@@ -15154,6 +15154,20 @@
       };
     }
 
+    // Bug-fix May 28 2026: BN.1 hid the entire `.mode-bar` to reclaim
+    // vertical space, but `.mode-sub` was hosting CRITICAL in-game chips
+    // for dynamic-board mode: the personal-best target ("🏆 לעבור: 47K")
+    // and the global leader ("👑 דניאל: 89K"). These are THE motivation
+    // anchors that drive "one more drop on this board" — losing them
+    // kills the dynamic-board addiction loop entirely.
+    //
+    // Solution: a compact `.mode-extras` strip that lives between .top
+    // and .tier-bar, only visible when populated. Sources its content
+    // by cloning the relevant chips from .mode-sub (single source of
+    // truth — JS only has to know how to populate sub, the mirror is
+    // automatic). Hides when sub is empty.
+    syncModeExtrasStrip();
+
     // B7 (May 2026 — REVISED): mode-info is ALWAYS clickable now. The
     // old mode-tabs row (יומי / אתגרים / חברים / חופשי) was removed —
     // it duplicated the bottom-nav's home-tab mode-picking flow. To
@@ -15252,6 +15266,76 @@
         init('practice', { fresh: true });
       };
     });
+  }
+
+  // ME.1 — Mode-Extras strip. Bug-fix for BN.1 collateral damage:
+  // `.mode-sub` chips (dynamic-board target + leader, contest name,
+  // duel opponent, etc) were invisible after .mode-bar got hidden.
+  // This strip is the new compact host that lives between .top and
+  // .tier-bar, populated from sub.innerHTML. Hidden when empty.
+  //
+  // The strip is INDEPENDENT of legacy-game-ui mode — when legacy is
+  // on, .mode-bar comes back and the strip is hidden (CSS rule). So
+  // the player never sees the chips twice.
+  function syncModeExtrasStrip() {
+    var subEl = document.getElementById('mode-sub');
+    if (!subEl) return;
+    // Find or create the host. Sits between .top and .tier-bar inside .app.
+    var host = document.getElementById('mode-extras');
+    if (!host) {
+      var app = document.querySelector('.app');
+      if (!app) return;
+      host = document.createElement('div');
+      host.id = 'mode-extras';
+      host.className = 'mode-extras';
+      // Insert AFTER .top (top-row+stats) so it sits just above .tier-bar.
+      var topEl = app.querySelector('.top');
+      if (topEl && topEl.nextSibling) {
+        app.insertBefore(host, topEl.nextSibling);
+      } else {
+        app.appendChild(host);
+      }
+    }
+    // Skip the legacy-game-ui case — the real .mode-bar is visible
+    // and the strip would duplicate it. CSS also gates this; the JS
+    // guard is defense-in-depth.
+    if (document.body.classList.contains('legacy-game-ui')) {
+      host.style.display = 'none';
+      host.innerHTML = '';
+      return;
+    }
+    // Mirror the sub content into the host. innerHTML copy lets the
+    // existing chip styles (`.dyn-target-chip`, `.dyn-leader-chip`,
+    // `.practice-diff-chip`) come along automatically.
+    var subContent = subEl.innerHTML.trim();
+    // Skip the daily "אותו דאנג'ן" copy — it's just informational text,
+    // not an interactive chip. Hide the strip in that case to save space.
+    var isPlainText = !subContent.includes('<');
+    if (!subContent || (isPlainText && subContent.length < 60)) {
+      // For dynamic/duel/contest where chip elements exist, render.
+      // For daily/challenge with plain prose text, suppress.
+      host.style.display = 'none';
+      host.innerHTML = '';
+      return;
+    }
+    host.innerHTML = subContent;
+    host.style.display = '';
+    // Re-wire the practice-diff-chip click since cloning innerHTML
+    // doesn't preserve event listeners.
+    var clonedChip = host.querySelector('.practice-diff-chip');
+    if (clonedChip) {
+      // Cloned IDs would collide with original — strip the dup id.
+      clonedChip.removeAttribute('id');
+      clonedChip.onclick = function(e) {
+        e.stopPropagation();
+        showPracticeDifficultyPicker();
+      };
+    }
+    // Same for dyn-target-chip — strip duplicate id to avoid collisions.
+    var clonedTarget = host.querySelector('.dyn-target-chip');
+    if (clonedTarget) clonedTarget.removeAttribute('id');
+    var clonedLeader = host.querySelector('.dyn-leader-chip');
+    if (clonedLeader) clonedLeader.removeAttribute('id');
   }
 
   // Mode picker (May 2026, B7 revised) — opens when player taps the
@@ -17282,32 +17366,44 @@
     // Dynamic-board target chip: when score crosses the previous best,
     // swap the chip to a "👑 עברת את השיא" celebration so the player
     // gets immediate feedback during gameplay, not just at game-over.
-    var dynTargetEl = document.getElementById('dyn-target-chip');
-    if (dynTargetEl) {
-      var tgt = parseInt(dynTargetEl.getAttribute('data-target') || '0', 10) || 0;
-      if (tgt > 0 && score > tgt && !dynTargetEl.classList.contains('dyn-target-chip-passed')) {
-        dynTargetEl.classList.add('dyn-target-chip-passed');
-        dynTargetEl.innerHTML = '👑 עברת את עצמך! +' + (score - tgt).toLocaleString();
-        // Audio reward — milestone tone + buzz so it feels earned.
-        try { if (typeof soundMilestone === 'function') soundMilestone(4); } catch (e) {}
-        try { if (typeof buzz === 'function') buzz([40, 40, 80]); } catch (e) {}
-      } else if (tgt > 0 && score > tgt && dynTargetEl.classList.contains('dyn-target-chip-passed')) {
-        // Keep updating the overage number live as score grows.
-        dynTargetEl.innerHTML = '👑 עברת את עצמך! +' + (score - tgt).toLocaleString();
+    //
+    // ME.1 fix: querySelectorAll instead of getElementById — the chip
+    // exists in BOTH the hidden .mode-sub (source of truth, has data-*
+    // attributes) AND the visible .mode-extras (clone). Update both
+    // so the visible one shows the celebration.
+    var dynTargetEls = document.querySelectorAll('.dyn-target-chip[data-target]');
+    if (dynTargetEls.length) {
+      // All instances share the same data-target — read from the first.
+      var tgt = parseInt(dynTargetEls[0].getAttribute('data-target') || '0', 10) || 0;
+      var alreadyPassed = dynTargetEls[0].classList.contains('dyn-target-chip-passed');
+      if (tgt > 0 && score > tgt) {
+        var passedLabel = '👑 עברת את עצמך! +' + (score - tgt).toLocaleString();
+        dynTargetEls.forEach(function(el) {
+          el.classList.add('dyn-target-chip-passed');
+          el.innerHTML = passedLabel;
+        });
+        if (!alreadyPassed) {
+          // Audio reward — fires ONCE at the moment of crossing.
+          try { if (typeof soundMilestone === 'function') soundMilestone(4); } catch (e) {}
+          try { if (typeof buzz === 'function') buzz([40, 40, 80]); } catch (e) {}
+        }
       }
     }
     // Dynamic-board global leader chip — same live-overtake feedback,
     // even bigger reward (overtaking another player is the strongest
-    // dopamine spike a casual game can give).
-    var dynLeaderEl = document.getElementById('dyn-leader-chip');
-    if (dynLeaderEl) {
-      var leaderTgt = parseInt(dynLeaderEl.getAttribute('data-leader') || '0', 10) || 0;
+    // dopamine spike a casual game can give). Updates ALL instances.
+    var dynLeaderEls = document.querySelectorAll('.dyn-leader-chip[data-leader]');
+    if (dynLeaderEls.length) {
+      var leaderTgt = parseInt(dynLeaderEls[0].getAttribute('data-leader') || '0', 10) || 0;
+      var alreadyCelebrated = !!dynLeaderEls[0].dataset.celebrated;
       if (leaderTgt > 0 && score > leaderTgt) {
-        dynLeaderEl.classList.add('dyn-leader-chip-king');
-        dynLeaderEl.innerHTML = '👑 חצית את המוביל! +' + (score - leaderTgt).toLocaleString();
-        // Fire celebration ONCE.
-        if (!dynLeaderEl.dataset.celebrated) {
-          dynLeaderEl.dataset.celebrated = '1';
+        var leaderLabel = '👑 חצית את המוביל! +' + (score - leaderTgt).toLocaleString();
+        dynLeaderEls.forEach(function(el) {
+          el.classList.add('dyn-leader-chip-king');
+          el.innerHTML = leaderLabel;
+          el.dataset.celebrated = '1';
+        });
+        if (!alreadyCelebrated) {
           try { if (typeof soundMilestone === 'function') soundMilestone(6); } catch (e) {}
           try { if (typeof buzz === 'function') buzz([60, 60, 60, 60, 100]); } catch (e) {}
         }
