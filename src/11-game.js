@@ -723,6 +723,32 @@
     subEl.textContent = 'בחירת מצב תפתח משחק חדש.';
     card.appendChild(subEl);
 
+    // Bug-fix May 28 2026: practice-difficulty chip used to live inside
+    // .mode-sub, but BN.1 hid the entire .mode-bar. The difficulty
+    // selection became invisible. Surface it here — a "🎚 רמת קושי"
+    // entry that's only visible when the player is currently in
+    // practice mode. Opens the existing showPracticeDifficultyPicker.
+    if (current === 'practice' && typeof showPracticeDifficultyPicker === 'function') {
+      var diffBtn = document.createElement('button');
+      diffBtn.className = 'mp-opt';
+      diffBtn.style.cssText = 'display:block;width:100%;text-align:right;direction:rtl;margin-bottom:8px;padding:10px 12px;border-radius:10px;border:2px solid rgba(0,0,0,0.08);background:#FFF6E6;cursor:pointer;font-family:inherit';
+      var dTitleEl = document.createElement('div');
+      dTitleEl.style.cssText = 'font-size:14px;font-weight:700;color:#1C1A18';
+      var curDiff = (sessionDifficulty && sessionDifficulty.label) || 'default';
+      var curPreset = DIFFICULTY_PRESETS[curDiff] || DIFFICULTY_PRESETS.default;
+      dTitleEl.textContent = '🎚 רמת קושי · ' + curPreset.emoji + ' ' + curPreset.name;
+      var dSubEl = document.createElement('div');
+      dSubEl.style.cssText = 'font-size:11px;color:#6F6E68;margin-top:2px';
+      dSubEl.textContent = 'בחר רמת קושי לאימון. רק "רגיל" נספר ללוח המובילים.';
+      diffBtn.appendChild(dTitleEl);
+      diffBtn.appendChild(dSubEl);
+      diffBtn.onclick = function() {
+        modal.remove();
+        try { showPracticeDifficultyPicker(); } catch (e) {}
+      };
+      card.appendChild(diffBtn);
+    }
+
     // If in contest, leaderboard shortcut.
     if (contestLBOpt) {
       var lbBtn = document.createElement('button');

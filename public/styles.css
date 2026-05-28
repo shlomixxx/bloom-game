@@ -19499,16 +19499,39 @@ html[data-theme="dark"] .rival-tips-list { color: #D1D5DB; }
   50%      { box-shadow: 0 1px 3px rgba(224, 59, 59, 0.4), 0 0 0 6px rgba(224, 59, 59, 0); }
 }
 
-/* Tab screens (non-home) — full-screen with bottom-nav padding */
+/* Tab screens (non-home) — full-screen with bottom-nav padding.
+   FIX (May 28 2026): mirror the .home-screen positioning pattern.
+   Previously the tab was a flex-child of .app with min-height:100dvh,
+   but .app has overflow:hidden so any tab content taller than 100dvh
+   got clipped — no internal scroll possible. Now uses position:absolute
+   + overflow-y:auto so each tab scrolls inside its own container,
+   exactly like .home-screen does. z-index 250 matches .home-screen so
+   the tab sits at the same layer when active. */
 .bn-tab-screen {
+  position: absolute;
+  inset: 0;
+  z-index: 250;
   width: 100%;
-  max-width: 460px;
-  margin: 0 auto;
-  padding: 18px 16px calc(80px + env(safe-area-inset-bottom, 0px)) 16px;
-  /* The 80px bottom padding clears the bottom nav. */
+  max-width: 100%;
+  margin: 0;
+  padding: 18px 16px calc(90px + env(safe-area-inset-bottom, 0px)) 16px;
+  /* The 90px bottom padding clears the 60px-tall bottom nav + safe-area. */
   direction: rtl;
-  min-height: 100dvh;
+  background: linear-gradient(180deg, #F5F5F0 0%, #FFFFFF 60%);
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
   animation: bnTabFadeIn 0.22s ease-out;
+}
+html[data-theme="dark"] .bn-tab-screen {
+  background: linear-gradient(180deg, #1A1816 0%, #221F1C 60%);
+}
+/* Center the column on wider devices so the tab content sits nicely
+   like the home screen does on tablets. */
+.bn-tab-screen > * {
+  max-width: 460px;
+  margin-left: auto;
+  margin-right: auto;
 }
 @keyframes bnTabFadeIn {
   from { opacity: 0; transform: translateY(8px); }
