@@ -381,9 +381,21 @@
 
   // Show home only for genuine first-timers or if the player was idle.
   // Returning mid-game players go straight to their game.
+  //
+  // BUG-FIX BT.1 (May 28 2026): the previous condition skipped home for
+  // ANY returning practice player (`hasHistory` true + `savedMode === 'practice'`)
+  // — but if they had no in-progress game to resume, they landed on an
+  // empty in-game UI with NO bottom nav (the nav is gated by data-active-tab).
+  // The player saw game chrome with score=0, empty grid, no way to navigate
+  // home except via the buried ⋯ menu. After deep-audit reproduction this
+  // is the #1 boot UX bug. New rule: show home for ANYONE without an
+  // active game to resume (TA.1 last-game snapshot OR paused practice
+  // mid-game state). Players WITH active state still resume directly.
   var hasHistory = loadGamesPlayed() > 0;
   var hasPracticeState = !!loadPracticeGameState();
-  if (!hasHistory || (savedMode === 'daily' && !hasPracticeState)) {
+  var hasInProgressGame = !!__lastGameForBoot ||
+                          (savedMode === 'practice' && hasPracticeState);
+  if (!hasInProgressGame) {
     // §1.1 — first-time players see the 3-step FTUE before the home
     // screen. Returning players (anyone with the bloom_ftue_done flag,
     // or anyone with games_played > 0) skip straight to home.
