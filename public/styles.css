@@ -213,6 +213,13 @@
   /* ── PHASE 2: hide mode-bar entirely in new UI ────────── */
   .mode-bar { display: none !important; }
 
+  /* Brand "BLOOM" hidden during game in new layout — the user is in
+     the app, they don't need the brand reminder. Reclaims ~70px so
+     the mode-chip fits in .top-row without wrapping. The home tab
+     still shows the brand prominently. */
+  .top-row > .brand { display: none; }
+  body.legacy-game-ui .top-row > .brand { display: block; }
+
   /* ── Mode chip lives in .top-row (new compact mode indicator) ── */
   .mode-chip {
     display: inline-flex;
