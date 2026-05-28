@@ -17126,17 +17126,101 @@
   }
 
   // Triple/Quad merge celebration
+  // MM.1 — multi-merge escalation. A merge of 6+ tiles in one group is
+  // a genuinely rare event (most games never see one), but the previous
+  // code rendered "🌟 MEGA ×6" with the same visual as "🌟 MEGA ×5".
+  // Dopamine peak should match rarity, mirroring the LEGENDARY/MYTHIC/
+  // GODLIKE escalation that chain 5+ already gets.
+  //
+  // Tiers:
+  //   3 → "✨ Triple!"   (light celebration, orange badge)
+  //   4 → "💥 Quad!"     (gold badge, escalated buzz + soundMilestone(3))
+  //   5 → "🌟 MEGA!"     (gold-pink gradient, 14-particle confetti, soundMilestone(5))
+  //   6+ → "⚡ MASSIVE ×N!" (full-screen radial flash + giant text + 24-particle confetti
+  //                         + extreme buzz, mirroring chain-godlike spectacle)
   function showMultiMergeBadge(count) {
     if (count < 3) return;
+    var tier = count >= 6 ? 'massive' : count >= 5 ? 'mega' : count === 4 ? 'quad' : 'triple';
+    // Skip the bot-celebration entirely so AI test runs aren't visually noisy.
+    var isBot = !!window.__bloomBotActive;
+    // Badge — keep for ALL tiers (triple/quad/mega/massive). The massive
+    // variant gets an ADDITIONAL full-screen overlay on top.
     var badge = document.createElement('div');
-    var label = count === 3 ? '✨ Triple!' : count === 4 ? '💥 Quad!' : '🌟 MEGA ×' + count;
-    badge.style.cssText = 'position:fixed;top:38%;left:50%;transform:translate(-50%,-50%);z-index:9999;background:' + (count >= 4 ? '#FAC775' : '#EF9F27') + ';color:#412402;font-weight:900;font-size:' + (20 + count * 2) + 'px;padding:12px 28px;border-radius:24px;pointer-events:none;text-align:center;box-shadow:0 8px 24px rgba(0,0,0,0.3);animation:chainPop 0.9s ease-out forwards';
+    badge.setAttribute('data-bloom-banner', 'multi-merge');
+    var label, badgeBg, badgeColor, badgeFont, badgeShadow;
+    if (tier === 'triple')      { label = '✨ Triple!';            badgeBg = '#EF9F27';                                                              badgeColor = '#412402'; badgeFont = 24; badgeShadow = '0 8px 24px rgba(0,0,0,0.3)'; }
+    else if (tier === 'quad')   { label = '💥 Quad!';              badgeBg = '#FAC775';                                                              badgeColor = '#412402'; badgeFont = 28; badgeShadow = '0 10px 28px rgba(250,199,117,0.5)'; }
+    else if (tier === 'mega')   { label = '🌟 MEGA!';              badgeBg = 'linear-gradient(135deg,#FFE08A 0%,#FF8E3C 100%)';                       badgeColor = '#1C1A18'; badgeFont = 32; badgeShadow = '0 12px 32px rgba(255,142,60,0.55)'; }
+    else /* massive */          { label = '⚡ MASSIVE ×' + count + '!'; badgeBg = 'linear-gradient(135deg,#FFE08A 0%,#FF6B9D 50%,#C8472F 100%)';      badgeColor = '#FFF';    badgeFont = 34; badgeShadow = '0 0 28px rgba(255,217,106,0.7), 0 14px 36px rgba(200,71,47,0.5)'; }
+    badge.style.cssText =
+      'position:fixed;top:38%;left:50%;transform:translate(-50%,-50%);z-index:9999;' +
+      'background:' + badgeBg + ';color:' + badgeColor + ';' +
+      'font-weight:900;font-size:' + badgeFont + 'px;letter-spacing:0.05em;' +
+      'padding:12px 28px;border-radius:24px;pointer-events:none;text-align:center;' +
+      'box-shadow:' + badgeShadow + ';' +
+      'animation:chainPop 0.95s ease-out forwards';
     badge.textContent = label;
     document.body.appendChild(badge);
-    buzz([60, 40]);
-    var mmShake = parseInt(getEventConfig('shake_multi_merge', count >= 4 ? '6' : '3'), 10) || 0;
+    setTimeout(function() { try { badge.remove(); } catch (e) {} }, 950);
+    // Sound — escalate with tier. Triple stays silent (the existing
+    // soundMerge fires anyway); quad+ gets a milestone twinkle.
+    if (!isBot) {
+      if (typeof soundMilestone === 'function') {
+        try {
+          if (tier === 'massive')   soundMilestone(7);
+          else if (tier === 'mega') soundMilestone(5);
+          else if (tier === 'quad') soundMilestone(3);
+        } catch (e) {}
+      }
+      // Buzz — pattern grows by tier. Triple = light, massive = extreme.
+      if (typeof buzz === 'function') {
+        try {
+          if (tier === 'massive')      buzz([50, 40, 60, 40, 80, 40, 120]);
+          else if (tier === 'mega')    buzz([40, 40, 60, 40, 100]);
+          else if (tier === 'quad')    buzz([60, 40, 80]);
+          else                         buzz([60, 40]);
+        } catch (e) {}
+      }
+      // Confetti for mega+ only.
+      if (typeof showConfetti === 'function') {
+        try {
+          if (tier === 'massive')   showConfetti(24);
+          else if (tier === 'mega') showConfetti(14);
+        } catch (e) {}
+      }
+    }
+    // Shake — quad and mega get the existing escalation; massive shakes
+    // harder to match the audio-visual peak.
+    var mmShakeDefault = tier === 'massive' ? '8' : tier === 'mega' ? '6' : tier === 'quad' ? '5' : '3';
+    var mmShake = parseInt(getEventConfig('shake_multi_merge', mmShakeDefault), 10) || 0;
     if (mmShake > 0) shakeGrid(mmShake);
-    setTimeout(function() { badge.remove(); }, 900);
+    // MM.1 — full-screen flash only for tier='massive' (6+ tiles). Mirrors
+    // the legendary chain spectacle: same z-index hierarchy + same fade
+    // duration so the visual language reads as "this is the same kind
+    // of peak moment".
+    if (tier === 'massive' && !isBot) {
+      try { showMassiveMergeFlash(count); } catch (e) {}
+    }
+    // Analytics — track rare big merges for product-side measurement.
+    try {
+      if (typeof trackEvent === 'function' && (tier === 'mega' || tier === 'massive')) {
+        trackEvent('multi_merge_big', { count: count, tier: tier });
+      }
+    } catch (e) {}
+  }
+
+  // MM.1 — full-screen flash for 6+ tile merges (the rarest in-game
+  // event after Crown Merge). Same shape as showLegendaryChainOverlay's
+  // flash so the visual vocabulary stays consistent.
+  function showMassiveMergeFlash(count) {
+    var flash = document.createElement('div');
+    flash.setAttribute('data-bloom-banner', 'massive-merge-flash');
+    flash.style.cssText =
+      'position:fixed;inset:0;z-index:9997;pointer-events:none;' +
+      'background:radial-gradient(circle at center, rgba(255,217,106,0.60) 0%, rgba(255,107,157,0.30) 35%, rgba(200,71,47,0.10) 70%, rgba(0,0,0,0) 100%);' +
+      'animation:massiveMergeFlash 1.2s ease-out forwards';
+    document.body.appendChild(flash);
+    setTimeout(function() { try { flash.remove(); } catch (e) {} }, 1300);
   }
 
   // Screen shake — makes big merges feel impactful
