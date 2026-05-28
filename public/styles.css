@@ -1073,7 +1073,10 @@
      5-question gate: scoped + auto-removes + cooldown-gated. */
   .clutch-save-banner {
     position: fixed;
-    top: 30%;
+    /* Sits at top:18% — above the legendary chain overlay (top:32%) and
+       the chain badge (top:45%) so a chain ≥5 clutch save shows BOTH
+       overlays cleanly stacked vertically instead of overlapping. */
+    top: 18%;
     left: 50%;
     transform: translate(-50%, -50%) scale(0.5);
     z-index: 9998;
