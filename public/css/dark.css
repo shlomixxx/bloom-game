@@ -165,6 +165,17 @@
   /* Misc */
   html[data-theme="dark"] .countdown { background: #2C2A28; color: #8E8A82; }
   html[data-theme="dark"] .lb-rank-pill { background: #2C2A28; color: #F2EFE9; }
+  /* Podium pills — keep the bright metallic gradients on dark too; only
+     soften the box-shadow halos so they don't bloom on a dark surface. */
+  html[data-theme="dark"] .lb-rank-pill-gold {
+    box-shadow: 0 0 0 2px rgba(255, 179, 71, 0.45), 0 4px 14px rgba(255, 142, 60, 0.30);
+  }
+  html[data-theme="dark"] .lb-rank-pill-silver {
+    box-shadow: 0 0 0 2px rgba(200, 200, 200, 0.30), 0 3px 10px rgba(0, 0, 0, 0.45);
+  }
+  html[data-theme="dark"] .lb-rank-pill-bronze {
+    box-shadow: 0 0 0 2px rgba(201, 126, 71, 0.45), 0 3px 10px rgba(0, 0, 0, 0.45);
+  }
   html[data-theme="dark"] .ach-unlock-toast { background: #2C2A28; }
   html[data-theme="dark"] .share-card { background: #1B3A2C; color: #DCF8C6; }
   html[data-theme="dark"] .lb-range { color: #8E8A82; }

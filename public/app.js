@@ -18585,14 +18585,30 @@
         : '<button class="btn" id="watch-ad-btn" style="background:transparent;border:1px solid #2E8B6F;color:#2E8B6F;padding:8px 16px;font-size:12px;border-radius:10px;margin-top:6px;font-weight:600">▶️ צפה בפרסומת וקבל ' + adCredits + '💎</button>';
 
       // ============ EMOTIONAL CONTEXT (1.3 game-over upgrade) ============
-      // Rank pill with total players so #23 doesn't read as "23 out of nowhere"
+      // Rank pill with total players so #23 doesn't read as "23 out of nowhere".
+      // Podium (top 3) gets a louder gold/silver/bronze variant — the strongest
+      // status-flex moment in the entire game; not surfacing it loses the snap.
       var rankPillHtml = '';
       if (dailyRank) {
-        var rankPillBody = '🏆 מקום <strong>#' + dailyRank + '</strong>';
-        if (dailyTotal && dailyTotal > 0) {
+        var rankPillExtra = '';
+        var rankPillPrefix = '🏆';
+        var rankPillClass = 'lb-rank-pill';
+        if (dailyRank === 1) {
+          rankPillPrefix = '👑';
+          rankPillExtra = ' מקום ראשון!';
+          rankPillClass += ' lb-rank-pill-gold';
+        } else if (dailyRank === 2) {
+          rankPillPrefix = '🥈';
+          rankPillClass += ' lb-rank-pill-silver';
+        } else if (dailyRank === 3) {
+          rankPillPrefix = '🥉';
+          rankPillClass += ' lb-rank-pill-bronze';
+        }
+        var rankPillBody = rankPillPrefix + ' מקום <strong>#' + dailyRank + '</strong>' + rankPillExtra;
+        if (dailyTotal && dailyTotal > 0 && dailyRank !== 1) {
           rankPillBody += ' מתוך ' + dailyTotal.toLocaleString();
         }
-        rankPillHtml = '<div class="lb-rank-pill">' + rankPillBody + '</div>';
+        rankPillHtml = '<div class="' + rankPillClass + '">' + rankPillBody + '</div>';
       }
 
       // 1.2-mod — invite the player to claim a real name (replaces the
@@ -18800,7 +18816,12 @@
           })() +
           watchAdHtml +
           (function() {
-            if (mode !== 'daily' && mode !== 'practice') return '';
+            // Daily login streak applies to every game mode (any game played
+            // today counts toward the streak). Showing the FOMO banner only on
+            // daily/practice was leaving contest/duel/dynamic finishers with
+            // zero retention nudge — they'd close the game with a 7-day
+            // streak and no reminder to come back tomorrow.
+            if (mode === 'challenge') return '';
             var s = loadStreak();
             var n = s.count | 0;
             var tomorrowReward = getDailyRewardAmount((n || 0) + 1);

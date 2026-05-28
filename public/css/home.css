@@ -251,6 +251,28 @@
     padding: 4px 10px; border-radius: 14px; font-size: 12px; font-weight: 600;
     margin-top: 8px;
   }
+  /* Podium variants — louder pills for top-3 finishers. Gold pulses to
+     amplify the "this is your status-flex moment" punch. */
+  .lb-rank-pill-gold {
+    background: linear-gradient(135deg, #FFE08A 0%, #FFB347 60%, #FF8E3C 100%);
+    color: #5B2E00; padding: 6px 14px; font-size: 14px; font-weight: 800;
+    box-shadow: 0 0 0 2px rgba(255, 179, 71, 0.35), 0 4px 14px rgba(255, 142, 60, 0.45);
+    animation: lbRankGoldPulse 2.2s ease-in-out infinite;
+  }
+  .lb-rank-pill-silver {
+    background: linear-gradient(135deg, #F2F2F2 0%, #C8C8C8 60%, #9E9E9E 100%);
+    color: #2A2A2A; padding: 5px 12px; font-size: 13px; font-weight: 700;
+    box-shadow: 0 0 0 2px rgba(200, 200, 200, 0.35), 0 3px 10px rgba(158, 158, 158, 0.35);
+  }
+  .lb-rank-pill-bronze {
+    background: linear-gradient(135deg, #E8B080 0%, #C97E47 60%, #8B5A2B 100%);
+    color: #2F1A05; padding: 5px 12px; font-size: 13px; font-weight: 700;
+    box-shadow: 0 0 0 2px rgba(201, 126, 71, 0.35), 0 3px 10px rgba(139, 90, 43, 0.35);
+  }
+  @keyframes lbRankGoldPulse {
+    0%, 100% { transform: scale(1); box-shadow: 0 0 0 2px rgba(255, 179, 71, 0.35), 0 4px 14px rgba(255, 142, 60, 0.45); }
+    50% { transform: scale(1.04); box-shadow: 0 0 0 4px rgba(255, 179, 71, 0.55), 0 6px 22px rgba(255, 142, 60, 0.65); }
+  }
   .lb-bar { height: 3px; border-radius: 2px; margin-top: 2px; }
   .lb-gap { font-size: 9px; color: #A8A6A0; margin-top: 1px; direction: rtl; }
   .lb-gap.you-gap { font-size: 10px; font-weight: 700; color: #BA7517; }
