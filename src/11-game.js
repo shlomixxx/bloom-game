@@ -435,12 +435,20 @@
     const infoEl = document.getElementById('mode-info');
     const chevEl = document.getElementById('mode-info-chevron');
     if (!bar) return;
+    // Compaction (May 2026): also paint the new .mode-chip in the top-row.
+    // The chip is the public face of mode info in the new layout; .mode-bar
+    // is hidden via CSS. Keep both in sync so a legacy-mode toggle works.
+    function paintModeChip(text) {
+      var lbl = document.getElementById('mode-chip-label');
+      if (lbl) lbl.textContent = text;
+    }
 
     // Title + subtitle reflect the current mode
     if (mode === 'daily') {
       bar.classList.remove('practice');
       title.textContent = 'אתגר יומי · ' + formatDateHe(dailyDate);
       sub.textContent = "אותו דאנג'ן לכולם היום";
+      paintModeChip('📅 יומי · ' + formatDateHe(dailyDate));
     } else if (mode === 'contest') {
       bar.classList.remove('practice');
       title.textContent = 'תחרות חברים';
@@ -449,15 +457,18 @@
         ? ' · ' + contestDiffPreset.emoji + ' ' + contestDiffPreset.name
         : '';
       sub.textContent = (activeContestData ? activeContestData.name : 'תחרות פעילה') + contestDiffStr;
+      paintModeChip('👥 ' + (activeContestData ? activeContestData.name : 'תחרות') + contestDiffStr);
     } else if (mode === 'challenge' && activeChallenge) {
       bar.classList.remove('practice');
       title.textContent = '🎁 אתגר פרס';
       sub.textContent = activeChallenge.name || activeChallenge.prizeText || 'אתגר פעיל';
+      paintModeChip('🏆 ' + (activeChallenge.name || 'אתגר פרס'));
     } else if (skinTrialMode && skinTrialId) {
       bar.classList.add('practice');
       var trialPack = SKIN_PACKS[skinTrialId];
       title.textContent = '🎨 ניסיון · ' + (trialPack ? trialPack.name : '');
       sub.textContent = 'ניקוד לא נשמר · שחק ותחליט';
+      paintModeChip('🎨 ניסיון · ' + (trialPack ? trialPack.name : 'סקין'));
     } else if (window._duelMode && activeDuelId) {
       bar.classList.remove('practice');
       title.textContent = '⚔️ דו-קרב 1v1';
@@ -466,6 +477,7 @@
         ? ' · ' + duelDiffPreset.emoji + ' ' + duelDiffPreset.name
         : '';
       sub.textContent = 'vs ' + (window._duelOpponentName || 'יריב') + duelDiffStr;
+      paintModeChip('⚔️ vs ' + (window._duelOpponentName || 'יריב') + duelDiffStr);
     } else if (mode === 'dynamic' && window._activeDynamicBoard) {
       // Dynamic-board mode — surface the personal best AND the global
       // leader as target chips. The personal-best chip is the in-game
@@ -476,6 +488,7 @@
       bar.classList.add('practice');
       var dbName = window._activeDynamicBoard.name || 'לוח דינמי';
       title.textContent = '🎯 ' + dbName;
+      paintModeChip('🎯 ' + dbName);
       var pbEnabled = (typeof dynFeatureEnabled === 'function') ? dynFeatureEnabled('personal_best') : true;
       var lbEnabled = (typeof dynFeatureEnabled === 'function') ? dynFeatureEnabled('global_lb') : true;
       var bbRec = (pbEnabled && typeof getBoardBest === 'function') ? getBoardBest(window._activeDynamicBoard.id) : null;
@@ -507,6 +520,7 @@
       var pdiff = sessionDifficulty && DIFFICULTY_PRESETS[sessionDifficulty.label]
         ? DIFFICULTY_PRESETS[sessionDifficulty.label]
         : DIFFICULTY_PRESETS.default;
+      paintModeChip('🎮 חופשי · ' + pdiff.emoji + ' ' + pdiff.name);
       // Compact single-line subtitle. Previously this was "<chip> · תתחרה על
       // לוח המובילים 🏆" which wrapped to a second line on narrow phones,
       // stealing pixels from grid-wrap → fitGrid shrank every cell. Now: chip

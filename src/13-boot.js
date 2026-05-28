@@ -241,13 +241,143 @@
 
   init(savedMode);
 
-  // (B7 tier-bar toggle removed May 2026. User feedback: when the
-  //  bar was hidden, players didn't know which tiles exist or what
-  //  merges into what. Bar is now permanently visible — it's the
-  //  teaching strip. Space reclaimed instead by hiding the mode-tabs
-  //  row (יומי/אתגרים/חברים/חופשי) since the bottom nav already
-  //  handles mode navigation. CSS in base.css + the mode-info area
-  //  is now a clickable mode-picker target via a chevron indicator.)
+  // (B7 tier-bar toggle removed May 2026. Bar permanently visible.)
+
+  // ════════════════════════════════════════════════════════════
+  // Game-UI Compaction (May 2026) — Approach B + Rollback path.
+  // Spec: docs/superpowers/specs/2026-05-28-game-ui-compaction-design.md
+  //
+  // Body class `legacy-game-ui` reverts everything to pre-compaction.
+  // Trigger paths:
+  //   1. localStorage `bloom_game_ui_legacy` = '1' (persistent)
+  //   2. URL `?ui=legacy` (one-time test, doesn't write LS)
+  // Toggled via the ⋯ menu → "🎨 גירסה ישנה" link.
+  // ════════════════════════════════════════════════════════════
+  (function applyGameUiVariant() {
+    var legacy = false;
+    try {
+      if (localStorage.getItem('bloom_game_ui_legacy') === '1') legacy = true;
+      var qp = new URLSearchParams(window.location.search);
+      if (qp.get('ui') === 'legacy') legacy = true;
+    } catch (e) {}
+    if (legacy) document.body.classList.add('legacy-game-ui');
+    // Ensure the new-ui-hint exists in legacy mode (mounted once).
+    if (legacy && !document.querySelector('.new-ui-hint')) {
+      var hint = document.createElement('div');
+      hint.className = 'new-ui-hint';
+      hint.textContent = '✨ נסה את העיצוב החדש →';
+      hint.onclick = function() {
+        try { localStorage.removeItem('bloom_game_ui_legacy'); } catch (e) {}
+        location.reload();
+      };
+      document.body.appendChild(hint);
+    }
+  })();
+
+  // ────────────────────────────────────────────────────────────
+  // Mode-chip wiring: clicking it opens the existing mode picker.
+  // ────────────────────────────────────────────────────────────
+  var __modeChipEl = document.getElementById('mode-chip');
+  if (__modeChipEl) {
+    __modeChipEl.addEventListener('click', function() {
+      if (typeof window.showModePicker === 'function') {
+        try { window.showModePicker(); } catch (e) {}
+      }
+    });
+  }
+
+  // ────────────────────────────────────────────────────────────
+  // ⋯ menu popover: 4 items (home / achievements / info / reset)
+  // + a rollback toggle "🎨 גירסה ישנה" / "✨ עיצוב חדש".
+  // ────────────────────────────────────────────────────────────
+  var __topMoreBtn = document.getElementById('topmore');
+  var __topMenuOpen = null;
+  function closeTopMenu() {
+    if (__topMenuOpen) {
+      try { __topMenuOpen.remove(); } catch (e) {}
+      __topMenuOpen = null;
+      if (__topMoreBtn) __topMoreBtn.setAttribute('aria-expanded', 'false');
+    }
+    document.removeEventListener('click', __onTopMenuOutside, true);
+    document.removeEventListener('keydown', __onTopMenuKey, true);
+  }
+  function __onTopMenuOutside(e) {
+    if (!__topMenuOpen) return;
+    if (__topMenuOpen.contains(e.target)) return;
+    if (__topMoreBtn && __topMoreBtn.contains(e.target)) return;
+    closeTopMenu();
+  }
+  function __onTopMenuKey(e) {
+    if (e.key === 'Escape') { e.preventDefault(); closeTopMenu(); }
+  }
+  function buildTopMenu(anchorRect) {
+    var pop = document.createElement('div');
+    pop.className = 'top-menu-popover';
+    pop.setAttribute('role', 'menu');
+    var items = [
+      { id: 'home',     icon: '🏠', label: 'חזרה לבית',  click: function() { closeTopMenu(); var b = document.getElementById('home-btn'); if (b) b.click(); else if (typeof showHome === 'function') showHome(); } },
+      { id: 'ach',      icon: '🏅', label: 'הישגים',     click: function() { closeTopMenu(); var b = document.getElementById('achievements'); if (b) b.click(); } },
+      { id: 'info',     icon: 'ℹ️', label: 'מידע על ניקוד', click: function() { closeTopMenu(); var b = document.getElementById('info'); if (b) b.click(); } },
+      { id: 'reset',    icon: '🔄', label: 'התחל מחדש',  click: function() { closeTopMenu(); var b = document.getElementById('reset'); if (b) b.click(); } }
+    ];
+    items.forEach(function(it) {
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'top-menu-item';
+      btn.setAttribute('role', 'menuitem');
+      var ic = document.createElement('span'); ic.className = 'top-menu-item-icon'; ic.textContent = it.icon;
+      var tx = document.createElement('span'); tx.className = 'top-menu-item-text'; tx.textContent = it.label;
+      btn.appendChild(ic);
+      btn.appendChild(tx);
+      btn.onclick = it.click;
+      pop.appendChild(btn);
+    });
+    // Separator + rollback toggle.
+    var sep = document.createElement('div'); sep.className = 'top-menu-sep'; pop.appendChild(sep);
+    var rollback = document.createElement('button');
+    rollback.type = 'button';
+    rollback.className = 'top-menu-item';
+    rollback.setAttribute('role', 'menuitem');
+    var rIcon = document.createElement('span'); rIcon.className = 'top-menu-item-icon';
+    var rText = document.createElement('span'); rText.className = 'top-menu-item-text';
+    var isLegacy = document.body.classList.contains('legacy-game-ui');
+    rIcon.textContent = isLegacy ? '✨' : '🎨';
+    rText.textContent = isLegacy ? 'עיצוב חדש' : 'גירסה ישנה';
+    rollback.appendChild(rIcon);
+    rollback.appendChild(rText);
+    rollback.onclick = function() {
+      try {
+        if (isLegacy) localStorage.removeItem('bloom_game_ui_legacy');
+        else localStorage.setItem('bloom_game_ui_legacy', '1');
+      } catch (e) {}
+      closeTopMenu();
+      location.reload();
+    };
+    pop.appendChild(rollback);
+    // Position: anchored under the ⋯ button, right-aligned within viewport.
+    document.body.appendChild(pop);
+    var pr = pop.getBoundingClientRect();
+    var ar = anchorRect;
+    var top = ar.bottom + 6;
+    var left = Math.min(window.innerWidth - pr.width - 8, ar.left);
+    if (left < 8) left = 8;
+    pop.style.top = Math.round(top) + 'px';
+    pop.style.left = Math.round(left) + 'px';
+    return pop;
+  }
+  if (__topMoreBtn) {
+    __topMoreBtn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      if (__topMenuOpen) { closeTopMenu(); return; }
+      var rect = __topMoreBtn.getBoundingClientRect();
+      __topMenuOpen = buildTopMenu(rect);
+      __topMoreBtn.setAttribute('aria-expanded', 'true');
+      setTimeout(function() {
+        document.addEventListener('click', __onTopMenuOutside, true);
+        document.addEventListener('keydown', __onTopMenuKey, true);
+      }, 0);
+    });
+  }
 
   // Show home only for genuine first-timers or if the player was idle.
   // Returning mid-game players go straight to their game.

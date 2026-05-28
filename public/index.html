@@ -73,7 +73,7 @@ function trackEvent(n,p){try{gtag('event',n,p||{});}catch(e){}}
 })();
 </script>
 
-<link rel="stylesheet" href="/styles.css?v=20260528b">
+<link rel="stylesheet" href="/styles.css?v=20260528c">
 </head>
 <body>
 
@@ -86,26 +86,37 @@ function trackEvent(n,p){try{gtag('event',n,p||{});}catch(e){}}
     <div class="top-row">
       <div class="brand">BLOOM</div>
       <div class="top-buttons">
-        <button class="icon-btn" id="home-btn" aria-label="חזרה לבית">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12l9-9 9 9M5 10v10h14V10M10 20v-6h4v6"/></svg>
-        </button>
         <button class="icon-btn" id="mute" aria-label="השתק">
           <svg id="mute-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 8a5 5 0 0 1 0 8M17.7 5a9 9 0 0 1 0 14M6 15H4a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1h2l3.5-4.5A.8.8 0 0 1 11 5v14a.8.8 0 0 1-1.5.5L6 15"/></svg>
         </button>
         <button class="icon-btn" id="leaderboard" aria-label="טבלת מובילים">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="14" width="5" height="7" rx="1"/><rect x="9.5" y="9" width="5" height="12" rx="1"/><rect x="16" y="4" width="5" height="17" rx="1"/></svg>
         </button>
-        <button class="icon-btn" id="achievements" aria-label="הישגים">
+        <button class="icon-btn" id="topmore" aria-label="עוד אפשרויות" aria-haspopup="true" aria-expanded="false" title="עוד">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="18" cy="12" r="1.4"/></svg>
+        </button>
+        <!-- Legacy buttons: hidden by default, only visible in body.legacy-game-ui mode -->
+        <button class="icon-btn icon-btn-legacy-only" id="home-btn" aria-label="חזרה לבית">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12l9-9 9 9M5 10v10h14V10M10 20v-6h4v6"/></svg>
+        </button>
+        <button class="icon-btn icon-btn-legacy-only" id="achievements" aria-label="הישגים">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4z"/><path d="M7 4H4v2a3 3 0 0 0 3 3M17 4h3v2a3 3 0 0 1-3 3"/></svg>
         </button>
-        <button class="icon-btn" id="info" aria-label="מידע על ניקוד">
+        <button class="icon-btn icon-btn-legacy-only" id="info" aria-label="מידע על ניקוד">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01M11 12h1v4h1"/></svg>
         </button>
-        <button class="icon-btn" id="reset" aria-label="התחל מחדש">
+        <button class="icon-btn icon-btn-legacy-only" id="reset" aria-label="התחל מחדש">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11A8.1 8.1 0 0 0 4.5 9M4 5v4h4"/><path d="M4 13a8.1 8.1 0 0 0 15.5 2M20 19v-4h-4"/></svg>
         </button>
       </div>
     </div>
+    <!-- B7-revised May 2026: compact mode chip lives next to stats so the
+         old .mode-bar can be hidden during play, freeing ~50px for the grid.
+         Hidden via CSS when body.legacy-game-ui (rollback path). -->
+    <button class="mode-chip" id="mode-chip" type="button" aria-label="החלף מצב משחק">
+      <span class="mode-chip-label" id="mode-chip-label">משחק</span>
+      <span class="mode-chip-chev">⌄</span>
+    </button>
     <div class="stats">
       <div class="stat stat-primary"><div class="stat-label">ניקוד</div><div class="stat-val" id="score">0</div></div>
       <div class="stat"><div class="stat-label">שיא</div><div class="stat-val" id="best">0</div></div>
@@ -130,7 +141,7 @@ function trackEvent(n,p){try{gtag('event',n,p||{});}catch(e){}}
   <div class="grid-wrap" id="grid-wrap"><div class="grid" id="grid"></div></div>
 </div>
 
-<script src="/app.js?v=20260528b"></script>
+<script src="/app.js?v=20260528c"></script>
 
 
 <script src="/bot.js"></script>

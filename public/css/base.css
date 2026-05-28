@@ -202,32 +202,172 @@
   }
   .top, .mode-bar, .tier-bar { flex-shrink: 0; }
 
-  /* B7 (May 2026) — REVISED: mode-tabs row hidden (redundant with
-     bottom nav which already handles mode picking via the home
-     tab). Tier-bar stays VISIBLE always — it's the teaching strip.
-     Tap on .mode-info → mode picker modal opens. Chevron next to
-     mode title indicates this is interactive.
-     Net space reclaim: ~32-40px (mode-tabs row height). */
-  .mode-bar .mode-tabs { display: none !important; }
-  .mode-info { cursor: pointer; gap: 8px !important; }
-  /* Chevron visible always to telegraph clickability. The .mode-info-chevron
-     was inline-styled display:none in HTML for the old in-contest-only path;
-     this rule overrides to always-show during gameplay. */
-  .mode-info .mode-info-chevron {
-    display: block !important;
-    width: 14px !important;
-    height: 14px !important;
-    opacity: 0.5;
-    margin-inline-start: auto;
-    flex-shrink: 0;
-  }
-  .mode-info:hover .mode-info-chevron { opacity: 0.9; }
+  /* ════════════════════════════════════════════════════════════
+     GAME-UI COMPACTION (May 2026, Approach B + Rollback)
+     Spec: docs/superpowers/specs/2026-05-28-game-ui-compaction-design.md
 
-  /* Compact mode bar. Tighter padding reclaims ~10-15px. */
-  .mode-bar { padding: 6px 12px !important; }
-  .mode-icon { width: 28px !important; height: 28px !important; }
-  .mode-icon svg { width: 16px !important; height: 16px !important; }
-  .mode-title { font-size: 13px !important; }
+     Goal: chrome 232px → ~145px (mobile). Grid cells 63 → 71+ px.
+     Rollback: body.legacy-game-ui reverts everything to pre-2026-05-28.
+     ════════════════════════════════════════════════════════════ */
+
+  /* ── PHASE 2: hide mode-bar entirely in new UI ────────── */
+  .mode-bar { display: none !important; }
+
+  /* ── Mode chip lives in .top-row (new compact mode indicator) ── */
+  .mode-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    min-height: 36px;
+    background: linear-gradient(180deg, #FFF7E6 0%, #FFE8B8 100%);
+    border: 1px solid rgba(186, 117, 23, 0.35);
+    border-radius: 14px;
+    font: inherit;
+    font-size: 12.5px;
+    font-weight: 700;
+    color: #4A2C0A;
+    cursor: pointer;
+    margin-inline-start: auto;
+    margin-inline-end: 8px;
+    white-space: nowrap;
+    max-width: 60%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition: background 0.15s ease, transform 0.12s ease;
+  }
+  .mode-chip:hover { background: linear-gradient(180deg, #FFF0CC, #FFD98A); }
+  .mode-chip:active { transform: scale(0.97); }
+  .mode-chip-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .mode-chip-chev {
+    font-size: 14px;
+    opacity: 0.65;
+    line-height: 1;
+  }
+  html[data-theme="dark"] .mode-chip {
+    background: linear-gradient(180deg, #4A3220, #5A3F1F);
+    border-color: rgba(250, 199, 117, 0.5);
+    color: #FAC775;
+  }
+
+  /* ── PHASE 1: compact stats row ─────────────────────────── */
+  /* Single-line layout, tighter padding, smaller fonts.
+     Score keeps prominence (22px) for the dopamine pop. */
+  .stats {
+    padding: 6px 12px !important;
+    gap: 8px !important;
+  }
+  .stat { padding: 6px 8px !important; min-height: 36px !important; }
+  .stat-label { font-size: 10px !important; opacity: 0.7; }
+  .stat-val { font-size: 14px !important; }
+  .stat-primary .stat-val { font-size: 22px !important; }
+  .stat-shop .stat-val { font-size: 14px !important; }
+
+  /* ── PHASE 3: legacy-only buttons hidden by default ─────── */
+  /* The 4 icons that moved into the ⋯ popover are hidden in new layout
+     and only re-shown in body.legacy-game-ui. */
+  .icon-btn-legacy-only { display: none !important; }
+
+  /* ── ⋯ menu popover ─────────────────────────────────────── */
+  .top-menu-popover {
+    position: fixed;
+    z-index: 3500;
+    background: #FFFFFF;
+    border: 1px solid rgba(0,0,0,0.08);
+    border-radius: 14px;
+    box-shadow: 0 18px 44px rgba(0,0,0,0.22);
+    padding: 6px;
+    min-width: 220px;
+    direction: rtl;
+    animation: topMenuPop 0.18s ease-out;
+  }
+  @keyframes topMenuPop {
+    from { opacity: 0; transform: translateY(-6px) scale(0.96); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  .top-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 10px 12px;
+    background: transparent;
+    border: none;
+    font: inherit;
+    font-size: 14px;
+    color: var(--color-text, #1C1A18);
+    cursor: pointer;
+    border-radius: 10px;
+    text-align: right;
+    direction: rtl;
+    min-height: 44px;
+  }
+  .top-menu-item:hover { background: var(--color-surface, #F5F2EC); }
+  .top-menu-item:active { background: var(--color-surface-2, rgba(0,0,0,0.08)); }
+  .top-menu-item-icon { font-size: 18px; line-height: 1; flex-shrink: 0; }
+  .top-menu-item-text { flex: 1; }
+  .top-menu-sep {
+    height: 1px;
+    background: rgba(0,0,0,0.08);
+    margin: 4px 6px;
+  }
+  html[data-theme="dark"] .top-menu-popover {
+    background: #2A2724;
+    border-color: rgba(255,255,255,0.08);
+    color: #F2EFE9;
+  }
+  html[data-theme="dark"] .top-menu-item { color: #F2EFE9; }
+  html[data-theme="dark"] .top-menu-item:hover { background: rgba(255,255,255,0.08); }
+
+  /* ── PHASE 4: tier-cell shrink on very narrow viewports ─── */
+  /* iPhone SE / older Androids (320-360px) — prevent horizontal scroll */
+  @media (max-width: 360px) {
+    .tier-icon { width: 28px !important; height: 28px !important; }
+    .tier-score { font-size: 9px !important; }
+    .tier-bar { padding: 2px 8px 3px !important; gap: 2px !important; }
+  }
+
+  /* ════════════════════════════════════════════════════════════
+     PHASE 6: ROLLBACK via body.legacy-game-ui
+     User can flip this from the ⋯ menu → "🎨 גירסה ישנה"
+     ════════════════════════════════════════════════════════════ */
+  body.legacy-game-ui .mode-bar { display: flex !important; }
+  body.legacy-game-ui .mode-chip { display: none !important; }
+  body.legacy-game-ui .icon-btn-legacy-only { display: flex !important; }
+  /* Stats restored to original sizes */
+  body.legacy-game-ui .stats { padding: 8px 12px !important; gap: 10px !important; }
+  body.legacy-game-ui .stat { padding: 8px 10px !important; min-height: 48px !important; }
+  body.legacy-game-ui .stat-label { font-size: 11px !important; }
+  body.legacy-game-ui .stat-val { font-size: 18px !important; }
+  body.legacy-game-ui .stat-primary .stat-val { font-size: 28px !important; }
+
+  /* A small "try the new design" link, shown only in legacy mode */
+  body.legacy-game-ui::after {
+    content: "";
+  }
+  body.legacy-game-ui .new-ui-hint {
+    display: block;
+    position: fixed;
+    bottom: calc(76px + env(safe-area-inset-bottom, 0px));
+    left: 50%;
+    transform: translateX(-50%);
+    background: linear-gradient(160deg, #FFE9A3, #F5C24B);
+    color: #2E1A1A;
+    padding: 8px 14px;
+    border-radius: 14px;
+    border: 2px solid rgba(255,255,255,0.6);
+    font-size: 12.5px;
+    font-weight: 700;
+    box-shadow: 0 6px 16px rgba(201, 145, 26, 0.35);
+    z-index: 1500;
+    cursor: pointer;
+    direction: rtl;
+  }
+  body:not(.legacy-game-ui) .new-ui-hint { display: none; }
   /* On phones (no body padding) — kill the rounded corners + box-shadow
      so the app uses every pixel of the viewport edge-to-edge. */
   @media (max-width: 420px) {
