@@ -16828,6 +16828,13 @@
   // chain 3!" moment that's still meaningful but doesn't deserve a
   // full-screen takeover.
   function showLifetimeFirstChainPill(chainCount) {
+    // L1 — dedup. A rapid 3→4 lifetime-first chain sequence within the
+    // 1.7s lifetime of the existing pill would stack two at the same
+    // position. If one is already on-screen, drop the new one — the
+    // bigger chain's legendary overlay will carry the spectacle anyway.
+    try {
+      if (document.querySelector('[data-bloom-banner="lifetime-chain-pill"]')) return;
+    } catch (e) {}
     var pill = document.createElement('div');
     pill.setAttribute('data-bloom-banner', 'lifetime-chain-pill');
     pill.style.cssText =
@@ -17427,17 +17434,27 @@
               var tierShake = parseInt(getEventConfig('shake_tier_up', nt >= 7 ? '5' : '3'), 10) || 0;
               if (tierShake > 0) shakeGrid(tierShake);
               // LF.1 — Lifetime-first detection. Compare against the
-              // persisted lifetime best (only bumped at game-end, so safe
-              // to read mid-game). When this tier has NEVER been reached
-              // in the player's entire history, fire a much louder
-              // celebration. Tier 8 (Crown) lifetime-first is the rarest
-              // event in the whole game — it gets a screenshot-prompt
-              // overlay so the player can share the moment.
+              // persisted lifetime best, then OPPORTUNISTICALLY bump it
+              // immediately so a force-close before game-over can't make
+              // the same crown re-fire "FIRST EVER" next session. The
+              // game-end `bumpLifetimeMax(BEST_TIER_KEY, highestTier)` is
+              // still authoritative for higher tiers reached after this
+              // first crossing; this just locks in the floor right here.
               try {
                 if (typeof loadLifetimeInt === 'function' && nt >= 5 && !window.__bloomBotActive && !skinTrialMode) {
                   var lifetimeBest = loadLifetimeInt(BEST_TIER_KEY) || 0;
                   if (nt > lifetimeBest) {
+                    // M2 — persist the lifetime-first marker before the
+                    // celebration fires. If the player closes the tab
+                    // during the 900ms delay, the bump still landed.
+                    try { bumpLifetimeMax(BEST_TIER_KEY, nt); } catch (e) {}
                     setTimeout(function() {
+                      // M1 — skip if a legendary chain banner is already
+                      // on-screen; two full-screen radial flashes layered
+                      // at once read as chaos, not celebration.
+                      try {
+                        if (document.querySelector('[data-bloom-banner="chain-legendary"]')) return;
+                      } catch (e) {}
                       try { showLifetimeFirstTierOverlay(nt); } catch (e) {}
                     }, 900); // let the per-game banner play first
                   }
@@ -17654,6 +17671,12 @@
       if (isGameOver()) {
         busy = true; // prevent further taps
         window.__bloomGameOver = true; // stop heartbeat
+        // DG.1 — clear danger-mode aura immediately when game-over fires.
+        // Without this the over-screen renders behind a red-pulsing grid
+        // and red-tinted empty cells — polluting the most emotional surface
+        // in the game. `updateDangerMode()` early-returns on the game-over
+        // flag, so it can't self-clear.
+        try { document.body.classList.remove('danger-mode'); inDangerMode = false; } catch (e) {}
         if (window.endHeartbeat) window.endHeartbeat(); // remove from admin live view
         stopEventSystem();
         // TB.1 — tear down the floating booster strip so it doesn't sit
@@ -17942,6 +17965,8 @@
     if (isGameOver()) {
       clearTimeout(_busyTimer);
       window.__bloomGameOver = true; // stop heartbeat
+      // DG.1 — same cleanup as the column-full game-over branch above.
+      try { document.body.classList.remove('danger-mode'); inDangerMode = false; } catch (e) {}
       if (window.endHeartbeat) window.endHeartbeat(); // remove from admin live view
       stopEventSystem();
       // TB.1 — tear down the floating booster strip so the over screen
