@@ -1067,6 +1067,53 @@
     50%      { transform: scale(1.03); box-shadow: 0 8px 28px rgba(255, 142, 60, 0.75); }
   }
 
+  /* CS.1 — Clutch Save banner. Fires on the danger→safe transition.
+     Gold-green gradient (relief colors). Sits above the grid center
+     so it doesn't overlap with chain badges (which use top:45%).
+     5-question gate: scoped + auto-removes + cooldown-gated. */
+  .clutch-save-banner {
+    position: fixed;
+    top: 30%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(0.5);
+    z-index: 9998;
+    background: linear-gradient(135deg, #2E8B6F 0%, #FFD96A 100%);
+    color: #1C1A18;
+    border-radius: 18px;
+    padding: 14px 26px 12px;
+    text-align: center;
+    direction: rtl;
+    box-shadow: 0 8px 28px rgba(46, 139, 111, 0.55),
+                0 0 0 2px rgba(255, 217, 106, 0.45);
+    pointer-events: none;
+    opacity: 0;
+    animation: clutchSavePop 1.7s cubic-bezier(0.17, 0.67, 0.21, 1.4) forwards;
+  }
+  .cs-eyebrow {
+    font-size: 20px;
+    font-weight: 900;
+    letter-spacing: 0.02em;
+    margin-bottom: 4px;
+    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.35);
+  }
+  .cs-sub {
+    font-size: 11px;
+    font-weight: 600;
+    color: rgba(28, 26, 24, 0.78);
+  }
+  @keyframes clutchSavePop {
+    0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.4); }
+    18%  { opacity: 1; transform: translate(-50%, -50%) scale(1.12); }
+    35%  { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+    80%  { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+    100% { opacity: 0; transform: translate(-50%, -70%) scale(0.95); }
+  }
+  /* Dark theme — keep the gradient bright so the relief color reads. */
+  html[data-theme="dark"] .clutch-save-banner {
+    box-shadow: 0 8px 32px rgba(46, 139, 111, 0.70),
+                0 0 0 2px rgba(255, 217, 106, 0.55);
+  }
+
   /* LF.2 — Lifetime-first chain pill (3-4). Mythic chain 5+ uses the
      legendary overlay's FIRST EVER label variant; this is the gentler
      pill for the chain-3 and chain-4 first-time-ever moments. */

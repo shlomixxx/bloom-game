@@ -176,6 +176,10 @@
     // (≤3 playable empty cells). Used as a one-shot edge detector — fires
     // sound + buzz ONCE when entering danger, never while sustaining.
     inDangerMode = false;
+    // CS.1 — clutch-save cooldown reset on every fresh game. Without this,
+    // a save in the previous game's last moments would block the first
+    // save in the new game until 5s elapsed.
+    lastClutchSaveAt = 0;
     try { document.body.classList.remove('danger-mode'); } catch (e) {}
     usedContinue = false; // reset second chance
     // Clear duel mode unless this init was called from startDuelGame
@@ -3022,7 +3026,59 @@
         }
       } else {
         document.body.classList.remove('danger-mode');
+        // CS.1 — CLUTCH SAVE. Falling-edge celebration: we were in danger,
+        // and now we're not. This is THE most cinematic moment in any
+        // board game — the player just escaped game-over via a merge.
+        // Cooldown 5s prevents oscillation spam (player who rapidly
+        // enters/exits danger doesn't get spammed). Don't fire if the
+        // empties count is suspiciously high (>= 8) — that means the
+        // recovery came from continue-ad clearing rows, not a clutch
+        // merge, and shouldn't be celebrated as one.
+        var now = Date.now();
+        if (now - lastClutchSaveAt > 5000 && empties < 8) {
+          lastClutchSaveAt = now;
+          try { showClutchSaveBanner(); } catch (e) {}
+        }
       }
+    } catch (e) {}
+  }
+
+  // CS.1 — the "you escaped game-over!" celebration. Gold-green gradient
+  // (relief colors) with "💪 ניצלת ברגע!" copy. Slightly bigger than the
+  // chain badge but smaller than the legendary overlay so the visual
+  // hierarchy reads: clutch save < legendary chain < lifetime first.
+  function showClutchSaveBanner() {
+    var banner = document.createElement('div');
+    banner.setAttribute('data-bloom-banner', 'clutch-save');
+    banner.className = 'clutch-save-banner';
+    banner.innerHTML =
+      '<div class="cs-eyebrow">💪 ניצלת ברגע!</div>' +
+      '<div class="cs-sub">המשך לשחק כדי לעלות יותר</div>';
+    document.body.appendChild(banner);
+    setTimeout(function() { try { banner.remove(); } catch (e) {} }, 1700);
+    // Audio: rising tone pair (340 → 540Hz, opposite of the danger-enter
+    // cue) reads as "relief / rescue". Then a brief milestone twinkle.
+    if (typeof tone === 'function') {
+      try {
+        tone({ freq: 340, duration: 0.14, type: 'triangle', vol: 0.10, filter: 4000 });
+        tone({ freq: 540, duration: 0.22, type: 'triangle', vol: 0.12, filter: 5000, delay: 0.10 });
+      } catch (e) {}
+    }
+    if (typeof soundMilestone === 'function') {
+      try { setTimeout(function() { soundMilestone(4); }, 240); } catch (e) {}
+    }
+    // Buzz: relief pulse — slower, softer than the chain-celebration
+    // pattern. Reads as "exhale" not "punch".
+    if (typeof buzz === 'function') {
+      try { buzz([40, 80, 40, 80, 80]); } catch (e) {}
+    }
+    // Small confetti — relief sparkle, not full celebration. The full
+    // moment-of-glory confetti is reserved for chain 5+ + lifetime-first.
+    if (typeof showConfetti === 'function') {
+      try { showConfetti(14); } catch (e) {}
+    }
+    try {
+      if (typeof trackEvent === 'function') trackEvent('clutch_save', {});
     } catch (e) {}
   }
 

@@ -350,6 +350,7 @@
   let bestBeatenThisGame = false; // live best tracking
   let usedContinue = false;       // second chance (once per game)
   let inDangerMode = false;       // DG.1 — near-game-over edge detector
+  let lastClutchSaveAt = 0;       // CS.1 — cooldown timestamp for clutch-save celebrations
   const TOTAL_PLAY_TIME_KEY = 'bloom_total_play_ms';
 
   // ──────────────────────────────────────────────────────────────────────
