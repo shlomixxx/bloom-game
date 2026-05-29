@@ -1465,28 +1465,51 @@
     }
   }
 
-  // BL.1 polish — local simulator for async bot-duel opponent score.
-  // Deterministic per duel id + time so consecutive ticks read the same
-  // when nothing changes (no jitter). Tracks the player's score so the
-  // bot stays competitive — most games stay within 15-20% delta, with
-  // small swings that feel like the bot is "playing".
+  // BL.1.2 — monotonic local simulator for async bot-duel opponent score.
+  // KEY CONSTRAINT: real players' scores never DECREASE (the merge engine
+  // only adds points). BL.1 had ±8% sine-noise → bot's displayed score
+  // could go down between ticks → looked obviously fake. Fix: track the
+  // highest score we've ever shown for THIS duel and never display less.
+  // The proposed score (ratio × player_score) is the FLOOR — we step the
+  // displayed value up toward it (with a small minimum positive delta so
+  // it always feels alive even when player score is static).
+  var _botLiveScoreCeiling = 0;
+  var _botLiveScoreLastDuelId = null;
+  var _botLiveScoreLastTickMs = 0;
   function computeBotLiveScore(duelRow, mySc, now) {
+    // Reset ceiling when the duel changes (new game).
+    if (duelRow.id !== _botLiveScoreLastDuelId) {
+      _botLiveScoreLastDuelId = duelRow.id;
+      _botLiveScoreCeiling = 0;
+      _botLiveScoreLastTickMs = now;
+    }
     var createdMs = duelRow.created_at ? new Date(duelRow.created_at).getTime() : now;
     var elapsedSec = Math.max(0, (now - createdMs) / 1000);
-    // Typical game length used for the easing curve. Beyond this, ratio caps.
     var expectedSec = 90;
     var progress = Math.min(1, elapsedSec / expectedSec);
-    // Player's score is the anchor. Bot starts at 60-70% of player and eases
-    // toward 95-105% as time progresses → feels like they're catching up.
-    var lo = 0.65 + 0.30 * Math.sqrt(progress);  // 0.65 → 0.95
-    var hi = 0.80 + 0.25 * Math.sqrt(progress);  // 0.80 → 1.05
-    // Noise oscillates ±8% per ~3s window, seeded by duel id.
+    // Target ratio: starts at 70% of player, eases toward 92% as time
+    // progresses. Slight oscillation on the UPPER bound only (so the
+    // proposed value can sometimes jump higher; the ceiling guards down).
+    var baseRatio = 0.70 + 0.22 * Math.sqrt(progress);  // 0.70 → 0.92
     var seed = ((duelRow.id | 0) * 9301 + 49297) % 233280;
-    var phase = elapsedSec * 0.7 + seed * 0.01;
-    var noise = 0.92 + 0.16 * ((Math.sin(phase) + 1) / 2);  // 0.92-1.08
-    var ratio = (lo + (hi - lo) * ((Math.sin(phase * 0.5) + 1) / 2)) * noise;
-    // Floor at 0; never negative.
-    return Math.max(0, Math.floor((mySc | 0) * ratio));
+    var phase = elapsedSec * 0.5 + seed * 0.01;
+    var bonus = 0.04 * ((Math.sin(phase) + 1) / 2);     // 0 → 0.04 positive only
+    var ratio = baseRatio + bonus;
+    var proposed = Math.max(0, Math.floor((mySc | 0) * ratio));
+    // Step toward proposed: if proposed > ceiling, accept it (bot caught up).
+    // Otherwise, add a tiny constant positive delta proportional to elapsed
+    // time so the score keeps ticking up even when the player is paused.
+    if (proposed > _botLiveScoreCeiling) {
+      _botLiveScoreCeiling = proposed;
+    } else {
+      // Small positive drift: ~50 points/sec for a typical 50K game.
+      // Scaled to player's score so it's proportional. Min 30/sec.
+      var dtSec = Math.max(0, (now - _botLiveScoreLastTickMs) / 1000);
+      var drift = Math.max(30, Math.floor((mySc | 0) * 0.0008)) * dtSec;
+      _botLiveScoreCeiling = Math.floor(_botLiveScoreCeiling + drift);
+    }
+    _botLiveScoreLastTickMs = now;
+    return _botLiveScoreCeiling;
   }
 
   function refreshDuelHudData() {

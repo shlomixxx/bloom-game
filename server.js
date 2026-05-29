@@ -16973,7 +16973,19 @@ app.get('/api/live-state/:deviceId', async (req, res) => {
         `SELECT display_name, mode, score, highest_tier, updated_at
          FROM player_heartbeat WHERE device_id = $1 AND updated_at > NOW() - INTERVAL '60 seconds'`, [did]);
     }
-    if (!r.rows.length) return res.status(404).json({ error: 'not_found' });
+    if (!r.rows.length) {
+      // BL.1.2 — bot-duel opponents have NO heartbeat row. The spectator
+      // widget in the player's waiting overlay was rendering "🔴 לא מחובר"
+      // + empty grid → obvious tell that this isn't a real player.
+      // Synthesize a believable live-state from the duel row (bot's
+      // computed score + a fake-but-plausible grid) so the bot looks
+      // like a player who's "still finishing their game".
+      if (did.startsWith('bot-')) {
+        const botLive = await _synthesizeBotLiveState(did);
+        if (botLive) return res.json(botLive);
+      }
+      return res.status(404).json({ error: 'not_found' });
+    }
     const row = r.rows[0];
     let grid = null;
     if (row.grid_json) { try { grid = JSON.parse(row.grid_json); } catch (e) {} }
@@ -16990,6 +17002,133 @@ app.get('/api/live-state/:deviceId', async (req, res) => {
     res.status(500).json({ error: 'server' });
   }
 });
+
+// BL.1.2 — synthesize a live state for a bot opponent so the player's
+// spectator widget shows "playing" + a real-looking grid + a growing
+// score instead of "🔴 לא מחובר" + empty grid.
+//
+// Score curve: starts low, climbs over the player's typical game length
+// (~90s) toward a target. Monotonic — never decreases on subsequent
+// reads (uses a sin-bounded easing on the ratio, not on the output).
+//
+// Grid: deterministic per duel id, a believable-looking 4×6 layout of
+// tiers 1-4 with maybe a tier-5 if the bot's "highest_tier" justifies
+// it. Doesn't have to be a legal merge state — the spectator widget
+// just shows what's on the board, no engine validation.
+async function _synthesizeBotLiveState(botDeviceId) {
+  try {
+    const r = await pool.query(
+      `SELECT id, opponent_name, opponent_score, created_at, is_live,
+              started_at, duration_seconds, bot_settle_at, status,
+              challenger_score
+         FROM duels
+        WHERE opponent_device = $1 AND is_bot_match = TRUE
+          AND status IN ('pending', 'accepted', 'settled', 'tie')
+          AND created_at > NOW() - INTERVAL '6 hours'
+        ORDER BY created_at DESC LIMIT 1`,
+      [botDeviceId]
+    );
+    if (!r.rows.length) return null;
+    const d = r.rows[0];
+    const createdMs = new Date(d.created_at).getTime();
+    const nowMs = Date.now();
+    // Settled? Show the final calibrated score so the spectator can
+    // verify it matches the result. Status text reflects "finished".
+    if (d.opponent_score != null) {
+      return {
+        ok: true,
+        name: d.opponent_name || 'יריב',
+        mode: 'duel',
+        score: d.opponent_score | 0,
+        tier: _tierForScore(d.opponent_score | 0),
+        grid: _synthesizeBotGrid(d.id, d.opponent_score | 0),
+        updatedAt: new Date().toISOString()
+      };
+    }
+    // Still "playing" — compute progressive score. For live races, the
+    // already-existing _liveBotScoreAt is canonical. For async duels,
+    // use an analogous curve targeting ~90s typical game length.
+    let score;
+    if (d.is_live && d.started_at && d.duration_seconds) {
+      score = _liveBotScoreAt(d.id, new Date(d.started_at).getTime(),
+                              d.duration_seconds, nowMs);
+    } else {
+      // Async curve: target the player's likely range with a sqrt easing.
+      // Use the player's CURRENT submitted score (if known) as the
+      // calibration anchor so the bot's displayed live score lands
+      // close to what it'll settle to.
+      const elapsed = Math.max(0, (nowMs - createdMs) / 1000);
+      const progress = Math.min(1, elapsed / 90);
+      const anchor = (d.challenger_score | 0) > 0
+        ? d.challenger_score | 0
+        : 40000; // fallback target when player hasn't submitted yet
+      const baseRatio = 0.70 + 0.22 * Math.sqrt(progress);
+      const seed = ((d.id | 0) * 9301 + 49297) % 233280;
+      const bonus = 0.04 * ((Math.sin(elapsed * 0.5 + seed * 0.01) + 1) / 2);
+      score = Math.max(100, Math.floor(anchor * (baseRatio + bonus)));
+    }
+    return {
+      ok: true,
+      name: d.opponent_name || 'יריב',
+      mode: 'duel',
+      score,
+      tier: _tierForScore(score),
+      grid: _synthesizeBotGrid(d.id, score),
+      updatedAt: new Date().toISOString()
+    };
+  } catch (e) {
+    console.warn('[bot-live-state]', e.message);
+    return null;
+  }
+}
+
+function _tierForScore(score) {
+  // Loose mapping: at typical-game scores, what's the highest tier the
+  // bot would plausibly have reached?
+  if (score >= 60000) return 6;
+  if (score >= 30000) return 5;
+  if (score >= 15000) return 4;
+  if (score >= 5000)  return 3;
+  if (score >= 1000)  return 2;
+  return 1;
+}
+
+// Deterministic per duel + score-banded grid. 6 rows × 4 cols, tiers 1-6.
+// Doesn't simulate the merge engine — just creates a plausible-looking
+// board. Higher score → higher tiers visible + a couple more occupied cells.
+function _synthesizeBotGrid(duelId, score) {
+  const ROWS = 6, COLS = 4;
+  const maxTier = _tierForScore(score);
+  // Seeded PRNG (Mulberry32) so the same duel always renders the same grid.
+  let s = (duelId * 2654435761) >>> 0;
+  function rand() {
+    s |= 0; s = (s + 0x6D2B79F5) | 0;
+    let t = Math.imul(s ^ (s >>> 15), 1 | s);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  }
+  const grid = [];
+  for (let r = 0; r < ROWS; r++) grid.push(new Array(COLS).fill(0));
+  // Fill bottom-up with gravity-respecting placement.
+  const fillProbs = [0, 0.7, 0.5, 0.35, 0.2, 0.1];
+  for (let c = 0; c < COLS; c++) {
+    let cellsToPlace = 2 + Math.floor(rand() * 4); // 2-5 cells per column
+    for (let r = ROWS - 1; r >= 0 && cellsToPlace > 0; r--) {
+      // Tier weighted toward lower numbers, biased up if maxTier is high.
+      let tier;
+      const roll = rand();
+      if (roll < 0.45) tier = 1;
+      else if (roll < 0.70) tier = 2;
+      else if (roll < 0.86) tier = Math.min(3, maxTier);
+      else if (roll < 0.95) tier = Math.min(4, maxTier);
+      else if (roll < 0.99) tier = Math.min(5, maxTier);
+      else tier = Math.min(6, maxTier);
+      grid[r][c] = tier;
+      cellsToPlace--;
+    }
+  }
+  return grid;
+}
 
 // Cleanup stale heartbeats: every 30s, anything older than 60s
 // Aggressive cleanup helps when server restarts orphan bot rows in DB

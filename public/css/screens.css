@@ -1317,6 +1317,14 @@
   body.duel-active .app {
     padding-top: max(80px, calc(env(safe-area-inset-top) + 76px)) !important;
   }
+  /* BL.1.2 polish — the persistent .bloom-bottom-nav (position:fixed at
+     viewport-bottom) was overlapping the bottom row of the grid during
+     a duel. The standard guard `body:not([data-active-tab])` failed
+     here because the player launched the duel FROM the bottom-nav
+     (קהילה tab) and the body still carried data-active-tab="community".
+     Belt-and-suspenders: explicit hide whenever a duel is active.
+     Restored in stopDuelOpponentHud (removes body.duel-active class). */
+  body.duel-active .bloom-bottom-nav { display: none !important; }
 
   .duel-hud {
     position: fixed;
