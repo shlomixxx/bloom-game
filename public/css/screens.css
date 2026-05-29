@@ -1301,6 +1301,14 @@
      while playing". Sits at the bottom so it doesn't obscure the
      game board; auto-removed via stopDuelOpponentHud() at game-over.
      ============================================================ */
+  /* When a duel is active, the duel HUD shows my score + opponent score
+     redundant with the .top header + .stats row. Hide them — the HUD is
+     enough, and the reclaimed ~80px of vertical real estate gives the
+     grid bigger cells (same pattern as TB.1+TB.2). Restored in
+     stopDuelOpponentHud. */
+  body.duel-active .top { display: none !important; }
+  body.duel-active .stats { display: none !important; }
+
   .duel-hud {
     position: fixed;
     left: 50%;

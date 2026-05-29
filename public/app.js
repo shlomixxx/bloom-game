@@ -772,6 +772,18 @@
       '<div style="font-size:16px;font-weight:700;margin-bottom:12px">⚔️ דו-קרב 1v1</div>' +
       '<div style="font-size:12px;color:#6F6E68;margin-bottom:12px">אתגר שחקן ספציפי! שניכם משחקים על אותו לוח — מי שמשיג יותר נקודות מנצח.</div>' +
       myCodePill +
+      // Friends picker — list of existing friends with one-tap "challenge".
+      // Way faster than typing a 4-char code, and the user can search by
+      // name when the list grows. Hidden until fetchFriends resolves so a
+      // player with no friends doesn't see an empty panel.
+      '<div id="duel-friends-panel" style="display:none;margin-bottom:10px;border:1px solid rgba(0,0,0,0.08);border-radius:10px;background:#FFFDF8;overflow:hidden">' +
+        '<div style="display:flex;align-items:center;justify-content:space-between;gap:6px;padding:7px 10px;background:linear-gradient(135deg,#FFF7E6,#FFEBD0);border-bottom:1px solid rgba(0,0,0,0.06)">' +
+          '<div style="font-size:11px;font-weight:700;color:#7A4A07">👥 החברים שלך · <span id="duel-friends-count">0</span></div>' +
+          '<input id="duel-friends-search" type="text" placeholder="🔍 חפש שם או קוד" style="flex:1;max-width:140px;padding:4px 8px;border:1px solid rgba(0,0,0,0.12);border-radius:6px;font-size:11px;font-family:inherit;background:#FFF;outline:none">' +
+        '</div>' +
+        '<div id="duel-friends-list" style="max-height:148px;overflow-y:auto;padding:6px"></div>' +
+        '<div id="duel-friends-empty-search" style="display:none;padding:10px;text-align:center;font-size:11px;color:#A8A6A0">לא נמצאו חברים תואמים</div>' +
+      '</div>' +
       '<div style="font-size:11px;font-weight:600;margin-bottom:4px">קוד היריב</div>' +
       // direction:ltr — the code "BLOOM-XXXX" is LTR English text, so the
       // pill must sit on the LEFT and the suffix input on the RIGHT, even
@@ -815,6 +827,124 @@
 
     // Load my duels
     loadMyDuels();
+
+    // Friends picker — fetch the friend list, populate, wire search +
+    // per-row click. Each row click stuffs the 4-char suffix into the
+    // input below so the player just taps "שלח אתגר". Rows are built
+    // via DOM API (createElement + textContent) — friend names come
+    // from the server and we never trust them for HTML.
+    (function initFriendsPicker() {
+      if (typeof window.fetchFriends !== 'function') return;
+      var panel = document.getElementById('duel-friends-panel');
+      var listHost = document.getElementById('duel-friends-list');
+      var countEl = document.getElementById('duel-friends-count');
+      var searchEl = document.getElementById('duel-friends-search');
+      var emptyEl = document.getElementById('duel-friends-empty-search');
+      if (!panel || !listHost) return;
+
+      var allFriends = [];
+
+      function buildRow(f) {
+        var suffix = '';
+        if (f.code) {
+          var m = String(f.code).match(/BLOOM-([A-HJ-NP-Z2-9]{4})/i);
+          if (m) suffix = m[1].toUpperCase();
+        }
+        if (!suffix) return null;
+
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'duel-friend-pick';
+        btn.setAttribute('data-suffix', suffix);
+        btn.style.cssText = 'display:flex;align-items:center;gap:8px;width:100%;padding:6px 8px;margin:0 0 4px 0;border:1px solid rgba(0,0,0,0.08);border-radius:8px;background:#FFF;cursor:pointer;text-align:right;font-family:inherit';
+
+        var avatar = document.createElement('div');
+        avatar.style.cssText = 'width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#FFE194,#FAC775);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0';
+        avatar.textContent = '👤';
+        btn.appendChild(avatar);
+
+        var body = document.createElement('div');
+        body.style.cssText = 'flex:1;min-width:0;display:flex;flex-direction:column;align-items:flex-start;gap:1px';
+        var nameDiv = document.createElement('div');
+        nameDiv.style.cssText = 'font-size:12px;font-weight:700;color:#1C1A18;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
+        nameDiv.textContent = f.name || 'אנונימי';
+        var codeDiv = document.createElement('div');
+        codeDiv.style.cssText = 'font-size:10px;color:#6F6E68;font-family:ui-monospace,monospace;letter-spacing:0.05em';
+        codeDiv.textContent = f.code || '';
+        body.appendChild(nameDiv);
+        body.appendChild(codeDiv);
+        btn.appendChild(body);
+
+        var right = document.createElement('div');
+        right.style.cssText = 'display:flex;flex-direction:column;align-items:flex-end;gap:2px;flex-shrink:0';
+        var status = document.createElement('span');
+        if (f.onlineNow) {
+          status.style.cssText = 'font-size:9px;color:#2E8B6F;font-weight:700';
+          status.textContent = '🟢 פעיל';
+        } else if (f.playedToday) {
+          status.style.cssText = 'font-size:9px;color:#BA7517;font-weight:700';
+          status.textContent = '✓ שיחק היום';
+        } else {
+          status.style.cssText = 'font-size:9px;color:#A8A6A0';
+          status.textContent = '⏰ לא פעיל';
+        }
+        right.appendChild(status);
+        var pickHint = document.createElement('span');
+        pickHint.style.cssText = 'font-size:11px;color:#7A4A07;font-weight:700';
+        pickHint.textContent = '⚔️ בחר';
+        right.appendChild(pickHint);
+        btn.appendChild(right);
+
+        btn.onclick = function() {
+          var input = document.getElementById('duel-opponent-suffix');
+          if (input) {
+            input.value = suffix;
+            try { input.dispatchEvent(new Event('input', { bubbles: true })); } catch (e) {}
+            try { input.focus(); } catch (e) {}
+          }
+          var siblings = listHost.querySelectorAll('.duel-friend-pick');
+          for (var i = 0; i < siblings.length; i++) {
+            siblings[i].style.background = '#FFF';
+            siblings[i].style.borderColor = 'rgba(0,0,0,0.08)';
+          }
+          btn.style.background = 'linear-gradient(135deg,#FFE194,#FAC775)';
+          btn.style.borderColor = '#BA7517';
+        };
+        return btn;
+      }
+
+      function applyFilter() {
+        var q = ((searchEl && searchEl.value) || '').trim().toLowerCase();
+        var filtered = !q ? allFriends : allFriends.filter(function(f) {
+          var name = (f.name || '').toLowerCase();
+          var code = (f.code || '').toLowerCase();
+          return name.indexOf(q) >= 0 || code.indexOf(q) >= 0;
+        });
+        while (listHost.firstChild) listHost.removeChild(listHost.firstChild);
+        for (var i = 0; i < filtered.length; i++) {
+          var row = buildRow(filtered[i]);
+          if (row) listHost.appendChild(row);
+        }
+        if (emptyEl) emptyEl.style.display = (filtered.length === 0 && q) ? 'block' : 'none';
+      }
+
+      window.fetchFriends(false).then(function(d) {
+        if (!d || !d.ok) return;
+        allFriends = (d.friends || []).filter(function(f) { return f && f.code; });
+        if (!allFriends.length) return;
+        panel.style.display = 'block';
+        if (countEl) countEl.textContent = String(allFriends.length);
+        applyFilter();
+      });
+
+      if (searchEl) {
+        var debTimer = null;
+        searchEl.addEventListener('input', function() {
+          if (debTimer) clearTimeout(debTimer);
+          debTimer = setTimeout(applyFilter, 100);
+        });
+      }
+    })();
 
     // Gift-to-friend opens a dedicated modal — uses the SAME suffix as
     // the duel form is pre-filled with (if the player typed one) so a
@@ -1173,6 +1303,8 @@
     if (_duelHudMyScoreTick) { clearInterval(_duelHudMyScoreTick); _duelHudMyScoreTick = null; }
     var hud = document.getElementById('duel-hud');
     if (hud) hud.remove();
+    // Restore the .top + .stats row for the next non-duel game.
+    try { document.body.classList.remove('duel-active'); } catch (e) {}
     _duelHudDuelRow = null;
     _duelHudLastOppScore = null;
     _duelHudFinalized = false;
@@ -1262,6 +1394,11 @@
     // which has clipped fixed children on some Safari versions. Body
     // is the safest containing block for a position:fixed element.
     document.body.appendChild(hud);
+    // Flag body so CSS can hide the redundant .top + .stats row during
+    // a duel — the HUD already shows my score + opponent score, and
+    // killing the duplicate row reclaims ~80px for the grid (TB.1+TB.2
+    // pattern). Removed in stopDuelOpponentHud.
+    try { document.body.classList.add('duel-active'); } catch (e) {}
     // Wire the exit handler. Uses native confirm() so a fat-finger tap
     // can't accidentally end the duel.
     var exitBtn = document.getElementById('duel-hud-exit');
