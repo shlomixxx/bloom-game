@@ -74,9 +74,14 @@
   }
 
   function maybeShowGuildTile() {
-    // T1.1 — Guilds unlock at L15. Social/team play is a deep mechanic;
-    // showing it on day 1 sends mixed signals about what BLOOM is.
-    try { if (typeof getPlayerLevel === 'function' && getPlayerLevel() < 15) return; } catch (e) {}
+    // FD.1 — Guilds lowered from L15 to L8. Industry data (Royal Match,
+    // Clash Royale, Brawl Stars): clan retention = +35% D30 and 3.4×
+    // sessions/day vs solo. Pulling the gate 7 games forward activates
+    // the single strongest retention lever earlier — peer pressure
+    // beats every other mechanic in F2P puzzles. Create cost (500💎
+    // from config) still keeps it from being noise for L1-7 players;
+    // joining via code is free + the modal lets them browse first.
+    try { if (typeof getPlayerLevel === 'function' && getPlayerLevel() < 8) return; } catch (e) {}
     fetchGuildState(false).then(function(d) {
       if (!d || !d.ok || !d.enabled) return;
       var home = document.getElementById('home-screen-v2') || document.getElementById('home-screen');

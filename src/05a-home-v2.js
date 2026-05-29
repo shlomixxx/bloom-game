@@ -296,6 +296,18 @@
     }
     if (typeof updateHomeSeasonPassTile === 'function') updateHomeSeasonPassTile();
 
+    // FD.1 — Feature Discovery Map. Tile + next-unlock banner mount
+    // at the TOP of the home content area (smallest setTimeout) so a
+    // returning veteran sees the level-progress front-and-center, and
+    // a new player understands what's coming. Both surfaces self-
+    // remove at L20 (banner) / become "all unlocked" badge (tile).
+    if (window.__bloomDiscovery) {
+      setTimeout(function() {
+        try { if (window.__bloomDiscovery.maybeMountTile) window.__bloomDiscovery.maybeMountTile(); } catch (e) {}
+        try { if (window.__bloomDiscovery.maybeMountNextUnlock) window.__bloomDiscovery.maybeMountNextUnlock(); } catch (e) {}
+      }, 200);
+    }
+
     // Stage 20 — Starter Pack offer check. Throttled to 1/min internally.
     if (typeof maybeOfferStarterPack === 'function') {
       // Defer slightly so the home shell mounts first.
