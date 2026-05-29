@@ -1649,10 +1649,18 @@
     widget.setAttribute('data-duel-spec-widget', '1');
     widget.style.cssText = 'margin-top:14px;padding:12px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:14px;direction:rtl';
     widget.innerHTML =
+      // BL.1.5 — countdown row at TOP for max prominence. Shows "Y שניות
+      // ליריב" so player knows how much longer until bot finishes.
+      '<div data-dspec-countdown-row style="display:none;justify-content:center;align-items:center;gap:6px;margin-bottom:10px;padding:8px 12px;background:linear-gradient(135deg,rgba(74,15,31,0.7),rgba(140,42,64,0.6));border-radius:10px;border:1px solid rgba(255,217,61,0.35)">' +
+        '<span style="font-size:14px">⏰</span>' +
+        '<span style="font-size:12px;color:#FFE9A3" data-dspec-countdown-label>נשארו ליריב</span>' +
+        '<span data-dspec-countdown style="font-size:22px;font-weight:900;font-variant-numeric:tabular-nums;color:#FFD93D;min-width:34px;display:inline-block">--</span>' +
+        '<span style="font-size:11px;color:rgba(255,233,163,0.7)">שניות</span>' +
+      '</div>' +
       '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;gap:10px">' +
         '<div style="display:flex;align-items:center;gap:6px;font-size:12px;color:#9FE1CB">' +
           '<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#2E8B6F;animation:dspecPulse 1.2s ease-in-out infinite"></span>' +
-          '<span>צופה ב-' + escapeHtml(oppName) + ' חי</span>' +
+          '<span data-dspec-header>צופה ב-' + escapeHtml(oppName) + ' חי</span>' +
         '</div>' +
         '<div style="font-size:11px;color:#A8A6A0" data-dspec-status>מתחבר…</div>' +
       '</div>' +
@@ -1681,6 +1689,11 @@
         '.dspec-cell-appear{animation:dspecAppear 420ms cubic-bezier(.34,1.56,.64,1)}' +
         '.dspec-cell-merge{animation:dspecMerge 360ms ease-out}' +
         '.dspec-cell-clear{animation:dspecClear 280ms ease-in}' +
+        // BL.1.5 — countdown urgency pulse for last 10s + opp score bump.
+        '@keyframes dspecCountdownPulse{0%,100%{box-shadow:0 0 0 rgba(255,77,109,0.6)}50%{box-shadow:0 0 16px rgba(255,77,109,1)}}' +
+        '.dspec-countdown-urgent{animation:dspecCountdownPulse 0.6s ease-in-out infinite;border-color:#FF4D6D !important}' +
+        '@keyframes dspecScoreBump{0%{transform:scale(1)}40%{transform:scale(1.25);color:#FFE9A3}100%{transform:scale(1)}}' +
+        '.dspec-score-bump{animation:dspecScoreBump 360ms cubic-bezier(.34,1.56,.64,1);display:inline-block}' +
       '</style>';
     // Insert before the "Play Again" button — last child of card.
     var btn = card.querySelector('button');
@@ -1709,7 +1722,44 @@
           return;
         }
         if (statusEl) statusEl.textContent = '🟢 מתעדכן';
-        if (scoreEl) scoreEl.textContent = (d.score | 0).toLocaleString();
+        // BL.1.5 — score-bump animation when opponent's number grows.
+        if (scoreEl) {
+          var prevSc = parseInt(scoreEl.dataset.lastValue || '0', 10);
+          var newSc = d.score | 0;
+          scoreEl.textContent = newSc.toLocaleString();
+          if (newSc > prevSc) {
+            scoreEl.classList.remove('dspec-score-bump');
+            void scoreEl.offsetWidth;
+            scoreEl.classList.add('dspec-score-bump');
+          }
+          scoreEl.dataset.lastValue = String(newSc);
+        }
+        // BL.1.5 — countdown row: shows "Y seconds left for the bot",
+        // adapts label to live race ("נשארו ליריב") vs async ("עוד").
+        var cdRow = document.querySelector('[data-dspec-countdown-row]');
+        var cdEl = document.querySelector('[data-dspec-countdown]');
+        var cdLabel = document.querySelector('[data-dspec-countdown-label]');
+        var headerEl = document.querySelector('[data-dspec-header]');
+        if (cdRow && cdEl && typeof d.timeLeftMs === 'number' && d.timeLeftMs > 0) {
+          cdRow.style.display = 'flex';
+          cdEl.textContent = Math.ceil(d.timeLeftMs / 1000);
+          if (cdLabel) cdLabel.textContent = d.isLive ? 'נשארו ליריב' : 'מגיש בעוד';
+          if (headerEl) {
+            headerEl.textContent = d.isLive
+              ? '⚡ צופה בקרב חי · ' + ((d.name || 'יריב'))
+              : 'צופה ב-' + (d.name || 'יריב') + ' חי';
+          }
+          // Pulse red in last 10 seconds.
+          if (d.timeLeftMs < 10000) {
+            cdRow.classList.add('dspec-countdown-urgent');
+            cdEl.style.color = '#FF4D6D';
+          } else {
+            cdRow.classList.remove('dspec-countdown-urgent');
+            cdEl.style.color = '#FFD93D';
+          }
+        } else if (cdRow) {
+          cdRow.style.display = 'none';
+        }
         if (!Array.isArray(d.grid)) return;
         var tiers = getActiveTiers();
         var cells = gridHost.children;

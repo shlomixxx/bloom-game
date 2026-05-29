@@ -576,6 +576,7 @@ export async function initDb() {
     // BL.1 — Bot social-proof + auto-fallback for duels (May 2026).
     `ALTER TABLE duels ADD COLUMN IF NOT EXISTS is_bot_match BOOLEAN DEFAULT FALSE`,
     `ALTER TABLE duels ADD COLUMN IF NOT EXISTS bot_settle_at TIMESTAMPTZ`,
+    `ALTER TABLE duels ADD COLUMN IF NOT EXISTS bot_trajectory JSONB`,
     `CREATE INDEX IF NOT EXISTS idx_duels_bot_settle
        ON duels (bot_settle_at)
        WHERE is_bot_match = TRUE AND status = 'accepted' AND opponent_score IS NULL`,

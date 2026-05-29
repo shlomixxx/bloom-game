@@ -2652,6 +2652,12 @@ INSERT INTO game_config (key, value) VALUES ('issues_auto_compensate_critical', 
 -- ============================================================
 ALTER TABLE duels ADD COLUMN IF NOT EXISTS is_bot_match  BOOLEAN     DEFAULT FALSE;
 ALTER TABLE duels ADD COLUMN IF NOT EXISTS bot_settle_at TIMESTAMPTZ;
+-- BL.1.5 — pre-simulated trajectory for bot duels. Computed once on
+-- first poll then cached. Shape: { snapshots: [{t,s,h,g}], finalScore,
+-- finalGrid, finalTier }. ~30 snapshots × ~120 bytes ≈ 4 KB / duel.
+-- Stores the bot's REAL gameplay (same seed + difficulty as player) so
+-- the spectator widget shows actual moves instead of random shapes.
+ALTER TABLE duels ADD COLUMN IF NOT EXISTS bot_trajectory JSONB;
 CREATE INDEX IF NOT EXISTS idx_duels_bot_settle
   ON duels (bot_settle_at)
   WHERE is_bot_match = TRUE AND status = 'accepted' AND opponent_score IS NULL;

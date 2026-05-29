@@ -17058,7 +17058,8 @@ async function _synthesizeBotLiveState(botDeviceId) {
     const r = await pool.query(
       `SELECT id, opponent_name, opponent_score, opponent_live_score, created_at, is_live,
               started_at, duration_seconds, bot_settle_at, status,
-              challenger_score
+              challenger_score, board_seed, difficulty_weights, difficulty_label,
+              bot_trajectory
          FROM duels
         WHERE opponent_device = $1 AND is_bot_match = TRUE
           AND status IN ('pending', 'accepted', 'settled', 'tie')
@@ -17069,27 +17070,40 @@ async function _synthesizeBotLiveState(botDeviceId) {
     if (!r.rows.length) return null;
     const d = r.rows[0];
     const nowMs = Date.now();
-    // Settled? Show the final calibrated score.
+    // BL.1.5 — compute/cache the bot's REAL gameplay trajectory once
+    // per duel (same seed + difficulty as the player → fair fight).
+    const traj = await _getOrComputeBotTrajectory(d).catch(() => null);
+    // Settled? Show the final calibrated score + the trajectory's
+    // final grid (matches what the player saw evolving during the game).
     if (d.opponent_score != null) {
+      const finalGrid = (traj && traj.finalGrid) || _synthesizeBotGrid(d.id, d.opponent_score | 0);
+      const finalTier = (traj && traj.finalTier) || _tierForScore(d.opponent_score | 0);
       return {
         ok: true,
         name: d.opponent_name || 'יריב',
         mode: 'duel',
+        difficulty: d.difficulty_label || 'default',
+        isLive: !!d.is_live,
         score: d.opponent_score | 0,
-        tier: _tierForScore(d.opponent_score | 0),
-        grid: _synthesizeBotGrid(d.id, d.opponent_score | 0),
+        tier: finalTier,
+        grid: finalGrid,
+        timeLeftMs: 0,
+        status: 'finished',
         updatedAt: new Date().toISOString()
       };
     }
     // BL.1.3 — compute candidate; use DB-enforced monotonicity by
     // writing GREATEST(opponent_live_score, candidate) and returning
     // the result. This guarantees the displayed score NEVER decreases
-    // between polls regardless of formula discontinuities (e.g. when
-    // player submits and the target switches from estimate to calibrated).
+    // between polls regardless of formula discontinuities.
     let candidate;
+    let timeLeftMs = 0;
     if (d.is_live && d.started_at && d.duration_seconds) {
       candidate = _liveBotScoreAt(d.id, new Date(d.started_at).getTime(),
                                   d.duration_seconds, nowMs);
+      const startedMs = new Date(d.started_at).getTime();
+      const durMs = (d.duration_seconds | 0) * 1000;
+      timeLeftMs = Math.max(0, (startedMs + durMs) - nowMs);
     } else {
       const cfg = await _loadBotDuelConfig();
       const createdMs = new Date(d.created_at).getTime();
@@ -17097,10 +17111,12 @@ async function _synthesizeBotLiveState(botDeviceId) {
       candidate = _botAsyncCandidateScore(
         d.id, createdMs, d.challenger_score, settleAtMs, nowMs, cfg.playerWinPct
       );
+      // Time-left for async = time until bot_settle_at fires.
+      if (settleAtMs) timeLeftMs = Math.max(0, settleAtMs - nowMs);
     }
     // Atomic GREATEST update so opponent_live_score acts as a monotonic
     // ceiling. Reading the RETURNING value gives us the actual displayed
-    // score (which may be the ceiling if candidate fell below it).
+    // score (may be the ceiling if candidate fell below it).
     const upd = await pool.query(
       `UPDATE duels SET opponent_live_score = GREATEST(COALESCE(opponent_live_score, 0), $1)
          WHERE id = $2
@@ -17108,13 +17124,46 @@ async function _synthesizeBotLiveState(botDeviceId) {
       [candidate, d.id]
     );
     const score = upd.rows[0] ? (upd.rows[0].opponent_live_score | 0) : candidate;
+    // BL.1.5 — snapshot lookup by PROGRESS (0..1) through the bot's
+    // natural game. The trajectory's score values are just metadata
+    // (typically much lower than the displayed calibrated curve); we
+    // map "displayed bot score" → "fraction of the way through the
+    // bot's real game" → "which snapshot to render".
+    //
+    // Target for the progress denominator depends on duel mode:
+    //   - Live race: deterministic per-duel target (35K-110K)
+    //   - Async post-submit: calibrated final (known) — settle will match
+    //   - Async pre-submit: 40K fallback (rough average)
+    const cfg2 = await _loadBotDuelConfig();
+    let targetForProgress;
+    if (d.is_live) {
+      targetForProgress = _liveBotTargetScore(d.id);
+    } else if ((d.challenger_score | 0) > 0) {
+      targetForProgress = _calibrateBotScore(d.id, d.challenger_score, cfg2.playerWinPct);
+    } else {
+      targetForProgress = 40000;
+    }
+    let grid, tier;
+    if (traj && traj.snapshots && traj.snapshots.length) {
+      const progress = targetForProgress > 0 ? (score / targetForProgress) : 0;
+      const snap = _snapshotForProgress(traj, progress);
+      grid = snap ? snap.g : (traj.snapshots[0] && traj.snapshots[0].g);
+      tier = snap ? (snap.h | 0) : 1;
+    } else {
+      grid = _synthesizeBotGrid(d.id, score);
+      tier = _tierForScore(score);
+    }
     return {
       ok: true,
       name: d.opponent_name || 'יריב',
       mode: 'duel',
+      difficulty: d.difficulty_label || 'default',
+      isLive: !!d.is_live,
       score,
-      tier: _tierForScore(score),
-      grid: _synthesizeBotGrid(d.id, score),
+      tier,
+      grid,
+      timeLeftMs,
+      status: 'playing',
       updatedAt: new Date().toISOString()
     };
   } catch (e) {
@@ -17134,6 +17183,314 @@ function _tierForScore(score) {
   return 1;
 }
 
+// ─── BL.1.5 — Pure bot engine ported from bot-engine.js ────────────
+// Used for REAL trajectory simulation so the spectator widget shows
+// the bot actually playing the same seed + difficulty as the player.
+// Same pure functions, no DB / no async. Mirrors the engine the live
+// game uses so the bot's moves look identical to real player moves.
+const _BOT_ROWS = 6, _BOT_COLS = 4, _BOT_MAX_TIER = 8;
+
+function _botEngFindGroup(g, sr, sc, tier) {
+  const visited = new Set();
+  const group = [];
+  const stack = [[sr, sc]];
+  while (stack.length) {
+    const [r, c] = stack.pop();
+    if (r < 0 || r >= _BOT_ROWS || c < 0 || c >= _BOT_COLS) continue;
+    const k = r * _BOT_COLS + c;
+    if (visited.has(k)) continue;
+    if (g[r][c] !== tier) continue;
+    visited.add(k);
+    group.push([r, c]);
+    stack.push([r-1,c],[r+1,c],[r,c-1],[r,c+1]);
+  }
+  return group;
+}
+
+function _botEngApplyGravity(g) {
+  for (let c = 0; c < _BOT_COLS; c++) {
+    let w = _BOT_ROWS - 1;
+    for (let r = _BOT_ROWS - 1; r >= 0; r--) {
+      if (g[r][c] !== 0) {
+        if (r !== w) { g[w][c] = g[r][c]; g[r][c] = 0; }
+        w--;
+      }
+    }
+  }
+}
+
+function _botEngProcessChains(g) {
+  let totalScore = 0, chains = 0, highest = 1;
+  while (true) {
+    let merged = false;
+    for (let r = 0; r < _BOT_ROWS && !merged; r++) {
+      for (let c = 0; c < _BOT_COLS; c++) {
+        const t = g[r][c];
+        if (t === 0 || t === _BOT_MAX_TIER) continue;
+        if (t > highest) highest = t;
+        const group = _botEngFindGroup(g, r, c, t);
+        if (group.length >= 2) {
+          let kr = -1, kc = -1;
+          for (const [gr, gc] of group) {
+            if (gr > kr || (gr === kr && gc < kc)) { kr = gr; kc = gc; }
+          }
+          for (const [gr, gc] of group) {
+            if (gr === kr && gc === kc) continue;
+            g[gr][gc] = 0;
+          }
+          const nt = Math.min(t + 1, _BOT_MAX_TIER);
+          g[kr][kc] = nt;
+          if (nt > highest) highest = nt;
+          chains++;
+          const mult = 1 + (chains - 1) * 0.5;
+          totalScore += nt * 10 * group.length * mult;
+          merged = true;
+          break;
+        }
+      }
+    }
+    if (!merged) break;
+    _botEngApplyGravity(g);
+  }
+  return { score: totalScore, chains, highest };
+}
+
+// Parse difficulty_weights from "55,28,12,5,0,0,0,0" string format used
+// by the duel row. NULL/empty → default weights matching the regular engine.
+function _botEngParseWeights(weightsStr) {
+  if (!weightsStr || typeof weightsStr !== 'string') {
+    return [0, 55, 28, 12, 5, 0, 0, 0, 0];
+  }
+  const parts = weightsStr.split(',').map(p => parseInt(p, 10) || 0);
+  // Front pad to 9 (index 0 = nothing, index 1..8 = tier weights)
+  const w = new Array(9).fill(0);
+  for (let i = 0; i < 8 && i < parts.length; i++) w[i + 1] = parts[i];
+  return w;
+}
+
+// Seeded RNG (Mulberry32) for deterministic per-duel piece picks +
+// column choices. Different seeds for pieces vs columns so the two
+// streams don't correlate.
+function _botEngMakeRng(seed) {
+  let s = (seed | 0) >>> 0;
+  return function() {
+    s |= 0; s = (s + 0x6D2B79F5) | 0;
+    let t = Math.imul(s ^ (s >>> 15), 1 | s);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// Pick a piece given the current highest tier + weight distribution.
+function _botEngPickPiece(rng, highest, weights) {
+  const maxSpawn = Math.min(_BOT_MAX_TIER - 1, Math.max(1, highest - 1));
+  let total = 0;
+  for (let i = 1; i <= maxSpawn; i++) total += Math.max(0, weights[i] | 0);
+  if (total <= 0) return 1;
+  let r = rng() * total;
+  for (let i = 1; i <= maxSpawn; i++) {
+    r -= Math.max(0, weights[i] | 0);
+    if (r <= 0) return i;
+  }
+  return 1;
+}
+
+function _botEngColumnHeights(g) {
+  const h = new Array(_BOT_COLS).fill(0);
+  for (let c = 0; c < _BOT_COLS; c++) {
+    for (let r = 0; r < _BOT_ROWS; r++) {
+      if (g[r][c] !== 0) { h[c] = _BOT_ROWS - r; break; }
+    }
+  }
+  return h;
+}
+
+function _botEngEvaluateBoard(g) {
+  const heights = _botEngColumnHeights(g);
+  let maxH = 0, sumH = 0, topFilled = 0;
+  for (let c = 0; c < _BOT_COLS; c++) {
+    if (heights[c] > maxH) maxH = heights[c];
+    sumH += heights[c];
+    if (g[0][c] !== 0) topFilled++;
+  }
+  let roughness = 0;
+  for (let c = 0; c < _BOT_COLS - 1; c++) roughness += Math.abs(heights[c] - heights[c+1]);
+  let tierBonus = 0, pairBonus = 0;
+  for (let r = 0; r < _BOT_ROWS; r++) {
+    for (let c = 0; c < _BOT_COLS; c++) {
+      const t = g[r][c];
+      if (t >= 4) tierBonus += t * 2;
+      if (t === 0) continue;
+      if (c + 1 < _BOT_COLS && g[r][c+1] === t) pairBonus += t;
+      if (r + 1 < _BOT_ROWS && g[r+1][c] === t) pairBonus += t;
+    }
+  }
+  return {
+    heightPenalty: maxH * 6 + sumH * 1.2,
+    topPenalty: topFilled * 40 + (topFilled >= 3 ? 120 : 0),
+    roughness: roughness * 4,
+    tierBonus,
+    pairBonus: pairBonus * 1.5
+  };
+}
+
+function _botEngSimulateDrop(g, col, piece) {
+  const sim = g.map(r => r.slice());
+  let row = -1;
+  for (let r = _BOT_ROWS - 1; r >= 0; r--) {
+    if (sim[r][col] === 0) { row = r; break; }
+  }
+  if (row === -1) return null;
+  sim[row][col] = piece;
+  const result = _botEngProcessChains(sim);
+  _botEngApplyGravity(sim);
+  return { grid: sim, ...result };
+}
+
+function _botEngBestColumn(g, piece, rng) {
+  let bestCol = 0, bestScore = -Infinity;
+  for (let col = 0; col < _BOT_COLS; col++) {
+    const sim = _botEngSimulateDrop(g, col, piece);
+    if (!sim) continue;
+    const ev = _botEngEvaluateBoard(sim.grid);
+    let s = sim.score * 1.0;
+    if (sim.chains >= 2) s += 80 * (sim.chains - 1);
+    if (sim.chains >= 3) s += 200;
+    if (sim.chains >= 4) s += 400;
+    if (sim.highest > piece) s += (sim.highest - piece) * 60;
+    s -= ev.heightPenalty;
+    s -= ev.topPenalty;
+    s -= ev.roughness;
+    s += ev.tierBonus;
+    s += ev.pairBonus;
+    let topEmpty = 0;
+    for (let c = 0; c < _BOT_COLS; c++) if (sim.grid[0][c] === 0) topEmpty++;
+    if (topEmpty === 0) s -= 5000;
+    else if (topEmpty === 1) s -= 200;
+    s += rng() * 2;
+    if (s > bestScore) { bestScore = s; bestCol = col; }
+  }
+  return bestCol;
+}
+
+function _botEngIsGameOver(g) {
+  return g[0].every(c => c !== 0);
+}
+
+// ─── BL.1.5 — Simulate full bot game for a duel ───────────────────
+// Given the duel's board_seed + difficulty_weights + durationSec,
+// runs the bot engine to completion (game over or duration reached),
+// producing snapshots at regular intervals.
+//
+// Returns: { snapshots: [{t, s, h, g}], finalScore, finalGrid, finalTier }
+//   t = elapsed seconds since game start
+//   s = score at this snapshot
+//   h = highest tier reached so far
+//   g = 6×4 grid as nested arrays
+//
+// Drop cadence: ~30 drops over the game duration so the spectator
+// sees 1-2 new tiles every 1-2 seconds.
+function _simulateBotDuelTrajectory(boardSeed, weightsStr, durationSec) {
+  const weights = _botEngParseWeights(weightsStr);
+  // Two independent seeded streams. Mix duelSeed deeply so two duels
+  // with consecutive ids produce visibly-different games.
+  const pieceRng = _botEngMakeRng((boardSeed | 0) ^ 0xA5A5A5A5);
+  const colRng = _botEngMakeRng((boardSeed | 0) ^ 0x5A5A5A5A);
+  const grid = [];
+  for (let r = 0; r < _BOT_ROWS; r++) grid.push(new Array(_BOT_COLS).fill(0));
+  let score = 0, highest = 1;
+  const snapshots = [];
+  // Initial snapshot at t=0 (empty board).
+  snapshots.push({ t: 0, s: 0, h: 1, g: grid.map(r => r.slice()) });
+  // Drop cadence: aim for ~1 drop per 1.5-2 seconds → 30-40 drops in 60s.
+  const dropsPerSec = 0.55;
+  const totalDrops = Math.max(10, Math.floor(durationSec * dropsPerSec));
+  const tPerDrop = durationSec / totalDrops;
+  for (let i = 0; i < totalDrops; i++) {
+    if (_botEngIsGameOver(grid)) break;
+    const piece = _botEngPickPiece(pieceRng, highest, weights);
+    const col = _botEngBestColumn(grid, piece, colRng);
+    let row = -1;
+    for (let r = _BOT_ROWS - 1; r >= 0; r--) {
+      if (grid[r][col] === 0) { row = r; break; }
+    }
+    if (row === -1) break;
+    grid[row][col] = piece;
+    if (piece > highest) highest = piece;
+    const result = _botEngProcessChains(grid);
+    score += result.score;
+    if (result.highest > highest) highest = result.highest;
+    _botEngApplyGravity(grid);
+    const t = Math.min(durationSec, (i + 1) * tPerDrop);
+    snapshots.push({
+      t: Math.round(t * 10) / 10,
+      s: Math.floor(score),
+      h: highest,
+      g: grid.map(r => r.slice())
+    });
+  }
+  return {
+    snapshots,
+    finalScore: Math.floor(score),
+    finalGrid: grid.map(r => r.slice()),
+    finalTier: highest
+  };
+}
+
+// ─── BL.1.5 — Get or compute bot trajectory (cached in duel row) ──
+// First poll triggers simulation (~10-50ms) + UPDATE the duel row.
+// Subsequent polls return the cached trajectory instantly.
+async function _getOrComputeBotTrajectory(duel) {
+  if (duel.bot_trajectory && typeof duel.bot_trajectory === 'object'
+      && Array.isArray(duel.bot_trajectory.snapshots)) {
+    return duel.bot_trajectory;
+  }
+  // Compute fresh.
+  const durationSec = duel.is_live && duel.duration_seconds
+    ? (duel.duration_seconds | 0)
+    : 90; // async duels: simulate a 90s "imaginary game" for the curve
+  const traj = _simulateBotDuelTrajectory(
+    (duel.board_seed | 0),
+    duel.difficulty_weights || null,
+    durationSec
+  );
+  // Persist for next poll (best-effort; not critical if it fails).
+  try {
+    await pool.query(
+      `UPDATE duels SET bot_trajectory = $1 WHERE id = $2`,
+      [JSON.stringify(traj), duel.id]
+    );
+  } catch (e) {
+    console.warn('[bot-trajectory] persist failed:', e.message);
+  }
+  return traj;
+}
+
+// Look up the snapshot whose score is closest-but-not-greater-than the
+// target score. Returns the snapshot or null.
+function _snapshotForScore(trajectory, targetScore) {
+  if (!trajectory || !Array.isArray(trajectory.snapshots) || !trajectory.snapshots.length) return null;
+  const target = Math.max(0, targetScore | 0);
+  let chosen = trajectory.snapshots[0];
+  for (const snap of trajectory.snapshots) {
+    if ((snap.s | 0) <= target) chosen = snap;
+    else break;
+  }
+  return chosen;
+}
+
+// BL.1.5 — alternative lookup by PROGRESS (0..1) through the trajectory.
+// Used when the bot's displayed score is calibrated (not natural), so we
+// can't match by score directly. Linear mapping: 0 → snapshot[0],
+// 1 → snapshot[last]. Smooth progression through the bot's real game.
+function _snapshotForProgress(trajectory, progressRatio) {
+  if (!trajectory || !Array.isArray(trajectory.snapshots) || !trajectory.snapshots.length) return null;
+  const n = trajectory.snapshots.length;
+  const p = Math.max(0, Math.min(1, progressRatio));
+  const idx = Math.min(n - 1, Math.floor(p * (n - 1)));
+  return trajectory.snapshots[idx];
+}
+
 // BL.1.4 — score-banded grid that EVOLVES as the bot's "score" grows.
 // Key insight: the same (duelId, score) must produce the same grid
 // (determinism for monotonicity), but as score increases the grid
@@ -17141,6 +17498,8 @@ function _tierForScore(score) {
 // of frozen. We seed the PRNG with a quantised score bucket — each
 // ~600 score points (roughly one merge) advances the bucket → new
 // grid layout → cells visibly shift in the spectator widget.
+// BL.1.5 deprecates this in favour of _simulateBotDuelTrajectory, but
+// keeps it as fallback for trajectories that fail to compute.
 function _synthesizeBotGrid(duelId, score) {
   const ROWS = 6, COLS = 4;
   const maxTier = _tierForScore(score);
