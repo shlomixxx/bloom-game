@@ -8974,15 +8974,30 @@ setInterval(async function() {
 // uses the existing _settleLiveDuel after we overlay the final
 // computed score.
 // ────────────────────────────────────────────────────────────
-function _calibrateBotScore(playerScore, playerWinPct) {
+// BL.1.3 — seeded RNG (Mulberry32) so calibration is fully deterministic
+// per duelId. Two calls with the same (duelId, playerScore, playerWinPct)
+// always return the SAME score → the live preview and the final settled
+// value agree, no surprise jumps.
+function _seededBotRng(seed) {
+  let s = (seed | 0) >>> 0;
+  return function() {
+    s |= 0; s = (s + 0x6D2B79F5) | 0;
+    let t = Math.imul(s ^ (s >>> 15), 1 | s);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function _calibrateBotScore(duelId, playerScore, playerWinPct) {
   const p = Math.max(20, Math.min(80, playerWinPct | 0));
-  const playerWins = Math.random() * 100 < p;
-  const isTie = Math.random() < 0.02;
+  const rng = _seededBotRng((duelId | 0) ^ 0x12345678);
+  const playerWins = rng() * 100 < p;
+  const isTie = rng() < 0.02;
   let deltaPct;
-  const t = Math.random();
-  if (t < 0.65)      deltaPct = 0.03 + Math.random() * 0.10;  // 65% → 3-13%
-  else if (t < 0.90) deltaPct = 0.10 + Math.random() * 0.15;  // 25% → 10-25%
-  else               deltaPct = 0.25 + Math.random() * 0.15;  // 10% → 25-40%
+  const t = rng();
+  if (t < 0.65)      deltaPct = 0.03 + rng() * 0.10;  // 65% → 3-13%
+  else if (t < 0.90) deltaPct = 0.10 + rng() * 0.15;  // 25% → 10-25%
+  else               deltaPct = 0.25 + rng() * 0.15;  // 10% → 25-40%
   let botScore;
   if (isTie) botScore = playerScore;
   else if (playerWins) botScore = Math.max(0, Math.floor(playerScore * (1 - deltaPct)));
@@ -8991,23 +9006,23 @@ function _calibrateBotScore(playerScore, playerWinPct) {
 }
 
 // Deterministic per-duel-id target final score for live bot duels.
-// Same duel → same target, so the curve is stable across heartbeat reads.
 function _liveBotTargetScore(duelId) {
   const r = ((duelId * 9301 + 49297) % 233280) / 233280;
   return Math.floor(35000 + r * 75000); // 35K-110K final
 }
 
-// Bot's "live score" at the current moment, given the duel's started_at.
-// Uses sqrt-easing so bots ramp up quickly then plateau (so a real
-// player who's strong can pass them late — dramatic comebacks possible).
+// BL.1.3 — bot's "live score" for live races. sqrt-easing toward the
+// deterministic target. STRICTLY MONOTONIC in nowMs — removed the
+// sin-noise factor that BL.1 had, because between server polls (1-2s
+// apart) the sin term could swing negative and the displayed score
+// would visibly DECREASE → an obvious tell that the opponent is fake.
+// Real merge scores never decrease.
 function _liveBotScoreAt(duelId, startedAtMs, durationSec, nowMs) {
   const target = _liveBotTargetScore(duelId);
   const elapsed = Math.max(0, (nowMs - startedAtMs) / 1000);
   const ratio = Math.min(1, elapsed / Math.max(1, durationSec));
   const eased = Math.sqrt(ratio);
-  // Tiny noise so consecutive heartbeats don't read the same to the millis.
-  const noise = 1 + (Math.sin(elapsed * 1.7 + duelId) * 0.02);
-  return Math.floor(target * eased * noise);
+  return Math.floor(target * eased);
 }
 
 async function _settleBotDuel(duelId) {
@@ -9032,7 +9047,7 @@ async function _settleBotDuel(duelId) {
       await client.query('ROLLBACK'); return null;
     }
     const cfg = await _loadBotDuelConfig();
-    const botScore = _calibrateBotScore(d.challenger_score, cfg.playerWinPct);
+    const botScore = _calibrateBotScore(d.id, d.challenger_score, cfg.playerWinPct);
     let winner = null;
     if (d.challenger_score > botScore) winner = d.challenger_device;
     else if (botScore > d.challenger_score) winner = d.opponent_device;
@@ -17015,10 +17030,33 @@ app.get('/api/live-state/:deviceId', async (req, res) => {
 // tiers 1-4 with maybe a tier-5 if the bot's "highest_tier" justifies
 // it. Doesn't have to be a legal merge state — the spectator widget
 // just shows what's on the board, no engine validation.
+// BL.1.3 — pure candidate-score function for async bot duels. Strictly
+// monotonic in nowMs because:
+//   - target is fully deterministic per (duelId, challenger_score)
+//   - ratio = min(1, elapsed / window) — non-decreasing in elapsed
+//   - sqrt — monotone non-decreasing
+//   - no time-varying noise
+// When player submits, target switches from estimate → calibrated final,
+// which can be a JUMP (up or down). To guard against down-jumps, the
+// caller wraps this with the GREATEST(...) DB guard on opponent_live_score.
+function _botAsyncCandidateScore(duelId, createdMs, challengerScore, settleAtMs, nowMs, playerWinPct) {
+  // Time anchor: end of curve = bot_settle_at if known, else estimated 90s.
+  const endMs = (settleAtMs && settleAtMs > createdMs) ? settleAtMs : (createdMs + 90 * 1000);
+  const totalSec = Math.max(1, (endMs - createdMs) / 1000);
+  const elapsed = Math.max(0, (nowMs - createdMs) / 1000);
+  const ratio = Math.min(1, elapsed / totalSec);
+  const eased = Math.sqrt(ratio);
+  // Target: known final if player submitted, else estimate (using a
+  // typical-game value as the calibration anchor).
+  const anchor = (challengerScore | 0) > 0 ? (challengerScore | 0) : 40000;
+  const target = _calibrateBotScore(duelId, anchor, playerWinPct);
+  return Math.max(100, Math.floor(target * eased));
+}
+
 async function _synthesizeBotLiveState(botDeviceId) {
   try {
     const r = await pool.query(
-      `SELECT id, opponent_name, opponent_score, created_at, is_live,
+      `SELECT id, opponent_name, opponent_score, opponent_live_score, created_at, is_live,
               started_at, duration_seconds, bot_settle_at, status,
               challenger_score
          FROM duels
@@ -17030,10 +17068,8 @@ async function _synthesizeBotLiveState(botDeviceId) {
     );
     if (!r.rows.length) return null;
     const d = r.rows[0];
-    const createdMs = new Date(d.created_at).getTime();
     const nowMs = Date.now();
-    // Settled? Show the final calibrated score so the spectator can
-    // verify it matches the result. Status text reflects "finished".
+    // Settled? Show the final calibrated score.
     if (d.opponent_score != null) {
       return {
         ok: true,
@@ -17045,28 +17081,33 @@ async function _synthesizeBotLiveState(botDeviceId) {
         updatedAt: new Date().toISOString()
       };
     }
-    // Still "playing" — compute progressive score. For live races, the
-    // already-existing _liveBotScoreAt is canonical. For async duels,
-    // use an analogous curve targeting ~90s typical game length.
-    let score;
+    // BL.1.3 — compute candidate; use DB-enforced monotonicity by
+    // writing GREATEST(opponent_live_score, candidate) and returning
+    // the result. This guarantees the displayed score NEVER decreases
+    // between polls regardless of formula discontinuities (e.g. when
+    // player submits and the target switches from estimate to calibrated).
+    let candidate;
     if (d.is_live && d.started_at && d.duration_seconds) {
-      score = _liveBotScoreAt(d.id, new Date(d.started_at).getTime(),
-                              d.duration_seconds, nowMs);
+      candidate = _liveBotScoreAt(d.id, new Date(d.started_at).getTime(),
+                                  d.duration_seconds, nowMs);
     } else {
-      // Async curve: target the player's likely range with a sqrt easing.
-      // Use the player's CURRENT submitted score (if known) as the
-      // calibration anchor so the bot's displayed live score lands
-      // close to what it'll settle to.
-      const elapsed = Math.max(0, (nowMs - createdMs) / 1000);
-      const progress = Math.min(1, elapsed / 90);
-      const anchor = (d.challenger_score | 0) > 0
-        ? d.challenger_score | 0
-        : 40000; // fallback target when player hasn't submitted yet
-      const baseRatio = 0.70 + 0.22 * Math.sqrt(progress);
-      const seed = ((d.id | 0) * 9301 + 49297) % 233280;
-      const bonus = 0.04 * ((Math.sin(elapsed * 0.5 + seed * 0.01) + 1) / 2);
-      score = Math.max(100, Math.floor(anchor * (baseRatio + bonus)));
+      const cfg = await _loadBotDuelConfig();
+      const createdMs = new Date(d.created_at).getTime();
+      const settleAtMs = d.bot_settle_at ? new Date(d.bot_settle_at).getTime() : null;
+      candidate = _botAsyncCandidateScore(
+        d.id, createdMs, d.challenger_score, settleAtMs, nowMs, cfg.playerWinPct
+      );
     }
+    // Atomic GREATEST update so opponent_live_score acts as a monotonic
+    // ceiling. Reading the RETURNING value gives us the actual displayed
+    // score (which may be the ceiling if candidate fell below it).
+    const upd = await pool.query(
+      `UPDATE duels SET opponent_live_score = GREATEST(COALESCE(opponent_live_score, 0), $1)
+         WHERE id = $2
+         RETURNING opponent_live_score`,
+      [candidate, d.id]
+    );
+    const score = upd.rows[0] ? (upd.rows[0].opponent_live_score | 0) : candidate;
     return {
       ok: true,
       name: d.opponent_name || 'יריב',
