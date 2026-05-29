@@ -562,7 +562,12 @@
     // by cloning the relevant chips from .mode-sub (single source of
     // truth — JS only has to know how to populate sub, the mirror is
     // automatic). Hides when sub is empty.
-    syncModeExtrasStrip();
+    //
+    // H3 fix (silent-failure-hunter audit): wrap in try/catch so a
+    // malformed innerHTML or DOM exception inside the strip sync can't
+    // abort the whole updateModeBar — that would freeze the title/sub
+    // updates until the next fresh init.
+    try { syncModeExtrasStrip(); } catch (e) {}
 
     // B7 (May 2026 — REVISED): mode-info is ALWAYS clickable now. The
     // old mode-tabs row (יומי / אתגרים / חברים / חופשי) was removed —
@@ -2769,9 +2774,13 @@
     // so the visible one shows the celebration.
     var dynTargetEls = document.querySelectorAll('.dyn-target-chip[data-target]');
     if (dynTargetEls.length) {
-      // All instances share the same data-target — read from the first.
-      var tgt = parseInt(dynTargetEls[0].getAttribute('data-target') || '0', 10) || 0;
-      var alreadyPassed = dynTargetEls[0].classList.contains('dyn-target-chip-passed');
+      // H2 fix (silent-failure-hunter audit): prefer the visible clone
+      // inside #mode-extras as the source-of-truth. The hidden .mode-sub
+      // original might have different state if a future refactor reorders
+      // DOM. The visible chip is the one the player sees animating.
+      var dynTargetSrc = document.querySelector('#mode-extras .dyn-target-chip[data-target]') || dynTargetEls[0];
+      var tgt = parseInt(dynTargetSrc.getAttribute('data-target') || '0', 10) || 0;
+      var alreadyPassed = dynTargetSrc.classList.contains('dyn-target-chip-passed');
       if (tgt > 0 && score > tgt) {
         var passedLabel = '👑 עברת את עצמך! +' + (score - tgt).toLocaleString();
         dynTargetEls.forEach(function(el) {
@@ -2790,8 +2799,10 @@
     // dopamine spike a casual game can give). Updates ALL instances.
     var dynLeaderEls = document.querySelectorAll('.dyn-leader-chip[data-leader]');
     if (dynLeaderEls.length) {
-      var leaderTgt = parseInt(dynLeaderEls[0].getAttribute('data-leader') || '0', 10) || 0;
-      var alreadyCelebrated = !!dynLeaderEls[0].dataset.celebrated;
+      // H2 fix: same visible-clone preference as the target chip above.
+      var dynLeaderSrc = document.querySelector('#mode-extras .dyn-leader-chip[data-leader]') || dynLeaderEls[0];
+      var leaderTgt = parseInt(dynLeaderSrc.getAttribute('data-leader') || '0', 10) || 0;
+      var alreadyCelebrated = !!dynLeaderSrc.dataset.celebrated;
       if (leaderTgt > 0 && score > leaderTgt) {
         var leaderLabel = '👑 חצית את המוביל! +' + (score - leaderTgt).toLocaleString();
         dynLeaderEls.forEach(function(el) {
@@ -3044,29 +3055,51 @@
               var tierShake = parseInt(getEventConfig('shake_tier_up', nt >= 7 ? '5' : '3'), 10) || 0;
               if (tierShake > 0) shakeGrid(tierShake);
               // LF.1 — Lifetime-first detection. Compare against the
-              // persisted lifetime best, then OPPORTUNISTICALLY bump it
-              // immediately so a force-close before game-over can't make
-              // the same crown re-fire "FIRST EVER" next session. The
-              // game-end `bumpLifetimeMax(BEST_TIER_KEY, highestTier)` is
-              // still authoritative for higher tiers reached after this
-              // first crossing; this just locks in the floor right here.
+              // persisted lifetime best, then mount the celebration. The
+              // game-end `bumpLifetimeMax(BEST_TIER_KEY, highestTier)`
+              // is still authoritative — this just gates the overlay.
+              //
+              // C2 fix (silent-failure-hunter audit): the previous code
+              // bumped BEST_TIER_KEY BEFORE the celebration fired. If
+              // the 900ms-later mount was suppressed (because a chain-
+              // legendary banner was still on-screen), the marker said
+              // "already seen" but the player got NO celebration —
+              // permanently lost the lifetime-first crown moment.
+              // New design: bump ONLY after showLifetimeFirstTierOverlay
+              // actually mounts. If suppressed by the legendary banner,
+              // retry every 200ms (up to ~3s total) until either it
+              // mounts OR we give up — in which case we still bump (so
+              // the player doesn't get spammed on every future drop) but
+              // log to telemetry.
               try {
                 if (typeof loadLifetimeInt === 'function' && nt >= 5 && !window.__bloomBotActive && !skinTrialMode) {
                   var lifetimeBest = loadLifetimeInt(BEST_TIER_KEY) || 0;
                   if (nt > lifetimeBest) {
-                    // M2 — persist the lifetime-first marker before the
-                    // celebration fires. If the player closes the tab
-                    // during the 900ms delay, the bump still landed.
-                    try { bumpLifetimeMax(BEST_TIER_KEY, nt); } catch (e) {}
-                    setTimeout(function() {
-                      // M1 — skip if a legendary chain banner is already
-                      // on-screen; two full-screen radial flashes layered
-                      // at once read as chaos, not celebration.
+                    var lf1Retries = 0;
+                    var lf1Try = function() {
+                      var legendaryShowing = false;
                       try {
-                        if (document.querySelector('[data-bloom-banner="chain-legendary"]')) return;
+                        legendaryShowing = !!document.querySelector('[data-bloom-banner="chain-legendary"]');
                       } catch (e) {}
-                      try { showLifetimeFirstTierOverlay(nt); } catch (e) {}
-                    }, 900); // let the per-game banner play first
+                      if (legendaryShowing && lf1Retries < 15) {
+                        lf1Retries++;
+                        setTimeout(lf1Try, 200);
+                        return;
+                      }
+                      // Mount succeeded OR we gave up after ~3s. Either way,
+                      // bump the marker so the player isn't spammed on every
+                      // future drop. If we gave up, the analytics event will
+                      // show 'lifetime_first_tier' with a `deferred` flag for
+                      // post-hoc inspection.
+                      try {
+                        if (!legendaryShowing) showLifetimeFirstTierOverlay(nt);
+                        else if (typeof trackEvent === 'function') {
+                          trackEvent('lifetime_first_tier_deferred', { tier: nt, retries: lf1Retries });
+                        }
+                      } catch (e) {}
+                      try { bumpLifetimeMax(BEST_TIER_KEY, nt); } catch (e) {}
+                    };
+                    setTimeout(lf1Try, 900); // let the per-game banner play first
                   }
                 }
               } catch (e) {}
@@ -3339,6 +3372,13 @@
         // in the game. `updateDangerMode()` early-returns on the game-over
         // flag, so it can't self-clear.
         try { document.body.classList.remove('danger-mode'); inDangerMode = false; } catch (e) {}
+        // M2 fix (silent-failure-hunter audit): clear the clutch-save
+        // banner if it's still on a 1.7s timeout. A merge that escapes
+        // danger AND triggers game-over in the same drop would otherwise
+        // show "💪 ניצלת ברגע!" overlapping the game-over screen.
+        try {
+          document.querySelectorAll('[data-bloom-banner="clutch-save"], .clutch-save-banner').forEach(function(b) { b.remove(); });
+        } catch (e) {}
         if (window.endHeartbeat) window.endHeartbeat(); // remove from admin live view
         stopEventSystem();
         // TB.1 — tear down the floating booster strip so it doesn't sit

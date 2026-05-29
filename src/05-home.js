@@ -15,6 +15,22 @@
     }
     stopEventSystem(); // don't run events behind home screen
     if (typeof purgeEventOverlays === 'function') purgeEventOverlays();
+    // H1 fix (silent-failure-hunter audit): clear any transient celebration
+    // banner (MM.1 massive merge flash, CS.1 clutch save, LF.1 lifetime
+    // first tier card) that might still be on a 1-6s timeout. Without
+    // this they leak onto the home screen with pointer-events still
+    // active — the LF.1 share button would be tappable on home.
+    if (typeof clearTransientBanners === 'function') clearTransientBanners();
+    try {
+      ['multi-merge', 'massive-merge-flash', 'chain-legendary', 'chain-legendary-text', 'clutch-save', 'lifetime-first', 'lifetime-first-card', 'lifetime-chain-pill']
+        .forEach(function(tag) {
+          var els = document.querySelectorAll('[data-bloom-banner="' + tag + '"]');
+          els.forEach(function(el) { try { el.remove(); } catch (e) {} });
+        });
+      document.querySelectorAll('.lifetime-first-card, .clutch-save-banner').forEach(function(el) {
+        try { el.remove(); } catch (e) {}
+      });
+    } catch (e) {}
     // TB.1 — strip is fixed-position on body, so it would float over the
     // home screen until the next game starts. Tear down explicitly here.
     try {

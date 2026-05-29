@@ -52,6 +52,21 @@
   function showHomeV2() {
     stopEventSystem();
     if (typeof purgeEventOverlays === 'function') purgeEventOverlays();
+    // H1 fix (silent-failure-hunter audit): kill leaked celebration
+    // banners from the previous in-game session so they don't float
+    // over the home screen during their TTL. LF.1 crown card has
+    // pointer-events:auto + a share button — tappable from home.
+    if (typeof clearTransientBanners === 'function') clearTransientBanners();
+    try {
+      ['multi-merge', 'massive-merge-flash', 'chain-legendary', 'chain-legendary-text', 'clutch-save', 'lifetime-first', 'lifetime-first-card', 'lifetime-chain-pill']
+        .forEach(function(tag) {
+          var els = document.querySelectorAll('[data-bloom-banner="' + tag + '"]');
+          els.forEach(function(el) { try { el.remove(); } catch (e) {} });
+        });
+      document.querySelectorAll('.lifetime-first-card, .clutch-save-banner').forEach(function(el) {
+        try { el.remove(); } catch (e) {}
+      });
+    } catch (e) {}
     // TB.1 — strip is fixed-position on body, so it would float over the
     // home screen until the next game starts. Tear down explicitly here.
     try {

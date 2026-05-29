@@ -246,9 +246,17 @@
       var qp = new URLSearchParams(window.location.search);
       if (qp.get('action') !== 'inbox') return;
       if (sessionStorage.getItem('bloom_inbox_url_handled')) return;
-      sessionStorage.setItem('bloom_inbox_url_handled', '1');
-      // Wait for home to mount + the icon to be wired before opening.
-      setTimeout(showInboxPanel, 1200);
+      // C1 fix (silent-failure-hunter audit): set dedup flag ONLY after
+      // showInboxPanel returns without throwing. Setting it BEFORE meant
+      // a single failure on the 1200ms-delayed call (e.g., dependency
+      // not yet mounted) silently blocked all future push-from-URL deep
+      // links until sessionStorage cleared.
+      setTimeout(function() {
+        try {
+          showInboxPanel();
+          sessionStorage.setItem('bloom_inbox_url_handled', '1');
+        } catch (e) {}
+      }, 1200);
     } catch (e) {}
   }
   maybeAutoOpenFromUrl();
