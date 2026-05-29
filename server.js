@@ -17197,20 +17197,32 @@ app.get('/api/stats/live', async (_req, res) => {
     // reads "1 שחקן פעיל" during low-traffic hours. Bots land in
     // `player_heartbeat` (not `contest_live_state` or `device_visits`), so we
     // add them as a separate query and blend per the admin-tunable cap.
-    const [active, playing, games, activeHr, gamesWeek, botsActive, botsPlaying] = await Promise.all([
+    // BL.1 polish — also count bot duels settled today + bot heartbeats
+    // landing in player_heartbeat from earlier today, since those are
+    // genuine "games played" that wouldn't otherwise be in daily_scores
+    // (when admin runs bots in non-daily modes).
+    const dayStartIso = today + 'T00:00:00+03:00'; // Asia/Jerusalem day start
+    const [active, playing, games, activeHr, gamesWeek, botsActive, botsPlaying, botsGamesToday] = await Promise.all([
       pool.query(`SELECT COUNT(DISTINCT device_id)::int AS c FROM contest_live_state WHERE updated_at > NOW() - INTERVAL '30 seconds'`),
       pool.query(`SELECT COUNT(DISTINCT device_id)::int AS c FROM device_visits WHERE last_at > NOW() - INTERVAL '3 minutes'`),
       pool.query(`SELECT COUNT(*)::int AS c FROM daily_scores WHERE date = $1`, [today]),
       pool.query(`SELECT COUNT(DISTINCT device_id)::int AS c FROM device_visits WHERE last_at > NOW() - INTERVAL '1 hour'`),
       pool.query(`SELECT COUNT(*)::int AS c FROM daily_scores WHERE date >= ($1::date - INTERVAL '7 days')::date`, [today]),
       pool.query(`SELECT COUNT(DISTINCT device_id)::int AS c FROM player_heartbeat WHERE updated_at > NOW() - INTERVAL '30 seconds' AND device_id LIKE 'bot-%'`),
-      pool.query(`SELECT COUNT(DISTINCT device_id)::int AS c FROM player_heartbeat WHERE updated_at > NOW() - INTERVAL '3 minutes' AND device_id LIKE 'bot-%'`)
+      pool.query(`SELECT COUNT(DISTINCT device_id)::int AS c FROM player_heartbeat WHERE updated_at > NOW() - INTERVAL '3 minutes' AND device_id LIKE 'bot-%'`),
+      pool.query(`SELECT
+        (SELECT COUNT(DISTINCT device_id)::int FROM player_heartbeat
+           WHERE device_id LIKE 'bot-%' AND updated_at >= $1::timestamptz) AS bot_distinct_today,
+        (SELECT COUNT(*)::int FROM duels
+           WHERE is_bot_match = TRUE AND created_at >= $1::timestamptz) AS bot_duels_today`, [dayStartIso])
     ]);
     let activeNow = active.rows[0].c | 0;
     let playingNow = playing.rows[0].c | 0;
     let activeThisHour = activeHr.rows[0].c | 0;
     const botActive = botsActive.rows[0].c | 0;
     const botPlaying = botsPlaying.rows[0].c | 0;
+    const botDistinctToday = (botsGamesToday.rows[0] && botsGamesToday.rows[0].bot_distinct_today) | 0;
+    const botDuelsToday = (botsGamesToday.rows[0] && botsGamesToday.rows[0].bot_duels_today) | 0;
     // Read bot-blending config. Cached in-process, so this is essentially free.
     let blendEnabled = true;
     let multiplier = 2.5;
@@ -17223,7 +17235,8 @@ app.get('/api/stats/live', async (_req, res) => {
       const f = parseInt(cfg.bots_live_stats_floor_when_zero_real, 10);
       if (Number.isFinite(f) && f >= 0 && f <= 100) floorWhenZero = f;
     } catch (_) {}
-    if (blendEnabled && (botActive > 0 || botPlaying > 0)) {
+    let gamesToday = games.rows[0].c | 0;
+    if (blendEnabled && (botActive > 0 || botPlaying > 0 || botDistinctToday > 0 || botDuelsToday > 0)) {
       // When real==0: show min(botActive, floor). When real>0: real + bots,
       // capped at real × multiplier so the displayed number stays
       // proportional. Never display LESS than real (we'd be lying down).
@@ -17233,11 +17246,19 @@ app.get('/api/stats/live', async (_req, res) => {
       playingNow = Math.max(playingNow, Math.min(playingNow + botPlaying, playingCap));
       const hourCap = activeThisHour > 0 ? Math.ceil(activeThisHour * multiplier) : floorWhenZero;
       activeThisHour = Math.max(activeThisHour, Math.min(activeThisHour + botPlaying, hourCap));
+      // gamesToday: include bot games. Each unique bot heartbeating today
+      // counts as ~1 game (bots typically play 1-3 games per session); the
+      // bot-duels-today count adds duel-vs-bot games the player triggered.
+      // Cap so a long-running bot session doesn't show "1000 games" while
+      // there's only 1 real player — keeps the social proof believable.
+      const botGamesContribution = botDistinctToday + botDuelsToday;
+      const gamesCap = gamesToday > 0 ? Math.ceil(gamesToday * multiplier) : Math.max(floorWhenZero * 2, 12);
+      gamesToday = Math.max(gamesToday, Math.min(gamesToday + botGamesContribution, gamesCap));
     }
     res.json({
       activeNow,
       playingNow,
-      gamesToday: games.rows[0].c | 0,
+      gamesToday,
       activeThisHour,
       gamesThisWeek: gamesWeek.rows[0].c | 0
     });

@@ -9836,6 +9836,15 @@ html[data-theme="dark"] .referrals-modal-empty {
      stopDuelOpponentHud. */
   body.duel-active .top { display: none !important; }
   body.duel-active .stats { display: none !important; }
+  /* BL.1 polish — the duel HUD is position:fixed at top:8px. With .top
+     and .stats hidden, the next in-flow element (.mode-bar / #mode-extras
+     / .tier-bar) starts at top:0 of the .app — so the HUD overlays the
+     tier-bar and the player can't see what piece is next. Push the .app
+     content down by the HUD's height (~76px) so the tier-bar lands
+     immediately below the HUD without an awkward gap. */
+  body.duel-active .app {
+    padding-top: max(80px, calc(env(safe-area-inset-top) + 76px)) !important;
+  }
 
   .duel-hud {
     position: fixed;

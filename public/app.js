@@ -1441,8 +1441,52 @@
     if (!el) return;
     var myScore = (typeof score === 'number') ? score : 0;
     el.textContent = myScore.toLocaleString();
-    // Also refresh the delta so it stays in sync with my score growth
-    paintDuelHudDelta(myScore, _duelHudLastOppScore);
+    // BL.1 polish — for ASYNC bot duels (is_bot_match=TRUE, is_live=FALSE,
+    // opponent_score still NULL), the universal /api/live-state/:botId
+    // endpoint returns 404 since the bot has no heartbeat. Without this
+    // local computation the HUD would show "0" + "מקבל אתגר" for the
+    // bot's entire game, which kills the feeling of a live competitive
+    // duel. Compute the bot's "live" score from elapsed time + my current
+    // score so it always feels competitive (within ±15% of me, easing
+    // toward parity as the game progresses). When the duel settles
+    // server-side, /api/duels/:id will return opponent_score != null and
+    // the existing "finished" branch takes over.
+    if (_duelHudDuelRow && _duelHudDuelRow.is_bot_match && _duelHudDuelRow.opponent_score == null
+        && !_duelHudFinalized && !_duelHudDuelRow.is_live) {
+      var bot = computeBotLiveScore(_duelHudDuelRow, myScore, Date.now());
+      paintDuelHud({
+        oppScore: bot,
+        oppStatus: 'playing',
+        oppDeviceId: _duelHudDuelRow.opponent_device || ''
+      });
+    } else {
+      // Also refresh the delta so it stays in sync with my score growth
+      paintDuelHudDelta(myScore, _duelHudLastOppScore);
+    }
+  }
+
+  // BL.1 polish — local simulator for async bot-duel opponent score.
+  // Deterministic per duel id + time so consecutive ticks read the same
+  // when nothing changes (no jitter). Tracks the player's score so the
+  // bot stays competitive — most games stay within 15-20% delta, with
+  // small swings that feel like the bot is "playing".
+  function computeBotLiveScore(duelRow, mySc, now) {
+    var createdMs = duelRow.created_at ? new Date(duelRow.created_at).getTime() : now;
+    var elapsedSec = Math.max(0, (now - createdMs) / 1000);
+    // Typical game length used for the easing curve. Beyond this, ratio caps.
+    var expectedSec = 90;
+    var progress = Math.min(1, elapsedSec / expectedSec);
+    // Player's score is the anchor. Bot starts at 60-70% of player and eases
+    // toward 95-105% as time progresses → feels like they're catching up.
+    var lo = 0.65 + 0.30 * Math.sqrt(progress);  // 0.65 → 0.95
+    var hi = 0.80 + 0.25 * Math.sqrt(progress);  // 0.80 → 1.05
+    // Noise oscillates ±8% per ~3s window, seeded by duel id.
+    var seed = ((duelRow.id | 0) * 9301 + 49297) % 233280;
+    var phase = elapsedSec * 0.7 + seed * 0.01;
+    var noise = 0.92 + 0.16 * ((Math.sin(phase) + 1) / 2);  // 0.92-1.08
+    var ratio = (lo + (hi - lo) * ((Math.sin(phase * 0.5) + 1) / 2)) * noise;
+    // Floor at 0; never negative.
+    return Math.max(0, Math.floor((mySc | 0) * ratio));
   }
 
   function refreshDuelHudData() {
@@ -1468,6 +1512,13 @@
           });
           return;
         }
+        // BL.1 polish — for async bot duels, skip the live-state fetch
+        // (the bot has no heartbeat, server returns 404). The 500ms
+        // `syncDuelHudMyScore` ticker is already painting the bot's
+        // simulated score; we just keep polling /api/duels/:id so that
+        // when bot_settle_at fires server-side and opponent_score gets
+        // set, we catch it on the next 2s poll and switch to "finished".
+        if (u.is_bot_match && !u.is_live) return;
         // Opponent hasn't finalized — check if they're playing live.
         if (oppDeviceId) {
           fetch(API_BASE + '/api/live-state/' + encodeURIComponent(oppDeviceId))
