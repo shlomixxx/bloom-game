@@ -2573,3 +2573,33 @@ CREATE INDEX IF NOT EXISTS idx_player_issues_kind ON player_issues (kind, report
 INSERT INTO game_config (key, value) VALUES ('issues_default_compensation',      '100') ON CONFLICT (key) DO NOTHING;
 INSERT INTO game_config (key, value) VALUES ('issues_client_report_max_per_hour','10')  ON CONFLICT (key) DO NOTHING;
 INSERT INTO game_config (key, value) VALUES ('issues_auto_compensate_critical',  'false') ON CONFLICT (key) DO NOTHING;
+
+-- ============================================================
+-- BL.1 — Bot social-proof + auto-fallback for duels (May 2026)
+--
+-- Two retention levers:
+--   1. Bot heartbeats counted in /api/stats/live so the live-pulse
+--      bar never reads "1 שחקן פעיל" (cold-start retention killer).
+--      Capped at real × multiplier to never feel absurdly fake.
+--   2. When duel matchmaking finds no real opponent in N seconds,
+--      a bot is spawned as the opponent. The player never feels
+--      alone. Bot uses an Israeli name + synthetic BLOOM-XXXX code.
+--      Score calibrated to give the player ~52% win rate (Royal
+--      Match / Coin Master tuning — not too easy, not too hard).
+-- ============================================================
+ALTER TABLE duels ADD COLUMN IF NOT EXISTS is_bot_match  BOOLEAN     DEFAULT FALSE;
+ALTER TABLE duels ADD COLUMN IF NOT EXISTS bot_settle_at TIMESTAMPTZ;
+CREATE INDEX IF NOT EXISTS idx_duels_bot_settle
+  ON duels (bot_settle_at)
+  WHERE is_bot_match = TRUE AND status = 'accepted' AND opponent_score IS NULL;
+
+-- Master toggle + tuning knobs. All admin-tunable.
+INSERT INTO game_config (key, value) VALUES ('bots_in_live_stats_enabled',           'true') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('bots_live_stats_max_multiplier',       '2.5')  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('bots_live_stats_floor_when_zero_real', '6')    ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('bot_duel_fallback_enabled',            'true') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('bot_duel_fallback_after_seconds',      '8')    ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('bot_duel_player_win_rate_pct',         '52')   ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('bot_duel_settle_delay_min_seconds',    '20')   ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('bot_duel_settle_delay_max_seconds',    '55')   ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('bot_live_race_fallback_after_seconds', '6')    ON CONFLICT (key) DO NOTHING;

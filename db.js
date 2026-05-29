@@ -573,6 +573,21 @@ export async function initDb() {
     // so existing installs need this one-time UPDATE. Idempotent — only flips
     // if the value is still the old default; respects any admin override.
     `UPDATE game_config SET value = 'hero' WHERE key = 'home_variant' AND value = 'standard'`,
+    // BL.1 — Bot social-proof + auto-fallback for duels (May 2026).
+    `ALTER TABLE duels ADD COLUMN IF NOT EXISTS is_bot_match BOOLEAN DEFAULT FALSE`,
+    `ALTER TABLE duels ADD COLUMN IF NOT EXISTS bot_settle_at TIMESTAMPTZ`,
+    `CREATE INDEX IF NOT EXISTS idx_duels_bot_settle
+       ON duels (bot_settle_at)
+       WHERE is_bot_match = TRUE AND status = 'accepted' AND opponent_score IS NULL`,
+    `INSERT INTO game_config (key, value) VALUES ('bots_in_live_stats_enabled',           'true') ON CONFLICT (key) DO NOTHING`,
+    `INSERT INTO game_config (key, value) VALUES ('bots_live_stats_max_multiplier',       '2.5')  ON CONFLICT (key) DO NOTHING`,
+    `INSERT INTO game_config (key, value) VALUES ('bots_live_stats_floor_when_zero_real', '6')    ON CONFLICT (key) DO NOTHING`,
+    `INSERT INTO game_config (key, value) VALUES ('bot_duel_fallback_enabled',            'true') ON CONFLICT (key) DO NOTHING`,
+    `INSERT INTO game_config (key, value) VALUES ('bot_duel_fallback_after_seconds',      '8')    ON CONFLICT (key) DO NOTHING`,
+    `INSERT INTO game_config (key, value) VALUES ('bot_duel_player_win_rate_pct',         '52')   ON CONFLICT (key) DO NOTHING`,
+    `INSERT INTO game_config (key, value) VALUES ('bot_duel_settle_delay_min_seconds',    '20')   ON CONFLICT (key) DO NOTHING`,
+    `INSERT INTO game_config (key, value) VALUES ('bot_duel_settle_delay_max_seconds',    '55')   ON CONFLICT (key) DO NOTHING`,
+    `INSERT INTO game_config (key, value) VALUES ('bot_live_race_fallback_after_seconds', '6')    ON CONFLICT (key) DO NOTHING`,
   ];
   for (const sql of migrations) {
     try { await pool.query(sql); } catch (e) {

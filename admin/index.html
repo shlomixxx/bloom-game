@@ -2292,6 +2292,16 @@
       <div id="bots-status-list" style="max-height:280px;overflow-y:auto;background:rgba(0,0,0,0.03);border-radius:10px;padding:6px"></div>
     </div>
   </section>
+
+  <!-- BL.1 — Bot duels telemetry (May 2026) -->
+  <section id="bot-duels-section" style="margin-bottom:12px">
+    <h2>⚔️ דו-קרבות מול בוטים <button class="tip-btn" data-tip-text="<strong>⚔️ Bot Duels — אנטי-בדידות</strong><br>כאשר שחקן מחפש דו-קרב אקראי ואין יריב אמיתי בתור — השרת יוצר יריב פנטומי תוך 6-8 שניות.<div class=&quot;tip-example&quot;>🎭 <strong>הבוט נראה כמו שחקן אמיתי</strong>: שם ישראלי + קוד BLOOM-XXXX + טרופים בטווח של השחקן.<br><br>🎯 <strong>יעד קליברציה</strong>: ~52% ניצחון לשחקן (Royal Match standard). לא קל מדי = משעמם. לא קשה מדי = מתסכל.<br><br>⏰ <strong>השהיית הגשת תוצאה</strong>: 20-55 שניות אחרי שהשחקן מגיש (נראה כאילו היריב משחק).<br><br>📊 <strong>מטרת המספרים בלוח הזה</strong>: לוודא שאחוז הניצחון של השחקן נשאר בטווח הרצוי. אם <50% — הבוטים חזקים מדי. אם >55% — הבוטים חלשים מדי.</div>">?</button></h2>
+    <div id="bot-duels-stats" style="padding:14px 16px;background:var(--card);border-radius:10px;margin-top:8px;font-size:12px"></div>
+    <details style="margin-top:8px;background:var(--card);border-radius:10px;border:1px solid rgba(0,0,0,0.06)">
+      <summary style="cursor:pointer;padding:10px 14px;font-weight:700;font-size:12px">📋 30 דו-קרבות אחרונים</summary>
+      <div id="bot-duels-recent" style="padding:0 14px 14px;font-size:11px"></div>
+    </details>
+  </section>
   </div><!-- /admin-tab-panel players:players-section+bots -->
 
   <div class="admin-tab-panel" data-tab="game">
@@ -9659,6 +9669,87 @@
     }).join('');
     listEl.innerHTML = rows;
   }
+  // BL.1 — Bot duels telemetry. Reads /admin/api/bot-duels/stats every
+  // 15s so the admin can verify player-win-rate calibration (target
+  // 50-55%; outside that band → adjust bot_duel_player_win_rate_pct).
+  async function refreshBotDuelsStats() {
+    var statsEl = $('bot-duels-stats');
+    var recentEl = $('bot-duels-recent');
+    if (!statsEl) return;
+    var d;
+    try { d = await api('/bot-duels/stats'); }
+    catch (e) { statsEl.innerHTML = '⚠ שגיאת חיבור'; return; }
+    if (!d || !d.ok) { statsEl.innerHTML = '⚠ אין נתונים'; return; }
+    var o = d.overall, h = d.last24h;
+    var winColor = (pct) => {
+      if (pct == null) return '#A8A6A0';
+      if (pct >= 48 && pct <= 56) return '#2E8B6F';    // green band = healthy
+      if (pct >= 42 && pct <= 60) return '#BA7517';    // orange band = borderline
+      return '#C8472F';                                 // red = needs tuning
+    };
+    var card = function(label, value, sub, color) {
+      return '<div style="background:rgba(0,0,0,0.04);border-radius:8px;padding:10px 12px;text-align:center;flex:1;min-width:110px">' +
+        '<div style="font-size:10px;color:#6F6E68;margin-bottom:4px">' + label + '</div>' +
+        '<div style="font-size:18px;font-weight:800;color:' + (color || '#1C1A18') + '">' + value + '</div>' +
+        (sub ? '<div style="font-size:9px;color:#A8A6A0;margin-top:2px">' + sub + '</div>' : '') +
+        '</div>';
+    };
+    var winPct24h = h.playerWinPct;
+    var winPctAll = o.playerWinPct;
+    statsEl.innerHTML =
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">' +
+        card('שחקן ניצח (24ש)', (h.playerWins || 0).toLocaleString(),
+             winPct24h != null ? (winPct24h + '%') : 'אין נתונים',
+             winColor(winPct24h)) +
+        card('בוט ניצח (24ש)', (h.botWins || 0).toLocaleString(), '', '#1C1A18') +
+        card('תיקו (24ש)', (h.ties || 0).toLocaleString(), '', '#1C1A18') +
+        card('סה"כ (24ש)', (h.total || 0).toLocaleString(), '', '#1C1A18') +
+      '</div>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">' +
+        card('סה"כ שחקן ניצח', (o.playerWins || 0).toLocaleString(),
+             winPctAll != null ? (winPctAll + '% (יעד 52%)') : 'אין נתונים',
+             winColor(winPctAll)) +
+        card('סה"כ בוט ניצח', (o.botWins || 0).toLocaleString(), '', '#1C1A18') +
+        card('פעילים כעת', (o.inProgress || 0).toLocaleString(), '', '#2E8B6F') +
+        card('Live (סה"כ)', (o.liveTotal || 0).toLocaleString(), '', '#BA7517') +
+      '</div>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+        card('ניקוד ממוצע שחקן', (o.avgPlayerScore || 0).toLocaleString(), '', '#1C1A18') +
+        card('ניקוד ממוצע בוט', (o.avgBotScore || 0).toLocaleString(), '', '#1C1A18') +
+      '</div>';
+    if (recentEl && d.recent) {
+      if (!d.recent.length) {
+        recentEl.innerHTML = '<div style="color:#A8A6A0;padding:8px;text-align:center">אין דו-קרבות עדיין</div>';
+      } else {
+        var resultBadge = (r) => {
+          if (r === 'player_won') return '<span style="background:#2E8B6F;color:#fff;padding:2px 6px;border-radius:4px;font-size:10px">🏆 שחקן</span>';
+          if (r === 'bot_won')    return '<span style="background:#C8472F;color:#fff;padding:2px 6px;border-radius:4px;font-size:10px">🤖 בוט</span>';
+          if (r === 'tie')        return '<span style="background:#BA7517;color:#fff;padding:2px 6px;border-radius:4px;font-size:10px">🤝 תיקו</span>';
+          if (r === 'expired')    return '<span style="background:#6F6E68;color:#fff;padding:2px 6px;border-radius:4px;font-size:10px">⌛ פג</span>';
+          return '<span style="background:#A8A6A0;color:#fff;padding:2px 6px;border-radius:4px;font-size:10px">⏳ פעיל</span>';
+        };
+        recentEl.innerHTML = d.recent.map(row => {
+          var when = new Date(row.createdAt).toLocaleString('he-IL', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' });
+          var scoreLine = (row.playerScore != null && row.botScore != null)
+            ? (row.playerScore || 0).toLocaleString() + ' vs ' + (row.botScore || 0).toLocaleString()
+            : '—';
+          return '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(0,0,0,0.05)">' +
+            '<span style="flex:1;font-weight:600">' + escHtml(row.playerName || '?') + ' ⚔ ' + escHtml(row.botName || '?') + (row.isLive ? ' ⚡' : '') + '</span>' +
+            '<span style="font-family:ui-monospace,Menlo,monospace;color:#6F6E68">' + scoreLine + '</span>' +
+            resultBadge(row.result) +
+            '<span style="font-size:10px;color:#A8A6A0;min-width:80px;text-align:left">' + when + '</span>' +
+            '</div>';
+        }).join('');
+      }
+    }
+  }
+  // Auto-refresh while the players tab is open. Cheap (one query w/ index).
+  setInterval(function() {
+    var active = document.querySelector('.admin-tab-panel[data-tab="players"]');
+    if (active && getComputedStyle(active).display !== 'none') refreshBotDuelsStats();
+  }, 15 * 1000);
+  // First load (the user may already be on the players tab on page load).
+  refreshBotDuelsStats();
   // Show/hide mode-specific input fields
   $('bot-mode').onchange = function() {
     $('bot-contest-row').style.display = this.value === 'contest' ? '' : 'none';

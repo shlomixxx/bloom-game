@@ -8201,6 +8201,121 @@ function _matchRangeForPoll(pollCount, cfg) {
   return 999999999; // unbounded after 4+ polls (~12+ seconds)
 }
 
+// ────────────────────────────────────────────────────────────
+// BL.1 — Bot duel fallback (May 2026)
+//
+// When matchmaking finds no real opponent after N seconds, we spawn
+// a synthetic opponent so the player never feels alone. The bot
+// looks identical to a real player from the client's perspective —
+// Israeli name, valid-looking BLOOM-XXXX code, trophy count within
+// range. Score is calibrated server-side to give the player ~52%
+// win rate (industry-standard "feels fair" tuning).
+//
+// Decoupled from bot-engine.js (those bots actively pump heartbeats
+// for the social-proof stat; these are phantom opponents created on
+// demand for single duels only).
+// ────────────────────────────────────────────────────────────
+const _DUEL_BOT_NAMES = [
+  'נועם','איתי','אורי','עידו','רועי','גיל','דור','אלון','ליאור','עומר',
+  'יונתן','אדם','דניאל','איתמר','עידן','רון','תומר','שחר','ניר','אמיר',
+  'יובל','אסף','מתן','נדב','אייל','עמית','בן','טל','ארז','שי',
+  'אלעד','אריאל','יואב','עדי','ליאם','נועה','מאיה','שירה','תמר','יעל',
+  'דנה','הילה','רוני','ליהי','אורלי','מיכל','גלי','שקד','איילת','הדר',
+  'ענבר','קרן','לירון','רותם','סתיו','אביב','דקלה','עינב','נגה','אלה',
+  'מעיין','יהלי','רננה','ורד','אפרת','מורן','טליה','אורית','ליאת','חן'
+];
+
+function _pickBotDuelName() {
+  return _DUEL_BOT_NAMES[Math.floor(Math.random() * _DUEL_BOT_NAMES.length)];
+}
+
+function _genBotDuelDeviceId() {
+  // Distinct prefix so /api/stats/live LIKE 'bot-%' counts these too +
+  // anything else filtering bots can spot them.
+  return 'bot-duel-' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+}
+
+// Pick a bot's trophy count within the player's matchmaking range,
+// biased slightly upward (so "I beat someone strong" feels good).
+function _pickBotTrophyCount(playerTrophies, range) {
+  const lo = Math.max(0, playerTrophies - Math.min(range, 200));
+  const hi = playerTrophies + Math.min(range, 200) + 50;
+  return Math.floor(lo + Math.random() * (hi - lo));
+}
+
+// Read bot-duel config with sane defaults.
+async function _loadBotDuelConfig() {
+  try {
+    const cfg = await getCachedConfigPrefix('bot_').catch(() => ({}));
+    return {
+      enabled: cfg.bot_duel_fallback_enabled !== 'false',
+      delaySec: Math.max(3, Math.min(60, parseInt(cfg.bot_duel_fallback_after_seconds, 10) || 8)),
+      liveDelaySec: Math.max(2, Math.min(30, parseInt(cfg.bot_live_race_fallback_after_seconds, 10) || 6)),
+      playerWinPct: Math.max(20, Math.min(80, parseInt(cfg.bot_duel_player_win_rate_pct, 10) || 52)),
+      settleMin: Math.max(5, Math.min(300, parseInt(cfg.bot_duel_settle_delay_min_seconds, 10) || 20)),
+      settleMax: Math.max(10, Math.min(600, parseInt(cfg.bot_duel_settle_delay_max_seconds, 10) || 55))
+    };
+  } catch (_) {
+    return { enabled: true, delaySec: 8, liveDelaySec: 6, playerWinPct: 52, settleMin: 20, settleMax: 55 };
+  }
+}
+
+// Create a synthetic bot duel for the given player. Returns the inserted
+// duel row. Caller has already verified fallback is enabled + the player
+// has been waiting at least `delaySec` seconds.
+async function _spawnBotDuelForPlayer(opts) {
+  const { deviceId, myName, myCode, myTrophies, difficulty, range, live, durationSec } = opts;
+  const botDeviceId = _genBotDuelDeviceId();
+  const botName = _pickBotDuelName();
+  const botCode = generatePlayerCode();
+  const botTrophies = _pickBotTrophyCount(myTrophies, range);
+  const seed = Math.floor(Math.random() * 0xFFFFFFFF);
+  const diff = resolveDifficulty(difficulty);
+  const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
+  // Clean the queue entry (the player was waiting in it).
+  await pool.query(
+    `DELETE FROM duel_matchmaking_queue WHERE device_id = $1`,
+    [deviceId]
+  ).catch(() => {});
+  // Seed a minimal player_profiles row for the bot so any downstream JOIN
+  // (e.g. friends list, duel history, leaderboard) finds a valid name+code.
+  // Bots NEVER buy/spend, but the row keeps stats queries simple. Note:
+  // player_code is stored WITH the 'BLOOM-' prefix in this codebase — see
+  // the /api/player/code endpoint that inserts `generatePlayerCode()`
+  // directly into player_profiles.player_code.
+  await pool.query(
+    `INSERT INTO player_profiles (device_id, display_name, player_code, country, balance, total_earned)
+     VALUES ($1, $2, $3, 'IL', 0, 0)
+     ON CONFLICT (device_id) DO NOTHING`,
+    [botDeviceId, botName, botCode]
+  ).catch(() => {});
+  // Also seed a trophy row so the bot appears credible in the duel HUD.
+  await pool.query(
+    `INSERT INTO player_trophies (device_id, trophies, trophies_lifetime, highest_trophies)
+     VALUES ($1, $2, $2, $2)
+     ON CONFLICT (device_id) DO NOTHING`,
+    [botDeviceId, botTrophies]
+  ).catch(() => {});
+  const ins = await pool.query(
+    `INSERT INTO duels (
+        challenger_device, challenger_name, challenger_code,
+        opponent_code, opponent_device, opponent_name,
+        amount, board_seed, expires_at, status,
+        difficulty_label, difficulty_weights, difficulty_speed_pct,
+        is_random_match, is_bot_match
+        ${live ? `, is_live, started_at, duration_seconds, live_last_heartbeat_at` : ``})
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'accepted', $10, $11, $12, TRUE, TRUE
+        ${live ? `, TRUE, NOW(), $13, NOW()` : ``})
+     RETURNING *`,
+    live
+      ? [deviceId, myName, myCode, botCode, botDeviceId, botName,
+         0, seed, expiresAt, diff.label, diff.weights, diff.speed_pct, durationSec || 60]
+      : [deviceId, myName, myCode, botCode, botDeviceId, botName,
+         0, seed, expiresAt, diff.label, diff.weights, diff.speed_pct]
+  );
+  return ins.rows[0];
+}
+
 app.post('/api/duels/find-random', requireDeviceAuth, async (req, res) => {
   const deviceId = req.deviceId;
   if (!checkRateLimit('duel_random', deviceId, 120, 60 * 60 * 1000)) {
@@ -8320,10 +8435,29 @@ app.post('/api/duels/find-random', requireDeviceAuth, async (req, res) => {
     } finally {
       client.release();
     }
-    // Return "still searching" with stats so client can render countdown.
+    // Return "still searching" — but first, check if we should fall back
+    // to a bot opponent (player has been waiting long enough).
     const stats = await pool.query(`SELECT COUNT(*)::int AS n FROM duel_matchmaking_queue WHERE joined_queue_at > NOW() - INTERVAL '90 seconds'`);
     const myJoinTime = meRow.rows[0] ? new Date(meRow.rows[0].joined_queue_at).getTime() : Date.now();
     const secondsWaited = Math.floor((Date.now() - myJoinTime) / 1000);
+    // BL.1 bot fallback — if waited long enough and fallback is enabled,
+    // spawn a phantom bot opponent so the player NEVER feels they're alone
+    // on a quiet hour. Bot looks identical to a real player from the
+    // client side (Israeli name + BLOOM code + trophies in range).
+    const botCfg = await _loadBotDuelConfig();
+    if (botCfg.enabled && secondsWaited >= botCfg.delaySec) {
+      try {
+        const range = _matchRangeForPoll(myPollCount + 1, cfg);
+        const botDuel = await _spawnBotDuelForPlayer({
+          deviceId, myName, myCode, myTrophies, difficulty, range,
+          live: false
+        });
+        return res.json({ ok: true, matched: true, duel: botDuel });
+      } catch (botErr) {
+        console.warn('[bot-duel] spawn failed:', botErr.message);
+        // Fall through to keep searching — never block on bot failure.
+      }
+    }
     res.json({
       ok: true,
       matched: false,
@@ -8471,7 +8605,7 @@ app.post('/api/duels/find-random-live', requireDeviceAuth, async (req, res) => {
     const myCode = (myProfile.rows[0] && myProfile.rows[0].player_code) || null;
     const liveLabel = '@live:' + difficulty;
     const meRow = await pool.query(
-      `SELECT poll_count FROM duel_matchmaking_queue WHERE device_id = $1 AND difficulty_label = $2`,
+      `SELECT poll_count, joined_queue_at FROM duel_matchmaking_queue WHERE device_id = $1 AND difficulty_label = $2`,
       [deviceId, liveLabel]
     );
     const myPollCount = meRow.rows[0] ? (meRow.rows[0].poll_count | 0) : 0;
@@ -8551,8 +8685,29 @@ app.post('/api/duels/find-random-live', requireDeviceAuth, async (req, res) => {
         WHERE difficulty_label = $1 AND joined_queue_at > NOW() - INTERVAL '90 seconds'`,
       [liveLabel]
     );
+    const myJoinTime = meRow.rows[0] && meRow.rows[0].joined_queue_at
+      ? new Date(meRow.rows[0].joined_queue_at).getTime() : Date.now();
+    const secondsWaited = Math.floor((Date.now() - myJoinTime) / 1000);
+    // BL.1 bot fallback for the live 60s race. Shorter threshold than the
+    // async path because 6s of staring at a spinner already feels long
+    // in a "60-second race" context. Bot's live score is simulated by
+    // the heartbeat hook (see _maybeUpdateLiveBotScore further below).
+    const botCfg = await _loadBotDuelConfig();
+    if (botCfg.enabled && secondsWaited >= botCfg.liveDelaySec) {
+      try {
+        const range = _matchRangeForPoll(myPollCount + 1, matchCfg);
+        const botDuel = await _spawnBotDuelForPlayer({
+          deviceId, myName, myCode, myTrophies, difficulty, range,
+          live: true, durationSec: duration
+        });
+        return res.json({ ok: true, matched: true, duel: botDuel, duration });
+      } catch (botErr) {
+        console.warn('[bot-duel-live] spawn failed:', botErr.message);
+      }
+    }
     res.json({
       ok: true, matched: false, searching: true,
+      secondsWaited,
       queueSize: stats.rows[0].n | 0,
       trophyRange: _matchRangeForPoll(myPollCount + 1, matchCfg)
     });
@@ -8577,7 +8732,7 @@ app.post('/api/duels/:id/live-heartbeat', requireDeviceAuth, async (req, res) =>
   }
   try {
     const r = await pool.query(
-      `SELECT challenger_device, opponent_device, is_live, started_at, duration_seconds, status
+      `SELECT challenger_device, opponent_device, is_live, is_bot_match, started_at, duration_seconds, status
          FROM duels WHERE id = $1`,
       [duelId]
     );
@@ -8593,6 +8748,18 @@ app.post('/api/duels/:id/live-heartbeat', requireDeviceAuth, async (req, res) =>
       `UPDATE duels SET ${col} = GREATEST(${col}, $1), live_last_heartbeat_at = NOW() WHERE id = $2`,
       [score, duelId]
     );
+    // BL.1 — for live bot duels, also write the bot's computed live score
+    // to opponent_live_score so the existing _settleLiveDuel (which reads
+    // from that column) sees a real number at settle time.
+    if (d.is_bot_match) {
+      const startedAtMs = d.started_at ? new Date(d.started_at).getTime() : Date.now();
+      const dur = d.duration_seconds || 60;
+      const botScore = _liveBotScoreAt(duelId, startedAtMs, dur, Date.now());
+      await pool.query(
+        `UPDATE duels SET opponent_live_score = GREATEST(opponent_live_score, $1) WHERE id = $2`,
+        [botScore, duelId]
+      );
+    }
     // Check if duration elapsed → auto-settle.
     const startedAt = d.started_at ? new Date(d.started_at).getTime() : 0;
     const durationMs = (d.duration_seconds || 60) * 1000;
@@ -8617,7 +8784,7 @@ app.get('/api/duels/:id/live-state', async (req, res) => {
     const r = await pool.query(
       `SELECT challenger_device, opponent_device, challenger_name, opponent_name,
               challenger_live_score, opponent_live_score, started_at, duration_seconds,
-              status, winner_device, challenger_score, opponent_score
+              status, winner_device, challenger_score, opponent_score, is_bot_match
          FROM duels WHERE id = $1 AND is_live = TRUE`,
       [duelId]
     );
@@ -8626,10 +8793,43 @@ app.get('/api/duels/:id/live-state', async (req, res) => {
     const startedMs = d.started_at ? new Date(d.started_at).getTime() : 0;
     const durationMs = (d.duration_seconds || 60) * 1000;
     const timeLeft = Math.max(0, durationMs - (Date.now() - startedMs));
+    // BL.1 — overlay the computed bot score on every read. The heartbeat
+    // hook also writes it, but a fast poller may read between heartbeats
+    // and see a stale value. Computing here keeps the HUD smooth.
+    let opponentLive = d.opponent_live_score | 0;
+    if (d.is_bot_match && d.status === 'accepted') {
+      const live = _liveBotScoreAt(duelId, startedMs, d.duration_seconds || 60, Date.now());
+      if (live > opponentLive) opponentLive = live;
+    }
+    // If the duration has elapsed but the duel hasn't been settled yet,
+    // trigger inline settle so the polling client sees the final result
+    // immediately (without waiting for the 30s backup ticker).
+    if (timeLeft <= 0 && d.status === 'accepted') {
+      // For bot live duels, make sure opponent_live_score holds the final
+      // computed value before _settleLiveDuel snapshots it.
+      if (d.is_bot_match) {
+        await pool.query(
+          `UPDATE duels SET opponent_live_score = GREATEST(opponent_live_score, $1) WHERE id = $2`,
+          [opponentLive, duelId]
+        ).catch(() => {});
+      }
+      await _settleLiveDuel(duelId).catch(() => {});
+      // Re-read so the response reflects the just-settled state.
+      const r2 = await pool.query(
+        `SELECT status, winner_device, challenger_score, opponent_score FROM duels WHERE id = $1`,
+        [duelId]
+      );
+      if (r2.rows[0]) {
+        d.status = r2.rows[0].status;
+        d.winner_device = r2.rows[0].winner_device;
+        d.challenger_score = r2.rows[0].challenger_score;
+        d.opponent_score = r2.rows[0].opponent_score;
+      }
+    }
     res.json({
       ok: true,
       challengerScore: d.challenger_live_score | 0,
-      opponentScore: d.opponent_live_score | 0,
+      opponentScore: opponentLive,
       challengerName: d.challenger_name,
       opponentName: d.opponent_name,
       timeLeft,
@@ -8651,7 +8851,8 @@ async function _settleLiveDuel(duelId) {
   try {
     await client.query('BEGIN');
     const r = await client.query(
-      `SELECT challenger_device, opponent_device, challenger_live_score, opponent_live_score, status
+      `SELECT challenger_device, opponent_device, challenger_live_score, opponent_live_score,
+              status, is_bot_match, started_at, duration_seconds
          FROM duels WHERE id = $1 AND is_live = TRUE FOR UPDATE`,
       [duelId]
     );
@@ -8661,7 +8862,15 @@ async function _settleLiveDuel(duelId) {
     }
     const d = r.rows[0];
     const cScore = d.challenger_live_score | 0;
-    const oScore = d.opponent_live_score | 0;
+    // BL.1 — for bot live duels, the opponent_live_score may be stale if
+    // the player abandoned (no heartbeats written it forward). Compute
+    // the bot's final score from elapsed time so the result is fair.
+    let oScore = d.opponent_live_score | 0;
+    if (d.is_bot_match && d.started_at && d.duration_seconds) {
+      const startedMs = new Date(d.started_at).getTime();
+      const finalBot = _liveBotScoreAt(duelId, startedMs, d.duration_seconds, Date.now());
+      if (finalBot > oScore) oScore = finalBot;
+    }
     let winner = null;
     if (cScore > oScore) winner = d.challenger_device;
     else if (oScore > cScore) winner = d.opponent_device;
@@ -8747,6 +8956,161 @@ setInterval(async function() {
     for (const row of r.rows) await _settleLiveDuel(row.id).catch(() => {});
   } catch (e) {}
 }, 30 * 1000);
+
+// ────────────────────────────────────────────────────────────
+// BL.1 — Bot duel score calibration + settler (May 2026)
+//
+// Async bot duels: player submits → server stamps bot_settle_at =
+// NOW() + random(20-55)s → settler fires later, computes bot's
+// "score", writes opponent_score + status, pushes player.
+//
+// Calibration target: ~52% player-win-rate (admin-tunable). Delta
+// distribution: 65% within 3-13% of player's score (most games are
+// close → feel real), 25% within 10-25% (a clear win/loss), 10% in
+// the 25-40% tail (the occasional blowout). Plus a 2% tie rate.
+//
+// Live bot duels: bot score is computed on-the-fly inside the
+// heartbeat/state endpoints (see _liveBotScoreAt). Settlement
+// uses the existing _settleLiveDuel after we overlay the final
+// computed score.
+// ────────────────────────────────────────────────────────────
+function _calibrateBotScore(playerScore, playerWinPct) {
+  const p = Math.max(20, Math.min(80, playerWinPct | 0));
+  const playerWins = Math.random() * 100 < p;
+  const isTie = Math.random() < 0.02;
+  let deltaPct;
+  const t = Math.random();
+  if (t < 0.65)      deltaPct = 0.03 + Math.random() * 0.10;  // 65% → 3-13%
+  else if (t < 0.90) deltaPct = 0.10 + Math.random() * 0.15;  // 25% → 10-25%
+  else               deltaPct = 0.25 + Math.random() * 0.15;  // 10% → 25-40%
+  let botScore;
+  if (isTie) botScore = playerScore;
+  else if (playerWins) botScore = Math.max(0, Math.floor(playerScore * (1 - deltaPct)));
+  else botScore = Math.floor(playerScore * (1 + deltaPct));
+  return Math.max(100, botScore); // never show "0" — looks like a failure
+}
+
+// Deterministic per-duel-id target final score for live bot duels.
+// Same duel → same target, so the curve is stable across heartbeat reads.
+function _liveBotTargetScore(duelId) {
+  const r = ((duelId * 9301 + 49297) % 233280) / 233280;
+  return Math.floor(35000 + r * 75000); // 35K-110K final
+}
+
+// Bot's "live score" at the current moment, given the duel's started_at.
+// Uses sqrt-easing so bots ramp up quickly then plateau (so a real
+// player who's strong can pass them late — dramatic comebacks possible).
+function _liveBotScoreAt(duelId, startedAtMs, durationSec, nowMs) {
+  const target = _liveBotTargetScore(duelId);
+  const elapsed = Math.max(0, (nowMs - startedAtMs) / 1000);
+  const ratio = Math.min(1, elapsed / Math.max(1, durationSec));
+  const eased = Math.sqrt(ratio);
+  // Tiny noise so consecutive heartbeats don't read the same to the millis.
+  const noise = 1 + (Math.sin(elapsed * 1.7 + duelId) * 0.02);
+  return Math.floor(target * eased * noise);
+}
+
+async function _settleBotDuel(duelId) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const r = await client.query(
+      `SELECT * FROM duels WHERE id = $1 AND is_bot_match = TRUE FOR UPDATE`,
+      [duelId]
+    );
+    if (!r.rows[0]) { await client.query('ROLLBACK'); return null; }
+    const d = r.rows[0];
+    if (d.status !== 'accepted' && d.status !== 'pending') {
+      await client.query('ROLLBACK'); return null;
+    }
+    if (d.challenger_score == null) {
+      // Player hasn't submitted — nothing to settle against yet.
+      await client.query('ROLLBACK'); return null;
+    }
+    if (d.opponent_score != null) {
+      // Already settled by a parallel race (lazy GET + ticker can collide).
+      await client.query('ROLLBACK'); return null;
+    }
+    const cfg = await _loadBotDuelConfig();
+    const botScore = _calibrateBotScore(d.challenger_score, cfg.playerWinPct);
+    let winner = null;
+    if (d.challenger_score > botScore) winner = d.challenger_device;
+    else if (botScore > d.challenger_score) winner = d.opponent_device;
+    if (winner) {
+      await client.query(
+        `UPDATE duels
+            SET opponent_score = $1, winner_device = $2,
+                status = 'settled', bot_settle_at = NULL
+          WHERE id = $3 AND opponent_score IS NULL`,
+        [botScore, winner, duelId]
+      );
+    } else {
+      await client.query(
+        `UPDATE duels
+            SET opponent_score = $1, winner_device = NULL,
+                status = 'tie', bot_settle_at = NULL
+          WHERE id = $2 AND opponent_score IS NULL`,
+        [botScore, duelId]
+      );
+    }
+    await client.query('COMMIT');
+    // Push the player on result. Bot has no device — no push needed there.
+    if (typeof sendPushToDevice === 'function') {
+      if (winner === d.challenger_device) {
+        sendPushToDevice(d.challenger_device, {
+          title: '🏆 ניצחת!',
+          body: 'ניצחת את ' + (d.opponent_name || 'היריב') + ' · ' +
+                d.challenger_score.toLocaleString() + ' מול ' + botScore.toLocaleString(),
+          tag: 'duel-result-' + duelId,
+          data: { url: '/?action=duels', kind: 'duel_result', duelId, winner: 'you' }
+        });
+      } else if (winner === d.opponent_device) {
+        sendPushToDevice(d.challenger_device, {
+          title: '😔 הפסדת',
+          body: (d.opponent_name || 'היריב') + ' ניצח/ה אותך · ' +
+                botScore.toLocaleString() + ' מול ' + d.challenger_score.toLocaleString(),
+          tag: 'duel-result-' + duelId,
+          data: { url: '/?action=duels', kind: 'duel_result', duelId, winner: 'opponent' }
+        });
+      } else {
+        sendPushToDevice(d.challenger_device, {
+          title: '🤝 תיקו!',
+          body: 'הדו-קרב נגד ' + (d.opponent_name || 'היריב') + ' הסתיים בתיקו',
+          tag: 'duel-result-' + duelId,
+          data: { url: '/?action=duels', kind: 'duel_tie', duelId }
+        });
+      }
+    }
+    return { winner, botScore };
+  } catch (e) {
+    await client.query('ROLLBACK');
+    throw e;
+  } finally {
+    client.release();
+  }
+}
+
+// Async bot-duel settler tick. Every 10s, finds duels whose
+// bot_settle_at has elapsed and settles them. Index `idx_duels_bot_settle`
+// keeps this query cheap as the table grows.
+setInterval(async function() {
+  try {
+    const r = await pool.query(
+      `SELECT id FROM duels
+        WHERE is_bot_match = TRUE
+          AND status = 'accepted'
+          AND opponent_score IS NULL
+          AND bot_settle_at IS NOT NULL
+          AND bot_settle_at <= NOW()
+        LIMIT 50`
+    );
+    for (const row of r.rows) {
+      await _settleBotDuel(row.id).catch(err => {
+        console.warn('[bot-duel-settler]', row.id, err.message);
+      });
+    }
+  } catch (e) {}
+}, 10 * 1000);
 
 // Cancel matchmaking — remove from queue. Caller-controlled (no rate
 // limit since it's a destructive op that always succeeds idempotently).
@@ -11885,6 +12249,98 @@ if (ADMIN_PATH && ADMIN_PASSWORD) {
     // Clear ALL bot heartbeats so followers report 'not running' immediately
     pool.query(`DELETE FROM player_heartbeat WHERE device_id LIKE 'bot-%'`).catch(() => {});
     res.json({ ok: true });
+  });
+
+  // BL.1 — Bot-duel telemetry. Surfaces win/loss/tie counts + recent
+  // matches so the admin can verify the calibration is working (target
+  // ~52% player win rate) and tune it without redeploying.
+  adminRouter.get('/api/bot-duels/stats', async (_req, res) => {
+    try {
+      const [overall, recent, recent24h, live] = await Promise.all([
+        pool.query(`
+          SELECT
+            COUNT(*) FILTER (WHERE status = 'settled' AND winner_device = challenger_device)::int AS player_wins,
+            COUNT(*) FILTER (WHERE status = 'settled' AND winner_device = opponent_device)::int AS bot_wins,
+            COUNT(*) FILTER (WHERE status = 'tie')::int AS ties,
+            COUNT(*) FILTER (WHERE status = 'accepted')::int AS in_progress,
+            COUNT(*) FILTER (WHERE status = 'expired')::int AS expired,
+            COUNT(*)::int AS total,
+            AVG(CASE WHEN status = 'settled' THEN challenger_score END)::int AS avg_player_score,
+            AVG(CASE WHEN status = 'settled' THEN opponent_score END)::int AS avg_bot_score
+          FROM duels WHERE is_bot_match = TRUE
+        `),
+        pool.query(`
+          SELECT id, challenger_name, opponent_name, challenger_score, opponent_score,
+                 winner_device, challenger_device, opponent_device, status, is_live,
+                 created_at
+            FROM duels
+           WHERE is_bot_match = TRUE
+           ORDER BY created_at DESC
+           LIMIT 30
+        `),
+        pool.query(`
+          SELECT
+            COUNT(*) FILTER (WHERE status = 'settled' AND winner_device = challenger_device)::int AS player_wins_24h,
+            COUNT(*) FILTER (WHERE status = 'settled' AND winner_device = opponent_device)::int AS bot_wins_24h,
+            COUNT(*) FILTER (WHERE status = 'tie')::int AS ties_24h,
+            COUNT(*)::int AS total_24h
+          FROM duels
+          WHERE is_bot_match = TRUE AND created_at > NOW() - INTERVAL '24 hours'
+        `),
+        pool.query(`
+          SELECT COUNT(*)::int AS c FROM duels
+           WHERE is_bot_match = TRUE AND is_live = TRUE
+        `)
+      ]);
+      const o = overall.rows[0] || {};
+      const o24 = recent24h.rows[0] || {};
+      const completed = (o.player_wins | 0) + (o.bot_wins | 0) + (o.ties | 0);
+      const completed24h = (o24.player_wins_24h | 0) + (o24.bot_wins_24h | 0) + (o24.ties_24h | 0);
+      res.json({
+        ok: true,
+        overall: {
+          playerWins: o.player_wins | 0,
+          botWins:    o.bot_wins | 0,
+          ties:       o.ties | 0,
+          inProgress: o.in_progress | 0,
+          expired:    o.expired | 0,
+          total:      o.total | 0,
+          completed,
+          playerWinPct: completed > 0 ? Math.round(((o.player_wins | 0) / completed) * 1000) / 10 : null,
+          avgPlayerScore: o.avg_player_score | 0,
+          avgBotScore:    o.avg_bot_score | 0,
+          liveTotal:      live.rows[0] ? (live.rows[0].c | 0) : 0
+        },
+        last24h: {
+          playerWins: o24.player_wins_24h | 0,
+          botWins:    o24.bot_wins_24h | 0,
+          ties:       o24.ties_24h | 0,
+          total:      o24.total_24h | 0,
+          completed:  completed24h,
+          playerWinPct: completed24h > 0 ? Math.round(((o24.player_wins_24h | 0) / completed24h) * 1000) / 10 : null
+        },
+        recent: recent.rows.map(d => {
+          let result = 'in_progress';
+          if (d.status === 'settled' && d.winner_device === d.challenger_device) result = 'player_won';
+          else if (d.status === 'settled' && d.winner_device === d.opponent_device) result = 'bot_won';
+          else if (d.status === 'tie') result = 'tie';
+          else if (d.status === 'expired') result = 'expired';
+          return {
+            id: d.id,
+            playerName: d.challenger_name,
+            botName:    d.opponent_name,
+            playerScore: d.challenger_score,
+            botScore:    d.opponent_score,
+            result,
+            isLive: !!d.is_live,
+            createdAt: d.created_at
+          };
+        })
+      });
+    } catch (e) {
+      console.error('admin /api/bot-duels/stats', e);
+      res.status(500).json({ error: 'server' });
+    }
   });
 
   // ---------- VERSION INFO ----------
@@ -15713,6 +16169,22 @@ app.get('/api/duels/:id', async (req, res) => {
     // not the next time someone else triggers a sweep.
     await expireStalePendingDuels();
     await expireStaleAcceptedDuels();
+    // BL.1 lazy bot-duel settle: a player polling for the result of
+    // their bot duel can shave off the 10s settler-tick latency by
+    // triggering the settle inline if their delay has elapsed.
+    try {
+      const peek = await pool.query(
+        `SELECT id FROM duels
+          WHERE id = $1
+            AND is_bot_match = TRUE
+            AND status = 'accepted'
+            AND opponent_score IS NULL
+            AND bot_settle_at IS NOT NULL
+            AND bot_settle_at <= NOW()`,
+        [duelId]
+      );
+      if (peek.rows.length) await _settleBotDuel(duelId);
+    } catch (_) {}
     const r = await pool.query('SELECT * FROM duels WHERE id = $1', [duelId]);
     if (!r.rows.length) return res.status(404).json({ error: 'not_found' });
     const d = r.rows[0];
@@ -15816,6 +16288,33 @@ app.post('/api/duels/:id/score', requireDeviceAuth, async (req, res) => {
     }
     if (!updated.rows.length) {
       return res.json({ ok: false, reason: 'already_submitted' });
+    }
+
+    // BL.1 — bot duel branch. The opponent is a phantom bot (no real
+    // device polling), so settlement is driven by a server-side timer
+    // instead of "wait for opponent to submit". Stamp bot_settle_at to
+    // a realistic 20-55s window so the player sees the waiting overlay
+    // for the same duration as a real-player duel. The periodic settler
+    // (every 10s) + the lazy-settle inside GET /api/duels/:id will pick
+    // it up when the time is right.
+    //
+    // Player should ALWAYS be the challenger in bot duels (that's how
+    // _spawnBotDuelForPlayer constructs them). If somehow the bot is on
+    // the challenger side, skip — better to fall through to standard
+    // flow than to corrupt state.
+    if (duel.is_bot_match && isChallenger) {
+      try {
+        const cfg = await _loadBotDuelConfig();
+        const delaySec = Math.floor(cfg.settleMin + Math.random() * Math.max(1, cfg.settleMax - cfg.settleMin));
+        await pool.query(
+          `UPDATE duels SET bot_settle_at = NOW() + ($1 || ' seconds')::interval
+             WHERE id = $2 AND bot_settle_at IS NULL`,
+          [delaySec, duelId]
+        );
+      } catch (botErr) {
+        console.warn('[bot-duel-stamp] failed:', botErr.message);
+      }
+      return res.json({ ok: true, result: 'waiting', yourScore: s });
     }
 
     // Check if both scored → settle
@@ -16225,19 +16724,54 @@ app.get('/api/stats/live', async (_req, res) => {
     const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' });
     // Tiered fallback so the home v2 social-proof bar never disappears:
     // activeNow → playingNow → gamesToday → activeThisHour → gamesThisWeek.
-    const [active, playing, games, activeHr, gamesWeek] = await Promise.all([
+    //
+    // BL.1 (May 2026) — also count bot heartbeats so the live-pulse bar never
+    // reads "1 שחקן פעיל" during low-traffic hours. Bots land in
+    // `player_heartbeat` (not `contest_live_state` or `device_visits`), so we
+    // add them as a separate query and blend per the admin-tunable cap.
+    const [active, playing, games, activeHr, gamesWeek, botsActive, botsPlaying] = await Promise.all([
       pool.query(`SELECT COUNT(DISTINCT device_id)::int AS c FROM contest_live_state WHERE updated_at > NOW() - INTERVAL '30 seconds'`),
       pool.query(`SELECT COUNT(DISTINCT device_id)::int AS c FROM device_visits WHERE last_at > NOW() - INTERVAL '3 minutes'`),
       pool.query(`SELECT COUNT(*)::int AS c FROM daily_scores WHERE date = $1`, [today]),
       pool.query(`SELECT COUNT(DISTINCT device_id)::int AS c FROM device_visits WHERE last_at > NOW() - INTERVAL '1 hour'`),
-      pool.query(`SELECT COUNT(*)::int AS c FROM daily_scores WHERE date >= ($1::date - INTERVAL '7 days')::date`, [today])
+      pool.query(`SELECT COUNT(*)::int AS c FROM daily_scores WHERE date >= ($1::date - INTERVAL '7 days')::date`, [today]),
+      pool.query(`SELECT COUNT(DISTINCT device_id)::int AS c FROM player_heartbeat WHERE updated_at > NOW() - INTERVAL '30 seconds' AND device_id LIKE 'bot-%'`),
+      pool.query(`SELECT COUNT(DISTINCT device_id)::int AS c FROM player_heartbeat WHERE updated_at > NOW() - INTERVAL '3 minutes' AND device_id LIKE 'bot-%'`)
     ]);
+    let activeNow = active.rows[0].c | 0;
+    let playingNow = playing.rows[0].c | 0;
+    let activeThisHour = activeHr.rows[0].c | 0;
+    const botActive = botsActive.rows[0].c | 0;
+    const botPlaying = botsPlaying.rows[0].c | 0;
+    // Read bot-blending config. Cached in-process, so this is essentially free.
+    let blendEnabled = true;
+    let multiplier = 2.5;
+    let floorWhenZero = 6;
+    try {
+      const cfg = await getCachedConfigPrefix('bots_').catch(() => ({}));
+      if (cfg.bots_in_live_stats_enabled === 'false') blendEnabled = false;
+      const m = parseFloat(cfg.bots_live_stats_max_multiplier);
+      if (Number.isFinite(m) && m >= 1 && m <= 20) multiplier = m;
+      const f = parseInt(cfg.bots_live_stats_floor_when_zero_real, 10);
+      if (Number.isFinite(f) && f >= 0 && f <= 100) floorWhenZero = f;
+    } catch (_) {}
+    if (blendEnabled && (botActive > 0 || botPlaying > 0)) {
+      // When real==0: show min(botActive, floor). When real>0: real + bots,
+      // capped at real × multiplier so the displayed number stays
+      // proportional. Never display LESS than real (we'd be lying down).
+      const cap = activeNow > 0 ? Math.ceil(activeNow * multiplier) : floorWhenZero;
+      activeNow = Math.max(activeNow, Math.min(activeNow + botActive, cap));
+      const playingCap = playingNow > 0 ? Math.ceil(playingNow * multiplier) : floorWhenZero;
+      playingNow = Math.max(playingNow, Math.min(playingNow + botPlaying, playingCap));
+      const hourCap = activeThisHour > 0 ? Math.ceil(activeThisHour * multiplier) : floorWhenZero;
+      activeThisHour = Math.max(activeThisHour, Math.min(activeThisHour + botPlaying, hourCap));
+    }
     res.json({
-      activeNow: active.rows[0].c,
-      playingNow: playing.rows[0].c,
-      gamesToday: games.rows[0].c,
-      activeThisHour: activeHr.rows[0].c,
-      gamesThisWeek: gamesWeek.rows[0].c
+      activeNow,
+      playingNow,
+      gamesToday: games.rows[0].c | 0,
+      activeThisHour,
+      gamesThisWeek: gamesWeek.rows[0].c | 0
     });
   } catch (e) {
     console.error('GET /api/stats/live', e);
