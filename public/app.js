@@ -1913,6 +1913,28 @@
     mode = 'practice';
     // Start the game with the duel's seed.
     init('practice', { fresh: true, seed: _liveRaceState.duel.board_seed });
+    // BL.1.7 — init('practice') ABOVE just read the player's PRACTICE
+    // difficulty from localStorage. If the player had practice set to
+    // גהינום (insane) but picked "default" in the duel modal, the live
+    // race would inherit the practice difficulty — wrong: the duel
+    // modal's pick must win. Override sessionDifficulty with the duel
+    // row's stored difficulty (mirrors startDuelGame's handling).
+    var duelForDiff = _liveRaceState && _liveRaceState.duel;
+    if (duelForDiff && duelForDiff.difficulty_weights) {
+      sessionDifficulty = {
+        label: duelForDiff.difficulty_label || 'custom',
+        weights: duelForDiff.difficulty_weights,
+        speed_pct: duelForDiff.difficulty_speed_pct || null
+      };
+    } else {
+      // Duel was 'default' — explicitly clear so the practice override
+      // doesn't survive (otherwise gehinom bleeds through).
+      sessionDifficulty = null;
+    }
+    // Re-paint the mode bar so the difficulty pill reflects the duel's
+    // pick (init() above painted it from the now-overridden practice
+    // value). updateModeBar reads sessionDifficulty to render.
+    try { if (typeof updateModeBar === 'function') updateModeBar(); } catch (e) {}
     // Mount live HUD + timer.
     mountLiveRaceHUD();
     // Heartbeat: send my score every 1s.
