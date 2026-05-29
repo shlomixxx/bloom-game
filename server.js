@@ -9011,17 +9011,19 @@ function _liveBotTargetScore(duelId) {
   return Math.floor(35000 + r * 75000); // 35K-110K final
 }
 
-// BL.1.3 — bot's "live score" for live races. sqrt-easing toward the
-// deterministic target. STRICTLY MONOTONIC in nowMs — removed the
-// sin-noise factor that BL.1 had, because between server polls (1-2s
-// apart) the sin term could swing negative and the displayed score
-// would visibly DECREASE → an obvious tell that the opponent is fake.
-// Real merge scores never decrease.
+// BL.1.6 — bot's "live score" for live races. QUADRATIC easing (was
+// sqrt) so the bot starts SLOW like a real player who's still placing
+// initial pieces, then accelerates as if merges are cascading. This
+// fixes the "bot starts with a huge gap" complaint: at t=5/60s, sqrt
+// gave target × 0.29 (way ahead of player who barely dropped 2 tiles);
+// quadratic gives target × 0.007 (essentially 0, matching a real
+// player's start). Curve still hits full target at t=duration.
 function _liveBotScoreAt(duelId, startedAtMs, durationSec, nowMs) {
   const target = _liveBotTargetScore(duelId);
   const elapsed = Math.max(0, (nowMs - startedAtMs) / 1000);
   const ratio = Math.min(1, elapsed / Math.max(1, durationSec));
-  const eased = Math.sqrt(ratio);
+  // Quadratic: ratio² → slow start, accelerating mid-game, hits target at end.
+  const eased = ratio * ratio;
   return Math.floor(target * eased);
 }
 
@@ -9047,7 +9049,17 @@ async function _settleBotDuel(duelId) {
       await client.query('ROLLBACK'); return null;
     }
     const cfg = await _loadBotDuelConfig();
-    const botScore = _calibrateBotScore(d.id, d.challenger_score, cfg.playerWinPct);
+    let botScore = _calibrateBotScore(d.id, d.challenger_score, cfg.playerWinPct);
+    // BL.1.6 — NEVER regress below the live ceiling. The spectator
+    // widget showed `opponent_live_score` during the settle window;
+    // if the calibrated final is lower, the player would see the bot's
+    // score DROP at settle ("bot was at 17K then ended at 9K"). MAX
+    // guard preserves the displayed value. In rare cases this lets the
+    // bot win when calibration said it should lose — acceptable because
+    // the user explicitly said: "I don't mind losing, just no lies in
+    // the scores".
+    const liveCeiling = d.opponent_live_score | 0;
+    if (liveCeiling > botScore) botScore = liveCeiling;
     let winner = null;
     if (d.challenger_score > botScore) winner = d.challenger_device;
     else if (botScore > d.challenger_score) winner = d.opponent_device;
@@ -17045,10 +17057,18 @@ function _botAsyncCandidateScore(duelId, createdMs, challengerScore, settleAtMs,
   const totalSec = Math.max(1, (endMs - createdMs) / 1000);
   const elapsed = Math.max(0, (nowMs - createdMs) / 1000);
   const ratio = Math.min(1, elapsed / totalSec);
-  const eased = Math.sqrt(ratio);
-  // Target: known final if player submitted, else estimate (using a
-  // typical-game value as the calibration anchor).
-  const anchor = (challengerScore | 0) > 0 ? (challengerScore | 0) : 40000;
+  // BL.1.6 — quadratic easing (was sqrt). Same reasoning as
+  // _liveBotScoreAt: slow start matches real player behaviour.
+  const eased = ratio * ratio;
+  // BL.1.6 — pre-submit anchor LOWERED 40000 → 8000.
+  // The high anchor caused the live ceiling to grow into the 25-35K
+  // range during the player's game, but when the player submitted with
+  // (e.g.) 5000, the calibrated final was ~4500 — the displayed score
+  // dropped from 25K to 4.5K at settle. User noticed: "bot at 17K mid-
+  // game then 9K final". With anchor=8000, the pre-submit ceiling tops
+  // out at ~6-7K, so when calibrated final comes in (typically much
+  // higher), the live score climbs UP toward it — no regression.
+  const anchor = (challengerScore | 0) > 0 ? (challengerScore | 0) : 8000;
   const target = _calibrateBotScore(duelId, anchor, playerWinPct);
   return Math.max(100, Math.floor(target * eased));
 }
@@ -17749,7 +17769,7 @@ app.get('/api/stats/live', async (_req, res) => {
     // genuine "games played" that wouldn't otherwise be in daily_scores
     // (when admin runs bots in non-daily modes).
     const dayStartIso = today + 'T00:00:00+03:00'; // Asia/Jerusalem day start
-    const [active, playing, games, activeHr, gamesWeek, botsActive, botsPlaying, botsGamesToday] = await Promise.all([
+    const [active, playing, games, activeHr, gamesWeek, botsActive, botsPlaying, botsGamesToday, botDuelsActive] = await Promise.all([
       pool.query(`SELECT COUNT(DISTINCT device_id)::int AS c FROM contest_live_state WHERE updated_at > NOW() - INTERVAL '30 seconds'`),
       pool.query(`SELECT COUNT(DISTINCT device_id)::int AS c FROM device_visits WHERE last_at > NOW() - INTERVAL '3 minutes'`),
       pool.query(`SELECT COUNT(*)::int AS c FROM daily_scores WHERE date = $1`, [today]),
@@ -17761,7 +17781,19 @@ app.get('/api/stats/live', async (_req, res) => {
         (SELECT COUNT(DISTINCT device_id)::int FROM player_heartbeat
            WHERE device_id LIKE 'bot-%' AND updated_at >= $1::timestamptz) AS bot_distinct_today,
         (SELECT COUNT(*)::int FROM duels
-           WHERE is_bot_match = TRUE AND created_at >= $1::timestamptz) AS bot_duels_today`, [dayStartIso])
+           WHERE is_bot_match = TRUE AND created_at >= $1::timestamptz) AS bot_duels_today`, [dayStartIso]),
+      // BL.1.6 — bot duels currently in progress contribute to "active
+      // players now". A player in a bot duel IS playing, the bot
+      // opponent is a real visible participant. Counted independently
+      // from heartbeat bots so per-mode duel activity shows up too.
+      pool.query(`SELECT
+        (SELECT COUNT(*)::int FROM duels
+           WHERE is_bot_match = TRUE AND status IN ('pending','accepted')
+             AND created_at > NOW() - INTERVAL '5 minutes') AS bot_duels_active_now,
+        (SELECT COUNT(*)::int FROM duels
+           WHERE is_bot_match = TRUE AND created_at > NOW() - INTERVAL '30 minutes') AS bot_duels_active_30m,
+        (SELECT COUNT(*)::int FROM duels
+           WHERE is_bot_match = TRUE AND created_at > NOW() - INTERVAL '1 hour') AS bot_duels_active_hour`)
     ]);
     let activeNow = active.rows[0].c | 0;
     let playingNow = playing.rows[0].c | 0;
@@ -17770,6 +17802,9 @@ app.get('/api/stats/live', async (_req, res) => {
     const botPlaying = botsPlaying.rows[0].c | 0;
     const botDistinctToday = (botsGamesToday.rows[0] && botsGamesToday.rows[0].bot_distinct_today) | 0;
     const botDuelsToday = (botsGamesToday.rows[0] && botsGamesToday.rows[0].bot_duels_today) | 0;
+    const botDuelsActiveNow = (botDuelsActive.rows[0] && botDuelsActive.rows[0].bot_duels_active_now) | 0;
+    const botDuelsActive30m = (botDuelsActive.rows[0] && botDuelsActive.rows[0].bot_duels_active_30m) | 0;
+    const botDuelsActiveHour = (botDuelsActive.rows[0] && botDuelsActive.rows[0].bot_duels_active_hour) | 0;
     // Read bot-blending config. Cached in-process, so this is essentially free.
     let blendEnabled = true;
     let multiplier = 2.5;
@@ -17783,21 +17818,22 @@ app.get('/api/stats/live', async (_req, res) => {
       if (Number.isFinite(f) && f >= 0 && f <= 100) floorWhenZero = f;
     } catch (_) {}
     let gamesToday = games.rows[0].c | 0;
-    if (blendEnabled && (botActive > 0 || botPlaying > 0 || botDistinctToday > 0 || botDuelsToday > 0)) {
-      // When real==0: show min(botActive, floor). When real>0: real + bots,
-      // capped at real × multiplier so the displayed number stays
-      // proportional. Never display LESS than real (we'd be lying down).
+    if (blendEnabled && (botActive > 0 || botPlaying > 0 || botDistinctToday > 0 || botDuelsToday > 0 || botDuelsActiveNow > 0 || botDuelsActiveHour > 0)) {
+      // BL.1.6 — total bot contribution per metric now includes:
+      //   activeNow: heartbeat-bots (player_heartbeat) + bot duels in
+      //              progress (status='accepted' in last 5 min)
+      //   playingNow: same +  bot duels created in last 30 min
+      //   activeThisHour: heartbeat-bots + bot duels in last hour
+      //   gamesToday: heartbeat-bots + bot duels created today
+      const totalBotActive = botActive + botDuelsActiveNow;
+      const totalBotPlaying = botPlaying + botDuelsActive30m;
+      const totalBotHour = botPlaying + botDuelsActiveHour;
       const cap = activeNow > 0 ? Math.ceil(activeNow * multiplier) : floorWhenZero;
-      activeNow = Math.max(activeNow, Math.min(activeNow + botActive, cap));
+      activeNow = Math.max(activeNow, Math.min(activeNow + totalBotActive, cap));
       const playingCap = playingNow > 0 ? Math.ceil(playingNow * multiplier) : floorWhenZero;
-      playingNow = Math.max(playingNow, Math.min(playingNow + botPlaying, playingCap));
+      playingNow = Math.max(playingNow, Math.min(playingNow + totalBotPlaying, playingCap));
       const hourCap = activeThisHour > 0 ? Math.ceil(activeThisHour * multiplier) : floorWhenZero;
-      activeThisHour = Math.max(activeThisHour, Math.min(activeThisHour + botPlaying, hourCap));
-      // gamesToday: include bot games. Each unique bot heartbeating today
-      // counts as ~1 game (bots typically play 1-3 games per session); the
-      // bot-duels-today count adds duel-vs-bot games the player triggered.
-      // Cap so a long-running bot session doesn't show "1000 games" while
-      // there's only 1 real player — keeps the social proof believable.
+      activeThisHour = Math.max(activeThisHour, Math.min(activeThisHour + totalBotHour, hourCap));
       const botGamesContribution = botDistinctToday + botDuelsToday;
       const gamesCap = gamesToday > 0 ? Math.ceil(gamesToday * multiplier) : Math.max(floorWhenZero * 2, 12);
       gamesToday = Math.max(gamesToday, Math.min(gamesToday + botGamesContribution, gamesCap));

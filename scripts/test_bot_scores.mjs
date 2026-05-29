@@ -52,7 +52,8 @@ function _liveBotScoreAt(duelId, startedAtMs, durationSec, nowMs) {
   const target = _liveBotTargetScore(duelId);
   const elapsed = Math.max(0, (nowMs - startedAtMs) / 1000);
   const ratio = Math.min(1, elapsed / Math.max(1, durationSec));
-  const eased = Math.sqrt(ratio);
+  // BL.1.6 — quadratic easing.
+  const eased = ratio * ratio;
   return Math.floor(target * eased);
 }
 
@@ -61,10 +62,19 @@ function _botAsyncCandidateScore(duelId, createdMs, challengerScore, settleAtMs,
   const totalSec = Math.max(1, (endMs - createdMs) / 1000);
   const elapsed = Math.max(0, (nowMs - createdMs) / 1000);
   const ratio = Math.min(1, elapsed / totalSec);
-  const eased = Math.sqrt(ratio);
-  const anchor = (challengerScore | 0) > 0 ? (challengerScore | 0) : 40000;
+  // BL.1.6 — quadratic easing.
+  const eased = ratio * ratio;
+  // BL.1.6 — anchor lowered 40000 → 8000.
+  const anchor = (challengerScore | 0) > 0 ? (challengerScore | 0) : 8000;
   const target = _calibrateBotScore(duelId, anchor, playerWinPct);
   return Math.max(100, Math.floor(target * eased));
+}
+
+// BL.1.6 — settle helper that mirrors _settleBotDuel logic.
+function _settledBotScore(duelId, playerScore, liveCeiling, playerWinPct) {
+  let botScore = _calibrateBotScore(duelId, playerScore, playerWinPct);
+  if ((liveCeiling | 0) > botScore) botScore = liveCeiling | 0;
+  return botScore;
 }
 
 function _tierForScore(score) {
@@ -289,6 +299,74 @@ function testSettledMatchesPreview() {
   console.log(`  ✓ 100 duels: preview === actual`);
 }
 
+// Test 8 — BL.1.6 CRITICAL: settled score is NEVER LESS than what
+// was displayed live (no "bot at 17K mid-game then 9K at settle" bug).
+// Simulates the full poll lifecycle + settle for many score scenarios.
+function testNoSettleRegression() {
+  console.log('\nTest 8 — settled score >= live ceiling (CRITICAL):');
+  let downJumps = 0;
+  const scenarios = [];
+  for (let duelId = 1; duelId <= 500; duelId++) {
+    // Wide range of player scores
+    const playerScore = 500 + (duelId * 311 % 95000);
+    const createdMs = 1700000000000;
+    const submitDelay = 30000 + (duelId * 53 % 30000);
+    const settleDelay = 20000 + (duelId * 71 % 35000);
+    const submitMs = createdMs + submitDelay;
+    const settleAtMs = submitMs + settleDelay;
+    // Simulate full 1.5s polling lifecycle, tracking ceiling.
+    let ceiling = 0;
+    let liveAtSettle = 0;
+    for (let dt = 0; dt <= submitDelay + settleDelay; dt += 1500) {
+      const nowMs = createdMs + dt;
+      const submitted = nowMs >= submitMs;
+      const cand = _botAsyncCandidateScore(
+        duelId, createdMs,
+        submitted ? playerScore : null,
+        submitted ? settleAtMs : null,
+        nowMs, 52
+      );
+      ceiling = Math.max(ceiling, cand);
+      if (nowMs >= settleAtMs) liveAtSettle = ceiling;
+    }
+    // Compute settled with BL.1.6 MAX guard.
+    const settled = _settledBotScore(duelId, playerScore, ceiling, 52);
+    // CRITICAL: settled must be ≥ liveAtSettle (no displayed-score regression).
+    if (settled < liveAtSettle) {
+      downJumps++;
+      scenarios.push({ duelId, playerScore, ceiling, liveAtSettle, settled });
+    }
+  }
+  console.log(`  500 duels simulated through full lifecycle`);
+  console.log(`  settle-regression events: ${downJumps} (target: 0)`);
+  if (scenarios.length > 0) {
+    console.log(`  failed examples: ${JSON.stringify(scenarios.slice(0, 3))}`);
+  }
+  assert(downJumps === 0, `expected 0 regressions, got ${downJumps}`);
+  console.log(`  ✓ settled always ≥ live ceiling`);
+}
+
+// Test 9 — BL.1.6: bot's initial score gap is SMALL (no "huge head start").
+// At t=2s of a 60s race, bot's score should be tiny (mimics real player).
+function testNoEarlyGap() {
+  console.log('\nTest 9 — bot starts SLOW (no head-start gap):');
+  let totalEarlyScore = 0;
+  let maxEarlyScore = 0;
+  for (let duelId = 1; duelId <= 200; duelId++) {
+    const start = 1700000000000;
+    const at2sec = _liveBotScoreAt(duelId, start, 60, start + 2000);
+    totalEarlyScore += at2sec;
+    if (at2sec > maxEarlyScore) maxEarlyScore = at2sec;
+  }
+  const avg = Math.floor(totalEarlyScore / 200);
+  console.log(`  avg bot score at t=2s of 60s race: ${avg}`);
+  console.log(`  max bot score at t=2s: ${maxEarlyScore}`);
+  // With quadratic and target ~70K: 70K * (2/60)² = 70K * 0.00111 = 77
+  assert(avg < 500, `avg ${avg} should be <500 (slow start)`);
+  assert(maxEarlyScore < 800, `max ${maxEarlyScore} should be <800`);
+  console.log(`  ✓ bot's early score is realistic (matches first-tile player)`);
+}
+
 // ─── Run all tests ──────────────────────────────────────────────────
 
 console.log('═══════════════════════════════════════════════════════════');
@@ -303,6 +381,8 @@ testFullPollLifecycleMonotonic();
 testGridDeterministic();
 testGridEvolves();
 testSettledMatchesPreview();
+testNoSettleRegression();
+testNoEarlyGap();
 
 console.log('\n═══════════════════════════════════════════════════════════');
 if (failures === 0) {
