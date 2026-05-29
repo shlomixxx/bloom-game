@@ -1073,6 +1073,12 @@
             '<span class="pid2-referrals-count" id="pid2-referrals-count">0</span>' +
             '<span class="pid2-referrals-label">הזמנת</span>' +
           '</button>' +
+          // FD.2 — sync button. Always-on for players with a code so
+          // they can recover their identity on any new browser/device.
+          '<button class="pid2-sync" type="button" id="pid2-sync-btn" aria-label="סנכרן בין מכשירים" title="🔗 סנכרן בין מכשירים">' +
+            '<span class="pid2-sync-icon">🔗</span>' +
+            '<span class="pid2-sync-label">סנכרן</span>' +
+          '</button>' +
         '</div>' : '');
 
     const editBtn = el.querySelector('.pid2-edit');
@@ -1093,6 +1099,12 @@
     if (refBtn) refBtn.onclick = function() {
       if (typeof window.__bloomShowReferralsModal === 'function') {
         window.__bloomShowReferralsModal();
+      }
+    };
+    const syncBtn = el.querySelector('#pid2-sync-btn');
+    if (syncBtn) syncBtn.onclick = function() {
+      if (window.__bloomDeviceSync && typeof window.__bloomDeviceSync.showModal === 'function') {
+        window.__bloomDeviceSync.showModal();
       }
     };
     fetchReferralCount();
@@ -1578,7 +1590,15 @@
 
   // ── WhatsApp invite (same as v1 but triggered from the small bottom link) ──
   function whatsappInviteV2() {
-    var link = window.location.origin + window.location.pathname;
+    // FD.2 — funnel through buildShareUrl so the player's BLOOM-XXXX code
+    // is appended as ?ref=. Without this every invite sent from home
+    // was a K-factor leak — recipients joined but the referral counter
+    // never fired, no signup bonus, no push-back-to-referrer. The
+    // universal helper handles missing playerCode gracefully (returns
+    // just the bare origin if it's not loaded yet).
+    var link = (typeof window.__bloomBuildShareUrl === 'function')
+      ? window.__bloomBuildShareUrl('/')
+      : (window.location.origin + window.location.pathname);
     var totalMs = parseInt(localStorage.getItem(TOTAL_PLAY_TIME_KEY) || '0', 10) || 0;
     var totalGames = parseInt(localStorage.getItem(GAMES_COUNT_KEY) || '0', 10) || 0;
     var playerNm = (getPlayerName() || '').trim();

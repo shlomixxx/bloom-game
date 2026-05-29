@@ -11313,6 +11313,474 @@ app.get('/api/friends/list', async (req, res) => {
   }
 });
 
+// ============================================================
+// FD.2 — Friend Search + Request workflow (May 29 2026)
+// ============================================================
+// The legacy /api/friends/invite is an instant bidirectional pair
+// (used by the WhatsApp ?ref= deep-link). This adds a Clash-Royale
+// style request workflow on top:
+//   /api/users/search        — by name or BLOOM-XXXX substring
+//   /api/friends/request-send — creates a pending row
+//   /api/friends/requests     — incoming + outgoing
+//   /api/friends/request-respond — accept (pays bonus) or decline
+// Bonus is paid only on accept, matching the original economics.
+
+// GET /api/users/search?deviceId=...&q=... — search ALL profiles by
+// display_name or player_code (full or partial). Excludes self,
+// existing friends, and devices with no profile. Returns top-N
+// results plus an `alreadyFriends` / `requestPending` flag per row
+// so the client knows which action button to show.
+app.get('/api/users/search', async (req, res) => {
+  try {
+    const deviceId = (req.query.deviceId || '').toString().slice(0, 64);
+    const rawQ = (req.query.q || '').toString().trim().slice(0, 64);
+    if (!deviceId || deviceId.length < 8) return res.status(400).json({ error: 'bad_device' });
+    if (!checkRateLimit('user_search', deviceId, 60, 60 * 1000)) {
+      return res.status(429).json({ error: 'rate_limited' });
+    }
+    const cfg = await pool.query(
+      `SELECT key, value FROM game_config WHERE key IN ('friend_requests_enabled','friend_search_min_chars','friend_search_max_results')`
+    );
+    const cfgMap = {};
+    cfg.rows.forEach(r => { cfgMap[r.key] = r.value; });
+    if (cfgMap.friend_requests_enabled === 'false') return res.json({ ok: false, reason: 'disabled' });
+    const minChars = Math.max(1, parseInt(cfgMap.friend_search_min_chars, 10) || 2);
+    const maxResults = Math.max(5, Math.min(50, parseInt(cfgMap.friend_search_max_results, 10) || 20));
+    if (rawQ.length < minChars) return res.json({ ok: true, results: [], minChars });
+    // Normalize for BLOOM-XXXX style codes — uppercase + strip prefix.
+    const isCode = /^BLOOM-/i.test(rawQ) || /^[A-HJ-NP-Z2-9]{4}$/i.test(rawQ);
+    const q = '%' + rawQ.replace(/[%_\\]/g, m => '\\' + m) + '%';
+    const qUpper = '%' + rawQ.toUpperCase().replace(/[%_\\]/g, m => '\\' + m) + '%';
+    // Search by display_name ILIKE OR player_code LIKE. Exclude self.
+    // Returns: device_id, display_name, player_code, country, level.
+    const rows = await pool.query(
+      `SELECT pp.device_id, pp.display_name, pp.player_code, pp.country, pp.level
+         FROM player_profiles pp
+        WHERE pp.device_id <> $1
+          AND (pp.display_name ILIKE $2 ESCAPE '\\'
+               OR pp.player_code LIKE $3 ESCAPE '\\')
+          AND pp.player_code IS NOT NULL
+        ORDER BY
+          CASE WHEN pp.player_code ILIKE $3 ESCAPE '\\' THEN 0 ELSE 1 END,
+          pp.level DESC NULLS LAST,
+          pp.display_name ASC NULLS LAST
+        LIMIT $4`,
+      [deviceId, q, qUpper, maxResults]
+    );
+    if (rows.rows.length === 0) return res.json({ ok: true, results: [], minChars });
+    const targetDevices = rows.rows.map(r => r.device_id);
+    // Mark which targets are already friends.
+    const friends = await pool.query(
+      `SELECT device_a, device_b FROM friendships
+        WHERE (device_a = $1 AND device_b = ANY($2::text[]))
+           OR (device_b = $1 AND device_a = ANY($2::text[]))`,
+      [deviceId, targetDevices]
+    );
+    const friendSet = new Set();
+    friends.rows.forEach(r => {
+      friendSet.add(r.device_a === deviceId ? r.device_b : r.device_a);
+    });
+    // Mark which targets have a pending request from me OR to me.
+    const pendings = await pool.query(
+      `SELECT from_device, to_device FROM friend_requests
+        WHERE status = 'pending'
+          AND ((from_device = $1 AND to_device = ANY($2::text[]))
+            OR (to_device = $1   AND from_device = ANY($2::text[])))`,
+      [deviceId, targetDevices]
+    );
+    const sentSet = new Set();
+    const recvSet = new Set();
+    pendings.rows.forEach(r => {
+      if (r.from_device === deviceId) sentSet.add(r.to_device);
+      else recvSet.add(r.from_device);
+    });
+    const results = rows.rows.map(r => ({
+      deviceId: r.device_id,
+      name: r.display_name || 'אנונימי',
+      code: r.player_code,
+      country: r.country || null,
+      level: r.level | 0,
+      alreadyFriends: friendSet.has(r.device_id),
+      requestSent: sentSet.has(r.device_id),
+      requestReceived: recvSet.has(r.device_id)
+    }));
+    res.json({ ok: true, results, minChars });
+  } catch (e) {
+    console.error('GET /api/users/search', e);
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
+// POST /api/friends/request-send — body: { deviceId, token, targetDeviceId?, targetCode?, message? }
+// Inserts a 'pending' row. Idempotent: re-sending while one is already
+// pending returns ok:true with `alreadyPending: true`.
+app.post('/api/friends/request-send', requireDeviceAuth, async (req, res) => {
+  try {
+    const { deviceId, targetDeviceId, targetCode, message } = req.body || {};
+    if (typeof deviceId !== 'string' || deviceId.length < 8) return res.status(400).json({ error: 'bad_device' });
+    if (!checkRateLimit('fr_send', deviceId, 30, 60 * 60 * 1000)) {
+      return res.status(429).json({ error: 'rate_limited' });
+    }
+    const cfg = await pool.query(
+      `SELECT key, value FROM game_config WHERE key IN ('friend_requests_enabled','friend_requests_max_pending','friends_max_per_device')`
+    );
+    const cfgMap = {};
+    cfg.rows.forEach(r => { cfgMap[r.key] = r.value; });
+    if (cfgMap.friend_requests_enabled === 'false') return res.json({ ok: false, reason: 'disabled' });
+    const maxPending = parseInt(cfgMap.friend_requests_max_pending, 10) || 50;
+    const maxFriends = parseInt(cfgMap.friends_max_per_device, 10) || 50;
+    let target = (typeof targetDeviceId === 'string' && targetDeviceId.length >= 8) ? targetDeviceId : null;
+    if (!target && targetCode) target = await resolveDeviceFromCode(targetCode);
+    if (!target) return res.json({ ok: false, reason: 'target_not_found' });
+    if (target === deviceId) return res.json({ ok: false, reason: 'cant_self_request' });
+    // Verify both have profiles.
+    const both = await pool.query(
+      `SELECT device_id FROM player_profiles WHERE device_id = ANY($1::text[])`,
+      [[deviceId, target]]
+    );
+    if (both.rows.length < 2) return res.json({ ok: false, reason: 'profile_missing' });
+    // If they're already friends, just say so.
+    const [a, b] = orderDevicePair(deviceId, target);
+    const friendExists = await pool.query(
+      `SELECT 1 FROM friendships WHERE device_a = $1 AND device_b = $2 LIMIT 1`,
+      [a, b]
+    );
+    if (friendExists.rows.length) return res.json({ ok: true, alreadyFriends: true });
+    // Cap senders by pending-from-me + cap on total friends.
+    const myFriendCount = await pool.query(
+      `SELECT COUNT(*)::int AS c FROM friendships WHERE device_a = $1 OR device_b = $1`,
+      [deviceId]
+    );
+    if ((myFriendCount.rows[0].c || 0) >= maxFriends) {
+      return res.json({ ok: false, reason: 'max_friends_reached', cap: maxFriends });
+    }
+    const myPending = await pool.query(
+      `SELECT COUNT(*)::int AS c FROM friend_requests WHERE from_device = $1 AND status = 'pending'`,
+      [deviceId]
+    );
+    if ((myPending.rows[0].c || 0) >= maxPending) {
+      return res.json({ ok: false, reason: 'max_pending_reached', cap: maxPending });
+    }
+    // If a pending request the OTHER direction exists → auto-accept.
+    const reverse = await pool.query(
+      `SELECT id FROM friend_requests
+        WHERE from_device = $1 AND to_device = $2 AND status = 'pending'
+        ORDER BY created_at DESC LIMIT 1`,
+      [target, deviceId]
+    );
+    if (reverse.rows.length) {
+      return await _friendRequestAccept(reverse.rows[0].id, deviceId, target, res);
+    }
+    // Trim the message to 160 chars, plain text only.
+    const msgClean = typeof message === 'string'
+      ? message.replace(/[ -]/g, '').slice(0, 160)
+      : null;
+    // Insert the request (or no-op via the partial unique index if
+    // a pending one already exists in this direction).
+    const ins = await pool.query(
+      `INSERT INTO friend_requests (from_device, to_device, status, message)
+       VALUES ($1, $2, 'pending', $3)
+       ON CONFLICT ON CONSTRAINT uq_friend_requests_pending DO NOTHING
+       RETURNING id`,
+      [deviceId, target, msgClean]
+    );
+    if (ins.rows.length === 0) return res.json({ ok: true, alreadyPending: true });
+    // Push to the recipient.
+    if (typeof sendPushToDevice === 'function') {
+      const me = await pool.query(`SELECT display_name FROM player_profiles WHERE device_id = $1`, [deviceId]);
+      const myName = (me.rows[0] && me.rows[0].display_name) || 'שחקן';
+      sendPushToDevice(target, {
+        title: '👥 בקשת חברות חדשה',
+        body: myName + ' רוצה להוסיף אותך כחבר · אשר לקבל 200💎 לשניכם',
+        tag: 'friend-request-' + ins.rows[0].id,
+        data: { url: '/?action=friend-requests' }
+      }).catch(function() {});
+    }
+    res.json({ ok: true, requestId: ins.rows[0].id });
+  } catch (e) {
+    console.error('POST /api/friends/request-send', e);
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
+// GET /api/friends/requests?deviceId=... — list incoming + outgoing
+// pending requests, plus recently-responded (last 14 days). Each row
+// includes the other-party's display_name + player_code + country.
+app.get('/api/friends/requests', async (req, res) => {
+  try {
+    const deviceId = (req.query.deviceId || '').toString().slice(0, 64);
+    if (!deviceId || deviceId.length < 8) return res.status(400).json({ error: 'bad_device' });
+    const incoming = await pool.query(
+      `SELECT fr.id, fr.from_device AS other_device, pp.display_name, pp.player_code, pp.country,
+              pp.level, fr.message, fr.created_at, fr.status
+         FROM friend_requests fr
+         LEFT JOIN player_profiles pp ON pp.device_id = fr.from_device
+        WHERE fr.to_device = $1
+          AND (fr.status = 'pending' OR fr.responded_at > NOW() - INTERVAL '14 days')
+        ORDER BY (fr.status = 'pending') DESC, fr.created_at DESC
+        LIMIT 50`,
+      [deviceId]
+    );
+    const outgoing = await pool.query(
+      `SELECT fr.id, fr.to_device AS other_device, pp.display_name, pp.player_code, pp.country,
+              pp.level, fr.message, fr.created_at, fr.status
+         FROM friend_requests fr
+         LEFT JOIN player_profiles pp ON pp.device_id = fr.to_device
+        WHERE fr.from_device = $1
+          AND (fr.status = 'pending' OR fr.responded_at > NOW() - INTERVAL '14 days')
+        ORDER BY (fr.status = 'pending') DESC, fr.created_at DESC
+        LIMIT 50`,
+      [deviceId]
+    );
+    const shape = r => ({
+      id: r.id,
+      otherDevice: r.other_device,
+      name: r.display_name || 'אנונימי',
+      code: r.player_code || null,
+      country: r.country || null,
+      level: r.level | 0,
+      message: r.message || null,
+      status: r.status,
+      createdAt: r.created_at
+    });
+    res.json({
+      ok: true,
+      incoming: incoming.rows.map(shape),
+      outgoing: outgoing.rows.map(shape),
+      unreadIncoming: incoming.rows.filter(r => r.status === 'pending').length
+    });
+  } catch (e) {
+    console.error('GET /api/friends/requests', e);
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
+// POST /api/friends/request-respond — body: { deviceId, token, requestId, action: 'accept'|'decline'|'cancel' }
+// accept → creates friendship + pays bonus (idempotent)
+// decline → marks declined (no friendship, no bonus)
+// cancel → only the sender can cancel a pending outgoing request
+app.post('/api/friends/request-respond', requireDeviceAuth, async (req, res) => {
+  try {
+    const { deviceId, requestId, action } = req.body || {};
+    if (typeof deviceId !== 'string' || deviceId.length < 8) return res.status(400).json({ error: 'bad_device' });
+    const validActions = new Set(['accept', 'decline', 'cancel']);
+    if (!validActions.has(action)) return res.json({ ok: false, reason: 'bad_action' });
+    const rid = parseInt(requestId, 10) | 0;
+    if (rid <= 0) return res.json({ ok: false, reason: 'bad_request' });
+    if (!checkRateLimit('fr_respond', deviceId, 60, 60 * 60 * 1000)) {
+      return res.status(429).json({ error: 'rate_limited' });
+    }
+    const row = await pool.query(
+      `SELECT id, from_device, to_device, status FROM friend_requests WHERE id = $1`,
+      [rid]
+    );
+    if (!row.rows.length) return res.json({ ok: false, reason: 'not_found' });
+    const fr = row.rows[0];
+    if (action === 'cancel') {
+      if (fr.from_device !== deviceId) return res.json({ ok: false, reason: 'not_sender' });
+      if (fr.status !== 'pending') return res.json({ ok: false, reason: 'already_resolved', status: fr.status });
+      await pool.query(
+        `UPDATE friend_requests SET status = 'canceled', responded_at = NOW() WHERE id = $1`,
+        [rid]
+      );
+      return res.json({ ok: true, status: 'canceled' });
+    }
+    // accept + decline: only recipient may act.
+    if (fr.to_device !== deviceId) return res.json({ ok: false, reason: 'not_recipient' });
+    if (fr.status !== 'pending') return res.json({ ok: false, reason: 'already_resolved', status: fr.status });
+    if (action === 'decline') {
+      await pool.query(
+        `UPDATE friend_requests SET status = 'declined', responded_at = NOW() WHERE id = $1`,
+        [rid]
+      );
+      return res.json({ ok: true, status: 'declined' });
+    }
+    // accept — delegated helper handles transaction + bonus + push.
+    return await _friendRequestAccept(rid, fr.to_device, fr.from_device, res);
+  } catch (e) {
+    console.error('POST /api/friends/request-respond', e);
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
+// Shared accept path. Atomic transaction: flip status → friendship row
+// → bonus to both → mark canceling counterparts. Idempotent — if
+// friendship already exists we still flip the request to 'accepted'.
+async function _friendRequestAccept(requestId, accepterDevice, senderDevice, res) {
+  const cfg = await pool.query(
+    `SELECT key, value FROM game_config WHERE key IN ('friends_enabled','friends_signup_bonus')`
+  );
+  const cfgMap = {};
+  cfg.rows.forEach(r => { cfgMap[r.key] = r.value; });
+  const signupBonus = parseInt(cfgMap.friends_signup_bonus, 10) || 200;
+  const [a, b] = orderDevicePair(accepterDevice, senderDevice);
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query(
+      `UPDATE friend_requests SET status = 'accepted', responded_at = NOW() WHERE id = $1 AND status = 'pending'`,
+      [requestId]
+    );
+    // Also auto-cancel any pending request in the OTHER direction so
+    // the inbox doesn't leave it dangling.
+    await client.query(
+      `UPDATE friend_requests SET status = 'canceled', responded_at = NOW()
+        WHERE from_device = $1 AND to_device = $2 AND status = 'pending'`,
+      [accepterDevice, senderDevice]
+    );
+    // Create friendship if it doesn't exist yet.
+    const inserted = await client.query(
+      `INSERT INTO friendships (device_a, device_b, initiator, bonus_paid)
+       VALUES ($1, $2, $3, true)
+       ON CONFLICT (device_a, device_b) DO NOTHING
+       RETURNING 1`,
+      [a, b, senderDevice]
+    );
+    const paidBonus = inserted.rows.length > 0;
+    if (paidBonus) {
+      await client.query(
+        `UPDATE player_profiles SET balance = balance + $1, total_earned = total_earned + $1, updated_at = NOW()
+          WHERE device_id = $2`,
+        [signupBonus, a]
+      );
+      await client.query(
+        `UPDATE player_profiles SET balance = balance + $1, total_earned = total_earned + $1, updated_at = NOW()
+          WHERE device_id = $2`,
+        [signupBonus, b]
+      );
+    }
+    await client.query('COMMIT');
+    if (paidBonus && typeof sendPushToDevice === 'function') {
+      const senderName = await pool.query(`SELECT display_name FROM player_profiles WHERE device_id = $1`, [accepterDevice]);
+      const nm = (senderName.rows[0] && senderName.rows[0].display_name) || 'חבר';
+      sendPushToDevice(senderDevice, {
+        title: '👥 ' + nm + ' אישר חברות!',
+        body: 'שניכם קיבלתם ' + signupBonus + '💎 · בכל יום ששניכם תשחקו = +100💎 לאחד',
+        tag: 'friend-accepted-' + requestId,
+        data: { url: '/' }
+      }).catch(function() {});
+    }
+    return res.json({ ok: true, status: 'accepted', signupBonus: paidBonus ? signupBonus : 0, alreadyFriends: !paidBonus });
+  } catch (err) {
+    try { await client.query('ROLLBACK'); } catch (_) {}
+    console.error('_friendRequestAccept', err);
+    return res.status(500).json({ error: 'internal' });
+  } finally {
+    client.release();
+  }
+}
+
+// ============================================================
+// FD.2 — Cross-Device Account Sync (May 29 2026)
+// ============================================================
+// Player on device A → POST /account/transfer-create → 6-char code.
+// Player on device B → POST /account/transfer-redeem with that code →
+//   server returns device A's deviceId + a fresh HMAC token. Client
+//   on device B overwrites its localStorage. From then on, both
+//   physical browsers act as the same logical player (single profile,
+//   shared streak / trophies / balance / friends).
+//
+// Anti-abuse: 6 random chars from a 32-char alphabet ≈ 1e9 combos.
+// 10-min TTL. Single-use. Source must be authenticated when creating
+// (only the real owner can issue a transfer). Redeem doesn't require
+// the redeeming device's auth — that device may be a fresh install
+// with no token yet. The 6-char code IS the auth on the redeem side.
+
+const _TRANSFER_CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // skip I/L/O/0/1
+function _generateTransferCode() {
+  let code = '';
+  for (let i = 0; i < 6; i++) {
+    code += _TRANSFER_CODE_ALPHABET[Math.floor(Math.random() * _TRANSFER_CODE_ALPHABET.length)];
+  }
+  return code;
+}
+
+app.post('/api/account/transfer-create', requireDeviceAuth, async (req, res) => {
+  try {
+    const { deviceId } = req.body || {};
+    if (typeof deviceId !== 'string' || deviceId.length < 8) return res.status(400).json({ error: 'bad_device' });
+    if (!checkRateLimit('xfer_create', deviceId, 5, 60 * 60 * 1000)) {
+      return res.status(429).json({ error: 'rate_limited' });
+    }
+    const cfg = await pool.query(
+      `SELECT key, value FROM game_config WHERE key IN ('device_sync_enabled','device_sync_ttl_min')`
+    );
+    const cfgMap = {};
+    cfg.rows.forEach(r => { cfgMap[r.key] = r.value; });
+    if (cfgMap.device_sync_enabled === 'false') return res.json({ ok: false, reason: 'disabled' });
+    const ttlMin = Math.max(2, Math.min(60, parseInt(cfgMap.device_sync_ttl_min, 10) || 10));
+    // Guard: source must have a profile (i.e. not an empty fresh install).
+    const profile = await pool.query(`SELECT 1 FROM player_profiles WHERE device_id = $1`, [deviceId]);
+    if (!profile.rows.length) return res.json({ ok: false, reason: 'no_profile' });
+    // Generate a code that isn't already taken among unexpired+unused.
+    let code = null;
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const candidate = _generateTransferCode();
+      const conflict = await pool.query(
+        `SELECT 1 FROM device_transfer_codes
+          WHERE code = $1 AND used_at IS NULL AND expires_at > NOW() LIMIT 1`,
+        [candidate]
+      );
+      if (!conflict.rows.length) { code = candidate; break; }
+    }
+    if (!code) return res.status(500).json({ error: 'code_collision' });
+    await pool.query(
+      `INSERT INTO device_transfer_codes (code, source_device_id, expires_at)
+       VALUES ($1, $2, NOW() + ($3 || ' minutes')::interval)`,
+      [code, deviceId, String(ttlMin)]
+    );
+    res.json({ ok: true, code, ttlMin, expiresInSec: ttlMin * 60 });
+  } catch (e) {
+    console.error('POST /api/account/transfer-create', e);
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
+app.post('/api/account/transfer-redeem', async (req, res) => {
+  try {
+    const { code, currentDeviceId } = req.body || {};
+    if (typeof code !== 'string' || !/^[A-HJ-NP-Z2-9]{6}$/i.test(code.trim())) {
+      return res.json({ ok: false, reason: 'bad_code_format' });
+    }
+    const codeUp = code.trim().toUpperCase();
+    // Rate limit by remote IP since the redeeming device may have no
+    // recognized deviceId.
+    const rateKey = (currentDeviceId && currentDeviceId.slice(0, 64)) ||
+                    (req.headers['x-forwarded-for'] || req.ip || 'unknown').toString().slice(0, 64);
+    if (!checkRateLimit('xfer_redeem', rateKey, 20, 60 * 60 * 1000)) {
+      return res.status(429).json({ error: 'rate_limited' });
+    }
+    const cfg = await pool.query(`SELECT value FROM game_config WHERE key = 'device_sync_enabled'`);
+    if (cfg.rows[0] && cfg.rows[0].value === 'false') return res.json({ ok: false, reason: 'disabled' });
+    // Atomic claim: only succeed if unused AND unexpired.
+    const claim = await pool.query(
+      `UPDATE device_transfer_codes
+          SET used_at = NOW(), used_by_device_id = $2
+        WHERE code = $1 AND used_at IS NULL AND expires_at > NOW()
+        RETURNING source_device_id`,
+      [codeUp, (typeof currentDeviceId === 'string' ? currentDeviceId.slice(0, 64) : null)]
+    );
+    if (!claim.rows.length) {
+      // Check why it failed — for friendlier UX.
+      const why = await pool.query(
+        `SELECT used_at, expires_at FROM device_transfer_codes WHERE code = $1`,
+        [codeUp]
+      );
+      if (!why.rows.length) return res.json({ ok: false, reason: 'not_found' });
+      if (why.rows[0].used_at) return res.json({ ok: false, reason: 'already_used' });
+      return res.json({ ok: false, reason: 'expired' });
+    }
+    const sourceDevice = claim.rows[0].source_device_id;
+    // Issue a fresh token for the source device. Source's profile is
+    // unchanged — we just hand the redeeming browser the credentials.
+    const newToken = generateDeviceToken(sourceDevice);
+    res.json({ ok: true, newDeviceId: sourceDevice, newToken });
+  } catch (e) {
+    console.error('POST /api/account/transfer-redeem', e);
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
 // Helper called from dynamic game-over: records that this device played a
 // dynamic game today AND triggers the shared-day bonus for every friend
 // who has ALSO played today (one-time per (a, b, date)).

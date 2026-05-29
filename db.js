@@ -588,6 +588,40 @@ export async function initDb() {
     `INSERT INTO game_config (key, value) VALUES ('bot_duel_settle_delay_min_seconds',    '20')   ON CONFLICT (key) DO NOTHING`,
     `INSERT INTO game_config (key, value) VALUES ('bot_duel_settle_delay_max_seconds',    '55')   ON CONFLICT (key) DO NOTHING`,
     `INSERT INTO game_config (key, value) VALUES ('bot_live_race_fallback_after_seconds', '6')    ON CONFLICT (key) DO NOTHING`,
+    // FD.2 — Friend Requests + Cross-device Sync
+    `CREATE TABLE IF NOT EXISTS friend_requests (
+      id           BIGSERIAL PRIMARY KEY,
+      from_device  VARCHAR(64) NOT NULL,
+      to_device    VARCHAR(64) NOT NULL,
+      status       VARCHAR(16) NOT NULL DEFAULT 'pending',
+      message      VARCHAR(160),
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      responded_at TIMESTAMPTZ,
+      CHECK (from_device <> to_device),
+      CHECK (status IN ('pending', 'accepted', 'declined', 'canceled'))
+    )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS uq_friend_requests_pending
+       ON friend_requests (from_device, to_device) WHERE status = 'pending'`,
+    `CREATE INDEX IF NOT EXISTS idx_friend_requests_to_pending
+       ON friend_requests (to_device, created_at DESC) WHERE status = 'pending'`,
+    `CREATE INDEX IF NOT EXISTS idx_friend_requests_from_pending
+       ON friend_requests (from_device, created_at DESC) WHERE status = 'pending'`,
+    `INSERT INTO game_config (key, value) VALUES ('friend_requests_enabled',     'true') ON CONFLICT (key) DO NOTHING`,
+    `INSERT INTO game_config (key, value) VALUES ('friend_requests_max_pending', '50')   ON CONFLICT (key) DO NOTHING`,
+    `INSERT INTO game_config (key, value) VALUES ('friend_search_min_chars',     '2')    ON CONFLICT (key) DO NOTHING`,
+    `INSERT INTO game_config (key, value) VALUES ('friend_search_max_results',   '20')   ON CONFLICT (key) DO NOTHING`,
+    `CREATE TABLE IF NOT EXISTS device_transfer_codes (
+      code              VARCHAR(8) PRIMARY KEY,
+      source_device_id  VARCHAR(64) NOT NULL,
+      created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      expires_at        TIMESTAMPTZ NOT NULL,
+      used_at           TIMESTAMPTZ,
+      used_by_device_id VARCHAR(64)
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_dtc_source ON device_transfer_codes (source_device_id, created_at DESC)`,
+    `CREATE INDEX IF NOT EXISTS idx_dtc_active ON device_transfer_codes (expires_at) WHERE used_at IS NULL`,
+    `INSERT INTO game_config (key, value) VALUES ('device_sync_enabled', 'true') ON CONFLICT (key) DO NOTHING`,
+    `INSERT INTO game_config (key, value) VALUES ('device_sync_ttl_min', '10')   ON CONFLICT (key) DO NOTHING`,
   ];
   for (const sql of migrations) {
     try { await pool.query(sql); } catch (e) {

@@ -2296,6 +2296,8 @@
           '<button class="dyn-friends-modal-close" aria-label="סגור">✕</button>' +
           '<div class="dyn-friends-modal-title">👥 חברים</div>' +
           '<div class="dyn-friends-modal-sub">הזמן חבר → שניכם מקבלים <strong>' + bonus + '💎</strong> · בכל יום ששניכם תשחקו = <strong>+' + sharedBonus + '💎</strong> כל אחד</div>' +
+          // FD.2 — entry point to the search + requests panel.
+          '<button class="dyn-friends-search-btn" id="dyn-friends-search-btn" type="button">🔍 חפש שחקנים + 📨 בקשות חברות</button>' +
         '</div>' +
         '<div class="dyn-friends-share-row">' +
           (myCode
@@ -2322,6 +2324,13 @@
     document.body.appendChild(ov);
     ov.querySelector('.dyn-friends-modal-close').onclick = closeFriendsModal;
     ov.addEventListener('click', function(e) { if (e.target === ov) closeFriendsModal(); });
+    // FD.2 — open the search + requests modal alongside (not instead of).
+    var searchBtn = ov.querySelector('#dyn-friends-search-btn');
+    if (searchBtn) searchBtn.onclick = function() {
+      if (window.__bloomFriendSearch && typeof window.__bloomFriendSearch.showModal === 'function') {
+        window.__bloomFriendSearch.showModal('search');
+      }
+    };
     var waBtn = ov.querySelector('.dyn-friends-share-wa');
     if (waBtn) waBtn.onclick = shareInviteViaWhatsApp;
     var natBtn = ov.querySelector('.dyn-friends-share-native');

@@ -13,14 +13,16 @@
   position: fixed;
   left: 0;
   right: 0;
-  bottom: 0;
+  /* Sit ABOVE the iPhone home indicator. Old version used `bottom: 0
+     + padding-bottom: env(safe-area)` which on some iOS configs let
+     scroll momentum push the visual edge BELOW the visible viewport.
+     Anchoring the layout to the safe-area inset itself is rock-solid. */
+  bottom: env(safe-area-inset-bottom, 0px);
   /* Center within the app container width if there's a parent .app.
      Falls back to viewport-width on desktop. */
   width: 100%;
   max-width: 480px;
   margin: 0 auto;
-  /* Safe-area-inset-bottom handles iPhone home-bar */
-  padding-bottom: env(safe-area-inset-bottom, 0px);
   background: rgba(255, 255, 255, 0.96);
   backdrop-filter: blur(12px) saturate(140%);
   -webkit-backdrop-filter: blur(12px) saturate(140%);
@@ -33,6 +35,16 @@
   direction: rtl;
   font-family: inherit;
   animation: bnSlideUp 0.28s ease-out;
+  /* iOS Safari fixed-position hardening (FD.2): force a dedicated
+     compositor layer so the nav can't get visually "scrolled" by an
+     ancestor with backdrop-filter / overflow / transform. Symptom
+     before: bar drifted with content + sometimes disappeared off
+     the viewport. translate3d is the textbook workaround. */
+  transform: translate3d(0, 0, 0);
+  -webkit-transform: translate3d(0, 0, 0);
+  will-change: transform;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
 }
 @keyframes bnSlideUp {
   from { transform: translateY(100%); opacity: 0; }

@@ -168,7 +168,12 @@
     var waInvite = document.getElementById('home-invite-wa');
     if (waInvite) waInvite.onclick = function(e) {
       e.stopPropagation();
-      var link = window.location.origin + window.location.pathname;
+      // FD.2 — funnel through buildShareUrl so the player's BLOOM-XXXX
+      // ref code is appended. Without this every invite from the v1
+      // home was a K-factor leak with zero attribution.
+      var link = (typeof window.__bloomBuildShareUrl === 'function')
+        ? window.__bloomBuildShareUrl('/')
+        : (window.location.origin + window.location.pathname);
       var totalMs = parseInt(localStorage.getItem(TOTAL_PLAY_TIME_KEY) || '0', 10) || 0;
       var totalGames = parseInt(localStorage.getItem(GAMES_COUNT_KEY) || '0', 10) || 0;
       var playerNm = (getPlayerName() || '').trim();

@@ -1450,6 +1450,69 @@ INSERT INTO game_config (key, value) VALUES ('friends_shared_day_bonus', '100') 
 INSERT INTO game_config (key, value) VALUES ('friends_max_per_device',   '50')   ON CONFLICT (key) DO NOTHING;
 
 -- ============================================================
+-- Friend Requests (FD.2 — May 29 2026)
+-- Adds a request workflow on top of the existing instant-friendship
+-- model. A request stays 'pending' until the target accepts (creates
+-- friendship + pays bonus to both) or declines (no friendship + no
+-- bonus). Old /api/friends/invite is kept for back-compat (existing
+-- WhatsApp invite UX, ?ref= deep-links). New endpoints power the
+-- search + request panel.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS friend_requests (
+  id          BIGSERIAL PRIMARY KEY,
+  from_device VARCHAR(64) NOT NULL,
+  to_device   VARCHAR(64) NOT NULL,
+  status      VARCHAR(16) NOT NULL DEFAULT 'pending'
+              CHECK (status IN ('pending', 'accepted', 'declined', 'canceled')),
+  message     VARCHAR(160),
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  responded_at TIMESTAMPTZ,
+  CHECK (from_device <> to_device)
+);
+-- One pending request per (from, to) — second tap re-uses or no-ops.
+CREATE UNIQUE INDEX IF NOT EXISTS uq_friend_requests_pending
+  ON friend_requests (from_device, to_device) WHERE status = 'pending';
+CREATE INDEX IF NOT EXISTS idx_friend_requests_to_pending
+  ON friend_requests (to_device, created_at DESC) WHERE status = 'pending';
+CREATE INDEX IF NOT EXISTS idx_friend_requests_from_pending
+  ON friend_requests (from_device, created_at DESC) WHERE status = 'pending';
+
+INSERT INTO game_config (key, value) VALUES ('friend_requests_enabled',     'true') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('friend_requests_max_pending', '50')   ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('friend_search_min_chars',     '2')    ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('friend_search_max_results',   '20')   ON CONFLICT (key) DO NOTHING;
+
+-- ============================================================
+-- Cross-device Account Sync (FD.2 — May 29 2026)
+--
+-- Lets a player on device A generate a one-time 6-char code, type it
+-- on device B (different browser, new install, lost-then-recovered
+-- localStorage), and have device B inherit device A's identity. The
+-- redeem endpoint replaces device B's localStorage `bloom_device_id`
+-- + `bloom_device_token` with device A's values — server sees one
+-- identity from then on. Player keeps their BLOOM-XXXX code, streak,
+-- trophies, achievements, balance, friends, everything.
+--
+-- Anti-abuse: code is 6 random chars, expires in 10 min, single-use
+-- (used_at + used_by_device_id stamped on redeem). Source device
+-- must be authenticated when creating the code — only the real owner
+-- can issue a transfer.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS device_transfer_codes (
+  code              VARCHAR(8) PRIMARY KEY,
+  source_device_id  VARCHAR(64) NOT NULL,
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  expires_at        TIMESTAMPTZ NOT NULL,
+  used_at           TIMESTAMPTZ,
+  used_by_device_id VARCHAR(64)
+);
+CREATE INDEX IF NOT EXISTS idx_dtc_source ON device_transfer_codes (source_device_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_dtc_active ON device_transfer_codes (expires_at) WHERE used_at IS NULL;
+
+INSERT INTO game_config (key, value) VALUES ('device_sync_enabled',  'true') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('device_sync_ttl_min',  '10')   ON CONFLICT (key) DO NOTHING;
+
+-- ============================================================
 -- Daily Login Multiplier Stack — stage 14 (May 2026)
 --
 -- The existing daily_login_reward + tiered streak bonuses already
