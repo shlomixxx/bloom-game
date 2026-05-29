@@ -1209,6 +1209,9 @@
         '<span class="lrh-timer" id="lrh-timer">60</span>' +
         '<span class="lrh-timer-unit">שניות</span>' +
       '</div>' +
+      // BL.1.4 — animated progress bar under the timer. Visual countdown
+      // works even when the user can't read the number (peripheral vision).
+      '<div class="lrh-timer-bar"><div class="lrh-timer-bar-fill" id="lrh-timer-bar-fill" style="width:100%"></div></div>' +
       '<div class="lrh-score-row">' +
         '<div class="lrh-me">' +
           '<div class="lrh-label">אתה</div>' +
@@ -1221,6 +1224,10 @@
         '</div>' +
       '</div>';
     document.body.appendChild(hud);
+    // BL.1.4 — set body class so CSS can hide the .top/.stats/.mode-bar/
+    // bottom-nav rows (otherwise the regular game chrome shows through
+    // and overlaps the HUD + steals vertical space from the grid).
+    try { document.body.classList.add('live-race-active'); } catch (e) {}
   }
 
   function paintLiveRaceHUD(oppScore, myServerScore, timeLeft) {
@@ -1230,9 +1237,37 @@
     var oppEl = document.getElementById('lrh-opp-score');
     var meEl = document.getElementById('lrh-my-score');
     var timerEl = document.getElementById('lrh-timer');
-    if (oppEl) oppEl.textContent = (oppScore | 0).toLocaleString();
-    if (meEl) meEl.textContent = myFinal.toLocaleString();
+    var barFillEl = document.getElementById('lrh-timer-bar-fill');
+    if (oppEl) {
+      var prevOpp = parseInt(oppEl.dataset.lastValue || '0', 10);
+      oppEl.textContent = (oppScore | 0).toLocaleString();
+      // Score-bump animation when opponent's number grows.
+      if ((oppScore | 0) > prevOpp) {
+        oppEl.classList.remove('lrh-score-bump');
+        void oppEl.offsetWidth;
+        oppEl.classList.add('lrh-score-bump');
+      }
+      oppEl.dataset.lastValue = String(oppScore | 0);
+    }
+    if (meEl) {
+      var prevMy = parseInt(meEl.dataset.lastValue || '0', 10);
+      meEl.textContent = myFinal.toLocaleString();
+      if (myFinal > prevMy) {
+        meEl.classList.remove('lrh-score-bump');
+        void meEl.offsetWidth;
+        meEl.classList.add('lrh-score-bump');
+      }
+      meEl.dataset.lastValue = String(myFinal);
+    }
     if (timerEl) timerEl.textContent = Math.ceil(timeLeft / 1000);
+    // BL.1.4 — progress bar uses _liveRaceState.durationMs for the
+    // denominator (default 60000ms) so the visual fill matches the
+    // actual race length even if admin tunes it.
+    if (barFillEl && _liveRaceState) {
+      var totalMs = (_liveRaceState.durationMs | 0) > 0 ? (_liveRaceState.durationMs | 0) : 60 * 1000;
+      var pct = Math.max(0, Math.min(100, (timeLeft / totalMs) * 100));
+      barFillEl.style.width = pct + '%';
+    }
     var hud = document.getElementById('live-race-hud');
     if (hud) {
       hud.classList.toggle('lrh-ahead', myFinal > (oppScore | 0));
@@ -1267,6 +1302,8 @@
         window._liveRaceMode = false;
         var hud = document.getElementById('live-race-hud');
         if (hud) hud.remove();
+        // BL.1.4 — restore the regular game chrome.
+        try { document.body.classList.remove('live-race-active'); } catch (e) {}
       });
     }, 800);
   }
@@ -1628,13 +1665,22 @@
       // board reads as a horizontal mirror of what the opponent actually sees.
       '<div class="dspec-grid" style="direction:ltr;display:grid;grid-template-columns:repeat(' + COLS + ',1fr);gap:3px;background:#0E0D0C;padding:6px;border-radius:8px;max-width:200px;margin:0 auto">' + cellsHtml + '</div>' +
       '<style>' +
-        '.dspec-cell{aspect-ratio:1;background:#2A2724;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:14px;overflow:hidden}' +
+        '.dspec-cell{aspect-ratio:1;background:#2A2724;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:14px;overflow:hidden;transition:background 220ms ease}' +
         // Tier SVGs have viewBox but no width/height. Without explicit sizing
         // they fall back to UA-default ~300×150 and either overflow or render
         // invisibly — leaving cells looking like plain coloured squares. 65%
         // of the cell matches the main game ratio.
-        '.dspec-cell svg{width:65%;height:65%;display:block}' +
+        '.dspec-cell svg{width:65%;height:65%;display:block;transition:transform 220ms ease}' +
         '@keyframes dspecPulse{0%,100%{opacity:1}50%{opacity:0.3}}' +
+        // BL.1.4 — three cell-change animations make the spectator board
+        // feel ALIVE instead of static. appear=tile dropped from above,
+        // merge=tile upgraded in place, clear=tile vanished.
+        '@keyframes dspecAppear{0%{transform:scale(0.5) translateY(-8px);opacity:0}60%{transform:scale(1.12) translateY(0);opacity:1}100%{transform:scale(1);opacity:1}}' +
+        '@keyframes dspecMerge{0%{transform:scale(1);filter:brightness(1)}40%{transform:scale(1.28);filter:brightness(1.4) drop-shadow(0 0 6px #FFD93D)}100%{transform:scale(1);filter:brightness(1)}}' +
+        '@keyframes dspecClear{0%{transform:scale(1);opacity:1}100%{transform:scale(0.7);opacity:0.2}}' +
+        '.dspec-cell-appear{animation:dspecAppear 420ms cubic-bezier(.34,1.56,.64,1)}' +
+        '.dspec-cell-merge{animation:dspecMerge 360ms ease-out}' +
+        '.dspec-cell-clear{animation:dspecClear 280ms ease-in}' +
       '</style>';
     // Insert before the "Play Again" button — last child of card.
     var btn = card.querySelector('button');
@@ -1668,21 +1714,44 @@
         var tiers = getActiveTiers();
         var cells = gridHost.children;
         var idx = 0;
+        // BL.1.4 — track previous tier per cell so we can fire a "pop"
+        // animation when a tile appears/changes/upgrades. The spectator
+        // widget was visually STATIC even when polling brought a new
+        // grid → looked frozen. Animation makes it feel like a real
+        // game is unfolding.
         for (var r = 0; r < d.grid.length; r++) {
           var row = d.grid[r] || [];
           for (var c = 0; c < row.length; c++) {
             var cell = cells[idx];
             if (cell) {
               var t = row[c] | 0;
+              var prevT = (cell.dataset.tier | 0) || 0;
+              var changed = t !== prevT;
               if (t > 0 && tiers[t]) {
                 cell.style.background = tiers[t].bg;
                 cell.style.color = tiers[t].fg;
                 cell.innerHTML = tiers[t].svg || '';
+                if (changed) {
+                  // Subtle pop on every tier change — distinguishes
+                  // "tile appeared" (from empty) vs "tile upgraded"
+                  // by adding a different class.
+                  var animClass = prevT === 0 ? 'dspec-cell-appear' : 'dspec-cell-merge';
+                  cell.classList.remove('dspec-cell-appear', 'dspec-cell-merge');
+                  void cell.offsetWidth;
+                  cell.classList.add(animClass);
+                }
               } else {
                 cell.style.background = '#2A2724';
                 cell.style.color = '';
                 cell.innerHTML = '';
+                if (changed && prevT > 0) {
+                  // A tile vanished — quick shrink-out flash.
+                  cell.classList.remove('dspec-cell-appear', 'dspec-cell-merge');
+                  void cell.offsetWidth;
+                  cell.classList.add('dspec-cell-clear');
+                }
               }
+              cell.dataset.tier = String(t);
             }
             idx++;
           }

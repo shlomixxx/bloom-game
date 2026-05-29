@@ -17134,14 +17134,22 @@ function _tierForScore(score) {
   return 1;
 }
 
-// Deterministic per duel + score-banded grid. 6 rows × 4 cols, tiers 1-6.
-// Doesn't simulate the merge engine — just creates a plausible-looking
-// board. Higher score → higher tiers visible + a couple more occupied cells.
+// BL.1.4 — score-banded grid that EVOLVES as the bot's "score" grows.
+// Key insight: the same (duelId, score) must produce the same grid
+// (determinism for monotonicity), but as score increases the grid
+// SHOULD visibly change so the spectator widget feels alive instead
+// of frozen. We seed the PRNG with a quantised score bucket — each
+// ~600 score points (roughly one merge) advances the bucket → new
+// grid layout → cells visibly shift in the spectator widget.
 function _synthesizeBotGrid(duelId, score) {
   const ROWS = 6, COLS = 4;
   const maxTier = _tierForScore(score);
-  // Seeded PRNG (Mulberry32) so the same duel always renders the same grid.
-  let s = (duelId * 2654435761) >>> 0;
+  // Score bucket: integer division by ~600 → one new "merge event" per bucket.
+  // At a typical 30K bot score, that's ~50 visible board changes across a
+  // game — feels like a real player making moves every ~1-2 seconds.
+  const bucket = Math.floor((score | 0) / 600);
+  // Seed mixes duelId (per-duel stability) + bucket (per-event evolution).
+  let s = ((duelId * 2654435761) ^ (bucket * 1597463007)) >>> 0;
   function rand() {
     s |= 0; s = (s + 0x6D2B79F5) | 0;
     let t = Math.imul(s ^ (s >>> 15), 1 | s);
@@ -17150,12 +17158,12 @@ function _synthesizeBotGrid(duelId, score) {
   }
   const grid = [];
   for (let r = 0; r < ROWS; r++) grid.push(new Array(COLS).fill(0));
-  // Fill bottom-up with gravity-respecting placement.
-  const fillProbs = [0, 0.7, 0.5, 0.35, 0.2, 0.1];
+  // More cells per column as score grows — the board "fills up" over time.
+  // At score 0: 1-2 cells per col. At 50K: 3-5 cells per col.
+  const fillBase = Math.min(3, 1 + Math.floor((score | 0) / 15000));
   for (let c = 0; c < COLS; c++) {
-    let cellsToPlace = 2 + Math.floor(rand() * 4); // 2-5 cells per column
+    let cellsToPlace = fillBase + Math.floor(rand() * 3);
     for (let r = ROWS - 1; r >= 0 && cellsToPlace > 0; r--) {
-      // Tier weighted toward lower numbers, biased up if maxTier is high.
       let tier;
       const roll = rand();
       if (roll < 0.45) tier = 1;

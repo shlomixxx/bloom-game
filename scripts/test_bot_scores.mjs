@@ -67,6 +67,47 @@ function _botAsyncCandidateScore(duelId, createdMs, challengerScore, settleAtMs,
   return Math.max(100, Math.floor(target * eased));
 }
 
+function _tierForScore(score) {
+  if (score >= 60000) return 6;
+  if (score >= 30000) return 5;
+  if (score >= 15000) return 4;
+  if (score >= 5000)  return 3;
+  if (score >= 1000)  return 2;
+  return 1;
+}
+
+function _synthesizeBotGrid(duelId, score) {
+  const ROWS = 6, COLS = 4;
+  const maxTier = _tierForScore(score);
+  const bucket = Math.floor((score | 0) / 600);
+  let s = ((duelId * 2654435761) ^ (bucket * 1597463007)) >>> 0;
+  function rand() {
+    s |= 0; s = (s + 0x6D2B79F5) | 0;
+    let t = Math.imul(s ^ (s >>> 15), 1 | s);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  }
+  const grid = [];
+  for (let r = 0; r < ROWS; r++) grid.push(new Array(COLS).fill(0));
+  const fillBase = Math.min(3, 1 + Math.floor((score | 0) / 15000));
+  for (let c = 0; c < COLS; c++) {
+    let cellsToPlace = fillBase + Math.floor(rand() * 3);
+    for (let r = ROWS - 1; r >= 0 && cellsToPlace > 0; r--) {
+      let tier;
+      const roll = rand();
+      if (roll < 0.45) tier = 1;
+      else if (roll < 0.70) tier = 2;
+      else if (roll < 0.86) tier = Math.min(3, maxTier);
+      else if (roll < 0.95) tier = Math.min(4, maxTier);
+      else if (roll < 0.99) tier = Math.min(5, maxTier);
+      else tier = Math.min(6, maxTier);
+      grid[r][c] = tier;
+      cellsToPlace--;
+    }
+  }
+  return grid;
+}
+
 // ─── Tests ──────────────────────────────────────────────────────────
 
 let failures = 0;
@@ -197,9 +238,47 @@ function testFullPollLifecycleMonotonic() {
   assert(downJumps === 0, `expected 0 down-jumps, got ${downJumps}`);
 }
 
-// Test 6: Settled score MATCHES the eventual displayed score (no surprise jump).
+// Test 6a: _synthesizeBotGrid is deterministic per (duelId, score).
+function testGridDeterministic() {
+  console.log('\nTest 6a — _synthesizeBotGrid deterministic per (duelId, score):');
+  for (let duelId = 1; duelId <= 50; duelId++) {
+    for (const score of [500, 3000, 10000, 50000]) {
+      const a = JSON.stringify(_synthesizeBotGrid(duelId, score));
+      const b = JSON.stringify(_synthesizeBotGrid(duelId, score));
+      assert(a === b, `duel=${duelId} score=${score} grids differ`);
+    }
+  }
+  console.log(`  ✓ 50 duels × 4 scores × 2 calls each = consistent`);
+}
+
+// Test 6b: _synthesizeBotGrid EVOLVES as score crosses bucket boundaries.
+function testGridEvolves() {
+  console.log('\nTest 6b — _synthesizeBotGrid evolves with score (≥10 changes / 30K range):');
+  let totalChanges = 0;
+  let duelsWithEvolution = 0;
+  for (let duelId = 1; duelId <= 30; duelId++) {
+    let prev = JSON.stringify(_synthesizeBotGrid(duelId, 0));
+    let changes = 0;
+    // Step through score 0 → 30000 in 600-point increments (bucket size).
+    for (let score = 600; score <= 30000; score += 600) {
+      const next = JSON.stringify(_synthesizeBotGrid(duelId, score));
+      if (next !== prev) changes++;
+      prev = next;
+    }
+    totalChanges += changes;
+    if (changes >= 10) duelsWithEvolution++;
+  }
+  const avgChanges = totalChanges / 30;
+  console.log(`  avg changes per duel: ${avgChanges.toFixed(1)} (target ≥10)`);
+  console.log(`  duels with ≥10 evolutions: ${duelsWithEvolution} / 30`);
+  assert(avgChanges >= 10, `avg changes ${avgChanges} should be ≥10`);
+  assert(duelsWithEvolution >= 25, `${duelsWithEvolution}/30 should evolve well`);
+  console.log(`  ✓ grid evolves visibly across the game`);
+}
+
+// Test 7: Settled score MATCHES the eventual displayed score (no surprise jump).
 function testSettledMatchesPreview() {
-  console.log('\nTest 6 — settled score matches calibrated preview:');
+  console.log('\nTest 7 — settled score matches calibrated preview:');
   for (let duelId = 1; duelId <= 100; duelId++) {
     const playerScore = 30000 + (duelId * 7 % 50000);
     const previewFinal = _calibrateBotScore(duelId, playerScore, 52);
@@ -221,6 +300,8 @@ testCalibrationWinRate();
 testLiveMonotonic();
 testAsyncCandidateMonotonicWithinAnchor();
 testFullPollLifecycleMonotonic();
+testGridDeterministic();
+testGridEvolves();
 testSettledMatchesPreview();
 
 console.log('\n═══════════════════════════════════════════════════════════');
