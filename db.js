@@ -589,6 +589,14 @@ export async function initDb() {
     `INSERT INTO game_config (key, value) VALUES ('bot_duel_settle_delay_min_seconds',    '20')   ON CONFLICT (key) DO NOTHING`,
     `INSERT INTO game_config (key, value) VALUES ('bot_duel_settle_delay_max_seconds',    '55')   ON CONFLICT (key) DO NOTHING`,
     `INSERT INTO game_config (key, value) VALUES ('bot_live_race_fallback_after_seconds', '6')    ON CONFLICT (key) DO NOTHING`,
+    // DU.2 — Duel system overhaul (2026-05-30): wager-aware matchmaking + locked bot final
+    `ALTER TABLE duel_matchmaking_queue ADD COLUMN IF NOT EXISTS wager INT NOT NULL DEFAULT 0`,
+    `ALTER TABLE duels ADD COLUMN IF NOT EXISTS bot_final_score INT`,
+    `INSERT INTO game_config (key, value) VALUES ('duel_wager_match_tolerance_pct', '0')      ON CONFLICT (key) DO NOTHING`,
+    `INSERT INTO game_config (key, value) VALUES ('duel_wager_widen_after_polls',   '3')      ON CONFLICT (key) DO NOTHING`,
+    `INSERT INTO game_config (key, value) VALUES ('duel_wager_widen_band',          '50')     ON CONFLICT (key) DO NOTHING`,
+    `INSERT INTO game_config (key, value) VALUES ('duel_random_max_wager',          '100000') ON CONFLICT (key) DO NOTHING`,
+    `INSERT INTO game_config (key, value) VALUES ('duel_pre_submit_display_cap',    '8000')   ON CONFLICT (key) DO NOTHING`,
     // FD.2 — Friend Requests + Cross-device Sync
     `CREATE TABLE IF NOT EXISTS friend_requests (
       id           BIGSERIAL PRIMARY KEY,
