@@ -8265,6 +8265,7 @@ async function _loadBotDuelConfig() {
 // has been waiting at least `delaySec` seconds.
 async function _spawnBotDuelForPlayer(opts) {
   const { deviceId, myName, myCode, myTrophies, difficulty, range, live, durationSec } = opts;
+  const wager = Math.max(0, opts.wager | 0); // DU.2 — real gem stake (bot's side is virtual)
   const botDeviceId = _genBotDuelDeviceId();
   const botName = _pickBotDuelName();
   const botCode = generatePlayerCode();
@@ -8309,11 +8310,17 @@ async function _spawnBotDuelForPlayer(opts) {
      RETURNING *`,
     live
       ? [deviceId, myName, myCode, botCode, botDeviceId, botName,
-         0, seed, expiresAt, diff.label, diff.weights, diff.speed_pct, durationSec || 60]
+         wager, seed, expiresAt, diff.label, diff.weights, diff.speed_pct, durationSec || 60]
       : [deviceId, myName, myCode, botCode, botDeviceId, botName,
-         0, seed, expiresAt, diff.label, diff.weights, diff.speed_pct]
+         wager, seed, expiresAt, diff.label, diff.weights, diff.speed_pct]
   );
   return ins.rows[0];
+}
+
+// DU.2 — max gem wager allowed in random/live matchmaking. Warm-cache read.
+function _duelMaxWager() {
+  const v = parseInt((_configCache && _configCache.duel_random_max_wager) || '', 10);
+  return (Number.isFinite(v) && v > 0) ? v : 100000;
 }
 
 app.post('/api/duels/find-random', requireDeviceAuth, async (req, res) => {
@@ -8325,6 +8332,7 @@ app.post('/api/duels/find-random', requireDeviceAuth, async (req, res) => {
     const cfg = await _loadRandomMatchConfig();
     if (cfg.random_match_enabled === 'false') return res.json({ ok: false, reason: 'disabled' });
     const difficulty = String((req.body && req.body.difficulty) || 'default').slice(0, 20);
+    const reqWager = Math.max(0, Math.min(_duelMaxWager(), parseInt((req.body && req.body.wager), 10) || 0));
     // Step 1: check if I was already matched (the OTHER player created a
     // duel for us in the last 60s). This is how the "previously-queued"
     // side learns they were matched.
@@ -8353,29 +8361,49 @@ app.post('/api/duels/find-random', requireDeviceAuth, async (req, res) => {
     );
     const myName = (myProfile.rows[0] && myProfile.rows[0].display_name) || 'אנונימי';
     const myCode = (myProfile.rows[0] && myProfile.rows[0].player_code) || null;
-    // First find my current poll_count (if I'm in the queue).
+    // First find my current poll_count + escrowed wager (if I'm in the queue).
     const meRow = await pool.query(
-      `SELECT poll_count, joined_queue_at FROM duel_matchmaking_queue WHERE device_id = $1`,
+      `SELECT poll_count, joined_queue_at, wager FROM duel_matchmaking_queue WHERE device_id = $1`,
       [deviceId]
     );
     const myPollCount = meRow.rows[0] ? (meRow.rows[0].poll_count | 0) : 0;
     const range = _matchRangeForPoll(myPollCount, cfg);
+    // DU.2 — the stake is paid ONCE, on the first queue entry, and held on
+    // the queue row. On re-polls use the escrowed wager (so a client can't
+    // change the stake mid-search to game the payout). Match wager EXACTLY
+    // (the bot fallback resolves quiet queues, so exact never traps anyone).
+    const alreadyQueued = !!meRow.rows[0];
+    const effectiveWager = alreadyQueued ? (meRow.rows[0].wager | 0) : reqWager;
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
+      // Pay the stake on first entry (atomic + balance-guarded, inside the
+      // txn so a rollback refunds it). Re-polls already paid → skip.
+      if (!alreadyQueued && reqWager > 0) {
+        const ded = await client.query(
+          `UPDATE player_profiles SET balance = balance - $1
+             WHERE device_id = $2 AND balance >= $1 RETURNING balance`,
+          [reqWager, deviceId]
+        );
+        if (!ded.rowCount) {
+          await client.query('ROLLBACK');
+          return res.json({ ok: false, reason: 'insufficient_funds', wager: reqWager });
+        }
+      }
       // Look for an opponent in range. ORDER BY: oldest first so we
       // honor FIFO order in the queue.
       const opp = await client.query(
-        `SELECT device_id, display_name, player_code, trophy_count, difficulty_label
+        `SELECT device_id, display_name, player_code, trophy_count, difficulty_label, wager
            FROM duel_matchmaking_queue
           WHERE device_id != $1
             AND ABS(trophy_count - $2) <= $3
             AND difficulty_label = $4
+            AND wager = $5
             AND joined_queue_at > NOW() - INTERVAL '90 seconds'
           ORDER BY joined_queue_at ASC
           LIMIT 1
           FOR UPDATE SKIP LOCKED`,
-        [deviceId, myTrophies, range, difficulty]
+        [deviceId, myTrophies, range, difficulty, effectiveWager]
       );
       if (opp.rows.length) {
         const oppRow = opp.rows[0];
@@ -8401,7 +8429,7 @@ app.post('/api/duels/find-random', requireDeviceAuth, async (req, res) => {
           [
             deviceId, myName, myCode,
             (oppRow.player_code || ''), oppRow.device_id, oppRow.display_name || 'יריב',
-            0, seed, expiresAt,
+            effectiveWager, seed, expiresAt,
             diff.label, diff.weights, diff.speed_pct
           ]
         );
@@ -8421,12 +8449,12 @@ app.post('/api/duels/find-random', requireDeviceAuth, async (req, res) => {
       // No opponent in range — upsert my queue row + bump poll_count.
       await client.query(
         `INSERT INTO duel_matchmaking_queue
-            (device_id, trophy_count, display_name, player_code, difficulty_label, poll_count)
-         VALUES ($1, $2, $3, $4, $5, 1)
+            (device_id, trophy_count, display_name, player_code, difficulty_label, poll_count, wager)
+         VALUES ($1, $2, $3, $4, $5, 1, $6)
          ON CONFLICT (device_id) DO UPDATE
            SET trophy_count = EXCLUDED.trophy_count,
                poll_count   = duel_matchmaking_queue.poll_count + 1`,
-        [deviceId, myTrophies, myName, myCode, difficulty]
+        [deviceId, myTrophies, myName, myCode, difficulty, effectiveWager]
       );
       await client.query('COMMIT');
     } catch (err) {
@@ -8450,7 +8478,7 @@ app.post('/api/duels/find-random', requireDeviceAuth, async (req, res) => {
         const range = _matchRangeForPoll(myPollCount + 1, cfg);
         const botDuel = await _spawnBotDuelForPlayer({
           deviceId, myName, myCode, myTrophies, difficulty, range,
-          live: false
+          live: false, wager: effectiveWager
         });
         return res.json({ ok: true, matched: true, duel: botDuel });
       } catch (botErr) {
@@ -8604,26 +8632,43 @@ app.post('/api/duels/find-random-live', requireDeviceAuth, async (req, res) => {
     const myName = (myProfile.rows[0] && myProfile.rows[0].display_name) || 'אנונימי';
     const myCode = (myProfile.rows[0] && myProfile.rows[0].player_code) || null;
     const liveLabel = '@live:' + difficulty;
+    const reqWager = Math.max(0, Math.min(_duelMaxWager(), parseInt((req.body && req.body.wager), 10) || 0));
     const meRow = await pool.query(
-      `SELECT poll_count, joined_queue_at FROM duel_matchmaking_queue WHERE device_id = $1 AND difficulty_label = $2`,
+      `SELECT poll_count, joined_queue_at, wager FROM duel_matchmaking_queue WHERE device_id = $1 AND difficulty_label = $2`,
       [deviceId, liveLabel]
     );
     const myPollCount = meRow.rows[0] ? (meRow.rows[0].poll_count | 0) : 0;
     const range = _matchRangeForPoll(myPollCount, matchCfg);
+    // DU.2 — same wager model as async: pay once on first entry, escrow on
+    // the queue row, match EXACTLY (bot fallback covers quiet queues).
+    const alreadyQueued = !!meRow.rows[0];
+    const effectiveWager = alreadyQueued ? (meRow.rows[0].wager | 0) : reqWager;
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
+      if (!alreadyQueued && reqWager > 0) {
+        const ded = await client.query(
+          `UPDATE player_profiles SET balance = balance - $1
+             WHERE device_id = $2 AND balance >= $1 RETURNING balance`,
+          [reqWager, deviceId]
+        );
+        if (!ded.rowCount) {
+          await client.query('ROLLBACK');
+          return res.json({ ok: false, reason: 'insufficient_funds', wager: reqWager });
+        }
+      }
       const opp = await client.query(
-        `SELECT device_id, display_name, player_code, trophy_count
+        `SELECT device_id, display_name, player_code, trophy_count, wager
            FROM duel_matchmaking_queue
           WHERE device_id != $1
             AND ABS(trophy_count - $2) <= $3
             AND difficulty_label = $4
+            AND wager = $5
             AND joined_queue_at > NOW() - INTERVAL '90 seconds'
           ORDER BY joined_queue_at ASC
           LIMIT 1
           FOR UPDATE SKIP LOCKED`,
-        [deviceId, myTrophies, range, liveLabel]
+        [deviceId, myTrophies, range, liveLabel, effectiveWager]
       );
       if (opp.rows.length) {
         const oppRow = opp.rows[0];
@@ -8647,7 +8692,7 @@ app.post('/api/duels/find-random-live', requireDeviceAuth, async (req, res) => {
           [
             deviceId, myName, myCode,
             (oppRow.player_code || ''), oppRow.device_id, oppRow.display_name || 'יריב',
-            0, seed, expiresAt,
+            effectiveWager, seed, expiresAt,
             diff.label, diff.weights, diff.speed_pct, duration
           ]
         );
@@ -8665,13 +8710,13 @@ app.post('/api/duels/find-random-live', requireDeviceAuth, async (req, res) => {
       // No opponent — queue up.
       await client.query(
         `INSERT INTO duel_matchmaking_queue
-            (device_id, trophy_count, display_name, player_code, difficulty_label, poll_count)
-         VALUES ($1, $2, $3, $4, $5, 1)
+            (device_id, trophy_count, display_name, player_code, difficulty_label, poll_count, wager)
+         VALUES ($1, $2, $3, $4, $5, 1, $6)
          ON CONFLICT (device_id) DO UPDATE
            SET trophy_count = EXCLUDED.trophy_count,
                difficulty_label = EXCLUDED.difficulty_label,
                poll_count   = duel_matchmaking_queue.poll_count + 1`,
-        [deviceId, myTrophies, myName, myCode, liveLabel]
+        [deviceId, myTrophies, myName, myCode, liveLabel, effectiveWager]
       );
       await client.query('COMMIT');
     } catch (err) {
@@ -8698,7 +8743,7 @@ app.post('/api/duels/find-random-live', requireDeviceAuth, async (req, res) => {
         const range = _matchRangeForPoll(myPollCount + 1, matchCfg);
         const botDuel = await _spawnBotDuelForPlayer({
           deviceId, myName, myCode, myTrophies, difficulty, range,
-          live: true, durationSec: duration
+          live: true, durationSec: duration, wager: effectiveWager
         });
         return res.json({ ok: true, matched: true, duel: botDuel, duration });
       } catch (botErr) {
@@ -8852,7 +8897,7 @@ async function _settleLiveDuel(duelId) {
     await client.query('BEGIN');
     const r = await client.query(
       `SELECT challenger_device, opponent_device, challenger_live_score, opponent_live_score,
-              status, is_bot_match, started_at, duration_seconds
+              status, is_bot_match, started_at, duration_seconds, amount
          FROM duels WHERE id = $1 AND is_live = TRUE FOR UPDATE`,
       [duelId]
     );
@@ -8888,6 +8933,36 @@ async function _settleLiveDuel(duelId) {
         `UPDATE player_profiles SET balance = balance + $1, total_earned = total_earned + $1 WHERE device_id = $2`,
         [reward, winner]
       );
+    }
+    // DU.2 — wager pool on top of the flat winner reward. Both players
+    // staked at queue entry (bot's side is virtual). Winner takes pool
+    // minus rake; tie refunds stakes. A bot winner gets nothing real
+    // (player already lost their stake).
+    const wager = d.amount | 0;
+    if (wager > 0) {
+      const rakePct = parseInt((_configCache && _configCache.wager_rake) || '', 10) || 5;
+      if (winner) {
+        const botWon = d.is_bot_match && winner === d.opponent_device;
+        if (!botWon) {
+          const prize = (wager * 2) - Math.round(wager * 2 * rakePct / 100);
+          await client.query(
+            `UPDATE player_profiles SET balance = balance + $1, total_earned = total_earned + $1 WHERE device_id = $2`,
+            [prize, winner]
+          );
+        }
+      } else {
+        // Tie → refund stakes (challenger always; opponent only if real).
+        await client.query(
+          `UPDATE player_profiles SET balance = balance + $1 WHERE device_id = $2`,
+          [wager, d.challenger_device]
+        );
+        if (!d.is_bot_match) {
+          await client.query(
+            `UPDATE player_profiles SET balance = balance + $1 WHERE device_id = $2`,
+            [wager, d.opponent_device]
+          );
+        }
+      }
     }
     await client.query('COMMIT');
     // Push notify both players. Best-effort.
@@ -9078,6 +9153,29 @@ async function _settleBotDuel(duelId) {
         [botScore, duelId]
       );
     }
+    // DU.2 — wager payout. Player is always the challenger in bot duels;
+    // the bot's stake is virtual. Player win → credit pool minus rake.
+    // Tie → refund the stake. Bot win → nothing (player already debited
+    // at queue entry). Same rake the friend-duel settle uses (wager_rake).
+    const wager = d.amount | 0;
+    let botPrize = 0;
+    if (wager > 0) {
+      const rakePct = parseInt((_configCache && _configCache.wager_rake) || '', 10) || 5;
+      if (winner === d.challenger_device) {
+        botPrize = (wager * 2) - Math.round(wager * 2 * rakePct / 100);
+        await client.query(
+          `UPDATE player_profiles SET balance = balance + $1, total_earned = total_earned + $1, updated_at = NOW()
+             WHERE device_id = $2`,
+          [botPrize, d.challenger_device]
+        );
+      } else if (!winner) {
+        await client.query(
+          `UPDATE player_profiles SET balance = balance + $1, updated_at = NOW()
+             WHERE device_id = $2`,
+          [wager, d.challenger_device]
+        );
+      }
+    }
     await client.query('COMMIT');
     // Push the player on result. Bot has no device — no push needed there.
     if (typeof sendPushToDevice === 'function') {
@@ -9085,7 +9183,8 @@ async function _settleBotDuel(duelId) {
         sendPushToDevice(d.challenger_device, {
           title: '🏆 ניצחת!',
           body: 'ניצחת את ' + (d.opponent_name || 'היריב') + ' · ' +
-                d.challenger_score.toLocaleString() + ' מול ' + botScore.toLocaleString(),
+                d.challenger_score.toLocaleString() + ' מול ' + botScore.toLocaleString() +
+                (botPrize > 0 ? ' · +' + botPrize.toLocaleString() + '💎' : ''),
           tag: 'duel-result-' + duelId,
           data: { url: '/?action=duels', kind: 'duel_result', duelId, winner: 'you' }
         });
@@ -9141,19 +9240,41 @@ setInterval(async function() {
 // limit since it's a destructive op that always succeeds idempotently).
 app.post('/api/duels/find-random/cancel', requireDeviceAuth, async (req, res) => {
   try {
-    await pool.query(`DELETE FROM duel_matchmaking_queue WHERE device_id = $1`, [req.deviceId]);
-    res.json({ ok: true });
+    // DU.2 — refund the escrowed stake when leaving the queue unmatched.
+    const del = await pool.query(
+      `DELETE FROM duel_matchmaking_queue WHERE device_id = $1 RETURNING wager`,
+      [req.deviceId]
+    );
+    const refund = del.rows[0] ? (del.rows[0].wager | 0) : 0;
+    if (refund > 0) {
+      await pool.query(
+        `UPDATE player_profiles SET balance = balance + $1 WHERE device_id = $2`,
+        [refund, req.deviceId]
+      ).catch(() => {});
+    }
+    res.json({ ok: true, refunded: refund });
   } catch (e) {
     res.status(500).json({ error: 'internal' });
   }
 });
 
-// Background cleanup: stale queue rows (>90s) are filtered out by the
-// time-window in the matchmaker query above, but they pile up if not
-// purged. Run every 5min — cheap, doesn't need a separate process.
+// Background cleanup: stale queue rows (>5min) are purged. DU.2 — any
+// escrowed wager on an abandoned row is REFUNDED so a player who closed
+// the tab mid-search never loses their stake. Done in one statement via a
+// CTE: delete returning (device, wager), then credit each back.
 setInterval(async function() {
   try {
-    await pool.query(`DELETE FROM duel_matchmaking_queue WHERE joined_queue_at < NOW() - INTERVAL '5 minutes'`);
+    await pool.query(
+      `WITH gone AS (
+         DELETE FROM duel_matchmaking_queue
+          WHERE joined_queue_at < NOW() - INTERVAL '5 minutes'
+          RETURNING device_id, wager
+       )
+       UPDATE player_profiles p
+          SET balance = balance + g.wager
+         FROM gone g
+        WHERE p.device_id = g.device_id AND g.wager > 0`
+    );
   } catch (e) {}
 }, 5 * 60 * 1000);
 
