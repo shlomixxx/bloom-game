@@ -1,4 +1,24 @@
   // ============ 1v1 DUEL SYSTEM ============
+  // DU.2 — read the shared wager input (applies to ALL three modes: friend
+  // duel, random duel, live race). Clamped to a non-negative integer.
+  function _readDuelWager(modal) {
+    var el = (modal || document).querySelector('#duel-amount');
+    var w = parseInt((el && el.value) || '0', 10) || 0;
+    return Math.max(0, w);
+  }
+  // Returns true if the player can afford the wager; otherwise paints an
+  // inline error (never a blocking alert) and returns false.
+  function _wagerAffordable(modal, wager) {
+    if (!(wager > 0)) return true;
+    if (typeof playerBalance === 'number' && playerBalance >= wager) return true;
+    var errEl = (modal || document).querySelector('#duel-error');
+    if (errEl) {
+      errEl.style.color = '#C8472F';
+      errEl.textContent = '💎 אין מספיק יהלומים להימור (' + (playerBalance | 0) + ') — הורד את ההימור או קנה יהלומים';
+    }
+    return false;
+  }
+
   // opts: { prefillSuffix } — used when launching from leaderboard "challenge" buttons
   function showDuelModal(opts) {
     opts = opts || {};
@@ -50,17 +70,22 @@
         '<button type="button" class="diff-pill" data-diff="hard" style="flex:1;min-width:60px;padding:5px 8px;font-size:11px;border:1px solid rgba(0,0,0,0.12);border-radius:6px;background:#F5F2EC;color:#1C1A18;font-weight:600;cursor:pointer">🔥 קשה</button>' +
         '<button type="button" class="diff-pill" data-diff="insane" style="flex:1;min-width:60px;padding:5px 8px;font-size:11px;border:1px solid rgba(0,0,0,0.12);border-radius:6px;background:#F5F2EC;color:#1C1A18;font-weight:600;cursor:pointer">💀 גהינום</button>' +
       '</div>' +
-      '<div style="font-size:11px;font-weight:600;margin-bottom:4px">הימור (אופציונלי)</div>' +
-      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">' +
-        '<input type="number" id="duel-amount" value="0" min="0" style="width:80px;padding:6px;border:1px solid rgba(0,0,0,0.12);border-radius:8px;font-family:inherit;font-size:14px;text-align:center;font-weight:700">' +
-        '<span style="font-size:12px;color:#6F6E68">💎 · המנצח לוקח הכל (minus 5% עמלה)</span>' +
+      '<div style="font-size:11px;font-weight:600;margin-bottom:4px">💎 הימור (לכל המצבים)</div>' +
+      '<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;flex-wrap:wrap">' +
+        '<input type="number" id="duel-amount" value="0" min="0" style="width:72px;padding:6px;border:1px solid rgba(0,0,0,0.12);border-radius:8px;font-family:inherit;font-size:14px;text-align:center;font-weight:700">' +
+        '<button type="button" class="wager-chip" data-wager="0" style="padding:4px 9px;font-size:11px;border:1px solid rgba(0,0,0,0.12);border-radius:6px;background:#1C1A18;color:#FAC775;font-weight:700;cursor:pointer">חינם</button>' +
+        '<button type="button" class="wager-chip" data-wager="50" style="padding:4px 9px;font-size:11px;border:1px solid rgba(0,0,0,0.12);border-radius:6px;background:#F5F2EC;color:#1C1A18;font-weight:700;cursor:pointer">50</button>' +
+        '<button type="button" class="wager-chip" data-wager="100" style="padding:4px 9px;font-size:11px;border:1px solid rgba(0,0,0,0.12);border-radius:6px;background:#F5F2EC;color:#1C1A18;font-weight:700;cursor:pointer">100</button>' +
+        '<button type="button" class="wager-chip" data-wager="250" style="padding:4px 9px;font-size:11px;border:1px solid rgba(0,0,0,0.12);border-radius:6px;background:#F5F2EC;color:#1C1A18;font-weight:700;cursor:pointer">250</button>' +
+        '<button type="button" class="wager-chip" data-wager="500" style="padding:4px 9px;font-size:11px;border:1px solid rgba(0,0,0,0.12);border-radius:6px;background:#F5F2EC;color:#1C1A18;font-weight:700;cursor:pointer">500</button>' +
       '</div>' +
-      '<button class="btn" id="duel-send" style="width:100%;margin-bottom:6px">שלח אתגר ⚔️</button>' +
+      '<div style="font-size:11px;color:#6F6E68;margin-bottom:12px">💎 ' + (typeof playerBalance === 'number' ? (playerBalance | 0) : 0) + ' זמינים · המנצח לוקח הכל (פחות 5% עמלה)</div>' +
+      '<button class="btn" id="duel-send" style="width:100%;margin-bottom:8px">⚔️ דו-קרב חבר · ♾️ משחק מלא · בלי שעון</button>' +
       // A6 — Random matchmaking. Solo players who don't have a BLOOM code
       // to type can hit this and get paired with another waiting player.
-      '<button class="btn" id="duel-random" style="width:100%;margin-bottom:6px;background:linear-gradient(135deg,#7A5FE0,#B59FFA);color:#FFF;font-weight:800">🎲 דו-קרב אקראי (חיפוש אוטומטי)</button>' +
+      '<button class="btn" id="duel-random" style="width:100%;margin-bottom:8px;background:linear-gradient(135deg,#3E6FD9,#7FA8F0);color:#FFF;font-weight:800;line-height:1.35">🎲 דו-קרב אקראי<br><span style="font-size:10px;font-weight:600;opacity:0.92">זר אקראי · ♾️ משחק מלא · בלי שעון</span></button>' +
       // A5 — Live PvP Race. 60-second real-time race against another player.
-      '<button class="btn" id="duel-live" style="width:100%;margin-bottom:6px;background:linear-gradient(135deg,#FF4D6D,#FF8DA1);color:#FFF;font-weight:800">⚡ דו-קרב חי 60 שניות</button>' +
+      '<button class="btn" id="duel-live" style="width:100%;margin-bottom:6px;background:linear-gradient(135deg,#FF4D6D,#FF8DA1);color:#FFF;font-weight:800;line-height:1.35">⚡ מרוץ חי<br><span style="font-size:10px;font-weight:600;opacity:0.92">זר אקראי · אותו לוח · ⏱ 60 שניות</span></button>' +
       // Send gift — peaceful counterpart to a duel. Same input (BLOOM-XXXX
       // suffix), small gem amount, optional message. Recipient sees a
       // toast banner next time they open the app.
@@ -210,8 +235,10 @@
     if (randomBtn) randomBtn.onclick = function() {
       var diffPill = modal.querySelector('.diff-pill.selected');
       var diff = diffPill ? (diffPill.getAttribute('data-diff') || 'default') : 'default';
+      var wager = _readDuelWager(modal);
+      if (!_wagerAffordable(modal, wager)) return;
       modal.remove();
-      startRandomMatchmaking(diff);
+      startRandomMatchmaking(diff, wager);
     };
 
     // A5 — Live PvP Race button. Same matchmaking flow but targets the
@@ -221,12 +248,17 @@
     if (liveBtn) liveBtn.onclick = function() {
       var diffPill = modal.querySelector('.diff-pill.selected');
       var diff = diffPill ? (diffPill.getAttribute('data-diff') || 'default') : 'default';
+      var wager = _readDuelWager(modal);
+      if (!_wagerAffordable(modal, wager)) return;
       modal.remove();
-      startLiveRaceMatchmaking(diff);
+      startLiveRaceMatchmaking(diff, wager);
     };
 
-    // Difficulty pill picker (challenger picks one — both players get it)
-    var selectedDuelDifficulty = 'default';
+    // Difficulty pill picker (challenger picks one — both players get it).
+    // Initialize from whichever pill is currently selected so a rematch's
+    // pre-selected difficulty (DU.2) flows into the friend-challenge path.
+    var _initSelPill = modal.querySelector('.diff-pill.selected');
+    var selectedDuelDifficulty = _initSelPill ? (_initSelPill.getAttribute('data-diff') || 'default') : 'default';
     modal.querySelectorAll('.diff-pill').forEach(function(pill) {
       pill.onclick = function() {
         modal.querySelectorAll('.diff-pill').forEach(function(p) {
@@ -240,6 +272,46 @@
         selectedDuelDifficulty = pill.getAttribute('data-diff') || 'default';
       };
     });
+
+    // DU.2 — wager preset chips. Tapping a chip fills the number input and
+    // highlights itself. Typing in the input clears the chip highlight.
+    (function wireWagerChips() {
+      var input = document.getElementById('duel-amount');
+      var chips = modal.querySelectorAll('.wager-chip');
+      function paint(active) {
+        chips.forEach(function(c) {
+          var on = (active != null) && (parseInt(c.getAttribute('data-wager'), 10) === active);
+          c.style.background = on ? '#1C1A18' : '#F5F2EC';
+          c.style.color = on ? '#FAC775' : '#1C1A18';
+        });
+      }
+      chips.forEach(function(c) {
+        c.onclick = function() {
+          var w = parseInt(c.getAttribute('data-wager'), 10) || 0;
+          if (input) input.value = String(w);
+          paint(w);
+        };
+      });
+      if (input) input.addEventListener('input', function() {
+        paint(parseInt(input.value, 10));
+      });
+      // DU.2 — rematch pre-fills the same wager.
+      var pw = opts.prefillWager | 0;
+      if (pw > 0 && input) { input.value = String(pw); paint(pw); }
+      else paint(0);
+    })();
+
+    // DU.2 — rematch pre-selects the same difficulty pill.
+    if (opts.prefillDiff && opts.prefillDiff !== 'default') {
+      var preDiffPill = modal.querySelector('.diff-pill[data-diff="' + opts.prefillDiff + '"]');
+      if (preDiffPill) {
+        modal.querySelectorAll('.diff-pill').forEach(function(p) {
+          p.classList.remove('selected'); p.style.background = '#F5F2EC'; p.style.color = '#1C1A18';
+        });
+        preDiffPill.classList.add('selected');
+        preDiffPill.style.background = '#1C1A18'; preDiffPill.style.color = '#FAC775';
+      }
+    }
 
     // "My code" pill — copy to clipboard
     var myPill = document.getElementById('duel-my-code');
@@ -410,7 +482,11 @@
           if (otherCode) {
             var sufRematch = String(otherCode).replace(/^BLOOM-/i, '').toUpperCase().slice(0, 4);
             if (sufRematch.length === 4) {
-              rematchBtn = ' <button class="btn sm" title="אתגר שוב" style="font-size:11px;padding:3px 10px;background:#FAC775;color:#412402;border:none;font-weight:700" onclick="rematchDuel(\'' + sufRematch + '\')">⚔️ שוב</button>';
+              // DU.2 — carry the same wager + difficulty into the rematch so
+              // the player relives the exact same stakes with one tap.
+              var rmWager = duel.amount | 0;
+              var rmDiff = (duel.difficulty_label || 'default').replace(/[^a-z]/gi, '').slice(0, 12);
+              rematchBtn = ' <button class="btn sm" title="אתגר שוב" style="font-size:11px;padding:3px 10px;background:#FAC775;color:#412402;border:none;font-weight:700" onclick="rematchDuel(\'' + sufRematch + '\',' + rmWager + ',\'' + rmDiff + '\')">⚔️ שוב</button>';
             }
           }
         }
@@ -479,12 +555,12 @@
   // sits INSIDE the duel modal, so we close + reopen it pre-filled
   // with the opponent's 4-char suffix. The player taps "שלח אתגר" and
   // the existing flow takes over from there.
-  window.rematchDuel = function(suffix) {
+  window.rematchDuel = function(suffix, wager, diff) {
     var clean = String(suffix || '').toUpperCase().replace(/[^A-HJ-NP-Z2-9]/g, '').slice(0, 4);
     if (clean.length !== 4) return;
     var existing = document.getElementById('duel-modal');
     if (existing) existing.remove();
-    showDuelModal({ prefillSuffix: clean });
+    showDuelModal({ prefillSuffix: clean, prefillWager: Math.max(0, wager | 0), prefillDiff: diff || 'default' });
   };
 
   window.playDuel = async function(id) {
@@ -630,6 +706,9 @@
         '<div class="duel-hud-vs-icon">⚔️</div>' +
         '<div class="duel-hud-delta" id="duel-hud-delta">--</div>' +
         '<div class="duel-hud-status" id="duel-hud-status">טוען...</div>' +
+        // DU.2 — async duels have NO clock. Make that explicit so the player
+        // never confuses this with the 60s live race.
+        '<div class="duel-hud-noclock" style="font-size:9px;color:#FAC775;opacity:0.85;margin-top:2px;font-weight:700">♾️ משחק מלא · בלי שעון</div>' +
       '</div>' +
       '<div class="duel-hud-side duel-hud-opp">' +
         '<div class="duel-hud-label">' + escDuelHtml(oppName) + '</div>' +
@@ -915,9 +994,17 @@
   var _randomMatchOverlay = null;
   var _randomMatchStartMs = 0;
 
-  function startRandomMatchmaking(difficulty) {
+  var _randomMatchWager = 0; // DU.2 — escrowed stake for the active search
+
+  function startRandomMatchmaking(difficulty, wager) {
     if (_randomMatchPoller) return; // already searching
+    _randomMatchWager = Math.max(0, wager | 0);
     _randomMatchStartMs = Date.now();
+    // Optimistically reflect the stake locally (server deducts on first poll).
+    if (_randomMatchWager > 0 && typeof playerBalance === 'number') {
+      playerBalance -= _randomMatchWager;
+      try { updateBalanceDisplay(); } catch (e) {}
+    }
     showRandomMatchOverlay(difficulty);
     // Initial call is immediate; subsequent polls every 3s.
     pollRandomMatch(difficulty);
@@ -930,12 +1017,20 @@
     if (_randomMatchPoller) { clearInterval(_randomMatchPoller); _randomMatchPoller = null; }
     if (_randomMatchOverlay) { try { _randomMatchOverlay.remove(); } catch (e) {} _randomMatchOverlay = null; }
     if (reason === 'cancelled') {
+      // Refund the optimistic local stake; server refunds its side too.
+      if (_randomMatchWager > 0 && typeof playerBalance === 'number') {
+        playerBalance += _randomMatchWager;
+        try { updateBalanceDisplay(); } catch (e) {}
+      }
+      _randomMatchWager = 0;
       // Fire-and-forget cancel.
       fetch('/api/duels/find-random/cancel', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ deviceId: deviceId, token: deviceToken })
       }).catch(function() {});
+    } else if (reason === 'matched') {
+      _randomMatchWager = 0; // stake is now escrowed on the duel row
     }
   }
 
@@ -943,10 +1038,15 @@
     fetch('/api/duels/find-random', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ deviceId: deviceId, token: deviceToken, difficulty: difficulty })
+      body: JSON.stringify({ deviceId: deviceId, token: deviceToken, difficulty: difficulty, wager: _randomMatchWager })
     }).then(function(r) { return r.json(); }).catch(function() { return null; }).then(function(d) {
       if (!d || !d.ok) {
-        // Soft fail — keep polling, update UI to "waiting".
+        if (d && d.reason === 'insufficient_funds') {
+          // Roll back the optimistic deduction + stop searching.
+          stopRandomMatchmaking('cancelled');
+          try { if (typeof showToast === 'function') showToast('💎 אין מספיק יהלומים להימור', 'error'); } catch (e) {}
+        }
+        // Soft fail otherwise — keep polling, update UI to "waiting".
         return;
       }
       if (d.matched && d.duel) {
@@ -1035,9 +1135,16 @@
   var _liveRacePollTimer = null;
   var _liveRaceState = null; // { duelId, durationMs, opponentName, ... }
 
-  function startLiveRaceMatchmaking(difficulty) {
+  var _liveRaceWager = 0; // DU.2 — escrowed stake for the active live search
+
+  function startLiveRaceMatchmaking(difficulty, wager) {
     if (_liveRacePoller) return;
+    _liveRaceWager = Math.max(0, wager | 0);
     _liveRaceStartMs = Date.now();
+    if (_liveRaceWager > 0 && typeof playerBalance === 'number') {
+      playerBalance -= _liveRaceWager;
+      try { updateBalanceDisplay(); } catch (e) {}
+    }
     showLiveRaceMatchOverlay(difficulty);
     pollLiveRaceMatch(difficulty);
     _liveRacePoller = setInterval(function() { pollLiveRaceMatch(difficulty); }, 3000);
@@ -1047,11 +1154,18 @@
     if (_liveRacePoller) { clearInterval(_liveRacePoller); _liveRacePoller = null; }
     if (_liveRaceOverlay) { try { _liveRaceOverlay.remove(); } catch (e) {} _liveRaceOverlay = null; }
     if (reason === 'cancelled') {
+      if (_liveRaceWager > 0 && typeof playerBalance === 'number') {
+        playerBalance += _liveRaceWager;
+        try { updateBalanceDisplay(); } catch (e) {}
+      }
+      _liveRaceWager = 0;
       fetch('/api/duels/find-random/cancel', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ deviceId: deviceId, token: deviceToken })
       }).catch(function() {});
+    } else if (reason === 'matched') {
+      _liveRaceWager = 0; // stake escrowed on the duel row
     }
   }
 
@@ -1059,9 +1173,15 @@
     fetch('/api/duels/find-random-live', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ deviceId: deviceId, token: deviceToken, difficulty: difficulty })
+      body: JSON.stringify({ deviceId: deviceId, token: deviceToken, difficulty: difficulty, wager: _liveRaceWager })
     }).then(function(r) { return r.json(); }).catch(function() { return null; }).then(function(d) {
-      if (!d || !d.ok) return;
+      if (!d || !d.ok) {
+        if (d && d.reason === 'insufficient_funds') {
+          stopLiveRaceMatchmaking('cancelled');
+          try { if (typeof showToast === 'function') showToast('💎 אין מספיק יהלומים להימור', 'error'); } catch (e) {}
+        }
+        return;
+      }
       if (d.matched && d.duel) {
         stopLiveRaceMatchmaking('matched');
         // Set up race state.
