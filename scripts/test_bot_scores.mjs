@@ -498,40 +498,6 @@ function testNoWeirdSubTwenty() {
 // no-jump, continuity) with SYNTHETIC monotonic trajectories. The real
 // engine+selection integration is verified by the live API test.
 
-function botOutcomeLottery(duelId, anchor, playerWinPct) {
-  const rng = _seededBotRng((duelId | 0) ^ 0x12345678);
-  const p = Math.max(20, Math.min(80, playerWinPct | 0));
-  const playerWins = rng() * 100 < p;
-  const isTie = rng() < 0.02;
-  let deltaPct;
-  const tk = rng();
-  if (tk < 0.65)      deltaPct = 0.03 + rng() * 0.10;
-  else if (tk < 0.90) deltaPct = 0.10 + rng() * 0.15;
-  else                deltaPct = 0.25 + rng() * 0.15;
-  let target;
-  if (isTie || anchor <= 0) target = anchor;
-  else if (playerWins) target = Math.max(0, Math.floor(anchor * (1 - deltaPct)));
-  else target = Math.floor(anchor * (1 + deltaPct));
-  return { playerWins, isTie, target };
-}
-
-function selectCalibratedFinal(candFinals, anchor, lottery, lastShown) {
-  let poolC = candFinals;
-  if (lastShown > 0) {
-    const reach = candFinals.filter(f => f >= lastShown);
-    if (reach.length) poolC = reach;
-  }
-  const onSide = (fs) => lottery.isTie ? true : (lottery.playerWins ? fs < anchor : fs > anchor);
-  const correct = poolC.filter(onSide);
-  const set = correct.length ? correct : poolC;
-  let best = set[0], bd = Math.abs(best - lottery.target);
-  for (let i = 1; i < set.length; i++) {
-    const d = Math.abs(set[i] - lottery.target);
-    if (d < bd) { bd = d; best = set[i]; }
-  }
-  return best;
-}
-
 function snapshotScoreForTime(snaps, elapsedSec) {
   const lastT = snaps[snaps.length - 1].t;
   const t = Math.max(0, Math.min(elapsedSec, lastT));
@@ -554,28 +520,6 @@ function synthTraj(finalScore, n) {
   return snaps;
 }
 
-function testSelectionWinRate() {
-  console.log('\nTest 14 — selection win-rate ≈ 52% from real candidates (DU.3):');
-  let pWins = 0, bWins = 0, ties = 0;
-  for (let i = 0; i < 10000; i++) {
-    const duelId = 20000 + i;
-    const anchor = 5000 + ((i * 313) % 90000);
-    const lot = botOutcomeLottery(duelId, anchor, 52);
-    const cands = [];
-    for (let k = 0; k < 12; k++) {
-      const f = Math.floor(anchor * (0.55 + ((i * 7 + k * 53) % 90) / 100)); // 0.55..1.45×
-      cands.push(Math.max(100, f));
-    }
-    const lastShown = Math.min(8000, Math.floor(anchor * 0.95));
-    const chosen = selectCalibratedFinal(cands, anchor, lot, lastShown);
-    if (chosen < anchor) pWins++; else if (chosen > anchor) bWins++; else ties++;
-  }
-  const pct = Math.round((pWins / 10000) * 1000) / 10;
-  console.log(`  player wins: ${pWins} (${pct}%) · bot wins: ${bWins} · ties: ${ties}`);
-  assert(pct >= 46 && pct <= 58, `win-rate ${pct}% out of band`);
-  console.log('  ✓ outcome tracks the 52% lottery using only real candidate finals');
-}
-
 function testSnapshotByTime() {
   console.log('\nTest 15 — snapshot-by-time monotonic + exact final (DU.3):');
   let down = 0, badFinal = 0;
@@ -596,35 +540,37 @@ function testSnapshotByTime() {
   console.log('  ✓ score climbs monotonically and ends exactly on the final');
 }
 
-function testNoJumpAndContinuity() {
-  console.log('\nTest 16 — no end-jump + continuity (DU.3):');
-  let jump = 0, dip = 0;
+// DU.4 — post-submit playback is the SAME trajectory continued from where it
+// was AT submit (submitElapsed) to its real end over the settle window. It must
+// be continuous with the in-game value (at progress=0 it equals the value at
+// submitElapsed), monotonic, and end EXACTLY on the real final == settle value.
+// One trajectory → zero end-jump by construction (no calibration, no join).
+function testPostSubmitContinuity() {
+  console.log('\nTest 16 — DU.4 post-submit continuity (one game, no jump):');
+  let jump = 0, dip = 0, discontinuity = 0;
   for (let i = 0; i < 600; i++) {
-    const duelId = 30000 + i;
-    const anchor = 4000 + ((i * 271) % 90000);
-    const lot = botOutcomeLottery(duelId, anchor, 52);
-    const lastShown = Math.min(8000, Math.floor(anchor * 0.95));
-    const cands = [];
-    for (let k = 0; k < 12; k++) cands.push(Math.max(100, Math.floor(anchor * (0.55 + ((i * 7 + k * 53) % 90) / 100))));
-    const finalScore = selectCalibratedFinal(cands, anchor, lot, lastShown);
-    const snaps = synthTraj(finalScore, 45);
+    const finalScore = 6000 + ((i * 271) % 90000); // bot's real (parity-range) final
+    const snaps = synthTraj(finalScore, 50);
     const lastT = snaps[snaps.length - 1].t;
-    let joinT = 0;
-    for (let j = 0; j < snaps.length; j++) { if (snaps[j].s <= lastShown) joinT = snaps[j].t; else break; }
-    let prev = -1, last = 0;
+    const submitElapsed = (lastT * (0.1 + ((i * 13) % 80) / 100)); // player finishes 10-90% into the bot's game
+    const valueAtSubmit = snapshotScoreForTime(snaps, submitElapsed);
+    let prev = -1, last = 0, first = null;
     for (let p = 0; p <= 30; p++) {
       const progress = p / 30;
-      const elapsed = joinT + progress * (lastT - joinT);
+      const elapsed = submitElapsed + progress * (lastT - submitElapsed);
       const s = snapshotScoreForTime(snaps, elapsed);
+      if (first === null) first = s;
       if (s < prev) dip++;
       prev = s; last = s;
     }
-    if (finalScore !== last) jump++;
+    if (first !== valueAtSubmit) discontinuity++; // post-submit must START where the HUD was
+    if (last !== finalScore) jump++;               // and END on the real final (settle)
   }
-  console.log(`  600 duels — end-jumps: ${jump}, playback-dips: ${dip}`);
-  assert(jump === 0, `settle must equal last-shown, ${jump} jumps`);
+  console.log(`  600 duels — start-discontinuities: ${discontinuity}, dips: ${dip}, end-jumps: ${jump}`);
+  assert(discontinuity === 0, `post-submit must continue from submit value, ${discontinuity} broke`);
   assert(dip === 0, `playback must not dip, ${dip} dips`);
-  console.log('  ✓ settle == last frame shown, playback never dips (continuous)');
+  assert(jump === 0, `settle must equal last frame, ${jump} jumps`);
+  console.log('  ✓ continues from the in-game value, climbs to the real final, no jump');
 }
 
 // ─── Run all tests ──────────────────────────────────────────────────
@@ -647,9 +593,8 @@ testAsyncConvergesToFinal();
 testWagerConservation();
 testSpectatorContinuity();
 testNoWeirdSubTwenty();
-testSelectionWinRate();
 testSnapshotByTime();
-testNoJumpAndContinuity();
+testPostSubmitContinuity();
 
 console.log('\n═══════════════════════════════════════════════════════════');
 if (failures === 0) {

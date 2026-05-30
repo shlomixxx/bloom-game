@@ -2694,4 +2694,5 @@ INSERT INTO game_config (key, value) VALUES ('duel_pre_submit_display_cap',    '
 -- DU.3 — "One Real Game, One Truth": bot duels show ONE real engine game
 -- (score + board from the same trajectory, selected by elapsed time).
 INSERT INTO game_config (key, value) VALUES ('bot_duel_trajectory_truth',    'true') ON CONFLICT (key) DO NOTHING;
-INSERT INTO game_config (key, value) VALUES ('bot_traj_candidate_count',     '12')   ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('bot_traj_candidate_count',     '6')    ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('bot_traj_pick_percentile',     '0.40') ON CONFLICT (key) DO NOTHING;
