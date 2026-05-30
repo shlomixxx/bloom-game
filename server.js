@@ -16929,16 +16929,24 @@ app.post('/api/duels/:id/score', requireDeviceAuth, async (req, res) => {
         // DU.2 — lock the bot's final score NOW, from the player's just-submitted
         // score, so the spectator widget converges to EXACTLY this number and the
         // settle reads the same value. Kills the calibrate-vs-preview mismatch.
-        const lockedFinal = _calibrateBotScore(duelId, s, cfg.playerWinPct);
+        // DU.2 — `botSeen` is the bot score the player was LAST shown in the
+        // in-game HUD (computeBotLiveScore, ~70-92% of their score). Clamp it
+        // just under the player's score so it can never flip a player-win into
+        // a loss, then lock the final at MAX(calibrated, seen). This makes the
+        // spectator widget CONTINUOUS: it starts from exactly what the HUD
+        // showed (opponent_live_score = seen, the anchor) and climbs to the
+        // final — no restart-from-zero, no down-jump. Win-rate is preserved
+        // (seen < player score, so player-wins stay wins; bot-wins are driven
+        // by the calibrated value which dominates).
+        const seen = Math.max(0, Math.min(parseInt(req.body && req.body.botSeen, 10) || 0, Math.floor(s * 0.97)));
+        const calibrated = _calibrateBotScore(duelId, s, cfg.playerWinPct);
+        const lockedFinal = Math.max(calibrated, seen);
         await pool.query(
-          // Also clamp the live ceiling to the locked final so a pre-submit
-          // "peek" can never have pushed it above the number we'll settle on
-          // (would cause a down-jump). LEAST holds it at/under lockedFinal.
           `UPDATE duels SET bot_settle_at = NOW() + ($1 || ' seconds')::interval,
                             bot_final_score = $2,
-                            opponent_live_score = LEAST(COALESCE(opponent_live_score, 0), $2)
-             WHERE id = $3 AND bot_settle_at IS NULL`,
-          [delaySec, lockedFinal, duelId]
+                            opponent_live_score = $3
+             WHERE id = $4 AND bot_settle_at IS NULL`,
+          [delaySec, lockedFinal, seen, duelId]
         );
       } catch (botErr) {
         console.warn('[bot-duel-stamp] failed:', botErr.message);

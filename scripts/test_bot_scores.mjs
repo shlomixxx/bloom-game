@@ -429,6 +429,48 @@ function testWagerConservation() {
   console.log('  ✓ only the rake leaves circulation; win/lose/tie nets exact');
 }
 
+// Test 12 — DU.2 continuity: the spectator widget is ANCHORED to the bot
+// score the player last saw in the HUD (`seen`) and climbs to the locked
+// final = max(calibrated, seen). It must START at seen (no restart-from-0),
+// never drop below seen, never exceed final, and converge to final. Also:
+// final >= seen always, and seen < playerScore keeps player-wins as wins.
+function testSpectatorContinuity() {
+  console.log('\nTest 12 — spectator continuity from HUD value (DU.2):');
+  let startedLow = 0, downJumps = 0, overFinal = 0, notConverged = 0, finalBelowSeen = 0, winFlipped = 0;
+  for (let i = 0; i < 600; i++) {
+    const duelId = 9000 + i;
+    const playerScore = 6000 + ((i * 211) % 100000);
+    // HUD shows ~70-92% of the player's score; clamp like the server does.
+    const hud = Math.floor(playerScore * (0.70 + ((i * 37) % 23) / 100)); // 0.70..0.92
+    const seen = Math.max(0, Math.min(hud, Math.floor(playerScore * 0.97)));
+    const calibrated = _calibrateBotScore(duelId, playerScore, 52);
+    const final = Math.max(calibrated, seen);
+    if (final < seen) finalBelowSeen++;
+    // If the player would have won by calibration, the seen-anchor must not flip it.
+    if (calibrated < playerScore && final >= playerScore) winFlipped++;
+    let prev = -1, last = 0, first = null;
+    for (let p = 0; p <= 60; p++) {
+      const progress = p / 60;
+      const curve = Math.min(final, Math.floor(final * progress * progress));
+      const shown = Math.max(seen, curve); // server: GREATEST(opponent_live_score=seen, candidate)
+      if (first === null) first = shown;
+      if (shown < prev) downJumps++;
+      if (shown > final) overFinal++;
+      prev = shown; last = shown;
+    }
+    if (first < seen) startedLow++;        // must start at >= seen (continuity)
+    if (last !== final) notConverged++;
+  }
+  console.log(`  600 duels — started-below-seen: ${startedLow}, down-jumps: ${downJumps}, over-final: ${overFinal}, not-converged: ${notConverged}, final<seen: ${finalBelowSeen}, win-flips: ${winFlipped}`);
+  assert(startedLow === 0, `expected all to start at >= seen, ${startedLow} started low`);
+  assert(downJumps === 0, `expected 0 down-jumps, got ${downJumps}`);
+  assert(overFinal === 0, `expected 0 over-final, got ${overFinal}`);
+  assert(notConverged === 0, `expected all to converge to final, ${notConverged} did not`);
+  assert(finalBelowSeen === 0, `final must be >= seen, ${finalBelowSeen} violated`);
+  assert(winFlipped === 0, `seen-anchor must not flip a player-win, ${winFlipped} flipped`);
+  console.log('  ✓ spectator starts at the HUD value, climbs to final, no flips');
+}
+
 // ─── Run all tests ──────────────────────────────────────────────────
 
 console.log('═══════════════════════════════════════════════════════════');
@@ -447,6 +489,7 @@ testNoSettleRegression();
 testNoEarlyGap();
 testAsyncConvergesToFinal();
 testWagerConservation();
+testSpectatorContinuity();
 
 console.log('\n═══════════════════════════════════════════════════════════');
 if (failures === 0) {

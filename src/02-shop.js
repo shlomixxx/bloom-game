@@ -1557,6 +1557,12 @@
     var duelId = activeDuelId;
     var oppName = window._duelOpponentName || 'יריב';
     activeDuelId = null;
+    // DU.2 — capture the bot score the player was LAST shown in the HUD
+    // (computeBotLiveScore's ceiling) BEFORE tearing the HUD down. The
+    // server anchors the spectator widget to start from exactly this value
+    // (instead of restarting from ~0), so the bot's score is CONTINUOUS
+    // from the in-game HUD into the post-finish spectator board.
+    var botSeen = (typeof _botLiveScoreCeiling === 'number') ? (_botLiveScoreCeiling | 0) : 0;
     // Tear down the live opponent HUD — the game-over overlay takes
     // over from here, so the HUD's job is done.
     try { stopDuelOpponentHud(); } catch (e) {}
@@ -1567,6 +1573,7 @@
         deviceId: deviceId,
         score: finalScore,
         drops: (typeof dropsCount === 'number' ? dropsCount : 0) | 0,
+        botSeen: botSeen,
         token: deviceToken
       })
     }).then(function(r) { return r.json(); }).then(function(d) {
