@@ -837,7 +837,9 @@
       _botLiveScoreCeiling = Math.floor(_botLiveScoreCeiling + drift);
     }
     _botLiveScoreLastTickMs = now;
-    return _botLiveScoreCeiling;
+    // DU.2.2 — a real score never reads as "16"; show 0 ("hasn't merged
+    // yet") below a realistic first-merge minimum instead of a weird 1-19.
+    return _botLiveScoreCeiling < 20 ? 0 : _botLiveScoreCeiling;
   }
 
   function refreshDuelHudData() {

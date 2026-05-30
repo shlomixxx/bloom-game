@@ -9086,6 +9086,17 @@ function _liveBotTargetScore(duelId) {
   return Math.floor(35000 + r * 75000); // 35K-110K final
 }
 
+// DU.2.2 — a real BLOOM score jumps in merge-sized steps (a first tier-1
+// merge is ~20 pts); nothing ever reads as "16". So any computed bot score
+// below this threshold is shown as 0 ("hasn't merged yet") rather than an
+// absurd 1-19. Keeps the slow start (no head-start gap) while killing the
+// weird sub-20 numbers the player noticed.
+const BOT_MIN_VISIBLE_SCORE = 20;
+function _floorBotVisibleScore(raw) {
+  raw = raw | 0;
+  return raw < BOT_MIN_VISIBLE_SCORE ? 0 : raw;
+}
+
 // BL.1.6 — bot's "live score" for live races. QUADRATIC easing (was
 // sqrt) so the bot starts SLOW like a real player who's still placing
 // initial pieces, then accelerates as if merges are cascading. This
@@ -9099,7 +9110,8 @@ function _liveBotScoreAt(duelId, startedAtMs, durationSec, nowMs) {
   const ratio = Math.min(1, elapsed / Math.max(1, durationSec));
   // Quadratic: ratio² → slow start, accelerating mid-game, hits target at end.
   const eased = ratio * ratio;
-  return Math.floor(target * eased);
+  // DU.2.2 — snap sub-20 values to 0 so the bot never shows an absurd "16".
+  return _floorBotVisibleScore(Math.floor(target * eased));
 }
 
 async function _settleBotDuel(duelId) {

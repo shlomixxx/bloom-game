@@ -54,7 +54,9 @@ function _liveBotScoreAt(duelId, startedAtMs, durationSec, nowMs) {
   const ratio = Math.min(1, elapsed / Math.max(1, durationSec));
   // BL.1.6 — quadratic easing.
   const eased = ratio * ratio;
-  return Math.floor(target * eased);
+  // DU.2.2 — snap sub-20 to 0 (no weird "16").
+  const raw = Math.floor(target * eased);
+  return raw < 20 ? 0 : raw;
 }
 
 function _botAsyncCandidateScore(duelId, createdMs, challengerScore, settleAtMs, nowMs, playerWinPct) {
@@ -471,6 +473,25 @@ function testSpectatorContinuity() {
   console.log('  ✓ spectator starts at the HUD value, climbs to final, no flips');
 }
 
+// Test 13 — DU.2.2: the live bot score is NEVER in the weird (0,20) range.
+// Real BLOOM scores jump in merge-sized steps; a displayed "16" looks broken.
+// The bot is either 0 ("hasn't merged yet") or >= 20. Sweep the whole race.
+function testNoWeirdSubTwenty() {
+  console.log('\nTest 13 — live bot score never in (0,20) (DU.2.2):');
+  let weird = 0, examples = [];
+  for (let duelId = 1; duelId <= 300; duelId++) {
+    const start = 1700000000000;
+    for (let ms = 0; ms <= 60000; ms += 100) { // every 100ms of a 60s race
+      const s = _liveBotScoreAt(duelId, start, 60, start + ms);
+      if (s > 0 && s < 20) { weird++; if (examples.length < 5) examples.push({ duelId, ms, s }); }
+    }
+  }
+  console.log(`  300 duels × 601 ticks — sub-20 nonzero values: ${weird}`);
+  if (weird) console.log('  examples:', JSON.stringify(examples));
+  assert(weird === 0, `expected 0 weird sub-20 scores, got ${weird}`);
+  console.log('  ✓ bot score is always 0 or >= 20 — no absurd "16"');
+}
+
 // ─── Run all tests ──────────────────────────────────────────────────
 
 console.log('═══════════════════════════════════════════════════════════');
@@ -490,6 +511,7 @@ testNoEarlyGap();
 testAsyncConvergesToFinal();
 testWagerConservation();
 testSpectatorContinuity();
+testNoWeirdSubTwenty();
 
 console.log('\n═══════════════════════════════════════════════════════════');
 if (failures === 0) {
