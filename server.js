@@ -17012,7 +17012,13 @@ app.post('/api/duels/:id/score', requireDeviceAuth, async (req, res) => {
           if ((finalScore == null) && trajForMeta && trajForMeta.finalScore != null) {
             finalScore = trajForMeta.finalScore | 0;
           }
-          const meta = { submitAtMs: Date.now(), settleWindowMs: delaySec * 1000, submitElapsed };
+          // Playback finishes a few seconds BEFORE the settle fires, so the
+          // bot's real game (incl. any big late tier-up jump) fully plays out
+          // on screen and HOLDS its final for ~6s before the result locks it.
+          // Without this margin the settle could fire mid-climb and the final
+          // would appear as a surprise jump at the result screen.
+          const playbackMs = Math.max(8000, (delaySec - 6) * 1000);
+          const meta = { submitAtMs: Date.now(), settleWindowMs: playbackMs, submitElapsed };
           if (trajForMeta && Array.isArray(trajForMeta.snapshots)) {
             trajForMeta = Object.assign({}, trajForMeta, { meta });
             await pool.query(
