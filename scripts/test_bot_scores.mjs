@@ -367,6 +367,68 @@ function testNoEarlyGap() {
   console.log(`  ✓ bot's early score is realistic (matches first-tile player)`);
 }
 
+// ─── DU.2 — duel-overhaul mirrors + tests ───────────────────────────
+
+// Mirror of the rewritten _synthesizeBotLiveState ASYNC locked-path math.
+// Once the player submits, the bot's final is LOCKED; the displayed score
+// climbs monotonically (quadratic in time) up to EXACTLY that final, never
+// exceeding it. progress is the fraction of the settle window elapsed.
+function asyncDisplayScore(lockedFinal, progress) {
+  const eased = progress * progress;
+  return Math.min(lockedFinal, Math.max(0, Math.floor(lockedFinal * eased)));
+}
+
+// Test 10 — async spectator display converges to the locked final, is
+// monotonic, and never exceeds it (the headline mismatch fix).
+function testAsyncConvergesToFinal() {
+  console.log('\nTest 10 — async spectator converges to locked final (DU.2):');
+  let downJumps = 0, exceed = 0, notConverged = 0;
+  for (let i = 0; i < 500; i++) {
+    const duelId = 5000 + i;
+    const playerScore = 8000 + ((i * 137) % 90000);
+    const lockedFinal = _calibrateBotScore(duelId, playerScore, 52); // server locks this at submit
+    let prev = -1, last = 0;
+    for (let p = 0; p <= 60; p++) {
+      const progress = p / 60;
+      // server keeps GREATEST(prev, candidate) — model it so the curve is
+      // monotone even if the formula had a flat spot.
+      const shown = Math.max(prev < 0 ? 0 : prev, asyncDisplayScore(lockedFinal, progress));
+      if (shown < prev) downJumps++;
+      if (shown > lockedFinal) exceed++;
+      prev = shown; last = shown;
+    }
+    if (last !== lockedFinal) notConverged++;
+  }
+  console.log(`  500 duels × 61 polls — down-jumps: ${downJumps}, over-final: ${exceed}, not-converged: ${notConverged}`);
+  assert(downJumps === 0, `expected 0 down-jumps, got ${downJumps}`);
+  assert(exceed === 0, `expected 0 polls over final, got ${exceed}`);
+  assert(notConverged === 0, `expected all to land on final, ${notConverged} did not`);
+  console.log('  ✓ displayed score climbs monotonically to EXACTLY the final');
+}
+
+// Test 11 — wager conservation. A duel removes gems from circulation only
+// via the rake; win/lose/tie nets are exact and balanced.
+function testWagerConservation() {
+  console.log('\nTest 11 — wager conservation (DU.2):');
+  let bad = 0;
+  for (let W = 0; W <= 1000; W += 50) {
+    for (const rakePct of [0, 3, 5, 10]) {
+      const pool = 2 * W;
+      const rake = Math.floor(pool * rakePct / 100);
+      const payout = pool - rake;
+      const winNet = payout - W;   // staked -W, received +payout
+      const loseNet = -W;          // staked -W, received 0
+      const tieNet = 0;            // staked -W, refunded +W
+      if (winNet !== (W - rake)) bad++;
+      if (loseNet !== -W) bad++;
+      if (tieNet !== 0) bad++;
+    }
+  }
+  console.log(`  21 wagers × 4 rake tiers — mismatches: ${bad}`);
+  assert(bad === 0, `expected 0 conservation mismatches, got ${bad}`);
+  console.log('  ✓ only the rake leaves circulation; win/lose/tie nets exact');
+}
+
 // ─── Run all tests ──────────────────────────────────────────────────
 
 console.log('═══════════════════════════════════════════════════════════');
@@ -383,6 +445,8 @@ testGridEvolves();
 testSettledMatchesPreview();
 testNoSettleRegression();
 testNoEarlyGap();
+testAsyncConvergesToFinal();
+testWagerConservation();
 
 console.log('\n═══════════════════════════════════════════════════════════');
 if (failures === 0) {

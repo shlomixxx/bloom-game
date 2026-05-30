@@ -9049,17 +9049,15 @@ async function _settleBotDuel(duelId) {
       await client.query('ROLLBACK'); return null;
     }
     const cfg = await _loadBotDuelConfig();
-    let botScore = _calibrateBotScore(d.id, d.challenger_score, cfg.playerWinPct);
-    // BL.1.6 — NEVER regress below the live ceiling. The spectator
-    // widget showed `opponent_live_score` during the settle window;
-    // if the calibrated final is lower, the player would see the bot's
-    // score DROP at settle ("bot was at 17K then ended at 9K"). MAX
-    // guard preserves the displayed value. In rare cases this lets the
-    // bot win when calibration said it should lose — acceptable because
-    // the user explicitly said: "I don't mind losing, just no lies in
-    // the scores".
-    const liveCeiling = d.opponent_live_score | 0;
-    if (liveCeiling > botScore) botScore = liveCeiling;
+    // DU.2 — prefer the score LOCKED at the player's submit time. The
+    // spectator widget was driven FROM this exact number (converging up
+    // to it, never above), so the settle and the displayed score always
+    // agree — no mismatch, no result-flipping MAX bump. Only fall back to
+    // a fresh calibration for legacy rows created before bot_final_score
+    // existed.
+    let botScore = (d.bot_final_score != null)
+      ? (d.bot_final_score | 0)
+      : _calibrateBotScore(d.id, d.challenger_score, cfg.playerWinPct);
     let winner = null;
     if (d.challenger_score > botScore) winner = d.challenger_device;
     else if (botScore > d.challenger_score) winner = d.opponent_device;
@@ -16801,10 +16799,19 @@ app.post('/api/duels/:id/score', requireDeviceAuth, async (req, res) => {
       try {
         const cfg = await _loadBotDuelConfig();
         const delaySec = Math.floor(cfg.settleMin + Math.random() * Math.max(1, cfg.settleMax - cfg.settleMin));
+        // DU.2 — lock the bot's final score NOW, from the player's just-submitted
+        // score, so the spectator widget converges to EXACTLY this number and the
+        // settle reads the same value. Kills the calibrate-vs-preview mismatch.
+        const lockedFinal = _calibrateBotScore(duelId, s, cfg.playerWinPct);
         await pool.query(
-          `UPDATE duels SET bot_settle_at = NOW() + ($1 || ' seconds')::interval
-             WHERE id = $2 AND bot_settle_at IS NULL`,
-          [delaySec, duelId]
+          // Also clamp the live ceiling to the locked final so a pre-submit
+          // "peek" can never have pushed it above the number we'll settle on
+          // (would cause a down-jump). LEAST holds it at/under lockedFinal.
+          `UPDATE duels SET bot_settle_at = NOW() + ($1 || ' seconds')::interval,
+                            bot_final_score = $2,
+                            opponent_live_score = LEAST(COALESCE(opponent_live_score, 0), $2)
+             WHERE id = $3 AND bot_settle_at IS NULL`,
+          [delaySec, lockedFinal, duelId]
         );
       } catch (botErr) {
         console.warn('[bot-duel-stamp] failed:', botErr.message);
@@ -17073,13 +17080,21 @@ function _botAsyncCandidateScore(duelId, createdMs, challengerScore, settleAtMs,
   return Math.max(100, Math.floor(target * eased));
 }
 
+// DU.2 — cap for the pre-submit spectator estimate so it can never grow
+// above a typical locked final (which would force a down-jump at settle).
+// Reads the warm config cache synchronously; falls back to 8000.
+function _duelPreSubmitDisplayCap() {
+  const v = parseInt((_configCache && _configCache.duel_pre_submit_display_cap) || '', 10);
+  return (Number.isFinite(v) && v > 0) ? v : 8000;
+}
+
 async function _synthesizeBotLiveState(botDeviceId) {
   try {
     const r = await pool.query(
       `SELECT id, opponent_name, opponent_score, opponent_live_score, created_at, is_live,
               started_at, duration_seconds, bot_settle_at, status,
               challenger_score, board_seed, difficulty_weights, difficulty_label,
-              bot_trajectory
+              bot_trajectory, bot_final_score
          FROM duels
         WHERE opponent_device = $1 AND is_bot_match = TRUE
           AND status IN ('pending', 'accepted', 'settled', 'tie')
@@ -17128,11 +17143,31 @@ async function _synthesizeBotLiveState(botDeviceId) {
       const cfg = await _loadBotDuelConfig();
       const createdMs = new Date(d.created_at).getTime();
       const settleAtMs = d.bot_settle_at ? new Date(d.bot_settle_at).getTime() : null;
-      candidate = _botAsyncCandidateScore(
-        d.id, createdMs, d.challenger_score, settleAtMs, nowMs, cfg.playerWinPct
-      );
-      // Time-left for async = time until bot_settle_at fires.
-      if (settleAtMs) timeLeftMs = Math.max(0, settleAtMs - nowMs);
+      if (d.bot_final_score != null && settleAtMs) {
+        // DU.2 — player has submitted: the final is LOCKED. Drive the
+        // displayed score monotonically UP to EXACTLY that number over the
+        // settle window. min() + a strictly time-increasing curve means the
+        // displayed value can never exceed (or jump past) the final, and the
+        // GREATEST ceiling (clamped ≤ final at submit) only ever rises. The
+        // settle reads the same bot_final_score → zero mismatch.
+        const final = d.bot_final_score | 0;
+        const windowMs = Math.max(1000, (cfg.settleMax | 0) * 1000);
+        const submitMs = settleAtMs - windowMs;
+        const ratio = Math.max(0, Math.min(1, (nowMs - submitMs) / windowMs));
+        const eased = ratio * ratio;
+        candidate = Math.min(final, Math.max(100, Math.floor(final * eased)));
+        timeLeftMs = Math.max(0, settleAtMs - nowMs);
+      } else {
+        // Pre-submit peek (a spectator watching while the player is still
+        // playing): conservative climbing estimate, capped low so it can't
+        // overshoot the eventual locked final.
+        const cand = _botAsyncCandidateScore(
+          d.id, createdMs, d.challenger_score, settleAtMs, nowMs, cfg.playerWinPct
+        );
+        const cap = _duelPreSubmitDisplayCap();
+        candidate = Math.min(cand, cap);
+        if (settleAtMs) timeLeftMs = Math.max(0, settleAtMs - nowMs);
+      }
     }
     // Atomic GREATEST update so opponent_live_score acts as a monotonic
     // ceiling. Reading the RETURNING value gives us the actual displayed
@@ -17158,6 +17193,10 @@ async function _synthesizeBotLiveState(botDeviceId) {
     let targetForProgress;
     if (d.is_live) {
       targetForProgress = _liveBotTargetScore(d.id);
+    } else if (d.bot_final_score != null) {
+      // DU.2 — grid progress tracks the same locked final as the score, so
+      // the board the player watches evolves in lockstep with the number.
+      targetForProgress = d.bot_final_score | 0;
     } else if ((d.challenger_score | 0) > 0) {
       targetForProgress = _calibrateBotScore(d.id, d.challenger_score, cfg2.playerWinPct);
     } else {
