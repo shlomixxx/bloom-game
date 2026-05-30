@@ -8297,24 +8297,54 @@ async function _spawnBotDuelForPlayer(opts) {
      ON CONFLICT (device_id) DO NOTHING`,
     [botDeviceId, botTrophies]
   ).catch(() => {});
+  // DU.3 — ALWAYS stamp started_at + duration so the bot has a real game
+  // clock (async needs it too, not just live). is_live stays FALSE for async
+  // (the client gates the 60s timer on is_live, so this never shows a clock).
+  const dur = live ? (durationSec || 60) : 90;
   const ins = await pool.query(
     `INSERT INTO duels (
         challenger_device, challenger_name, challenger_code,
         opponent_code, opponent_device, opponent_name,
         amount, board_seed, expires_at, status,
         difficulty_label, difficulty_weights, difficulty_speed_pct,
-        is_random_match, is_bot_match
-        ${live ? `, is_live, started_at, duration_seconds, live_last_heartbeat_at` : ``})
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'accepted', $10, $11, $12, TRUE, TRUE
-        ${live ? `, TRUE, NOW(), $13, NOW()` : ``})
+        is_random_match, is_bot_match,
+        started_at, duration_seconds, live_last_heartbeat_at
+        ${live ? `, is_live` : ``})
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'accepted', $10, $11, $12, TRUE, TRUE,
+             NOW(), $13, NOW() ${live ? `, TRUE` : ``})
      RETURNING *`,
-    live
-      ? [deviceId, myName, myCode, botCode, botDeviceId, botName,
-         wager, seed, expiresAt, diff.label, diff.weights, diff.speed_pct, durationSec || 60]
-      : [deviceId, myName, myCode, botCode, botDeviceId, botName,
-         wager, seed, expiresAt, diff.label, diff.weights, diff.speed_pct]
+    [deviceId, myName, myCode, botCode, botDeviceId, botName,
+     wager, seed, expiresAt, diff.label, diff.weights, diff.speed_pct, dur]
   );
-  return ins.rows[0];
+  let row = ins.rows[0];
+  // DU.3 — pre-play the bot's ONE real game so its score AND board are a
+  // single consistent real playthrough from t=0. Live: target the per-duel
+  // band (player final unknown mid-race) and lock the final now. Async: a
+  // conservative real game for the pre-submit display; recalibrated to the
+  // player's real score at submit time.
+  if (_trajectoryTruthEnabled()) {
+    try {
+      const cfg = await _loadBotDuelConfig();
+      if (live) {
+        const band = _liveBotTargetScore(row.id);
+        const gen = _generateCalibratedTrajectory(row, band, cfg, {});
+        await pool.query(
+          `UPDATE duels SET bot_trajectory = $1, bot_final_score = $2 WHERE id = $3`,
+          [JSON.stringify(gen.trajectory), gen.finalScore, row.id]
+        );
+        row.bot_trajectory = gen.trajectory;
+        row.bot_final_score = gen.finalScore;
+      } else {
+        const traj = _simulateBotDuelTrajectory(row.board_seed | 0, row.difficulty_weights, 90, 0);
+        await pool.query(
+          `UPDATE duels SET bot_trajectory = $1 WHERE id = $2`,
+          [JSON.stringify(traj), row.id]
+        );
+        row.bot_trajectory = traj;
+      }
+    } catch (e) { console.warn('[bot-traj-spawn]', e.message); }
+  }
+  return row;
 }
 
 // DU.2 — max gem wager allowed in random/live matchmaking. Warm-cache read.
@@ -8799,7 +8829,9 @@ app.post('/api/duels/:id/live-heartbeat', requireDeviceAuth, async (req, res) =>
     if (d.is_bot_match) {
       const startedAtMs = d.started_at ? new Date(d.started_at).getTime() : Date.now();
       const dur = d.duration_seconds || 60;
-      const botScore = _liveBotScoreAt(duelId, startedAtMs, dur, Date.now());
+      // DU.3 — bot's live score from its ONE real game (trajectory), falling
+      // back to the synthetic curve only if the flag is off / no trajectory.
+      const botScore = await _liveBotScoreFromTraj(duelId, startedAtMs, dur, Date.now());
       await pool.query(
         `UPDATE duels SET opponent_live_score = GREATEST(opponent_live_score, $1) WHERE id = $2`,
         [botScore, duelId]
@@ -8843,7 +8875,7 @@ app.get('/api/duels/:id/live-state', async (req, res) => {
     // and see a stale value. Computing here keeps the HUD smooth.
     let opponentLive = d.opponent_live_score | 0;
     if (d.is_bot_match && d.status === 'accepted') {
-      const live = _liveBotScoreAt(duelId, startedMs, d.duration_seconds || 60, Date.now());
+      const live = await _liveBotScoreFromTraj(duelId, startedMs, d.duration_seconds || 60, Date.now());
       if (live > opponentLive) opponentLive = live;
     }
     // If the duration has elapsed but the duel hasn't been settled yet,
@@ -8897,7 +8929,7 @@ async function _settleLiveDuel(duelId) {
     await client.query('BEGIN');
     const r = await client.query(
       `SELECT challenger_device, opponent_device, challenger_live_score, opponent_live_score,
-              status, is_bot_match, started_at, duration_seconds, amount
+              status, is_bot_match, started_at, duration_seconds, amount, bot_final_score
          FROM duels WHERE id = $1 AND is_live = TRUE FOR UPDATE`,
       [duelId]
     );
@@ -8907,14 +8939,20 @@ async function _settleLiveDuel(duelId) {
     }
     const d = r.rows[0];
     const cScore = d.challenger_live_score | 0;
-    // BL.1 — for bot live duels, the opponent_live_score may be stale if
-    // the player abandoned (no heartbeats written it forward). Compute
-    // the bot's final score from elapsed time so the result is fair.
+    // For bot live duels, the opponent_live_score may be stale if the player
+    // abandoned (no heartbeats written it forward). DU.3 — the bot's REAL
+    // final is `bot_final_score` (its trajectory's last frame, == what the
+    // race showed at t=60). Fall back to the synthetic curve if the flag is
+    // off / no locked final.
     let oScore = d.opponent_live_score | 0;
-    if (d.is_bot_match && d.started_at && d.duration_seconds) {
-      const startedMs = new Date(d.started_at).getTime();
-      const finalBot = _liveBotScoreAt(duelId, startedMs, d.duration_seconds, Date.now());
-      if (finalBot > oScore) oScore = finalBot;
+    if (d.is_bot_match) {
+      let finalBot;
+      if (_trajectoryTruthEnabled() && d.bot_final_score != null) {
+        finalBot = d.bot_final_score | 0;
+      } else if (d.started_at && d.duration_seconds) {
+        finalBot = _liveBotScoreAt(duelId, new Date(d.started_at).getTime(), d.duration_seconds, Date.now());
+      }
+      if (finalBot != null && finalBot > oScore) oScore = finalBot;
     }
     let winner = null;
     if (cScore > oScore) winner = d.challenger_device;
@@ -9112,6 +9150,28 @@ function _liveBotScoreAt(duelId, startedAtMs, durationSec, nowMs) {
   const eased = ratio * ratio;
   // DU.2.2 — snap sub-20 values to 0 so the bot never shows an absurd "16".
   return _floorBotVisibleScore(Math.floor(target * eased));
+}
+
+// DU.3 — in-memory cache of LIVE bot trajectories (immutable after spawn) so
+// the 1Hz heartbeat + live-state polls don't re-fetch a ~10KB JSONB each tick.
+const _botTrajCache = new Map(); // duelId -> { traj|null, ts }
+async function _liveBotScoreFromTraj(duelId, startedMs, durationSec, nowMs) {
+  if (!_trajectoryTruthEnabled()) {
+    return _liveBotScoreAt(duelId, startedMs, durationSec, nowMs);
+  }
+  let entry = _botTrajCache.get(duelId);
+  if (!entry || (nowMs - entry.ts) > 5 * 60 * 1000) {
+    try {
+      const r = await pool.query(`SELECT bot_trajectory FROM duels WHERE id = $1`, [duelId]);
+      const t = r.rows[0] && r.rows[0].bot_trajectory;
+      entry = { traj: (t && Array.isArray(t.snapshots) && t.snapshots.length) ? t : null, ts: nowMs };
+      if (_botTrajCache.size > 2000) _botTrajCache.clear();
+      _botTrajCache.set(duelId, entry);
+    } catch (e) { entry = { traj: null, ts: nowMs }; }
+  }
+  if (!entry.traj) return _liveBotScoreAt(duelId, startedMs, durationSec, nowMs);
+  const snap = _snapshotForTime(entry.traj, (nowMs - startedMs) / 1000);
+  return snap ? snap.score : 0;
 }
 
 async function _settleBotDuel(duelId) {
@@ -16938,28 +16998,59 @@ app.post('/api/duels/:id/score', requireDeviceAuth, async (req, res) => {
       try {
         const cfg = await _loadBotDuelConfig();
         const delaySec = Math.floor(cfg.settleMin + Math.random() * Math.max(1, cfg.settleMax - cfg.settleMin));
-        // DU.2 — lock the bot's final score NOW, from the player's just-submitted
-        // score, so the spectator widget converges to EXACTLY this number and the
-        // settle reads the same value. Kills the calibrate-vs-preview mismatch.
-        // DU.2 — `botSeen` is the bot score the player was LAST shown in the
-        // in-game HUD (computeBotLiveScore, ~70-92% of their score). Clamp it
-        // just under the player's score so it can never flip a player-win into
-        // a loss, then lock the final at MAX(calibrated, seen). This makes the
-        // spectator widget CONTINUOUS: it starts from exactly what the HUD
-        // showed (opponent_live_score = seen, the anchor) and climbs to the
-        // final — no restart-from-zero, no down-jump. Win-rate is preserved
-        // (seen < player score, so player-wins stay wins; bot-wins are driven
-        // by the calibrated value which dominates).
-        const seen = Math.max(0, Math.min(parseInt(req.body && req.body.botSeen, 10) || 0, Math.floor(s * 0.97)));
-        const calibrated = _calibrateBotScore(duelId, s, cfg.playerWinPct);
-        const lockedFinal = Math.max(calibrated, seen);
-        await pool.query(
-          `UPDATE duels SET bot_settle_at = NOW() + ($1 || ' seconds')::interval,
-                            bot_final_score = $2,
-                            opponent_live_score = $3
-             WHERE id = $4 AND bot_settle_at IS NULL`,
-          [delaySec, lockedFinal, seen, duelId]
-        );
+        if (_trajectoryTruthEnabled()) {
+          // DU.3 — "One Real Game, One Truth". Re-select a REAL bot game whose
+          // natural final lands on the 52% side of the player's just-submitted
+          // score. The displayed number is that real game's real merge total —
+          // never faked. Continuity: the pre-submit display showed the neutral
+          // game at the current elapsed (lastShown); we prefer a calibrated game
+          // that reaches >= lastShown and play it back from that point so the
+          // post-finish spectator continues smoothly (no restart, no end-jump:
+          // the settle reads the same finalScore the player watches converge to).
+          const rowR = await pool.query(
+            `SELECT id, board_seed, difficulty_weights, is_live, duration_seconds,
+                    started_at, created_at, bot_trajectory
+               FROM duels WHERE id = $1`, [duelId]);
+          const drow = rowR.rows[0] || duel;
+          const startedMs = drow.started_at ? new Date(drow.started_at).getTime()
+                          : (drow.created_at ? new Date(drow.created_at).getTime() : Date.now());
+          const elapsedAtSubmit = Math.max(0, (Date.now() - startedMs) / 1000);
+          let lastShown = 0;
+          if (drow.bot_trajectory && Array.isArray(drow.bot_trajectory.snapshots)) {
+            const ns = _snapshotForTime(drow.bot_trajectory, elapsedAtSubmit);
+            lastShown = ns ? (ns.score | 0) : 0;
+            lastShown = Math.min(lastShown, _duelPreSubmitDisplayCap()); // matches the capped pre-submit display
+          }
+          // Never let the continuity floor reach the player's score — keeps a
+          // player-win a win (the calibrated final still decides win/lose).
+          lastShown = Math.max(0, Math.min(lastShown, Math.floor(s * 0.95)));
+          const gen = _generateCalibratedTrajectory(drow, s, cfg, { lastShown });
+          const traj = gen.trajectory;
+          const lastT = traj.snapshots.length ? (traj.snapshots[traj.snapshots.length - 1].t || 0) : 0;
+          // Join the playback at the snapshot whose score ≈ lastShown so the
+          // post-finish board/score continue from where the player left off.
+          const joinSnap = lastShown > 0 ? _snapshotForScore(traj, lastShown) : null;
+          const joinT = Math.max(0, Math.min(joinSnap ? (joinSnap.t || 0) : 0, lastT));
+          traj.meta = { submitAtMs: Date.now(), settleWindowMs: delaySec * 1000, joinT, lastShown };
+          await pool.query(
+            `UPDATE duels SET bot_settle_at = NOW() + ($1 || ' seconds')::interval,
+                              bot_final_score = $2,
+                              bot_trajectory = $3
+               WHERE id = $4 AND bot_settle_at IS NULL`,
+            [delaySec, gen.finalScore, JSON.stringify(traj), duelId]
+          );
+        } else {
+          // Legacy synthetic path (rollback flag off).
+          const seen = Math.max(0, Math.min(parseInt(req.body && req.body.botSeen, 10) || 0, Math.floor(s * 0.97)));
+          const calibrated = _calibrateBotScore(duelId, s, cfg.playerWinPct);
+          const lockedFinal = Math.max(calibrated, seen);
+          await pool.query(
+            `UPDATE duels SET bot_settle_at = NOW() + ($1 || ' seconds')::interval,
+                              bot_final_score = $2, opponent_live_score = $3
+               WHERE id = $4 AND bot_settle_at IS NULL`,
+            [delaySec, lockedFinal, seen, duelId]
+          );
+        }
       } catch (botErr) {
         console.warn('[bot-duel-stamp] failed:', botErr.message);
       }
@@ -17274,6 +17365,77 @@ async function _synthesizeBotLiveState(botDeviceId) {
         updatedAt: new Date().toISOString()
       };
     }
+    // ─── DU.3 — "One Real Game, One Truth" ───────────────────────────
+    // The bot's displayed score AND board both come from the SAME real-game
+    // trajectory, selected by elapsed wall-clock TIME. No synthetic curve, no
+    // progress-ratio denominator, no GREATEST ceiling — the trajectory is
+    // monotonic by construction (real merges only add), and the settle reads
+    // the SAME finalScore the player watches converge to → zero end-jump.
+    if (_trajectoryTruthEnabled() && traj && Array.isArray(traj.snapshots) && traj.snapshots.length) {
+      const lastT = traj.snapshots[traj.snapshots.length - 1].t || 0;
+      let elapsedSec, tLeftMs = 0;
+      if (d.is_live && d.started_at && d.duration_seconds) {
+        // Live race: bot clock = wall-clock since race start (both players see
+        // the bot climb from 0 alongside them).
+        const startedMs = new Date(d.started_at).getTime();
+        elapsedSec = (nowMs - startedMs) / 1000;
+        tLeftMs = Math.max(0, (startedMs + (d.duration_seconds | 0) * 1000) - nowMs);
+      } else if (d.bot_final_score != null && traj.meta && d.bot_settle_at) {
+        // Async post-submit: replay the calibrated game from its join point
+        // (≈ what the player last saw) to its end over the settle window.
+        const meta = traj.meta;
+        const windowMs = Math.max(1000, meta.settleWindowMs || 30000);
+        const submitMs = meta.submitAtMs || (new Date(d.bot_settle_at).getTime() - windowMs);
+        const progress = Math.max(0, Math.min(1, (nowMs - submitMs) / windowMs));
+        const joinT = Math.max(0, Math.min(meta.joinT || 0, lastT));
+        elapsedSec = joinT + progress * (lastT - joinT);
+        tLeftMs = Math.max(0, new Date(d.bot_settle_at).getTime() - nowMs);
+      } else {
+        // Async pre-submit (player still playing): bot clock = wall-clock
+        // since its game started, but the displayed score is CAPPED at a
+        // conservative value so it can never run above what the post-finish
+        // calibrated game will show (which would force a drop at the handoff).
+        const startedMs = d.started_at ? new Date(d.started_at).getTime() : new Date(d.created_at).getTime();
+        elapsedSec = (nowMs - startedMs) / 1000;
+        if (d.bot_settle_at) tLeftMs = Math.max(0, new Date(d.bot_settle_at).getTime() - nowMs);
+        let snapPre = _snapshotForTime(traj, elapsedSec);
+        const cap = _duelPreSubmitDisplayCap();
+        if (snapPre && snapPre.score > cap) {
+          // Freeze score AND board at the cap-point snapshot so they stay
+          // consistent (both describe the same real moment of the game).
+          const capRaw = _snapshotForScore(traj, cap);
+          if (capRaw) snapPre = { score: _floorBotVisibleScore(capRaw.s | 0), tier: capRaw.h | 0, grid: capRaw.g, isFinal: false };
+        }
+        return {
+          ok: true,
+          name: d.opponent_name || 'יריב',
+          mode: 'duel',
+          difficulty: d.difficulty_label || 'default',
+          isLive: !!d.is_live,
+          score: snapPre ? snapPre.score : 0,
+          tier: snapPre ? snapPre.tier : 1,
+          grid: snapPre ? snapPre.grid : (traj.snapshots[0] && traj.snapshots[0].g),
+          timeLeftMs: tLeftMs,
+          status: 'playing',
+          updatedAt: new Date().toISOString()
+        };
+      }
+      const snap = _snapshotForTime(traj, elapsedSec);
+      return {
+        ok: true,
+        name: d.opponent_name || 'יריב',
+        mode: 'duel',
+        difficulty: d.difficulty_label || 'default',
+        isLive: !!d.is_live,
+        score: snap ? snap.score : 0,
+        tier: snap ? snap.tier : 1,
+        grid: snap ? snap.grid : (traj.snapshots[0] && traj.snapshots[0].g),
+        timeLeftMs: tLeftMs,
+        status: 'playing',
+        updatedAt: new Date().toISOString()
+      };
+    }
+    // ─── Legacy synthetic path (rollback flag off) ───────────────────
     // BL.1.3 — compute candidate; use DB-enforced monotonicity by
     // writing GREATEST(opponent_live_score, candidate) and returning
     // the result. This guarantees the displayed score NEVER decreases
@@ -17596,20 +17758,24 @@ function _botEngIsGameOver(g) {
 //
 // Drop cadence: ~30 drops over the game duration so the spectator
 // sees 1-2 new tiles every 1-2 seconds.
-function _simulateBotDuelTrajectory(boardSeed, weightsStr, durationSec) {
+function _simulateBotDuelTrajectory(boardSeed, weightsStr, durationSec, rngSalt) {
   const weights = _botEngParseWeights(weightsStr);
   // Two independent seeded streams. Mix duelSeed deeply so two duels
-  // with consecutive ids produce visibly-different games.
-  const pieceRng = _botEngMakeRng((boardSeed | 0) ^ 0xA5A5A5A5);
-  const colRng = _botEngMakeRng((boardSeed | 0) ^ 0x5A5A5A5A);
+  // with consecutive ids produce visibly-different games. DU.3 — rngSalt
+  // lets _generateCalibratedTrajectory generate a BANK of distinct real
+  // games off one board seed (rejection-sampling for win-rate control).
+  const salt = (rngSalt | 0);
+  const pieceRng = _botEngMakeRng(((boardSeed | 0) ^ 0xA5A5A5A5) ^ Math.imul(salt + 1, 0x9E3779B1));
+  const colRng = _botEngMakeRng(((boardSeed | 0) ^ 0x5A5A5A5A) ^ Math.imul(salt + 1, 0x85EBCA77));
   const grid = [];
   for (let r = 0; r < _BOT_ROWS; r++) grid.push(new Array(_BOT_COLS).fill(0));
   let score = 0, highest = 1;
   const snapshots = [];
   // Initial snapshot at t=0 (empty board).
   snapshots.push({ t: 0, s: 0, h: 1, g: grid.map(r => r.slice()) });
-  // Drop cadence: aim for ~1 drop per 1.5-2 seconds → 30-40 drops in 60s.
-  const dropsPerSec = 0.55;
+  // DU.3 — denser cadence (~0.9 drops/sec → ~one snapshot per ~1.1s) so each
+  // ~1.5s spectator poll advances roughly one move = legible real movement.
+  const dropsPerSec = 0.9;
   const totalDrops = Math.max(10, Math.floor(durationSec * dropsPerSec));
   const tPerDrop = durationSec / totalDrops;
   for (let i = 0; i < totalDrops; i++) {
@@ -17695,6 +17861,98 @@ function _snapshotForProgress(trajectory, progressRatio) {
   const p = Math.max(0, Math.min(1, progressRatio));
   const idx = Math.min(n - 1, Math.floor(p * (n - 1)));
   return trajectory.snapshots[idx];
+}
+
+// ─── DU.3 — "One Real Game, One Truth" ───────────────────────────────
+// THE single selector for bot duels: the bot's displayed score AND board
+// both come from the SAME real-game snapshot, chosen by elapsed wall-clock
+// TIME. The score is a real merge-step series (monotonic for free), so the
+// settled final == the last frame the player saw → zero end-jump, and the
+// board the player watches is literally that game's board at that moment.
+function _snapshotForTime(traj, elapsedSec) {
+  if (!traj || !Array.isArray(traj.snapshots) || !traj.snapshots.length) return null;
+  const snaps = traj.snapshots;
+  const lastT = snaps[snaps.length - 1].t || 0;
+  const t = Math.max(0, Math.min(elapsedSec, lastT));
+  let chosen = snaps[0];
+  for (let i = 0; i < snaps.length; i++) {
+    if ((snaps[i].t || 0) <= t) chosen = snaps[i];
+    else break;
+  }
+  return {
+    score: _floorBotVisibleScore(chosen.s | 0),
+    tier: chosen.h | 0,
+    grid: chosen.g,
+    isFinal: chosen === snaps[snaps.length - 1]
+  };
+}
+
+// Is this bot trajectory truthful (DU.3) — i.e. does its real final equal
+// what the player will be shown? Guarded by the rollback flag so the old
+// synthetic path can be re-enabled instantly without a redeploy.
+function _trajectoryTruthEnabled() {
+  const v = (_configCache && _configCache.bot_duel_trajectory_truth);
+  return v === undefined || v === null || String(v) !== 'false';
+}
+
+// Win-rate engine. Generates a BANK of real games (varying rngSalt off the
+// duel's board seed) and picks the one whose NATURAL final lands on the
+// 52%-correct side of the player, closest to a calibrated target. The
+// displayed number is therefore ALWAYS a real merge total — never scaled or
+// faked (per the owner's "always absolute truth" decision). `lastShown` (the
+// score the player already saw in the HUD) is honored: we prefer a candidate
+// whose real game reaches at least that value, so the post-finish playback
+// can continue smoothly from there instead of restarting low.
+function _generateCalibratedTrajectory(duel, anchorScore, cfg, opts) {
+  opts = opts || {};
+  const anchor = Math.max(0, anchorScore | 0);
+  const N = Math.max(3, Math.min(40, parseInt((_configCache && _configCache.bot_traj_candidate_count) || '', 10) || 12));
+  // Same seeded lottery _calibrateBotScore uses → deterministic outcome.
+  const rng = _seededBotRng((duel.id | 0) ^ 0x12345678);
+  const p = Math.max(20, Math.min(80, cfg.playerWinPct | 0));
+  const playerWins = rng() * 100 < p;
+  const isTie = rng() < 0.02;
+  let deltaPct;
+  const tk = rng();
+  if (tk < 0.65)      deltaPct = 0.03 + rng() * 0.10;
+  else if (tk < 0.90) deltaPct = 0.10 + rng() * 0.15;
+  else                deltaPct = 0.25 + rng() * 0.15;
+  let target;
+  if (isTie || anchor <= 0) target = anchor;
+  else if (playerWins) target = Math.max(0, Math.floor(anchor * (1 - deltaPct)));
+  else target = Math.floor(anchor * (1 + deltaPct));
+  const durationSec = (duel.is_live && duel.duration_seconds) ? (duel.duration_seconds | 0) : 90;
+  const weights = duel.difficulty_weights || null;
+  const boardSeed = (duel.board_seed | 0);
+  // Generate N real candidate games.
+  const cands = [];
+  for (let k = 0; k < N; k++) {
+    const traj = _simulateBotDuelTrajectory(boardSeed, weights, durationSec, k + 1);
+    cands.push({ traj, finalScore: traj.finalScore | 0 });
+  }
+  const lastShown = Math.max(0, opts.lastShown | 0);
+  // Continuity: prefer real games that REACH lastShown so the post-finish
+  // playback can join at that value (a monotonic real game passes through
+  // every lower value). Falls back to all candidates if none reach it
+  // (would need every one of N real games to finish below what the HUD
+  // showed — vanishingly rare since pre-submit display is conservative).
+  let poolC = cands;
+  if (lastShown > 0) {
+    const reach = cands.filter(c => c.finalScore >= lastShown);
+    if (reach.length) poolC = reach;
+  }
+  // Prefer candidates on the 52%-correct side of the player.
+  const onSide = (fs) => isTie ? true : (playerWins ? fs < anchor : fs > anchor);
+  const correct = poolC.filter(c => onSide(c.finalScore));
+  const searchSet = correct.length ? correct : poolC;
+  // Among the search set, the one whose REAL final is closest to target.
+  let best = searchSet[0];
+  let bestDist = Math.abs(best.finalScore - target);
+  for (let i = 1; i < searchSet.length; i++) {
+    const d = Math.abs(searchSet[i].finalScore - target);
+    if (d < bestDist) { bestDist = d; best = searchSet[i]; }
+  }
+  return { trajectory: best.traj, finalScore: best.finalScore };
 }
 
 // BL.1.4 — score-banded grid that EVOLVES as the bot's "score" grows.

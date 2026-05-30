@@ -492,6 +492,141 @@ function testNoWeirdSubTwenty() {
   console.log('  ✓ bot score is always 0 or >= 20 — no absurd "16"');
 }
 
+// ─── DU.3 "One Real Game, One Truth" — logic mirrors + tests ─────────
+// The engine itself is validated by test_engine.mjs; here we verify the NEW
+// decision logic (outcome lottery, candidate selection, snapshot-by-time,
+// no-jump, continuity) with SYNTHETIC monotonic trajectories. The real
+// engine+selection integration is verified by the live API test.
+
+function botOutcomeLottery(duelId, anchor, playerWinPct) {
+  const rng = _seededBotRng((duelId | 0) ^ 0x12345678);
+  const p = Math.max(20, Math.min(80, playerWinPct | 0));
+  const playerWins = rng() * 100 < p;
+  const isTie = rng() < 0.02;
+  let deltaPct;
+  const tk = rng();
+  if (tk < 0.65)      deltaPct = 0.03 + rng() * 0.10;
+  else if (tk < 0.90) deltaPct = 0.10 + rng() * 0.15;
+  else                deltaPct = 0.25 + rng() * 0.15;
+  let target;
+  if (isTie || anchor <= 0) target = anchor;
+  else if (playerWins) target = Math.max(0, Math.floor(anchor * (1 - deltaPct)));
+  else target = Math.floor(anchor * (1 + deltaPct));
+  return { playerWins, isTie, target };
+}
+
+function selectCalibratedFinal(candFinals, anchor, lottery, lastShown) {
+  let poolC = candFinals;
+  if (lastShown > 0) {
+    const reach = candFinals.filter(f => f >= lastShown);
+    if (reach.length) poolC = reach;
+  }
+  const onSide = (fs) => lottery.isTie ? true : (lottery.playerWins ? fs < anchor : fs > anchor);
+  const correct = poolC.filter(onSide);
+  const set = correct.length ? correct : poolC;
+  let best = set[0], bd = Math.abs(best - lottery.target);
+  for (let i = 1; i < set.length; i++) {
+    const d = Math.abs(set[i] - lottery.target);
+    if (d < bd) { bd = d; best = set[i]; }
+  }
+  return best;
+}
+
+function snapshotScoreForTime(snaps, elapsedSec) {
+  const lastT = snaps[snaps.length - 1].t;
+  const t = Math.max(0, Math.min(elapsedSec, lastT));
+  let chosen = snaps[0];
+  for (let i = 0; i < snaps.length; i++) {
+    if (snaps[i].t <= t) chosen = snaps[i]; else break;
+  }
+  return chosen.s < 20 ? 0 : chosen.s; // mirrors _floorBotVisibleScore
+}
+
+function synthTraj(finalScore, n) {
+  n = n || 40;
+  const snaps = [];
+  for (let i = 0; i <= n; i++) {
+    const frac = i / n;
+    const s = Math.round(finalScore * frac * frac / 20) * 20; // merge-stepped monotonic climb
+    snaps.push({ t: Math.round((frac * 60) * 10) / 10, s });
+  }
+  snaps[snaps.length - 1].s = finalScore;
+  return snaps;
+}
+
+function testSelectionWinRate() {
+  console.log('\nTest 14 — selection win-rate ≈ 52% from real candidates (DU.3):');
+  let pWins = 0, bWins = 0, ties = 0;
+  for (let i = 0; i < 10000; i++) {
+    const duelId = 20000 + i;
+    const anchor = 5000 + ((i * 313) % 90000);
+    const lot = botOutcomeLottery(duelId, anchor, 52);
+    const cands = [];
+    for (let k = 0; k < 12; k++) {
+      const f = Math.floor(anchor * (0.55 + ((i * 7 + k * 53) % 90) / 100)); // 0.55..1.45×
+      cands.push(Math.max(100, f));
+    }
+    const lastShown = Math.min(8000, Math.floor(anchor * 0.95));
+    const chosen = selectCalibratedFinal(cands, anchor, lot, lastShown);
+    if (chosen < anchor) pWins++; else if (chosen > anchor) bWins++; else ties++;
+  }
+  const pct = Math.round((pWins / 10000) * 1000) / 10;
+  console.log(`  player wins: ${pWins} (${pct}%) · bot wins: ${bWins} · ties: ${ties}`);
+  assert(pct >= 46 && pct <= 58, `win-rate ${pct}% out of band`);
+  console.log('  ✓ outcome tracks the 52% lottery using only real candidate finals');
+}
+
+function testSnapshotByTime() {
+  console.log('\nTest 15 — snapshot-by-time monotonic + exact final (DU.3):');
+  let down = 0, badFinal = 0;
+  for (let i = 0; i < 500; i++) {
+    const finalScore = 2000 + ((i * 191) % 100000);
+    const snaps = synthTraj(finalScore, 45);
+    let prev = -1;
+    for (let ms = 0; ms <= 70000; ms += 500) {
+      const s = snapshotScoreForTime(snaps, ms / 1000);
+      if (s < prev) down++;
+      prev = s;
+    }
+    if (snapshotScoreForTime(snaps, 999) !== finalScore) badFinal++;
+  }
+  console.log(`  500 trajectories × 141 ticks — down-jumps: ${down}, wrong-final: ${badFinal}`);
+  assert(down === 0, `expected 0 down-jumps, got ${down}`);
+  assert(badFinal === 0, `expected exact final at end, ${badFinal} wrong`);
+  console.log('  ✓ score climbs monotonically and ends exactly on the final');
+}
+
+function testNoJumpAndContinuity() {
+  console.log('\nTest 16 — no end-jump + continuity (DU.3):');
+  let jump = 0, dip = 0;
+  for (let i = 0; i < 600; i++) {
+    const duelId = 30000 + i;
+    const anchor = 4000 + ((i * 271) % 90000);
+    const lot = botOutcomeLottery(duelId, anchor, 52);
+    const lastShown = Math.min(8000, Math.floor(anchor * 0.95));
+    const cands = [];
+    for (let k = 0; k < 12; k++) cands.push(Math.max(100, Math.floor(anchor * (0.55 + ((i * 7 + k * 53) % 90) / 100))));
+    const finalScore = selectCalibratedFinal(cands, anchor, lot, lastShown);
+    const snaps = synthTraj(finalScore, 45);
+    const lastT = snaps[snaps.length - 1].t;
+    let joinT = 0;
+    for (let j = 0; j < snaps.length; j++) { if (snaps[j].s <= lastShown) joinT = snaps[j].t; else break; }
+    let prev = -1, last = 0;
+    for (let p = 0; p <= 30; p++) {
+      const progress = p / 30;
+      const elapsed = joinT + progress * (lastT - joinT);
+      const s = snapshotScoreForTime(snaps, elapsed);
+      if (s < prev) dip++;
+      prev = s; last = s;
+    }
+    if (finalScore !== last) jump++;
+  }
+  console.log(`  600 duels — end-jumps: ${jump}, playback-dips: ${dip}`);
+  assert(jump === 0, `settle must equal last-shown, ${jump} jumps`);
+  assert(dip === 0, `playback must not dip, ${dip} dips`);
+  console.log('  ✓ settle == last frame shown, playback never dips (continuous)');
+}
+
 // ─── Run all tests ──────────────────────────────────────────────────
 
 console.log('═══════════════════════════════════════════════════════════');
@@ -512,6 +647,9 @@ testAsyncConvergesToFinal();
 testWagerConservation();
 testSpectatorContinuity();
 testNoWeirdSubTwenty();
+testSelectionWinRate();
+testSnapshotByTime();
+testNoJumpAndContinuity();
 
 console.log('\n═══════════════════════════════════════════════════════════');
 if (failures === 0) {
