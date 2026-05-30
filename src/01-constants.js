@@ -274,7 +274,13 @@
   const ACTIVE_SKIN_KEY = 'bloom_active_skin';
   const OWNED_SKINS_KEY = 'bloom_owned_skins';
   var activeSkinId = localStorage.getItem(ACTIVE_SKIN_KEY) || 'classic';
-  var ownedSkins = JSON.parse(localStorage.getItem(OWNED_SKINS_KEY) || '["classic"]');
+  var ownedSkins;
+  try {
+    ownedSkins = JSON.parse(localStorage.getItem(OWNED_SKINS_KEY) || '["classic"]');
+    if (!Array.isArray(ownedSkins) || ownedSkins.length === 0) ownedSkins = ['classic'];
+  } catch (e) {
+    ownedSkins = ['classic'];
+  }
 
   // Track the special class currently applied so we can remove it cleanly
   // when the active skin changes (admin can register new ones via the

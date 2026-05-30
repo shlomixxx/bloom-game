@@ -1144,6 +1144,11 @@
     _liveRaceWager = Math.max(0, wager | 0);
     _liveRaceStartMs = Date.now();
     if (_liveRaceWager > 0 && typeof playerBalance === 'number') {
+      if (playerBalance < _liveRaceWager) {
+        _liveRaceWager = 0;
+        if (typeof showToast === 'function') showToast('💎 אין מספיק יהלומים', 'error');
+        return;
+      }
       playerBalance -= _liveRaceWager;
       try { updateBalanceDisplay(); } catch (e) {}
     }
@@ -1274,6 +1279,11 @@
   }
 
   function startLiveRaceGame() {
+    // Guard against double-start (double-tap / rematch) — clear orphan timers
+    // first, otherwise the previous run's heartbeat/poll intervals leak and
+    // keep firing forever (battery drain + colliding scores).
+    if (_liveRaceHbTimer) { clearInterval(_liveRaceHbTimer); _liveRaceHbTimer = null; }
+    if (_liveRacePollTimer) { clearInterval(_liveRacePollTimer); _liveRacePollTimer = null; }
     activeDuelId = _liveRaceState.duelId;
     window._duelMode = true;
     window._liveRaceMode = true;

@@ -8537,7 +8537,7 @@ app.get('/api/promo/next', async (req, res) => {
                AND c.device_id = $1
                AND c.clicked_at > NOW() - ($3::TEXT || ' minutes')::INTERVAL
           )
-        ORDER BY RANDOM() * p.weight DESC
+        ORDER BY -LN(RANDOM()) / GREATEST(p.weight, 0.001) ASC
         LIMIT 1`,
       [deviceId || '__none__', level, String(cooldownMin)]
     );
