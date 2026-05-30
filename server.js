@@ -12880,7 +12880,9 @@ if (ADMIN_PATH && ADMIN_PASSWORD) {
             COUNT(*) FILTER (WHERE status = 'expired')::int AS expired,
             COUNT(*)::int AS total,
             AVG(CASE WHEN status = 'settled' THEN challenger_score END)::int AS avg_player_score,
-            AVG(CASE WHEN status = 'settled' THEN opponent_score END)::int AS avg_bot_score
+            AVG(CASE WHEN status = 'settled' THEN opponent_score END)::int AS avg_bot_score,
+            COALESCE(SUM(amount) FILTER (WHERE amount > 0 AND status IN ('settled','tie')), 0)::bigint AS gems_staked,
+            COALESCE(SUM(amount) FILTER (WHERE amount > 0 AND status = 'settled' AND winner_device = challenger_device), 0)::bigint AS gems_won_basis
           FROM duels WHERE is_bot_match = TRUE
         `),
         pool.query(`
@@ -12923,7 +12925,11 @@ if (ADMIN_PATH && ADMIN_PASSWORD) {
           playerWinPct: completed > 0 ? Math.round(((o.player_wins | 0) / completed) * 1000) / 10 : null,
           avgPlayerScore: o.avg_player_score | 0,
           avgBotScore:    o.avg_bot_score | 0,
-          liveTotal:      live.rows[0] ? (live.rows[0].c | 0) : 0
+          liveTotal:      live.rows[0] ? (live.rows[0].c | 0) : 0,
+          // DU.2 — wager economics. Players stake `gems_staked` on bot duels;
+          // when they win they take pool minus rake (≈2× stake × 0.95).
+          gemsStaked:     Number(o.gems_staked || 0),
+          gemsPaidOut:    Math.round(Number(o.gems_won_basis || 0) * 2 * (1 - ((parseInt((_configCache && _configCache.wager_rake) || '', 10) || 5) / 100)))
         },
         last24h: {
           playerWins: o24.player_wins_24h | 0,

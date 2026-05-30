@@ -3211,6 +3211,12 @@
   // Each entry is shown when the admin clicks the small ? next to the key row.
   // Keys without an entry simply hide the ? button (no harm done).
   var TIPS_PER_KEY = {
+    // ---- DU.2 Duel overhaul ----
+    duel_random_max_wager: 'תקרת ההימור (💎) שמותר לשים בדו-קרב אקראי / מרוץ חי.<div class="tip-example">📊 <code>100000</code> (ברירת מחדל) — מאפשר גם הימורי ראווה. הורד אם אתה רוצה להגביל סיכון לשחקנים חדשים.<br>💡 ההימור מנוכה בכניסה לתור ומוחזר אם השחקן מבטל / לא נמצא יריב.</div>',
+    duel_pre_submit_display_cap: 'תקרת הניקוד שמוצג בחלון הצפייה לפני שהשחקן מגיש (אם מישהו "מציץ" בבוט באמצע).<div class="tip-example">📊 <code>8000</code> (ברירת מחדל). חייב להיות נמוך מספיק כדי שלא יחרוג מהניקוד הסופי האמיתי — אחרת הניקוד "יקפוץ למטה" בסיום. אל תעלה מעל ~10000 בלי סיבה.</div>',
+    duel_wager_match_tolerance_pct: '(שמור לעתיד) טווח התאמת הימור באחוזים. כרגע השידוך הוא לפי הימור <strong>מדויק</strong> — הבוט תמיד מכסה תור שקט.<div class="tip-example">השאר <code>0</code> אלא אם תרצה לאפשר זיווג בין הימורים שונים.</div>',
+    duel_wager_widen_after_polls: '(שמור לעתיד) אחרי כמה polls להרחיב את טווח ההימור. כרגע לא בשימוש — השידוך מדויק + bot fallback.',
+    duel_wager_widen_band: '(שמור לעתיד) בכמה 💎 להרחיב את טווח ההימור כשהתור שקט. כרגע לא בשימוש.',
     // ---- Core gameplay ----
     merge_mode: 'כיוון מיזוג — איפה נשאר האריח אחרי שלוש אריחים זהים מתמזגים.<div class="tip-example">🎯 <code>anchor</code> (ברירת מחדל): ליד מקום הזריקה. השחקן יכול לכוון בדיוק לאן ייפול האריח החדש.<br>⬅ <code>classic</code>: תמיד שמאלה (סגנון Suika המקורי). פחות אינטואיטיבי לעין RTL ישראלית.<br>🧠 <code>smart</code>: המערכת מסמלצת כל מועמד (כולל gravity) ובוחרת את המקום הכי טוב — מעדיפה שרשרת מיידית, סולם דרגות, ועומק בלוח. מגדיל ניקוד ב-15-30% לשחקנים מתחילים.<br><br>שינוי נכנס מיד לשחקנים חדשים, ולפעילים אחרי refresh.</div>',
     crown_merge_enabled: 'פיצוץ כשני 👑 כתרים מתחברים — מנקה שורה שלמה ונותן בונוס ענק.<div class="tip-example">✅ <code>true</code> (ברירת מחדל): שני כתרים → פיצוץ דרמטי + רעידה + 50,000 נקודות בונוס.<br>❌ <code>false</code>: כתרים פשוט לא מתמזגים. סגנון Suika קלאסי.<br><br>💡 ההמלצה החזקה ביותר: השאר on. שחקנים מתחננים ל"crown explosion" אחרי שראו פעם.</div>',
@@ -9713,9 +9719,14 @@
         card('פעילים כעת', (o.inProgress || 0).toLocaleString(), '', '#2E8B6F') +
         card('Live (סה"כ)', (o.liveTotal || 0).toLocaleString(), '', '#BA7517') +
       '</div>' +
-      '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">' +
         card('ניקוד ממוצע שחקן', (o.avgPlayerScore || 0).toLocaleString(), '', '#1C1A18') +
         card('ניקוד ממוצע בוט', (o.avgBotScore || 0).toLocaleString(), '', '#1C1A18') +
+      '</div>' +
+      // DU.2 — wager economics: what players staked vs what they took home.
+      '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+        card('💎 הומר מול בוטים', (o.gemsStaked || 0).toLocaleString(), 'סך ההימורים', '#7A4A07') +
+        card('💎 שולם לזוכים', (o.gemsPaidOut || 0).toLocaleString(), 'פרסים (פחות עמלה)', '#2E8B6F') +
       '</div>';
     if (recentEl && d.recent) {
       if (!d.recent.length) {
