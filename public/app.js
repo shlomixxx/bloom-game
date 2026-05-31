@@ -2046,6 +2046,7 @@
     hud.id = 'live-race-hud';
     hud.className = 'live-race-hud';
     hud.innerHTML =
+      '<button class="lrh-forfeit" id="lrh-forfeit" aria-label="פרוש מהמרוץ" title="פרוש">✕</button>' +
       '<div class="lrh-timer-row">' +
         '<span class="lrh-timer-label">⏰</span>' +
         '<span class="lrh-timer" id="lrh-timer">60</span>' +
@@ -2066,10 +2067,63 @@
         '</div>' +
       '</div>';
     document.body.appendChild(hud);
+    // Forfeit button — lets the player leave a live race instead of being locked
+    // for the full 60s. Submits the current score + settles immediately. (audit fix)
+    try {
+      var ffBtn = hud.querySelector('#lrh-forfeit');
+      if (ffBtn) ffBtn.addEventListener('click', forfeitLiveRace);
+    } catch (e) {}
     // BL.1.4 — set body class so CSS can hide the .top/.stats/.mode-bar/
     // bottom-nav rows (otherwise the regular game chrome shows through
     // and overlaps the HUD + steals vertical space from the grid).
     try { document.body.classList.add('live-race-active'); } catch (e) {}
+  }
+
+  function forfeitLiveRace() {
+    if (!_liveRaceState) return;
+    var ok = true;
+    try { ok = window.confirm('לפרוש מהמרוץ עכשיו? הניקוד הנוכחי יוגש והקרב יוכרע מיד.'); } catch (e) {}
+    if (!ok) return;
+    var ffBtn = document.getElementById('lrh-forfeit');
+    if (ffBtn) { ffBtn.disabled = true; ffBtn.textContent = '…'; }
+    var sc = (typeof score !== 'undefined' && score != null) ? (score | 0) : 0;
+    var duelId = _liveRaceState.duelId;
+    var isCh = _liveRaceState.isChallenger;
+    var oppName = _liveRaceState.opponentName;
+    // Stop local timers so the normal expiry path can't double-fire a result.
+    if (_liveRaceHbTimer) { clearInterval(_liveRaceHbTimer); _liveRaceHbTimer = null; }
+    if (_liveRacePollTimer) { clearInterval(_liveRacePollTimer); _liveRacePollTimer = null; }
+    apiPost('/api/duels/' + duelId + '/forfeit-live', { score: sc })
+      .then(function() {
+        return fetch('/api/duels/' + duelId + '/live-state').then(function(r){ return r.json(); }).catch(function(){ return null; });
+      })
+      .then(function(d) {
+        var myScore = sc, oppScore = 0;
+        if (d && d.ok) {
+          if (d.challengerFinal != null) {
+            myScore = isCh ? d.challengerFinal : d.opponentFinal;
+            oppScore = isCh ? d.opponentFinal : d.challengerFinal;
+          } else {
+            oppScore = isCh ? (d.opponentScore | 0) : (d.challengerScore | 0);
+          }
+        }
+        showLiveRaceResult(myScore, oppScore, oppName, d);
+        _liveRaceState = null;
+        window._duelMode = false;
+        window._liveRaceMode = false;
+        window.__bloomGameOver = true;
+        try { busy = true; } catch (e) {}
+        var hud = document.getElementById('live-race-hud');
+        if (hud) hud.remove();
+        try { document.body.classList.remove('live-race-active'); } catch (e) {}
+      })
+      .catch(function() {
+        var hud = document.getElementById('live-race-hud');
+        if (hud) hud.remove();
+        try { document.body.classList.remove('live-race-active'); } catch (e) {}
+        _liveRaceState = null;
+        window._liveRaceMode = false;
+      });
   }
 
   function paintLiveRaceHUD(oppScore, myServerScore, timeLeft) {
@@ -2138,7 +2192,7 @@
           myScore = _liveRaceState.isChallenger ? d.challengerFinal : d.opponentFinal;
           oppScore = _liveRaceState.isChallenger ? d.opponentFinal : d.challengerFinal;
         }
-        showLiveRaceResult(myScore, oppScore, _liveRaceState.opponentName);
+        showLiveRaceResult(myScore, oppScore, _liveRaceState.opponentName, d);
         _liveRaceState = null;
         window._duelMode = false;
         window._liveRaceMode = false;
@@ -2150,7 +2204,7 @@
     }, 800);
   }
 
-  function showLiveRaceResult(myScore, oppScore, oppName) {
+  function showLiveRaceResult(myScore, oppScore, oppName, settleData) {
     var existing = document.getElementById('live-race-result');
     if (existing) existing.remove();
     var won = myScore > oppScore;
@@ -2160,7 +2214,15 @@
     ov.className = 'live-race-result-overlay';
     var emoji = won ? '🏆' : (tied ? '🤝' : '😔');
     var title = won ? 'ניצחת!' : (tied ? 'תיקו' : 'הפסדת');
-    var sub = won ? ('+50💎 על הזכייה') : (tied ? 'אף אחד לא קיבל פרס' : 'נסה שוב!');
+    // Real payout from the server (base reward + wager winnings) instead of a
+    // hardcoded +50. Tie shows the stake refund. (audit fix May 2026)
+    var winReward = (settleData && settleData.winnerReward != null) ? Number(settleData.winnerReward) : 50;
+    var wagerAmt = (settleData && settleData.wager != null) ? Number(settleData.wager) : 0;
+    var sub = won
+      ? ('+' + winReward.toLocaleString() + '💎 על הזכייה')
+      : (tied
+          ? (wagerAmt > 0 ? ('🔄 ההימור הוחזר · ' + wagerAmt.toLocaleString() + '💎') : 'אף אחד לא קיבל פרס')
+          : 'נסה שוב!');
     ov.innerHTML =
       '<div class="lrr-card lrr-' + (won ? 'won' : tied ? 'tie' : 'lost') + '">' +
         '<div class="lrr-emoji">' + emoji + '</div>' +
@@ -2177,7 +2239,9 @@
     try { if (typeof soundMilestone === 'function') soundMilestone(won ? 7 : 3); } catch (e) {}
     try { if (typeof buzz === 'function') buzz(won ? [80,60,100,60,120,80,140] : [40,30,60]); } catch (e) {}
     if (won && window.__bloomBumpBal && typeof playerBalance !== 'undefined') {
-      try { window.__bloomBumpBal(playerBalance + 50, 50); } catch (e) {}
+      try { window.__bloomBumpBal(playerBalance + winReward, winReward); } catch (e) {}
+    } else if (tied && wagerAmt > 0 && window.__bloomBumpBal && typeof playerBalance !== 'undefined') {
+      try { window.__bloomBumpBal(playerBalance + wagerAmt, wagerAmt); } catch (e) {}
     }
   }
 
@@ -11287,19 +11351,35 @@
       '</div>';
 
     document.getElementById('ctsh-wa').onclick = function() {
-      // Some mobile browsers block window.open if it isn't a direct user click
-      // gesture — fall back to copying the link with a "הועתק" flash.
+      // Some mobile browsers (Safari especially) block window.open if it isn't a
+      // direct user gesture — fall back to copying the LINK (not the long share
+      // text, which pastes as a wall of words). The link is what the friend
+      // actually needs to join. (audit fix May 2026)
       const w = window.open('https://wa.me/?text=' + encodeURIComponent(shareText), '_blank');
       if (!w) {
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-          navigator.clipboard.writeText(shareText).catch(function() {});
+        let copied = false;
+        try {
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(link).catch(function() {});
+            copied = true;
+          }
+        } catch (e) {}
+        if (!copied) {
+          try {
+            const ta = document.createElement('textarea');
+            ta.value = link; ta.setAttribute('readonly', '');
+            ta.style.cssText = 'position:fixed;top:-1000px;opacity:0';
+            document.body.appendChild(ta); ta.select();
+            copied = document.execCommand('copy');
+            document.body.removeChild(ta);
+          } catch (e) {}
         }
         const wa = document.getElementById('ctsh-wa');
         const span = wa.querySelector('span');
         if (span) {
           const orig = span.textContent;
-          span.textContent = '✓ הטקסט הועתק';
-          setTimeout(function() { span.textContent = orig; }, 1700);
+          span.textContent = copied ? '✓ הקישור הועתק — הדבק בוואטסאפ' : '↗ פתח וואטסאפ ושתף';
+          setTimeout(function() { span.textContent = orig; }, 2000);
         }
       }
     };
@@ -23925,6 +24005,12 @@
 // ============================================================
 (function() {
   var _livesCache = { data: null, fetchedAt: 0 };
+  // Expose the SAME object reference on window so the balance bar
+  // (renderBalanceBarV2 in 05a-home-v2.js) can read window._livesCache.data.
+  // The code below mutates _livesCache.data in place (never reassigns the
+  // object), so this single exposure stays live. Without it the ❤️ balance
+  // slot could never render. (audit fix May 2026 — true root cause)
+  try { window._livesCache = _livesCache; } catch (e) {}
   var _livesInFlight = false;
   var _livesTicker = null;
 

@@ -7,6 +7,12 @@
 // ============================================================
 (function() {
   var _livesCache = { data: null, fetchedAt: 0 };
+  // Expose the SAME object reference on window so the balance bar
+  // (renderBalanceBarV2 in 05a-home-v2.js) can read window._livesCache.data.
+  // The code below mutates _livesCache.data in place (never reassigns the
+  // object), so this single exposure stays live. Without it the ❤️ balance
+  // slot could never render. (audit fix May 2026 — true root cause)
+  try { window._livesCache = _livesCache; } catch (e) {}
   var _livesInFlight = false;
   var _livesTicker = null;
 

@@ -2635,9 +2635,33 @@ function validateBoardDefinition(type, definition) {
     }
     return { ok: true };
   }
-  // Future types (shape / themed / mode / vip) accept any object —
-  // validation is added per-phase. Today no client-side code applies
-  // them, so a bad definition is a no-op.
+  // 'themed' boards layer a holiday palette (+ optional shape / cells /
+  // multipliers) on top. They ARE applied client-side, so an empty themed
+  // board (no theme_id, no shape, no cells, no multipliers) renders identical
+  // to practice — and if picked as the Daily Special it breaks the flagship
+  // daily hook. Require at least one visible difference. (audit fix May 2026)
+  if (type === 'themed') {
+    const tCells = definition.cells;
+    const hasTheme = !!definition.theme_id;
+    const hasShape = !!definition.shape_id;
+    const hasCells = Array.isArray(tCells) && tCells.length > 0;
+    const hasMults = Array.isArray(definition.multipliers) &&
+      definition.multipliers.some(function (m) { return Number(m) !== 1; });
+    if (!hasTheme && !hasShape && !hasCells && !hasMults) {
+      return { ok: false, error: 'empty_themed_board' };
+    }
+    if (hasTheme) {
+      const validThemes = ['hanukkah', 'valentine', 'yom_haatzmaut', 'passover'];
+      if (!validThemes.includes(definition.theme_id)) return { ok: false, error: 'bad_theme_id' };
+    }
+    if (hasShape) {
+      const validShapes = ['heart', 'diamond', 'tree', 'pyramid'];
+      if (!validShapes.includes(definition.shape_id)) return { ok: false, error: 'bad_shape_id' };
+    }
+    return { ok: true };
+  }
+  // Future types (shape / mode / vip) accept any object — validation is added
+  // per-phase. Today no client-side code applies them, so a bad def is a no-op.
   return { ok: true };
 }
 
@@ -2756,6 +2780,22 @@ async function loadConfigKeys(keys) {
   } catch (e) { return {}; }
 }
 
+// A board is "meaningful" as a Daily Special only if it visibly differs from a
+// plain practice game — a theme palette, a shape mask, special cells, or column
+// multipliers. An empty 'themed' board (definition.cells:[] with no theme_id)
+// renders identical to practice, so the flagship daily hook would silently send
+// the player to a board that looks like nothing special. Filter those out so the
+// picker only ever lands on a real special board. (audit fix May 2026)
+function _boardIsMeaningful(b) {
+  if (!b) return false;
+  const d = b.definition || {};
+  if (d.theme_id) return true;
+  if (d.shape_id) return true;
+  if (Array.isArray(d.cells) && d.cells.length > 0) return true;
+  if (Array.isArray(d.multipliers) && d.multipliers.some(function (m) { return Number(m) !== 1; })) return true;
+  return false;
+}
+
 async function pickDailySpecial(boardRows) {
   try {
     const cfg = await loadConfigKeys([
@@ -2771,11 +2811,19 @@ async function pickDailySpecial(boardRows) {
     const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' });
     const overrideId = parseInt(cfg.daily_special_override_id || '', 10);
     if (Number.isFinite(overrideId) && overrideId > 0) {
+      // An explicit admin override wins even if it happens to be "empty" — the
+      // admin chose it on purpose (and the admin UI warns about empties).
       const match = boardRows.find(function(b) { return b.id === overrideId; });
       if (match) return { enabled: true, id: overrideId, xpMult, rewardMult, date: today, isOverride: true };
     }
-    const idx = _dailySpecialHash(today) % boardRows.length;
-    return { enabled: true, id: boardRows[idx].id, xpMult, rewardMult, date: today, isOverride: false };
+    // Only deterministically pick from boards that are actually special. If the
+    // rows carry a `definition` we can filter; if not (caller selected id-only),
+    // fall back to the full list so we never regress to "no special at all".
+    const haveDefs = boardRows.some(function (b) { return b && b.definition !== undefined; });
+    const pool = haveDefs ? boardRows.filter(_boardIsMeaningful) : boardRows;
+    if (pool.length === 0) return { enabled: false };
+    const idx = _dailySpecialHash(today) % pool.length;
+    return { enabled: true, id: pool[idx].id, xpMult, rewardMult, date: today, isOverride: false };
   } catch (e) {
     return { enabled: false };
   }
@@ -2786,7 +2834,7 @@ async function pickDailySpecial(boardRows) {
 async function getDailySpecialForToday() {
   try {
     const r = await pool.query(
-      `SELECT id FROM board_configurations
+      `SELECT id, definition FROM board_configurations
         WHERE is_active = true
           AND 'dynamic' = ANY(applies_to)
           AND (starts_at IS NULL OR starts_at <= NOW())

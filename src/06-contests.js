@@ -395,19 +395,35 @@
       '</div>';
 
     document.getElementById('ctsh-wa').onclick = function() {
-      // Some mobile browsers block window.open if it isn't a direct user click
-      // gesture — fall back to copying the link with a "הועתק" flash.
+      // Some mobile browsers (Safari especially) block window.open if it isn't a
+      // direct user gesture — fall back to copying the LINK (not the long share
+      // text, which pastes as a wall of words). The link is what the friend
+      // actually needs to join. (audit fix May 2026)
       const w = window.open('https://wa.me/?text=' + encodeURIComponent(shareText), '_blank');
       if (!w) {
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-          navigator.clipboard.writeText(shareText).catch(function() {});
+        let copied = false;
+        try {
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(link).catch(function() {});
+            copied = true;
+          }
+        } catch (e) {}
+        if (!copied) {
+          try {
+            const ta = document.createElement('textarea');
+            ta.value = link; ta.setAttribute('readonly', '');
+            ta.style.cssText = 'position:fixed;top:-1000px;opacity:0';
+            document.body.appendChild(ta); ta.select();
+            copied = document.execCommand('copy');
+            document.body.removeChild(ta);
+          } catch (e) {}
         }
         const wa = document.getElementById('ctsh-wa');
         const span = wa.querySelector('span');
         if (span) {
           const orig = span.textContent;
-          span.textContent = '✓ הטקסט הועתק';
-          setTimeout(function() { span.textContent = orig; }, 1700);
+          span.textContent = copied ? '✓ הקישור הועתק — הדבק בוואטסאפ' : '↗ פתח וואטסאפ ושתף';
+          setTimeout(function() { span.textContent = orig; }, 2000);
         }
       }
     };
