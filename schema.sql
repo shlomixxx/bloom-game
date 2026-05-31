@@ -2671,6 +2671,11 @@ INSERT INTO game_config (key, value) VALUES ('bot_duel_fallback_after_seconds', 
 INSERT INTO game_config (key, value) VALUES ('bot_duel_player_win_rate_pct',         '52')   ON CONFLICT (key) DO NOTHING;
 INSERT INTO game_config (key, value) VALUES ('bot_duel_settle_delay_min_seconds',    '20')   ON CONFLICT (key) DO NOTHING;
 INSERT INTO game_config (key, value) VALUES ('bot_duel_settle_delay_max_seconds',    '55')   ON CONFLICT (key) DO NOTHING;
+-- AD.2 — auto-fleet: bots start at boot so the world is never empty. Admin-tunable.
+INSERT INTO game_config (key, value) VALUES ('bots_auto_enabled',  'true')  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('bots_auto_count',    '10')    ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('bots_auto_mode',     'daily') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('bots_games_today_floor', '0') ON CONFLICT (key) DO NOTHING;
 INSERT INTO game_config (key, value) VALUES ('bot_live_race_fallback_after_seconds', '6')    ON CONFLICT (key) DO NOTHING;
 
 -- ============================================================
