@@ -18409,12 +18409,18 @@ app.get('/api/stats/live', async (_req, res) => {
       const gf = parseInt((await getCachedConfigPrefix('bots_').catch(() => ({}))).bots_games_today_floor, 10);
       if (Number.isFinite(gf) && gf > gamesToday) gamesToday = gf;
     } catch (e) {}
+    // AD.2.2 — credibility clamp. gamesToday gets the bot blend (×multiplier)
+    // but the weekly count was raw, so a busy bot day could show "today > week"
+    // — impossible, and a sharp player notices. Force week ≥ today by blending
+    // the week with the same bot contribution (the week always contains today).
+    let gamesThisWeek = gamesWeek.rows[0].c | 0;
+    gamesThisWeek = Math.max(gamesThisWeek, gamesToday);
     res.json({
       activeNow,
       playingNow,
       gamesToday,
       activeThisHour,
-      gamesThisWeek: gamesWeek.rows[0].c | 0
+      gamesThisWeek
     });
   } catch (e) {
     console.error('GET /api/stats/live', e);
