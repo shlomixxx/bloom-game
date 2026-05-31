@@ -588,6 +588,8 @@ export async function initDb() {
     `INSERT INTO game_config (key, value) VALUES ('bots_auto_count',    '10')    ON CONFLICT (key) DO NOTHING`,
     `INSERT INTO game_config (key, value) VALUES ('bots_auto_mode',     'daily') ON CONFLICT (key) DO NOTHING`,
     `INSERT INTO game_config (key, value) VALUES ('bots_games_today_floor', '0') ON CONFLICT (key) DO NOTHING`,
+    // AD.4 — live "moves to survive" danger meter (loss-aversion). Default on.
+    `INSERT INTO game_config (key, value) VALUES ('danger_meter_enabled', 'true') ON CONFLICT (key) DO NOTHING`,
     `INSERT INTO game_config (key, value) VALUES ('bot_duel_fallback_enabled',            'true') ON CONFLICT (key) DO NOTHING`,
     `INSERT INTO game_config (key, value) VALUES ('bot_duel_fallback_after_seconds',      '8')    ON CONFLICT (key) DO NOTHING`,
     `INSERT INTO game_config (key, value) VALUES ('bot_duel_player_win_rate_pct',         '52')   ON CONFLICT (key) DO NOTHING`,

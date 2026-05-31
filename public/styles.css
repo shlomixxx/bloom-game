@@ -838,6 +838,39 @@
   html[data-theme="dark"] body.danger-mode .grid-wrap::after {
     border-color: rgba(255, 96, 96, 0.50);
   }
+  /* AD.4 — live "moves to survive" meter. A small red pill anchored to the
+     top-center of the grid showing the empty-cell count. Turns danger into a
+     tactical puzzle. Built/removed by paintDangerMeter() in 11-game.js. */
+  .danger-meter {
+    position: absolute;
+    top: -14px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: var(--z-floating, 30);
+    background: linear-gradient(135deg, #E84660, #B91C3C);
+    color: #fff;
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0.01em;
+    padding: 4px 12px;
+    border-radius: 999px;
+    box-shadow: 0 4px 14px rgba(232, 70, 96, 0.5);
+    white-space: nowrap;
+    pointer-events: none;
+    animation: dangerMeterPop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  .danger-meter-critical { animation: dangerMeterCrit 0.7s ease-in-out infinite; }
+  @keyframes dangerMeterPop {
+    0%   { transform: translateX(-50%) scale(0.6); opacity: 0; }
+    100% { transform: translateX(-50%) scale(1); opacity: 1; }
+  }
+  @keyframes dangerMeterCrit {
+    0%, 100% { transform: translateX(-50%) scale(1); box-shadow: 0 4px 14px rgba(232,70,96,0.5); }
+    50%      { transform: translateX(-50%) scale(1.09); box-shadow: 0 6px 22px rgba(232,70,96,0.9); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .danger-meter, .danger-meter-critical { animation: none; }
+  }
   .cell.appearing { animation: pop 0.22s ease-out; }
   .cell.merging { animation: merge 0.24s ease-out; }
   /* `?debug=1` — tiny row,col + tier label so the user can confirm exactly

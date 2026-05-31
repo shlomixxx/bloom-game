@@ -2886,6 +2886,7 @@
     bots_auto_count: [6, 8, 10, 15, 20],
     bots_auto_mode: ['daily', 'practice', 'dynamic'],
     bots_games_today_floor: [0, 25, 50, 100],
+    danger_meter_enabled: ['true', 'false'],
     bots_in_live_stats_enabled: ['true', 'false'],
     bots_live_stats_max_multiplier: [1.5, 2, 2.5, 3, 4],
     bots_live_stats_floor_when_zero_real: [3, 6, 10, 15],
@@ -3228,6 +3229,7 @@
     bots_auto_count: 'כמה בוטים אוטומטיים להריץ במקביל.<div class="tip-example">📊 8-15 = תחושת חיים בלי להעמיס. שעות שיא? 20. עלות שרת זניחה עד 50.</div>',
     bots_auto_mode: 'מצב המשחק של הבוטים האוטומטיים.<div class="tip-example">📅 <code>daily</code> = ממלא את לוח המובילים היומי (מומלץ). 🏋️ <code>practice</code> / 🎯 <code>dynamic</code> = heartbeat בלבד (״שחקנים פעילים״ אך לא בלוח).</div>',
     bots_games_today_floor: 'רצפה ל״משחקים היום״ בעמוד הבית.<div class="tip-example">📊 <code>0</code> = ללא רצפה (מציג את המספר האמיתי). 50+ ליצירת רושם של פעילות גבוהה.</div>',
+    danger_meter_enabled: 'מד "תאים נותרו" — כשהלוח כמעט מלא (≤3 תאים) מופיע תג אדום מעל הלוח שמראה כמה תאים נשארו. הופך את הסכנה מ"אדום מפחיד" לפאזל טקטי.<div class="tip-example">💡 loss-aversion — המנוף החזק ביותר ל"עוד הטלה אחת". השאר <code>true</code>. אדום + פעימה כשנשאר תא אחד.</div>',
     // ---- DU.4 Real-play bot duels ----
     bot_duel_trajectory_truth: 'מתג ראשי — האם הבוט משחק משחק אמיתי אחד (ניקוד + לוח מאותו משחק, ללא זיוף).<div class="tip-example">✅ <code>true</code> (ברירת מחדל): הבוט משחק משחק אמיתי, הניקוד עולה כמו של שחקן אמיתי, הלוח זז, והתוצאה הסופית = מה שראית. ❌ <code>false</code>: חזרה לעקומה הסינתטית הישנה (rollback מיידי אם משהו נשבר).</div>',
     bot_traj_candidate_count: 'כמה משחקים אמיתיים לייצר ב-spawn לפני בחירת אחד.<div class="tip-example">📊 <code>6</code> (ברירת מחדל). יותר = מבחר רחב יותר אבל יקר יותר ב-CPU (~0.7ms למשחק). 3-10 הגיוני.</div>',

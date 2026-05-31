@@ -15369,6 +15369,7 @@
     // save in the new game until 5s elapsed.
     lastClutchSaveAt = 0;
     try { document.body.classList.remove('danger-mode'); } catch (e) {}
+    try { var _dmInit = document.getElementById('danger-meter'); if (_dmInit) _dmInit.remove(); } catch (e) {}
     usedContinue = false; // reset second chance
     // Clear duel mode unless this init was called from startDuelGame
     if (!opts.keepDuel) { window._duelMode = false; window._duelOpponentName = ''; }
@@ -18437,6 +18438,11 @@
     var empties = countEmptyPlayableCells();
     var threshold = 3; // ≤3 empty cells = "one careless move from over"
     var shouldBeDanger = empties > 0 && empties <= threshold;
+    // AD.4 — live "moves to survive" meter. Turns danger from a passive red
+    // wash into a tactical puzzle ("can I free a cell in N moves?"). Repaint
+    // the count on EVERY call (not just edges) so it stays accurate as the
+    // player merges. Admin-gated by danger_meter_enabled (default on).
+    try { paintDangerMeter(shouldBeDanger ? empties : 0); } catch (e) {}
     if (shouldBeDanger === inDangerMode) return; // no state change
     inDangerMode = shouldBeDanger;
     try {
@@ -18471,6 +18477,36 @@
         }
       }
     } catch (e) {}
+  }
+
+  // AD.4 — the live "moves to survive" meter. A small pill anchored to the
+  // grid showing how many empty cells remain when in danger. empties=0 → hide.
+  // Built once, then text-only updates (cheap, no flicker). Gated by the admin
+  // key danger_meter_enabled (default on) so it can be turned off globally.
+  function paintDangerMeter(empties) {
+    var enabled = true;
+    try {
+      if (typeof gameConfig === 'object' && gameConfig && gameConfig.danger_meter_enabled === 'false') enabled = false;
+    } catch (e) {}
+    var existing = document.getElementById('danger-meter');
+    if (!enabled || !empties || empties <= 0) {
+      if (existing) existing.remove();
+      return;
+    }
+    var wrap = document.getElementById('grid-wrap');
+    if (!wrap) { if (existing) existing.remove(); return; }
+    var el = existing;
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'danger-meter';
+      el.className = 'danger-meter';
+      // Position relative to grid-wrap so it floats just above the grid.
+      if (getComputedStyle(wrap).position === 'static') wrap.style.position = 'relative';
+      wrap.appendChild(el);
+    }
+    var word = empties === 1 ? 'תא אחרון!' : (empties + ' תאים');
+    el.textContent = '🚨 ' + word;
+    el.className = 'danger-meter' + (empties === 1 ? ' danger-meter-critical' : '');
   }
 
   // CS.1 — the "you escaped game-over!" celebration. Gold-green gradient
