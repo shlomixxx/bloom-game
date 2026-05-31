@@ -21,6 +21,14 @@
 > - ✅ **AD.10** — תיקון דליפת-DOM בקונפטי (`showConfetti`): הפיסה האחרונה נוספה פעמיים + ה-container לעולם לא נמחק → כל חגיגה השאירה div קבוע. הוסר ה-append הכפול + cleanup אחרי 3.6ש. (החגיגות הן ליבת-הדופמין). cache `v20260601a`/SW `bloom-v22.3`.
 > - ✅ **AD.11** — באג #13 (אנטי-צ'יט): `POST /api/contests/:code/score` חסר בדיקת drops-implausibility שיש לכל endpoint אחר. נוסף `challengeDropsImplausible` (נאכף רק כש-drops נשלח → לא שובר לקוחות ישנים; cheater עם ניקוד ענק ומעט drops נדחה 400). server-only.
 > - ✅ **AD.12** — באג #17: דירוג-עצמי בלוח-הישגים לא תאם את סדר התצוגה (`ach_count DESC, last_unlocked_at ASC`). תוקן — שחקן "לפניי" אם יש לו יותר הישגים, או אותו מספר עם unlock מוקדם יותר. server-only.
+> - ℹ️ **באג #24** (self-pair בוט-דו-קרב) — **כבר תקין** (false-positive): `bot-engine.js:423` כבר עושה `find(b => b.deviceId !== bot.deviceId)` ו-`if (!partner) return` לפני ה-INSERT. לא נדרש שינוי.
+>
+> **נותר (אופציונלי, לא קריטי-להתמכרות — נעצר בנקודה נקייה כשהכלים החלו לשבש קריאות-קוד רב-שורתיות בקבצי-לקוח גדולים):**
+> - #16 — כפתור "דו-קרב שוב" ב-overlay התוצאה (כבר קיים `rematchDuel()` + "⚔️ שוב" ברשימת הדו-קרבות — חסר רק ב-overlay). קובץ `src/02-shop.js` (garble-prone).
+> - #7 — signals של loss-aversion ב-push (ירידת-ליגה/הפסד-גביעים). עריכה רגישה ל-`_pickSmartPushFor` (Promise.allSettled מיושר-אינדקס) — סיכון גבוה כשהקריאות משובשות.
+> - #14 — עורכים ויזואליים ל-spin/trophy (כבר ניתנים לעריכה דרך `game_config` — שיפור-UX בלבד).
+> - #22/#37 — design tokens (חוב-טכני, לא משפיע על שחקן).
+> - באגי polish נותרים מהטבלה: #9 spectator 404, #10 checklist celebration-on-fail, #11 danger-meter forward, #12 tier-bar post-over, #14/#15 carousel/badge refresh, #18 spectator "last score", #19 live-pulse flash, #20 FTUE guards, #21 dark confetti (כבר צבעים בהירים), #22/#23/#25 (audio כבר עם catch). כולם 🟠/🟡 — polish, לא שוברי-אמון.
 > - ℹ️ נבדקו ונמצאו **כבר קיימים** (false-positive, לא נדרש שינוי): #18 פעימת כפתור-שיתוף · #21 שם חיית-מחמד ב-widget.
 > - ⚠️ #19/#20 (גילדות/שער-גילדה) — **הגילדות מושבתות במכוון** (28-guilds.js:99 `return;` — "replaced by simpler social features"). לא להפעיל מחדש בלי אישור הבעלים.
 >
