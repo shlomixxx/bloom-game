@@ -18705,6 +18705,84 @@ initDb()
     // ============================================================
     // WEEKLY AUTO-CHALLENGE (creates a new weekly contest each Sunday)
     // ============================================================
+    // AD.7 — daily auto-tournament. A scheduled prime-time event the player
+    // can plan their day around (Coin Master / Royal Match pattern) — the
+    // strongest "show up at a specific time" live-ops lever. Creates ONE
+    // tournament per Israel-day with a top-3 prize pool, finishing tonight at
+    // the configured end-hour. maybeFinalizeTournament (already shipped) handles
+    // payout + winner push. Fully admin-controllable via daily_tournament_* keys.
+    async function ensureDailyTournament() {
+      try {
+        const cfg = await pool.query(
+          `SELECT key, value FROM game_config WHERE key IN
+             ('daily_tournament_enabled','daily_tournament_name','daily_tournament_start_hour',
+              'daily_tournament_end_hour','daily_tournament_prize_1','daily_tournament_prize_2','daily_tournament_prize_3')`
+        );
+        const m = {}; cfg.rows.forEach(r => { m[r.key] = r.value; });
+        if (m.daily_tournament_enabled === 'false') return;
+        const startHour = Math.max(0, Math.min(23, parseInt(m.daily_tournament_start_hour, 10) || 20));
+        const endHour = Math.max(1, Math.min(24, parseInt(m.daily_tournament_end_hour, 10) || 22));
+        const p1 = parseInt(m.daily_tournament_prize_1, 10) || 1000;
+        const p2 = parseInt(m.daily_tournament_prize_2, 10) || 500;
+        const p3 = parseInt(m.daily_tournament_prize_3, 10) || 250;
+        const baseName = m.daily_tournament_name || '🏆 טורניר הערב';
+
+        // Israel "today" date string for dedup (one tournament per day).
+        const todayIL = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' });
+        // Current Israel hour — only create once we're within the day; we
+        // create it as soon as the scheduler runs on a day that has no daily
+        // tournament yet, with starts_at = today startHour, ends_at = today endHour.
+        const ilNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Jerusalem' }));
+        const ilHour = ilNow.getHours();
+        // If we're already past the end hour, don't create today's (it's over);
+        // tomorrow's scheduler run will make the next one.
+        if (ilHour >= endHour) return;
+
+        // Dedup: does a daily tournament for today already exist? We tag the
+        // name with the date so the check is robust across restarts.
+        const dateTag = '· ' + todayIL;
+        const existing = await pool.query(
+          `SELECT id FROM tournaments WHERE name LIKE $1 AND status <> 'finalized' LIMIT 1`,
+          ['%' + dateTag]
+        );
+        if (existing.rows.length) return;
+
+        // Build starts_at / ends_at as real timestamps for today in Israel.
+        // Compute the UTC instant for today's startHour:00 / endHour:00 Israel.
+        function ilToUtc(dateStr, hour) {
+          // dateStr = YYYY-MM-DD (Israel). Build an ISO with the Israel offset
+          // by probing: create a Date at UTC midnight of that date, then find
+          // Israel's offset for that moment.
+          const baseUtc = new Date(dateStr + 'T00:00:00Z');
+          // Israel offset (minutes) at that date.
+          const ilStr = baseUtc.toLocaleString('en-US', { timeZone: 'Asia/Jerusalem', hour12: false });
+          const ilDate = new Date(ilStr);
+          const offsetMs = ilDate.getTime() - baseUtc.getTime();
+          // Israel local hour:00 = UTC midnight + hour - offset.
+          return new Date(baseUtc.getTime() + hour * 3600000 - offsetMs);
+        }
+        const startsAt = ilToUtc(todayIL, startHour);
+        let endsAt = ilToUtc(todayIL, endHour);
+        if (endsAt <= startsAt) endsAt = new Date(startsAt.getTime() + 2 * 3600000);
+
+        const prizePool = JSON.stringify([
+          { rank: 1, reward: p1 }, { rank: 2, reward: p2 }, { rank: 3, reward: p3 }
+        ]);
+        const name = baseName + ' ' + dateTag;
+        await pool.query(
+          `INSERT INTO tournaments (name, description, starts_at, ends_at, prize_pool, status)
+           VALUES ($1, $2, $3, $4, $5::jsonb, 'scheduled')`,
+          [name, 'טורניר יומי אוטומטי — שחק כל משחק דינמי כדי לטפס', startsAt.toISOString(), endsAt.toISOString(), prizePool]
+        );
+        console.log(`[daily-tournament] created "${name}" (${startsAt.toISOString()} → ${endsAt.toISOString()}, prizes ${p1}/${p2}/${p3})`);
+      } catch (e) {
+        console.warn('[daily-tournament] ensureDailyTournament failed:', e.message);
+      }
+    }
+    // Run on startup + hourly (creates today's once, no-ops otherwise).
+    setTimeout(ensureDailyTournament, 20000);
+    setInterval(ensureDailyTournament, 60 * 60 * 1000);
+
     async function ensureWeeklyContest() {
       try {
         const enabledRow = await pool.query(`SELECT value FROM game_config WHERE key = 'weekly_enabled'`);

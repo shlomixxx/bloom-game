@@ -595,6 +595,14 @@ export async function initDb() {
     `INSERT INTO game_config (key, value) VALUES ('home_win_celebration_min_score', '5000') ON CONFLICT (key) DO NOTHING`,
     // AD.6 — "next daily rewards" countdown on game-over. Default on.
     `INSERT INTO game_config (key, value) VALUES ('next_reward_countdown_enabled', 'true') ON CONFLICT (key) DO NOTHING`,
+    // AD.7 — daily auto-tournament (prime-time scheduled event). Default on.
+    `INSERT INTO game_config (key, value) VALUES ('daily_tournament_enabled', 'true') ON CONFLICT (key) DO NOTHING`,
+    `INSERT INTO game_config (key, value) VALUES ('daily_tournament_name', '🏆 טורניר הערב') ON CONFLICT (key) DO NOTHING`,
+    `INSERT INTO game_config (key, value) VALUES ('daily_tournament_start_hour', '20') ON CONFLICT (key) DO NOTHING`,
+    `INSERT INTO game_config (key, value) VALUES ('daily_tournament_end_hour', '22') ON CONFLICT (key) DO NOTHING`,
+    `INSERT INTO game_config (key, value) VALUES ('daily_tournament_prize_1', '1000') ON CONFLICT (key) DO NOTHING`,
+    `INSERT INTO game_config (key, value) VALUES ('daily_tournament_prize_2', '500') ON CONFLICT (key) DO NOTHING`,
+    `INSERT INTO game_config (key, value) VALUES ('daily_tournament_prize_3', '250') ON CONFLICT (key) DO NOTHING`,
     `INSERT INTO game_config (key, value) VALUES ('bot_duel_fallback_enabled',            'true') ON CONFLICT (key) DO NOTHING`,
     `INSERT INTO game_config (key, value) VALUES ('bot_duel_fallback_after_seconds',      '8')    ON CONFLICT (key) DO NOTHING`,
     `INSERT INTO game_config (key, value) VALUES ('bot_duel_player_win_rate_pct',         '52')   ON CONFLICT (key) DO NOTHING`,
