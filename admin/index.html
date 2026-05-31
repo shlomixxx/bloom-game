@@ -1532,6 +1532,14 @@
     </div>
     <button class="tip-btn" data-tip="tab_economy" aria-label="הסבר על לשונית כלכלה">?</button>
   </div>
+  <!-- #16 — economy faucet-vs-sink dashboard -->
+  <section id="economy-section" style="margin-bottom:12px">
+    <h2>📊 ברז מול בור (Faucet vs Sink) <button class="btn btn-small" onclick="loadEconomy()">🔄 רענן</button></h2>
+    <div style="padding:12px 16px;background:var(--card);border-radius:10px;margin-top:8px">
+      <p style="font-size:11px;color:var(--muted);margin:0 0 10px">כמה יהלומים נוצרו (ברז) מול כמה הוצאו (בור). יחס-בור נמוך = שחקנים אוגרים, אין לחץ הוצאה → לולאת-רדיפה חלשה. בריא ≈ 40-70%.</p>
+      <div id="economy-dash"><div style="color:var(--muted);font-size:12px">לחץ "רענן" לצפייה.</div></div>
+    </div>
+  </section>
   <!-- Credit Rewards Control — one panel to edit every 💎-earning rule -->
   <section id="rewards-section" style="margin-bottom:12px">
     <h2>💎 ניהול תגמולי קרדיטים <button class="tip-btn" data-tip-text="<strong>💎 ניהול תגמולי קרדיטים</strong><br>כאן נמצאים כל המקומות שבהם שחקן מרוויח 💎 — בקבוצות לפי מקור.<div class=&quot;tip-example&quot;>📐 <strong>השלם וערוך</strong>:<br>• הזן ערך חדש בשדה ← לחץ <strong>שמור</strong> או Enter<br>• השינוי נכנס לתוקף מיידית לכל השחקנים<br>• מקור האמת היחיד הוא טבלת <code>game_config</code> בDB — כל הצד-שרת קורא משם<br><br>💡 <strong>תקרת ה-ads</strong>: <code>ad_daily_cap × ad_watch_reward</code>. אם תרצה לפתוח: העלה את ה-cap (כל צפייה היא הכנסה אמיתית כש-AdSense מותקן).<br><br>🔒 כל מפתח כאן מאומת ב-server-side לפני שהוא משולם. אין סיכון להזין ערך גבוה מדי בטעות — אבל בדוק את ה-impact ב<strong>📊 סטטוס כלכלה</strong> למטה.</div>">?</button></h2>
@@ -4655,9 +4663,62 @@
     if (data.visits.length) {
       html += '<h4 style="font-size:12px;color:#6F6E68;margin:14px 0 6px">' + data.visits.length + ' ימי ביקור (90 אחרונים)</h4>';
     }
+    // #15 — moderation panel (ban / unban / grant gems-trophies-xp / set level).
+    var p = data.profile || {};
+    var isBanned = !!p.banned;
+    html += '<div style="margin-top:16px;padding:12px;border:1px solid #E5E1D5;border-radius:10px;background:' + (isBanned ? 'rgba(255,80,80,.10)' : 'rgba(120,120,120,.05)') + '">';
+    html += '<div style="display:flex;flex-wrap:wrap;gap:10px;font-size:13px;margin-bottom:10px">';
+    html += '<span>🏷 <strong>' + escHtml(p.player_code || '—') + '</strong></span>';
+    html += '<span>👤 ' + escHtml(p.display_name || '—') + '</span>';
+    html += '<span>💎 ' + fmtNum(p.balance || 0) + '</span>';
+    html += '<span>🏆 ' + fmtNum(p.trophies || 0) + '</span>';
+    html += '<span>⭐ רמה ' + (p.level || 1) + '</span>';
+    html += '<span>✨ XP ' + fmtNum(p.xp || 0) + '</span>';
+    if (isBanned) html += '<span style="color:#c0392b;font-weight:700">🚫 חסום' + (p.banned_reason ? ' (' + escHtml(p.banned_reason) + ')' : '') + '</span>';
+    html += '</div><div style="display:flex;flex-wrap:wrap;gap:6px">';
+    if (isBanned) html += '<button class="btn btn-small" id="mod-unban">✅ בטל חסימה</button>';
+    else html += '<button class="btn btn-small danger" id="mod-ban">🚫 חסום שחקן</button>';
+    html += '<button class="btn btn-small" id="mod-gems">💎 הענק יהלומים</button>';
+    html += '<button class="btn btn-small" id="mod-trophies">🏆 הענק גביעים</button>';
+    html += '<button class="btn btn-small" id="mod-xp">✨ הענק XP</button>';
+    html += '<button class="btn btn-small" id="mod-level">⭐ קבע רמה</button>';
+    html += '</div></div>';
     html += '<div style="margin-top:18px"><button class="btn danger" id="drawer-del">🗑 מחק שחקן ואת כל הנתונים</button></div>';
     drawer.innerHTML = html;
     $('drawer-close').onclick = closePlayerDrawer;
+    // #15 — wire moderation buttons (re-opens the drawer on success to refresh).
+    async function _mod(action, body) {
+      var r = await api('/api/players/moderate', { method: 'POST', body: JSON.stringify(Object.assign({ deviceId: id, action: action }, body || {})) });
+      if (r && r.ok) { toast('✅ בוצע'); openPlayerDrawer(id); }
+      else if (r) toast('שגיאה: ' + (r.error || r.msg || 'unknown'));
+    }
+    async function _grantGems() {
+      var raw = prompt('כמות יהלומים להענקה:', ''); if (raw == null) return;
+      var amt = parseInt(raw, 10); if (isNaN(amt)) { toast('מספר לא תקין'); return; }
+      var r = await api('/players/balance', { method: 'POST', body: JSON.stringify({ deviceId: id, amount: amt, mode: 'add' }) });
+      if (r && r.ok) { toast('✅ ' + amt + '💎 נוספו'); openPlayerDrawer(id); }
+    }
+    if ($('mod-ban')) $('mod-ban').onclick = function() {
+      if (!confirm('לחסום את השחקן? הוא לא יוכל לשלוח ניקוד / לרכוש / להשתתף.')) return;
+      _mod('ban', { reason: prompt('סיבת החסימה (אופציונלי):', '') || '' });
+    };
+    if ($('mod-unban')) $('mod-unban').onclick = function() { _mod('unban'); };
+    if ($('mod-gems')) $('mod-gems').onclick = _grantGems;
+    if ($('mod-trophies')) $('mod-trophies').onclick = function() {
+      var raw = prompt('כמות גביעים להענקה:', ''); if (raw == null) return;
+      var amt = parseInt(raw, 10); if (isNaN(amt)) { toast('מספר לא תקין'); return; }
+      _mod('grant_trophies', { amount: amt });
+    };
+    if ($('mod-xp')) $('mod-xp').onclick = function() {
+      var raw = prompt('כמות XP להענקה:', ''); if (raw == null) return;
+      var amt = parseInt(raw, 10); if (isNaN(amt)) { toast('מספר לא תקין'); return; }
+      _mod('grant_xp', { amount: amt });
+    };
+    if ($('mod-level')) $('mod-level').onclick = function() {
+      var raw = prompt('קבע רמה (1-999):', ''); if (raw == null) return;
+      var amt = parseInt(raw, 10); if (isNaN(amt)) { toast('מספר לא תקין'); return; }
+      _mod('set_level', { amount: amt });
+    };
     $('drawer-del').onclick = async function() {
       if (!confirm('למחוק את השחקן ' + id + ' לצמיתות? כל הניקודים, ביקורים, ותחרויות יימחקו.')) return;
       const r = await api('/player/' + encodeURIComponent(id), { method: 'DELETE' });
@@ -4667,6 +4728,36 @@
   function closePlayerDrawer() {
     $('drawer-overlay').classList.remove('open');
     $('drawer').classList.remove('open');
+  }
+
+  // #16 — economy faucet-vs-sink dashboard.
+  async function loadEconomy() {
+    var host = $('economy-dash');
+    if (!host) return;
+    host.innerHTML = '<div class="loading">טוען…</div>';
+    function rc(p) { return (p >= 40 && p <= 70) ? '#3fbf6f' : (p < 25 || p > 85) ? '#c0392b' : '#d68910'; }
+    var d = await api('/api/economy');
+    if (!d || !d.ok) { host.innerHTML = '<p style="color:var(--muted)">שגיאה בטעינה</p>'; return; }
+    var t = d.totals, a = d.active, h = '';
+    h += '<div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:14px">';
+    h += '<div style="flex:1;min-width:120px;padding:12px;border-radius:10px;background:rgba(63,191,111,.12)"><div style="font-size:12px;opacity:.8">🚰 ברז (נוצרו)</div><div style="font-size:20px;font-weight:800">' + fmtNum(t.faucet) + '</div></div>';
+    h += '<div style="flex:1;min-width:120px;padding:12px;border-radius:10px;background:rgba(255,120,80,.12)"><div style="font-size:12px;opacity:.8">🕳 בור (הוצאו)</div><div style="font-size:20px;font-weight:800">' + fmtNum(t.sink) + '</div></div>';
+    h += '<div style="flex:1;min-width:120px;padding:12px;border-radius:10px;background:rgba(120,140,255,.12)"><div style="font-size:12px;opacity:.8">💼 צף (ארנקים+בנק)</div><div style="font-size:20px;font-weight:800">' + fmtNum(t.float) + '</div></div>';
+    h += '<div style="flex:1;min-width:120px;padding:12px;border-radius:10px;background:rgba(160,160,160,.10)"><div style="font-size:12px;opacity:.8">📈 יחס-בור</div><div style="font-size:20px;font-weight:800;color:' + rc(t.sinkRatioPct) + '">' + t.sinkRatioPct + '%</div></div>';
+    h += '</div>';
+    h += '<p style="color:var(--muted);font-size:12px;margin:0 0 12px">' + fmtNum(t.players) + ' שחקנים · ' + fmtNum(t.holders) + ' מחזיקים יהלומים · בנק: ' + fmtNum(t.bankFloat) + '💎</p>';
+    h += '<div style="padding:10px;border-radius:8px;background:rgba(120,140,255,.06);margin-bottom:14px;font-size:13px"><strong>פעילים (7 ימים):</strong> ' + fmtNum(a.players) + ' · ברז ' + fmtNum(a.faucet) + ' · בור ' + fmtNum(a.sink) + ' · יחס <strong style="color:' + rc(a.sinkRatioPct) + '">' + a.sinkRatioPct + '%</strong></div>';
+    function tbl(title, rows, vk, vl) {
+      var s = '<h4 style="margin:14px 0 6px">' + title + '</h4><table><thead><tr><th>קוד</th><th>שם</th><th>' + vl + '</th><th>נוצרו</th><th>הוצאו</th><th>יתרה</th></tr></thead><tbody>';
+      (rows || []).forEach(function(r) {
+        s += '<tr><td>' + escHtml(r.player_code || '—') + '</td><td>' + escHtml(r.display_name || '') + '</td><td><strong>' + fmtNum(r[vk]) + '</strong></td><td>' + fmtNum(r.total_earned) + '</td><td>' + fmtNum(r.total_spent) + '</td><td>' + fmtNum(r.balance) + '</td></tr>';
+      });
+      return s + '</tbody></table>';
+    }
+    h += tbl('🚰 20 המרוויחים הגדולים', d.topEarners, 'total_earned', 'נוצרו');
+    h += tbl('🕳 20 הבזבזנים הגדולים', d.topSpenders, 'total_spent', 'הוצאו');
+    h += tbl('💰 20 האוגרים הגדולים', d.topHoarders, 'balance', 'יתרה');
+    host.innerHTML = h;
   }
 
   // ---------- WIRING ----------
@@ -4683,7 +4774,7 @@
     return {
       dashboard: [loadDashboard, loadFunnel, loadRetention, loadHeatmap, loadEngagementOverview],
       game:      [loadBoards, loadSkins, loadDailySpecialPicker, loadHomeVariant],
-      economy:   [loadSeasonPassTiers, loadDailyDeals, loadGachaPool, loadCalendarEvents,
+      economy:   [loadEconomy, loadSeasonPassTiers, loadDailyDeals, loadGachaPool, loadCalendarEvents,
                   loadBundles, loadAchLb, loadSmartPush, loadReplayStats, loadGuildsAdmin,
                   loadRivalryStats, loadSpinStats, loadGuildWars, loadPromos, loadTrophyStats],
       players:   [loadPlayers, loadTopScores],
