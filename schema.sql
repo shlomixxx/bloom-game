@@ -2681,6 +2681,8 @@ INSERT INTO game_config (key, value) VALUES ('danger_meter_enabled', 'true') ON 
 -- AD.5 — win-return celebration on home (confetti + sound after a win). Default on.
 INSERT INTO game_config (key, value) VALUES ('home_win_celebration_enabled', 'true') ON CONFLICT (key) DO NOTHING;
 INSERT INTO game_config (key, value) VALUES ('home_win_celebration_min_score', '5000') ON CONFLICT (key) DO NOTHING;
+-- AD.6 — "next daily rewards in HH:MM:SS" countdown on game-over. Default on.
+INSERT INTO game_config (key, value) VALUES ('next_reward_countdown_enabled', 'true') ON CONFLICT (key) DO NOTHING;
 INSERT INTO game_config (key, value) VALUES ('bot_live_race_fallback_after_seconds', '6')    ON CONFLICT (key) DO NOTHING;
 
 -- ============================================================

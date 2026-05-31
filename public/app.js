@@ -20166,6 +20166,23 @@
             return '<div class="over-streak over-streak-cold">💪 חזור מחר לאתגר יומי + <strong>' + tomorrowReward + ' 💎</strong> בונוס יומי 🔥</div>';
           })() +
           (showCountdown ? '<div class="countdown" id="countdown"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span>אתגר חדש בעוד <span id="countdown-val">--:--:--</span></span></div>' : '') +
+          // AD.6 — "next reward" countdown. Gives every non-duel game-over a
+          // concrete return-time hook ("come back in HH:MM:SS for your daily
+          // rewards"). Anchored to Israel midnight (spin + login-cal + daily-
+          // deal + daily-special all reset then). Skipped when the daily
+          // countdown above already shows (daily mode) to avoid two timers.
+          // Admin-gated by next_reward_countdown_enabled; ticker wired after mount.
+          ((!showCountdown && !window._duelMode) ? (function() {
+            try {
+              if (typeof gameConfig === 'object' && gameConfig && gameConfig.next_reward_countdown_enabled === 'false') return '';
+              if (typeof msUntilNextIsraelMidnight !== 'function' || typeof formatCountdown !== 'function') return '';
+              return '<div class="over-next-reward" id="over-next-reward">' +
+                '<span class="onr-icon">🎁</span>' +
+                '<span class="onr-text">הפרסים היומיים הבאים בעוד <strong id="onr-countdown">' +
+                  formatCountdown(msUntilNextIsraelMidnight()) + '</strong></span>' +
+                '</div>';
+            } catch (e) { return ''; }
+          })() : '') +
           // §1.6 — "already played today" funnel. The audit calls out that
           // the countdown screen is a dead-end and proposes practice /
           // contests / challenges as forward actions. Only renders when the
@@ -20543,6 +20560,7 @@
       const specBtn = document.getElementById('spec-open');
       if (specBtn) specBtn.onclick = function() { openSpectatorPicker('game-over'); };
       if (showCountdown) startCountdown();
+      try { startNextRewardCountdown(); } catch (e) {}
       equipOverlay();
       return;
     }
