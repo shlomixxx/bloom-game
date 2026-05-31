@@ -13040,9 +13040,50 @@ if (ADMIN_PATH && ADMIN_PASSWORD) {
     // Clear persisted state so bots don't auto-restart on other instances
     pool.query(`DELETE FROM game_config WHERE key = '__bot_engine_state'`).catch(() => {});
     pool.query(`DELETE FROM game_config WHERE key = '__bot_engine_leader'`).catch(() => {});
+    // AD.2 — also disable the always-on auto fleet, otherwise the boot
+    // reconciler (_desiredBotFleet) restarts bots within 5s and "stop" looks
+    // broken. Start / fill-world re-enable it; the admin can also flip
+    // bots_auto_enabled back to 'true' in the config editor.
+    pool.query(
+      `INSERT INTO game_config (key, value, updated_at) VALUES ('bots_auto_enabled', 'false', NOW())
+         ON CONFLICT (key) DO UPDATE SET value = 'false', updated_at = NOW()`
+    ).catch(() => {});
     // Clear ALL bot heartbeats so followers report 'not running' immediately
     pool.query(`DELETE FROM player_heartbeat WHERE device_id LIKE 'bot-%'`).catch(() => {});
     res.json({ ok: true });
+  });
+
+  // AD.2 — 🌍 Fill the world. One click to populate the game instantly:
+  // start a daily-mode bot fleet (heartbeats + seeds the daily leaderboard),
+  // re-enable the auto fleet, and ensure a live weekly contest exists.
+  adminRouter.post('/api/bots/fill-world', async (_req, res) => {
+    try {
+      const ac = await pool.query(
+        `SELECT key, value FROM game_config WHERE key IN ('bots_auto_count','bots_auto_mode')`
+      );
+      const m = {}; ac.rows.forEach(x => { m[x.key] = x.value; });
+      const count = Math.max(1, Math.min(50, parseInt(m.bots_auto_count || '10', 10) || 10));
+      const mode = ['practice', 'daily', 'dynamic'].includes(m.bots_auto_mode) ? m.bots_auto_mode : 'daily';
+      const config = { mode, speed: 'normal', contestCode: null, challengeSlug: null, restartMin: 30, restartMax: 120, maxGamesPerBot: 1 };
+      startBots(count, pool, config);
+      // Re-enable auto + persist manual state so it survives a redeploy.
+      await pool.query(
+        `INSERT INTO game_config (key, value, updated_at) VALUES ('bots_auto_enabled', 'true', NOW())
+           ON CONFLICT (key) DO UPDATE SET value = 'true', updated_at = NOW()`
+      ).catch(() => {});
+      await pool.query(
+        `INSERT INTO game_config (key, value, updated_at) VALUES ('__bot_engine_state', $1, NOW())
+           ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
+        [JSON.stringify({ enabled: true, count, ...config })]
+      ).catch(() => {});
+      let contestSeeded = false;
+      try { if (typeof ensureWeeklyContest === 'function') { await ensureWeeklyContest(); contestSeeded = true; } } catch (e) {}
+      logAdminAction('bots.fill_world', 'bots', String(count), { count, mode });
+      res.json({ ok: true, botCount: count, mode, contestSeeded });
+    } catch (e) {
+      console.error('admin /api/bots/fill-world', e);
+      res.status(500).json({ error: 'server' });
+    }
   });
 
   // BL.1 — Bot-duel telemetry. Surfaces win/loss/tie counts + recent
@@ -18362,6 +18403,12 @@ app.get('/api/stats/live', async (_req, res) => {
       const gamesCap = gamesToday > 0 ? Math.ceil(gamesToday * multiplier) : Math.max(floorWhenZero * 2, 12);
       gamesToday = Math.max(gamesToday, Math.min(gamesToday + botGamesContribution, gamesCap));
     }
+    // AD.2 — optional admin floor so "games today" never reads tiny on the
+    // home pulse (0 = no floor, show the real+bot count as-is).
+    try {
+      const gf = parseInt((await getCachedConfigPrefix('bots_').catch(() => ({}))).bots_games_today_floor, 10);
+      if (Number.isFinite(gf) && gf > gamesToday) gamesToday = gf;
+    } catch (e) {}
     res.json({
       activeNow,
       playingNow,
