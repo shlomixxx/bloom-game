@@ -12561,9 +12561,20 @@ if (ADMIN_PATH && ADMIN_PASSWORD) {
         `SELECT date, visit_count FROM device_visits WHERE device_id = $1 ORDER BY date DESC LIMIT 90`,
         [id]
       );
+      // #15 — profile + moderation state for the admin drill-down panel.
+      const prof = await pool.query(
+        `SELECT pp.player_code, pp.display_name, pp.balance, pp.xp, pp.level,
+                pp.banned, pp.banned_at, pp.banned_reason,
+                pt.trophies
+           FROM player_profiles pp
+           LEFT JOIN player_trophies pt ON pt.device_id = pp.device_id
+          WHERE pp.device_id = $1`,
+        [id]
+      );
       res.json({
         ok: true,
         deviceId: id,
+        profile: prof.rows[0] || null,
         scores: scores.rows,
         contests: contests.rows,
         visits: visits.rows
@@ -13573,6 +13584,72 @@ if (ADMIN_PATH && ADMIN_PASSWORD) {
       }
       logAdminAction('player.balance', p.player_code, identifier, { mode: mode || 'add', amount: amt, newBalance });
       res.json({ ok: true, playerCode: p.player_code, newBalance });
+    } catch (e) {
+      res.status(500).json({ error: 'server', msg: e.message });
+    }
+  });
+
+  // #15 — player moderation. Single endpoint, action-switched, so the admin
+  // can ban/unban a device and grant trophies / XP / level. Find-by-code OR
+  // deviceId mirrors the balance route. Ban/unban mutates the in-memory
+  // bannedDevices set immediately so it takes effect without the 60s refresh.
+  adminRouter.post('/api/players/moderate', async (req, res) => {
+    const { deviceId, playerCode, action, amount, reason } = req.body || {};
+    const identifier = playerCode || deviceId;
+    if (!identifier || !action) return res.status(400).json({ error: 'missing_params' });
+    const ALLOWED = new Set(['ban', 'unban', 'grant_trophies', 'grant_xp', 'set_level']);
+    if (!ALLOWED.has(action)) return res.status(400).json({ error: 'bad_action' });
+    try {
+      const findCol = playerCode ? 'player_code' : 'device_id';
+      const player = await pool.query(
+        `SELECT device_id, player_code, banned, xp, level FROM player_profiles WHERE ${findCol} = $1`, [identifier]);
+      if (!player.rows.length) return res.status(404).json({ error: 'player_not_found' });
+      const p = player.rows[0];
+      const amt = Math.abs(parseInt(amount, 10) || 0);
+      let result = {};
+
+      if (action === 'ban') {
+        const why = String(reason || '').slice(0, 500) || null;
+        await pool.query(
+          `UPDATE player_profiles SET banned = TRUE, banned_at = NOW(), banned_reason = $2 WHERE device_id = $1`,
+          [p.device_id, why]);
+        bannedDevices.add(p.device_id);
+        result = { banned: true, reason: why };
+      } else if (action === 'unban') {
+        await pool.query(
+          `UPDATE player_profiles SET banned = FALSE, banned_at = NULL, banned_reason = NULL WHERE device_id = $1`,
+          [p.device_id]);
+        bannedDevices.delete(p.device_id);
+        result = { banned: false };
+      } else if (action === 'grant_trophies') {
+        // player_trophies row may not exist yet — upsert.
+        const tr = await pool.query(
+          `INSERT INTO player_trophies (device_id, trophies, trophies_lifetime, highest_trophies)
+             VALUES ($1, GREATEST(0, $2), GREATEST(0, $2), GREATEST(0, $2))
+           ON CONFLICT (device_id) DO UPDATE SET
+             trophies          = GREATEST(0, player_trophies.trophies + $2),
+             trophies_lifetime = player_trophies.trophies_lifetime + GREATEST(0, $2),
+             highest_trophies  = GREATEST(player_trophies.highest_trophies, player_trophies.trophies + $2),
+             last_change       = $2,
+             last_change_at    = NOW()
+           RETURNING trophies`,
+          [p.device_id, amt]);
+        result = { trophies: tr.rows[0].trophies };
+      } else if (action === 'grant_xp') {
+        const r = await pool.query(
+          `UPDATE player_profiles SET xp = GREATEST(0, COALESCE(xp,0) + $2) WHERE device_id = $1 RETURNING xp`,
+          [p.device_id, amt]);
+        result = { xp: r.rows[0].xp };
+      } else if (action === 'set_level') {
+        const lvl = Math.max(1, Math.min(999, parseInt(amount, 10) || 1));
+        const r = await pool.query(
+          `UPDATE player_profiles SET level = $2 WHERE device_id = $1 RETURNING level`,
+          [p.device_id, lvl]);
+        result = { level: r.rows[0].level };
+      }
+
+      await logAdminAction('player.moderate', p.player_code, p.device_id, { action, amount: amt, reason: reason || null, result });
+      res.json({ ok: true, playerCode: p.player_code, action, ...result });
     } catch (e) {
       res.status(500).json({ error: 'server', msg: e.message });
     }

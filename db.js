@@ -42,6 +42,10 @@ export async function initDb() {
     `ALTER TABLE contests ADD COLUMN IF NOT EXISTS wager_settled BOOLEAN DEFAULT false`,
     `ALTER TABLE player_profiles ADD COLUMN IF NOT EXISTS xp INT DEFAULT 0`,
     `ALTER TABLE player_profiles ADD COLUMN IF NOT EXISTS level INT DEFAULT 1`,
+    // #15 — player moderation (ban a device).
+    `ALTER TABLE player_profiles ADD COLUMN IF NOT EXISTS banned BOOLEAN NOT NULL DEFAULT FALSE`,
+    `ALTER TABLE player_profiles ADD COLUMN IF NOT EXISTS banned_at TIMESTAMPTZ`,
+    `ALTER TABLE player_profiles ADD COLUMN IF NOT EXISTS banned_reason TEXT`,
     // Player-chosen difficulty per contest/duel. NULL or 'default' = use admin
     // globals. Stored as a label + the resolved weights/speed so the server's
     // preset table is authoritative at creation time even if presets change later.
