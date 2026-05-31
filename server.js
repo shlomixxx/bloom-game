@@ -11355,7 +11355,7 @@ app.get('/api/tournaments', async (req, res) => {
     res.json({ ok: true, enabled: true, tournaments: enriched });
   } catch (e) {
     console.error('GET /api/tournaments', e);
-    res.status(500).json({ ok: false, error: 'internal' });
+    res.status(500).json({ ok: false, error: 'internal', _debug: (e && e.message) ? String(e.message).slice(0, 200) : 'no_message' });
   }
 });
 
