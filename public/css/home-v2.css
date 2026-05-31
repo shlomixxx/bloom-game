@@ -4977,6 +4977,30 @@ html[data-theme="dark"] .fc-list-empty-title { color: #E8E6E2; }
   animation: lrhUrgentPulse 0.6s ease-in-out infinite;
   border-color: #FF4D6D;
 }
+/* Forfeit ✕ — lets the player leave a live race early instead of being locked
+   for the full 60s. Top-left so it doesn't collide with the centered timer. */
+.lrh-forfeit {
+  position: absolute;
+  top: 6px;
+  left: 8px;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.22);
+  color: #FFF;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: background 0.15s;
+}
+.lrh-forfeit:hover { background: rgba(255, 255, 255, 0.4); }
+.lrh-forfeit:disabled { opacity: 0.5; cursor: default; }
 @keyframes lrhUrgentPulse {
   0%, 100% { box-shadow: 0 8px 28px rgba(255, 77, 109, 0.5); }
   50%      { box-shadow: 0 12px 40px rgba(255, 77, 109, 1); transform: translateX(-50%) scale(1.02); }

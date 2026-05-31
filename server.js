@@ -8893,6 +8893,54 @@ app.post('/api/duels/:id/live-heartbeat', requireDeviceAuth, async (req, res) =>
   }
 });
 
+// POST /api/duels/:id/forfeit-live — let a player leave a 60s live race early
+// instead of being locked for the full timer. Submits the current score, syncs
+// the (bot) opponent's live score so the comparison is fair at this instant,
+// then settles immediately. Honest: whoever is ahead right now wins. (audit fix)
+app.post('/api/duels/:id/forfeit-live', requireDeviceAuth, async (req, res) => {
+  const deviceId = req.deviceId;
+  const duelId = parseInt(req.params.id, 10);
+  if (!duelId) return res.status(400).json({ error: 'bad_id' });
+  const score = parseInt((req.body && req.body.score) || 0, 10);
+  if (!Number.isFinite(score) || score < 0 || score > 10_000_000) {
+    return res.status(400).json({ error: 'bad_score' });
+  }
+  try {
+    const r = await pool.query(
+      `SELECT challenger_device, opponent_device, is_live, is_bot_match, started_at, duration_seconds, status
+         FROM duels WHERE id = $1`,
+      [duelId]
+    );
+    if (!r.rows[0]) return res.json({ ok: false, reason: 'not_found' });
+    const d = r.rows[0];
+    if (!d.is_live) return res.json({ ok: false, reason: 'not_live' });
+    const isChallenger = d.challenger_device === deviceId;
+    const isOpponent = d.opponent_device === deviceId;
+    if (!isChallenger && !isOpponent) return res.json({ ok: false, reason: 'not_participant' });
+    if (d.status === 'settled' || d.status === 'tie') return res.json({ ok: true, alreadySettled: true });
+    const col = isChallenger ? 'challenger_live_score' : 'opponent_live_score';
+    await pool.query(
+      `UPDATE duels SET ${col} = GREATEST(${col}, $1), live_last_heartbeat_at = NOW() WHERE id = $2`,
+      [score, duelId]
+    );
+    // Sync the bot's live score so the at-this-instant comparison is fair.
+    if (d.is_bot_match) {
+      const startedAtMs = d.started_at ? new Date(d.started_at).getTime() : Date.now();
+      const dur = d.duration_seconds || 60;
+      const botScore = await _liveBotScoreFromTraj(duelId, startedAtMs, dur, Date.now());
+      await pool.query(
+        `UPDATE duels SET opponent_live_score = GREATEST(opponent_live_score, $1) WHERE id = $2`,
+        [botScore, duelId]
+      );
+    }
+    await _settleLiveDuel(duelId);
+    res.json({ ok: true, settled: true });
+  } catch (e) {
+    console.error('POST /api/duels/:id/forfeit-live', e);
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
 // Live state — opponent polls for the other side's score.
 app.get('/api/duels/:id/live-state', async (req, res) => {
   const duelId = parseInt(req.params.id, 10);
@@ -8901,7 +8949,7 @@ app.get('/api/duels/:id/live-state', async (req, res) => {
     const r = await pool.query(
       `SELECT challenger_device, opponent_device, challenger_name, opponent_name,
               challenger_live_score, opponent_live_score, started_at, duration_seconds,
-              status, winner_device, challenger_score, opponent_score, is_bot_match
+              status, winner_device, challenger_score, opponent_score, is_bot_match, amount
          FROM duels WHERE id = $1 AND is_live = TRUE`,
       [duelId]
     );
@@ -8943,6 +8991,17 @@ app.get('/api/duels/:id/live-state', async (req, res) => {
         d.opponent_score = r2.rows[0].opponent_score;
       }
     }
+    // Compute the REAL winner payout + wager so the client result overlay shows
+    // the true amount instead of a hardcoded "+50💎". Only meaningful once the
+    // duel is settled with a winner. Mirrors _settleLiveDuel's math. (audit fix)
+    const wagerAmt = d.amount | 0;
+    let winnerReward = 0;
+    if (d.status === 'settled' && d.winner_device) {
+      const lc = await getCachedConfigPrefix('live_race_').catch(() => ({}));
+      const base = parseInt(lc.live_race_winner_reward, 10) || 50;
+      const rakePct = parseInt((_configCache && _configCache.wager_rake) || '', 10) || 5;
+      winnerReward = base + (wagerAmt > 0 ? Math.max(0, wagerAmt * 2 - Math.round(wagerAmt * 2 * rakePct / 100)) : 0);
+    }
     res.json({
       ok: true,
       challengerScore: d.challenger_live_score | 0,
@@ -8953,7 +9012,9 @@ app.get('/api/duels/:id/live-state', async (req, res) => {
       status: d.status,
       winner: d.winner_device || null,
       challengerFinal: d.challenger_score,
-      opponentFinal: d.opponent_score
+      opponentFinal: d.opponent_score,
+      wager: wagerAmt,
+      winnerReward: winnerReward
     });
   } catch (e) {
     res.status(500).json({ error: 'internal' });
