@@ -13669,6 +13669,70 @@ if (ADMIN_PATH && ADMIN_PASSWORD) {
     }
   });
 
+  // #16 — economy faucet-vs-sink dashboard. No per-source ledger exists, so this
+  // is the aggregate picture: total gems ever created (faucet) vs spent (sink)
+  // vs currently held (float in wallets + bank). The sink-ratio is the health
+  // metric — too low = players hoard, no spend pressure, weaker gem-chase loop.
+  adminRouter.get('/api/economy', async (_req, res) => {
+    try {
+      const agg = await pool.query(
+        `SELECT
+           COALESCE(SUM(total_earned),0)::bigint AS faucet,
+           COALESCE(SUM(total_spent),0)::bigint  AS sink,
+           COALESCE(SUM(balance),0)::bigint      AS wallet_float,
+           COUNT(*)::int                          AS players,
+           COUNT(*) FILTER (WHERE balance > 0)::int AS holders
+         FROM player_profiles`);
+      let bankFloat = 0;
+      try {
+        const b = await pool.query(`SELECT COALESCE(SUM(deposited),0)::bigint AS bank FROM gem_bank`);
+        bankFloat = Number(b.rows[0].bank) || 0;
+      } catch (e) { /* gem_bank may not exist on a fresh DB */ }
+      // Active-player economy (visited in last 7d) — what the live base looks like.
+      const active = await pool.query(
+        `SELECT
+           COALESCE(SUM(pp.total_earned),0)::bigint AS faucet,
+           COALESCE(SUM(pp.total_spent),0)::bigint  AS sink,
+           COUNT(*)::int AS players
+         FROM player_profiles pp
+         WHERE EXISTS (
+           SELECT 1 FROM device_visits dv
+           WHERE dv.device_id = pp.device_id AND dv.date >= (CURRENT_DATE - INTERVAL '7 days'))`);
+      const topEarn = await pool.query(
+        `SELECT player_code, display_name, total_earned, total_spent, balance
+         FROM player_profiles ORDER BY total_earned DESC LIMIT 20`);
+      const topSpend = await pool.query(
+        `SELECT player_code, display_name, total_spent, total_earned, balance
+         FROM player_profiles ORDER BY total_spent DESC LIMIT 20`);
+      const topHoard = await pool.query(
+        `SELECT player_code, display_name, balance, total_earned, total_spent
+         FROM player_profiles ORDER BY balance DESC LIMIT 20`);
+      const a = agg.rows[0];
+      const faucet = Number(a.faucet), sink = Number(a.sink);
+      res.json({
+        ok: true,
+        totals: {
+          faucet, sink, walletFloat: Number(a.wallet_float), bankFloat,
+          float: Number(a.wallet_float) + bankFloat,
+          players: a.players, holders: a.holders,
+          sinkRatioPct: faucet > 0 ? Math.round((sink / faucet) * 1000) / 10 : 0
+        },
+        active: {
+          faucet: Number(active.rows[0].faucet),
+          sink: Number(active.rows[0].sink),
+          players: active.rows[0].players,
+          sinkRatioPct: Number(active.rows[0].faucet) > 0
+            ? Math.round((Number(active.rows[0].sink) / Number(active.rows[0].faucet)) * 1000) / 10 : 0
+        },
+        topEarners: topEarn.rows,
+        topSpenders: topSpend.rows,
+        topHoarders: topHoard.rows
+      });
+    } catch (e) {
+      res.status(500).json({ error: 'server', msg: e.message });
+    }
+  });
+
   // ---------- GAME CONFIG (moved after bots) ----------
   adminRouter.get('/api/config', async (_req, res) => {
     try {
