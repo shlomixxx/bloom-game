@@ -18937,6 +18937,12 @@ initDb()
     setTimeout(ensureDailyTournament, 20000);
     setInterval(ensureDailyTournament, 60 * 60 * 1000);
 
+    // #15 — load the banned-device set at boot, refresh every 60s so bans
+    // survive restarts and an admin ban/unban propagates within a minute
+    // (the immediate Set mutation in /moderate covers the gap before that).
+    refreshBannedDevices();
+    setInterval(refreshBannedDevices, 60 * 1000);
+
     async function ensureWeeklyContest() {
       try {
         const enabledRow = await pool.query(`SELECT value FROM game_config WHERE key = 'weekly_enabled'`);
