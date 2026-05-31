@@ -898,6 +898,10 @@ ALTER TABLE player_profiles ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFA
 -- but schema.sql must also carry them so a fresh psql replay matches.
 ALTER TABLE player_profiles ADD COLUMN IF NOT EXISTS xp INT DEFAULT 0;
 ALTER TABLE player_profiles ADD COLUMN IF NOT EXISTS level INT DEFAULT 1;
+-- #15 — player moderation: ban a device (blocks all state-mutating endpoints).
+ALTER TABLE player_profiles ADD COLUMN IF NOT EXISTS banned BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE player_profiles ADD COLUMN IF NOT EXISTS banned_at TIMESTAMPTZ;
+ALTER TABLE player_profiles ADD COLUMN IF NOT EXISTS banned_reason TEXT;
 
 -- ============================================================
 -- Difficulty leaderboard (practice + duel best per device per difficulty)

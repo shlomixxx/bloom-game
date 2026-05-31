@@ -573,6 +573,18 @@ function verifyDeviceToken(deviceId, token) {
 // requireDeviceAuth. Each middleware also sets req.deviceId for downstream
 // handlers, but handlers still validate as before (defense in depth).
 
+// #15 — player moderation. In-memory ban set so the per-request check is a
+// synchronous Set lookup (zero DB cost). Refreshed every 60s from the DB and
+// mutated immediately when an admin bans/unbans so it takes effect at once.
+const bannedDevices = new Set();
+async function refreshBannedDevices() {
+  try {
+    const r = await pool.query(`SELECT device_id FROM player_profiles WHERE banned = TRUE`);
+    bannedDevices.clear();
+    for (const row of r.rows) bannedDevices.add(row.device_id);
+  } catch (e) { /* keep last-known set on transient DB error */ }
+}
+
 function requireDeviceAuth(req, res, next) {
   const deviceId =
     (req.body && typeof req.body.deviceId === 'string' && req.body.deviceId) ||
@@ -587,6 +599,7 @@ function requireDeviceAuth(req, res, next) {
   }
   if (!token) return res.status(401).json({ error: 'missing_token' });
   if (!verifyDeviceToken(deviceId, token)) return res.status(403).json({ error: 'bad_token' });
+  if (bannedDevices.has(deviceId)) return res.status(403).json({ error: 'banned' });
   req.deviceId = deviceId;
   next();
 }
