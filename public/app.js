@@ -18545,15 +18545,29 @@
     }
     var wrap = document.getElementById('grid-wrap');
     if (!wrap) { if (existing) existing.remove(); return; }
+    // AD.4 fix: mount into grid-wrap's PARENT (.app), NOT grid-wrap itself.
+    // grid-wrap has overflow-y:auto / overflow-x:hidden, which CLIPS an
+    // absolutely-positioned child sitting above its top edge — the pill
+    // (top:-14px) showed as a thin red sliver half-hidden behind the
+    // tier-bar (most visible during a live race, where the grid fills to
+    // ~1 empty cell). .app is position:relative and doesn't clip in this
+    // band, and the pill becomes the last child → highest paint order.
+    var host = wrap.parentNode;
+    if (!host) { if (existing) existing.remove(); return; }
     var el = existing;
     if (!el) {
       el = document.createElement('div');
       el.id = 'danger-meter';
       el.className = 'danger-meter';
-      // Position relative to grid-wrap so it floats just above the grid.
-      if (getComputedStyle(wrap).position === 'static') wrap.style.position = 'relative';
-      wrap.appendChild(el);
     }
+    if (el.parentNode !== host) {
+      if (getComputedStyle(host).position === 'static') host.style.position = 'relative';
+      host.appendChild(el);
+    }
+    // Anchor just above the grid (mirrors the old top:-14px intent) but
+    // relative to .app so it escapes grid-wrap's overflow clipping. offsetTop
+    // is dynamic, so it tracks the live-race padding-top shift automatically.
+    try { el.style.top = Math.max(2, wrap.offsetTop - 14) + 'px'; } catch (e) {}
     var word = empties === 1 ? 'תא אחרון!' : (empties + ' תאים');
     el.textContent = '🚨 ' + word;
     el.className = 'danger-meter' + (empties === 1 ? ' danger-meter-critical' : '');

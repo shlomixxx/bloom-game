@@ -843,7 +843,9 @@
      tactical puzzle. Built/removed by paintDangerMeter() in 11-game.js. */
   .danger-meter {
     position: absolute;
-    top: -14px;
+    /* top is set inline by paintDangerMeter() relative to .app (escapes
+       grid-wrap's overflow clipping); this is just a safe fallback. */
+    top: 0;
     left: 50%;
     transform: translateX(-50%);
     z-index: var(--z-floating, 30);
