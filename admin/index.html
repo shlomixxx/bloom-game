@@ -2887,6 +2887,8 @@
     bots_auto_mode: ['daily', 'practice', 'dynamic'],
     bots_games_today_floor: [0, 25, 50, 100],
     danger_meter_enabled: ['true', 'false'],
+    home_win_celebration_enabled: ['true', 'false'],
+    home_win_celebration_min_score: [0, 2500, 5000, 10000, 25000],
     bots_in_live_stats_enabled: ['true', 'false'],
     bots_live_stats_max_multiplier: [1.5, 2, 2.5, 3, 4],
     bots_live_stats_floor_when_zero_real: [3, 6, 10, 15],
@@ -3230,6 +3232,8 @@
     bots_auto_mode: 'מצב המשחק של הבוטים האוטומטיים.<div class="tip-example">📅 <code>daily</code> = ממלא את לוח המובילים היומי (מומלץ). 🏋️ <code>practice</code> / 🎯 <code>dynamic</code> = heartbeat בלבד (״שחקנים פעילים״ אך לא בלוח).</div>',
     bots_games_today_floor: 'רצפה ל״משחקים היום״ בעמוד הבית.<div class="tip-example">📊 <code>0</code> = ללא רצפה (מציג את המספר האמיתי). 50+ ליצירת רושם של פעילות גבוהה.</div>',
     danger_meter_enabled: 'מד "תאים נותרו" — כשהלוח כמעט מלא (≤3 תאים) מופיע תג אדום מעל הלוח שמראה כמה תאים נשארו. הופך את הסכנה מ"אדום מפחיד" לפאזל טקטי.<div class="tip-example">💡 loss-aversion — המנוף החזק ביותר ל"עוד הטלה אחת". השאר <code>true</code>. אדום + פעימה כשנשאר תא אחד.</div>',
+    home_win_celebration_enabled: 'חגיגת חזרה הביתה — אחרי משחק מנצח, כשהשחקן חוזר למסך הבית מתפוצץ קונפטי + צליל + באנר "ניצחת!". מאריך את אדרנלין-הניצחון וגורם לרצות לשחק שוב.<div class="tip-example">💡 דפוס Candy Crush. נורה פעם אחת לכל משחק (guard ב-sessionStorage). השאר <code>true</code>.</div>',
+    home_win_celebration_min_score: 'סף הניקוד שמפעיל את חגיגת החזרה (מעבר לשיא אישי, שתמיד מפעיל).<div class="tip-example">📊 ברירת מחדל 5000. תוריד כדי לחגוג יותר בנדיבות, תעלה כדי לשמור את החגיגה למשחקים גדולים בלבד.</div>',
     // ---- DU.4 Real-play bot duels ----
     bot_duel_trajectory_truth: 'מתג ראשי — האם הבוט משחק משחק אמיתי אחד (ניקוד + לוח מאותו משחק, ללא זיוף).<div class="tip-example">✅ <code>true</code> (ברירת מחדל): הבוט משחק משחק אמיתי, הניקוד עולה כמו של שחקן אמיתי, הלוח זז, והתוצאה הסופית = מה שראית. ❌ <code>false</code>: חזרה לעקומה הסינתטית הישנה (rollback מיידי אם משהו נשבר).</div>',
     bot_traj_candidate_count: 'כמה משחקים אמיתיים לייצר ב-spawn לפני בחירת אחד.<div class="tip-example">📊 <code>6</code> (ברירת מחדל). יותר = מבחר רחב יותר אבל יקר יותר ב-CPU (~0.7ms למשחק). 3-10 הגיוני.</div>',

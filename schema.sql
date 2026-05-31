@@ -2678,6 +2678,9 @@ INSERT INTO game_config (key, value) VALUES ('bots_auto_mode',     'daily') ON C
 INSERT INTO game_config (key, value) VALUES ('bots_games_today_floor', '0') ON CONFLICT (key) DO NOTHING;
 -- AD.4 — live "moves to survive" danger meter (loss-aversion). Default on.
 INSERT INTO game_config (key, value) VALUES ('danger_meter_enabled', 'true') ON CONFLICT (key) DO NOTHING;
+-- AD.5 — win-return celebration on home (confetti + sound after a win). Default on.
+INSERT INTO game_config (key, value) VALUES ('home_win_celebration_enabled', 'true') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('home_win_celebration_min_score', '5000') ON CONFLICT (key) DO NOTHING;
 INSERT INTO game_config (key, value) VALUES ('bot_live_race_fallback_after_seconds', '6')    ON CONFLICT (key) DO NOTHING;
 
 -- ============================================================

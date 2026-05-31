@@ -5905,6 +5905,13 @@
       setTimeout(function() { try { maybeShowLivesWidget(); } catch (e) {} }, 400);
     }
 
+    // AD.5 — win-return celebration. When the player lands on home right after
+    // a win (new personal best OR a high score), extend the victory dopamine
+    // with confetti + sound + a brief banner. Once per game (sessionStorage
+    // guard keyed on the snapshot gameId). Admin-gated by
+    // home_win_celebration_enabled (default on).
+    try { maybeWinReturnCelebration(); } catch (e) {}
+
     // Stage 26 — Daily Checklist tile. Mounts near top so it's the
     // first thing the player sees after the lives widget.
     if (typeof maybeShowChecklistTile === 'function') {
@@ -6848,6 +6855,49 @@
   // Re-fired on (a) home mount, (b) earnCredits success via __bloomBumpBal,
   // (c) lives widget refresh, and (d) game-over (so level/streak update
   // even if we don't reach a new threshold).
+  // AD.5 — win-return celebration. Reads the last-game snapshot (written at
+  // game-over, 30-min TTL) and, if the player just won (new personal best, or
+  // a score above the configurable threshold), fires confetti + sound + a
+  // short "🎉 ניצחת!" banner. Fires at most once per game via a sessionStorage
+  // guard keyed on the snapshot's gameId, so navigating home↔game doesn't
+  // re-trigger. Skipped for bot/skin-trial (those never write a snapshot).
+  function maybeWinReturnCelebration() {
+    // Admin master toggle (default on).
+    try {
+      if (typeof gameConfig === 'object' && gameConfig && gameConfig.home_win_celebration_enabled === 'false') return;
+    } catch (e) {}
+    var snap = null;
+    try { if (window.__bloomLoadLastGame) snap = window.__bloomLoadLastGame(); } catch (e) {}
+    if (!snap) return;
+    // Only celebrate a recent game (the snapshot loader already enforces a
+    // 30-min TTL, but keep the dopamine tight to ~15s after the game ended).
+    if (Date.now() - (snap.ts || 0) > 15000) return;
+    var threshold = 5000;
+    try {
+      var t = parseInt(gameConfig && gameConfig.home_win_celebration_min_score, 10);
+      if (Number.isFinite(t) && t >= 0) threshold = t;
+    } catch (e) {}
+    var isWin = !!snap.isNewBest || (snap.score | 0) >= threshold;
+    if (!isWin) return;
+    // Once per game.
+    var guardKey = 'bloom_win_celebrated_' + (snap.gameId || snap.ts || '');
+    try { if (sessionStorage.getItem(guardKey)) return; sessionStorage.setItem(guardKey, '1'); } catch (e) {}
+    // Fire confetti + sound (both live in other IIFEs → use globals/guards).
+    try { if (typeof window.__bloomConfetti === 'function') window.__bloomConfetti(snap.isNewBest ? 48 : 28); } catch (e) {}
+    try { if (typeof soundMilestone === 'function') soundMilestone(snap.isNewBest ? 7 : 5); } catch (e) {}
+    try { if (typeof buzz === 'function') buzz(snap.isNewBest ? [40, 30, 60, 30, 90] : [30, 40, 60]); } catch (e) {}
+    // Brief banner.
+    try {
+      var b = document.createElement('div');
+      b.className = 'home-win-banner';
+      var title = snap.isNewBest ? '🎉 שיא חדש!' : '🎉 ניצחת!';
+      b.innerHTML = '<div class="home-win-banner-title">' + title + '</div>' +
+        '<div class="home-win-banner-sub">' + (snap.score | 0).toLocaleString() + ' נקודות</div>';
+      document.body.appendChild(b);
+      setTimeout(function() { try { b.remove(); } catch (e) {} }, 2600);
+    } catch (e) {}
+  }
+
   function renderBalanceBarV2() {
     const bar = document.getElementById('home-v2-balance-bar');
     if (!bar) return;
@@ -22330,6 +22380,9 @@
     document.body.appendChild(host);
     setTimeout(function() { host.remove(); }, 2500);
   }
+  // AD.5 — expose confetti so the home screen (separate IIFE) can fire a
+  // win-return celebration. soundMilestone is already global in this bundle.
+  try { window.__bloomConfetti = showConfetti; } catch (e) {}
 
   // ============================================================
   // COMBO COUNTER — persistent chain display during gameplay

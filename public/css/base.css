@@ -1564,6 +1564,35 @@
   }
 
   /* ── Confetti (CSS-only particles for celebrations) ── */
+  /* AD.5 — win-return celebration banner. Brief gold card center-top of home
+     after a winning game, alongside the confetti burst. */
+  .home-win-banner {
+    position: fixed;
+    top: 18%;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: var(--z-celeb, 3000);
+    background: linear-gradient(135deg, #FAC775, #EF9F27);
+    color: #2A1A02;
+    text-align: center;
+    padding: 14px 28px;
+    border-radius: 18px;
+    box-shadow: 0 10px 32px rgba(239, 159, 39, 0.5);
+    pointer-events: none;
+    animation: homeWinPop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1), homeWinFade 0.4s ease-in 2.2s forwards;
+  }
+  .home-win-banner-title { font-size: 22px; font-weight: 900; }
+  .home-win-banner-sub { font-size: 14px; font-weight: 700; margin-top: 2px; opacity: 0.85; }
+  @keyframes homeWinPop {
+    0%   { transform: translateX(-50%) scale(0.5); opacity: 0; }
+    100% { transform: translateX(-50%) scale(1); opacity: 1; }
+  }
+  @keyframes homeWinFade {
+    to { opacity: 0; transform: translateX(-50%) translateY(-10px); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .home-win-banner { animation: none; }
+  }
   .confetti-host {
     position: fixed; inset: 0; z-index: 9998; pointer-events: none; overflow: hidden;
   }

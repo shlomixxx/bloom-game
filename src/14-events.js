@@ -814,6 +814,9 @@
     document.body.appendChild(host);
     setTimeout(function() { host.remove(); }, 2500);
   }
+  // AD.5 — expose confetti so the home screen (separate IIFE) can fire a
+  // win-return celebration. soundMilestone is already global in this bundle.
+  try { window.__bloomConfetti = showConfetti; } catch (e) {}
 
   // ============================================================
   // COMBO COUNTER — persistent chain display during gameplay
