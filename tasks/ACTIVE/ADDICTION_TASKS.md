@@ -18,9 +18,8 @@
 >
 > **נותר לביצוע (מדורג למטה):** #4/#7 הפעלת push + loss-aversion · #5/#6/#12 הזרעת תחרויות + טורניר יומי אוטומטי · #14/#15/#16 מודרציית-שחקן + עורכי spin/trophy + דשבורד כלכלה · #22/#37 design tokens · ועוד.
 >
-> **🔒 חסום על משימה ידנית שלך (לא ניתן לבצע בקוד):**
-> - **#4 / #7 — Push notifications**: בייצור אין מפתחות VAPID (`/api/push/vapid-public` מחזיר `publicKey:null`), כך שכל קוד-push לא יעבוד. **פעולה ידנית נדרשת ממך**: הרץ `npx web-push generate-vapid-keys`, ואז ב-Railway → service bloom-web → Variables הוסף `VAPID_PUBLIC_KEY` + `VAPID_PRIVATE_KEY` + `VAPID_SUBJECT` (למשל `mailto:shlomibusiness@gmail.com`). אחרי שזה מוגדר — הקוד של הפעלת-push וה-loss-aversion push ניתן לבנות. זה ה-driver מס' 1 לחזרה כשהאפליקציה סגורה, אז שווה לעשות את הצעד הידני הזה.
-
+> **ℹ️ #4 / #7 — Push notifications (push כבר מוגדר בייצור!):**
+> - מפתחות VAPID **קיימים** בייצור (`/api/push/vapid-public` מחזיר מפתח אמיתי). תשתית ה-push מלאה: subscribe/unsubscribe, smart-push scheduler (`_pickSmartPushFor`), broadcast מהאדמין. מה שחסר: (#4) הבקשת-הרשאה נדירה מדי (cooldown 3 ימים + רק 3 רגעים), ו-(#7) חסרים signals של loss-aversion (סכנת ירידת-ליגה/הפסד-גביעים). שניהם ניתנים לבנייה — לא חסומים.
 
 ## איך לקרוא את הקובץ
 בצע מלמעלה למטה — דירוג 1 הוא ההשפעה הגדולה ביותר על "השחקן לא מצליח להפסיק". קודם תקן את הבאגים האדומים (שוברים אמון = הורגים התמכרות), אחר כך רד ברשימה המדורגת לפי ROI.
