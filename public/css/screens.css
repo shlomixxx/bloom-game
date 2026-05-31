@@ -1231,6 +1231,37 @@
   html[data-theme="dark"] .over-streak-hot { color: #F0A878; }
 
   /* ── Game-Over: "already played today" alternative-mode funnel (§1.6) ── */
+  /* AD.6 — "next daily rewards in HH:MM:SS" block on game-over. A calm
+     gold-tinted return-time hook. Anchored to Israel midnight. */
+  .over-next-reward {
+    margin: 10px auto 0;
+    max-width: 360px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    background: linear-gradient(135deg, rgba(250,199,117,0.18), rgba(239,159,39,0.12));
+    border: 1px solid rgba(239,159,39,0.35);
+    border-radius: 12px;
+    padding: 9px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #7A4E08;
+    direction: rtl;
+  }
+  .over-next-reward .onr-icon { font-size: 16px; }
+  .over-next-reward .onr-text strong {
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.02em;
+    color: #B8730A;
+  }
+  html[data-theme="dark"] .over-next-reward {
+    background: linear-gradient(135deg, rgba(250,199,117,0.16), rgba(239,159,39,0.10));
+    border-color: rgba(250,199,117,0.4);
+    color: #F4C982;
+  }
+  html[data-theme="dark"] .over-next-reward .onr-text strong { color: #FAC775; }
+
   .over-funnel {
     margin: 12px auto;
     padding: 12px;
