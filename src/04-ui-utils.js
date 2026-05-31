@@ -424,7 +424,10 @@
     var safe = String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     return showTransientBanner({
       tag: 'toast-' + type,
-      style: 'position:fixed;left:50%;bottom:32px;transform:translateX(-50%);' +
+      // Sit ABOVE the persistent 5-tab bottom-nav (~76px tall) so success/error
+      // confirmations are never hidden behind it on iOS. The extra safe-area
+      // inset keeps it clear of the home indicator on notched phones.
+      style: 'position:fixed;left:50%;bottom:calc(90px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);' +
              'background:' + p.bg + ';color:' + p.fg + ';' +
              'border:1px solid ' + p.border + ';' +
              'padding:10px 18px;border-radius:10px;z-index:10005;' +

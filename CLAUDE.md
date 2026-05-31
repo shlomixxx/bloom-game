@@ -10,6 +10,8 @@ The human-facing description lives in [README.md](README.md). This file focuses 
 
 Quick-scan map of the addiction-loop work. **Update this table whenever a stage ships.** Detailed change-log entries live in §11 below.
 
+> 🔍 **AUDIT 2026-05-31 — full addiction audit** (132-agent scan, 110 bugs checked / 63 confirmed + live-server browser evidence). Two deliverables: [BLOOM_ADDICTION_AUDIT.md](BLOOM_ADDICTION_AUDIT.md) (per-category scores, overall **6.5/10**, 63-bug table, "what's missing" diagnosis) + [tasks/ACTIVE/ADDICTION_TASKS.md](tasks/ACTIVE/ADDICTION_TASKS.md) (30 addiction-ranked tasks + 8 fix-first bugs). **Headline finding: the world looks EMPTY** (`activeNow:0`, bots not default-on, Daily Special points to an empty board, push effectively dead) — fixing aliveness + focus is the #1 ROI. Top fix-first bugs: `_finalizeGuildWar` missing ROLLBACK (server.js:10208), empty Daily Special board (server.js:2638), no Express error-middleware, toast hidden behind bottom-nav, lives widget never shows, live-race shows fixed +50💎 not real wager.
+
 ### ✅ Completed stages (post-roadmap retention layer)
 | # | Stage | Surface |
 |---|---|---|

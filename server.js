@@ -10213,6 +10213,13 @@ async function _finalizeGuildWar(warId) {
         [winnerId, warId]
       );
       await client.query('COMMIT');
+    } catch (txErr) {
+      // The ONLY transaction in the codebase that was missing a ROLLBACK.
+      // Without it, a throwing UPDATE released the connection back to the
+      // pool with an open transaction → poisoned the next request that
+      // reused it. Roll back explicitly before re-throwing.
+      try { await client.query('ROLLBACK'); } catch (e) {}
+      throw txErr;
     } finally {
       client.release();
     }
@@ -18390,6 +18397,20 @@ initDb()
     // _trajectoryTruthEnabled) read the admin-set value immediately after a
     // reboot, before the first lazy request. Fire-and-forget (don't block boot).
     if (typeof loadConfig === 'function') loadConfig().catch(() => {});
+
+    // Centralized Express error middleware. Registered LAST (after every route
+    // + the admin router are attached during module eval) so it catches any
+    // uncaught error / async rejection bubbling out of a handler. Returns the
+    // app's structured JSON shape instead of Express's default HTML 500 with a
+    // raw stack trace (which leaked internals). Logs the stack server-side.
+    app.use((err, req, res, next) => {
+      try {
+        console.error('[express error]', req.method, req.originalUrl,
+          err && err.stack ? err.stack : err);
+      } catch (e) {}
+      if (res.headersSent) return next(err);
+      res.status(500).json({ error: 'server_error' });
+    });
 
     const server = app.listen(port, () => console.log(`[bloom] listening on ${port}`));
 
