@@ -17,6 +17,10 @@
 > - ⚠️ #19/#20 (גילדות/שער-גילדה) — **הגילדות מושבתות במכוון** (28-guilds.js:99 `return;` — "replaced by simpler social features"). לא להפעיל מחדש בלי אישור הבעלים.
 >
 > **נותר לביצוע (מדורג למטה):** #4/#7 הפעלת push + loss-aversion · #5/#6/#12 הזרעת תחרויות + טורניר יומי אוטומטי · #14/#15/#16 מודרציית-שחקן + עורכי spin/trophy + דשבורד כלכלה · #22/#37 design tokens · ועוד.
+>
+> **🔒 חסום על משימה ידנית שלך (לא ניתן לבצע בקוד):**
+> - **#4 / #7 — Push notifications**: בייצור אין מפתחות VAPID (`/api/push/vapid-public` מחזיר `publicKey:null`), כך שכל קוד-push לא יעבוד. **פעולה ידנית נדרשת ממך**: הרץ `npx web-push generate-vapid-keys`, ואז ב-Railway → service bloom-web → Variables הוסף `VAPID_PUBLIC_KEY` + `VAPID_PRIVATE_KEY` + `VAPID_SUBJECT` (למשל `mailto:shlomibusiness@gmail.com`). אחרי שזה מוגדר — הקוד של הפעלת-push וה-loss-aversion push ניתן לבנות. זה ה-driver מס' 1 לחזרה כשהאפליקציה סגורה, אז שווה לעשות את הצעד הידני הזה.
+
 
 ## איך לקרוא את הקובץ
 בצע מלמעלה למטה — דירוג 1 הוא ההשפעה הגדולה ביותר על "השחקן לא מצליח להפסיק". קודם תקן את הבאגים האדומים (שוברים אמון = הורגים התמכרות), אחר כך רד ברשימה המדורגת לפי ROI.
