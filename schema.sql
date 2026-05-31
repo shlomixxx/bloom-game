@@ -2691,8 +2691,6 @@ INSERT INTO game_config (key, value) VALUES ('daily_tournament_end_hour', '22') 
 INSERT INTO game_config (key, value) VALUES ('daily_tournament_prize_1', '1000') ON CONFLICT (key) DO NOTHING;
 INSERT INTO game_config (key, value) VALUES ('daily_tournament_prize_2', '500') ON CONFLICT (key) DO NOTHING;
 INSERT INTO game_config (key, value) VALUES ('daily_tournament_prize_3', '250') ON CONFLICT (key) DO NOTHING;
--- AD.7 — daily auto-tournament (prime-time scheduled event). Default on.
--- AD.7 — daily auto-tournament (prime-time scheduled event). Default on.
 INSERT INTO game_config (key, value) VALUES ('bot_live_race_fallback_after_seconds', '6')    ON CONFLICT (key) DO NOTHING;
 
 -- ============================================================
