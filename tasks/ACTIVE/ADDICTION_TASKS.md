@@ -20,6 +20,7 @@
 > **session 3 (2026-06-01) — polish מדורג:**
 > - ✅ **AD.10** — תיקון דליפת-DOM בקונפטי (`showConfetti`): הפיסה האחרונה נוספה פעמיים + ה-container לעולם לא נמחק → כל חגיגה השאירה div קבוע. הוסר ה-append הכפול + cleanup אחרי 3.6ש. (החגיגות הן ליבת-הדופמין). cache `v20260601a`/SW `bloom-v22.3`.
 > - ✅ **AD.11** — באג #13 (אנטי-צ'יט): `POST /api/contests/:code/score` חסר בדיקת drops-implausibility שיש לכל endpoint אחר. נוסף `challengeDropsImplausible` (נאכף רק כש-drops נשלח → לא שובר לקוחות ישנים; cheater עם ניקוד ענק ומעט drops נדחה 400). server-only.
+> - ✅ **AD.12** — באג #17: דירוג-עצמי בלוח-הישגים לא תאם את סדר התצוגה (`ach_count DESC, last_unlocked_at ASC`). תוקן — שחקן "לפניי" אם יש לו יותר הישגים, או אותו מספר עם unlock מוקדם יותר. server-only.
 > - ℹ️ נבדקו ונמצאו **כבר קיימים** (false-positive, לא נדרש שינוי): #18 פעימת כפתור-שיתוף · #21 שם חיית-מחמד ב-widget.
 > - ⚠️ #19/#20 (גילדות/שער-גילדה) — **הגילדות מושבתות במכוון** (28-guilds.js:99 `return;` — "replaced by simpler social features"). לא להפעיל מחדש בלי אישור הבעלים.
 >
