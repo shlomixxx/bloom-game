@@ -18456,45 +18456,87 @@ initDb()
       }
     }
 
+    // AD.2 — resolve the fleet the server SHOULD be running right now.
+    // Priority: (1) an explicit admin manual fleet (__bot_engine_state) wins;
+    // (2) otherwise the always-on AUTO fleet keeps the world alive by default.
+    // Returns the startBots config or null (= run no bots). The auto fleet is
+    // the single biggest fix for "the game feels empty" — bots heartbeat (live
+    // stats), play daily (seeds the world leaderboard) and back matchmaking.
+    // Fully admin-controllable: set bots_auto_enabled='false' to disable.
+    async function _desiredBotFleet() {
+      // (1) Manual admin fleet.
+      try {
+        const r = await pool.query(`SELECT value FROM game_config WHERE key = '__bot_engine_state' LIMIT 1`);
+        if (r.rows.length) {
+          const s = JSON.parse(r.rows[0].value);
+          if (s && s.enabled && s.count > 0) {
+            return {
+              count: s.count, mode: s.mode || 'practice', speed: s.speed || 'normal',
+              contestCode: s.contestCode || null, challengeSlug: s.challengeSlug || null,
+              restartMin: s.restartMin || 30, restartMax: s.restartMax || 90,
+              maxGamesPerBot: s.maxGamesPerBot || 1,
+              submitDaily: s.submitDaily === true, source: 'manual'
+            };
+          }
+        }
+      } catch (e) {}
+      // (2) Auto fleet (default ON).
+      try {
+        const ac = await pool.query(
+          `SELECT key, value FROM game_config WHERE key IN ('bots_auto_enabled','bots_auto_count','bots_auto_mode')`
+        );
+        const m = {}; ac.rows.forEach(x => { m[x.key] = x.value; });
+        const autoOn = m.bots_auto_enabled !== 'false'; // default ON when unset
+        const autoCount = Math.max(0, Math.min(60, parseInt(m.bots_auto_count || '10', 10) || 10));
+        const autoMode = ['practice', 'daily', 'dynamic'].includes(m.bots_auto_mode) ? m.bots_auto_mode : 'daily';
+        if (autoOn && autoCount > 0) {
+          return {
+            count: autoCount, mode: autoMode, speed: 'normal',
+            contestCode: null, challengeSlug: null,
+            restartMin: 30, restartMax: 120, maxGamesPerBot: 1,
+            // 'daily' mode already writes daily_scores; for practice/dynamic we
+            // still want the world leaderboard seeded, so force submitDaily.
+            submitDaily: autoMode !== 'daily', source: 'auto'
+          };
+        }
+      } catch (e) {}
+      return null;
+    }
+
+    let _lastBotFleetKey = '';
     async function startBotsIfLeader() {
       const acquired = await tryAcquireBotLock();
-      if (acquired && !isBotLeader) {
+      if (!acquired) {
+        if (isBotLeader) {
+          // Lost the lock — another instance is leader now. Stand down.
+          isBotLeader = false;
+          console.log(`[bots] no longer the leader — stopping`);
+          stopBots();
+          _lastBotFleetKey = '';
+        }
+        return;
+      }
+      // We hold the lock. Reconcile actual vs desired fleet.
+      if (!isBotLeader) {
         isBotLeader = true;
         console.log(`[bots] this instance is the leader (${INSTANCE_ID})`);
-        // Load saved state and start bots
-        try {
-          const r = await pool.query(`SELECT value FROM game_config WHERE key = '__bot_engine_state' LIMIT 1`);
-          if (r.rows.length) {
-            const state = JSON.parse(r.rows[0].value);
-            if (state && state.enabled && state.count > 0) {
-              console.log(`[bots] auto-restarting ${state.count} bots from persisted config`);
-              startBots(state.count, pool, {
-                mode: state.mode || 'practice',
-                speed: state.speed || 'normal',
-                contestCode: state.contestCode || null,
-                challengeSlug: state.challengeSlug || null,
-                restartMin: state.restartMin || 30,
-                restartMax: state.restartMax || 90,
-                maxGamesPerBot: state.maxGamesPerBot || 1
-              });
-            }
-          }
-        } catch (e) { console.error('[bots] failed to restore state:', e.message); }
-      } else if (!acquired && isBotLeader) {
-        // We were the leader but lost the lock — stop bots
-        isBotLeader = false;
-        console.log(`[bots] no longer the leader — stopping`);
+      }
+      let desired = null;
+      try { desired = await _desiredBotFleet(); } catch (e) {}
+      const running = getBotStatus().running;
+      const desiredKey = desired ? `${desired.source}:${desired.count}:${desired.mode}` : '';
+      if (desired && (!running || desiredKey !== _lastBotFleetKey)) {
+        // Start (or restart with new params). startBots is idempotent enough —
+        // if already running with the same key we won't reach here.
+        if (running && desiredKey !== _lastBotFleetKey) stopBots();
+        console.log(`[bots] starting ${desired.count} ${desired.source} bots (mode=${desired.mode})`);
+        startBots(desired.count, pool, desired);
+        _lastBotFleetKey = desiredKey;
+      } else if (!desired && running) {
+        // Admin disabled both manual + auto → stop.
+        console.log(`[bots] no desired fleet — stopping bots`);
         stopBots();
-      } else if (acquired && isBotLeader) {
-        // Still the leader — check if admin pressed stop (state row was deleted)
-        try {
-          const r = await pool.query(`SELECT value FROM game_config WHERE key = '__bot_engine_state' LIMIT 1`);
-          if (!r.rows.length && getBotStatus().running) {
-            // State was deleted but we're still running bots — stop them
-            console.log(`[bots] state row deleted — stopping bots`);
-            stopBots();
-          }
-        } catch (e) {}
+        _lastBotFleetKey = '';
       }
     }
 
