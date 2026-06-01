@@ -2932,6 +2932,7 @@
     trophy_arena_8_at: [10000, 12000, 15000, 20000],
     animation_duration_multiplier: [0.5, 0.75, 1, 1.25, 1.5],
     chest_all_modes_enabled: ['true', 'false'],
+    bot_traj_percentile_variance: [0, 0.1, 0.15, 0.2, 0.3],
     home_win_celebration_enabled: ['true', 'false'],
     home_win_celebration_min_score: [0, 2500, 5000, 10000, 25000],
     next_reward_countdown_enabled: ['true', 'false'],
@@ -3322,6 +3323,7 @@
     trophy_arena_8_at: 'סף הגביעים לארנה 8 (⚡ היכל האגדה — הגבוהה ביותר). ברירת מחדל <code>12000</code>.<div class="tip-example">💡 זו הפסגה — שחקני-על מתגאים בה. גבוה מדי = לעולם לא מושגת; נמוך = מאבדת יוקרה.</div>',
     animation_duration_multiplier: 'מכפיל-מהירות גלובלי לאנימציות ה-micro-interaction המשותפות (ui-pop-in/out/bounce/glow/slide). 1 = רגיל, פחות = מהיר יותר, יותר = איטי/דרמטי.<div class="tip-example">💡 0.75 = ממשק "זריז"; 1.25 = "יוקרתי/דרמטי". מכבד prefers-reduced-motion (OS). טווח 0.5-1.5.</div>',
     chest_all_modes_enabled: 'תיבת-מסתורין (Skinner-box) בכל סוף-משחק — לא רק בלוחות דינמיים אלא גם daily/practice/contest. מכבד את ה-master toggle <code>dyn_chest_enabled</code>; ה-pity floor + cap-יומי (<code>dyn_chest_daily_cap</code>) עדיין נאכפים בשרת.<div class="tip-example">💡 פרס-הפתעה בכל game-over = ליבת ההתמכרות. ⚠️ מגדיל את ה-faucet (עד ה-cap) — עקוב בדשבורד "ברז מול בור". כבה אם הכלכלה מתנפחת.</div>',
+    bot_traj_percentile_variance: '"אישיות" לבוטים בדו-קרב — שונות-לכל-קרב באיזה משחק-בוט אמיתי נבחר מהבנק. גבוה = יותר דרמה (הפסדים צמודים + ניצחונות-comeback מאוחרים), 0 = תמיד אותו אחוזון (חלק). **עדיין משחק-בוט אמיתי עם ניקוד אמיתי — בלי זיוף.**<div class="tip-example">💡 DEFAULT OFF (0). הפעל <code>0.10-0.20</code> לדרמה עדינה. דטרמיניסטי לכל duel id (הניקוד יציב, ה-monotonicity נשמרת). 0.30+ = הבוט לפעמים חזק מאוד/חלש מאוד.</div>',
     home_win_celebration_enabled: 'חגיגת חזרה הביתה — אחרי משחק מנצח, כשהשחקן חוזר למסך הבית מתפוצץ קונפטי + צליל + באנר "ניצחת!". מאריך את אדרנלין-הניצחון וגורם לרצות לשחק שוב.<div class="tip-example">💡 דפוס Candy Crush. נורה פעם אחת לכל משחק (guard ב-sessionStorage). השאר <code>true</code>.</div>',
     home_win_celebration_min_score: 'סף הניקוד שמפעיל את חגיגת החזרה (מעבר לשיא אישי, שתמיד מפעיל).<div class="tip-example">📊 ברירת מחדל 5000. תוריד כדי לחגוג יותר בנדיבות, תעלה כדי לשמור את החגיגה למשחקים גדולים בלבד.</div>',
     next_reward_countdown_enabled: 'ספירה-לאחור "הפרסים היומיים הבאים בעוד HH:MM:SS" במסך סיום המשחק. נותן לכל סוף-משחק יעד-חזרה ברור (הגלגל היומי, לוח-הכניסה, הדיל היומי והלוח-של-היום מתאפסים בחצות).<div class="tip-example">💡 ה-lever הכי חזק ל"חזרה בשעה מסוימת". מעוגן לחצות שעון ישראל. השאר <code>true</code>.</div>',
@@ -4944,6 +4946,43 @@
         jump: 'rivalries-section'
       });
     }
+    // Task #26 — extend the overview beyond the 4 stat-backed systems to the
+    // major addiction systems via their game_config enabled-flags, so the
+    // owner has true "mission control" (solves "where is X in admin?"). Each
+    // jumps to its section (or the general config table). Public /api/config
+    // is fetched directly (it's not under the admin slug).
+    try {
+      var cfgResp = await fetch('/api/config').then(function(r) { return r.ok ? r.json() : null; }).catch(function() { return null; });
+      var cfg = (cfgResp && cfgResp.config) || {};
+      var CONFIG_SYSTEMS = [
+        { key: 'pet_enabled',                 icon: '🌱',  title: 'חיית מחמד',     jump: 'pet-section' },
+        { key: 'lives_enabled',               icon: '❤️',  title: 'חיים / אנרגיה', jump: 'lives-section' },
+        { key: 'gacha_enabled',               icon: '🎰',  title: 'גאצ׳ה סקינים',  jump: 'config-section' },
+        { key: 'daily_deals_enabled',         icon: '🔥',  title: 'דילים יומיים',  jump: 'config-section' },
+        { key: 'starter_pack_enabled',        icon: '🎁',  title: 'Starter Pack',  jump: 'config-section' },
+        { key: 'season_pass_enabled',         icon: '🎖',  title: 'Battle Pass',   jump: 'config-section' },
+        { key: 'league_enabled',              icon: '⚔️',  title: 'ליגות שבועיות', jump: 'config-section' },
+        { key: 'daily_tournament_enabled',    icon: '🏆',  title: 'טורניר יומי',   jump: 'config-section' },
+        { key: 'bots_auto_enabled',           icon: '🤖',  title: 'צי בוטים',      jump: 'config-section' },
+        { key: 'win_streak_enabled',          icon: '🔥',  title: 'רצף ניצחונות',  jump: 'config-section' },
+        { key: 'chest_all_modes_enabled',     icon: '🎁',  title: 'תיבות כל-מצב',  jump: 'config-section' },
+        { key: 'tournament_bot_seed_enabled', icon: '🌍',  title: 'הזרעת טורניר',  jump: 'config-section' },
+        { key: 'next_reward_countdown_enabled', icon: '⏳', title: 'ספירת פרס',    jump: 'config-section' },
+        { key: 'home_win_celebration_enabled', icon: '🎉', title: 'חגיגת ניצחון',  jump: 'config-section' }
+      ];
+      CONFIG_SYSTEMS.forEach(function(sys) {
+        if (cfg[sys.key] === undefined) return; // system/key not present — skip
+        var on = cfg[sys.key] !== 'false';
+        cards.push({
+          icon: sys.icon, title: sys.title,
+          stat: on ? '✓' : '⏸',
+          lbl: on ? 'פעיל' : 'כבוי',
+          status: on ? 'ok' : 'off',
+          statusText: on ? '✓ מופעל' : '⏸ כבוי — לחץ להפעיל',
+          jump: sys.jump
+        });
+      });
+    } catch (e) {}
     if (!cards.length) { host.innerHTML = '<div class="loading">שגיאת טעינה</div>'; return; }
     host.innerHTML = cards.map(function(c) {
       return '<div class="eng-card" data-jump="' + c.jump + '">' +

@@ -18396,7 +18396,19 @@ function _pickBotTrajectory(duel) {
   }
   cands.sort((a, b) => a.finalScore - b.finalScore);
   // ~40th percentile: a real game on the slightly-beatable side of the bank.
-  const pct = Math.max(0, Math.min(1, parseFloat((_configCache && _configCache.bot_traj_pick_percentile) || '') || 0.40));
+  let pct = Math.max(0, Math.min(1, parseFloat((_configCache && _configCache.bot_traj_pick_percentile) || '') || 0.40));
+  // Task #28 — per-duel percentile VARIANCE gives bots "personality"/drama:
+  // some duels the bot plays near the top of its bank (a tough, close game you
+  // might lose), some near the bottom (a comeback you win late). Crucially this
+  // still selects a REAL simulated game with a REAL final score — NO calibration
+  // or faking (the owner's hard rule). Deterministic per duel id so the pick is
+  // stable across every read (the monotonicity/credibility guarantees hold).
+  const variance = Math.max(0, Math.min(0.45, parseFloat((_configCache && _configCache.bot_traj_percentile_variance) || '') || 0));
+  if (variance > 0) {
+    const seed = (((duel.id | 0) || (duel.board_seed | 0) || 1) ^ 0x5bd1e995) >>> 0;
+    const rng = _seededBotRng(seed);
+    pct = Math.max(0.05, Math.min(0.95, pct + (rng() - 0.5) * 2 * variance));
+  }
   const idx = Math.min(cands.length - 1, Math.max(0, Math.round((cands.length - 1) * pct)));
   const chosen = cands[idx];
   return { trajectory: chosen.traj, finalScore: chosen.finalScore };

@@ -620,6 +620,8 @@ export async function initDb() {
     `INSERT INTO game_config (key, value) VALUES ('animation_duration_multiplier', '1') ON CONFLICT (key) DO NOTHING`,
     // Task #23 — Mystery Chest at every game-over (not just dynamic). Default on.
     `INSERT INTO game_config (key, value) VALUES ('chest_all_modes_enabled', 'true') ON CONFLICT (key) DO NOTHING`,
+    // Task #28 — per-duel bot percentile variance for drama. DEFAULT OFF (admin opt-in).
+    `INSERT INTO game_config (key, value) VALUES ('bot_traj_percentile_variance', '0') ON CONFLICT (key) DO NOTHING`,
     // AD.5 — win-return celebration on home. Default on.
     `INSERT INTO game_config (key, value) VALUES ('home_win_celebration_enabled', 'true') ON CONFLICT (key) DO NOTHING`,
     `INSERT INTO game_config (key, value) VALUES ('home_win_celebration_min_score', '5000') ON CONFLICT (key) DO NOTHING`,

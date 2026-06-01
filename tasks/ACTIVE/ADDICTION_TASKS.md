@@ -105,6 +105,14 @@
 > - ✅ **#22** (micro-interaction tokens) — 5 keyframes משותפים (`ui-pop-in/out/bounce-land/pulse-glow/slide-up`) + `--anim-mult` ב-base.css + reduced-motion. מכפיל-מהירות ניתן-לאדמין (`animation_duration_multiplier`, נקרא ב-03-audio → `--anim-mult`). הוחל על friends-banner כ-proof. **קונבנציה ל-קוד-חדש** (לא mass-migration — סיכון רגרסיה, תקדים TC.2). schema+db+admin.
 > - ✅ **#23** (תיבת-מסתורין בכל game-over) — ה-Skinner-box נורה עכשיו גם ב-daily/practice/contest (לא רק דינמי). `chestAllModesEnabled()` (default ON, מכבד `dyn_chest_enabled`), נורה ב-game-over handler לפני ש-submitDuelScore מאפס activeDuelId (כך שדו-קרבות מודרים). pity+cap-יומי נאכפים בשרת. toggle אדמין `chest_all_modes_enabled` + tip שמזהיר על ה-faucet (עקוב ב-AD.9).
 
+## ✅ session 4 batch 12 (2026-06-02) — #26 admin-overview + #28 bot-drama [server/admin]
+> בלי שינוי client → בלי cache-bump. נפרס server. כל 16 בדיקות ה-bot-score עברו.
+> - ✅ **#26** (Engagement Overview לכל המערכות) — הרחבתי את `loadEngagementOverview` מ-4 כרטיסים (stat-backed) ל-+14 כרטיסי **config-status** מ-`/api/config` (pet/lives/gacha/deals/starter/BP/leagues/daily-tournament/bots/win-streak/chest/seed/countdown/win-celebration), כל אחד עם ✓פעיל/⏸כבוי + קפיצה לסקשן (pet-section/lives-section/config-section — אומתו קיימים). פותר "איפה X באדמין?". ([admin/index.html](admin/index.html)).
+> - ✅ **#28** (אישיות-בוט / דרמה) — `bot_traj_percentile_variance` ב-`_pickBotTrajectory`: שונות-לכל-קרב באחוזון הנבחר מבנק-המשחקים → לפעמים בוט חזק (הפסד צמוד), לפעמים חלש (comeback). **עדיין משחק-בוט אמיתי + ניקוד אמיתי — בלי calibration/זיוף** (חוק-הברזל של הבעלים). דטרמיניסטי לכל duel id (`_seededBotRng`) → monotonicity/credibility נשמרות. **DEFAULT OFF (0)** — admin opt-in בגלל רגישות-הבוטים (תקדים Lives DEFAULT-OFF); הבעלים מפעיל 0.10-0.20 לדרמה. schema+db+admin TIPS/PRESETS. ([server.js](server.js)).
+>
+> ### ⏸️ #27 — מוחזק להחלטת הבעלים (לא דילגתי — מטופל עם נימוק)
+> **#27** (FTUE מנוע-אמיתי במקום מתוסרט) — **מסכן את ה-merge engine** (§10 "load-bearing, לא לגעת בלי לסמן trade-off"). דורש seed-controlled init + drop-interception + tour pause/resume על המנוע האמיתי — בדיוק ה-re-architecture ש-T1.2 דחה ("high risk of breaking the merge engine for a surface שנורה פעם אחת למכשיר"). ה-FTUE הנוכחי ([src/15-ftue.js](src/15-ftue.js)) הוא demo מתוסרט עובד (drop→merge→chain עם אותה אמנות). **אין גרסה בטוחה באותה מידה.** ⇒ **דרושה החלטת בעלים:** (א) להשאיר את ה-demo המתוסרט (מומלץ — ROI נמוך, סיכון גבוה), או (ב) לאשר במפורש re-architecture של ה-FTUE על המנוע האמיתי (sprint ייעודי עם engine self-test צמוד). עד החלטה — מוחזק.
+
 ## איך לקרוא את הקובץ
 בצע מלמעלה למטה — דירוג 1 הוא ההשפעה הגדולה ביותר על "השחקן לא מצליח להפסיק". קודם תקן את הבאגים האדומים (שוברים אמון = הורגים התמכרות), אחר כך רד ברשימה המדורגת לפי ROI.
 
