@@ -68,6 +68,11 @@
 > - ℹ️ **משימה #36** (מד ×N XP תוך-משחק ללוח-של-היום) — **נדחה במכוון**: ה-`showSpecialBoardToast` כבר מכריז "×N XP" בתחילת המשחק; באנר *קבוע* תוך-משחק מתחרה ב-tier-bar/score/danger-meter ואוכל מקום אנכי (עבודת TB.1/TB.2 שמרה עליו) — תועלת שולית מול סיכון-layout. ה-toast הקיים + באנר ה-game-over מספיקים.
 > - ℹ️ **משימה #30** (escalation רצף-מכפיל בבית) — **כבר מכוסה** ע"י TD.1 (Tomorrow Preview pill ב-streak hero: "מחר: +50💎 במקום +25", זהב-ורוד פועם). prospective-FOMO כבר גלוי קבוע בבית.
 
+## ✅ session 4 batch 5 (2026-06-02) — מד ×N XP תוך-משחק (#2) + הפעלת push (#4)
+> build חי: `v20260602f` / SW `bloom-v22.9`. engine self-test נקי.
+> - ✅ **משימה #2** (high, מד מכפיל תוך-משחק ללוח-של-היום) — שיניתי דעה מ-batch4 ועשיתי את זה **בלי לסכן layout**: chip "🌟 ×3 XP" נכנס ל-`#mode-extras` (הרצועה הקומפקטית הקיימת בין `.top` ל-`.tier-bar`, ME.1) — אפס מקום אנכי נוסף. `currentDailySpecialMult()` מזהה שמשחקים בלוח-של-היום (`mode==='dynamic'` + `_activeDynamicBoard.id === _dailySpecial.id`), וה-chip מופיע ראשון ברצועה + מאלץ אותה גלויה. gradient זהב-ורוד פועם. (`src/11-game.js` + `public/css/boards.css`). **ה-empty-board fix של #2 כבר נעשה ב-AD.1.**
+> - ✅ **משימה #4** (high, הפעלת push) — שני שינויים: (1) **cooldown קוצר 72ש→24ש + ניתן-לכוונון-אדמין** (`push_prompt_cooldown_hours`, schema+db+admin TIPS/PRESETS) — היה נדיר מדי. (2) **trigger חדש ב-game-over high-emotion** (שיא-אישי / כתר / ניקוד≥50K, לא-בוט/לא-restored) — `__bloomMaybeAskPush` עם מסגרת-ערך "🔔 הפעל התראות — נזכיר לך כשהרצף בסכנה ויש פרס ממתין". ה-pre-prompt עצמו עם guards של permission-state+cooldown → לא יכול לספאם. (`src/16-push.js` + `src/12-tour-info.js`).
+
 ## איך לקרוא את הקובץ
 בצע מלמעלה למטה — דירוג 1 הוא ההשפעה הגדולה ביותר על "השחקן לא מצליח להפסיק". קודם תקן את הבאגים האדומים (שוברים אמון = הורגים התמכרות), אחר כך רד ברשימה המדורגת לפי ROI.
 

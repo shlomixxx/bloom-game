@@ -16062,6 +16062,29 @@
   // The strip is INDEPENDENT of legacy-game-ui mode — when legacy is
   // on, .mode-bar comes back and the strip is hidden (CSS rule). So
   // the player never sees the chips twice.
+  // Task #2 — is the player currently on TODAY's Daily Special board?
+  // Mirrors the game-over banner's detection (window._activeDynamicBoard +
+  // ds.xpMult). Returns the XP multiplier (e.g. 3) or null. Drives the
+  // in-game "🌟 ×3 XP" chip so the multiplier dopamine is visible DURING
+  // play, not just at game-over.
+  function currentDailySpecialMult() {
+    try {
+      var ds = window._dailySpecial;
+      if (!ds || !ds.enabled || !ds.id) return null;
+      if (mode !== 'dynamic') return null;
+      var br = window._activeDynamicBoard;
+      if (!br || br.id !== ds.id) return null;
+      var m = ds.xpMult;
+      return (typeof m === 'number' && m > 1) ? m : null;
+    } catch (e) { return null; }
+  }
+  function dailySpecialChipHtml() {
+    var m = currentDailySpecialMult();
+    if (!m) return '';
+    var label = (m % 1 === 0) ? ('×' + m) : ('×' + m.toFixed(1));
+    return '<span class="ds-xp-chip" title="הלוח של היום — XP מוכפל">🌟 ' + label + ' XP</span>';
+  }
+
   function syncModeExtrasStrip() {
     var subEl = document.getElementById('mode-sub');
     if (!subEl) return;
@@ -16093,17 +16116,24 @@
     // existing chip styles (`.dyn-target-chip`, `.dyn-leader-chip`,
     // `.practice-diff-chip`) come along automatically.
     var subContent = subEl.innerHTML.trim();
+    // Task #2 — the Daily Special XP chip. When present it forces the strip
+    // visible (the multiplier is the point), and sits FIRST so the eye lands
+    // on the "🌟 ×3 XP" reward before anything else.
+    var dsChip = dailySpecialChipHtml();
     // Skip the daily "אותו דאנג'ן" copy — it's just informational text,
     // not an interactive chip. Hide the strip in that case to save space.
     var isPlainText = !subContent.includes('<');
-    if (!subContent || (isPlainText && subContent.length < 60)) {
+    if (!dsChip && (!subContent || (isPlainText && subContent.length < 60))) {
       // For dynamic/duel/contest where chip elements exist, render.
       // For daily/challenge with plain prose text, suppress.
       host.style.display = 'none';
       host.innerHTML = '';
       return;
     }
-    host.innerHTML = subContent;
+    // Only carry the mirrored content when it's real chips (has markup) or
+    // substantial — never the short plain-prose daily copy.
+    var mirrored = (subContent && (!isPlainText || subContent.length >= 60)) ? subContent : '';
+    host.innerHTML = dsChip + mirrored;
     host.style.display = '';
     // Re-wire the practice-diff-chip click since cloning innerHTML
     // doesn't preserve event listeners.
@@ -20610,6 +20640,20 @@
           }, 600);
         }
       } catch (e) {}
+      // Task #4 — push opt-in at a HIGH-emotion game-over (new best / crown /
+      // big score). The value-framing reason explains WHY ("we'll remind you
+      // when your streak is in danger + a reward is waiting"). The pre-prompt
+      // itself has permission-state + cooldown guards, so this can't spam.
+      try {
+        var bigPushMoment = (opts.isNewBest || highestTier >= 8 || (score | 0) >= 50000);
+        if (bigPushMoment && !opts.restored && !opts.alreadyPlayed &&
+            !window.__bloomBotActive && !skinTrialMode &&
+            typeof window.__bloomMaybeAskPush === 'function') {
+          setTimeout(function() {
+            try { window.__bloomMaybeAskPush('🔔 הפעל התראות — נזכיר לך כשהרצף שלך בסכנה ויש פרס ממתין, גם כשהמשחק סגור.'); } catch (e) {}
+          }, 2600);
+        }
+      } catch (e) {}
       // TA.1 — Restored game-over: explicit "🎮 משחק חדש" CTA in the
       // restored banner. Clears the snapshot so a click can't re-enter
       // the restored over screen, then inits a fresh game in the same
@@ -23277,8 +23321,13 @@
     // 'default' — we can ask, but only if we haven't already in the cooldown.
     try {
       const lastShown = parseInt(localStorage.getItem(PUSH_PROMPT_SHOWN_KEY) || '0', 10) || 0;
-      const threeDays = 3 * 24 * 60 * 60 * 1000;
-      if (Date.now() - lastShown < threeDays) return false;
+      // Task #4 — cooldown shortened + admin-tunable (default 24h; was a
+      // hardcoded 3 days, which made opt-in far too rare — push is the #1
+      // return driver). The browser permission-state guard above means a
+      // user who already granted/denied is never re-prompted regardless.
+      var coolH = parseInt((typeof gameConfig === 'object' && gameConfig && gameConfig.push_prompt_cooldown_hours), 10);
+      if (!(coolH > 0)) coolH = 24;
+      if (Date.now() - lastShown < coolH * 3600000) return false;
     } catch (e) {}
 
     const wantsIt = await showPushPrePrompt(reasonTextHe);

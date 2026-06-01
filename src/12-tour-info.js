@@ -1113,6 +1113,20 @@
           }, 600);
         }
       } catch (e) {}
+      // Task #4 — push opt-in at a HIGH-emotion game-over (new best / crown /
+      // big score). The value-framing reason explains WHY ("we'll remind you
+      // when your streak is in danger + a reward is waiting"). The pre-prompt
+      // itself has permission-state + cooldown guards, so this can't spam.
+      try {
+        var bigPushMoment = (opts.isNewBest || highestTier >= 8 || (score | 0) >= 50000);
+        if (bigPushMoment && !opts.restored && !opts.alreadyPlayed &&
+            !window.__bloomBotActive && !skinTrialMode &&
+            typeof window.__bloomMaybeAskPush === 'function') {
+          setTimeout(function() {
+            try { window.__bloomMaybeAskPush('🔔 הפעל התראות — נזכיר לך כשהרצף שלך בסכנה ויש פרס ממתין, גם כשהמשחק סגור.'); } catch (e) {}
+          }, 2600);
+        }
+      } catch (e) {}
       // TA.1 — Restored game-over: explicit "🎮 משחק חדש" CTA in the
       // restored banner. Clears the snapshot so a click can't re-enter
       // the restored over screen, then inits a fresh game in the same

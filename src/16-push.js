@@ -142,8 +142,13 @@
     // 'default' — we can ask, but only if we haven't already in the cooldown.
     try {
       const lastShown = parseInt(localStorage.getItem(PUSH_PROMPT_SHOWN_KEY) || '0', 10) || 0;
-      const threeDays = 3 * 24 * 60 * 60 * 1000;
-      if (Date.now() - lastShown < threeDays) return false;
+      // Task #4 — cooldown shortened + admin-tunable (default 24h; was a
+      // hardcoded 3 days, which made opt-in far too rare — push is the #1
+      // return driver). The browser permission-state guard above means a
+      // user who already granted/denied is never re-prompted regardless.
+      var coolH = parseInt((typeof gameConfig === 'object' && gameConfig && gameConfig.push_prompt_cooldown_hours), 10);
+      if (!(coolH > 0)) coolH = 24;
+      if (Date.now() - lastShown < coolH * 3600000) return false;
     } catch (e) {}
 
     const wantsIt = await showPushPrePrompt(reasonTextHe);
