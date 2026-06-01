@@ -136,7 +136,18 @@
     ftueState.nextEl = overlay.querySelector('#ftue-next');
     ftueState.bubbleEl = overlay.querySelector('#ftue-bubble');
     ftueState.arrowEl = overlay.querySelector('#ftue-arrow');
-    overlay.querySelector('#ftue-skip').onclick = function() {
+    // Bug #20 — if the overlay DOM didn't materialize (grid missing), don't
+    // strand a first-time player on a broken tutorial with no home + no game.
+    // Tear down and hand off to onDone (→ showHome) so they still land safely.
+    if (!ftueState.gridEl) {
+      var failCb = ftueState.onDone;
+      try { overlay.remove(); } catch (e) {}
+      ftueState = null;
+      if (typeof failCb === 'function') { try { failCb(); } catch (e) {} }
+      return;
+    }
+    var skipBtn = overlay.querySelector('#ftue-skip');
+    if (skipBtn) skipBtn.onclick = function() {
       try { trackEvent('tutorial_skip', { step: (ftueState && ftueState.stepIdx) || 0 }); } catch (e) {}
       finishFTUE(false);
     };
@@ -176,26 +187,34 @@
   }
 
   function renderFtueGrid(state, hintCol) {
+    // Bug #20 — guard against a missing grid element / bad state so the
+    // tutorial fails soft instead of throwing on a first-time player.
+    if (!ftueState || !ftueState.gridEl || !Array.isArray(state)) return;
     const cols = 4, rows = 6;
-    ftueState.gridEl.innerHTML = '';
-    for (let r = 0; r < rows; r++) {
-      for (let c = 0; c < cols; c++) {
-        const cell = document.createElement('div');
-        cell.className = 'ftue-cell';
-        cell.dataset.row = r;
-        cell.dataset.col = c;
-        if (c === hintCol) cell.classList.add('hint-col');
-        const tier = state[r * cols + c];
-        if (tier > 0) {
-          cell.appendChild(buildFtueTileNode(tier));
+    try {
+      ftueState.gridEl.innerHTML = '';
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          const cell = document.createElement('div');
+          cell.className = 'ftue-cell';
+          cell.dataset.row = r;
+          cell.dataset.col = c;
+          if (c === hintCol) cell.classList.add('hint-col');
+          const tier = state[r * cols + c];
+          if (tier > 0) {
+            cell.appendChild(buildFtueTileNode(tier));
+          }
+          cell.onclick = function() { onCellTap(c); };
+          ftueState.gridEl.appendChild(cell);
         }
-        cell.onclick = function() { onCellTap(c); };
-        ftueState.gridEl.appendChild(cell);
       }
+    } catch (e) {
+      try { console.warn('[bloom] FTUE grid render failed', e && e.message); } catch (_) {}
     }
   }
 
   function renderFtueTile(container, tier) {
+    if (!container) return;
     container.innerHTML = '';
     container.appendChild(buildFtueTileNode(tier));
   }

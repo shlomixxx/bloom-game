@@ -2775,7 +2775,11 @@
       detail = '<div style="font-size:14px;color:#F5C4B3;margin-top:6px">היריב היה טוב יותר הפעם</div>';
     } else if (d && d.result === 'tie') {
       emoji = '🤝'; title = 'תיקו!'; color = '#BA7517';
-      detail = '<div style="font-size:14px;color:#FAC775;margin-top:6px">ההימור הוחזר</div>';
+      // Bug #22 — show the actual refunded wager when the server echoes it.
+      var tieRefund = (d.refund != null) ? (d.refund | 0) : 0;
+      detail = '<div style="font-size:14px;color:#FAC775;margin-top:6px">' +
+        (tieRefund > 0 ? 'ההימור הוחזר: <strong>' + tieRefund.toLocaleString() + '💎</strong>' : 'ההימור הוחזר') +
+        '</div>';
     } else if (d && d.result === 'declined') {
       // The opponent explicitly declined the duel. No win/loss for either
       // side; the wager has been refunded server-side already. Make the
@@ -19861,6 +19865,77 @@
     revealNextTier(chosen);
   }
 
+  // ────────────────────────────────────────────────────────────────
+  // Task #24 — in-session "hot streak". Consecutive games at/above a
+  // threshold within THIS browser session (resets when the tab closes).
+  // Pure dopamine: an escalating meter directly above the "play again" CTA
+  // + a celebration at milestones. The nuclear "just one more" driver —
+  // turns "I finished a game" into "I'm on a run, I can't stop now". Admin
+  // controls it via win_streak_enabled + win_streak_threshold.
+  // ────────────────────────────────────────────────────────────────
+  var WIN_STREAK_KEY = 'bloom_win_streak';
+  var WIN_STREAK_GAME_KEY = 'bloom_win_streak_last_game';
+  function winStreakEnabled() {
+    if (typeof gameConfig !== 'object' || !gameConfig) return true;
+    return gameConfig.win_streak_enabled !== 'false';
+  }
+  function winStreakThreshold() {
+    var t = parseInt(gameConfig && gameConfig.win_streak_threshold, 10);
+    return (t > 0) ? t : 15000;
+  }
+  function getWinStreak() {
+    try { return parseInt(sessionStorage.getItem(WIN_STREAK_KEY), 10) || 0; } catch (e) { return 0; }
+  }
+  function setWinStreak(n) {
+    try { sessionStorage.setItem(WIN_STREAK_KEY, String(n | 0)); } catch (e) {}
+  }
+  // Update at game-over and return { count, isWin, milestone, brokeAt } or
+  // null when disabled / not applicable (bot / skin-trial). Deduped per game
+  // so a double render() can't double-count.
+  function updateWinStreakForGame(gscore, opts) {
+    if (!winStreakEnabled()) return null;
+    if (typeof window.__bloomBotActive !== 'undefined' && window.__bloomBotActive) return null;
+    if (typeof skinTrialMode !== 'undefined' && skinTrialMode) return null;
+    if (opts && (opts.restored || opts.alreadyPlayed)) {
+      // Restored/already-played view — reflect, don't re-count.
+      return { count: getWinStreak(), isWin: null, milestone: 0, brokeAt: 0 };
+    }
+    var gid = (typeof getCurrentGameId === 'function') ? getCurrentGameId() : null;
+    var prevGid = null;
+    try { prevGid = sessionStorage.getItem(WIN_STREAK_GAME_KEY); } catch (e) {}
+    var prev = getWinStreak();
+    var isWin = (gscore | 0) >= winStreakThreshold();
+    if (gid && gid === prevGid) {
+      // Already counted this exact game — don't re-increment on re-render.
+      return { count: prev, isWin: isWin, milestone: 0, brokeAt: 0 };
+    }
+    var count = isWin ? (prev + 1) : 0;
+    var brokeAt = (!isWin && prev >= 2) ? prev : 0;
+    setWinStreak(count);
+    try { if (gid) sessionStorage.setItem(WIN_STREAK_GAME_KEY, gid); } catch (e) {}
+    var milestone = 0;
+    if (isWin && (count === 3 || count === 5 || count === 7 || count === 10 || (count > 10 && count % 5 === 0))) milestone = count;
+    return { count: count, isWin: isWin, milestone: milestone, brokeAt: brokeAt };
+  }
+  function renderWinStreakMeterHtml(st) {
+    if (!st) return '';
+    if (st.count >= 2) {
+      var n = st.count;
+      var cls = n >= 7 ? 'over-winstreak over-winstreak-blaze'
+              : n >= 5 ? 'over-winstreak over-winstreak-hot'
+              : 'over-winstreak';
+      var msg = n >= 7 ? '🔥🔥🔥 רצף ' + n + ' ניצחונות — בלתי-ניתן-לעצירה!'
+              : n >= 5 ? '🔥🔥 רצף ' + n + ' ניצחונות — אל תעצור עכשיו!'
+              : '🔥 רצף ' + n + ' ניצחונות — עוד אחד!';
+      return '<div class="' + cls + '">' + msg + '</div>';
+    }
+    if (st.brokeAt >= 2) {
+      // Loss-aversion — the run you just lost stings, drives the retry.
+      return '<div class="over-winstreak over-winstreak-broken">💔 הרצף נשבר ב-' + st.brokeAt + ' — תתחיל מחדש!</div>';
+    }
+    return '';
+  }
+
   function render(opts) {
     opts = opts || {};
     document.getElementById('score').textContent = score.toLocaleString();
@@ -19951,6 +20026,10 @@
     const wrap = document.getElementById('grid-wrap');
 
     if (opts.over) {
+      // Task #24 — update the in-session win-streak once per game (deduped),
+      // then render the escalating meter above the replay CTA below.
+      var winStreakState = updateWinStreakForGame(score, opts);
+      var winStreakHtml = renderWinStreakMeterHtml(winStreakState);
       const tierRows = [];
       for (let t = 1; t <= MAX_TIER; t++) {
         const ti = getActiveTiers()[t];
@@ -20265,6 +20344,9 @@
           rankTierHtml +
           rivalHtml +
           continueHtml +
+          // Task #24 — hot-streak meter directly above the replay CTA so the
+          // escalating "🔥 רצף N — עוד אחד!" sits right where the decision is made.
+          winStreakHtml +
           // PRIMARY CTA — right after score
           '<button class="btn over-again-btn" id="again">' + againLabel + '</button>' +
           // Stage 32 — Replay Share button. Only when score crosses threshold.
@@ -20480,6 +20562,22 @@
             try { if (typeof soundMilestone === 'function') soundMilestone(7); } catch (e) {}
             try { if (typeof buzz === 'function') buzz([40, 30, 60, 30, 90]); } catch (e) {}
           }, 250);
+        }
+      } catch (e) {}
+      // Task #24 — hot-streak milestone celebration (3/5/7/10…). Escalating
+      // confetti + sound + buzz, fired a beat after the personal-best pop so
+      // they don't fully collide. The "I'm on a run" dopamine spike that makes
+      // breaking the streak feel like a real loss.
+      try {
+        if (winStreakState && winStreakState.milestone >= 3 &&
+            !opts.restored && !opts.alreadyPlayed &&
+            !window.__bloomBotActive && !skinTrialMode) {
+          var __wsM = winStreakState.milestone;
+          setTimeout(function() {
+            try { if (typeof showConfetti === 'function') showConfetti(__wsM >= 7 ? 40 : (__wsM >= 5 ? 28 : 18)); } catch (e) {}
+            try { if (typeof soundMilestone === 'function') soundMilestone(Math.min(8, 3 + Math.floor(__wsM / 2))); } catch (e) {}
+            try { if (typeof buzz === 'function') buzz(__wsM >= 7 ? [50, 40, 60, 40, 90] : [40, 40, 70]); } catch (e) {}
+          }, 600);
         }
       } catch (e) {}
       // TA.1 — Restored game-over: explicit "🎮 משחק חדש" CTA in the
@@ -22716,7 +22814,18 @@
     ftueState.nextEl = overlay.querySelector('#ftue-next');
     ftueState.bubbleEl = overlay.querySelector('#ftue-bubble');
     ftueState.arrowEl = overlay.querySelector('#ftue-arrow');
-    overlay.querySelector('#ftue-skip').onclick = function() {
+    // Bug #20 — if the overlay DOM didn't materialize (grid missing), don't
+    // strand a first-time player on a broken tutorial with no home + no game.
+    // Tear down and hand off to onDone (→ showHome) so they still land safely.
+    if (!ftueState.gridEl) {
+      var failCb = ftueState.onDone;
+      try { overlay.remove(); } catch (e) {}
+      ftueState = null;
+      if (typeof failCb === 'function') { try { failCb(); } catch (e) {} }
+      return;
+    }
+    var skipBtn = overlay.querySelector('#ftue-skip');
+    if (skipBtn) skipBtn.onclick = function() {
       try { trackEvent('tutorial_skip', { step: (ftueState && ftueState.stepIdx) || 0 }); } catch (e) {}
       finishFTUE(false);
     };
@@ -22756,26 +22865,34 @@
   }
 
   function renderFtueGrid(state, hintCol) {
+    // Bug #20 — guard against a missing grid element / bad state so the
+    // tutorial fails soft instead of throwing on a first-time player.
+    if (!ftueState || !ftueState.gridEl || !Array.isArray(state)) return;
     const cols = 4, rows = 6;
-    ftueState.gridEl.innerHTML = '';
-    for (let r = 0; r < rows; r++) {
-      for (let c = 0; c < cols; c++) {
-        const cell = document.createElement('div');
-        cell.className = 'ftue-cell';
-        cell.dataset.row = r;
-        cell.dataset.col = c;
-        if (c === hintCol) cell.classList.add('hint-col');
-        const tier = state[r * cols + c];
-        if (tier > 0) {
-          cell.appendChild(buildFtueTileNode(tier));
+    try {
+      ftueState.gridEl.innerHTML = '';
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          const cell = document.createElement('div');
+          cell.className = 'ftue-cell';
+          cell.dataset.row = r;
+          cell.dataset.col = c;
+          if (c === hintCol) cell.classList.add('hint-col');
+          const tier = state[r * cols + c];
+          if (tier > 0) {
+            cell.appendChild(buildFtueTileNode(tier));
+          }
+          cell.onclick = function() { onCellTap(c); };
+          ftueState.gridEl.appendChild(cell);
         }
-        cell.onclick = function() { onCellTap(c); };
-        ftueState.gridEl.appendChild(cell);
       }
+    } catch (e) {
+      try { console.warn('[bloom] FTUE grid render failed', e && e.message); } catch (_) {}
     }
   }
 
   function renderFtueTile(container, tier) {
+    if (!container) return;
     container.innerHTML = '';
     container.appendChild(buildFtueTileNode(tier));
   }

@@ -50,6 +50,12 @@
 > - ✅ **באג #23** (🟡, decode מוזיקה שקט) — ה-`.catch` כבר היה קיים; הוסף `console.warn` לדיבוג. (`src/03-audio.js`).
 > - ℹ️ **משימה #18** (שדרוג כפתור replay-share) — **כבר בוצע** (false-positive): `.over-replay-share-btn` ב-`boards.css:7220` כבר gradient ורוד-סגול + `replayShareBtnPulse` infinite, וממוקם מיד אחרי ה-CTA הראשי (`12-tour-info.js:807`, לפני טבלת ה-tiers). אין מה לשנות.
 
+## ✅ session 4 batch 2 (2026-06-02) — FTUE-crash + tie-refund + מד רצף-ניצחונות
+> build חי: `v20260602c` / SW `bloom-v22.6`. engine self-test נקי (0 floating tiles).
+> - ✅ **באג #20** (🟡, FTUE קורס בלי try/catch) — guard ב-`startFTUE` (אם ה-grid לא נוצר → teardown + `onDone()`→showHome, לא משאיר שחקן-ראשון תקוע), `renderFtueGrid` עטוף ב-try/catch + null-guards, `renderFtueTile` guard ל-`container`. (`src/15-ftue.js`).
+> - ✅ **באג #22** (🟡, תיקו-wager לא מראה סכום) — השרת מחזיר עכשיו `refund: u.amount` בתגובת התיקו (`server.js:17448`), וה-overlay מציג "ההימור הוחזר: N💎". (`server.js` + `src/02-shop.js`).
+> - ✅ **משימה #24** (medium/high addiction, מד win-streak תוך-סשן) — מד "🔥 רצף N ניצחונות — עוד אחד!" מעל כפתור "שחק שוב" במסך הסיום. ניצחון = ניקוד ≥ `win_streak_threshold` (ברירת מחדל 15K). 3 רמות חזותיות (רגיל/hot 5+/blaze 7+) + חגיגה מסלימה (קונפטי+צליל+buzz) ב-3/5/7/10, ו-"💔 הרצף נשבר ב-N" loss-aversion כשנשבר. מתאפס בסגירת טאב (sessionStorage), dedup per-game דרך `getCurrentGameId`, מדלג על בוטים/skin-trial/restored. **שליטת אדמין מלאה:** `win_streak_enabled` + `win_streak_threshold` ב-schema+db+admin (TIPS+PRESETS). client-only celebration (בלי reward → בלי anti-cheat). (`src/12-tour-info.js` + `public/css/screens.css` + schema/db/admin).
+
 ## איך לקרוא את הקובץ
 בצע מלמעלה למטה — דירוג 1 הוא ההשפעה הגדולה ביותר על "השחקן לא מצליח להפסיק". קודם תקן את הבאגים האדומים (שוברים אמון = הורגים התמכרות), אחר כך רד ברשימה המדורגת לפי ROI.
 

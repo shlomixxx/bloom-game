@@ -2018,7 +2018,11 @@
       detail = '<div style="font-size:14px;color:#F5C4B3;margin-top:6px">היריב היה טוב יותר הפעם</div>';
     } else if (d && d.result === 'tie') {
       emoji = '🤝'; title = 'תיקו!'; color = '#BA7517';
-      detail = '<div style="font-size:14px;color:#FAC775;margin-top:6px">ההימור הוחזר</div>';
+      // Bug #22 — show the actual refunded wager when the server echoes it.
+      var tieRefund = (d.refund != null) ? (d.refund | 0) : 0;
+      detail = '<div style="font-size:14px;color:#FAC775;margin-top:6px">' +
+        (tieRefund > 0 ? 'ההימור הוחזר: <strong>' + tieRefund.toLocaleString() + '💎</strong>' : 'ההימור הוחזר') +
+        '</div>';
     } else if (d && d.result === 'declined') {
       // The opponent explicitly declined the duel. No win/loss for either
       // side; the wager has been refunded server-side already. Make the

@@ -599,6 +599,9 @@ export async function initDb() {
     `INSERT INTO game_config (key, value) VALUES ('bots_games_today_floor', '0') ON CONFLICT (key) DO NOTHING`,
     // AD.4 — live "moves to survive" danger meter (loss-aversion). Default on.
     `INSERT INTO game_config (key, value) VALUES ('danger_meter_enabled', 'true') ON CONFLICT (key) DO NOTHING`,
+    // Task #24 — in-session "hot streak" meter on game-over. Default on.
+    `INSERT INTO game_config (key, value) VALUES ('win_streak_enabled', 'true') ON CONFLICT (key) DO NOTHING`,
+    `INSERT INTO game_config (key, value) VALUES ('win_streak_threshold', '15000') ON CONFLICT (key) DO NOTHING`,
     // AD.5 — win-return celebration on home. Default on.
     `INSERT INTO game_config (key, value) VALUES ('home_win_celebration_enabled', 'true') ON CONFLICT (key) DO NOTHING`,
     `INSERT INTO game_config (key, value) VALUES ('home_win_celebration_min_score', '5000') ON CONFLICT (key) DO NOTHING`,

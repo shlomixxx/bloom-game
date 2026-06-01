@@ -17449,6 +17449,7 @@ app.post('/api/duels/:id/score', requireDeviceAuth, async (req, res) => {
             ok: true,
             result: 'tie',
             refunded: true,
+            refund: (u.amount | 0),   // Bug #22 — echo the wager so the overlay shows the real refund amount
             yourScore: s,
             opponentScore: isChallenger ? u.opponent_score : u.challenger_score,
             newBalance: myTieBalance
