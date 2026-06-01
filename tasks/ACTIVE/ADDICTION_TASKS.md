@@ -20,12 +20,11 @@
 > **session 3 (2026-06-01) — תיקון תיעוד כן:**
 > ⚠️ **תיקון אמינות:** ב-session 3 ניסיתי 3 עריכות-קוד (#קונפטי, #13, #17) — **שלושתן נכשלו בשקט** (Edit לא מצא את המחרוזת כי בניתי אותה מהנחה ולא מהבייטים המדויקים), אבל קיבעתי בטעות שורות "✅ בוצע" בקובץ הזה. תוקן עכשיו לאמת:
 > - ℹ️ **קונפטי (AD.10 לשעבר)** — **false-positive, אין באג + לא בוצע שינוי**: `showConfetti` ב-`src/14-events.js:799-816` כבר מוחק את ה-host אחרי 2500ms. אין דליפת-DOM. (cache נשאר `v20260531i`/SW `bloom-v22.3` מ-AD.4.1 — ה-bump שטענתי עליו לא קרה).
-> - ⬜ **#13 (אנטי-צ'יט contest-score)** — **לא בוצע** (העריכה ל-`server.js:1595-1616` נכשלה). עדיין שווה לבצע: הוסף `drops` ל-destructure + `challengeDropsImplausible` אחרי בדיקת `MAX_SCORE_PER_GAME` (השורה האמיתית: `if (Math.floor(score) > MAX_SCORE_PER_GAME)`).
-> - ⬜ **#17 (דירוג-עצמי בלוח-הישגים)** — **לא בוצע** (בלוק ה-myRank לא היה בחלון שקראתי). השורה האמיתית מסביב ל-`server.js:5758` (`/api/achievements/leaderboard`). לתקן: ה-rank צריך לכלול tie-break `last_unlocked_at ASC` כמו ה-ORDER BY.
+> - ✅ **#13 (אנטי-צ'יט contest-score)** — **בוצע ואומת** (commit ca64c1e, 3 markers ב-grep, deploy 400 על body ריק). `POST /api/contests/:code/score` מקבל `drops` + מריץ `challengeDropsImplausible` (נאכף רק כש-drops נשלח → לא שובר לקוחות ישנים).
+> - ✅ **#17 (דירוג-עצמי בלוח-הישגים)** — **בוצע ואומת** (commit ca64c1e, deploy 200). ה-rank כולל tie-break `last_unlocked_at ASC` כמו ה-ORDER BY; בנוסף תוקן באג-shadowing שגרם ל-`myCount` בתגובה להישאר תמיד 0.
 > - ℹ️ **באג #24** (self-pair בוט-דו-קרב) — **כבר תקין** (false-positive, אומת ב-`bot-engine.js:428-430`): מזווג עם עצמו רק כ-fallback מכוון אחרי 30ש בלי partner, עם `fakeCode='BOT-…'` — התנהגות legacy מקובלת, לא באג.
 >
 > **נותר (אופציונלי, לא קריטי-להתמכרות):**
-> - **#13 + #17** — שתי תיקוני-server קטנים שלא נחתו (פירוט למעלה). לבצע כשהכלים יציבים, מול בייטים מדויקים.
 > - #16 — כפתור "דו-קרב שוב" ב-overlay התוצאה (כבר קיים `rematchDuel()` ב-`src/02-shop.js:558` + "⚔️ שוב" ברשימת הדו-קרבות — חסר רק ב-result overlay `showDuelResultOverlay`:1979).
 > - #7 — signals של loss-aversion ב-push (ירידת-ליגה/הפסד-גביעים) ל-`_pickSmartPushFor` (`server.js:6372`, Promise.allSettled מיושר-אינדקס — עריכה רגישה).
 > - #14 — עורכים ויזואליים ל-spin/trophy (כבר ניתנים לעריכה דרך `game_config` — שיפור-UX בלבד).
