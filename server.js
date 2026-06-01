@@ -12535,11 +12535,17 @@ if (ADMIN_PATH && ADMIN_PASSWORD) {
       const q      = String(req.query.q || '').trim();
       const params = [limit, offset];
       let where = '';
+      let whereTotal = '';
       if (q) {
         params.push('%' + q + '%');
         const i = params.length;
         // Match on display name (daily_scores), device_id, player_code, or profile display_name
         where = `WHERE ds.name ILIKE $${i} OR ds.device_id ILIKE $${i} OR pp.player_code ILIKE $${i} OR pp.display_name ILIKE $${i}`;
+        // The COUNT query below is passed ONLY the q-pattern (as $1), so it
+        // needs its OWN clause referencing $1. The clause above uses $3
+        // (q comes after limit+offset), which made the count query throw
+        // "there is no parameter $3" → HTTP 500 on EVERY player search.
+        whereTotal = `WHERE ds.name ILIKE $1 OR ds.device_id ILIKE $1 OR pp.player_code ILIKE $1 OR pp.display_name ILIKE $1`;
       }
       const rows = await pool.query(
         `SELECT
@@ -12564,7 +12570,7 @@ if (ADMIN_PATH && ADMIN_PASSWORD) {
         `SELECT COUNT(DISTINCT ds.device_id)::int AS c
          FROM daily_scores ds
          LEFT JOIN player_profiles pp ON pp.device_id = ds.device_id
-         ${where}`,
+         ${whereTotal}`,
         q ? [params[2]] : []
       );
       res.json({ ok: true, players: rows.rows, total: total.rows[0].c });
