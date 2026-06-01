@@ -97,6 +97,14 @@
 > - ✅ **משימה #29** (medium, spin חצי) — perceived-rarity FOMO על גלגל-היום: `segRarity(seg)` מסווג כל פלח לפי ערך הפרס (common/rare/epic/legendary/jackpot), וכל פלח מקבל stroke בהיר+עבה יותר לפי רוֹרִיוּת (לבן→תכלת→סגול→זהב→ורוד) + sparkle 💎/✨ ליד ה-rim על legendary/jackpot. העין נמשכת ל-jackpot בכל פתיחה → מניע את לולאת-הספין. SVG-only, contained, בלי blur-filter (מטשטש פלחים מלאים). ([src/32-daily-spin.js](src/32-daily-spin.js)).
 > - ℹ️ **#29 album חצי** — gradient-לפי-board_difficulty ללוחות-האלבום נשאר follow-up (מערכת נפרדת, פחות-תכוף מהספין).
 
+## ✅ session 4 batch 11 (2026-06-02) — מילוי הפערים בסדר: #11/#19/#20/#22/#23
+> build חי: `v20260602j` / SW `bloom-v23.3`. engine self-test נקי. **חזרתי למלא פריטים שדילגתי עליהם — לא לדלג, לפי הסדר.**
+> - ✅ **#11** (כיווץ-בית hero) — **כבר בוצע** ע"י PH.1 (Power Hero): `home_variant` ברירת-מחדל `'hero'` (schema:2390 + migration ב-db.js), כרטיס-גיבור מסתובב + מגירה מקוטלגת. אומת, אין מה להוסיף.
+> - ✅ **#19** (באנר "החברים שלך פה") — מודול חדש [src/50-friends-banner.js](src/50-friends-banner.js): באנר social-proof מתחת לגיבור (L5+) — "🟢 N פעילים עכשיו" / "N שיחקו היום" / "יש לך N חברים" / "חבר ראשון = +200💎". קליק → modal חיפוש-חברים. רק מספרים (בלי שמות) → אפס XSS. CSS ב-home-v2.css עם dark-parity + caller ב-05a-home-v2.
+> - ✅ **#20** (שער-גילדה) — **תיקון:** הגילדות **לא** מושבתות (ה-handoff טעה) — רק gated L8. הורדתי הצטרפות ל-**L3** (`28-guilds.js:84`), ויצירה נשארת **L8** (gated במודאל — L3-7 רואים "🔒 יצירה נפתחת ברמה 8 · הצטרף בקוד חינם"). לא נגעתי ב-`guilds_enabled`. CSS locked-note.
+> - ✅ **#22** (micro-interaction tokens) — 5 keyframes משותפים (`ui-pop-in/out/bounce-land/pulse-glow/slide-up`) + `--anim-mult` ב-base.css + reduced-motion. מכפיל-מהירות ניתן-לאדמין (`animation_duration_multiplier`, נקרא ב-03-audio → `--anim-mult`). הוחל על friends-banner כ-proof. **קונבנציה ל-קוד-חדש** (לא mass-migration — סיכון רגרסיה, תקדים TC.2). schema+db+admin.
+> - ✅ **#23** (תיבת-מסתורין בכל game-over) — ה-Skinner-box נורה עכשיו גם ב-daily/practice/contest (לא רק דינמי). `chestAllModesEnabled()` (default ON, מכבד `dyn_chest_enabled`), נורה ב-game-over handler לפני ש-submitDuelScore מאפס activeDuelId (כך שדו-קרבות מודרים). pity+cap-יומי נאכפים בשרת. toggle אדמין `chest_all_modes_enabled` + tip שמזהיר על ה-faucet (עקוב ב-AD.9).
+
 ## איך לקרוא את הקובץ
 בצע מלמעלה למטה — דירוג 1 הוא ההשפעה הגדולה ביותר על "השחקן לא מצליח להפסיק". קודם תקן את הבאגים האדומים (שוברים אמון = הורגים התמכרות), אחר כך רד ברשימה המדורגת לפי ROI.
 

@@ -430,6 +430,11 @@
       setTimeout(function() { try { window.__bloomGhostMode.maybeShow(); } catch (e) {} }, 700);
     }
 
+    // Task #19 — "your friends are here" social-proof banner (L5+).
+    if (window.__bloomFriendsBanner && typeof window.__bloomFriendsBanner.maybeShow === 'function') {
+      setTimeout(function() { try { window.__bloomFriendsBanner.maybeShow(); } catch (e) {} }, 750);
+    }
+
     // Tier-icons tap → reveal stats bubble (same behaviour as v1)
     var iconsTap = document.getElementById('home-icons-tap');
     if (iconsTap) {

@@ -695,6 +695,14 @@
       return (typeof m === 'number' && m > 1) ? m : null;
     } catch (e) { return null; }
   }
+  // Task #23 — should the Mystery Chest fire at EVERY game-over (daily/
+  // practice/contest), not just dynamic boards? Respects the master chest
+  // toggle; default ON (the per-day cap + pity floor are enforced server-side).
+  function chestAllModesEnabled() {
+    if (typeof gameConfig !== 'object' || !gameConfig) return true;
+    if (gameConfig.dyn_chest_enabled === 'false') return false;
+    return gameConfig.chest_all_modes_enabled !== 'false';
+  }
   function dailySpecialChipHtml() {
     var m = currentDailySpecialMult();
     if (!m) return '';
@@ -3599,6 +3607,17 @@
               }
             }
           })();
+        }
+        // Task #23 — variable-reward Mystery Chest at EVERY game-over, not just
+        // dynamic boards. The Skinner-box is the core retention loop; leaving
+        // the most-played modes (daily/practice/contest) without it left them
+        // flat. Pity floor + daily cap are server-enforced. Checked BEFORE
+        // submitDuelScore() nulls activeDuelId so duels are correctly excluded.
+        if (chestAllModesEnabled() && !window.__bloomBotActive && !skinTrialMode &&
+            !activeDuelId && !window._duelMode &&
+            (mode === 'daily' || mode === 'practice' || mode === 'contest') &&
+            typeof openMysteryChest === 'function') {
+          setTimeout(function() { try { openMysteryChest(); } catch (e) {} }, 950);
         }
         if (mode === 'practice') clearPracticeGameState();
         if (activeDuelId) submitDuelScore(score);

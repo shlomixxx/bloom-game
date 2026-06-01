@@ -7672,6 +7672,14 @@ html[data-theme="dark"] .replay-share-text-preview { background: rgba(255,255,25
   color: #6B7280;
   margin: 8px 0;
 }
+/* Task #20 — locked "create" notice for L3-7 players (join is still free). */
+.guild-jc-locked-note {
+  font-size: 12px; font-weight: 700; line-height: 1.5;
+  color: #8A6D3B; background: rgba(255,200,80,0.12);
+  border: 1px dashed rgba(186,117,23,0.45); border-radius: 12px;
+  padding: 10px 12px; text-align: center;
+}
+html[data-theme="dark"] .guild-jc-locked-note { color: #E6C77A; background: rgba(255,200,80,0.08); }
 .guild-jc-create-fields {
   display: flex;
   flex-direction: column;

@@ -9,6 +9,12 @@
       .then(function(d) {
         if (d && d.config) {
           gameConfig = d.config;
+          // Task #22 — apply the admin-tunable animation duration multiplier
+          // to the --anim-mult token so every ui-* micro-interaction scales.
+          try {
+            var __am = parseFloat(d.config.animation_duration_multiplier);
+            if (__am > 0 && __am <= 5) document.documentElement.style.setProperty('--anim-mult', String(__am));
+          } catch (e) {}
           // Race-condition fix (May 2026): showHomeV2 calls
           // applyHomeVariant() at end of mount, but this fetch is async.
           // If the page loaded slowly enough that home mounted BEFORE the

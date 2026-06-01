@@ -81,7 +81,11 @@
     // beats every other mechanic in F2P puzzles. Create cost (500💎
     // from config) still keeps it from being noise for L1-7 players;
     // joining via code is free + the modal lets them browse first.
-    try { if (typeof getPlayerLevel === 'function' && getPlayerLevel() < 8) return; } catch (e) {}
+    // Task #20 — gate lowered L8 → L3. Clan retention is the strongest social
+    // lever (+35% D30, 3.4× sessions/day); exposing "join a clan" earlier pulls
+    // it forward. CREATE stays at L8 (gated inside the modal) — the 500💎 cost +
+    // level keep new players from spawning dead clans; joining by code is free.
+    try { if (typeof getPlayerLevel === 'function' && getPlayerLevel() < 3) return; } catch (e) {}
     fetchGuildState(false).then(function(d) {
       if (!d || !d.ok || !d.enabled) return;
       var home = document.getElementById('home-screen-v2') || document.getElementById('home-screen');
@@ -146,6 +150,24 @@
     var modal = document.createElement('div');
     modal.id = 'guild-jc-modal';
     modal.className = 'guild-modal-overlay';
+    // Task #20 — CREATE is gated to L8; L3-7 players can only JOIN by code.
+    var guildLvl = 99;
+    try { if (typeof getPlayerLevel === 'function') guildLvl = getPlayerLevel(); } catch (e) {}
+    var guildCanCreate = guildLvl >= 8;
+    var createSectionHtml = guildCanCreate
+      ? '<div class="guild-jc-section">' +
+          '<div class="guild-jc-section-title">✨ צור קלאן חדש</div>' +
+          '<div class="guild-jc-create-fields">' +
+            '<input type="text" id="guild-create-name" placeholder="שם הקלאן" maxlength="60" />' +
+            '<input type="text" id="guild-create-emoji" placeholder="אימוג\'י (לדוגמה: 🛡)" maxlength="4" style="text-align:center;font-size:18px" />' +
+            '<textarea id="guild-create-desc" placeholder="תיאור (אופציונלי)" maxlength="300" rows="2"></textarea>' +
+            '<button class="guild-jc-btn-create" id="guild-jc-create">צור · 500💎</button>' +
+          '</div>' +
+        '</div>'
+      : '<div class="guild-jc-section guild-jc-create-locked">' +
+          '<div class="guild-jc-section-title">✨ צור קלאן חדש</div>' +
+          '<div class="guild-jc-locked-note">🔒 יצירת קלאן נפתחת ברמה 8 · בינתיים הצטרף לקלאן קיים עם קוד (חינם!)</div>' +
+        '</div>';
     modal.innerHTML =
       '<div class="guild-modal-card">' +
         '<button class="guild-modal-close" aria-label="סגור">×</button>' +
@@ -163,15 +185,7 @@
 
         '<div class="guild-jc-divider">— או —</div>' +
 
-        '<div class="guild-jc-section">' +
-          '<div class="guild-jc-section-title">✨ צור קלאן חדש</div>' +
-          '<div class="guild-jc-create-fields">' +
-            '<input type="text" id="guild-create-name" placeholder="שם הקלאן" maxlength="60" />' +
-            '<input type="text" id="guild-create-emoji" placeholder="אימוג\'י (לדוגמה: 🛡)" maxlength="4" style="text-align:center;font-size:18px" />' +
-            '<textarea id="guild-create-desc" placeholder="תיאור (אופציונלי)" maxlength="300" rows="2"></textarea>' +
-            '<button class="guild-jc-btn-create" id="guild-jc-create">צור · 500💎</button>' +
-          '</div>' +
-        '</div>' +
+        createSectionHtml +
 
         '<div id="guild-jc-status" class="guild-jc-status"></div>' +
       '</div>';
@@ -185,7 +199,8 @@
       if (code.length < 4) { setGuildStatus('הקוד קצר מדי', true); return; }
       doGuildJoin(code, close);
     };
-    document.getElementById('guild-jc-create').onclick = function() {
+    var createBtn = document.getElementById('guild-jc-create');
+    if (createBtn) createBtn.onclick = function() {
       var name = document.getElementById('guild-create-name').value.trim();
       var emoji = document.getElementById('guild-create-emoji').value.trim();
       var desc = document.getElementById('guild-create-desc').value.trim();

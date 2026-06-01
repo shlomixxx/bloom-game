@@ -616,6 +616,10 @@ export async function initDb() {
     `INSERT INTO game_config (key, value) VALUES ('trophy_arena_6_at', '3000') ON CONFLICT (key) DO NOTHING`,
     `INSERT INTO game_config (key, value) VALUES ('trophy_arena_7_at', '6000') ON CONFLICT (key) DO NOTHING`,
     `INSERT INTO game_config (key, value) VALUES ('trophy_arena_8_at', '12000') ON CONFLICT (key) DO NOTHING`,
+    // Task #22 — global multiplier on the shared ui-* micro-interaction durations.
+    `INSERT INTO game_config (key, value) VALUES ('animation_duration_multiplier', '1') ON CONFLICT (key) DO NOTHING`,
+    // Task #23 — Mystery Chest at every game-over (not just dynamic). Default on.
+    `INSERT INTO game_config (key, value) VALUES ('chest_all_modes_enabled', 'true') ON CONFLICT (key) DO NOTHING`,
     // AD.5 — win-return celebration on home. Default on.
     `INSERT INTO game_config (key, value) VALUES ('home_win_celebration_enabled', 'true') ON CONFLICT (key) DO NOTHING`,
     `INSERT INTO game_config (key, value) VALUES ('home_win_celebration_min_score', '5000') ON CONFLICT (key) DO NOTHING`,

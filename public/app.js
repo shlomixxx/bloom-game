@@ -3734,6 +3734,12 @@
       .then(function(d) {
         if (d && d.config) {
           gameConfig = d.config;
+          // Task #22 — apply the admin-tunable animation duration multiplier
+          // to the --anim-mult token so every ui-* micro-interaction scales.
+          try {
+            var __am = parseFloat(d.config.animation_duration_multiplier);
+            if (__am > 0 && __am <= 5) document.documentElement.style.setProperty('--anim-mult', String(__am));
+          } catch (e) {}
           // Race-condition fix (May 2026): showHomeV2 calls
           // applyHomeVariant() at end of mount, but this fetch is async.
           // If the page loaded slowly enough that home mounted BEFORE the
@@ -6074,6 +6080,11 @@
     // A9 — Ghost Mode tile (L8+, always shown for L8+ players).
     if (window.__bloomGhostMode && typeof window.__bloomGhostMode.maybeShow === 'function') {
       setTimeout(function() { try { window.__bloomGhostMode.maybeShow(); } catch (e) {} }, 700);
+    }
+
+    // Task #19 — "your friends are here" social-proof banner (L5+).
+    if (window.__bloomFriendsBanner && typeof window.__bloomFriendsBanner.maybeShow === 'function') {
+      setTimeout(function() { try { window.__bloomFriendsBanner.maybeShow(); } catch (e) {} }, 750);
     }
 
     // Tier-icons tap → reveal stats bubble (same behaviour as v1)
@@ -16078,6 +16089,14 @@
       return (typeof m === 'number' && m > 1) ? m : null;
     } catch (e) { return null; }
   }
+  // Task #23 — should the Mystery Chest fire at EVERY game-over (daily/
+  // practice/contest), not just dynamic boards? Respects the master chest
+  // toggle; default ON (the per-day cap + pity floor are enforced server-side).
+  function chestAllModesEnabled() {
+    if (typeof gameConfig !== 'object' || !gameConfig) return true;
+    if (gameConfig.dyn_chest_enabled === 'false') return false;
+    return gameConfig.chest_all_modes_enabled !== 'false';
+  }
   function dailySpecialChipHtml() {
     var m = currentDailySpecialMult();
     if (!m) return '';
@@ -18982,6 +19001,17 @@
               }
             }
           })();
+        }
+        // Task #23 — variable-reward Mystery Chest at EVERY game-over, not just
+        // dynamic boards. The Skinner-box is the core retention loop; leaving
+        // the most-played modes (daily/practice/contest) without it left them
+        // flat. Pity floor + daily cap are server-enforced. Checked BEFORE
+        // submitDuelScore() nulls activeDuelId so duels are correctly excluded.
+        if (chestAllModesEnabled() && !window.__bloomBotActive && !skinTrialMode &&
+            !activeDuelId && !window._duelMode &&
+            (mode === 'daily' || mode === 'practice' || mode === 'contest') &&
+            typeof openMysteryChest === 'function') {
+          setTimeout(function() { try { openMysteryChest(); } catch (e) {} }, 950);
         }
         if (mode === 'practice') clearPracticeGameState();
         if (activeDuelId) submitDuelScore(score);
@@ -27001,7 +27031,11 @@
     // beats every other mechanic in F2P puzzles. Create cost (500💎
     // from config) still keeps it from being noise for L1-7 players;
     // joining via code is free + the modal lets them browse first.
-    try { if (typeof getPlayerLevel === 'function' && getPlayerLevel() < 8) return; } catch (e) {}
+    // Task #20 — gate lowered L8 → L3. Clan retention is the strongest social
+    // lever (+35% D30, 3.4× sessions/day); exposing "join a clan" earlier pulls
+    // it forward. CREATE stays at L8 (gated inside the modal) — the 500💎 cost +
+    // level keep new players from spawning dead clans; joining by code is free.
+    try { if (typeof getPlayerLevel === 'function' && getPlayerLevel() < 3) return; } catch (e) {}
     fetchGuildState(false).then(function(d) {
       if (!d || !d.ok || !d.enabled) return;
       var home = document.getElementById('home-screen-v2') || document.getElementById('home-screen');
@@ -27066,6 +27100,24 @@
     var modal = document.createElement('div');
     modal.id = 'guild-jc-modal';
     modal.className = 'guild-modal-overlay';
+    // Task #20 — CREATE is gated to L8; L3-7 players can only JOIN by code.
+    var guildLvl = 99;
+    try { if (typeof getPlayerLevel === 'function') guildLvl = getPlayerLevel(); } catch (e) {}
+    var guildCanCreate = guildLvl >= 8;
+    var createSectionHtml = guildCanCreate
+      ? '<div class="guild-jc-section">' +
+          '<div class="guild-jc-section-title">✨ צור קלאן חדש</div>' +
+          '<div class="guild-jc-create-fields">' +
+            '<input type="text" id="guild-create-name" placeholder="שם הקלאן" maxlength="60" />' +
+            '<input type="text" id="guild-create-emoji" placeholder="אימוג\'י (לדוגמה: 🛡)" maxlength="4" style="text-align:center;font-size:18px" />' +
+            '<textarea id="guild-create-desc" placeholder="תיאור (אופציונלי)" maxlength="300" rows="2"></textarea>' +
+            '<button class="guild-jc-btn-create" id="guild-jc-create">צור · 500💎</button>' +
+          '</div>' +
+        '</div>'
+      : '<div class="guild-jc-section guild-jc-create-locked">' +
+          '<div class="guild-jc-section-title">✨ צור קלאן חדש</div>' +
+          '<div class="guild-jc-locked-note">🔒 יצירת קלאן נפתחת ברמה 8 · בינתיים הצטרף לקלאן קיים עם קוד (חינם!)</div>' +
+        '</div>';
     modal.innerHTML =
       '<div class="guild-modal-card">' +
         '<button class="guild-modal-close" aria-label="סגור">×</button>' +
@@ -27083,15 +27135,7 @@
 
         '<div class="guild-jc-divider">— או —</div>' +
 
-        '<div class="guild-jc-section">' +
-          '<div class="guild-jc-section-title">✨ צור קלאן חדש</div>' +
-          '<div class="guild-jc-create-fields">' +
-            '<input type="text" id="guild-create-name" placeholder="שם הקלאן" maxlength="60" />' +
-            '<input type="text" id="guild-create-emoji" placeholder="אימוג\'י (לדוגמה: 🛡)" maxlength="4" style="text-align:center;font-size:18px" />' +
-            '<textarea id="guild-create-desc" placeholder="תיאור (אופציונלי)" maxlength="300" rows="2"></textarea>' +
-            '<button class="guild-jc-btn-create" id="guild-jc-create">צור · 500💎</button>' +
-          '</div>' +
-        '</div>' +
+        createSectionHtml +
 
         '<div id="guild-jc-status" class="guild-jc-status"></div>' +
       '</div>';
@@ -27105,7 +27149,8 @@
       if (code.length < 4) { setGuildStatus('הקוד קצר מדי', true); return; }
       doGuildJoin(code, close);
     };
-    document.getElementById('guild-jc-create').onclick = function() {
+    var createBtn = document.getElementById('guild-jc-create');
+    if (createBtn) createBtn.onclick = function() {
       var name = document.getElementById('guild-create-name').value.trim();
       var emoji = document.getElementById('guild-create-emoji').value.trim();
       var desc = document.getElementById('guild-create-desc').value.trim();
@@ -34964,6 +35009,87 @@ try {
   window.__bloomFriendSearch = {
     showModal: showModal
   };
+})();
+// ============================================================
+// Task #19 — "Your friends are here" social-proof banner.
+//
+// Social proof at the login moment drives discovery exactly when
+// retention is most fragile (day 2-5). A slim banner near the top of
+// the home tile area (below the hero, so it never covers the primary
+// PLAY CTA):
+//   - friends online now → "🟢 N מהחברים שלך פעילים עכשיו"
+//   - friends played today → "👥 N מהחברים שלך שיחקו היום"
+//   - has friends, idle → "👥 יש לך N חברים · הזמן עוד"
+//   - 0 friends → "👥 חבר ראשון = +200💎 לשניכם · הוסף חבר"
+// Tap → friend-search modal (49-friend-search.js). Only friend counts
+// are rendered (no names) → zero XSS surface.
+// ============================================================
+(function() {
+  'use strict';
+
+  function maybeShowFriendsBanner() {
+    // Level gate L5+ — same as the other social/engagement surfaces.
+    try { if (typeof getPlayerLevel === 'function' && getPlayerLevel() < 5) return; } catch (e) {}
+    var home = document.getElementById('home-screen-v2') || document.getElementById('home-screen');
+    if (!home) return;
+    if (typeof window.fetchFriends !== 'function') return;
+    window.fetchFriends(false).then(function(d) {
+      if (!d || !d.ok) return;
+      var friends = Array.isArray(d.friends) ? d.friends : [];
+      var count = friends.length;
+      var online = 0, today = 0;
+      for (var i = 0; i < friends.length; i++) {
+        if (friends[i] && friends[i].onlineNow) online++;
+        if (friends[i] && friends[i].playedToday) today++;
+      }
+
+      var icon, title, sub, cls;
+      if (count === 0) {
+        cls = 'friends-banner-empty'; icon = '👥';
+        title = 'חבר ראשון = +200💎 לשניכם';
+        sub = 'הוסף חבר ושחקו יחד · 👆 לחץ להזמין';
+      } else if (online > 0) {
+        cls = 'friends-banner-live'; icon = '🟢';
+        title = online + ' מהחברים שלך פעילים עכשיו';
+        sub = 'הצטרף אליהם · 👆 חברים';
+      } else if (today > 0) {
+        cls = 'friends-banner-today'; icon = '👥';
+        title = today + ' מהחברים שלך שיחקו היום';
+        sub = (d.iPlayedToday ? 'אתם בקצב!' : 'אל תישאר מאחור — שחק היום') + ' · 👆 חברים';
+      } else {
+        cls = 'friends-banner-have'; icon = '👥';
+        title = 'יש לך ' + count + ' חברים';
+        sub = 'הזמן עוד · +200💎 לכל הזמנה · 👆 חברים';
+      }
+
+      var el = document.getElementById('friends-banner');
+      if (!el) {
+        el = document.createElement('button');
+        el.id = 'friends-banner';
+        el.onclick = function() {
+          if (window.__bloomFriendSearch && typeof window.__bloomFriendSearch.showModal === 'function') {
+            window.__bloomFriendSearch.showModal('search');
+          }
+        };
+        // Append to the home tile area (below the hero) — slim, so it never
+        // competes with the primary PLAY CTA.
+        home.appendChild(el);
+      }
+      // Task #22 — entrance via the shared micro-interaction token (ui-pop-in).
+      el.className = 'friends-banner ui-pop-in ' + cls;
+      el.innerHTML =
+        '<span class="friends-banner-icon">' + icon + '</span>' +
+        '<span class="friends-banner-body">' +
+          '<span class="friends-banner-title">' + title + '</span>' +
+          '<span class="friends-banner-sub">' + sub + '</span>' +
+        '</span>' +
+        '<span class="friends-banner-arrow">›</span>';
+    });
+  }
+
+  try {
+    window.__bloomFriendsBanner = { maybeShow: maybeShowFriendsBanner };
+  } catch (e) {}
 })();
 // ============================================================
 // Stage 39 — UX Polish + Addiction Maximizer (May 2026)
