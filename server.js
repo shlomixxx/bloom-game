@@ -11282,6 +11282,56 @@ app.post('/api/spin/today', requireDeviceAuth, async (req, res) => {
 // Anti-cheat: best-score-wins upsert (same as daily_scores), drops
 // validation, server-side rank computation at finalize time.
 // ============================================================
+// Task #5/#12 — seed a fresh tournament with believable bot scores so a
+// player who arrives (e.g. via the new tournament_starting push) never lands
+// on an empty board — the exact moment the addiction illusion dies. Bots
+// populate the LEADERBOARD but are excluded from real prizes in
+// maybeFinalizeTournament (device_id NOT LIKE 'bot-%'), so they never take a
+// real player's reward. Scoped to PUBLIC tournaments only — private friend
+// contests are NEVER bot-seeded (would confuse "who are these people?").
+async function _maybeSeedBotsIntoTournament(tid) {
+  try {
+    const cfg = _configCache || {};
+    if (cfg.tournament_bot_seed_enabled === 'false') return;
+    const count = Math.max(0, Math.min(20, parseInt(cfg.tournament_bot_seed_count, 10) || 6));
+    if (count <= 0) return;
+    // Atomic claim — only the first caller seeds; the dedup key doubles as
+    // the "already seeded" flag.
+    const claim = await pool.query(
+      `INSERT INTO game_config (key, value) VALUES ($1, '1')
+         ON CONFLICT (key) DO NOTHING RETURNING key`,
+      ['_tseed:' + tid]
+    );
+    if (!claim.rows.length) return; // already seeded (or being seeded)
+    // Only seed live/scheduled tournaments — never finalized/ended ones.
+    const tr = await pool.query(`SELECT status, ends_at FROM tournaments WHERE id = $1`, [tid]);
+    if (!tr.rows.length) return;
+    const st = tr.rows[0];
+    if (st.status === 'finalized') return;
+    if (st.ends_at && new Date(st.ends_at) <= new Date()) return;
+    // Pick N unique Israeli names (Fisher–Yates shuffle of the duel pool).
+    const names = _DUEL_BOT_NAMES.slice();
+    for (let i = names.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      const tmp = names[i]; names[i] = names[j]; names[j] = tmp;
+    }
+    // Beatable descending band (~22K top → ~6K) with jitter, so a genuinely
+    // engaged real player tops them and wins the visible prize.
+    for (let i = 0; i < count; i++) {
+      const base = 22000 - i * (16000 / Math.max(1, count));
+      const score = Math.max(2000, Math.round(base * (0.82 + Math.random() * 0.32)));
+      await pool.query(
+        `INSERT INTO tournament_scores (tournament_id, device_id, name, score, tier, games_played, country)
+         VALUES ($1, $2, $3, $4, $5, $6, 'IL')
+         ON CONFLICT (tournament_id, device_id) DO NOTHING`,
+        [tid, 'bot-tseed-' + tid + '-' + i, names[i % names.length], score, _tierForScore(score), 1 + Math.floor(Math.random() * 3)]
+      );
+    }
+  } catch (e) {
+    console.warn('[tournament-seed] failed', tid, e && e.message);
+  }
+}
+
 async function maybeFinalizeTournament(tournamentId) {
   // Lazy-finalize a tournament whose ends_at has passed. Idempotent —
   // safe to call multiple times. Top-N players have their prizes
@@ -11307,6 +11357,7 @@ async function maybeFinalizeTournament(tournamentId) {
          FROM tournament_scores
         WHERE tournament_id = $1
           AND (prize_claimed IS NULL)
+          AND device_id NOT LIKE 'bot-%'   -- Task #5/#12: seeded bots populate the board but never take real prizes
         ORDER BY score DESC, updated_at ASC
         LIMIT $2`,
       [tournamentId, pool_.length]
@@ -11413,6 +11464,10 @@ app.get('/api/tournaments/:id/leaderboard', async (req, res) => {
     const deviceId = (req.query.deviceId || '').toString().slice(0, 64);
     const t = await pool.query(`SELECT id, name, ends_at FROM tournaments WHERE id = $1`, [tid]);
     if (!t.rows.length) return res.status(404).json({ error: 'not_found' });
+    // Task #5/#12 — lazy-seed believable bot scores BEFORE reading, so even
+    // the very first viewer sees a populated board (never an empty one).
+    // Self-dedups via the _tseed:<id> claim key + only touches live/scheduled.
+    await _maybeSeedBotsIntoTournament(tid);
     const top = await pool.query(
       `SELECT device_id, name, score, tier, country, games_played, prize_claimed
          FROM tournament_scores

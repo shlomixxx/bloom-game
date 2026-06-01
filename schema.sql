@@ -2688,6 +2688,10 @@ INSERT INTO game_config (key, value) VALUES ('win_streak_enabled', 'true') ON CO
 INSERT INTO game_config (key, value) VALUES ('win_streak_threshold', '15000') ON CONFLICT (key) DO NOTHING;
 -- Task #4 — push opt-in pre-prompt cooldown (hours). Lower = ask more often.
 INSERT INTO game_config (key, value) VALUES ('push_prompt_cooldown_hours', '24') ON CONFLICT (key) DO NOTHING;
+-- Task #5/#12 — seed fresh PUBLIC tournaments with believable bot scores so the
+-- board is never empty (bots are excluded from real prizes). Private contests are never seeded.
+INSERT INTO game_config (key, value) VALUES ('tournament_bot_seed_enabled', 'true') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('tournament_bot_seed_count', '6') ON CONFLICT (key) DO NOTHING;
 -- AD.5 — win-return celebration on home (confetti + sound after a win). Default on.
 INSERT INTO game_config (key, value) VALUES ('home_win_celebration_enabled', 'true') ON CONFLICT (key) DO NOTHING;
 INSERT INTO game_config (key, value) VALUES ('home_win_celebration_min_score', '5000') ON CONFLICT (key) DO NOTHING;
