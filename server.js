@@ -8654,9 +8654,14 @@ app.post('/api/promo/impression', requireDeviceAuth, async (req, res) => {
   try {
     const promoId = parseInt(req.body && req.body.promoId, 10);
     if (!Number.isFinite(promoId) || promoId <= 0) return res.status(400).json({ error: 'bad_promo_id' });
+    // promo_impressions.slot is NOT NULL with no default. The client only
+    // sends promoId, so omitting slot was a NOT-NULL violation → HTTP 500
+    // (player-issue api_promo_x). Read it from the body if present, else
+    // default to a sane placeholder.
+    const slot = (req.body && typeof req.body.slot === 'string' && req.body.slot) ? req.body.slot.slice(0, 30) : 'home_tile';
     await pool.query(
-      `INSERT INTO promo_impressions (promo_id, device_id) VALUES ($1, $2)`,
-      [promoId, deviceId]
+      `INSERT INTO promo_impressions (promo_id, device_id, slot) VALUES ($1, $2, $3)`,
+      [promoId, deviceId, slot]
     );
     res.json({ ok: true });
   } catch (e) {
@@ -8673,9 +8678,11 @@ app.post('/api/promo/click', requireDeviceAuth, async (req, res) => {
   try {
     const promoId = parseInt(req.body && req.body.promoId, 10);
     if (!Number.isFinite(promoId) || promoId <= 0) return res.status(400).json({ error: 'bad_promo_id' });
+    // Same NOT-NULL slot fix as the impression endpoint above.
+    const slot = (req.body && typeof req.body.slot === 'string' && req.body.slot) ? req.body.slot.slice(0, 30) : 'home_tile';
     await pool.query(
-      `INSERT INTO promo_clicks (promo_id, device_id) VALUES ($1, $2)`,
-      [promoId, deviceId]
+      `INSERT INTO promo_clicks (promo_id, device_id, slot) VALUES ($1, $2, $3)`,
+      [promoId, deviceId, slot]
     );
     res.json({ ok: true });
   } catch (e) {
@@ -15397,6 +15404,14 @@ app.post('/api/player/earn', requireDeviceAuth, async (req, res) => {
 
     const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' });
 
+    // validatedMeta must live in the HANDLER scope (not inside the dedup
+    // `else` block) — the payment branches further down (score_milestone /
+    // dyn_quest / dyn_ach / dyn_streak_milestone) all read it. A refactor had
+    // `let`-declared it inside the else block, so every meta-dedup reward
+    // action threw "validatedMeta is not defined" → HTTP 500. This was the #1
+    // player-issue report (earn_http_500 + api_player_x across 11 devices).
+    let validatedMeta = null;
+
     // Event gifts: two layers of rate limit.
     //   (a) 30s minimum between gifts (was 10s, too loose at server-clamped cap)
     //   (b) hourly cap so a tab left open all afternoon can't drip into 5K credits
@@ -15423,7 +15438,7 @@ app.post('/api/player/earn', requireDeviceAuth, async (req, res) => {
       //     so a cheater can't invent fake milestones to fan out the keyspace.
       //   - Everything else dedups purely on action+date.
       const META_DEDUP_ACTIONS = new Set(['score_milestone', 'dyn_quest', 'dyn_ach', 'dyn_streak_milestone']);
-      let validatedMeta = null;
+      validatedMeta = null;
       if (action === 'score_milestone' && meta && typeof meta === 'object') {
         const m = parseInt(meta.milestone, 10);
         const ALLOWED_MILESTONES = [10000, 25000, 50000, 100000, 250000, 500000, 1000000];

@@ -318,7 +318,7 @@ CREATE TABLE IF NOT EXISTS promo_impressions (
   id              BIGSERIAL PRIMARY KEY,
   promo_id        BIGINT NOT NULL REFERENCES internal_promos(id) ON DELETE CASCADE,
   device_id       VARCHAR(64) NOT NULL,
-  slot            VARCHAR(30) NOT NULL, -- 'ad_watch' / 'home_tile' / 'game_over' / etc.
+  slot            VARCHAR(30) NOT NULL DEFAULT 'home_tile', -- 'ad_watch' / 'home_tile' / 'game_over' / etc.
   shown_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_promo_impr_device_time ON promo_impressions (device_id, shown_at DESC);
@@ -328,7 +328,7 @@ CREATE TABLE IF NOT EXISTS promo_clicks (
   id              BIGSERIAL PRIMARY KEY,
   promo_id        BIGINT NOT NULL REFERENCES internal_promos(id) ON DELETE CASCADE,
   device_id       VARCHAR(64) NOT NULL,
-  slot            VARCHAR(30) NOT NULL,
+  slot            VARCHAR(30) NOT NULL DEFAULT 'home_tile',
   clicked_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_promo_clicks_promo ON promo_clicks (promo_id, clicked_at DESC);

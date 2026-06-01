@@ -2808,12 +2808,6 @@
       '</div>';
     }
 
-    // CTA wiring — for "go home" results we want the button to actually
-    // dismiss + return to home, not to start a fresh practice game.
-    var ctaOnClick = ctaMode === '__home__'
-      ? 'this.closest(\'div[style]\').parentElement.remove(); if (typeof showHome === \'function\') showHome();'
-      : 'this.closest(\'div[style]\').parentElement.remove();init(\'practice\',{fresh:true})';
-
     var overlay = document.createElement('div');
     overlay.setAttribute('data-duel-result-overlay', '1');
     overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;display:flex;align-items:center;justify-content:center;direction:rtl';
@@ -2823,9 +2817,23 @@
         '<div style="font-size:24px;font-weight:900;color:' + color + '">' + title + '</div>' +
         scoresHtml +
         detail +
-        '<button onclick="' + ctaOnClick + '" style="margin-top:18px;width:100%;padding:12px;border:none;border-radius:12px;background:#FAC775;color:#412402;font-size:16px;font-weight:800;cursor:pointer;font-family:inherit">' + escDuelHtml(ctaLabel) + '</button>' +
+        '<button class="duel-result-cta" style="margin-top:18px;width:100%;padding:12px;border:none;border-radius:12px;background:#FAC775;color:#412402;font-size:16px;font-weight:800;cursor:pointer;font-family:inherit">' + escDuelHtml(ctaLabel) + '</button>' +
       '</div>';
     document.body.appendChild(overlay);
+
+    // Wire the CTA via addEventListener (NOT an inline onclick string) so it
+    // runs inside the IIFE closure where init()/showHome() exist. The old
+    // inline onclick ran in GLOBAL scope → "Can't find variable: init" on
+    // every click (28 player-issue reports, all from the duel-result button).
+    var ctaBtn = overlay.querySelector('.duel-result-cta');
+    if (ctaBtn) ctaBtn.addEventListener('click', function() {
+      try { overlay.remove(); } catch (e) {}
+      if (ctaMode === '__home__') {
+        if (typeof showHome === 'function') showHome();
+      } else if (typeof init === 'function') {
+        init('practice', { fresh: true });
+      }
+    });
 
     if (showConfettiFlag && typeof showConfetti === 'function') showConfetti(40);
     if (showConfettiFlag) buzz([80, 40, 80, 40, 80]);
@@ -24833,7 +24841,17 @@
     var lives = document.getElementById('lives-home-widget');
     var checklist = document.getElementById('checklist-home-tile');
     var anchor = checklist || (lives && lives.nextSibling) || homeEl.firstChild;
-    homeEl.insertBefore(w, anchor);
+    // insertBefore REQUIRES anchor to be a direct child of homeEl. The
+    // bottom-nav (src/46) routes tiles like checklist/lives into other tab
+    // panels, so they can exist in the DOM but NOT be children of homeEl —
+    // then insertBefore throws "The object can not be found here." (Safari)
+    // / "node ... is not a child of this node" (Chrome). 106 such crashes in
+    // the issues tab. Guard the anchor; fall back to append.
+    if (anchor && anchor.parentNode === homeEl) {
+      homeEl.insertBefore(w, anchor);
+    } else {
+      homeEl.appendChild(w);
+    }
     w.onclick = function() {
       if (!data.name) {
         promptForPetName();

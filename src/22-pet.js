@@ -85,7 +85,17 @@
     var lives = document.getElementById('lives-home-widget');
     var checklist = document.getElementById('checklist-home-tile');
     var anchor = checklist || (lives && lives.nextSibling) || homeEl.firstChild;
-    homeEl.insertBefore(w, anchor);
+    // insertBefore REQUIRES anchor to be a direct child of homeEl. The
+    // bottom-nav (src/46) routes tiles like checklist/lives into other tab
+    // panels, so they can exist in the DOM but NOT be children of homeEl —
+    // then insertBefore throws "The object can not be found here." (Safari)
+    // / "node ... is not a child of this node" (Chrome). 106 such crashes in
+    // the issues tab. Guard the anchor; fall back to append.
+    if (anchor && anchor.parentNode === homeEl) {
+      homeEl.insertBefore(w, anchor);
+    } else {
+      homeEl.appendChild(w);
+    }
     w.onclick = function() {
       if (!data.name) {
         promptForPetName();

@@ -96,6 +96,11 @@ export async function initDb() {
       clicked_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )`,
     `CREATE INDEX IF NOT EXISTS idx_promo_clicks_promo ON promo_clicks (promo_id, clicked_at DESC)`,
+    // promo_*.slot is NOT NULL but the impression/click endpoints insert
+    // without it — give it a default so a bare INSERT can never NOT-NULL-fail
+    // (defense in depth; the endpoints now pass slot explicitly too).
+    `ALTER TABLE promo_impressions ALTER COLUMN slot SET DEFAULT 'home_tile'`,
+    `ALTER TABLE promo_clicks ALTER COLUMN slot SET DEFAULT 'home_tile'`,
     // A5 — Live PvP Race columns on duels (full def in schema.sql).
     `ALTER TABLE duels ADD COLUMN IF NOT EXISTS is_live BOOLEAN DEFAULT FALSE`,
     `ALTER TABLE duels ADD COLUMN IF NOT EXISTS started_at TIMESTAMPTZ`,
