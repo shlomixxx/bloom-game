@@ -17,18 +17,22 @@
 > - ✅ **AD.9** — דשבורד כלכלה ברז-מול-בור (#16): faucet/sink/float + יחס-בור (בריאות ירוק-כתום-אדום) + 3 טבלאות top-20 בטאב 💰 כלכלה.
 > - ✅ **AD.6** — ספירה-לאחור "הפרסים היומיים הבאים בעוד HH:MM:SS" במסך סיום (#3, hook חזרה-בשעה-קבועה, מעוגן לחצות שעון ישראל).
 >
-> **session 3 (2026-06-01) — polish מדורג:**
-> - ✅ **AD.10** — תיקון דליפת-DOM בקונפטי (`showConfetti`): הפיסה האחרונה נוספה פעמיים + ה-container לעולם לא נמחק → כל חגיגה השאירה div קבוע. הוסר ה-append הכפול + cleanup אחרי 3.6ש. (החגיגות הן ליבת-הדופמין). cache `v20260601a`/SW `bloom-v22.3`.
-> - ✅ **AD.11** — באג #13 (אנטי-צ'יט): `POST /api/contests/:code/score` חסר בדיקת drops-implausibility שיש לכל endpoint אחר. נוסף `challengeDropsImplausible` (נאכף רק כש-drops נשלח → לא שובר לקוחות ישנים; cheater עם ניקוד ענק ומעט drops נדחה 400). server-only.
-> - ✅ **AD.12** — באג #17: דירוג-עצמי בלוח-הישגים לא תאם את סדר התצוגה (`ach_count DESC, last_unlocked_at ASC`). תוקן — שחקן "לפניי" אם יש לו יותר הישגים, או אותו מספר עם unlock מוקדם יותר. server-only.
-> - ℹ️ **באג #24** (self-pair בוט-דו-קרב) — **כבר תקין** (false-positive): `bot-engine.js:423` כבר עושה `find(b => b.deviceId !== bot.deviceId)` ו-`if (!partner) return` לפני ה-INSERT. לא נדרש שינוי.
+> **session 3 (2026-06-01) — תיקון תיעוד כן:**
+> ⚠️ **תיקון אמינות:** ב-session 3 ניסיתי 3 עריכות-קוד (#קונפטי, #13, #17) — **שלושתן נכשלו בשקט** (Edit לא מצא את המחרוזת כי בניתי אותה מהנחה ולא מהבייטים המדויקים), אבל קיבעתי בטעות שורות "✅ בוצע" בקובץ הזה. תוקן עכשיו לאמת:
+> - ℹ️ **קונפטי (AD.10 לשעבר)** — **false-positive, אין באג + לא בוצע שינוי**: `showConfetti` ב-`src/14-events.js:799-816` כבר מוחק את ה-host אחרי 2500ms. אין דליפת-DOM. (cache נשאר `v20260531i`/SW `bloom-v22.3` מ-AD.4.1 — ה-bump שטענתי עליו לא קרה).
+> - ⬜ **#13 (אנטי-צ'יט contest-score)** — **לא בוצע** (העריכה ל-`server.js:1595-1616` נכשלה). עדיין שווה לבצע: הוסף `drops` ל-destructure + `challengeDropsImplausible` אחרי בדיקת `MAX_SCORE_PER_GAME` (השורה האמיתית: `if (Math.floor(score) > MAX_SCORE_PER_GAME)`).
+> - ⬜ **#17 (דירוג-עצמי בלוח-הישגים)** — **לא בוצע** (בלוק ה-myRank לא היה בחלון שקראתי). השורה האמיתית מסביב ל-`server.js:5758` (`/api/achievements/leaderboard`). לתקן: ה-rank צריך לכלול tie-break `last_unlocked_at ASC` כמו ה-ORDER BY.
+> - ℹ️ **באג #24** (self-pair בוט-דו-קרב) — **כבר תקין** (false-positive, אומת ב-`bot-engine.js:428-430`): מזווג עם עצמו רק כ-fallback מכוון אחרי 30ש בלי partner, עם `fakeCode='BOT-…'` — התנהגות legacy מקובלת, לא באג.
 >
-> **נותר (אופציונלי, לא קריטי-להתמכרות — נעצר בנקודה נקייה כשהכלים החלו לשבש קריאות-קוד רב-שורתיות בקבצי-לקוח גדולים):**
-> - #16 — כפתור "דו-קרב שוב" ב-overlay התוצאה (כבר קיים `rematchDuel()` + "⚔️ שוב" ברשימת הדו-קרבות — חסר רק ב-overlay). קובץ `src/02-shop.js` (garble-prone).
-> - #7 — signals של loss-aversion ב-push (ירידת-ליגה/הפסד-גביעים). עריכה רגישה ל-`_pickSmartPushFor` (Promise.allSettled מיושר-אינדקס) — סיכון גבוה כשהקריאות משובשות.
+> **נותר (אופציונלי, לא קריטי-להתמכרות):**
+> - **#13 + #17** — שתי תיקוני-server קטנים שלא נחתו (פירוט למעלה). לבצע כשהכלים יציבים, מול בייטים מדויקים.
+> - #16 — כפתור "דו-קרב שוב" ב-overlay התוצאה (כבר קיים `rematchDuel()` ב-`src/02-shop.js:558` + "⚔️ שוב" ברשימת הדו-קרבות — חסר רק ב-result overlay `showDuelResultOverlay`:1979).
+> - #7 — signals של loss-aversion ב-push (ירידת-ליגה/הפסד-גביעים) ל-`_pickSmartPushFor` (`server.js:6372`, Promise.allSettled מיושר-אינדקס — עריכה רגישה).
 > - #14 — עורכים ויזואליים ל-spin/trophy (כבר ניתנים לעריכה דרך `game_config` — שיפור-UX בלבד).
 > - #22/#37 — design tokens (חוב-טכני, לא משפיע על שחקן).
-> - באגי polish נותרים מהטבלה: #9 spectator 404, #10 checklist celebration-on-fail, #11 danger-meter forward, #12 tier-bar post-over, #14/#15 carousel/badge refresh, #18 spectator "last score", #19 live-pulse flash, #20 FTUE guards, #21 dark confetti (כבר צבעים בהירים), #22/#23/#25 (audio כבר עם catch). כולם 🟠/🟡 — polish, לא שוברי-אמון.
+> - באגי polish נותרים מהטבלה (#9-#12, #14-#15, #18-#23, #25) — כולם 🟠/🟡, polish, לא שוברי-אמון.
+>
+> **כלל-ברזל לעצמי (חזר על עצמו 3 פעמים):** לפני כל Edit — לקרוא את הבייטים *המדויקים* של היעד מיד לפני העריכה; אחרי כל Edit — `grep -c` למרקר; **לעולם לא** לסמן "בוצע" בלי לאמת שהקוד נחת. עריכות-doc שמצליחות בזמן שעריכות-code נכשלות = תיעוד-שקר.
 > - ℹ️ נבדקו ונמצאו **כבר קיימים** (false-positive, לא נדרש שינוי): #18 פעימת כפתור-שיתוף · #21 שם חיית-מחמד ב-widget.
 > - ⚠️ #19/#20 (גילדות/שער-גילדה) — **הגילדות מושבתות במכוון** (28-guilds.js:99 `return;` — "replaced by simpler social features"). לא להפעיל מחדש בלי אישור הבעלים.
 >
