@@ -1,0 +1,69 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - banner [ref=e3]:
+      - heading "BLOOM אדמין 1 ביוני 2026" [level=1] [ref=e4]
+      - generic [ref=e5]:
+        - generic "גרסה פעילה של המשחק" [ref=e6]: build —
+        - button "?" [ref=e7] [cursor=pointer]
+        - button "יציאה" [ref=e8] [cursor=pointer]
+        - button "↻ רענון" [ref=e9] [cursor=pointer]
+    - tablist "ניווט בין קטעי האדמין" [ref=e10]:
+      - tab "📊 דשבורד" [selected] [ref=e11] [cursor=pointer]
+      - tab "🎮 משחק" [ref=e12] [cursor=pointer]
+      - tab "💰 כלכלה" [ref=e13] [cursor=pointer]
+      - tab "👥 שחקנים" [ref=e14] [cursor=pointer]
+      - tab "🏆 תחרויות" [ref=e15] [cursor=pointer]
+      - tab "🔧 ניטור" [ref=e16] [cursor=pointer]
+      - tab "🚨 תקלות" [ref=e17] [cursor=pointer]
+      - tab "🐛 דיבאג" [ref=e18] [cursor=pointer]
+    - generic [ref=e19]:
+      - generic [ref=e20]:
+        - generic [ref=e21]:
+          - generic [ref=e22]: 📊 דשבורד — סקירת בריאות המשחק
+          - generic [ref=e23]:
+            - text: KPI חכמים, גרף DAU 30 ימים, retention cohorts, משפך 7 ימים, heatmap.
+            - strong [ref=e24]: נקודת הפתיחה היומית שלך.
+        - button "הסבר על לשונית דשבורד" [ref=e25] [cursor=pointer]: "?"
+      - generic [ref=e26]:
+        - heading "🎯 סקירת מערכות התמכרות ?" [level=2] [ref=e27]:
+          - text: 🎯 סקירת מערכות התמכרות
+          - button "?" [ref=e28] [cursor=pointer]
+        - generic [ref=e30]: שגיאת טעינה
+      - generic [ref=e31]:
+        - heading "מטריקות-על ? היום" [level=2] [ref=e32]:
+          - text: מטריקות-על
+          - button "?" [ref=e33] [cursor=pointer]
+          - generic [ref=e34]: היום
+        - generic [ref=e36]: טוען…
+        - generic [ref=e37]: "השוואה לאמת-תעשייה (Hybrid Casual 2026): D1 ≥ 40% · D7 ≥ 20% · D30 ≥ 7%"
+      - generic [ref=e38]:
+        - heading "DAU · 30 ימים ?" [level=2] [ref=e39]:
+          - text: DAU · 30 ימים
+          - button "?" [ref=e40] [cursor=pointer]
+        - generic [ref=e42]: טוען…
+      - generic [ref=e43]:
+        - heading "משפך ? · 7 ימים אחרונים" [level=2] [ref=e44]:
+          - text: משפך
+          - button "?" [ref=e45] [cursor=pointer]
+          - text: ·
+          - generic [ref=e46]: 7 ימים אחרונים
+        - generic [ref=e48]: טוען…
+        - generic [ref=e49]: בחן את נקודות הנשירה — כל ירידה מעל 50% מסומנת באדום.
+      - generic [ref=e50]:
+        - heading "Cohort retention ? · 8 שבועות אחרונים" [level=2] [ref=e51]:
+          - text: Cohort retention
+          - button "?" [ref=e52] [cursor=pointer]
+          - text: ·
+          - generic [ref=e53]: 8 שבועות אחרונים
+        - generic [ref=e55]: טוען…
+        - generic [ref=e56]: כל שורה = שחקנים שהתחילו לראשונה בשבוע הזה. D1/D7/D30 = אחוז שחזר אחרי 1/7/30 ימים.
+      - generic [ref=e57]:
+        - heading "מפת חום ? · שעות-יום (30 ימים, אסיה/ירושלים)" [level=2] [ref=e58]:
+          - text: מפת חום
+          - button "?" [ref=e59] [cursor=pointer]
+          - text: ·
+          - generic [ref=e60]: שעות-יום (30 ימים, אסיה/ירושלים)
+        - generic [ref=e62]: טוען…
+        - generic [ref=e63]: צבע כהה = יותר משחקים שהסתיימו באותה שעה. שימושי לתזמון תזכורות.
+  - complementary [ref=e64]
+  - generic [ref=e65]: שגיאת רשת

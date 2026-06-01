@@ -9378,7 +9378,11 @@
       var path = endpoints[i];
       try {
         var t0 = Date.now();
-        var r = await fetch(API + '/' + path, { credentials: 'include' });
+        // Absolute same-origin URL (location.origin has no userinfo) so the
+        // fetch never inherits credentials from location.href — otherwise the
+        // browser throws "URL that includes credentials" and every endpoint
+        // shows a false NETWORK fail. Normal sessions are unaffected.
+        var r = await fetch(location.origin + API + '/' + path, { credentials: 'include' });
         var ms = Date.now() - t0;
         if (!r.ok) {
           failures.push({ path: path, status: r.status, ms: ms });
@@ -9401,7 +9405,7 @@
     // they're hard to discover.
     var unknown = [];
     try {
-      var r = await fetch(API + '/config', { credentials: 'include' });
+      var r = await fetch(location.origin + API + '/config', { credentials: 'include' });
       var d = await r.json();
       // Admin /api/config returns {ok, config: [{key, value, ...}, ...]}
       if (!d || !Array.isArray(d.config)) return [];
@@ -9444,7 +9448,10 @@
   async function getAdminScriptText() {
     if (_adminScriptCache !== null) return _adminScriptCache;
     try {
-      var html = await (await fetch(location.href, { credentials: 'include' })).text();
+      // origin+pathname (no userinfo/query) so a credentialed location.href
+      // can't make this fetch throw and blank out the script text (which
+      // would then false-flag many buttons as dead).
+      var html = await (await fetch(location.origin + location.pathname, { credentials: 'include' })).text();
       // Extract <scr\x69pt>...<\/scr\x69pt> blocks (intentional letter
       // mangling — a literal closing tag here would end the OUTER
       // script block at this point in the file and break the page).
@@ -9968,6 +9975,39 @@
       if (summaryEl) summaryEl.innerHTML = '❌ <strong>שגיאת רשת</strong>: ' + (e.message || e);
     }
     this.disabled = false; this.textContent = '⏹ עצור';
+  };
+  // 🌍 "מלא את העולם" — instant auto-fleet kick (AD.2). Reads bots_auto_count
+  // + bots_auto_mode server-side and spawns that many bots NOW + re-enables
+  // the always-on auto fleet. The button HTML shipped without this handler
+  // (the wiring commit silently no-matched), so it was a dead button — caught
+  // by the 🐛 debug scanner.
+  if ($('btn-bots-fill')) $('btn-bots-fill').onclick = async function() {
+    var summaryEl = $('bots-status-summary');
+    this.disabled = true; this.textContent = '⏳ ממלא...';
+    if (summaryEl) summaryEl.innerHTML = '⏳ <strong>ממלא את העולם בבוטים...</strong>';
+    try {
+      var r = await api('/bots/fill-world', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({})
+      });
+      if (r && r.ok) {
+        toast('🌍 ' + r.botCount + ' בוטים · ' + botModeLabel(r.mode) + (r.contestSeeded ? ' · תחרות נזרעה' : ''));
+        if (summaryEl) summaryEl.innerHTML = '🟢 <strong>' + r.botCount + ' בוטים פעילים</strong> · ' + botModeLabel(r.mode);
+        if ($('bots-status-list')) {
+          $('bots-status-list').innerHTML = '<div style="color:#A8A6A0;font-size:11px;padding:12px;text-align:center">⏳ טוען בוטים... (אם זה ממשיך, רענן את הדף)</div>';
+        }
+        if ($('bots-status-full')) $('bots-status-full').style.display = 'block';
+        setTimeout(refreshBotStatus, 400);
+        setTimeout(refreshBotStatus, 1500);
+        setTimeout(refreshBotStatus, 3500);
+      } else {
+        if (summaryEl) summaryEl.innerHTML = '❌ <strong>השרת החזיר שגיאה</strong><br><span style="font-size:10px;color:#C8472F">תגובה: ' + JSON.stringify(r) + '</span>';
+      }
+    } catch (e) {
+      if (summaryEl) summaryEl.innerHTML = '❌ <strong>שגיאת רשת</strong><br><span style="font-size:10px;color:#C8472F">' + (e && e.message || e) + '</span>';
+    }
+    this.disabled = false; this.textContent = '🌍 מלא את העולם עכשיו';
   };
   $('btn-bots-debug').onclick = async function() {
     var summaryEl = $('bots-status-summary');
