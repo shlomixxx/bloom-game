@@ -45,6 +45,32 @@
     });
   }
 
+  // Task #25 — concrete weekly DEADLINE so the goal has urgency. Self-contained
+  // (the leagues module is its own IIFE — no dependency on the main IIFE's
+  // Israel-time helpers). Weekly reset = next Sunday 00:00 Asia/Jerusalem.
+  function msUntilWeeklyReset() {
+    try {
+      var now = new Date();
+      var ilNow = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Jerusalem' }));
+      var dow = ilNow.getDay(); // 0 = Sunday
+      var ilMidnight = new Date(ilNow);
+      ilMidnight.setHours(24, 0, 0, 0);
+      var msToMidnight = ilMidnight.getTime() - ilNow.getTime();
+      var daysUntilSunday = (7 - dow) % 7;
+      if (daysUntilSunday === 0) daysUntilSunday = 7; // this Sunday already started
+      return Math.max(0, msToMidnight + (daysUntilSunday - 1) * 86400000);
+    } catch (e) { return 0; }
+  }
+  function fmtResetShort(ms) {
+    if (ms <= 0) return 'בקרוב';
+    var totalMin = Math.floor(ms / 60000);
+    var d = Math.floor(totalMin / 1440);
+    var h = Math.floor((totalMin % 1440) / 60);
+    if (d >= 1) return d + 'י ' + h + 'ש';
+    var m = totalMin % 60;
+    return h + 'ש ' + m + 'ד';
+  }
+
   function tileInner(data) {
     var l = data.league || { emoji: '🥉', label: 'Bronze', color: '#B45309' };
     var rewardBadge = data.unclaimedReward
@@ -59,6 +85,7 @@
         '<span class="league-tile-title">ליגת ' + l.label + rewardBadge + '</span>' +
         '<span class="league-tile-bar"><span class="league-tile-bar-fill" style="width:' + (data.progressPct || 0) + '%;background:' + l.color + '"></span></span>' +
         '<span class="league-tile-sub">' + (data.weeklyGain || 0).toLocaleString() + ' XP השבוע · ' + progressText + '</span>' +
+        '<span class="league-tile-reset">⏳ השבוע מתאפס בעוד ' + fmtResetShort(msUntilWeeklyReset()) + '</span>' +
       '</span>' +
       '<span class="league-tile-arrow">›</span>'
     );
@@ -124,6 +151,7 @@
         '<div class="league-current-emoji">' + l.emoji + '</div>' +
         '<div class="league-current-label">' + l.label + '</div>' +
         '<div class="league-current-week">' + (data.weeklyGain || 0).toLocaleString() + ' XP השבוע</div>' +
+        '<div class="league-current-reset">⏳ השבוע מתאפס בעוד ' + fmtResetShort(msUntilWeeklyReset()) + '</div>' +
       '</div>';
     // Progress to next tier
     var nextHtml = '';

@@ -87,6 +87,11 @@
 > build חי: `v20260602g` / SW `bloom-v23.0`.
 > - ✅ **משימה #17** (medium, אקוסיסטם) — מתן שם לחיית-המחמד פותח עכשיו את הישג "🌱 גנן" (`cross:gardener`) **server-side** ב-`POST /api/pet/name` (INSERT ל-`player_achievements` ON CONFLICT DO NOTHING), מחשב את ה-rank החדש בלוח-ההישגים ומחזיר `gardenerUnlocked`+`achRank`. הלקוח ([src/22-pet.js](src/22-pet.js)) חוגג: toast "🌱 הישג חדש: גנן! · אתה עכשיו #N בלוח ההישגים" + קונפטי + צליל. הופך dopamine מבודד (שם לחיה) ל-"אהה, הכל מחובר" — ה-rank קופץ כי ההישג נספר ב-COUNT של לוח-ההישגים. ([server.js](server.js)+[src/22-pet.js](src/22-pet.js)). ℹ️ לא נרשם בקטלוג-ההישגים הויזואלי (ACH_CROSS) כי הוא aggregate-מבוסס-localStorage ו-gardener הוא server-authoritative — ה-toast+rank כבר מספקים את הרגע.
 
+## ✅ session 4 batch 9 (2026-06-02) — דדליין-איפוס שבועי בליגות (#25)
+> build חי: `v20260602h` / SW `bloom-v23.1`.
+> - ✅ **משימה #25** (high, "מטרת היום + ספירה-לאחור") — מסגרת ה-"goal" כבר הייתה ("עוד N XP לליגת X"); מה שחסר זה ה-**דדליין**. הוסף ספירה-לאחור "⏳ השבוע מתאפס בעוד 2י 4ש" לאריח הליגה **ולמודאל**. `msUntilWeeklyReset()` self-contained (מודול-ליגות הוא IIFE נפרד) → יום-ראשון הבא 00:00 שעון-ישראל. CSS עם זהב לדחיפות. ([src/30-leagues.js](src/30-leagues.js)+[public/css/boards.css](public/css/boards.css)).
+> - ℹ️ **#25 Trophy/Lifetime** — **N/A ל-reset-countdown**: גביעים נמשכים (לא מתאפסים), Lifetime לעולם לא מתאפס. ל-Leagues זו המערכת היחידה עם reset תקופתי. מסגרת ה-goal שלהם (התקדמות לארנה/רמה הבאה) כבר קיימת. כך ש-#25's reset-countdown מכוסה במלואו במערכת הרלוונטית.
+
 ## איך לקרוא את הקובץ
 בצע מלמעלה למטה — דירוג 1 הוא ההשפעה הגדולה ביותר על "השחקן לא מצליח להפסיק". קודם תקן את הבאגים האדומים (שוברים אמון = הורגים התמכרות), אחר כך רד ברשימה המדורגת לפי ROI.
 
