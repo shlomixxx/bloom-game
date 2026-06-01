@@ -6829,7 +6829,21 @@ html[data-theme="dark"] .ach-lb-row-me {
   border-radius: 10px;
   padding: 10px;
 }
-.album-board-row.complete { background: rgba(16, 185, 129, 0.08); border-color: rgba(16, 185, 129, 0.3); }
+/* Task #29 — completed album boards get a "legendary" gold treatment so the
+   rarity of full completion (all 8 tiers) is unmistakable → perceived-rarity
+   FOMO to finish more boards. (Literal difficulty-gradient would need a
+   board_difficulty field on the album state — noted as a follow-up.) */
+.album-board-row.complete {
+  background: linear-gradient(135deg, rgba(255,215,90,0.15), rgba(255,140,60,0.10));
+  border-color: rgba(255,180,40,0.5);
+  box-shadow: inset 0 0 0 1px rgba(255,180,40,0.22);
+}
+.album-board-row.complete .album-board-name {
+  background: linear-gradient(135deg, #B8860B, #FF8C42);
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent;
+  font-weight: 900;
+}
 .album-board-row.can-claim {
   background: linear-gradient(135deg, rgba(245,158,11,0.18), rgba(245,158,11,0.04));
   border-color: #F59E0B;
@@ -6938,7 +6952,7 @@ html[data-theme="dark"] .album-section-title { color: #E0E7FF; border-color: rgb
 html[data-theme="dark"] .album-tier-row { background: rgba(99,102,241,0.1); }
 html[data-theme="dark"] .album-tier-row-label { color: #E0E7FF; }
 html[data-theme="dark"] .album-board-row { background: rgba(255,255,255,0.04); border-color: rgba(255,255,255,0.06); }
-html[data-theme="dark"] .album-board-row.complete { background: rgba(16,185,129,0.15); }
+html[data-theme="dark"] .album-board-row.complete { background: linear-gradient(135deg, rgba(255,215,90,0.16), rgba(255,140,60,0.10)); border-color: rgba(255,180,40,0.45); }
 html[data-theme="dark"] .album-board-name { color: #E0E7FF; }
 html[data-theme="dark"] .album-tile-cell.collected { background: linear-gradient(135deg, #4338CA, #0E7490); border-color: #818CF8; }
 html[data-theme="dark"] .album-tile-cell.locked { background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.08); }

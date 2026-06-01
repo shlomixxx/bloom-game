@@ -95,7 +95,7 @@
 ## ✅ session 4 batch 10 (2026-06-02) — רוֹרִיוּת ויזואלית בגלגל היומי (#29 — חצי spin)
 > build חי: `v20260602i` / SW `bloom-v23.2`.
 > - ✅ **משימה #29** (medium, spin חצי) — perceived-rarity FOMO על גלגל-היום: `segRarity(seg)` מסווג כל פלח לפי ערך הפרס (common/rare/epic/legendary/jackpot), וכל פלח מקבל stroke בהיר+עבה יותר לפי רוֹרִיוּת (לבן→תכלת→סגול→זהב→ורוד) + sparkle 💎/✨ ליד ה-rim על legendary/jackpot. העין נמשכת ל-jackpot בכל פתיחה → מניע את לולאת-הספין. SVG-only, contained, בלי blur-filter (מטשטש פלחים מלאים). ([src/32-daily-spin.js](src/32-daily-spin.js)).
-> - ℹ️ **#29 album חצי** — gradient-לפי-board_difficulty ללוחות-האלבום נשאר follow-up (מערכת נפרדת, פחות-תכוף מהספין).
+> - ✅ **#29 album חצי (batch 12b, v20260602k)** — לוחות-אלבום שהושלמו (כל 8 הטיירים) מקבלים טיפול **זהב "legendary"** (gradient + שם בזהב) → perceived-rarity FOMO להשלים עוד לוחות. CSS-only על מחלקת `.complete` הקיימת + dark-override. ℹ️ ה-gradient-לפי-`board_difficulty` הליטרלי דורש שדה difficulty ב-album-state — follow-up מתועד (רוֹרִיוּת-לפי-השלמה היא ציר טוב יותר ל-FOMO ממילא).
 
 ## ✅ session 4 batch 11 (2026-06-02) — מילוי הפערים בסדר: #11/#19/#20/#22/#23
 > build חי: `v20260602j` / SW `bloom-v23.3`. engine self-test נקי. **חזרתי למלא פריטים שדילגתי עליהם — לא לדלג, לפי הסדר.**

@@ -4,7 +4,7 @@
    Server.js rewrites CACHE_NAME to `bloom-v1-${BOOT_TS}` on every deploy so
    the file you see here is just a template — the live SW always has a
    deploy-unique cache key. */
-const CACHE_NAME = 'bloom-v23.3';
+const CACHE_NAME = 'bloom-v23.4';
 
 // ============================================================
 // WEB PUSH — closed-app notifications
