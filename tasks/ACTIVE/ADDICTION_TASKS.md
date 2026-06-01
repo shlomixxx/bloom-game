@@ -56,6 +56,12 @@
 > - ✅ **באג #22** (🟡, תיקו-wager לא מראה סכום) — השרת מחזיר עכשיו `refund: u.amount` בתגובת התיקו (`server.js:17448`), וה-overlay מציג "ההימור הוחזר: N💎". (`server.js` + `src/02-shop.js`).
 > - ✅ **משימה #24** (medium/high addiction, מד win-streak תוך-סשן) — מד "🔥 רצף N ניצחונות — עוד אחד!" מעל כפתור "שחק שוב" במסך הסיום. ניצחון = ניקוד ≥ `win_streak_threshold` (ברירת מחדל 15K). 3 רמות חזותיות (רגיל/hot 5+/blaze 7+) + חגיגה מסלימה (קונפטי+צליל+buzz) ב-3/5/7/10, ו-"💔 הרצף נשבר ב-N" loss-aversion כשנשבר. מתאפס בסגירת טאב (sessionStorage), dedup per-game דרך `getCurrentGameId`, מדלג על בוטים/skin-trial/restored. **שליטת אדמין מלאה:** `win_streak_enabled` + `win_streak_threshold` ב-schema+db+admin (TIPS+PRESETS). client-only celebration (בלי reward → בלי anti-cheat). (`src/12-tour-info.js` + `public/css/screens.css` + schema/db/admin).
 
+## ✅ session 4 batch 3 (2026-06-02) — tier-bar fix + push appointment-signal
+> build חי: `v20260602d` / SW `bloom-v22.7`.
+> - ✅ **באג #12** (🟠, אנימציית tier-bar אחרי game-over → אריח שגוי) — `revealToken++` במסך הסיום מבטל את ה-sweep התלוי של `revealNextTier` מהטלה האחרונה, כך שהדגשת ה-highestTier לא נדרסת. (`src/12-tour-info.js`).
+> - ✅ **משימה #7** (push) — **הוחלט במכוון לא להוסיף trophy-loss/league-drop**: ב-BLOOM גביעים/ליגות הם gain-only (לא נשחקים פסיבית), אז אין trigger אמיתי ל"אתה עומד לרדת" — להמציא אחד = רעש. **במקום זה הוסף signal מתאים-ל-BLOOM:** `tournament_starting` ב-`_pickSmartPushFor` (append באינדקס 8, בלי הזזת אינדקסים) — push "🏆 הטורניר מתחיל בעוד N דקות" כש-`tournaments.status='scheduled'` ו-`starts_at` בתוך 90 דק'. ממלא את ה-push החסר של AD.7 (טורניר prime-time) = appointment hook. נרשם ב-`SP_REASON_LABELS` באדמין (+ נוסף `streak_freeze_offer` שהיה חסר). 7 ה-signals הקיימים (streak_danger/streak_freeze_offer/pet_crying/friend_played/comeback) כבר מכסים את ה-loss-aversion המתאים ל-BLOOM. (`server.js` + `admin/index.html`).
+> - ⏸️ **באגים #14/#15** (🟠, carousel/badge staleness) — **נדחו במכוון** (low-ROI + סיכון): #14 רלוונטי רק ב-variant `carousel` (לא ברירת-מחדל; הדיפולט `hero`). #15 — ה-badge ב-bottom-nav הוא count-based (כמות אריחים), אז refresh תקופתי לא יתקן שינוי-מצב בתוך אריח קיים (chest שהבשיל); תיקון אמיתי דורש MutationObserver על גוף-הטאב עם ניהול-מחזור-חיים זהיר — סיכון רגרסיה גבוה מול תועלת-freshness שולית. להחזיר רק אם מתלוננים.
+
 ## איך לקרוא את הקובץ
 בצע מלמעלה למטה — דירוג 1 הוא ההשפעה הגדולה ביותר על "השחקן לא מצליח להפסיק". קודם תקן את הבאגים האדומים (שוברים אמון = הורגים התמכרות), אחר כך רד ברשימה המדורגת לפי ROI.
 

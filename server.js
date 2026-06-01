@@ -6432,9 +6432,19 @@ async function _pickSmartPushFor(deviceId, cfg) {
          0
        ) AS days_since FROM daily_scores WHERE device_id = $1`,
       [deviceId]
+    ),
+    // 8. Scheduled tournament STARTING soon — appointment hook for the AD.7
+    //    daily prime-time tournament. APPENDED at the end so indices 0-7
+    //    above stay aligned with the destructuring below.
+    pool.query(
+      `SELECT name, starts_at FROM tournaments
+        WHERE status = 'scheduled'
+          AND starts_at BETWEEN NOW() AND NOW() + INTERVAL '90 minutes'
+        ORDER BY starts_at ASC
+        LIMIT 1`
     )
   ]);
-  const [profileR, petR, streakR, seasonR, friendR, tourneyR, todayPlayR, comebackR] = queries;
+  const [profileR, petR, streakR, seasonR, friendR, tourneyR, todayPlayR, comebackR, tourneyStartR] = queries;
   const profile = (profileR.status === 'fulfilled' && profileR.value.rows[0]) || {};
   const playerName = (profile.display_name || '').toString().slice(0, 20);
   // Ranked signals — pick the highest-emotion ONE.
@@ -6454,6 +6464,21 @@ async function _pickSmartPushFor(deviceId, cfg) {
         url: '/'
       };
     }
+  }
+  // 1b. Daily/scheduled tournament STARTING soon — the appointment hook that
+  // makes a prime-time event drive DAU (Coin Master / Royal Match). Pairs with
+  // AD.7: the daily tournament is created `status='scheduled'` ~hours before it
+  // goes live; this reminds the player to show up right as it starts.
+  if (tourneyStartR.status === 'fulfilled' && tourneyStartR.value.rows[0]) {
+    const tsName = (tourneyStartR.value.rows[0].name || '🏆 טורניר').toString().slice(0, 40);
+    let minsLeft = 60;
+    try { minsLeft = Math.max(1, Math.round((new Date(tourneyStartR.value.rows[0].starts_at).getTime() - Date.now()) / 60000)); } catch (e) {}
+    return {
+      reason: 'tournament_starting',
+      title: '🏆 ' + tsName + ' מתחיל בקרוב!',
+      body: (playerName ? playerName + ' — ' : '') + 'הטורניר מתחיל בעוד ' + minsLeft + ' דקות · היה מוכן לטפס לראש הטבלה',
+      url: '/'
+    };
   }
   // 2. Tournament ending soon
   if (tourneyR.status === 'fulfilled' && tourneyR.value.rows[0]) {

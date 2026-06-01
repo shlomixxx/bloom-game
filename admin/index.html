@@ -5412,13 +5412,15 @@
   // 🤖 Smart Push admin (stats + recent + manual scan)
   // ============================================================
   var SP_REASON_LABELS = {
-    pet_crying:       { emoji: '😢', label: 'פרח עצוב' },
-    tournament_ending:{ emoji: '🏆', label: 'טורניר נגמר' },
-    friend_played:    { emoji: '👥', label: 'חבר שיחק' },
-    streak_danger:    { emoji: '🔥', label: 'רצף בסכנה' },
-    bp_unclaimed:     { emoji: '🎖', label: 'BP פרס ממתין' },
-    comeback:         { emoji: '👋', label: 'קאמבק' },
-    daily_special:    { emoji: '🌟', label: 'לוח של היום' }
+    pet_crying:        { emoji: '😢', label: 'פרח עצוב' },
+    tournament_starting:{ emoji: '🏆', label: 'טורניר מתחיל' },
+    tournament_ending: { emoji: '🏆', label: 'טורניר נגמר' },
+    friend_played:     { emoji: '👥', label: 'חבר שיחק' },
+    streak_danger:     { emoji: '🔥', label: 'רצף בסכנה' },
+    streak_freeze_offer:{ emoji: '🛡', label: 'הצעת הקפאה' },
+    bp_unclaimed:      { emoji: '🎖', label: 'BP פרס ממתין' },
+    comeback:          { emoji: '👋', label: 'קאמבק' },
+    daily_special:     { emoji: '🌟', label: 'לוח של היום' }
   };
 
   async function loadSmartPush() {

@@ -20013,6 +20013,11 @@
     }
     buildTierBar();
     if (opts.over) {
+      // Bug #12 — cancel any in-flight revealNextTier() sweep from the last
+      // drop. Without bumping the token, that async sweep keeps running after
+      // game-over and overwrites the highestTier highlight with an
+      // intermediate (wrong) tile. The sweep bails on myToken !== revealToken.
+      revealToken++;
       highlightNextTier(highestTier || nextPiece);
     } else {
       highlightNextTier(nextPiece);
