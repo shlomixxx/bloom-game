@@ -25238,6 +25238,15 @@
             }
             try { if (typeof soundMilestone === 'function') soundMilestone(3); } catch (e) {}
             try { if (typeof buzz === 'function') buzz([40, 30, 60]); } catch (e) {}
+            // Task #17 — cross-system link payoff: the server unlocked the
+            // "Gardener" achievement → surface the ecosystem moment (rank bump)
+            // so naming the pet feels connected to the wider game, not isolated.
+            if (d.gardenerUnlocked) {
+              var rankTxt = d.achRank ? ' · אתה #' + d.achRank + ' בלוח ההישגים' : '';
+              try { if (typeof showToast === 'function') showToast('🌱 הישג חדש: גנן! נתת שם לחיית המחמד' + rankTxt, 'success'); } catch (e) {}
+              try { if (typeof window.__bloomConfetti === 'function') window.__bloomConfetti(20); } catch (e) {}
+              try { if (typeof soundMilestone === 'function') setTimeout(function() { soundMilestone(5); }, 320); } catch (e) {}
+            }
             // Auto-open the pet modal right after naming.
             setTimeout(function() { fetchPetState(true).then(function(d) { if (d) showPetModal(d); }); }, 400);
           }

@@ -5261,7 +5261,35 @@ app.post('/api/pet/name', requireDeviceAuth, async (req, res) => {
        ON CONFLICT (device_id) DO UPDATE SET pet_name = $2, updated_at = NOW()`,
       [deviceId, cleanName]
     );
-    res.json({ ok: true, name: cleanName });
+    // Task #17 — cross-system link: naming your pet unlocks the "Gardener"
+    // achievement, which feeds the achievement leaderboard. Turns isolated
+    // pet dopamine into the ecosystem ("now I'm #N globally"). Non-fatal —
+    // naming still succeeds even if the achievement insert fails.
+    let gardenerUnlocked = false, achRank = null;
+    try {
+      const ins = await pool.query(
+        `INSERT INTO player_achievements (device_id, achievement_key)
+         VALUES ($1, 'cross:gardener')
+         ON CONFLICT (device_id, achievement_key) DO NOTHING
+         RETURNING achievement_key`,
+        [deviceId]
+      );
+      gardenerUnlocked = ins.rows.length > 0;
+      if (gardenerUnlocked) {
+        const cr = await pool.query(`SELECT COUNT(*)::int AS c FROM player_achievements WHERE device_id = $1`, [deviceId]);
+        const achCount = (cr.rows[0] && cr.rows[0].c) | 0;
+        if (achCount > 0) {
+          const rr = await pool.query(
+            `SELECT COUNT(*) + 1 AS rank FROM (
+               SELECT device_id FROM player_achievements GROUP BY device_id HAVING COUNT(*) > $1
+             ) s`,
+            [achCount]
+          );
+          achRank = parseInt(rr.rows[0].rank, 10) || null;
+        }
+      }
+    } catch (e) { /* non-fatal */ }
+    res.json({ ok: true, name: cleanName, gardenerUnlocked, achRank });
   } catch (e) {
     console.error('POST /api/pet/name', e);
     res.status(500).json({ error: 'internal' });

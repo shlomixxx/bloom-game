@@ -83,6 +83,10 @@
 > - ✅ **משימה #14** (trophy חצי) — ה-8 ארנות Trophy Road היו **hardcoded** ב-`TROPHY_ARENAS` (server.js). עכשיו `_trophyArenas()` קורא override מ-`game_config`: `trophy_arena_N_at` (סף) + `trophy_arena_N_name` + `_emoji`, עם fallback לקשיח. ממוין asc תמיד (כדי ש-`_trophyArenaFor` יישאר מונוטוני גם על קלט-אדמין מוזר). `_trophyArenaFor` + state-endpoint (`nextArena`+`arenas`) משתמשים בו → **השינוי מתפשט ללקוח אוטומטית** (קורא `data.arenas`). 8 מפתחות `_at` seeded לגילוי באדמין + presets + tips; name/emoji ניתנים-לעריכה דרך fallback. מאפשר "עונה/אירוע" עם ספים חדשים בלי deploy. ([server.js](server.js)+[schema.sql](schema.sql)+[db.js](db.js)+[admin/index.html](admin/index.html)).
 > - ℹ️ **#14 spin חצי** — פלחי ה-Spin Wheel **כבר** ניתנים-לעריכה דרך טבלת ה-config (`daily_spin_seg_N_*`). עורך ויזואלי ייעודי (כמו Gacha) = nice-to-have בלבד; לא נדרש.
 
+## ✅ session 4 batch 8 (2026-06-02) — קישוריות-צולבת חיית-מחמד↔הישגים (#17)
+> build חי: `v20260602g` / SW `bloom-v23.0`.
+> - ✅ **משימה #17** (medium, אקוסיסטם) — מתן שם לחיית-המחמד פותח עכשיו את הישג "🌱 גנן" (`cross:gardener`) **server-side** ב-`POST /api/pet/name` (INSERT ל-`player_achievements` ON CONFLICT DO NOTHING), מחשב את ה-rank החדש בלוח-ההישגים ומחזיר `gardenerUnlocked`+`achRank`. הלקוח ([src/22-pet.js](src/22-pet.js)) חוגג: toast "🌱 הישג חדש: גנן! · אתה עכשיו #N בלוח ההישגים" + קונפטי + צליל. הופך dopamine מבודד (שם לחיה) ל-"אהה, הכל מחובר" — ה-rank קופץ כי ההישג נספר ב-COUNT של לוח-ההישגים. ([server.js](server.js)+[src/22-pet.js](src/22-pet.js)). ℹ️ לא נרשם בקטלוג-ההישגים הויזואלי (ACH_CROSS) כי הוא aggregate-מבוסס-localStorage ו-gardener הוא server-authoritative — ה-toast+rank כבר מספקים את הרגע.
+
 ## איך לקרוא את הקובץ
 בצע מלמעלה למטה — דירוג 1 הוא ההשפעה הגדולה ביותר על "השחקן לא מצליח להפסיק". קודם תקן את הבאגים האדומים (שוברים אמון = הורגים התמכרות), אחר כך רד ברשימה המדורגת לפי ROI.
 
