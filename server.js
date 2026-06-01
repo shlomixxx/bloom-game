@@ -1595,7 +1595,7 @@ app.post('/api/contests/:code/leave', requireDeviceAuth, async (req, res) => {
 app.post('/api/contests/:code/score', requireDeviceAuth, async (req, res) => {
   try {
     const code = String(req.params.code || '').toUpperCase().slice(0, 8);
-    const { deviceId, displayName, score, tier } = req.body || {};
+    const { deviceId, displayName, score, tier, drops } = req.body || {};
 
     if (!code) return res.status(400).json({ error: 'bad_code' });
     if (typeof deviceId !== 'string' || deviceId.length < 8 || deviceId.length > 64) {
@@ -1613,6 +1613,13 @@ app.post('/api/contests/:code/score', requireDeviceAuth, async (req, res) => {
     const MAX_SCORE_PER_GAME = 1_500_000;
     if (Math.floor(score) > MAX_SCORE_PER_GAME) {
       return res.status(400).json({ error: 'score_too_high', max: MAX_SCORE_PER_GAME });
+    }
+    // #13 — drops-implausibility anti-cheat, parity with /api/score. Enforced
+    // only when drops is supplied (older clients omit it → non-breaking); a
+    // cheater POSTing a huge score with too-few drops is rejected.
+    const dropsN = (req.body && req.body.drops != null) ? Number(drops) : null;
+    if (dropsN != null && Number.isFinite(dropsN) && challengeDropsImplausible(score, dropsN)) {
+      return res.status(400).json({ error: 'implausible_score' });
     }
     if (typeof tier !== 'number' || tier < 1 || tier > 8) {
       return res.status(400).json({ error: 'bad_tier' });
