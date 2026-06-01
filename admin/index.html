@@ -2889,6 +2889,28 @@
   // Numeric / enum presets per key — rendered as chips below the input. Click
   // = auto-save. Admin can still type a custom value into the input field.
   var PRESETS_PER_KEY = {
+    // BL.1 / DU.2 — bot duels
+    bot_duel_fallback_enabled: ['true', 'false'],
+    bot_duel_fallback_after_seconds: [5, 8, 12, 15],
+    bot_live_race_fallback_after_seconds: [4, 6, 8, 10],
+    bot_duel_player_win_rate_pct: [48, 50, 52, 55],
+    bot_duel_settle_delay_min_seconds: [10, 20, 30],
+    bot_duel_settle_delay_max_seconds: [40, 55, 70],
+    // BL.1 — bots in live stats
+    bots_in_live_stats_enabled: ['true', 'false'],
+    bots_live_stats_max_multiplier: [2, 2.5, 3],
+    bots_live_stats_floor_when_zero_real: [0, 4, 6, 8],
+    // FD.2 — device sync + friends
+    device_sync_enabled: ['true', 'false'],
+    device_sync_ttl_min: [5, 10, 15],
+    friend_requests_enabled: ['true', 'false'],
+    friend_requests_max_pending: [25, 50, 100],
+    friend_search_min_chars: [1, 2, 3],
+    friend_search_max_results: [10, 20, 30],
+    // Issues / tickets
+    issues_auto_compensate_critical: ['true', 'false'],
+    issues_client_report_max_per_hour: [5, 10, 20],
+    issues_default_compensation: [50, 100, 200],
     // AD.2 — auto-fleet
     bots_auto_enabled: ['true', 'false'],
     bots_auto_count: [6, 8, 10, 15, 20],
@@ -3241,6 +3263,29 @@
   // Each entry is shown when the admin clicks the small ? next to the key row.
   // Keys without an entry simply hide the ? button (no harm done).
   var TIPS_PER_KEY = {
+    // ---- BL.1 / DU.2 — bot duels (phantom opponents so solo players never wait) ----
+    bot_duel_fallback_enabled: 'נפילת-בוט בדו-קרב אקראי — אם לא נמצא יריב אמיתי תוך כמה שניות, השרת יוצר יריב-בוט שנראה כמו שחקן אמיתי (שם ישראלי + קוד BLOOM + גביעים בטווח). מבטיח ששחקן בודד אף פעם לא תקוע בהמתנה.<div class="tip-example">💡 ה-cold-start killer של דו-קרבות. השאר <code>true</code>.</div>',
+    bot_duel_fallback_after_seconds: 'כמה שניות להמתין ליריב אמיתי בדו-קרב אקראי לפני שמזמנים בוט.<div class="tip-example">📊 ברירת מחדל 8. נמוך = פחות המתנה אך פחות סיכוי למפגש אמיתי. במרוץ-חי הסף נפרד (6ש).</div>',
+    bot_live_race_fallback_after_seconds: 'כמו bot_duel_fallback_after_seconds אבל למרוץ-החי של 60 שניות (מהיר יותר כי כל שנייה קריטית).<div class="tip-example">📊 ברירת מחדל 6.</div>',
+    bot_duel_player_win_rate_pct: 'אחוז הניצחון היעד של השחקן מול בוטים. 52 = "השחקן מרגיש מועדף קלות".<div class="tip-example">📊 ברירת מחדל 52 (תקן Royal Match/Coin Master). מתחת ל-50 = הבוטים מנצחים יותר (מתסכל). מעל 60 = קל מדי. השאר 50-55.</div>',
+    bot_duel_settle_delay_min_seconds: 'מינימום שניות עד שדו-קרב מול בוט מוכרע אחרי שהשחקן הגיש (כדי שירגיש כמו יריב שעדיין משחק).<div class="tip-example">📊 ברירת מחדל 20. הזוג עם _max יוצר המתנה אקראית טבעית.</div>',
+    bot_duel_settle_delay_max_seconds: 'מקסימום שניות עד הכרעת דו-קרב מול בוט.<div class="tip-example">📊 ברירת מחדל 55. גבוה מדי = השחקן מאבד עניין; השאר 40-60.</div>',
+    // ---- BL.1 — bots blended into the live "active players" bar (social proof) ----
+    bots_in_live_stats_enabled: 'ספירת בוטים בתוך "שחקנים פעילים עכשיו" בעמוד הבית. מונע מהבר להראות "1 שחקן" בשעות שקטות — אחד מ-D1-killers הגדולים ב-F2P.<div class="tip-example">💡 השאר <code>true</code>. מתואם עם floor + multiplier למטה כדי שהיחס יישאר אמין.</div>',
+    bots_live_stats_max_multiplier: 'תקרה לערבוב בוטים: הבר לעולם לא יציג יותר מ-real × המכפיל הזה.<div class="tip-example">📊 ברירת מחדל 2.5 — 4 אמיתיים → עד 10 מוצגים. גבוה מדי = לא אמין. השאר 2-3.</div>',
+    bots_live_stats_floor_when_zero_real: 'כמה "שחקנים פעילים" להציג כשאין אף שחקן אמיתי מחובר.<div class="tip-example">📊 ברירת מחדל 6. 0 = מציג ריק (לא מומלץ). השאר 4-8 לתחושת חיים.</div>',
+    // ---- FD.2 — cross-device account sync (top mobile-web retention killer) ----
+    device_sync_enabled: 'סנכרון חשבון בין דפדפנים/מכשירים דרך קוד 6 תווים. בלעדיו — Safari ו-Chrome באותו טלפון = שני שחקנים נפרדים, וכל מעבר דפדפן מאבד רצף/גביעים/חברים.<div class="tip-example">💡 מעלה D30 ב-40-60% במובייל-ווב. השאר <code>true</code>.</div>',
+    device_sync_ttl_min: 'תוקף קוד ההעברה בדקות לפני שהוא פג.<div class="tip-example">📊 ברירת מחדל 10. קצר = בטוח יותר אך לחוץ. השאר 5-15.</div>',
+    // ---- FD.2 — friend search + requests (Clash-Royale social loop) ----
+    friend_requests_enabled: 'מערכת בקשות-חברות (חיפוש שחקן → שלח בקשה → אישור = +200💎 לשניהם). בלעדיה רק הוספה מיידית דרך קוד עובדת.<div class="tip-example">💡 לולאת ה-social-debt. השאר <code>true</code>.</div>',
+    friend_requests_max_pending: 'מקסימום בקשות-חברות ממתינות לכל שחקן (אנטי-ספאם).<div class="tip-example">📊 ברירת מחדל 50.</div>',
+    friend_search_min_chars: 'מינימום תווים לפני שחיפוש שחקנים מתחיל לרוץ (חוסך עומס שרת).<div class="tip-example">📊 ברירת מחדל 2.</div>',
+    friend_search_max_results: 'כמה תוצאות להחזיר בחיפוש שחקנים.<div class="tip-example">📊 ברירת מחדל 20.</div>',
+    // ---- Issues / tickets (auto error reports + player compensation) ----
+    issues_client_report_max_per_hour: 'תקרת דיווחי-שגיאה אוטומטיים מהקליינט לכל מכשיר בשעה (אנטי-הצפה).<div class="tip-example">📊 ברירת מחדל 10.</div>',
+    issues_auto_compensate_critical: 'פיצוי אוטומטי ביהלומים לשחקנים שנפגעו מתקלה קריטית.<div class="tip-example">⚠️ ברירת מחדל <code>false</code> — הדלק בזהירות (יכול לחלק הרבה 💎). הסכום נקבע ב-issues_default_compensation.</div>',
+    issues_default_compensation: 'כמות היהלומים בפיצוי ברירת-מחדל על תקלה.<div class="tip-example">📊 ברירת מחדל 100💎.</div>',
     // ---- AD.2 Auto-fleet (world never empty) ----
     bots_auto_enabled: 'בוטים אוטומטיים — נדלקים לבד עם עליית השרת כדי שהמשחק אף פעם לא ירגיש ריק. הם משחקים, מזרימים heartbeat, ומאכלסים את לוח המובילים היומי.<div class="tip-example">💡 התיקון מס׳ 1 לתחושת ״ריק״. השאר על <code>true</code>. כפתור ״⏹ עצור״ בפאנל הבוטים מכבה את זה; ״🌍 מלא עולם״ מדליק שוב.</div>',
     bots_auto_count: 'כמה בוטים אוטומטיים להריץ במקביל.<div class="tip-example">📊 8-15 = תחושת חיים בלי להעמיס. שעות שיא? 20. עלות שרת זניחה עד 50.</div>',
