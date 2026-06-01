@@ -5793,21 +5793,28 @@ app.get('/api/achievements/leaderboard', async (req, res) => {
     if (deviceId && deviceId.length >= 8) {
       // My count.
       const meR = await pool.query(
-        `SELECT COUNT(*) AS cnt FROM player_achievements WHERE device_id = $1`,
+        `SELECT COUNT(*) AS cnt, MAX(unlocked_at) AS last_at
+           FROM player_achievements WHERE device_id = $1`,
         [deviceId]
       );
       const myCount = parseInt(meR.rows[0].cnt, 10) || 0;
+      const myLastAt = meR.rows[0].last_at;
       if (myCount > 0) {
-        // My rank = number of players with MORE achievements + 1.
+        // #17 — rank must match the leaderboard ORDER BY
+        // (ach_count DESC, last_unlocked_at ASC): a player is "ahead" of me if
+        // they have MORE achievements, OR the SAME count with an EARLIER last
+        // unlock. Counting only c>myCount gave tied players a rank
+        // inconsistent with their displayed row.
         const rankR = await pool.query(
           `SELECT COUNT(*) + 1 AS rank
              FROM (
-               SELECT device_id, COUNT(*) AS c
+               SELECT device_id, COUNT(*) AS c, MAX(unlocked_at) AS last_at
                  FROM player_achievements
                  GROUP BY device_id
                  HAVING COUNT(*) > $1
+                     OR (COUNT(*) = $1 AND MAX(unlocked_at) < $2)
              ) sub`,
-          [myCount]
+          [myCount, myLastAt]
         );
         myRank = parseInt(rankR.rows[0].rank, 10) || null;
         const meDetails = await pool.query(
