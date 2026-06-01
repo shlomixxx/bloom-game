@@ -62,6 +62,12 @@
 > - ✅ **משימה #7** (push) — **הוחלט במכוון לא להוסיף trophy-loss/league-drop**: ב-BLOOM גביעים/ליגות הם gain-only (לא נשחקים פסיבית), אז אין trigger אמיתי ל"אתה עומד לרדת" — להמציא אחד = רעש. **במקום זה הוסף signal מתאים-ל-BLOOM:** `tournament_starting` ב-`_pickSmartPushFor` (append באינדקס 8, בלי הזזת אינדקסים) — push "🏆 הטורניר מתחיל בעוד N דקות" כש-`tournaments.status='scheduled'` ו-`starts_at` בתוך 90 דק'. ממלא את ה-push החסר של AD.7 (טורניר prime-time) = appointment hook. נרשם ב-`SP_REASON_LABELS` באדמין (+ נוסף `streak_freeze_offer` שהיה חסר). 7 ה-signals הקיימים (streak_danger/streak_freeze_offer/pet_crying/friend_played/comeback) כבר מכסים את ה-loss-aversion המתאים ל-BLOOM. (`server.js` + `admin/index.html`).
 > - ⏸️ **באגים #14/#15** (🟠, carousel/badge staleness) — **נדחו במכוון** (low-ROI + סיכון): #14 רלוונטי רק ב-variant `carousel` (לא ברירת-מחדל; הדיפולט `hero`). #15 — ה-badge ב-bottom-nav הוא count-based (כמות אריחים), אז refresh תקופתי לא יתקן שינוי-מצב בתוך אריח קיים (chest שהבשיל); תיקון אמיתי דורש MutationObserver על גוף-הטאב עם ניהול-מחזור-חיים זהיר — סיכון רגרסיה גבוה מול תועלת-freshness שולית. להחזיר רק אם מתלוננים.
 
+## ✅ session 4 batch 4 (2026-06-02) — מד-התקדמות בצופה (#33)
+> build חי: `v20260602e` / SW `bloom-v22.8`.
+> - ✅ **משימה #33** (high, מד-התקדמות בצופה) — סולם-דרגות (8 נקודות tier) מתחת לרשת בצופה: מלא עד הדרגה הנוכחית, הדרגה-הבאה פועמת, + תווית "דרגה 5 · עוד 3 לכתר 👑". הופך צפייה מ"מה הניקוד" ל-micro-narrative "כמה קרוב לכתר". משתמש רק ב-`snap.tier` (בלי נתוני-שרת נוספים; drops לא ב-snapshot). client-only, additive למסך ייעודי. CSS עם dark-parity + reduced-motion. (`src/10-spectator.js` + `public/css/screens.css`).
+> - ℹ️ **משימה #36** (מד ×N XP תוך-משחק ללוח-של-היום) — **נדחה במכוון**: ה-`showSpecialBoardToast` כבר מכריז "×N XP" בתחילת המשחק; באנר *קבוע* תוך-משחק מתחרה ב-tier-bar/score/danger-meter ואוכל מקום אנכי (עבודת TB.1/TB.2 שמרה עליו) — תועלת שולית מול סיכון-layout. ה-toast הקיים + באנר ה-game-over מספיקים.
+> - ℹ️ **משימה #30** (escalation רצף-מכפיל בבית) — **כבר מכוסה** ע"י TD.1 (Tomorrow Preview pill ב-streak hero: "מחר: +50💎 במקום +25", זהב-ורוד פועם). prospective-FOMO כבר גלוי קבוע בבית.
+
 ## איך לקרוא את הקובץ
 בצע מלמעלה למטה — דירוג 1 הוא ההשפעה הגדולה ביותר על "השחקן לא מצליח להפסיק". קודם תקן את הבאגים האדומים (שוברים אמון = הורגים התמכרות), אחר כך רד ברשימה המדורגת לפי ROI.
 

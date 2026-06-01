@@ -250,6 +250,30 @@
     const exitLabel = willResumeGame ? 'חזור למשחק שלי'
       : s.entryFrom === 'contest-screen' ? 'חזור ללוח התחרות'
       : 'צא מהצפייה';
+    // Task #33 — tier-ladder micro-narrative under the grid. Turns watching
+    // from "what's the score" into "they're at tier 5 — 3 away from crown",
+    // which holds attention. Uses snap.tier only (no extra server data).
+    let tierLadderHtml = '';
+    (function() {
+      const maxT = (typeof MAX_TIER !== 'undefined') ? MAX_TIER : 8;
+      let dots = '';
+      for (let t = 1; t <= maxT; t++) {
+        const on = t <= tier;
+        const isNext = (t === tier + 1);
+        const to = getActiveTiers()[t];
+        const emoji = (to && to.emoji) ? to.emoji : '·';
+        dots += '<span class="spec-tier-dot' + (on ? ' on' : '') + (isNext ? ' next' : '') + '">' + emoji + '</span>';
+      }
+      const toGo = Math.max(0, maxT - tier);
+      const label = tier >= maxT ? '👑 הגיע/ה לכתר!'
+        : tier <= 0 ? 'מתחיל/ה לטפס…'
+        : ('דרגה ' + tier + ' · עוד ' + toGo + ' לכתר 👑');
+      tierLadderHtml =
+        '<div class="spectator-tier-ladder">' +
+          '<div class="spec-tier-dots">' + dots + '</div>' +
+          '<div class="spec-tier-label">' + label + '</div>' +
+        '</div>';
+    })();
     wrap.innerHTML =
       '<div class="spectator-view">' +
         '<div class="spectator-header">' +
@@ -263,6 +287,7 @@
           '<div class="spectator-header-score">' + liveScoreText + '</div>' +
         '</div>' +
         '<div class="spectator-grid"><div class="grid" id="spectator-grid-el">' + cellsHtml + '</div></div>' +
+        tierLadderHtml +
         '<div class="spectator-controls">' +
           '<button class="btn secondary" id="spec-switch">החלפת שחקן</button>' +
           '<button class="btn" id="spec-exit">' + exitLabel + '</button>' +

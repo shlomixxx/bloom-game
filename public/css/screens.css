@@ -938,6 +938,31 @@
   }
   .spectator-controls .btn { margin-top: 0; flex: 1; }
   .spectator-controls .btn.secondary { background: #F5F2EC; color: #1C1A18; }
+  /* ── Task #33 — spectator tier-ladder micro-narrative ── */
+  .spectator-tier-ladder {
+    width: 100%; max-width: 340px; margin: 12px auto 0;
+    text-align: center; direction: rtl;
+  }
+  .spec-tier-dots { display: flex; justify-content: center; gap: 5px; flex-wrap: nowrap; }
+  .spec-tier-dot {
+    width: 26px; height: 26px; line-height: 26px; font-size: 14px;
+    border-radius: 50%; background: rgba(120,120,120,0.14);
+    filter: grayscale(1) opacity(0.5); transition: all 0.25s ease;
+  }
+  .spec-tier-dot.on { filter: none; background: rgba(255,180,0,0.18); }
+  .spec-tier-dot.next {
+    filter: none; background: rgba(255,107,157,0.22);
+    box-shadow: 0 0 0 2px rgba(255,107,157,0.5);
+    animation: boardBestPulse 1.3s ease-in-out infinite;
+  }
+  .spec-tier-label {
+    margin-top: 7px; font-size: 13px; font-weight: 800; color: #8B3E0A;
+  }
+  html[data-theme="dark"] .spec-tier-label { color: #FFB48C; }
+  html[data-theme="dark"] .spec-tier-dot { background: rgba(255,255,255,0.07); }
+  @media (prefers-reduced-motion: reduce) {
+    .spec-tier-dot.next { animation: none; }
+  }
   .spectator-toast {
     position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%);
     background: #1C1A18; color: #FFFFFF;
