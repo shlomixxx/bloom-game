@@ -2692,6 +2692,17 @@ INSERT INTO game_config (key, value) VALUES ('push_prompt_cooldown_hours', '24')
 -- board is never empty (bots are excluded from real prizes). Private contests are never seeded.
 INSERT INTO game_config (key, value) VALUES ('tournament_bot_seed_enabled', 'true') ON CONFLICT (key) DO NOTHING;
 INSERT INTO game_config (key, value) VALUES ('tournament_bot_seed_count', '6') ON CONFLICT (key) DO NOTHING;
+-- Task #14 — admin-editable Trophy Road arena thresholds (🏆 at which trophy
+-- count each of the 8 arenas begins). Name/emoji are also config-overridable
+-- (trophy_arena_N_name / _emoji) but fall back to the hardcoded defaults.
+INSERT INTO game_config (key, value) VALUES ('trophy_arena_1_at', '0') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('trophy_arena_2_at', '50') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('trophy_arena_3_at', '200') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('trophy_arena_4_at', '600') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('trophy_arena_5_at', '1500') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('trophy_arena_6_at', '3000') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('trophy_arena_7_at', '6000') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('trophy_arena_8_at', '12000') ON CONFLICT (key) DO NOTHING;
 -- AD.5 — win-return celebration on home (confetti + sound after a win). Default on.
 INSERT INTO game_config (key, value) VALUES ('home_win_celebration_enabled', 'true') ON CONFLICT (key) DO NOTHING;
 INSERT INTO game_config (key, value) VALUES ('home_win_celebration_min_score', '5000') ON CONFLICT (key) DO NOTHING;

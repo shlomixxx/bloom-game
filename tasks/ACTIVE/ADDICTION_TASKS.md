@@ -78,6 +78,11 @@
 > - ✅ **משימות #5 + #12** (high, "העולם הריק") — **scope ממוקד-סיכון:** הלוח-הגלובלי-היומי כבר מוזרע (AD.2 auto-fleet, mode=daily), ותחרויות-חברים פרטיות **לא** מוזרעות (יבלבל "מי האנשים האלה?"). הפרוסה הנקייה = **טורנירים** (תמיד ציבוריים; מגבה ישירות את ה-push החדש `tournament_starting`). `_maybeSeedBotsIntoTournament(tid)` ([server.js](server.js)): claim אטומי דרך `_tseed:<id>` (seed פעם אחת), מזריע N בוטים (שמות מ-`_DUEL_BOT_NAMES`) בטווח בר-ניצחון 6K-22K יורד, רק לטורנירים live/scheduled. נקרא **lazy לפני** ה-SELECT ב-`GET /api/tournaments/:id/leaderboard` → גם הצופה-הראשון רואה לוח מלא. **הבוטים מודרים מפרסים אמיתיים** — `maybeFinalizeTournament` סינן `device_id NOT LIKE 'bot-%'`, כך ששחקן אמיתי תמיד זוכה בפרס הגלוי. שליטת אדמין: `tournament_bot_seed_enabled` + `tournament_bot_seed_count` (schema+db+admin TIPS/PRESETS). ([server.js](server.js)+[schema.sql](schema.sql)+[db.js](db.js)+[admin/index.html](admin/index.html)).
 > - ℹ️ **#5 contests/guilds** — הזרעת contest_scores נשארת מודרת בכוונה לתחרויות-ציבוריות-בלבד; כרגע רק טורנירים. גילדות מושבתות (28-guilds.js:99). הרחבה לתחרות-שבועית-ציבורית = הצעד הבא אם יידרש.
 
+## ✅ session 4 batch 7 (2026-06-02) — ארנות Trophy ניתנות-לעריכה באדמין (#14) [server-only]
+> בלי שינוי client → בלי cache-bump. הלקוח כבר מרנדר מ-`data.arenas` של השרת.
+> - ✅ **משימה #14** (trophy חצי) — ה-8 ארנות Trophy Road היו **hardcoded** ב-`TROPHY_ARENAS` (server.js). עכשיו `_trophyArenas()` קורא override מ-`game_config`: `trophy_arena_N_at` (סף) + `trophy_arena_N_name` + `_emoji`, עם fallback לקשיח. ממוין asc תמיד (כדי ש-`_trophyArenaFor` יישאר מונוטוני גם על קלט-אדמין מוזר). `_trophyArenaFor` + state-endpoint (`nextArena`+`arenas`) משתמשים בו → **השינוי מתפשט ללקוח אוטומטית** (קורא `data.arenas`). 8 מפתחות `_at` seeded לגילוי באדמין + presets + tips; name/emoji ניתנים-לעריכה דרך fallback. מאפשר "עונה/אירוע" עם ספים חדשים בלי deploy. ([server.js](server.js)+[schema.sql](schema.sql)+[db.js](db.js)+[admin/index.html](admin/index.html)).
+> - ℹ️ **#14 spin חצי** — פלחי ה-Spin Wheel **כבר** ניתנים-לעריכה דרך טבלת ה-config (`daily_spin_seg_N_*`). עורך ויזואלי ייעודי (כמו Gacha) = nice-to-have בלבד; לא נדרש.
+
 ## איך לקרוא את הקובץ
 בצע מלמעלה למטה — דירוג 1 הוא ההשפעה הגדולה ביותר על "השחקן לא מצליח להפסיק". קודם תקן את הבאגים האדומים (שוברים אמון = הורגים התמכרות), אחר כך רד ברשימה המדורגת לפי ROI.
 

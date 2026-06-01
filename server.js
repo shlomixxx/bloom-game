@@ -7224,9 +7224,36 @@ const TROPHY_ARENAS = [
   { id: 'legend',   minTrophies: 12000, emoji: '⚡', label: 'היכל האגדה',    color: '#FFD93D' }
 ];
 
+// Task #14 — admin-editable arenas. Each arena's threshold/name/emoji can be
+// overridden via game_config (trophy_arena_N_at / _name / _emoji), falling back
+// to the hardcoded TROPHY_ARENAS. Lets the owner re-theme/re-tune the ladder
+// for a season/event without a deploy. Always returned sorted ascending so the
+// _trophyArenaFor ladder walk stays monotonic even on weird admin input.
+function _trophyArenas() {
+  // Always read the arena overrides from the global config cache (it holds
+  // every non-underscore key); the per-feature trophy cfg only has trophies_*.
+  const cfg = _configCache || {};
+  const list = TROPHY_ARENAS.map((a, i) => {
+    const n = i + 1;
+    const at = parseInt(cfg['trophy_arena_' + n + '_at'], 10);
+    const nm = (cfg['trophy_arena_' + n + '_name'] || '').toString().trim();
+    const em = (cfg['trophy_arena_' + n + '_emoji'] || '').toString().trim();
+    return {
+      id: a.id,
+      minTrophies: (Number.isFinite(at) && at >= 0) ? at : a.minTrophies,
+      emoji: em || a.emoji,
+      label: nm || a.label,
+      color: a.color
+    };
+  });
+  list.sort((x, y) => x.minTrophies - y.minTrophies);
+  return list;
+}
+
 function _trophyArenaFor(trophies) {
-  let curr = TROPHY_ARENAS[0];
-  for (const a of TROPHY_ARENAS) {
+  const arenas = _trophyArenas();
+  let curr = arenas[0];
+  for (const a of arenas) {
     if (trophies >= a.minTrophies) curr = a;
     else break;
   }
@@ -7293,9 +7320,10 @@ app.get('/api/trophies/state', async (req, res) => {
       [deviceId]
     );
     const row = r.rows[0] || { trophies: 0, trophies_lifetime: 0, highest_trophies: 0, current_arena_id: 'sprout', claimed_milestones: [], total_games: 0, total_wins: 0, last_change: 0, last_change_at: null };
+    const arenaList = _trophyArenas();
     const arena = _trophyArenaFor(row.trophies);
     // Next arena
-    const nextArena = TROPHY_ARENAS.find(a => a.minTrophies > row.trophies) || null;
+    const nextArena = arenaList.find(a => a.minTrophies > row.trophies) || null;
     const milestones = _trophyMilestones(cfg);
     const claimed = Array.isArray(row.claimed_milestones) ? row.claimed_milestones : [];
     const unclaimedMilestones = milestones.filter(m => row.trophies >= m.at && claimed.indexOf(m.index) < 0);
@@ -7307,7 +7335,7 @@ app.get('/api/trophies/state', async (req, res) => {
       highest: row.highest_trophies,
       arena: arena,
       nextArena: nextArena ? { ...nextArena, gap: nextArena.minTrophies - row.trophies } : null,
-      arenas: TROPHY_ARENAS,
+      arenas: arenaList,
       milestones: milestones.map(m => ({ ...m, claimed: claimed.indexOf(m.index) >= 0, ready: row.trophies >= m.at })),
       claimedCount: claimed.length,
       unclaimedCount: unclaimedMilestones.length,
