@@ -92,6 +92,11 @@
 > - ✅ **משימה #25** (high, "מטרת היום + ספירה-לאחור") — מסגרת ה-"goal" כבר הייתה ("עוד N XP לליגת X"); מה שחסר זה ה-**דדליין**. הוסף ספירה-לאחור "⏳ השבוע מתאפס בעוד 2י 4ש" לאריח הליגה **ולמודאל**. `msUntilWeeklyReset()` self-contained (מודול-ליגות הוא IIFE נפרד) → יום-ראשון הבא 00:00 שעון-ישראל. CSS עם זהב לדחיפות. ([src/30-leagues.js](src/30-leagues.js)+[public/css/boards.css](public/css/boards.css)).
 > - ℹ️ **#25 Trophy/Lifetime** — **N/A ל-reset-countdown**: גביעים נמשכים (לא מתאפסים), Lifetime לעולם לא מתאפס. ל-Leagues זו המערכת היחידה עם reset תקופתי. מסגרת ה-goal שלהם (התקדמות לארנה/רמה הבאה) כבר קיימת. כך ש-#25's reset-countdown מכוסה במלואו במערכת הרלוונטית.
 
+## ✅ session 4 batch 10 (2026-06-02) — רוֹרִיוּת ויזואלית בגלגל היומי (#29 — חצי spin)
+> build חי: `v20260602i` / SW `bloom-v23.2`.
+> - ✅ **משימה #29** (medium, spin חצי) — perceived-rarity FOMO על גלגל-היום: `segRarity(seg)` מסווג כל פלח לפי ערך הפרס (common/rare/epic/legendary/jackpot), וכל פלח מקבל stroke בהיר+עבה יותר לפי רוֹרִיוּת (לבן→תכלת→סגול→זהב→ורוד) + sparkle 💎/✨ ליד ה-rim על legendary/jackpot. העין נמשכת ל-jackpot בכל פתיחה → מניע את לולאת-הספין. SVG-only, contained, בלי blur-filter (מטשטש פלחים מלאים). ([src/32-daily-spin.js](src/32-daily-spin.js)).
+> - ℹ️ **#29 album חצי** — gradient-לפי-board_difficulty ללוחות-האלבום נשאר follow-up (מערכת נפרדת, פחות-תכוף מהספין).
+
 ## איך לקרוא את הקובץ
 בצע מלמעלה למטה — דירוג 1 הוא ההשפעה הגדולה ביותר על "השחקן לא מצליח להפסיק". קודם תקן את הבאגים האדומים (שוברים אמון = הורגים התמכרות), אחר כך רד ברשימה המדורגת לפי ROI.
 

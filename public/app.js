@@ -28912,6 +28912,27 @@
     if (spinBtn) spinBtn.onclick = doSpin;
   }
 
+  // Task #29 — perceived-rarity FOMO. Classify each spin segment by reward
+  // value and give rarer slices a brighter, thicker stroke + a sparkle glyph,
+  // so the eye is drawn to the jackpot every time the wheel is open. Genshin/
+  // Apex pattern — visible rarity is what drives the daily-spin loop.
+  function segRarity(seg) {
+    var amt = parseInt(seg && seg.amount, 10) || 0;
+    var type = (seg && seg.type) || '';
+    if (type === 'jackpot' || amt >= 5000) return 'jackpot';
+    if (amt >= 1000) return 'legendary';
+    if (amt >= 200)  return 'epic';
+    if (amt >= 50)   return 'rare';
+    return 'common';
+  }
+  var RARITY_STROKE = {
+    common:    { color: 'rgba(255,255,255,0.5)',  width: 2 },
+    rare:      { color: 'rgba(120,210,255,0.95)', width: 2.5 },
+    epic:      { color: 'rgba(190,150,255,1)',    width: 3 },
+    legendary: { color: 'rgba(255,205,70,1)',     width: 3.5 },
+    jackpot:   { color: 'rgba(255,90,157,1)',     width: 4 }
+  };
+
   function renderWheelSvg(segs) {
     // 12 segments around a 320px circle. Each segment = 30 degrees.
     var SIZE = 320;
@@ -28930,7 +28951,10 @@
       var y2 = CY + R * Math.sin(endAng);
       var largeArc = per > 180 ? 1 : 0;
       var d = 'M' + CX + ',' + CY + ' L' + x1.toFixed(2) + ',' + y1.toFixed(2) + ' A' + R + ',' + R + ' 0 ' + largeArc + ',1 ' + x2.toFixed(2) + ',' + y2.toFixed(2) + ' Z';
-      paths += '<path d="' + d + '" fill="' + (segs[i].color || '#FFD3D3') + '" stroke="rgba(255,255,255,0.6)" stroke-width="2"/>';
+      // Task #29 — rarity-aware stroke so the rare/jackpot slices visibly pop.
+      var rar = segRarity(segs[i]);
+      var rs = RARITY_STROKE[rar] || RARITY_STROKE.common;
+      paths += '<path d="' + d + '" fill="' + (segs[i].color || '#FFD3D3') + '" stroke="' + rs.color + '" stroke-width="' + rs.width + '"/>';
       // Label in the middle of each segment, slightly outward.
       var midAng = ((i + 0.5) * per - 90) * Math.PI / 180;
       var tx = CX + R * 0.65 * Math.cos(midAng);
@@ -28940,6 +28964,13 @@
         '<text text-anchor="middle" font-size="20" dominant-baseline="middle" fill="#FFF" font-weight="700" stroke="rgba(0,0,0,0.4)" stroke-width="0.8" paint-order="stroke">' + (segs[i].emoji || '✨') + '</text>' +
         '<text text-anchor="middle" font-size="11" dominant-baseline="middle" y="16" fill="#FFF" font-weight="800" stroke="rgba(0,0,0,0.5)" stroke-width="0.5" paint-order="stroke">' + (segs[i].label || '').slice(0, 8) + '</text>' +
       '</g>';
+      // Task #29 — sparkle on the rarest slices, near the outer rim, so the
+      // jackpot/legendary segments are unmistakable at a glance.
+      if (rar === 'jackpot' || rar === 'legendary') {
+        var sx = CX + R * 0.9 * Math.cos(midAng);
+        var sy = CY + R * 0.9 * Math.sin(midAng);
+        labels += '<text x="' + sx.toFixed(2) + '" y="' + sy.toFixed(2) + '" text-anchor="middle" dominant-baseline="middle" font-size="13">' + (rar === 'jackpot' ? '💎' : '✨') + '</text>';
+      }
     }
     return '<div class="spin-wheel-frame">' +
       '<svg viewBox="0 0 ' + SIZE + ' ' + SIZE + '" class="spin-wheel-svg" id="spin-wheel-svg">' +
