@@ -1356,6 +1356,10 @@
   // ============================================================
   var _duelHudPoller = null;
   var _duelHudDuelRow = null;
+  // Bug #16 / Task #10 — captured at submit time (before the HUD teardown
+  // nulls _duelHudDuelRow) so the result overlay can offer a one-tap rematch
+  // even when the poller surfaces the result minutes later.
+  var _lastDuelRematchCtx = null;
   var _duelHudLastOppScore = null;  // for "score jump" flash animation
   var _duelHudFinalized = false;    // stops polling once opponent finalized
   var _duelHudOppFinishedAnnounced = false; // single big-toast on transition
@@ -2315,11 +2319,36 @@
     try { startDuelOpponentHud(duelRow); } catch (e) { console.warn('[duel-hud]', e); }
   }
 
+  // Bug #16 / Task #10 — derive the one-tap-rematch context from the active
+  // duel row. Mirrors the my-duels list pattern (opponent's BLOOM code +
+  // wager + difficulty). Sets _lastDuelRematchCtx to null when no valid
+  // human opponent exists (bot match, missing code) so the result overlay
+  // won't offer a rematch that can't work.
+  function captureDuelRematchCtx() {
+    _lastDuelRematchCtx = null;
+    var row = _duelHudDuelRow;
+    if (!row || row.is_bot_match) return;
+    var iAmChall = row.challenger_device === deviceId;
+    var otherCode = iAmChall ? row.opponent_code : row.challenger_code;
+    if (!otherCode) return;
+    var suf = String(otherCode).replace(/^BLOOM-/i, '').toUpperCase().replace(/[^A-HJ-NP-Z2-9]/g, '').slice(0, 4);
+    if (suf.length !== 4) return;
+    _lastDuelRematchCtx = {
+      suffix: suf,
+      wager: (row.amount | 0),
+      diff: (row.difficulty_label || 'default').replace(/[^a-z]/gi, '').slice(0, 12) || 'default'
+    };
+  }
+
   // Called from game-over to submit duel score
   function submitDuelScore(finalScore) {
     if (!activeDuelId) return;
     var duelId = activeDuelId;
     var oppName = window._duelOpponentName || 'יריב';
+    // Bug #16 / Task #10 — capture the rematch context NOW, before the HUD
+    // teardown below nulls _duelHudDuelRow. Skip bot matches (a phantom bot
+    // has no real BLOOM code to re-challenge).
+    captureDuelRematchCtx();
     activeDuelId = null;
     // Tear down the live opponent HUD — the game-over overlay takes
     // over from here, so the HUD's job is done.
@@ -2808,6 +2837,20 @@
       '</div>';
     }
 
+    // Bug #16 / Task #10 — one-tap rematch on a duel that ACTUALLY happened
+    // (settled/tie, real human opponent). The highest-conversion post-match
+    // CTA is "play them again immediately" — keep the momentum. The gradient
+    // pink-purple button is the loud hero; "שחק שוב" (practice) drops to a
+    // muted secondary so the eye lands on the rematch.
+    var showRematch = !!(_lastDuelRematchCtx && d && (d.result === 'settled' || d.result === 'tie'));
+    var rematchHtml = showRematch
+      ? '<button class="duel-result-rematch" style="margin-top:16px;width:100%;padding:13px;border:none;border-radius:12px;background:linear-gradient(135deg,#A855F7,#EC4899);color:#fff;font-size:16px;font-weight:900;cursor:pointer;font-family:inherit;box-shadow:0 4px 16px rgba(168,85,247,0.4)">⚔️ דו-קרב שוב</button>'
+      : '';
+    var ctaBg = showRematch ? 'transparent' : '#FAC775';
+    var ctaFg = showRematch ? '#A8A6A0' : '#412402';
+    var ctaBorder = showRematch ? '1px solid rgba(255,255,255,0.14)' : 'none';
+    var ctaWeight = showRematch ? '600' : '800';
+
     var overlay = document.createElement('div');
     overlay.setAttribute('data-duel-result-overlay', '1');
     overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;display:flex;align-items:center;justify-content:center;direction:rtl';
@@ -2817,7 +2860,8 @@
         '<div style="font-size:24px;font-weight:900;color:' + color + '">' + title + '</div>' +
         scoresHtml +
         detail +
-        '<button class="duel-result-cta" style="margin-top:18px;width:100%;padding:12px;border:none;border-radius:12px;background:#FAC775;color:#412402;font-size:16px;font-weight:800;cursor:pointer;font-family:inherit">' + escDuelHtml(ctaLabel) + '</button>' +
+        rematchHtml +
+        '<button class="duel-result-cta" style="margin-top:' + (showRematch ? '10' : '18') + 'px;width:100%;padding:12px;border:' + ctaBorder + ';border-radius:12px;background:' + ctaBg + ';color:' + ctaFg + ';font-size:16px;font-weight:' + ctaWeight + ';cursor:pointer;font-family:inherit">' + escDuelHtml(ctaLabel) + '</button>' +
       '</div>';
     document.body.appendChild(overlay);
 
@@ -2834,6 +2878,18 @@
         init('practice', { fresh: true });
       }
     });
+
+    // Bug #16 / Task #10 — wire the rematch button to the existing
+    // rematchDuel flow (closes overlay → reopens duel modal pre-filled
+    // with the same opponent suffix + wager + difficulty).
+    var rematchBtn = overlay.querySelector('.duel-result-rematch');
+    if (rematchBtn && _lastDuelRematchCtx) {
+      var rmCtx = _lastDuelRematchCtx;
+      rematchBtn.addEventListener('click', function() {
+        try { overlay.remove(); } catch (e) {}
+        if (typeof window.rematchDuel === 'function') window.rematchDuel(rmCtx.suffix, rmCtx.wager, rmCtx.diff);
+      });
+    }
 
     if (showConfettiFlag && typeof showConfetti === 'function') showConfetti(40);
     if (showConfettiFlag) buzz([80, 40, 80, 40, 80]);
@@ -4002,7 +4058,11 @@
         setTrackLevel(name, Math.min(target, target * (i / MUSIC_FADE_STEPS)));
         if (i >= MUSIC_FADE_STEPS) clearFade(name);
       }, stepMs);
-    }).catch(function() { /* decode failed — silent */ });
+    }).catch(function(e) {
+      // Bug #23 — was silent. Log so a decode/playback failure is debuggable
+      // instead of "music just stopped for no reason".
+      try { console.warn('[bloom] music fade/decode failed:', name, e && e.message); } catch (_) {}
+    });
   }
   function playMusic(name) {
     if (!MUSIC_TRACKS[name]) return;
@@ -5671,7 +5731,10 @@
         '<button class="home-v2-mute" id="home-mute" aria-label="השתק">' +
           '<svg id="home-mute-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 8a5 5 0 0 1 0 8M17.7 5a9 9 0 0 1 0 14M6 15H4a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1h2l3.5-4.5A.8.8 0 0 1 11 5v14a.8.8 0 0 1-1.5.5L6 15"/></svg>' +
         '</button>' +
-        '<div class="home-v2-live-pulse" id="home-v2-live-pulse">' +
+        // Bug #19 — hidden until the first /api/stats/live resolves, so the
+        // player never sees a "טוען…" flash (matches v1 behavior). The pulse
+        // refresher reveals it via wrap.style.display='' once data lands.
+        '<div class="home-v2-live-pulse" id="home-v2-live-pulse" style="display:none">' +
           '<span class="home-v2-live-dot"></span>' +
           '<span class="home-v2-live-text" id="home-v2-live-text">טוען…</span>' +
         '</div>' +
@@ -13230,7 +13293,7 @@
       if (_earnedThisSession[dedupKey]) return;
       _earnedThisSession[dedupKey] = true;
     }
-    fetch(API_BASE + '/api/player/earn', {
+    return fetch(API_BASE + '/api/player/earn', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ deviceId: deviceId, token: deviceToken, action: action, meta: meta || null })
@@ -13267,12 +13330,14 @@
         }
         updateBalanceDisplay();
       }
+      return d;
     }).catch(function(err) {
       // Network-level failure — player can lose gems silently. Report it.
       try { __bloomReportIssue({ kind: 'earn_network_fail', severity: 'high',
         title: 'שגיאת רשת ב-earnCredits · ' + action,
         detail: 'action=' + action + ' err=' + (err && err.message || err),
         context: { action: action, meta: meta || null }}); } catch (e) {}
+      return null;
     });
   }
   function showLevelUpToast(level) {
@@ -15101,21 +15166,29 @@
       res = await fetch(API_BASE + '/api/contests/' + encodeURIComponent(s.code) +
         '/live-state/' + encodeURIComponent(s.targetDeviceId));
     } catch (e) {
+      // Bug #9 fix — a network blip used to freeze the spectator view
+      // silently. Count it toward the reconnecting indicator, but NEVER
+      // auto-close on a network error (the game may still be live; the
+      // watcher just lost connectivity).
+      handleSpectatorMiss(s, true);
       return;
     }
     if (!spectatorSession || spectatorSession !== s) return;
     if (res.status === 404) {
-      s.missCount++;
-      if (s.missCount >= 2) {
-        showSpectatorToast('המשחק הסתיים');
-        stopSpectator(true);
-      }
+      // 404 = server has no FRESH live-state (>10s stale). That can mean
+      // the game ENDED, or the target's heartbeat briefly gapped (tab
+      // backgrounded). The old code closed after 2 ticks (≈2s) — way too
+      // aggressive. Now: show "reconnecting" after a few misses, and only
+      // declare the game over after a sustained run of server 404s.
+      handleSpectatorMiss(s, false);
       return;
     }
     if (!res.ok) return;
     let data;
     try { data = await res.json(); } catch (e) { return; }
     if (!spectatorSession || spectatorSession !== s) return;
+    // Recovered — clear any reconnecting banner.
+    if (s.missCount > 0) clearSpectatorReconnecting(s);
     s.missCount = 0;
     if (data && data.live) {
       s.lastSnap = data.live;
@@ -15124,6 +15197,40 @@
     } else if (forceRender) {
       renderSpectatorView();
     }
+  }
+
+  // Centralized miss handling. networkErr=true means the fetch threw
+  // (connectivity) → only show the reconnecting banner, never close. A 404
+  // (server confirms no fresh state) can eventually mean "game ended", so
+  // after a sustained run we close gracefully.
+  function handleSpectatorMiss(s, networkErr) {
+    s.missCount = (s.missCount || 0) + 1;
+    if (s.missCount >= 3) showSpectatorReconnecting(s);
+    if (!networkErr && s.missCount >= 8) {
+      clearSpectatorReconnecting(s);
+      showSpectatorToast('המשחק הסתיים');
+      stopSpectator(true);
+    }
+  }
+
+  function showSpectatorReconnecting(s) {
+    if (s && s._reconnectShown) return;
+    if (s) s._reconnectShown = true;
+    const wrap = document.getElementById('grid-wrap');
+    if (!wrap) return;
+    if (document.getElementById('spectator-reconnect')) return;
+    const b = document.createElement('div');
+    b.id = 'spectator-reconnect';
+    b.style.cssText = 'position:absolute;top:8px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.78);color:#FAC775;padding:6px 14px;border-radius:14px;font-size:13px;font-weight:700;z-index:50;direction:rtl;pointer-events:none';
+    b.textContent = '🔄 מתחבר מחדש…';
+    if (getComputedStyle(wrap).position === 'static') wrap.style.position = 'relative';
+    wrap.appendChild(b);
+  }
+
+  function clearSpectatorReconnecting(s) {
+    if (s) s._reconnectShown = false;
+    const b = document.getElementById('spectator-reconnect');
+    if (b) b.remove();
   }
 
   function renderSpectatorView() {
@@ -15194,6 +15301,7 @@
   function stopSpectator(exit) {
     const s = spectatorSession;
     if (!s) return;
+    clearSpectatorReconnecting(s);
     if (s.pollTimer) { clearInterval(s.pollTimer); s.pollTimer = null; }
     if (s.heartbeatTimer) { clearInterval(s.heartbeatTimer); s.heartbeatTimer = null; }
     // Best-effort unwatch — the server TTL will clean us up regardless.
@@ -24591,7 +24699,6 @@
     // a celebration. The dedup is double-bolted (localStorage on client,
     // game_config _earn key on server) so a refresh-spammer gets nothing.
     if (data.allDone && !checklistBonusClaimedToday()) {
-      markChecklistBonusClaimed();
       // Determine today's daily-special-played flag from localStorage
       // (the only client-tracked item — others are server-verified).
       var dailySpecialDone = false;
@@ -24602,13 +24709,36 @@
           dailySpecialDone = !!raw;
         }
       } catch (e) {}
+      // Bug #10 fix — only mark claimed + fire confetti AFTER the server
+      // confirms the credit. The old code marked + celebrated EAGERLY, so a
+      // network failure showed confetti while the gems never actually landed.
+      var celebrate = function() {
+        try { if (typeof soundMilestone === 'function') soundMilestone(5); } catch (e) {}
+        try { if (typeof buzz === 'function') buzz([80, 60, 100, 60, 120]); } catch (e) {}
+        showChecklistAllDoneOverlay();
+      };
       if (typeof earnCredits === 'function') {
-        earnCredits('daily_checklist_complete', { dailySpecialDone: dailySpecialDone });
+        var p = earnCredits('daily_checklist_complete', { dailySpecialDone: dailySpecialDone });
+        if (p && typeof p.then === 'function') {
+          p.then(function(d) {
+            if (d && d.ok && d.reward > 0) {
+              markChecklistBonusClaimed();
+              celebrate();
+            } else if (d && d.reason && d.reason.indexOf('already') === 0) {
+              // Server already paid earlier (client lost the flag) — mark
+              // silently so we don't re-spam, but no confetti.
+              markChecklistBonusClaimed();
+            } else if (!d) {
+              // Network failure — leave UNclaimed so it retries next refresh.
+              try { if (typeof showToast === 'function') showToast('שמירת הבונוס נכשלה — ננסה שוב', 'error'); } catch (e) {}
+            }
+            // else (not-complete / reward 0): do nothing, allow retry.
+          });
+        } else {
+          // earnCredits dedup early-return (already fired this session).
+          markChecklistBonusClaimed();
+        }
       }
-      // Celebrate.
-      try { if (typeof soundMilestone === 'function') soundMilestone(5); } catch (e) {}
-      try { if (typeof buzz === 'function') buzz([80, 60, 100, 60, 120]); } catch (e) {}
-      showChecklistAllDoneOverlay();
     }
   }
 
@@ -33542,8 +33672,13 @@ try {
         var entries = FEATURES.filter(function(f) {
           if (f.category !== cat.id) return false;
           if (!q) return true;
+          // Bug #25 — also search the locked-feature teaser bullets so a
+          // player searching for a benefit ("יהלומים", "חבר") finds the
+          // locked feature whose teaser mentions it.
+          var teaserText = Array.isArray(f.teaser) ? f.teaser.join(' ').toLowerCase() : '';
           return f.name.toLowerCase().indexOf(q) >= 0 ||
-                 f.description.toLowerCase().indexOf(q) >= 0;
+                 f.description.toLowerCase().indexOf(q) >= 0 ||
+                 teaserText.indexOf(q) >= 0;
         });
         if (!entries.length) continue;
         anyShown = true;

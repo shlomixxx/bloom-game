@@ -599,6 +599,10 @@
   // ============================================================
   var _duelHudPoller = null;
   var _duelHudDuelRow = null;
+  // Bug #16 / Task #10 — captured at submit time (before the HUD teardown
+  // nulls _duelHudDuelRow) so the result overlay can offer a one-tap rematch
+  // even when the poller surfaces the result minutes later.
+  var _lastDuelRematchCtx = null;
   var _duelHudLastOppScore = null;  // for "score jump" flash animation
   var _duelHudFinalized = false;    // stops polling once opponent finalized
   var _duelHudOppFinishedAnnounced = false; // single big-toast on transition
@@ -1558,11 +1562,36 @@
     try { startDuelOpponentHud(duelRow); } catch (e) { console.warn('[duel-hud]', e); }
   }
 
+  // Bug #16 / Task #10 — derive the one-tap-rematch context from the active
+  // duel row. Mirrors the my-duels list pattern (opponent's BLOOM code +
+  // wager + difficulty). Sets _lastDuelRematchCtx to null when no valid
+  // human opponent exists (bot match, missing code) so the result overlay
+  // won't offer a rematch that can't work.
+  function captureDuelRematchCtx() {
+    _lastDuelRematchCtx = null;
+    var row = _duelHudDuelRow;
+    if (!row || row.is_bot_match) return;
+    var iAmChall = row.challenger_device === deviceId;
+    var otherCode = iAmChall ? row.opponent_code : row.challenger_code;
+    if (!otherCode) return;
+    var suf = String(otherCode).replace(/^BLOOM-/i, '').toUpperCase().replace(/[^A-HJ-NP-Z2-9]/g, '').slice(0, 4);
+    if (suf.length !== 4) return;
+    _lastDuelRematchCtx = {
+      suffix: suf,
+      wager: (row.amount | 0),
+      diff: (row.difficulty_label || 'default').replace(/[^a-z]/gi, '').slice(0, 12) || 'default'
+    };
+  }
+
   // Called from game-over to submit duel score
   function submitDuelScore(finalScore) {
     if (!activeDuelId) return;
     var duelId = activeDuelId;
     var oppName = window._duelOpponentName || 'יריב';
+    // Bug #16 / Task #10 — capture the rematch context NOW, before the HUD
+    // teardown below nulls _duelHudDuelRow. Skip bot matches (a phantom bot
+    // has no real BLOOM code to re-challenge).
+    captureDuelRematchCtx();
     activeDuelId = null;
     // Tear down the live opponent HUD — the game-over overlay takes
     // over from here, so the HUD's job is done.
@@ -2051,6 +2080,20 @@
       '</div>';
     }
 
+    // Bug #16 / Task #10 — one-tap rematch on a duel that ACTUALLY happened
+    // (settled/tie, real human opponent). The highest-conversion post-match
+    // CTA is "play them again immediately" — keep the momentum. The gradient
+    // pink-purple button is the loud hero; "שחק שוב" (practice) drops to a
+    // muted secondary so the eye lands on the rematch.
+    var showRematch = !!(_lastDuelRematchCtx && d && (d.result === 'settled' || d.result === 'tie'));
+    var rematchHtml = showRematch
+      ? '<button class="duel-result-rematch" style="margin-top:16px;width:100%;padding:13px;border:none;border-radius:12px;background:linear-gradient(135deg,#A855F7,#EC4899);color:#fff;font-size:16px;font-weight:900;cursor:pointer;font-family:inherit;box-shadow:0 4px 16px rgba(168,85,247,0.4)">⚔️ דו-קרב שוב</button>'
+      : '';
+    var ctaBg = showRematch ? 'transparent' : '#FAC775';
+    var ctaFg = showRematch ? '#A8A6A0' : '#412402';
+    var ctaBorder = showRematch ? '1px solid rgba(255,255,255,0.14)' : 'none';
+    var ctaWeight = showRematch ? '600' : '800';
+
     var overlay = document.createElement('div');
     overlay.setAttribute('data-duel-result-overlay', '1');
     overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;display:flex;align-items:center;justify-content:center;direction:rtl';
@@ -2060,7 +2103,8 @@
         '<div style="font-size:24px;font-weight:900;color:' + color + '">' + title + '</div>' +
         scoresHtml +
         detail +
-        '<button class="duel-result-cta" style="margin-top:18px;width:100%;padding:12px;border:none;border-radius:12px;background:#FAC775;color:#412402;font-size:16px;font-weight:800;cursor:pointer;font-family:inherit">' + escDuelHtml(ctaLabel) + '</button>' +
+        rematchHtml +
+        '<button class="duel-result-cta" style="margin-top:' + (showRematch ? '10' : '18') + 'px;width:100%;padding:12px;border:' + ctaBorder + ';border-radius:12px;background:' + ctaBg + ';color:' + ctaFg + ';font-size:16px;font-weight:' + ctaWeight + ';cursor:pointer;font-family:inherit">' + escDuelHtml(ctaLabel) + '</button>' +
       '</div>';
     document.body.appendChild(overlay);
 
@@ -2077,6 +2121,18 @@
         init('practice', { fresh: true });
       }
     });
+
+    // Bug #16 / Task #10 — wire the rematch button to the existing
+    // rematchDuel flow (closes overlay → reopens duel modal pre-filled
+    // with the same opponent suffix + wager + difficulty).
+    var rematchBtn = overlay.querySelector('.duel-result-rematch');
+    if (rematchBtn && _lastDuelRematchCtx) {
+      var rmCtx = _lastDuelRematchCtx;
+      rematchBtn.addEventListener('click', function() {
+        try { overlay.remove(); } catch (e) {}
+        if (typeof window.rematchDuel === 'function') window.rematchDuel(rmCtx.suffix, rmCtx.wager, rmCtx.diff);
+      });
+    }
 
     if (showConfettiFlag && typeof showConfetti === 'function') showConfetti(40);
     if (showConfettiFlag) buzz([80, 40, 80, 40, 80]);

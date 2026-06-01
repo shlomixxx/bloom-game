@@ -440,8 +440,13 @@
         var entries = FEATURES.filter(function(f) {
           if (f.category !== cat.id) return false;
           if (!q) return true;
+          // Bug #25 — also search the locked-feature teaser bullets so a
+          // player searching for a benefit ("יהלומים", "חבר") finds the
+          // locked feature whose teaser mentions it.
+          var teaserText = Array.isArray(f.teaser) ? f.teaser.join(' ').toLowerCase() : '';
           return f.name.toLowerCase().indexOf(q) >= 0 ||
-                 f.description.toLowerCase().indexOf(q) >= 0;
+                 f.description.toLowerCase().indexOf(q) >= 0 ||
+                 teaserText.indexOf(q) >= 0;
         });
         if (!entries.length) continue;
         anyShown = true;

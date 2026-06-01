@@ -150,21 +150,29 @@
       res = await fetch(API_BASE + '/api/contests/' + encodeURIComponent(s.code) +
         '/live-state/' + encodeURIComponent(s.targetDeviceId));
     } catch (e) {
+      // Bug #9 fix — a network blip used to freeze the spectator view
+      // silently. Count it toward the reconnecting indicator, but NEVER
+      // auto-close on a network error (the game may still be live; the
+      // watcher just lost connectivity).
+      handleSpectatorMiss(s, true);
       return;
     }
     if (!spectatorSession || spectatorSession !== s) return;
     if (res.status === 404) {
-      s.missCount++;
-      if (s.missCount >= 2) {
-        showSpectatorToast('המשחק הסתיים');
-        stopSpectator(true);
-      }
+      // 404 = server has no FRESH live-state (>10s stale). That can mean
+      // the game ENDED, or the target's heartbeat briefly gapped (tab
+      // backgrounded). The old code closed after 2 ticks (≈2s) — way too
+      // aggressive. Now: show "reconnecting" after a few misses, and only
+      // declare the game over after a sustained run of server 404s.
+      handleSpectatorMiss(s, false);
       return;
     }
     if (!res.ok) return;
     let data;
     try { data = await res.json(); } catch (e) { return; }
     if (!spectatorSession || spectatorSession !== s) return;
+    // Recovered — clear any reconnecting banner.
+    if (s.missCount > 0) clearSpectatorReconnecting(s);
     s.missCount = 0;
     if (data && data.live) {
       s.lastSnap = data.live;
@@ -173,6 +181,40 @@
     } else if (forceRender) {
       renderSpectatorView();
     }
+  }
+
+  // Centralized miss handling. networkErr=true means the fetch threw
+  // (connectivity) → only show the reconnecting banner, never close. A 404
+  // (server confirms no fresh state) can eventually mean "game ended", so
+  // after a sustained run we close gracefully.
+  function handleSpectatorMiss(s, networkErr) {
+    s.missCount = (s.missCount || 0) + 1;
+    if (s.missCount >= 3) showSpectatorReconnecting(s);
+    if (!networkErr && s.missCount >= 8) {
+      clearSpectatorReconnecting(s);
+      showSpectatorToast('המשחק הסתיים');
+      stopSpectator(true);
+    }
+  }
+
+  function showSpectatorReconnecting(s) {
+    if (s && s._reconnectShown) return;
+    if (s) s._reconnectShown = true;
+    const wrap = document.getElementById('grid-wrap');
+    if (!wrap) return;
+    if (document.getElementById('spectator-reconnect')) return;
+    const b = document.createElement('div');
+    b.id = 'spectator-reconnect';
+    b.style.cssText = 'position:absolute;top:8px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.78);color:#FAC775;padding:6px 14px;border-radius:14px;font-size:13px;font-weight:700;z-index:50;direction:rtl;pointer-events:none';
+    b.textContent = '🔄 מתחבר מחדש…';
+    if (getComputedStyle(wrap).position === 'static') wrap.style.position = 'relative';
+    wrap.appendChild(b);
+  }
+
+  function clearSpectatorReconnecting(s) {
+    if (s) s._reconnectShown = false;
+    const b = document.getElementById('spectator-reconnect');
+    if (b) b.remove();
   }
 
   function renderSpectatorView() {
@@ -243,6 +285,7 @@
   function stopSpectator(exit) {
     const s = spectatorSession;
     if (!s) return;
+    clearSpectatorReconnecting(s);
     if (s.pollTimer) { clearInterval(s.pollTimer); s.pollTimer = null; }
     if (s.heartbeatTimer) { clearInterval(s.heartbeatTimer); s.heartbeatTimer = null; }
     // Best-effort unwatch — the server TTL will clean us up regardless.

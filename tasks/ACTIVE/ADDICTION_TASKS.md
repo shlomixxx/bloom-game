@@ -40,6 +40,16 @@
 > **ℹ️ #4 / #7 — Push notifications (push כבר מוגדר בייצור!):**
 > - מפתחות VAPID **קיימים** בייצור (`/api/push/vapid-public` מחזיר מפתח אמיתי). תשתית ה-push מלאה: subscribe/unsubscribe, smart-push scheduler (`_pickSmartPushFor`), broadcast מהאדמין. מה שחסר: (#4) הבקשת-הרשאה נדירה מדי (cooldown 3 ימים + רק 3 רגעים), ו-(#7) חסרים signals של loss-aversion (סכנת ירידת-ליגה/הפסד-גביעים). שניהם ניתנים לבנייה — לא חסומים.
 
+## ✅ session 4 (2026-06-02) — באגי 🔴/🟠/🟡 + rematch (כל edit אומת ב-grep + node --check + build)
+> build חי: `v20260602b` / SW `bloom-v22.5`. כל השינויים client-only, נבנו ל-app.js.
+> - ✅ **באג #10** (🔴, קונפטי גם כשהזיכוי נכשל) — `earnCredits` מחזיר עכשיו Promise; ה-checklist מחכה ל-`d.ok` לפני mark+celebrate. כשל-רשת → toast "שמירת הבונוס נכשלה — ננסה שוב" + לא מסומן (retry בריענון הבא). already_claimed → mark שקט בלי קונפטי. (`src/07-identity.js` + `src/21-calendar.js`).
+> - ✅ **באג #9** (🔴, צופה נסגר בשקט אחרי 2×404) — הסף הועלה מ-2ש ל-8ש (404), באנר "🔄 מתחבר מחדש…" אחרי 3 misses, ו-**אף פעם** לא נסגר על שגיאת-רשת (רק על 404 רצוף). `handleSpectatorMiss`/`showSpectatorReconnecting`/`clearSpectatorReconnecting` (`src/10-spectator.js`).
+> - ✅ **באג #16 + משימה #10** (🟠/high, rematch ב-result overlay) — כפתור "⚔️ דו-קרב שוב" (gradient ורוד-סגול, hero) במסך תוצאת הדו-קרב כש-settled/tie מול יריב אנושי אמיתי (לא בוט). מקבל suffix+wager+difficulty דרך `captureDuelRematchCtx()` שנלכד לפני teardown ה-HUD → `rematchDuel()`. ה-"שחק שוב" יורד ל-secondary מעומעם. (`src/02-shop.js`).
+> - ✅ **באג #19** (🟡, live-pulse "טוען…" מהבהב) — ה-div מתחיל `display:none`, מתגלה רק כש-`/api/stats/live` חוזר (כמו v1). (`src/05a-home-v2.js`).
+> - ✅ **באג #25** (🟡, חיפוש-גילוי לא מסנן teaser) — הוסף `f.teaser` (מערך) למסנן. (`src/47-discovery.js`).
+> - ✅ **באג #23** (🟡, decode מוזיקה שקט) — ה-`.catch` כבר היה קיים; הוסף `console.warn` לדיבוג. (`src/03-audio.js`).
+> - ℹ️ **משימה #18** (שדרוג כפתור replay-share) — **כבר בוצע** (false-positive): `.over-replay-share-btn` ב-`boards.css:7220` כבר gradient ורוד-סגול + `replayShareBtnPulse` infinite, וממוקם מיד אחרי ה-CTA הראשי (`12-tour-info.js:807`, לפני טבלת ה-tiers). אין מה לשנות.
+
 ## איך לקרוא את הקובץ
 בצע מלמעלה למטה — דירוג 1 הוא ההשפעה הגדולה ביותר על "השחקן לא מצליח להפסיק". קודם תקן את הבאגים האדומים (שוברים אמון = הורגים התמכרות), אחר כך רד ברשימה המדורגת לפי ROI.
 

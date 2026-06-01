@@ -337,7 +337,11 @@
         setTrackLevel(name, Math.min(target, target * (i / MUSIC_FADE_STEPS)));
         if (i >= MUSIC_FADE_STEPS) clearFade(name);
       }, stepMs);
-    }).catch(function() { /* decode failed — silent */ });
+    }).catch(function(e) {
+      // Bug #23 — was silent. Log so a decode/playback failure is debuggable
+      // instead of "music just stopped for no reason".
+      try { console.warn('[bloom] music fade/decode failed:', name, e && e.message); } catch (_) {}
+    });
   }
   function playMusic(name) {
     if (!MUSIC_TRACKS[name]) return;

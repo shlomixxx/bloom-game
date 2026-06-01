@@ -544,7 +544,7 @@
       if (_earnedThisSession[dedupKey]) return;
       _earnedThisSession[dedupKey] = true;
     }
-    fetch(API_BASE + '/api/player/earn', {
+    return fetch(API_BASE + '/api/player/earn', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ deviceId: deviceId, token: deviceToken, action: action, meta: meta || null })
@@ -581,12 +581,14 @@
         }
         updateBalanceDisplay();
       }
+      return d;
     }).catch(function(err) {
       // Network-level failure — player can lose gems silently. Report it.
       try { __bloomReportIssue({ kind: 'earn_network_fail', severity: 'high',
         title: 'שגיאת רשת ב-earnCredits · ' + action,
         detail: 'action=' + action + ' err=' + (err && err.message || err),
         context: { action: action, meta: meta || null }}); } catch (e) {}
+      return null;
     });
   }
   function showLevelUpToast(level) {

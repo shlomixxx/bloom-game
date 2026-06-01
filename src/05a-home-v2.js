@@ -89,7 +89,10 @@
         '<button class="home-v2-mute" id="home-mute" aria-label="השתק">' +
           '<svg id="home-mute-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 8a5 5 0 0 1 0 8M17.7 5a9 9 0 0 1 0 14M6 15H4a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1h2l3.5-4.5A.8.8 0 0 1 11 5v14a.8.8 0 0 1-1.5.5L6 15"/></svg>' +
         '</button>' +
-        '<div class="home-v2-live-pulse" id="home-v2-live-pulse">' +
+        // Bug #19 — hidden until the first /api/stats/live resolves, so the
+        // player never sees a "טוען…" flash (matches v1 behavior). The pulse
+        // refresher reveals it via wrap.style.display='' once data lands.
+        '<div class="home-v2-live-pulse" id="home-v2-live-pulse" style="display:none">' +
           '<span class="home-v2-live-dot"></span>' +
           '<span class="home-v2-live-text" id="home-v2-live-text">טוען…</span>' +
         '</div>' +

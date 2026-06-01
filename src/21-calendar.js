@@ -136,7 +136,6 @@
     // a celebration. The dedup is double-bolted (localStorage on client,
     // game_config _earn key on server) so a refresh-spammer gets nothing.
     if (data.allDone && !checklistBonusClaimedToday()) {
-      markChecklistBonusClaimed();
       // Determine today's daily-special-played flag from localStorage
       // (the only client-tracked item — others are server-verified).
       var dailySpecialDone = false;
@@ -147,13 +146,36 @@
           dailySpecialDone = !!raw;
         }
       } catch (e) {}
+      // Bug #10 fix — only mark claimed + fire confetti AFTER the server
+      // confirms the credit. The old code marked + celebrated EAGERLY, so a
+      // network failure showed confetti while the gems never actually landed.
+      var celebrate = function() {
+        try { if (typeof soundMilestone === 'function') soundMilestone(5); } catch (e) {}
+        try { if (typeof buzz === 'function') buzz([80, 60, 100, 60, 120]); } catch (e) {}
+        showChecklistAllDoneOverlay();
+      };
       if (typeof earnCredits === 'function') {
-        earnCredits('daily_checklist_complete', { dailySpecialDone: dailySpecialDone });
+        var p = earnCredits('daily_checklist_complete', { dailySpecialDone: dailySpecialDone });
+        if (p && typeof p.then === 'function') {
+          p.then(function(d) {
+            if (d && d.ok && d.reward > 0) {
+              markChecklistBonusClaimed();
+              celebrate();
+            } else if (d && d.reason && d.reason.indexOf('already') === 0) {
+              // Server already paid earlier (client lost the flag) — mark
+              // silently so we don't re-spam, but no confetti.
+              markChecklistBonusClaimed();
+            } else if (!d) {
+              // Network failure — leave UNclaimed so it retries next refresh.
+              try { if (typeof showToast === 'function') showToast('שמירת הבונוס נכשלה — ננסה שוב', 'error'); } catch (e) {}
+            }
+            // else (not-complete / reward 0): do nothing, allow retry.
+          });
+        } else {
+          // earnCredits dedup early-return (already fired this session).
+          markChecklistBonusClaimed();
+        }
       }
-      // Celebrate.
-      try { if (typeof soundMilestone === 'function') soundMilestone(5); } catch (e) {}
-      try { if (typeof buzz === 'function') buzz([80, 60, 100, 60, 120]); } catch (e) {}
-      showChecklistAllDoneOverlay();
     }
   }
 
