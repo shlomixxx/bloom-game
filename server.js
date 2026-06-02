@@ -5318,11 +5318,13 @@ app.post('/api/pet/pet', requireDeviceAuth, async (req, res) => {
     if (cfg.pet_enabled === 'false') return res.json({ ok: false, reason: 'disabled' });
     const reward = parseInt(cfg.pet_daily_pet_reward_gems || '20', 10) || 20;
     const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' });
-    // Lazy-create row.
+    // Lazy-create rows. The profile must exist (with a valid player_code)
+    // before we credit it inside the transaction below.
     await pool.query(
       `INSERT INTO player_pet (device_id) VALUES ($1) ON CONFLICT DO NOTHING`,
       [deviceId]
     );
+    await ensurePlayerProfile(deviceId);
     // Check + update + grant in one transaction.
     const client = await pool.connect();
     try {
@@ -5346,11 +5348,6 @@ app.post('/api/pet/pet', requireDeviceAuth, async (req, res) => {
                 updated_at = NOW()
           WHERE device_id = $2`,
         [today, deviceId]
-      );
-      // Make sure profile exists.
-      await client.query(
-        `INSERT INTO player_profiles (device_id) VALUES ($1) ON CONFLICT DO NOTHING`,
-        [deviceId]
       );
       const credit = await client.query(
         `UPDATE player_profiles SET balance = balance + $1, total_earned = total_earned + $1, updated_at = NOW()
@@ -12038,7 +12035,7 @@ app.post('/api/friends/request-send', requireDeviceAuth, async (req, res) => {
     const ins = await pool.query(
       `INSERT INTO friend_requests (from_device, to_device, status, message)
        VALUES ($1, $2, 'pending', $3)
-       ON CONFLICT ON CONSTRAINT uq_friend_requests_pending DO NOTHING
+       ON CONFLICT (from_device, to_device) WHERE status = 'pending' DO NOTHING
        RETURNING id`,
       [deviceId, target, msgClean]
     );
@@ -15482,6 +15479,28 @@ function generatePlayerCode() {
   let code = '';
   for (let i = 0; i < 4; i++) code += chars[Math.floor(Math.random() * chars.length)];
   return 'BLOOM-' + code;
+}
+
+// Idempotently ensure a player_profiles row exists for this device.
+// player_code is UNIQUE NOT NULL with no default, so a bare
+// `INSERT (device_id) ON CONFLICT DO NOTHING` ALWAYS throws — the NOT NULL
+// check on player_code fires before conflict resolution, even when the row
+// already exists. Generate a code and target the device_id PK; retry on the
+// (astronomically rare) player_code collision, which the PK arbiter ignores.
+async function ensurePlayerProfile(deviceId) {
+  for (let attempt = 0; attempt < 6; attempt++) {
+    try {
+      await pool.query(
+        `INSERT INTO player_profiles (device_id, player_code)
+         VALUES ($1, $2) ON CONFLICT (device_id) DO NOTHING`,
+        [deviceId, generatePlayerCode()]
+      );
+      return;
+    } catch (e) {
+      if (e.code === '23505') continue; // player_code collision — retry with a fresh code
+      throw e;
+    }
+  }
 }
 
 // GET /api/player/code — get or create player code
