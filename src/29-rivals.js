@@ -188,11 +188,41 @@
     var host = document.getElementById('rival-modal-body');
     if (!host) return;
     if (!data || !data.ok || !data.enabled || !data.rivalry) {
+      // Task #32 — let a player find a NEW rival on demand instead of waiting
+      // up to 4h for the scheduled matchmaker (removes friction = keeps the
+      // personal-competition loop alive). Backed by POST /api/rival/find-random.
       host.innerHTML = '<div style="padding:30px;text-align:center;color:#999">' +
         '<div style="font-size:64px;margin-bottom:12px;opacity:0.5">🥊</div>' +
         '<div style="font-weight:700;margin-bottom:8px">אין כרגע יריב פעיל</div>' +
-        '<div style="font-size:12px;opacity:0.7">המערכת תזווג אותך אוטומטית עם שחקן באותה רמה תוך 4 שעות. כדאי לשחק כדי לעלות בדירוג!</div>' +
+        '<div style="font-size:12px;opacity:0.7;margin-bottom:14px">אפשר לחכות לזיווג האוטומטי — או למצוא יריב עכשיו:</div>' +
+        '<button id="rival-find-now" class="rival-find-now-btn">🔍 מצא יריב חדש עכשיו</button>' +
+        '<div id="rival-find-status" style="font-size:12px;margin-top:10px;min-height:16px"></div>' +
       '</div>';
+      var findBtn = document.getElementById('rival-find-now');
+      if (findBtn) findBtn.onclick = function() {
+        findBtn.disabled = true; findBtn.textContent = '⏳ מחפש...';
+        var statusEl = document.getElementById('rival-find-status');
+        var deviceId = (typeof getDeviceId === 'function') ? getDeviceId() : '';
+        var token = (typeof deviceToken !== 'undefined') ? deviceToken : null;
+        fetch('/api/rival/find-random', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ deviceId: deviceId, token: token })
+        }).then(function(r) { return r.json(); }).catch(function() { return null; })
+          .then(function(d) {
+            if (d && d.ok && d.matched) {
+              if (statusEl) statusEl.textContent = '✅ נמצא יריב! טוען...';
+              try { if (typeof soundMilestone === 'function') soundMilestone(4); } catch (e) {}
+              fetchRivalState(true).then(function(fresh) { renderRivalBody(fresh); });
+            } else {
+              var msg = (d && d.reason === 'already_have_rival') ? 'כבר יש לך יריב פעיל' :
+                        (d && d.reason === 'no_opponent') ? 'אין כרגע יריב פנוי — נסה שוב מאוחר יותר' :
+                        (d && d.reason === 'rate_limited') ? 'נסה שוב בעוד כמה דקות' :
+                        'לא הצלחנו למצוא יריב כרגע';
+              if (statusEl) statusEl.textContent = '⚠️ ' + msg;
+              findBtn.disabled = false; findBtn.textContent = '🔍 מצא יריב חדש עכשיו';
+            }
+          });
+      };
       return;
     }
     var r = data.rivalry;

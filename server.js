@@ -10775,6 +10775,59 @@ function _startRivalryScheduler() {
 _startRivalryScheduler();
 
 // Get my active rivalry — fresh XP for both me + my rival.
+// Task #32 — on-demand "find me a new rival" so a player whose rivalry expired
+// doesn't have to wait up to 4h for the scheduled matchmaker. Mirrors the
+// matchmaker but for ONE player: pairs them with the closest-by-best-score
+// recent player who has no active rivalry (the auto-fleet bots are in
+// daily_scores too, so there's effectively always an opponent — never "empty").
+app.post('/api/rival/find-random', requireDeviceAuth, async (req, res) => {
+  try {
+    const deviceId = req.deviceId || (req.body && req.body.deviceId) || '';
+    if (!deviceId || deviceId.length < 8) return res.status(400).json({ error: 'bad_device' });
+    if (!checkRateLimit('rival_find', deviceId, 10, 60 * 60 * 1000)) {
+      return res.status(429).json({ error: 'rate_limited' });
+    }
+    const cfg = await _loadRivalConfig();
+    if (cfg.rival_enabled === 'false') return res.json({ ok: false, reason: 'disabled' });
+    const have = await pool.query(
+      `SELECT 1 FROM player_rivalries WHERE device_id = $1 AND resolved = FALSE AND expires_at > NOW() LIMIT 1`,
+      [deviceId]
+    );
+    if (have.rows.length) return res.json({ ok: false, reason: 'already_have_rival' });
+    const durationHours = parseInt(cfg.rival_duration_hours || '24', 10) || 24;
+    const myBestR = await pool.query(`SELECT MAX(score) AS s FROM daily_scores WHERE device_id = $1`, [deviceId]);
+    const myBest = Number(myBestR.rows[0] && myBestR.rows[0].s) || 0;
+    const candR = await pool.query(
+      `SELECT ds.device_id AS device_id, MAX(ds.score) AS best_score
+         FROM daily_scores ds
+        WHERE ds.date > NOW() - INTERVAL '7 days'
+          AND ds.device_id <> $1
+          AND NOT EXISTS (
+            SELECT 1 FROM player_rivalries pr
+             WHERE pr.device_id = ds.device_id AND pr.resolved = FALSE AND pr.expires_at > NOW()
+          )
+        GROUP BY ds.device_id
+        ORDER BY ABS(MAX(ds.score) - $2) ASC
+        LIMIT 1`,
+      [deviceId, myBest]
+    ).catch(() => ({ rows: [] }));
+    if (!candR.rows.length) return res.json({ ok: false, reason: 'no_opponent' });
+    const them = candR.rows[0].device_id;
+    const myXp = await _computeLifetimeXp(deviceId);
+    const theirXp = await _computeLifetimeXp(them);
+    const expiresAt = new Date(Date.now() + durationHours * 3600000);
+    await pool.query(
+      `INSERT INTO player_rivalries (device_id, rival_device_id, my_xp_at_decl, rival_xp_at_decl, expires_at)
+         VALUES ($1, $2, $3, $4, $5), ($2, $1, $4, $3, $5)`,
+      [deviceId, them, myXp, theirXp, expiresAt]
+    );
+    res.json({ ok: true, matched: true });
+  } catch (e) {
+    console.error('POST /api/rival/find-random', e);
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
 app.get('/api/rival/state', async (req, res) => {
   try {
     const cfg = await _loadRivalConfig();

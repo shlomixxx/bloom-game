@@ -19348,6 +19348,14 @@ html[data-theme="dark"] .guild-jc-btn-join { background: #6366F1; }
 }
 
 /* Status banner */
+/* Task #32 — "find new rival" button (no-rivalry state). */
+.rival-find-now-btn {
+  display: inline-block; padding: 12px 22px; border: none; border-radius: 14px;
+  font-family: inherit; font-size: 15px; font-weight: 900; cursor: pointer;
+  background: linear-gradient(135deg, #EF4444, #F59E0B); color: #fff;
+  box-shadow: 0 4px 14px rgba(239,68,68,0.4);
+}
+.rival-find-now-btn:disabled { opacity: 0.6; cursor: default; }
 .rival-status-banner {
   padding: 12px 14px;
   margin-bottom: 12px;

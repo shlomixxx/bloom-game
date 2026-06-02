@@ -117,6 +117,10 @@
 > build חי: `v20260602l` / SW `bloom-v23.5`.
 > - ✅ **#31** (סולם-comeback מסלים) — בונוס-החזרה (Stage 9) היה overlay יחיד עם פרס קבוע. עכשיו **מסלים לפי ימים-בחוץ**: 3-6 ימים → `dyn_comeback_reward` (150) · 7-13 → `dyn_comeback_reward_7` (300) · 14+ → `dyn_comeback_reward_14` (600). **server-authoritative** (anti-cheat — הלקוח לא בוחר מדרגה). ה-overlay מוסיף recap "⏳ היית בחוץ N ימים · 🎁 המתנה גדלה!/מתנת VIP". push-החזרה (`__bloomMaybeAskPush`) כבר היה. schema+admin TIPS (db.js לא מזריע dyn_comeback — schema.sql הוא נתיב-הזרעה). ([server.js](server.js)+[src/05c-dynamic-boards.js](src/05c-dynamic-boards.js)+[public/css/boards.css](public/css/boards.css)).
 
+## ✅ session 4 batch 14 (2026-06-02) — rematch/find-new ל-Rivals (#32)
+> build חי: `v20260602m` / SW `bloom-v23.6`.
+> - ✅ **#32** (rematch ל-rival שפג) — endpoint חדש `POST /api/rival/find-random` ([server.js](server.js)): מזווג מיידית את השחקן עם השחקן-האחרון-הקרוב-ביותר-בניקוד שאין לו יריב פעיל (מראה את לוגיקת ה-matchmaker לשחקן יחיד), במקום להמתין עד 4 שעות. **בוטי auto-fleet נמצאים ב-daily_scores → תמיד יש יריב (לעולם לא "ריק")**. rate-limit 10/hr, anti-cheat (כבר-יש-יריב/no_opponent/disabled). כפתור "🔍 מצא יריב חדש עכשיו" במצב-ללא-יריב במודאל הרייבלים ([src/29-rivals.js](src/29-rivals.js)) → קורא לאנדפוינט → מרענן. CSS אדום-כתום. הסרת-חיכוך = שמירה על לולאת התחרות-האישית.
+
 ## איך לקרוא את הקובץ
 בצע מלמעלה למטה — דירוג 1 הוא ההשפעה הגדולה ביותר על "השחקן לא מצליח להפסיק". קודם תקן את הבאגים האדומים (שוברים אמון = הורגים התמכרות), אחר כך רד ברשימה המדורגת לפי ROI.
 
