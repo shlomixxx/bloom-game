@@ -9,6 +9,18 @@
 
 
 
+
+## ✅ סבב 7 — בוצע ונפרס (2026-06-02 · cache `v20260602za` · SW `bloom-v25.0`)
+
+**מסך-סיום (66) — 2 ממצאי-פוקוס/יופי (CSS בלבד, אפס collision):**
+
+- **🎉 הכותרת-חוגגת חזרה להיות כותרת**: `.over-title` (למשל "👑🎉 שיא חדש + כתר!") היה **13px אפור uppercase** — מוקטן מול ניקוד 42px, וה-uppercase/letter-spacing מזיקים לעברית. עכשיו **21px bold כהה** בלי uppercase. הרגע הכי רגשי קורא ככותרת.
+- **🔢 ניקוד-גיבור גדול יותר**: 42px → 46px, weight 800 — שיא ה-count-up פחות "תפל" בנייד.
+- **🌙 dark**: שתי ה-overrides של `.over-title` עברו מ-#8E8A82 אפור ל-#F2EFE9 בהיר.
+
+> נשאר במסך-הסיום (לא נגעתי): קיר 25-האלמנטים (effort L · פוקוס) + כפתור בית-מתויג + continue-ad hex (tokens). **ציון הדף: 66 → ~70 (משוער).**
+
+---
 ## ✅ סבב 6 — בוצע ונפרס (2026-06-02 · cache `v20260602y` · SW `bloom-v24.8`)
 
 **Pet / Mascot (69) — 5 ממצאים נסגרו (העוגן הרגשי הפך לניתן-לפעולה):**
@@ -432,11 +444,11 @@
   - **הבעיה:** The over-screen renders inside #grid-wrap and offers only forward CTAs (play again / mode buttons / funnel). A player who is done and wants to leave to home has no visible ≥40px labeled 'home/exit' control in the over content; the only path is the small ⋯ popover in the top game chrome (added in BN.1 specifically because veterans were stranded) or browser-back. This fails UX gate Q4 (one obvious way to back out) for the 'I'm finished' intent and adds friction for casual exits.
   - 📍 **הוכחה:** `src/12-tour-info.js:773-1041 over template contains 'again', replay, watch-ad, funnel, share, spectate buttons but no home button; exit-to-home only via src/13-boot.js:290+ ⋯ top-menu-popover ('home / achievements / info / reset'). The over .overlay scrolls but has no header bar.`
   - 🔧 **לעשות:** Add a low-emphasis secondary '🏠 חזור הבית' link below the share-actions row in the over template (src/12-tour-info.js, after line 1039), wired to showHome() / __bloomStartMode. Style it as a quiet text-button (≥44px tap height, --color-text-muted) so it doesn't compete with the gold 'again' CTA. Optionally also honor ESC/back on the over-screen by routing to home. Result: a clear, no-hunt exit for finished players without weakening the primary replay pull.
-- [ ] **🟡 בינוני · מאמץ `M` · ★★★ · יופי** — **Celebration headline is visually demoted — 13px grey uppercase vs the 42px score**
+- [x] ✅ **בוצע (סבב 7)** · **🟡 בינוני · מאמץ `M` · ★★★ · יופי** — **Celebration headline is visually demoted — 13px grey uppercase vs the 42px score**
   - **הבעיה:** The emotional headline (e.g. '👑🎉 שיא חדש + כתר!', '🔥 מטורף!') is rendered in .over-title which is styled as a tiny 13px, weight-500, grey (#6F6E68), letter-spaced UPPERCASE label — a treatment meant for a quiet eyebrow, not the hero emotional line. The Hebrew+emoji combined headlines (12-tour-info.js:585-596) deserve to be the loudest text on screen, but they read smaller and fainter than the score and even some banners. This blunts the peak-emotion moment ('יפה' suffers).
   - 📍 **הוכחה:** `src/12-tour-info.js:776 `'<div class="over-title">' + title + '</div>'` with title set at 585-596; styled at base.css:1279 `.over-title { font-size: 13px; font-weight: 500; color: #6F6E68; letter-spacing: 0.08em; text-transform: uppercase; }` and dark.css:47 keeps it grey #8E8A82.`
   - 🔧 **לעשות:** Split the headline from the eyebrow. Keep a small grey .over-title eyebrow for 'סיום משחק' but render the celebratory title (new-best/crown/big-score variants) in a new .over-headline class: font-size ~22-24px, font-weight 800, color var(--color-text) (gradient gold for crown/new-best), no uppercase (uppercase breaks Hebrew anyway and only affects the latin/emoji), with an entrance pop (scale 0.9→1, 0.4s) and prefers-reduced-motion guard. Result: the win headline becomes the dominant text, properly framing the count-up score below it.
-- [ ] **⚪ נמוך · מאמץ `S` · ★★ · יופי** — **Hero score caps at 42px — the count-up climax underwhelms on a phone**
+- [x] ✅ **בוצע (סבב 7)** · **⚪ נמוך · מאמץ `S` · ★★ · יופי** — **Hero score caps at 42px — the count-up climax underwhelms on a phone**
   - **הבעיה:** The score is the single number the count-up animation builds to, yet .over-score is only 42px / weight-700. On a ~380px-wide phone this is a modest size for the emotional centerpiece, especially when 6-7 digit scores appear. The animation work (TA.4 ease-out count-up) is good but the typographic payoff is small, so the climb feels less satisfying than best-in-class (where the final number bursts large).
   - 📍 **הוכחה:** `public/css/base.css:1280 `.over-score { font-size: 42px; font-weight: 700; ... }`; count-up logic at src/12-tour-info.js:1060-1078 animates this exact element.`
   - 🔧 **לעשות:** Bump .over-score to clamp(44px, 13vw, 60px), font-weight 800, tighter line-height, and on the final tick of the count-up add a one-shot scale-bump (1→1.08→1, 220ms cubic-bezier overshoot) with a prefers-reduced-motion guard. For new-best/crown, tint with the gold accent gradient. Result: the number lands with a visible punch that rewards the climb.

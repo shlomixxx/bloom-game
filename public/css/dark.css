@@ -44,7 +44,7 @@
   html[data-theme="dark"] .btn.secondary { background: #2C2A28; color: #F2EFE9; }
   /* Score overlay (game-over) */
   html[data-theme="dark"] .overlay { color: #F2EFE9; }
-  html[data-theme="dark"] .over-title { color: #8E8A82; }
+  html[data-theme="dark"] .over-title { color: #F2EFE9; }
   html[data-theme="dark"] .over-score { color: #F2EFE9; }
   html[data-theme="dark"] .over-sub { color: #8E8A82; }
   html[data-theme="dark"] .tier-row.reached { background: #2C2A28; }
@@ -272,7 +272,7 @@
   html[data-theme="dark"] .lb-tab.active { background: #2C2A28; color: #F2EFE9; }
   html[data-theme="dark"] .over-score { color: #F2EFE9; }
   html[data-theme="dark"] .over-sub { color: #8E8A82; }
-  html[data-theme="dark"] .over-title { color: #8E8A82; }
+  html[data-theme="dark"] .over-title { color: #F2EFE9; }
   html[data-theme="dark"] .share-card { background: #1B3A1B; color: #9FE1CB; }
   html[data-theme="dark"] .share-label { color: #6F6E68; }
   html[data-theme="dark"] .game-stats-summary { background: #2C2A28; border-color: rgba(255,255,255,0.06); }
