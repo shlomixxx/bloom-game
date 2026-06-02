@@ -9203,11 +9203,20 @@
     if (diff < minDays) return null;
     // Already claimed this comeback (cleared after claim).
     if (st.comebackClaimedFor === lostDate) return null;
+    // Task #31 — escalating ladder by days-away (day 3-6 / 7-13 / 14+). The
+    // displayed amount must match the server's tiered choice (server is
+    // authoritative). Bigger gift for longer absence = the strongest
+    // re-engagement lever.
+    var tier = diff >= 14 ? 14 : (diff >= 7 ? 7 : 3);
+    var reward = tier === 14 ? dynConfigInt('dyn_comeback_reward_14', 600)
+               : tier === 7  ? dynConfigInt('dyn_comeback_reward_7', 300)
+               :               dynConfigInt('dyn_comeback_reward', 150);
     return {
       daysAway: diff,
       lostStreak: lostStreak,
       lostStreakDate: lostDate,
-      reward: dynConfigInt('dyn_comeback_reward', 150)
+      reward: reward,
+      tier: tier
     };
   }
   function claimComebackBonus() {
@@ -9269,6 +9278,11 @@
         '<div class="dyn-comeback-icon">👋</div>' +
         '<div class="dyn-comeback-title">ברוך שובך!</div>' +
         '<div class="dyn-comeback-sub">היה לך רצף <strong>' + ctx.lostStreak + ' ימים</strong>. נתחיל מחדש?</div>' +
+        // Task #31 — "what you missed" recap + escalation framing. The longer
+        // you were away, the louder the gift — and the player SEES the ladder.
+        '<div class="dyn-comeback-recap">⏳ היית בחוץ <strong>' + ctx.daysAway + ' ימים</strong>' +
+          (ctx.tier >= 14 ? ' · 🎁 מתנת ה-VIP הגדולה ביותר!' : ctx.tier >= 7 ? ' · 🎁 המתנה גדלה!' : '') +
+        '</div>' +
         '<div class="dyn-comeback-reward">+<span id="dyn-comeback-amount">' + ctx.reward + '</span>💎</div>' +
         '<div class="dyn-comeback-gift">+ הקפאת רצף 🛡 (חינם!)</div>' +
         '<button class="dyn-comeback-claim">🎁 קבל את הבונוס</button>' +

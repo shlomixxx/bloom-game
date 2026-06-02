@@ -14324,6 +14324,13 @@ html[data-theme="dark"] .over-streak-banner-freeze { color: #B5D4F4; }
   line-height: 1.4;
 }
 .dyn-comeback-sub strong { font-weight: 900; }
+/* Task #31 — "what you missed" recap + escalation framing. */
+.dyn-comeback-recap {
+  font-size: 12px; font-weight: 800; margin-top: 8px;
+  padding: 6px 12px; border-radius: 999px; display: inline-block;
+  background: rgba(255,180,40,0.16); color: #FFE9B0;
+}
+.dyn-comeback-recap strong { font-weight: 900; }
 .dyn-comeback-reward {
   font-size: 42px;
   font-weight: 900;

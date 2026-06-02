@@ -1211,6 +1211,9 @@ INSERT INTO game_config (key, value) VALUES ('dyn_comeback_enabled',     'true')
 INSERT INTO game_config (key, value) VALUES ('dyn_comeback_min_days',    '3')    ON CONFLICT (key) DO NOTHING;
 INSERT INTO game_config (key, value) VALUES ('dyn_comeback_min_streak',  '3')    ON CONFLICT (key) DO NOTHING;
 INSERT INTO game_config (key, value) VALUES ('dyn_comeback_reward',      '150')  ON CONFLICT (key) DO NOTHING;
+-- Task #31 — escalating comeback ladder: bigger gift the longer you were away.
+INSERT INTO game_config (key, value) VALUES ('dyn_comeback_reward_7',    '300')  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('dyn_comeback_reward_14',   '600')  ON CONFLICT (key) DO NOTHING;
 -- Bonus boost when comeback player ALSO has a freeze ready to apply.
 INSERT INTO game_config (key, value) VALUES ('dyn_comeback_freeze_gift', '1')    ON CONFLICT (key) DO NOTHING;
 

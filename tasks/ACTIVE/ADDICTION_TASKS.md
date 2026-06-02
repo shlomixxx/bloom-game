@@ -113,6 +113,10 @@
 > ### ⏸️ #27 — מוחזק להחלטת הבעלים (לא דילגתי — מטופל עם נימוק)
 > **#27** (FTUE מנוע-אמיתי במקום מתוסרט) — **מסכן את ה-merge engine** (§10 "load-bearing, לא לגעת בלי לסמן trade-off"). דורש seed-controlled init + drop-interception + tour pause/resume על המנוע האמיתי — בדיוק ה-re-architecture ש-T1.2 דחה ("high risk of breaking the merge engine for a surface שנורה פעם אחת למכשיר"). ה-FTUE הנוכחי ([src/15-ftue.js](src/15-ftue.js)) הוא demo מתוסרט עובד (drop→merge→chain עם אותה אמנות). **אין גרסה בטוחה באותה מידה.** ⇒ **דרושה החלטת בעלים:** (א) להשאיר את ה-demo המתוסרט (מומלץ — ROI נמוך, סיכון גבוה), או (ב) לאשר במפורש re-architecture של ה-FTUE על המנוע האמיתי (sprint ייעודי עם engine self-test צמוד). עד החלטה — מוחזק.
 
+## ✅ session 4 batch 13 (2026-06-02) — סולם-comeback מסלים (#31)
+> build חי: `v20260602l` / SW `bloom-v23.5`.
+> - ✅ **#31** (סולם-comeback מסלים) — בונוס-החזרה (Stage 9) היה overlay יחיד עם פרס קבוע. עכשיו **מסלים לפי ימים-בחוץ**: 3-6 ימים → `dyn_comeback_reward` (150) · 7-13 → `dyn_comeback_reward_7` (300) · 14+ → `dyn_comeback_reward_14` (600). **server-authoritative** (anti-cheat — הלקוח לא בוחר מדרגה). ה-overlay מוסיף recap "⏳ היית בחוץ N ימים · 🎁 המתנה גדלה!/מתנת VIP". push-החזרה (`__bloomMaybeAskPush`) כבר היה. schema+admin TIPS (db.js לא מזריע dyn_comeback — schema.sql הוא נתיב-הזרעה). ([server.js](server.js)+[src/05c-dynamic-boards.js](src/05c-dynamic-boards.js)+[public/css/boards.css](public/css/boards.css)).
+
 ## איך לקרוא את הקובץ
 בצע מלמעלה למטה — דירוג 1 הוא ההשפעה הגדולה ביותר על "השחקן לא מצליח להפסיק". קודם תקן את הבאגים האדומים (שוברים אמון = הורגים התמכרות), אחר כך רד ברשימה המדורגת לפי ROI.
 

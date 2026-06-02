@@ -3313,10 +3313,18 @@ app.post('/api/player/comeback-claim', requireDeviceAuth, async (req, res) => {
     const minDays    = parseInt(cfgMap.dyn_comeback_min_days,    10) || 3;
     const minStreak  = parseInt(cfgMap.dyn_comeback_min_streak,  10) || 3;
     const reward     = parseInt(cfgMap.dyn_comeback_reward,      10) || 150;
+    const reward7    = parseInt(cfgMap.dyn_comeback_reward_7,    10) || 300;
+    const reward14   = parseInt(cfgMap.dyn_comeback_reward_14,   10) || 600;
     const freezeGift = parseInt(cfgMap.dyn_comeback_freeze_gift, 10) || 1;
     if (daysAwayN < minDays || lostStreakN < minStreak) {
       return res.json({ ok: false, reason: 'not_eligible', minDays, minStreak });
     }
+    // Task #31 — escalating ladder: the longer you were away, the bigger the
+    // welcome-back gift (day 3-6 base / 7-13 / 14+). Server-authoritative so a
+    // client can't pick its own tier. The bigger gift for longer absence is the
+    // strongest re-engagement lever (cheaper than re-acquiring a churned user).
+    const tieredReward = daysAwayN >= 14 ? reward14 : (daysAwayN >= 7 ? reward7 : reward);
+    const tier = daysAwayN >= 14 ? 14 : (daysAwayN >= 7 ? 7 : 3);
     // Server-side dedup: one comeback claim per device per rolling 7 days.
     const dedupKey = `_comeback:${deviceId}:${Math.floor(Date.now() / (7 * 24 * 60 * 60 * 1000))}`;
     const existing = await pool.query(`SELECT value FROM game_config WHERE key = $1`, [dedupKey]);
@@ -3333,7 +3341,7 @@ app.post('/api/player/comeback-claim', requireDeviceAuth, async (req, res) => {
       const credit = await pool.query(
         `UPDATE player_profiles SET balance = balance + $1, total_earned = total_earned + $1, updated_at = NOW()
           WHERE device_id = $2 RETURNING balance`,
-        [reward, deviceId]
+        [tieredReward, deviceId]
       );
       if (credit.rows[0]) newBalance = credit.rows[0].balance;
     } catch (e) {
@@ -3341,7 +3349,8 @@ app.post('/api/player/comeback-claim', requireDeviceAuth, async (req, res) => {
     }
     res.json({
       ok: true,
-      reward: reward,
+      reward: tieredReward,
+      tier: tier,
       freezeGift: freezeGift,
       newBalance: newBalance
     });
