@@ -19,3 +19,4 @@ railway-backups-*/
 *.dump
 bloom-*.png
 .tmp-*
+.playwright-mcp/
