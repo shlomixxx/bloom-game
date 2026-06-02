@@ -5971,13 +5971,21 @@ html[data-theme="dark"] .cal-event-row {
   position: absolute;
   top: 10px;
   left: 12px;
-  width: 32px;
-  height: 32px;
+  /* BUG FIX 2026-06-03 — the ✕ did nothing: the sibling .pet-modal-emoji-area
+     (position:relative, later in DOM) painted on top of this absolute,
+     z-index-less button and swallowed the click. A z-index lifts it above the
+     emoji area so the tap lands on the ✕. Bumped to 40px for a real tap target. */
+  z-index: 6;
+  width: 40px;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border: none;
   background: rgba(0,0,0,0.15);
   color: #064E3B;
   border-radius: 50%;
-  font-size: 18px;
+  font-size: 20px;
   cursor: pointer;
   line-height: 1;
   font-family: inherit;
