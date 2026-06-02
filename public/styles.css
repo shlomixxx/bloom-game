@@ -1812,7 +1812,7 @@
   /* Larger touch targets on every "close X" button across the app.
      WCAG 2.5.5 requires 44×44px minimum for primary interactive UI;
      several modals had 28-32px close buttons that were finger-miss
-     prone on phones. */
+     prone on phones.
      UX audit 2026-06-02 (theme #4): widened [class$="modal-close"]
      → [class*="-close"] so it also catches the ~40 close buttons that
      end in just "-close" (login-cal-close, inbox-close, wr-close,
