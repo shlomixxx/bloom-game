@@ -2402,7 +2402,18 @@
           host.innerHTML = '<div class="board-lb-empty">🌱 עדיין אין חברים<br><span class="board-lb-empty-sub">שתף את הקוד שלך עם חבר!</span></div>';
           return;
         }
-        var html = '<div class="dyn-friends-list-title">החברים שלך · ' + list.length + '</div>';
+        // Surface the most "alive" friends first — online now > played today >
+        // idle — so the player immediately sees who they can challenge right now.
+        list = list.slice().sort(function(a, b) {
+          var ra = a.onlineNow ? 0 : (a.playedToday ? 1 : 2);
+          var rb = b.onlineNow ? 0 : (b.playedToday ? 1 : 2);
+          return ra - rb;
+        });
+        var onlineCount = list.filter(function(f) { return f.onlineNow; }).length;
+        var listTitle = onlineCount > 0
+          ? '🟢 ' + onlineCount + ' פעילים עכשיו · אתגר אותם!'
+          : 'החברים שלך · ' + list.length;
+        var html = '<div class="dyn-friends-list-title">' + listTitle + '</div>';
         list.forEach(function(f) {
           // T4.5 — three-state status: 🟢 online now (visit <1h) /
           // 🟡 played today / ⚫ offline. Most "alive" state wins.

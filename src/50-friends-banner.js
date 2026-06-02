@@ -55,7 +55,12 @@
         el = document.createElement('button');
         el.id = 'friends-banner';
         el.onclick = function() {
-          if (window.__bloomFriendSearch && typeof window.__bloomFriendSearch.showModal === 'function') {
+          // Open the friends HUB (online status + one-tap ⚔️ duel / 🎯 challenge
+          // per friend), not the bare search — so "N friends online" leads
+          // straight to acting on them. Falls back to search if unavailable.
+          if (typeof window.showFriendsModal === 'function') {
+            window.showFriendsModal();
+          } else if (window.__bloomFriendSearch && typeof window.__bloomFriendSearch.showModal === 'function') {
             window.__bloomFriendSearch.showModal('search');
           }
         };
