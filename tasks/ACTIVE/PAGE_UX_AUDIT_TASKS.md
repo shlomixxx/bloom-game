@@ -12,6 +12,18 @@
 
 
 
+
+## ✅ סבב 9ב — בוצע ונפרס (2026-06-02 · admin static · ללא cache bump)
+
+**Admin (71) — 3 ממצאים (כלי-הבעלים, prime directive "אדמין שולט בכל מנוף"):**
+
+- **🔍 חיפוש חי בטבלת ה-config** ([admin/index.html](admin/index.html), ★★★★★): שדה-חיפוש מעל 200+ המפתחות שמסנן שורות לפי שם-מפתח בזמן-אמת + מונה דינמי. (היה קיר שטוח בלי חיפוש.)
+- **🎯 jump-cards לא מובילים למבוי-סתום** (★★★★): card שמצביע ל-config פותח את ה-`<details>`, טוען את ה-config אם צריך, ומסנן מראש למפתחות הפיצ׳ר (`gacha_enabled` → "gacha"). (היה נוחת על drawer מקופל וריק.)
+- **🔢 תווית "(42 מפתחות)" מיושנת** → מתעדכנת לספירה האמיתית בעת הטעינה.
+
+> inline JS אומת (node --check נקי). admin הוא static-served — אין build/cache-bump. **ציון הדף: 71 → ~80 (משוער).**
+
+---
 ## ✅ סבב 9א — בוצע ונפרס (2026-06-02 · cache `v20260602zc` · SW `bloom-v25.2`)
 
 **3 שיפורים גבוהי-ערך (אומת ב-Playwright מקומי לפני deploy):**
@@ -968,15 +980,15 @@
 
 **🛠️ משימות לביצוע (7):**
 
-- [ ] **🟠 גבוה · מאמץ `M` · ★★★★★ · נוחות** — **No search/filter on the 200+ key config table — finding one knob means scrolling a wall**
+- [x] ✅ **בוצע (סבב 9)** · **🟠 גבוה · מאמץ `M` · ★★★★★ · נוחות** — **No search/filter on the 200+ key config table — finding one knob means scrolling a wall**
   - **הבעיה:** The 'כל ההגדרות' table (btn-load-all-config, admin/index.html:9166) renders EVERY game_config row (204+ preset-mapped keys per PRESETS_PER_KEY, far beyond the legacy count) as one flat table with zero search, filter, or category grouping. To change e.g. 'bot_duel_player_win_rate_pct' the owner must visually scan hundreds of monospace LTR keys inside a collapsed <details>. This is the single biggest friction point in the whole owner workflow.
   - 📍 **הוכחה:** `admin/index.html:9176-9192 builds one <table> by iterating all rows with no filter UI; the only gate is r.key.startsWith('_'). No <input> for search exists in the config-table-host region (line 966-968 is just the load button).`
   - 🔧 **לעשות:** In btn-load-all-config.onclick (admin/index.html:9166), before building the table inject a sticky search input (placeholder 'חיפוש מפתח… (לדוגמה: bot, spin, reward)') plus 4-6 category filter chips derived from key prefixes (event_/bot_/spin_/season_/dyn_/gacha_ etc.). Wire an input listener that hides/shows <tr> rows by case-insensitive match on the key text + the tooltip text. Style the search box with --radius-md and the chips like .cfg-preset-btn. Result: owner types 'win_rate' and instantly sees the 2-3 relevant keys instead of scrolling 200.
-- [ ] **🟠 גבוה · מאמץ `M` · ★★★★ · בהירות** — **Engagement jump-cards dump you at a collapsed, unloaded config section**
+- [x] ✅ **בוצע (סבב 9)** · **🟠 גבוה · מאמץ `M` · ★★★★ · בהירות** — **Engagement jump-cards dump you at a collapsed, unloaded config section**
   - **הבעיה:** 18 of the 22 engagement cards (Gacha, Daily Deals, Battle Pass, League, Daily Tournament, Bot Fleet, etc.) have jump:'config-section' (admin/index.html:4962-4973). Clicking 'גאצ׳ה סקינים' switches to the 🎮 tab and scrolls to the config section header — but the giant settings table is inside a collapsed <details> AND requires a separate 'טען הגדרות' button click, and the jump does NOT pre-filter to that system's keys. The owner is promised 'jump to this system' but lands on a closed drawer with no obvious next step. The promise of mission-control breaks at the click.
   - 📍 **הוכחה:** `jump targets at admin/index.html:4962-4973 all point to 'config-section'; the card click handler (4997-5016) only switchAdminTab + scrollIntoView, it never opens the <details> (964) nor triggers btn-load-all-config (967) nor filters keys.`
   - 🔧 **לעשות:** In the eng-card click handler (admin/index.html:4997), when jumpId==='config-section': also force-open the <details> (set .open=true), click btn-load-all-config if the table isn't loaded yet, and — if you add the search box from the prior finding — pre-fill it with that system's prefix (pass a card.searchPrefix like 'gacha_'). Result: clicking 'Gacha' lands directly on the gacha keys, expanded and filtered, in one tap.
-- [ ] **🟡 בינוני · מאמץ `S` · ★★★ · בהירות** — **Stale '(42 מפתחות)' label massively undercounts the real config surface**
+- [x] ✅ **בוצע (סבב 9)** · **🟡 בינוני · מאמץ `S` · ★★★ · בהירות** — **Stale '(42 מפתחות)' label massively undercounts the real config surface**
   - **הבעיה:** The settings drawer summary reads '⚙️ כל ההגדרות (42 מפתחות)' but there are 200+ live config keys (204 mapped in PRESETS_PER_KEY alone, plus dozens of bool/free-form keys). The owner is told there are 42 settings when there are hundreds — undermines trust and hides how much control actually exists.
   - 📍 **הוכחה:** `admin/index.html:965 hardcodes '(42 מפתחות)'; PRESETS_PER_KEY (2891) maps 204 keys and TIPS_PER_KEY (3281) covers many more.`
   - 🔧 **לעשות:** At admin/index.html:965 remove the hardcoded count from the static summary and instead set it dynamically after btn-load-all-config loads: count rows.filter(r=>!r.key.startsWith('_')).length and write it into the summary text (e.g. 'כל ההגדרות (187 מפתחות)'). Until loaded, show 'כל ההגדרות' with no number. Result: the label never lies and reflects the true breadth of owner control.

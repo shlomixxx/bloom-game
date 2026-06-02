@@ -4981,13 +4981,14 @@
           lbl: on ? 'פעיל' : 'כבוי',
           status: on ? 'ok' : 'off',
           statusText: on ? '✓ מופעל' : '⏸ כבוי — לחץ להפעיל',
-          jump: sys.jump
+          jump: sys.jump,
+          cfgKey: sys.key || ''
         });
       });
     } catch (e) {}
     if (!cards.length) { host.innerHTML = '<div class="loading">שגיאת טעינה</div>'; return; }
     host.innerHTML = cards.map(function(c) {
-      return '<div class="eng-card" data-jump="' + c.jump + '">' +
+      return '<div class="eng-card" data-jump="' + c.jump + '" data-cfg-key="' + (c.cfgKey || '') + '">' +
         '<div class="eng-card-head"><span class="eng-card-icon">' + c.icon + '</span>' + c.title + '</div>' +
         '<div class="eng-card-stat">' + c.stat + '</div>' +
         '<div class="eng-card-lbl">' + c.lbl + '</div>' +
@@ -5011,6 +5012,29 @@
           }
           // Scroll into view after tab switches
           setTimeout(function() { target.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 200);
+          // UX audit 2026-06-02 — config-section cards used to dead-end on a
+          // collapsed, unloaded config drawer. Open it, load it, and pre-filter
+          // the new search to this feature's keys (e.g. gacha_enabled → "gacha").
+          if (jumpId === 'config-section') {
+            var stem = (card.getAttribute('data-cfg-key') || '').replace(/_enabled$/, '');
+            var hostEl = document.getElementById('config-table-host');
+            var det = hostEl ? hostEl.closest('details') : null;
+            if (det) det.open = true;
+            setTimeout(function() {
+              if (!document.getElementById('config-search-input')) {
+                var loadBtn = document.getElementById('btn-load-all-config');
+                if (loadBtn) loadBtn.click();
+              }
+              var tries = 0;
+              (function waitFilter() {
+                if (typeof window.__adminConfigSearch === 'function' && document.getElementById('config-search-input')) {
+                  if (stem) window.__adminConfigSearch(stem);
+                } else if (tries++ < 25) {
+                  setTimeout(waitFilter, 150);
+                }
+              })();
+            }, 280);
+          }
         }
       };
     });
@@ -9172,7 +9196,10 @@
       var rows = d.config;
       var html = '<div style="font-size:11px;color:var(--muted);margin-bottom:8px">' +
         '🖱️ <strong>true/false</strong> — לחץ על כפתורי פעיל/כבוי. <strong>מספרים</strong> — לחץ על אחת מהאפשרויות המהירות או ערוך ידנית ושמור. <strong>?</strong> ליד כל שורה מסביר עם דוגמאות.' +
-        '</div>';
+        '</div>' +
+        // UX audit 2026-06-02 — live search over the 200+ key config wall.
+        '<input type="text" id="config-search-input" placeholder="🔍 חפש מפתח (spin, trophy, bot, gacha...)" autocomplete="off" style="width:100%;padding:9px 11px;margin-bottom:6px;border:1px solid rgba(0,0,0,0.15);border-radius:8px;font-size:13px;direction:ltr;box-sizing:border-box" />' +
+        '<div id="config-search-count" style="font-size:11px;color:var(--muted);margin-bottom:6px"></div>';
       html += '<table style="width:100%;border-collapse:collapse;font-size:12px">';
       html += '<tr style="background:rgba(0,0,0,0.04)"><th style="text-align:right;padding:6px 8px">מפתח</th><th style="text-align:right;padding:6px 8px">ערך</th><th style="width:30px"></th><th style="width:60px"></th></tr>';
       rows.forEach(function(r) {
@@ -9192,6 +9219,41 @@
       host.innerHTML = html;
       // Re-wire tooltips for the freshly-rendered ? buttons inside the table.
       wireTips();
+      // UX audit 2026-06-02 — live search/filter + dynamic count + correct
+      // the stale "(42 מפתחות)" summary label. Exposes window.__adminConfigSearch
+      // so the engagement jump-cards can pre-filter to a key prefix.
+      (function() {
+        var search = $('config-search-input');
+        var countEl = $('config-search-count');
+        var allRows = host.querySelectorAll('tr[data-config-key]');
+        function applyFilter() {
+          var q = (search && search.value || '').trim().toLowerCase();
+          var shown = 0;
+          allRows.forEach(function(tr) {
+            var key = (tr.getAttribute('data-config-key') || '').toLowerCase();
+            var match = !q || key.indexOf(q) !== -1;
+            tr.style.display = match ? '' : 'none';
+            if (match) shown++;
+          });
+          if (countEl) countEl.textContent = q ? ('מציג ' + shown + ' מתוך ' + allRows.length + ' מפתחות') : (allRows.length + ' מפתחות סה"כ');
+        }
+        if (search) {
+          search.oninput = applyFilter;
+          window.__adminConfigSearch = function(prefix) {
+            if (!search) return;
+            search.value = prefix || '';
+            applyFilter();
+            try { search.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (e) {}
+            try { search.focus(); } catch (e) {}
+          };
+        }
+        applyFilter();
+        try {
+          var det = host.closest ? host.closest('details') : null;
+          var sum = det ? det.querySelector('summary') : null;
+          if (sum) sum.textContent = '⚙️ כל ההגדרות (' + allRows.length + ' מפתחות)';
+        } catch (e) {}
+      })();
       // Wire toggle clicks (auto-save)
       host.querySelectorAll('.cfg-toggle-btn').forEach(function(btn) {
         btn.onclick = async function() {
