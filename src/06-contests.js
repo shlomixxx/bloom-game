@@ -1623,6 +1623,7 @@
     const wrap = document.getElementById('grid-wrap');
     const grid = document.getElementById('grid');
     if (!wrap || !grid) return;
+    ensureGridResizeObserver();    // self-heal: re-fit whenever grid-wrap settles
     const padX = 6;                // matches CSS .grid-wrap horizontal padding
     const padY = 12;               // matches CSS .grid-wrap bottom padding
     const gap = 5;                 // matches CSS .grid gap
@@ -1630,7 +1631,18 @@
     const rows = getBoardRows();
     const W = Math.max(0, wrap.clientWidth - 2 * padX);
     const H = Math.max(0, wrap.clientHeight - padY - 6);
-    if (W <= 0 || H <= 0) return;  // not yet laid out
+    if (W <= 0 || H <= 0) {
+      // BUG FIX 2026-06-03 ("tiles disappear" / empty grid): the wrap was
+      // momentarily collapsed (mid-transition, or before a late-mounting
+      // sibling like the col-mult bar laid out). The old code silently
+      // returned, leaving the grid UNSIZED → its empty 1fr cells CSS-collapse
+      // to 0 height → an invisible board, and nothing ever re-fit it. Now we
+      // retry on the next frame (capped) until the layout settles.
+      window.__fitGridRetries = (window.__fitGridRetries || 0) + 1;
+      if (window.__fitGridRetries <= 30) requestAnimationFrame(fitGrid);
+      return;
+    }
+    window.__fitGridRetries = 0;
     const cellByW = Math.floor((W - (cols - 1) * gap) / cols);
     const cellByH = Math.floor((H - (rows - 1) * gap) / rows);
     const cell = Math.max(1, Math.min(cellByW, cellByH));
@@ -1664,6 +1676,26 @@
   window.addEventListener('resize', function() {
     if (typeof fitGrid === 'function') fitGrid();
   });
+  // BUG FIX 2026-06-03 — a window 'resize' does NOT fire when grid-wrap's own
+  // size changes from a sibling laying out late (the col-mult bar on a daily-
+  // special, the address bar settling, a tab/transition reflow). Without a
+  // re-fit there, fitGrid's first (too-early) run leaves the grid collapsed →
+  // "the tiles disappear". A ResizeObserver on grid-wrap re-fits on every such
+  // settle. fitGrid sizes the GRID (a child of the wrap), never the wrap, so
+  // this cannot feedback-loop. Idempotent + lazily attached.
+  function ensureGridResizeObserver() {
+    if (window.__gridRO || typeof ResizeObserver === 'undefined') return;
+    var wrap = document.getElementById('grid-wrap');
+    if (!wrap) return;
+    try {
+      window.__gridRO = new ResizeObserver(function() {
+        if (typeof fitGrid === 'function') fitGrid();
+      });
+      window.__gridRO.observe(wrap);
+    } catch (e) {}
+  }
+  try { if (document.readyState !== 'loading') ensureGridResizeObserver(); } catch (e) {}
+  try { window.addEventListener('DOMContentLoaded', ensureGridResizeObserver); } catch (e) {}
 
   // Score per merge. The (1 + (tier-1)*0.3) factor weights higher tiers more
   // heavily — Crown (tier 8) merges are worth ~3.1× a flat formula. This
