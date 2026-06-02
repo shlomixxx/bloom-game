@@ -6,6 +6,21 @@
 
 
 
+
+## ✅ סבב 4 — בוצע ונפרס (2026-06-02 · server-only · ללא cache bump)
+
+**פרופיל השחקן (66) — 4 ממצאים נסגרו (הפיכת הרזומה הסטטי לנשק ויראלי):**
+
+- **🥇 hook תחרותי + דירוג**: query חדש מחשב **דירוג עולמי** לפי שיא, ומוצג "מקום #N בעולם" + באנר "🎯 תצליח לעבור את X?" — ה-FOMO שממיר צופה לשחקן (היה רזומה סטטי בלי הזמנה).
+- **🚪 לא עוד מבוי-סתום**: ה-CTA הפך ל"⚔️ קבל את האתגר — שחק עכשיו" + קישור-footer ל-/welcome ("מה זה BLOOM?"). לצופה יש עכשיו נתיב פנימה.
+- **🔒 הסרת דליפת-כלכלה**: יתרת ה-💎 + "הרוויח" הוסרו מפרופיל ציבורי (אות שגוי + brag חלש) והוחלפו בדירוג/ימים-פעילים.
+- **♿ reduced-motion**: הפרופיל הוא HTML עצמאי (לא משתמש ב-base.css), אז נוסף בלוק reduced-motion ל-style המוטמע שלו.
+
+> **נדחה במודע:** og:image דינמי per-player (★★★★★) — דורש ייצור PNG בצד-שרת (תלות sharp/canvas שאסורה). ה-og:title/description **כבר** מותאמים-אישית (שם+רמה+שיא); רק התמונה גנרית. צריך החלטת-בעלים על הוספת תלות. גם token-unification של welcome/profile נשאר במסע ה-tokens.
+
+> **ציון הדף: 66 → ~78 (משוער).**
+
+---
 ## ✅ סבב 3 — בוצע ונפרס (2026-06-02 · cache `v20260602w` · SW `bloom-v24.6`)
 
 **Spectator (62/C+, הדף ה-2 הכי נמוך) — 5/6 ממצאים נסגרו:**
@@ -568,7 +583,7 @@
 
 **🛠️ משימות לביצוע (7):**
 
-- [ ] **🟠 גבוה · מאמץ `M` · ★★★★★ · התמכרות** — **Profile has zero competitive/FOMO hook — it brags but never invites a challenge**
+- [x] ✅ **בוצע (סבב 4)** · **🟠 גבוה · מאמץ `M` · ★★★★★ · התמכרות** — **Profile has zero competitive/FOMO hook — it brags but never invites a challenge**
   - **הבעיה:** The profile is a static résumé (best, games, credits, days, contests, earned, referrals). It never says 'can you beat 248,500?' as an action, never shows global RANK, never surfaces today's daily challenge, and never offers a duel. The shareText (server.js:15366) ends with 'תצליח לנצח?' but the page body itself has no challenge framing — the strongest viral merge-game pattern (Royal Match / Wordle 'beat my score') is left on the table. A viewer cannot directly race this player.
   - 📍 **הוכחה:** `server.js:15432-15442 stat grid is purely retrospective; server.js:15445 CTA is bland 'שחק גם ב-BLOOM' with no score reference; no rank, no daily-challenge link, no duel CTA.`
   - 🔧 **לעשות:** In the profile render (server.js:15425-15445), (1) make the best-score stat the visual hero (bigger, with a 'הכי גבוה' crown) and add a one-line challenge banner under it: 'תעבור את {best}?' as the headline above the play button; (2) change the primary CTA copy from 'שחק גם ב-BLOOM' to 'נסה לעבור את {name} 🔥' so the click is framed as a race; (3) if feasible, fetch the player's global daily rank and show a '#N בעולם' pill in the level-badge row. This converts a résumé into an addiction invitation.
@@ -576,11 +591,11 @@
   - **הבעיה:** The whole point of a shareable profile is that a friend sees THIS player's brag (level, best score, name) in the link preview and wants to beat them. But og:image is the static site-wide social-share.png (server.js:15376) and twitter:card is 'summary' (small thumbnail, server.js:15377), not 'summary_large_image'. So a WhatsApp/Twitter unfurl of /player/BLOOM-XXXX shows a generic BLOOM banner with no name, no level, no score — the personalization that would make a non-player click is invisible in the preview where it matters most.
   - 📍 **הוכחה:** `server.js:15376 og:image=...social-share.png (static); server.js:15377 twitter:card=summary; the rich per-player data (name, lvl.title, stats.best) is only in og:title/description text, not in the image.`
   - 🔧 **לעשות:** In the /player/:code route (server.js:15368-15379), switch twitter:card to 'summary_large_image' and generate a per-player OG image. Cheapest path: add an /api/og/player/:code endpoint that server-renders a 1200x630 PNG (via node-canvas or an SVG-to-PNG) showing avatar+name+level title+best score on the dark-gold brand background, then point og:image and twitter:image at it with a cache header. The preview should read '{name} · רמה 12 · שיא 248,500' so a non-player sees a real human's brag, not a logo.
-- [ ] **🟠 גבוה · מאמץ `S` · ★★★★ · נוחות** — **Profile page has NO way back into the game shell or to your own profile — it is a viral dead-end for the viewer**
+- [x] ✅ **בוצע (סבב 4)** · **🟠 גבוה · מאמץ `S` · ★★★★ · נוחות** — **Profile page has NO way back into the game shell or to your own profile — it is a viral dead-end for the viewer**
   - **הבעיה:** The profile renders ONLY a 'play also' CTA to /?ref= and two share buttons (server.js:15444-15449). There is no link to /welcome (the conversion-optimized landing), no nav, no 'see the leaderboard', and no close/back chrome at all. A curious non-player who lands here gets one binary choice; an existing player who taps their own profile from home has no obvious 'back' (relies on browser back only). For the highest-emotion identity surface, the funnel is a single dead-end with no secondary path (e.g. 'see today's daily challenge' or 'view leaderboard').
   - 📍 **הוכחה:** `server.js:15444-15450 — btns block contains only btn-play (href=/?ref=) + two share buttons; no back link, no /welcome link, no leaderboard link anywhere on the page.`
   - 🔧 **לעשות:** In the profile btns block (server.js:15444), add a thin secondary row of two text links under the share buttons: 'איך משחקים?' → /welcome and 'לוח המובילים' → / (or a future /leaderboard deep-link). Keep btn-play dominant. This gives the viewer a soft secondary path and gives an existing player an explicit exit, turning the dead-end into a 2-branch funnel.
-- [ ] **🟡 בינוני · מאמץ `S` · ★★★ · רלוונטיות** — **Credits/💎 prominently displayed on a PUBLIC profile — wrong signal, leaks economy, weak brag**
+- [x] ✅ **בוצע (סבב 4)** · **🟡 בינוני · מאמץ `S` · ★★★ · רלוונטיות** — **Credits/💎 prominently displayed on a PUBLIC profile — wrong signal, leaks economy, weak brag**
   - **הבעיה:** The public profile shows balance 'קרדיטים' and total_earned '💎 הרוויח' as two of seven stats (server.js:15435, 15440). On a viral landing surface aimed at non-players, a gem balance is meaningless noise (a stranger has no context for '💎') and it publicly exposes the player's wallet. It dilutes the two stats that actually create envy/competition — best score and level. UX gate Q3 (focus) and Q5 (relevance) both fail here.
   - 📍 **הוכחה:** `server.js:15435 stat-val ${player.balance|0} 💎 lbl קרדיטים; server.js:15440 stat-val ${total_earned} lbl 💎 הרוויח — two of seven stat cells are economy figures on a public share page.`
   - 🔧 **לעשות:** In the profile stat grids (server.js:15432-15442), drop the raw balance/credits cell entirely and replace total_earned with a more brag-worthy public stat (e.g. highest tier reached as an emoji 👑, or current streak). Reserve gem balance for the in-app private profile only. Re-weight the grid so 🏆 שיא and רמה dominate. This sharpens the envy signal and stops leaking the wallet.
@@ -588,7 +603,7 @@
   - **הבעיה:** Both pages hardcode their own color values and re-declare a private :root in /welcome (server.js:264) instead of consuming base.css design tokens (--color-accent, --radius-md, --shadow-glow, etc. per CLAUDE.md §UX). The profile card uses #BA7517/#FAC775/#252320 literals (server.js:15390-15406), privacy.html uses yet another set (#BA7517/#F7F5F0, privacy.html:11-18). Result: three different gold shades and radii across surfaces, and any brand refresh requires editing 3 inline style blocks. Visual consistency ('יפה' directive) is only skin-deep.
   - 📍 **הוכחה:** `server.js:264 /welcome redeclares --gold:#FAC775 etc inline; server.js:15385-15406 profile uses literal hex with no tokens; privacy.html:11-18 third independent palette. None reference base.css tokens.`
   - 🔧 **לעשות:** Extract a tiny shared server-rendered CSS partial (or a /assets/landing.css served statically) defining the brand tokens once, and have /welcome, /player, and privacy.html link it. At minimum unify the gold (--gold:#FAC775 / --gold-dark:#BA7517), border-radius (16px cards / 14px buttons), and shadow values across all three so the gold, corner radius, and glow match base.css exactly. Cuts maintenance to one place and guarantees brand consistency across the viral surfaces.
-- [ ] **⚪ נמוך · מאמץ `S` · ★★ · יופי** — **No prefers-reduced-motion guard on the infinite animations in /welcome and the profile popIn**
+- [x] ✅ **בוצע (סבב 4)** · **⚪ נמוך · מאמץ `S` · ★★ · יופי** — **No prefers-reduced-motion guard on the infinite animations in /welcome and the profile popIn**
   - **הבעיה:** The welcome hero runs perpetual heroGlow (server.js:268) and float (server.js:272) infinite keyframe animations, and the profile card animates popIn on every load (server.js:15388), with no @media (prefers-reduced-motion: reduce) override anywhere. The in-app CSS is careful about this (CLAUDE.md repeatedly notes reduced-motion guards), so these server-rendered surfaces are inconsistent and can cause discomfort for motion-sensitive users on the first-impression page.
   - 📍 **הוכחה:** `server.js:267-272 heroGlow + float are 'infinite' with no reduced-motion guard; server.js:15388 popIn unconditional; no @media prefers-reduced-motion in either inline <style>.`
   - 🔧 **לעשות:** Add a single @media (prefers-reduced-motion: reduce){ *{animation:none!important} } block to the inline <style> of both /welcome (after server.js:295) and /player (after server.js:15421), plus privacy has none needed. Keeps the static layout intact while respecting the OS accessibility setting on the most-viewed first-impression pages.

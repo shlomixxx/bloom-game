@@ -15359,6 +15359,21 @@ app.get('/player/:code', async (req, res) => {
     const contestRow = await pool.query(`SELECT COUNT(DISTINCT contest_code) as contests, SUM(games_played) as contest_games FROM contest_scores WHERE device_id = (SELECT device_id FROM player_profiles WHERE player_code = $1)`, [code]);
     const cStats = contestRow.rows[0] || { contests: 0, contest_games: 0 };
     const referrals = await pool.query(`SELECT COUNT(*) as count FROM referrals WHERE referrer_code = $1`, [code]);
+    // UX audit 2026-06-02 — the profile is a viral surface but never showed a
+    // competitive hook. Compute the player's global rank by all-time best so a
+    // viewer sees "#N in the world · can you beat X?" — the FOMO that converts.
+    let globalRank = 0, globalTotal = 0;
+    try {
+      const rankRow = await pool.query(
+        `SELECT
+           (SELECT COUNT(*) FROM (SELECT device_id, MAX(score) m FROM daily_scores GROUP BY device_id HAVING MAX(score) > $1) x) AS ahead,
+           (SELECT COUNT(DISTINCT device_id) FROM daily_scores) AS total`,
+        [stats.best | 0]);
+      globalRank = (rankRow.rows[0].ahead | 0) + 1;
+      globalTotal = rankRow.rows[0].total | 0;
+    } catch (e) { globalRank = 0; globalTotal = 0; }
+    const showRank = globalTotal >= 10 && (stats.best | 0) > 0;
+    const bestFmt = (stats.best | 0).toLocaleString();
     const daysSinceJoin = Math.max(1, Math.round((Date.now() - new Date(player.created_at).getTime()) / 86400000));
     const joinDate = new Date(player.created_at).toLocaleDateString('he-IL');
     const name = (player.display_name || 'שחקן').replace(/[<>"'&]/g, '');
@@ -15419,6 +15434,15 @@ body.dark{background:linear-gradient(180deg,#1F1D1B 0%,#1A1816 60%);color:#F2EFE
 .btn-copy{}.light .btn-copy{background:#F5F2EC;color:#1C1A18}.dark .btn-copy{background:#2C2A28;color:#F2EFE9}
 .btn-wa{background:#25D366!important;color:#FFF!important}
 .btn-wa svg{width:16px;height:16px;fill:#FFF}
+.beat-banner{text-align:center;font-size:14px;font-weight:700;padding:12px 14px;border-radius:14px;margin-bottom:12px;direction:rtl}
+.light .beat-banner{background:linear-gradient(135deg,#FFF4D6,#FFE0EC);color:#8A2B5A;border:1px solid #F3C9D9}
+.dark .beat-banner{background:linear-gradient(135deg,#3D2E0A,#3A1E2E);color:#FFC0D6;border:1px solid rgba(255,192,214,0.25)}
+.beat-banner b{color:#BA7517}
+.dark .beat-banner b{color:#FAC775}
+.profile-foot{text-align:center;margin-top:14px;font-size:12px}
+.profile-foot a{color:#BA7517;font-weight:600;text-decoration:none}
+.dark .profile-foot a{color:#FAC775}
+@media (prefers-reduced-motion:reduce){.card{animation:none}.xp-fill{transition:none}}
 </style>
 <script>(function(){var d=window.matchMedia&&window.matchMedia('(prefers-color-scheme:dark)').matches;document.body.className=d?'dark':'light'})()</script>
 </head><body>
@@ -15430,24 +15454,27 @@ body.dark{background:linear-gradient(180deg,#1F1D1B 0%,#1A1816 60%);color:#F2EFE
 <div class="xp-bar"><div class="xp-fill" style="width:${progress}%"></div></div>
 <div class="xp-text">${player.xp.toLocaleString()} / ${nextXp.toLocaleString()} XP</div>
 <div class="stats">
-<div class="stat"><div class="stat-val gold">${(stats.best|0).toLocaleString()}</div><div class="stat-lbl">🏆 שיא</div></div>
+<div class="stat"><div class="stat-val gold">${bestFmt}</div><div class="stat-lbl">🏆 שיא</div></div>
 <div class="stat"><div class="stat-val">${stats.games|0}</div><div class="stat-lbl">🎮 משחקים</div></div>
-<div class="stat"><div class="stat-val">${player.balance|0} 💎</div><div class="stat-lbl">קרדיטים</div></div>
+${showRank
+  ? `<div class="stat"><div class="stat-val gold">#${globalRank}</div><div class="stat-lbl">🥇 דירוג עולמי</div></div>`
+  : `<div class="stat"><div class="stat-val">${stats.days_active|0}</div><div class="stat-lbl">📅 ימים פעילים</div></div>`}
 </div>
-<div class="stats2">
-<div class="stat"><div class="stat-val">${stats.days_active|0}</div><div class="stat-lbl">📅 ימים פעילים</div></div>
+<div class="stats2"${showRank ? ' style="grid-template-columns:1fr 1fr 1fr"' : ''}>
+${showRank ? `<div class="stat"><div class="stat-val">${stats.days_active|0}</div><div class="stat-lbl">📅 ימים פעילים</div></div>` : ''}
 <div class="stat"><div class="stat-val">${cStats.contests|0}</div><div class="stat-lbl">🏅 תחרויות</div></div>
-<div class="stat"><div class="stat-val">${(player.total_earned|0).toLocaleString()}</div><div class="stat-lbl">💎 הרוויח</div></div>
-<div class="stat"><div class="stat-val">${referrals.rows[0].count|0}</div><div class="stat-lbl">🔗 הפניות</div></div>
+<div class="stat"><div class="stat-val">${referrals.rows[0].count|0}</div><div class="stat-lbl">🔗 הזמין חברים</div></div>
 </div>
 <div class="joined">📆 הצטרף ב-${joinDate} · ${daysSinceJoin} ימים ב-BLOOM</div>
+<div class="beat-banner">🎯 תצליח לעבור את <b>${bestFmt}</b>?${showRank ? ` · מקום <b>#${globalRank}</b> בעולם 🌍` : ''}</div>
 <div class="btns">
-<a class="btn-play" href="/?ref=${code}">🌸 שחק גם ב-BLOOM</a>
+<a class="btn-play" href="/?ref=${code}">⚔️ קבל את האתגר — שחק עכשיו</a>
 <div class="btn-share">
 <button class="btn-copy" onclick="var t='${shareText.replace(/'/g,"\\'")} ${shareUrl}';if(navigator.share)navigator.share({text:t}).catch(function(){});else if(navigator.clipboard){navigator.clipboard.writeText(t);this.textContent='✓ הועתק'}">📤 שתף פרופיל</button>
 <button class="btn-wa" onclick="window.open('https://wa.me/?text='+encodeURIComponent('${shareText.replace(/'/g,"\\'")} ${shareUrl}'),'_blank')"><svg viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>WhatsApp</button>
 </div>
 </div>
+<div class="profile-foot"><a href="/welcome">מה זה BLOOM? →</a></div>
 </div></body></html>`);
   } catch (e) {
     console.error('profile', e.message);
