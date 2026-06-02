@@ -211,6 +211,9 @@
           }
           try { if (typeof soundMilestone === 'function') soundMilestone(6); } catch (e) {}
           try { if (typeof buzz === 'function') buzz([80, 60, 100, 60, 120]); } catch (e) {}
+          // UX audit 2026-06-02 — confetti climax on the bundle purchase
+          // (a multi-day FOMO event purchase; was sound+buzz only).
+          try { if (typeof window.__bloomConfetti === 'function') window.__bloomConfetti(60); } catch (e) {}
           _bundlesCache.data = null;
           var banner = document.getElementById('bundle-banner-' + bundleId);
           if (banner) banner.remove();

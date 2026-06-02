@@ -221,6 +221,9 @@
           } catch (e) {}
           try { if (typeof soundMilestone === 'function') soundMilestone(6); } catch (e) {}
           try { if (typeof buzz === 'function') buzz([80, 60, 100, 60, 120]); } catch (e) {}
+          // UX audit 2026-06-02 — confetti climax on the highest-conversion
+          // purchase in the game (was sound+buzz only).
+          try { if (typeof window.__bloomConfetti === 'function') window.__bloomConfetti(60); } catch (e) {}
           // Clear cache so subsequent checks see "purchased".
           _starterPackCache.data = null;
           // Remove banner if visible.

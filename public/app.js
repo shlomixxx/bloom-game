@@ -24114,6 +24114,9 @@
           } catch (e) {}
           try { if (typeof soundMilestone === 'function') soundMilestone(6); } catch (e) {}
           try { if (typeof buzz === 'function') buzz([80, 60, 100, 60, 120]); } catch (e) {}
+          // UX audit 2026-06-02 — confetti climax on the highest-conversion
+          // purchase in the game (was sound+buzz only).
+          try { if (typeof window.__bloomConfetti === 'function') window.__bloomConfetti(60); } catch (e) {}
           // Clear cache so subsequent checks see "purchased".
           _starterPackCache.data = null;
           // Remove banner if visible.
@@ -24837,6 +24840,15 @@
           else if (res.rarity === 'legendary') buzz([60,40,100,60,140]);
           else if (res.rarity === 'rare')   buzz([40,40,80]);
           else                              buzz([30, 20]);
+        }
+      } catch (e) {}
+      // UX audit 2026-06-02 — confetti climax for the rarest pulls (the 0.5%
+      // mythic / legendary had only sound+buzz, no screen-wide celebration).
+      try {
+        if (typeof window.__bloomConfetti === 'function') {
+          if (res.rarity === 'mythic')         window.__bloomConfetti(70);
+          else if (res.rarity === 'legendary') window.__bloomConfetti(48);
+          else if (res.rarity === 'rare')      window.__bloomConfetti(28);
         }
       } catch (e) {}
     }
@@ -26433,6 +26445,9 @@
           }
           try { if (typeof soundMilestone === 'function') soundMilestone(6); } catch (e) {}
           try { if (typeof buzz === 'function') buzz([80, 60, 100, 60, 120]); } catch (e) {}
+          // UX audit 2026-06-02 — confetti climax on the bundle purchase
+          // (a multi-day FOMO event purchase; was sound+buzz only).
+          try { if (typeof window.__bloomConfetti === 'function') window.__bloomConfetti(60); } catch (e) {}
           _bundlesCache.data = null;
           var banner = document.getElementById('bundle-banner-' + bundleId);
           if (banner) banner.remove();

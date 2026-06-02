@@ -348,6 +348,15 @@
           else                              buzz([30, 20]);
         }
       } catch (e) {}
+      // UX audit 2026-06-02 — confetti climax for the rarest pulls (the 0.5%
+      // mythic / legendary had only sound+buzz, no screen-wide celebration).
+      try {
+        if (typeof window.__bloomConfetti === 'function') {
+          if (res.rarity === 'mythic')         window.__bloomConfetti(70);
+          else if (res.rarity === 'legendary') window.__bloomConfetti(48);
+          else if (res.rarity === 'rare')      window.__bloomConfetti(28);
+        }
+      } catch (e) {}
     }
 
     function next() {

@@ -10,6 +10,16 @@
 
 
 
+
+## ✅ סבב 8 — בוצע ונפרס (2026-06-02 · cache `v20260602zb` · SW `bloom-v25.1`)
+
+**Shop (74) — שיא-דופמין ברגעים הכי יקרים (prime directive: max addiction):**
+
+- **🎉 קונפטי בשיאי-מונטיזציה** — הרגעים הכי יקרים ירו רק sound+buzz. נוסף `__bloomConfetti`: **gacha** מדורג לפי נדירות (mythic 70 · legendary 48 · rare 28), **starter-pack** (60, ההמרה הכי גבוהה במשחק), **bundle** (60). אומת שהאודיט נכון (grep: אפס קונפטי בשלושתם לפני).
+
+> **ציון הדף: 74 → ~80 (משוער).** נשאר ב-Shop: confirm() נייטיב בבנק (medium) + dark-mode לבנק/חבילות (medium).
+
+---
 ## ✅ סבב 7 — בוצע ונפרס (2026-06-02 · cache `v20260602za` · SW `bloom-v25.0`)
 
 **מסך-סיום (66) — 2 ממצאי-פוקוס/יופי (CSS בלבד, אפס collision):**
@@ -1142,7 +1152,7 @@
 
 **🛠️ משימות לביצוע (8):**
 
-- [ ] **🟠 גבוה · מאמץ `S` · ★★★★ · התמכרות** — **No confetti / climax FX on the highest-value monetization moments**
+- [x] ✅ **בוצע (סבב 8)** · **🟠 גבוה · מאמץ `S` · ★★★★ · התמכרות** — **No confetti / climax FX on the highest-value monetization moments**
   - **הבעיה:** The biggest dopamine peaks in the cluster — a mythic gacha pull (0.5% odds), a legendary, the starter-pack purchase, and a bundle purchase — fire only soundMilestone + buzz. There is zero confetti or screen-wide celebration. showConfetti is exposed as window.__bloomConfetti (used elsewhere on home win-return) but is never called here. A 0.5% mythic landing with the same visual weight as an uncommon leaves the single rarest event in the shop under-celebrated, and the purchase-welcome overlays are static cards.
   - 📍 **הוכחה:** `src/19-skin-gacha.js:341-350 (renderCard fires only soundMilestone+buzz, no confetti even for res.rarity==='mythic'); src/17-starter-pack.js:222-223 + showStarterPackWelcomeOverlay (261-281) no confetti; src/23-bundles.js:212-213 + showBundleWelcome (240-264) no confetti. Grep for 'confetti' across all 5 files returned zero matches.`
   - 🔧 **לעשות:** In src/19-skin-gacha.js renderCard(), after the sound/buzz block, call window.__bloomConfetti when present: mythic → ~60 particles, legendary → ~40, rare → ~18, scaled like the LF.1/AD.5 pattern. In src/17-starter-pack.js buyStarterPack success branch and src/23-bundles.js buyBundle success branch, fire window.__bloomConfetti(48) alongside the existing soundMilestone(6). Guard each call in try/catch and skip when prefers-reduced-motion. Result: the rarest/most-valuable purchases get a screen-wide gold-pink burst, matching the celebration weight already used for daily-login jackpot and personal-best.
