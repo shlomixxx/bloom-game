@@ -33619,6 +33619,12 @@ try {
       '#home-v2-featured':         'home',
       '#home-weekly-host':         'home',
       '#home-jackpot':             'home',
+      // The discovery surfaces are a cross-cutting "browse all features" zone;
+      // they belong on the home tab. Mapped to 'home' so the observer claims
+      // them (preventing the descendant-scan from touching them) but leaves
+      // them in place — they self-mount ABOVE the footer (see 47-discovery.js).
+      '#discovery-tile':           'home',
+      '#discovery-next-unlock':    'home',
       // ── Rewards tab ──
       '#spin-home-tile':           'rewards',
       '#checklist-home-tile':      'rewards',
@@ -33626,6 +33632,7 @@ try {
       '#chest-home-tile':          'rewards',
       '.daily-deal-home-banner':   'rewards',
       // ── Social tab ──
+      '#friends-banner':           'social',
       '#guild-home-tile':          'social',
       '#guild-war-home-tile':      'social',
       '#squad-tile':               'social',
@@ -34417,9 +34424,19 @@ try {
         try { if (typeof ensureAudio === 'function') ensureAudio(); } catch (e) {}
         showDiscoveryModal();
       };
-      home.appendChild(tile);
+      mountAboveFooter(home, tile);
     }
     renderTile(tile);
+  }
+
+  // The discovery surfaces are mounted late (200ms) via createElement, so a
+  // bare appendChild lands them BELOW the home footer links (privacy / how-to /
+  // invite) as orphan tiles. Anchor them ABOVE the footer instead so they read
+  // as the "browse all features" zone at the end of the home content.
+  function mountAboveFooter(home, el) {
+    var ft = home.querySelector('.home-v2-bottom');
+    if (ft && ft.parentNode === home) home.insertBefore(el, ft);
+    else home.appendChild(el);
   }
 
   function renderTile(tile) {
@@ -34479,7 +34496,7 @@ try {
         try { if (typeof ensureAudio === 'function') ensureAudio(); } catch (e) {}
         showDiscoveryModal();
       };
-      home.appendChild(banner);
+      mountAboveFooter(home, banner);
     }
     renderNextUnlock(banner, s);
   }
@@ -35679,9 +35696,15 @@ try {
       if (!el) {
         el = document.createElement('button');
         el.id = 'friends-banner';
-        // Append to the home tile area (below the hero) — slim, so it never
-        // competes with the primary PLAY CTA.
-        home.appendChild(el);
+        // Mount ABOVE the home footer links so it never renders as an orphan
+        // tile below the privacy/how-to row. When the bottom-nav is active its
+        // MutationObserver then relocates this banner into the קהילה (social)
+        // tab — where "your friends are active" social-proof belongs — and the
+        // tab earns an unread badge so the player is pulled to discover it. In
+        // legacy (no bottom-nav) mode it simply stays here, above the footer.
+        var ftb = home.querySelector('.home-v2-bottom');
+        if (ftb && ftb.parentNode === home) home.insertBefore(el, ftb);
+        else home.appendChild(el);
       }
       // Re-bind every render so the route reflects the CURRENT friend count.
       // Opens the unified friends hub straight on the right tab: a player with

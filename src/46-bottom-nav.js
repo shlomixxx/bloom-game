@@ -49,6 +49,12 @@
       '#home-v2-featured':         'home',
       '#home-weekly-host':         'home',
       '#home-jackpot':             'home',
+      // The discovery surfaces are a cross-cutting "browse all features" zone;
+      // they belong on the home tab. Mapped to 'home' so the observer claims
+      // them (preventing the descendant-scan from touching them) but leaves
+      // them in place — they self-mount ABOVE the footer (see 47-discovery.js).
+      '#discovery-tile':           'home',
+      '#discovery-next-unlock':    'home',
       // ── Rewards tab ──
       '#spin-home-tile':           'rewards',
       '#checklist-home-tile':      'rewards',
@@ -56,6 +62,7 @@
       '#chest-home-tile':          'rewards',
       '.daily-deal-home-banner':   'rewards',
       // ── Social tab ──
+      '#friends-banner':           'social',
       '#guild-home-tile':          'social',
       '#guild-war-home-tile':      'social',
       '#squad-tile':               'social',

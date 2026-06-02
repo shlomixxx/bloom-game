@@ -276,9 +276,19 @@
         try { if (typeof ensureAudio === 'function') ensureAudio(); } catch (e) {}
         showDiscoveryModal();
       };
-      home.appendChild(tile);
+      mountAboveFooter(home, tile);
     }
     renderTile(tile);
+  }
+
+  // The discovery surfaces are mounted late (200ms) via createElement, so a
+  // bare appendChild lands them BELOW the home footer links (privacy / how-to /
+  // invite) as orphan tiles. Anchor them ABOVE the footer instead so they read
+  // as the "browse all features" zone at the end of the home content.
+  function mountAboveFooter(home, el) {
+    var ft = home.querySelector('.home-v2-bottom');
+    if (ft && ft.parentNode === home) home.insertBefore(el, ft);
+    else home.appendChild(el);
   }
 
   function renderTile(tile) {
@@ -338,7 +348,7 @@
         try { if (typeof ensureAudio === 'function') ensureAudio(); } catch (e) {}
         showDiscoveryModal();
       };
-      home.appendChild(banner);
+      mountAboveFooter(home, banner);
     }
     renderNextUnlock(banner, s);
   }

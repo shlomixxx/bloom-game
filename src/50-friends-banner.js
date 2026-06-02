@@ -54,9 +54,15 @@
       if (!el) {
         el = document.createElement('button');
         el.id = 'friends-banner';
-        // Append to the home tile area (below the hero) — slim, so it never
-        // competes with the primary PLAY CTA.
-        home.appendChild(el);
+        // Mount ABOVE the home footer links so it never renders as an orphan
+        // tile below the privacy/how-to row. When the bottom-nav is active its
+        // MutationObserver then relocates this banner into the קהילה (social)
+        // tab — where "your friends are active" social-proof belongs — and the
+        // tab earns an unread badge so the player is pulled to discover it. In
+        // legacy (no bottom-nav) mode it simply stays here, above the footer.
+        var ftb = home.querySelector('.home-v2-bottom');
+        if (ftb && ftb.parentNode === home) home.insertBefore(el, ftb);
+        else home.appendChild(el);
       }
       // Re-bind every render so the route reflects the CURRENT friend count.
       // Opens the unified friends hub straight on the right tab: a player with
