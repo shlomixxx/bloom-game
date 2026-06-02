@@ -49,6 +49,8 @@
 
 **5. [tasks/ACTIVE/ADMIN_TASKS.md](tasks/ACTIVE/ADMIN_TASKS.md)** — Admin panel audit (2026-05-26): ~165 פערים ב-9 phases (A-I). Phase A+B+C = MVP למניעת נטישה (שבועיים, ~25% churn reduction). Drill-down לשחקן בודד + per-player actions + churn detection dashboard עדיין חסרים.
 
+**6. [tasks/ACTIVE/PAGE_UX_AUDIT_TASKS.md](tasks/ACTIVE/PAGE_UX_AUDIT_TASKS.md)** — ביקורת UX+התמכרות לכל 21 הדפים (2026-06-02, 21-agent workflow). ציון משחק כולל **67/100 (B-)**, 141 ממצאים (0 קריטי / 34 גבוה / 65 בינוני / 42 נמוך). טבלת ציונים מדורגת לפי ROI + 8 תמות-רוחב (tokens לא-מאומצים, reduced-motion חסר, חורי-סגירה, tap-targets<40px, hooks ריקים/קפואים, חוסר שיא-דופמין, overload, חוסר השוואה-חברתית) + 18 quick-wins + 11 פרויקטים גדולים. כל ממצא = משימה עם file:line + הוראת-ביצוע.
+
 ### 📚 קבצי context (לא משימות — הקשר היסטורי)
 
 - **[CLAUDE.md](CLAUDE.md)** — Living spec של הפרויקט. §0 = retention stages tracker (49 stages). §5 = current features.
