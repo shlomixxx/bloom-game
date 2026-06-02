@@ -24335,10 +24335,22 @@
     if (Date.now() - _lastBannerCheckAt < 30 * 1000) return;
     _lastBannerCheckAt = Date.now();
     fetchTodayDeal(false).then(function(d) {
-      if (!d || !d.ok || !d.enabled || !d.deal || d.purchased) return;
+      var existing = document.getElementById('daily-deal-home-banner');
+      // BUG FIX 2026-06-03 — self-correct. The old code returned early when a
+      // banner already existed, so a STALE banner (already purchased, or the
+      // deal rotated) was never removed → "I bought it but it still shows / I
+      // click and nothing happens". Now: no live unpurchased deal → remove any
+      // lingering banner; a different deal id → replace it.
+      if (!d || !d.ok || !d.enabled || !d.deal || d.purchased) {
+        if (existing) existing.remove();
+        return;
+      }
       var home = document.getElementById('home-screen-v2') || document.getElementById('home-screen');
       if (!home) return;
-      if (document.getElementById('daily-deal-home-banner')) return;
+      if (existing) {
+        if (existing.dataset && existing.dataset.dealId === String(d.deal.id)) return; // same deal — leave it
+        existing.remove(); // stale (rotated) — replace below
+      }
       mountDailyDealBanner(home, d);
     });
   }
@@ -24370,13 +24382,15 @@
     } else {
       homeEl.insertBefore(banner, homeEl.firstChild);
     }
-    banner.querySelector('.dd-banner-cta').onclick = function() { showDailyDealModal(data); };
-    // No dismiss/✕ — feature surface, not a deletable notification. Rotates daily.
-    banner.addEventListener('click', function(e) {
-      if (e.target === banner || e.target.classList.contains('dd-banner-body') || e.target.classList.contains('dd-banner-icon')) {
-        showDailyDealModal(data);
-      }
-    });
+    // Tag the banner with the deal id so maybeShowDailyDealBanner can detect a
+    // stale (rotated/purchased) banner and replace/remove it.
+    banner.dataset.dealId = String(deal.id);
+    // BUG FIX 2026-06-03 — the WHOLE banner is clickable. The old delegate only
+    // fired for clicks on the icon / body-padding, so tapping the title / price
+    // / countdown text (children of .dd-banner-body) did NOTHING — the user's
+    // "I click and nothing happens". The CTA click bubbles here too.
+    banner.style.cursor = 'pointer';
+    banner.addEventListener('click', function() { showDailyDealModal(data); });
     // Live countdown ticker.
     var countdownEl = banner.querySelector('.dd-banner-countdown');
     var ticker = setInterval(function() {
