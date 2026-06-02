@@ -1037,6 +1037,10 @@
               '<span>WhatsApp</span>' +
             '</button>' +
           '</div>' +
+          // UX audit 2026-06-02 — a clearly-labeled exit-to-home (the only path
+          // home was the buried ⋯ menu). Secondary styling so it never competes
+          // with the primary "play again".
+          '<button class="btn secondary over-home-btn" id="over-home">🏠 חזרה לבית</button>' +
           spectateBtn +
         '</div>';
       document.getElementById('again').onclick = function() {
@@ -1328,6 +1332,11 @@
       };
 
       document.getElementById('share-btn').onclick = shareResult;
+      var overHomeBtn = document.getElementById('over-home');
+      if (overHomeBtn) overHomeBtn.onclick = function() {
+        try { if (typeof ensureAudio === 'function') ensureAudio(); } catch (e) {}
+        try { if (typeof showHome === 'function') showHome(); } catch (e) {}
+      };
       var waShareBtn = document.getElementById('share-wa-btn');
       if (waShareBtn) waShareBtn.onclick = function() { shareResultWhatsApp(); };
       var gssAddictionShare = document.getElementById('gss-addiction-share');

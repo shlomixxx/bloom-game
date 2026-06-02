@@ -842,7 +842,10 @@
       // to type can hit this and get paired with another waiting player.
       '<button class="btn" id="duel-random" style="width:100%;margin-bottom:8px;background:linear-gradient(135deg,#3E6FD9,#7FA8F0);color:#FFF;font-weight:800;line-height:1.35">🎲 דו-קרב אקראי<br><span style="font-size:10px;font-weight:600;opacity:0.92">זר אקראי · ♾️ משחק מלא · בלי שעון</span></button>' +
       // A5 — Live PvP Race. 60-second real-time race against another player.
-      '<button class="btn" id="duel-live" style="width:100%;margin-bottom:6px;background:linear-gradient(135deg,#FF4D6D,#FF8DA1);color:#FFF;font-weight:800;line-height:1.35">⚡ מרוץ חי<br><span style="font-size:10px;font-weight:600;opacity:0.92">זר אקראי · אותו לוח · ⏱ 60 שניות</span></button>' +
+      // UX audit 2026-06-02 — promoted to the single DOMINANT action (the modal
+      // had 3 equal-weight CTAs = no focus). Bigger + a "🔥 הכי מרגש" tag +
+      // stronger shadow so the eye lands here; friend/random stay as secondaries.
+      '<button class="btn" id="duel-live" style="width:100%;margin-bottom:8px;padding:15px;background:linear-gradient(135deg,#FF4D6D,#FF8DA1);color:#FFF;font-weight:900;font-size:16px;line-height:1.3;box-shadow:0 6px 22px rgba(255,77,109,0.45)">⚡ מרוץ חי <span style="font-size:10px;background:rgba(255,255,255,0.25);border-radius:8px;padding:2px 7px;font-weight:800;vertical-align:middle">🔥 הכי מרגש</span><br><span style="font-size:11px;font-weight:600;opacity:0.95">זר אקראי · אותו לוח · ⏱ 60 שניות</span></button>' +
       // Send gift — peaceful counterpart to a duel. Same input (BLOOM-XXXX
       // suffix), small gem amount, optional message. Recipient sees a
       // toast banner next time they open the app.
@@ -20987,6 +20990,10 @@
               '<span>WhatsApp</span>' +
             '</button>' +
           '</div>' +
+          // UX audit 2026-06-02 — a clearly-labeled exit-to-home (the only path
+          // home was the buried ⋯ menu). Secondary styling so it never competes
+          // with the primary "play again".
+          '<button class="btn secondary over-home-btn" id="over-home">🏠 חזרה לבית</button>' +
           spectateBtn +
         '</div>';
       document.getElementById('again').onclick = function() {
@@ -21278,6 +21285,11 @@
       };
 
       document.getElementById('share-btn').onclick = shareResult;
+      var overHomeBtn = document.getElementById('over-home');
+      if (overHomeBtn) overHomeBtn.onclick = function() {
+        try { if (typeof ensureAudio === 'function') ensureAudio(); } catch (e) {}
+        try { if (typeof showHome === 'function') showHome(); } catch (e) {}
+      };
       var waShareBtn = document.getElementById('share-wa-btn');
       if (waShareBtn) waShareBtn.onclick = function() { shareResultWhatsApp(); };
       var gssAddictionShare = document.getElementById('gss-addiction-share');

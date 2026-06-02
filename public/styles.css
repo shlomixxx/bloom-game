@@ -831,7 +831,11 @@
     min-width: 0; min-height: 0;
   }
   .cell:hover { background: #EFEBE2; }
-  .cell.filled svg { width: 30px; height: 30px; }
+  /* UX audit 2026-06-02 — was a fixed 30px inside cells that fitGrid sizes to
+     ~60-70px on a phone, so the tile art filled under half the cell (small,
+     lonely glyphs). Percentage fills the cell nicely (matches the spectator
+     grid's 60% precedent); tier SVGs scale by viewBox so there's no clipping. */
+  .cell.filled svg { width: 62%; height: 62%; }
   /* DG.1 — Danger Mode. When the grid has ≤3 playable empty cells the
      body gets .danger-mode and a red pulsing aura wraps the grid. Pure
      loss-aversion lever: the player feels the pressure, becomes more
