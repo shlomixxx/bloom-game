@@ -2401,9 +2401,10 @@ html[data-theme="dark"] .polish-tooltip-body {
 .dd-modal-saved strong { color: #1F6E55; }
 .dd-modal-multiplier {
   position: absolute;
-  /* Sits below the close ✕ (top-left) so it never covers/blocks it. */
-  top: 52px;
-  left: 10px;
+  /* Top-right, below the discount ribbon — keeps the whole top-left corner
+     free for the close ✕ so the badge can never cover/block it. */
+  top: 46px;
+  right: 12px;
   background: linear-gradient(135deg, #FF6B9D, #FF4D6D);
   color: #FFF;
   font-size: 12px;
