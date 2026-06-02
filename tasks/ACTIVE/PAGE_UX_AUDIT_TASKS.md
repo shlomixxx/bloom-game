@@ -7,6 +7,18 @@
 
 
 
+
+## ✅ סבב 5 — בוצע ונפרס (2026-06-02 · cache `v20260602x` · SW `bloom-v24.7`)
+
+**Onboarding/FTUE (66) — 3 ממצאים נסגרו (30 השניות הכי קריטיות לשימור יום-ראשון):**
+
+- **🌸 רגע value-prop לפני הדמו** ([15-ftue.js](src/15-ftue.js)): מסך-פתיחה חדש — "מזגו פרחים. הגיעו לכתר 👑" + תצוגת סולם-8-הדרגות + 3 bullets (מזג/טפס/התחרה) + כפתור "בוא נתחיל". במקום לפתוח ישר במטלה על לוח ריק.
+- **🎮 CTA סיום (graduation)**: אחרי הצעד האחרון — כרטיס "מוכן? בוא נשחק!" + קונפטי + כפתור "התחל לשחק" שהשחקן לוחץ במכוון, במקום זריקה פסיבית ל-home.
+- **⏱ קיצור זמני-המתנה**: dead-time בין צעדים מ-1300ms ל-1000ms; השחקן עכשיו עם agency בהתחלה ובסוף.
+
+> blast-radius נמוך — נורה רק למכשירים חדשים (games_played===0), השינויים אדיטיביים, 3 צעדי-הדמו עצמם לא נגעתי. נדחה: rearch לדמו-על-מנוע-אמיתי (החלטת-בעלים) + push-prompt tokens + country-picker. **ציון הדף: 66 → ~76 (משוער).**
+
+---
 ## ✅ סבב 4 — בוצע ונפרס (2026-06-02 · server-only · ללא cache bump)
 
 **פרופיל השחקן (66) — 4 ממצאים נסגרו (הפיכת הרזומה הסטטי לנשק ויראלי):**
@@ -536,11 +548,11 @@
 
 **🛠️ משימות לביצוע (7):**
 
-- [ ] **🟠 גבוה · מאמץ `M` · ★★★★★ · התמכרות** — **No value-prop / welcome moment before the tutorial — straight into a chore**
+- [x] ✅ **בוצע (סבב 5)** · **🟠 גבוה · מאמץ `M` · ★★★★★ · התמכרות** — **No value-prop / welcome moment before the tutorial — straight into a chore**
   - **הבעיה:** The very first thing a brand-new player sees is an instruction bubble 'הקש על העמודה כדי להפיל את האבן' on an empty grid (15-ftue.js:57). There is no hook: no 'this is the addictive merge game', no aspirational Crown/Diamond preview, no emotional promise of what they're about to feel. The first 30s — explicitly the make-or-break window — open with homework, not desire. Top F2P (Royal Match, Gardenscapes) open with a juicy near-win or a goal image. BLOOM opens cold.
   - 📍 **הוכחה:** `15-ftue.js:52-83 FTUE_STEPS — step 0 is bare 'tap the column'; buildOverlay() header is only a static '🌸 ברוכים הבאים ל-BLOOM' (15-ftue.js:121) with no value prop, no animated goal, no reward tease.`
   - 🔧 **לעשות:** In src/15-ftue.js buildOverlay(), add a 1.5-2s opening beat BEFORE renderStep(0): a centered hero card showing the 8-tier ladder culminating in 👑 Crown with text like 'מזגו אבנים → הגיעו לכתר → תפסו את הראש בטבלה'. Animate the Crown with a --shadow-glow pulse. Make it tap-to-continue. Goal: the player feels desire (status + progression) within 2 seconds, before the mechanic lesson.
-- [ ] **🟠 גבוה · מאמץ `M` · ★★★★★ · התמכרות** — **FTUE ends with NO commitment CTA — silently dumps player on home**
+- [x] ✅ **בוצע (סבב 5)** · **🟠 גבוה · מאמץ `M` · ★★★★★ · התמכרות** — **FTUE ends with NO commitment CTA — silently dumps player on home**
   - **הבעיה:** After step 3's chain celebration, advanceAfterCheer() auto-fires finishFTUE(true) → showHome() after 1300ms with zero player action (15-ftue.js:394-403, 406-427). The code comment at 15-ftue.js:8 explicitly promises a 'מוכן? בוא נשחק' handoff that does not exist. The single highest-intent moment in the player's life — they just learned the loop and felt the chain dopamine — is wasted on a passive transition to a 25-tile home wall instead of a big 'בוא נשחק עכשיו!' button that drops them into a real game. This is the textbook first-session conversion lever, and it's missing.
   - 📍 **הוכחה:** `15-ftue.js:394-403 advanceAfterCheer auto-advances with setTimeout; finishFTUE(true) at line 399 calls onDone (=showHome from boot.js:410) with no intermediate CTA. The promised handoff in the file's own header comment (line 8) is unimplemented.`
   - 🔧 **לעשות:** In src/15-ftue.js, after the 3rd step's cheer, replace the auto-finishFTUE with a 4th 'graduation' beat: a full-width gold CTA button '🎮 בוא נשחק עכשיו' (≥56px, --radius-lg, --shadow-glow, breathing pulse) plus a smaller 'דלג לבית'. The CTA should call onDone but ALSO set a flag so boot/home immediately starts a real practice game (init('practice',{fresh:true})) instead of landing on the tile-wall home. Channel the just-earned dopamine straight into first real play.
@@ -552,7 +564,7 @@
   - **הבעיה:** showPushPrePrompt() builds the entire modal with hardcoded hex colors (#FAC775, #BA7517, #1C1A18, #6F6E68) and inline cssText (16-push.js:90-113) instead of the design-token system every other surface uses. It has NO dark-theme variant (white card on a dark app), NO prefers-reduced-motion guard on its fadeIn/opacity animations, and the close ✕ is only available via backdrop tap / the 'אחר כך' text link (no dedicated ≥40px close glyph). On a dark-mode device this flashes a glaring white card; the visual inconsistency reads as 'a different app', violating the 'יפה' goal.
   - 📍 **הוכחה:** `16-push.js:90-113 inline cssText with literal hexes; no html[data-theme="dark"] override exists for #push-pre-prompt; animation:fadeIn 0.25s at line 93 with no reduced-motion fallback.`
   - 🔧 **לעשות:** Move the push pre-prompt markup to a CSS class in viral.css (e.g. .push-pre-prompt-card) using --color-surface/--color-accent/--radius-lg/--shadow-glow, add a html[data-theme="dark"] override, wrap entrance animations in @media (prefers-reduced-motion: reduce){animation:none}, and add a visible ≥40px ✕ close button to match the rest of the modal system. Result: theme-consistent, accessible push prompt.
-- [ ] **🟡 בינוני · מאמץ `S` · ★★★ · נוחות** — **Each FTUE beat has a long forced wait (~1.7-2.6s of locked dead-time per step)**
+- [x] ✅ **בוצע (סבב 5)** · **🟡 בינוני · מאמץ `S` · ★★★ · נוחות** — **Each FTUE beat has a long forced wait (~1.7-2.6s of locked dead-time per step)**
   - **הבעיה:** Between the player's tap and being able to act again, the step locks (15-ftue.js:257) through a chain of setTimeouts: drop 380ms + merge 220ms + animateMergeAt 260ms + (chain) animateChainHop 280ms + celebrate WOW 1700ms display + advanceAfterCheer 1300ms before the next step renders. On the chain step that's ~3s of staring at a banner before the next beat. Impatient new players (the highest-churn cohort) feel held hostage. There's no way to tap-to-skip the celebration and move on.
   - 📍 **הוכחה:** `15-ftue.js:317 (380ms), :316 (220ms), :341 (260ms), :363 (280ms), :383 (1700ms wow), :403 (1300ms advance) — all fixed, none skippable; ftueState.locked stays true throughout.`
   - 🔧 **לעשות:** In src/15-ftue.js, make the celebration tap-to-advance: while a cheer is showing, a tap anywhere on the overlay should immediately clear pending timeouts and call renderStep(next)/finishFTUE. Also shorten advanceAfterCheer from 1300ms to ~700ms. Keeps the dopamine beat for those who watch it, but never traps the impatient. Goal: player-controlled pacing, faster path to home.

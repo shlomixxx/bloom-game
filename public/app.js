@@ -23279,7 +23279,61 @@
     // requires a user-initiated activation). The first tap inside FTUE
     // gives us that gesture.
     buildOverlay();
+    if (!ftueState) return;   // buildOverlay tears down on a missing grid
+    showFtueWelcome();
+  }
+
+  // UX audit 2026-06-02 — value-prop welcome phase (shown before the demo) +
+  // a graduation "let's play" CTA (shown after the last step) so the first
+  // session opens with desire and ends with a deliberate commit, not a chore
+  // and a passive dump to home.
+  function showFtueWelcome() {
+    if (!ftueState || !ftueState.overlay) return;
+    var ladder = ftueState.overlay.querySelector('#ftue-welcome-ladder');
+    if (ladder) {
+      ladder.innerHTML = '';
+      var maxT = (typeof MAX_TIER !== 'undefined') ? MAX_TIER : 8;
+      for (var t = 1; t <= maxT; t++) ladder.appendChild(buildFtueTileNode(t));
+    }
+    var startBtn = ftueState.overlay.querySelector('#ftue-welcome-start');
+    if (startBtn) startBtn.onclick = function() {
+      try { if (typeof ensureAudio === 'function') ensureAudio(); } catch (e) {}
+      beginFtueSteps();
+    };
+    var skipW = ftueState.overlay.querySelector('#ftue-skip-welcome');
+    if (skipW) skipW.onclick = function() {
+      try { trackEvent('tutorial_skip', { step: -1 }); } catch (e) {}
+      finishFTUE(false);
+    };
+    try { trackEvent('tutorial_welcome', {}); } catch (e) {}
+  }
+  function beginFtueSteps() {
+    if (!ftueState || !ftueState.overlay) return;
+    var welcome = ftueState.overlay.querySelector('#ftue-welcome');
+    var steps = ftueState.overlay.querySelector('#ftue-steps');
+    if (welcome) welcome.style.display = 'none';
+    if (steps) steps.style.display = '';
     renderStep(0);
+  }
+  function showFtueGraduation() {
+    if (!ftueState || !ftueState.overlay) { finishFTUE(true); return; }
+    var steps = ftueState.overlay.querySelector('#ftue-steps');
+    var welcome = ftueState.overlay.querySelector('#ftue-welcome');
+    if (steps) steps.style.display = 'none';
+    if (!welcome) { finishFTUE(true); return; }
+    welcome.style.display = '';
+    welcome.innerHTML =
+      '<div class="ftue-grad-emoji">🌸</div>' +
+      '<div class="ftue-welcome-title">מוכן? בוא נשחק!</div>' +
+      '<div class="ftue-grad-sub">עכשיו תורך — בנה את הכתר שלך 👑</div>' +
+      '<button class="ftue-welcome-start" id="ftue-grad-start">🎮 התחל לשחק</button>';
+    var gb = welcome.querySelector('#ftue-grad-start');
+    if (gb) gb.onclick = function() {
+      try { if (typeof ensureAudio === 'function') ensureAudio(); } catch (e) {}
+      finishFTUE(true);
+    };
+    try { if (typeof showConfetti === 'function') showConfetti(30); } catch (e) {}
+    try { trackEvent('tutorial_graduation', {}); } catch (e) {}
   }
 
   function buildOverlay() {
@@ -23288,22 +23342,39 @@
     overlay.className = 'ftue-overlay';
     overlay.innerHTML =
       '<div class="ftue-card">' +
-        '<div class="ftue-step-dots">' +
-          '<span class="ftue-dot active"></span>' +
-          '<span class="ftue-dot"></span>' +
-          '<span class="ftue-dot"></span>' +
+        // UX audit 2026-06-02 — a value-prop "welcome" moment BEFORE the demo
+        // (the old flow opened straight into a chore on an empty grid). The
+        // 3-step scripted demo below (#ftue-steps) is unchanged.
+        '<div class="ftue-welcome" id="ftue-welcome">' +
+          '<div class="ftue-brand">🌸 BLOOM</div>' +
+          '<div class="ftue-welcome-title">מזגו פרחים. הגיעו לכתר 👑</div>' +
+          '<div class="ftue-welcome-ladder" id="ftue-welcome-ladder"></div>' +
+          '<div class="ftue-welcome-bullets">' +
+            '<div>🌱 מזגו 3 אבנים זהות → שדרוג לדרגה הבאה</div>' +
+            '<div>👑 טפסו 8 דרגות עד הכתר</div>' +
+            '<div>🏆 התחרו על המקום הראשון בעולם</div>' +
+          '</div>' +
+          '<button class="ftue-welcome-start" id="ftue-welcome-start">בוא נתחיל 🌸</button>' +
+          '<button class="ftue-skip" id="ftue-skip-welcome">דלג על המדריך</button>' +
         '</div>' +
-        '<div class="ftue-brand">🌸 ברוכים הבאים ל-BLOOM</div>' +
-        '<div class="ftue-bubble" id="ftue-bubble">הוראות הצעד...</div>' +
-        '<div class="ftue-next-row">' +
-          '<span class="ftue-next-label">הבא:</span>' +
-          '<div class="ftue-next-tile" id="ftue-next"></div>' +
+        '<div class="ftue-steps" id="ftue-steps" style="display:none">' +
+          '<div class="ftue-step-dots">' +
+            '<span class="ftue-dot active"></span>' +
+            '<span class="ftue-dot"></span>' +
+            '<span class="ftue-dot"></span>' +
+          '</div>' +
+          '<div class="ftue-brand">🌸 ברוכים הבאים ל-BLOOM</div>' +
+          '<div class="ftue-bubble" id="ftue-bubble">הוראות הצעד...</div>' +
+          '<div class="ftue-next-row">' +
+            '<span class="ftue-next-label">הבא:</span>' +
+            '<div class="ftue-next-tile" id="ftue-next"></div>' +
+          '</div>' +
+          '<div class="ftue-grid-wrap">' +
+            '<div class="ftue-arrow" id="ftue-arrow">⬇️</div>' +
+            '<div class="ftue-grid" id="ftue-grid"></div>' +
+          '</div>' +
+          '<button class="ftue-skip" id="ftue-skip">דלג על המדריך</button>' +
         '</div>' +
-        '<div class="ftue-grid-wrap">' +
-          '<div class="ftue-arrow" id="ftue-arrow">⬇️</div>' +
-          '<div class="ftue-grid" id="ftue-grid"></div>' +
-        '</div>' +
-        '<button class="ftue-skip" id="ftue-skip">דלג על המדריך</button>' +
       '</div>';
     document.body.appendChild(overlay);
     ftueState.overlay = overlay;
@@ -23571,11 +23642,13 @@
       if (!ftueState) return;
       const nextIdx = ftueState.stepIdx + 1;
       if (nextIdx >= FTUE_STEPS.length) {
-        finishFTUE(true);
+        // UX audit 2026-06-02 — graduate with a deliberate "let's play" CTA
+        // instead of silently dumping the player on home.
+        showFtueGraduation();
       } else {
         renderStep(nextIdx);
       }
-    }, 1300);
+    }, 1000);
   }
 
   function finishFTUE(completed) {
