@@ -78,8 +78,7 @@
           ' · <span class="dd-banner-countdown" data-expires="' + data.expiresAt + '">⏰ ' + fmtDealCountdown(msLeft) + '</span>' +
         '</div>' +
       '</div>' +
-      '<button class="dd-banner-cta">פתח →</button>' +
-      '<button class="dd-banner-close" aria-label="סגור">×</button>';
+      '<button class="dd-banner-cta">פתח →</button>';
     // Insert AFTER the starter-pack banner if present, else at top.
     var spBanner = document.getElementById('starter-pack-home-banner');
     if (spBanner && spBanner.nextSibling) {
@@ -88,10 +87,9 @@
       homeEl.insertBefore(banner, homeEl.firstChild);
     }
     banner.querySelector('.dd-banner-cta').onclick = function() { showDailyDealModal(data); };
+    // No dismiss/✕ — feature surface, not a deletable notification. Rotates daily.
     banner.addEventListener('click', function(e) {
-      if (e.target.classList.contains('dd-banner-close')) {
-        banner.remove();
-      } else if (e.target === banner || e.target.classList.contains('dd-banner-body') || e.target.classList.contains('dd-banner-icon')) {
+      if (e.target === banner || e.target.classList.contains('dd-banner-body') || e.target.classList.contains('dd-banner-icon')) {
         showDailyDealModal(data);
       }
     });

@@ -77,15 +77,14 @@
           ' · <span class="bundle-banner-countdown" data-ends="' + bundle.endsAt + '">⏰ ' + fmtBundleCountdown(msLeft) + '</span>' +
         '</div>' +
       '</div>' +
-      '<button class="bundle-banner-cta">פתח →</button>' +
-      '<button class="bundle-banner-close" aria-label="סגור">×</button>';
+      '<button class="bundle-banner-cta">פתח →</button>';
     // Append at the END of home so bundles don't push critical UI down.
     homeEl.appendChild(banner);
     banner.querySelector('.bundle-banner-cta').onclick = function() { showBundleModal(bundle); };
+    // No dismiss/✕ — feature surface, not deletable. Auto-hides when the
+    // bundle's time window ends (countdown ticker below removes it at 0).
     banner.addEventListener('click', function(e) {
-      if (e.target.classList.contains('bundle-banner-close')) {
-        banner.remove();
-      } else if (e.target === banner || e.target.classList.contains('bundle-banner-body') || e.target.classList.contains('bundle-banner-icon')) {
+      if (e.target === banner || e.target.classList.contains('bundle-banner-body') || e.target.classList.contains('bundle-banner-icon')) {
         showBundleModal(bundle);
       }
     });

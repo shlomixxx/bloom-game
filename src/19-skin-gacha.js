@@ -69,8 +69,7 @@
           (pityHint || 'נדירים מובטחים כל ' + data.pityThreshold + ' פולים · יש סקינים בלעדיים') +
         '</div>' +
       '</div>' +
-      '<button class="gacha-banner-cta">פתח →</button>' +
-      '<button class="gacha-banner-close" aria-label="סגור">×</button>';
+      '<button class="gacha-banner-cta">פתח →</button>';
     // Position after starter/deals banners if present.
     var sp = document.getElementById('starter-pack-home-banner');
     var dd = document.getElementById('daily-deal-home-banner');
@@ -81,10 +80,9 @@
       homeEl.insertBefore(banner, homeEl.firstChild);
     }
     banner.querySelector('.gacha-banner-cta').onclick = function() { showGachaModal(data); };
+    // No dismiss/✕ — gacha is a permanent feature surface, not deletable.
     banner.addEventListener('click', function(e) {
-      if (e.target.classList.contains('gacha-banner-close')) {
-        banner.remove();
-      } else if (e.target === banner || e.target.classList.contains('gacha-banner-body') || e.target.classList.contains('gacha-banner-icon')) {
+      if (e.target === banner || e.target.classList.contains('gacha-banner-body') || e.target.classList.contains('gacha-banner-icon')) {
         showGachaModal(data);
       }
     });

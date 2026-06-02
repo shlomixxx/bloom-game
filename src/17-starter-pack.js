@@ -86,17 +86,15 @@
           '<span class="sp-banner-countdown" data-expires="' + data.expiresAt + '">⏰ ' + fmtSpCountdown(data.expiresAt) + '</span>' +
         '</div>' +
       '</div>' +
-      '<button class="sp-banner-cta">פתח →</button>' +
-      '<button class="sp-banner-close" aria-label="סגור">×</button>';
+      '<button class="sp-banner-cta">פתח →</button>';
     // Insert at the top of the home content (after the brand/header).
     var firstChild = homeEl.firstChild;
     homeEl.insertBefore(banner, firstChild);
     banner.querySelector('.sp-banner-cta').onclick = function() { showStarterPackModal(data); };
+    // No dismiss/✕ — this is a feature surface, not a deletable notification.
+    // It auto-hides on purchase or after the 7-day window expires.
     banner.addEventListener('click', function(e) {
-      if (e.target.classList.contains('sp-banner-close')) {
-        banner.remove();
-        dismissStarterPack();
-      } else if (e.target === banner || e.target.classList.contains('sp-banner-body') || e.target.classList.contains('sp-banner-icon')) {
+      if (e.target === banner || e.target.classList.contains('sp-banner-body') || e.target.classList.contains('sp-banner-icon')) {
         showStarterPackModal(data);
       }
     });

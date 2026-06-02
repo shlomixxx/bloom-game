@@ -23527,17 +23527,15 @@
           '<span class="sp-banner-countdown" data-expires="' + data.expiresAt + '">⏰ ' + fmtSpCountdown(data.expiresAt) + '</span>' +
         '</div>' +
       '</div>' +
-      '<button class="sp-banner-cta">פתח →</button>' +
-      '<button class="sp-banner-close" aria-label="סגור">×</button>';
+      '<button class="sp-banner-cta">פתח →</button>';
     // Insert at the top of the home content (after the brand/header).
     var firstChild = homeEl.firstChild;
     homeEl.insertBefore(banner, firstChild);
     banner.querySelector('.sp-banner-cta').onclick = function() { showStarterPackModal(data); };
+    // No dismiss/✕ — this is a feature surface, not a deletable notification.
+    // It auto-hides on purchase or after the 7-day window expires.
     banner.addEventListener('click', function(e) {
-      if (e.target.classList.contains('sp-banner-close')) {
-        banner.remove();
-        dismissStarterPack();
-      } else if (e.target === banner || e.target.classList.contains('sp-banner-body') || e.target.classList.contains('sp-banner-icon')) {
+      if (e.target === banner || e.target.classList.contains('sp-banner-body') || e.target.classList.contains('sp-banner-icon')) {
         showStarterPackModal(data);
       }
     });
@@ -23808,8 +23806,7 @@
           ' · <span class="dd-banner-countdown" data-expires="' + data.expiresAt + '">⏰ ' + fmtDealCountdown(msLeft) + '</span>' +
         '</div>' +
       '</div>' +
-      '<button class="dd-banner-cta">פתח →</button>' +
-      '<button class="dd-banner-close" aria-label="סגור">×</button>';
+      '<button class="dd-banner-cta">פתח →</button>';
     // Insert AFTER the starter-pack banner if present, else at top.
     var spBanner = document.getElementById('starter-pack-home-banner');
     if (spBanner && spBanner.nextSibling) {
@@ -23818,10 +23815,9 @@
       homeEl.insertBefore(banner, homeEl.firstChild);
     }
     banner.querySelector('.dd-banner-cta').onclick = function() { showDailyDealModal(data); };
+    // No dismiss/✕ — feature surface, not a deletable notification. Rotates daily.
     banner.addEventListener('click', function(e) {
-      if (e.target.classList.contains('dd-banner-close')) {
-        banner.remove();
-      } else if (e.target === banner || e.target.classList.contains('dd-banner-body') || e.target.classList.contains('dd-banner-icon')) {
+      if (e.target === banner || e.target.classList.contains('dd-banner-body') || e.target.classList.contains('dd-banner-icon')) {
         showDailyDealModal(data);
       }
     });
@@ -24112,8 +24108,7 @@
           (pityHint || 'נדירים מובטחים כל ' + data.pityThreshold + ' פולים · יש סקינים בלעדיים') +
         '</div>' +
       '</div>' +
-      '<button class="gacha-banner-cta">פתח →</button>' +
-      '<button class="gacha-banner-close" aria-label="סגור">×</button>';
+      '<button class="gacha-banner-cta">פתח →</button>';
     // Position after starter/deals banners if present.
     var sp = document.getElementById('starter-pack-home-banner');
     var dd = document.getElementById('daily-deal-home-banner');
@@ -24124,10 +24119,9 @@
       homeEl.insertBefore(banner, homeEl.firstChild);
     }
     banner.querySelector('.gacha-banner-cta').onclick = function() { showGachaModal(data); };
+    // No dismiss/✕ — gacha is a permanent feature surface, not deletable.
     banner.addEventListener('click', function(e) {
-      if (e.target.classList.contains('gacha-banner-close')) {
-        banner.remove();
-      } else if (e.target === banner || e.target.classList.contains('gacha-banner-body') || e.target.classList.contains('gacha-banner-icon')) {
+      if (e.target === banner || e.target.classList.contains('gacha-banner-body') || e.target.classList.contains('gacha-banner-icon')) {
         showGachaModal(data);
       }
     });
@@ -25767,15 +25761,14 @@
           ' · <span class="bundle-banner-countdown" data-ends="' + bundle.endsAt + '">⏰ ' + fmtBundleCountdown(msLeft) + '</span>' +
         '</div>' +
       '</div>' +
-      '<button class="bundle-banner-cta">פתח →</button>' +
-      '<button class="bundle-banner-close" aria-label="סגור">×</button>';
+      '<button class="bundle-banner-cta">פתח →</button>';
     // Append at the END of home so bundles don't push critical UI down.
     homeEl.appendChild(banner);
     banner.querySelector('.bundle-banner-cta').onclick = function() { showBundleModal(bundle); };
+    // No dismiss/✕ — feature surface, not deletable. Auto-hides when the
+    // bundle's time window ends (countdown ticker below removes it at 0).
     banner.addEventListener('click', function(e) {
-      if (e.target.classList.contains('bundle-banner-close')) {
-        banner.remove();
-      } else if (e.target === banner || e.target.classList.contains('bundle-banner-body') || e.target.classList.contains('bundle-banner-icon')) {
+      if (e.target === banner || e.target.classList.contains('bundle-banner-body') || e.target.classList.contains('bundle-banner-icon')) {
         showBundleModal(bundle);
       }
     });
