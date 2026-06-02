@@ -2401,7 +2401,8 @@ html[data-theme="dark"] .polish-tooltip-body {
 .dd-modal-saved strong { color: #1F6E55; }
 .dd-modal-multiplier {
   position: absolute;
-  top: 10px;
+  /* Sits below the close ✕ (top-left) so it never covers/blocks it. */
+  top: 52px;
   left: 10px;
   background: linear-gradient(135deg, #FF6B9D, #FF4D6D);
   color: #FFF;

@@ -4617,6 +4617,8 @@ html[data-theme="dark"] .sp-welcome-btn { background: #FFD9A8; color: #3D2010; }
   cursor: pointer;
   line-height: 1;
   font-family: inherit;
+  /* Always above the value/ribbon badges so the ✕ is never click-blocked. */
+  z-index: 5;
 }
 .dd-modal-ribbon {
   position: absolute;

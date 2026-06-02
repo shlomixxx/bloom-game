@@ -4971,7 +4971,8 @@ html[data-theme="dark"] .polish-tooltip-body {
 .dd-modal-saved strong { color: #1F6E55; }
 .dd-modal-multiplier {
   position: absolute;
-  top: 10px;
+  /* Sits below the close ✕ (top-left) so it never covers/blocks it. */
+  top: 52px;
   left: 10px;
   background: linear-gradient(135deg, #FF6B9D, #FF4D6D);
   color: #FFF;
@@ -16035,6 +16036,8 @@ html[data-theme="dark"] .sp-welcome-btn { background: #FFD9A8; color: #3D2010; }
   cursor: pointer;
   line-height: 1;
   font-family: inherit;
+  /* Always above the value/ribbon badges so the ✕ is never click-blocked. */
+  z-index: 5;
 }
 .dd-modal-ribbon {
   position: absolute;
