@@ -7385,6 +7385,43 @@ app.get('/api/trophies/state', async (req, res) => {
   }
 });
 
+// UX audit 2026-06-02 — Trophy Road social ladder (★★★★★, the #1 Clash-Royale
+// retention hook). Returns the player's global trophy rank + the 3 players just
+// above / below them by trophy count + the "beat them" next target. Separate
+// from /state so the home-tile state call stays cheap (this only fires when the
+// trophy modal opens).
+app.get('/api/trophies/nearby', async (req, res) => {
+  try {
+    const deviceId = String(req.query.deviceId || '').slice(0, 64);
+    if (deviceId.length < 8) return res.status(400).json({ error: 'bad_device' });
+    const cfg = await _loadTrophyConfig();
+    if (cfg.trophies_enabled === 'false') return res.json({ ok: true, enabled: false });
+    const meR = await pool.query(`SELECT trophies FROM player_trophies WHERE device_id = $1`, [deviceId]);
+    const myTrophies = meR.rows[0] ? (meR.rows[0].trophies | 0) : 0;
+    const nameSel = `COALESCE(NULLIF(pp.display_name, ''), 'שחקן') AS name`;
+    const [aboveR, belowR, rankR, totalR] = await Promise.all([
+      pool.query(`SELECT pt.trophies, ${nameSel}, pp.country FROM player_trophies pt LEFT JOIN player_profiles pp ON pp.device_id = pt.device_id WHERE pt.trophies > $1 AND pt.device_id <> $2 ORDER BY pt.trophies ASC LIMIT 3`, [myTrophies, deviceId]),
+      pool.query(`SELECT pt.trophies, ${nameSel}, pp.country FROM player_trophies pt LEFT JOIN player_profiles pp ON pp.device_id = pt.device_id WHERE pt.trophies < $1 AND pt.device_id <> $2 ORDER BY pt.trophies DESC LIMIT 3`, [myTrophies, deviceId]),
+      pool.query(`SELECT COUNT(*)::int AS c FROM player_trophies WHERE trophies > $1`, [myTrophies]),
+      pool.query(`SELECT COUNT(*)::int AS c FROM player_trophies`)
+    ]);
+    // above is fetched closest-first (ASC); reverse so the display is highest→lowest.
+    const above = aboveR.rows.slice().reverse();
+    const below = belowR.rows;
+    const rank = (rankR.rows[0].c | 0) + 1;
+    const total = totalR.rows[0].c | 0;
+    const nextRow = above.length ? above[above.length - 1] : null; // the one directly above me
+    res.json({
+      ok: true, enabled: true,
+      myTrophies, rank, total, above, below,
+      nextTarget: nextRow ? { name: nextRow.name, trophies: nextRow.trophies | 0, gap: (nextRow.trophies | 0) - myTrophies } : null
+    });
+  } catch (e) {
+    console.error('GET /api/trophies/nearby', e);
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
 // Granted automatically when /api/score (daily) or /api/score/practice
 // fires — see hooks below. Also a direct endpoint so admin / future
 // modes can call it explicitly with a custom reason.

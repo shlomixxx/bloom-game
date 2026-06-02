@@ -30332,11 +30332,64 @@
       '• משחק קצר ≤100 = −8 🏆 (זהירות!)<br>' +
       '<span class="trophy-tips-note">חדשים עד 50 🏆 לא יורדים — שחק בלי פחד!</span>' +
     '</div>';
-    host.innerHTML = header + nextHtml + statsHtml + milestonesHtml + arenasHtml + tipsHtml;
+    host.innerHTML = header + nextHtml + statsHtml + '<div id="trophy-nearby-host"></div>' + milestonesHtml + arenasHtml + tipsHtml;
     // Wire claim buttons
     Array.prototype.forEach.call(host.querySelectorAll('.trophy-ms-claim'), function(btn) {
       btn.onclick = function() { doMilestoneClaim(parseInt(btn.dataset.idx, 10), btn); };
     });
+    // UX audit 2026-06-02 — social ladder (who's just above/below you + the
+    // "beat them" target). The #1 Clash-Royale retention hook, previously absent.
+    fetchTrophyNearby();
+  }
+
+  function fetchTrophyNearby() {
+    var host = document.getElementById('trophy-nearby-host');
+    if (!host) return;
+    var deviceId = (typeof getDeviceId === 'function') ? getDeviceId() : '';
+    if (!deviceId) return;
+    fetch('/api/trophies/nearby?deviceId=' + encodeURIComponent(deviceId))
+      .then(function(r) { return r.json(); }).catch(function() { return null; })
+      .then(function(d) { renderTrophyNearby(d); });
+  }
+  function trophyFlagEmoji(cc) {
+    try {
+      if (!cc || cc.length !== 2) return '';
+      var A = 0x1F1E6, u = cc.toUpperCase();
+      return String.fromCodePoint(A + u.charCodeAt(0) - 65, A + u.charCodeAt(1) - 65) + ' ';
+    } catch (e) { return ''; }
+  }
+  function renderTrophyNearby(d) {
+    var host = document.getElementById('trophy-nearby-host');
+    if (!host) return;
+    var hasNeighbors = d && d.ok && d.enabled && (((d.above || []).length) || ((d.below || []).length));
+    if (!hasNeighbors) { host.innerHTML = ''; return; }  // too few players — hide
+    function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+    function rowHtml(p, cls) {
+      return '<div class="trophy-ladder-row ' + cls + '">' +
+        '<span class="trophy-ladder-name">' + trophyFlagEmoji(p.country) + esc(p.name) + '</span>' +
+        '<span class="trophy-ladder-tr">🏆 ' + (p.trophies | 0).toLocaleString() + '</span>' +
+      '</div>';
+    }
+    var rows = '';
+    (d.above || []).forEach(function(p) { rows += rowHtml(p, 'trophy-ladder-above'); });
+    rows += '<div class="trophy-ladder-row trophy-ladder-me">' +
+      '<span class="trophy-ladder-name">⭐ אתה</span>' +
+      '<span class="trophy-ladder-tr">🏆 ' + (d.myTrophies | 0).toLocaleString() + '</span>' +
+    '</div>';
+    (d.below || []).forEach(function(p) { rows += rowHtml(p, 'trophy-ladder-below'); });
+    var target = d.nextTarget
+      ? '<div class="trophy-ladder-target">🎯 <strong>' + esc(d.nextTarget.name) + '</strong> לפניך ב-<strong>' + (d.nextTarget.gap | 0).toLocaleString() + ' 🏆</strong> — תעקוף אותו!</div>'
+      : '<div class="trophy-ladder-target trophy-ladder-target-king">👑 אתה בראש הסולם! שמור על המקום.</div>';
+    var rankLine = (d.total >= 5)
+      ? '<div class="trophy-ladder-rank">המקום שלך: <strong>#' + (d.rank | 0).toLocaleString() + '</strong> מתוך ' + (d.total | 0).toLocaleString() + '</div>'
+      : '';
+    host.innerHTML =
+      '<div class="trophy-ladder-card">' +
+        '<div class="trophy-ladder-title">🥊 הסולם שלך</div>' +
+        rankLine +
+        '<div class="trophy-ladder-rows">' + rows + '</div>' +
+        target +
+      '</div>';
   }
 
   function doMilestoneClaim(idx, btn) {

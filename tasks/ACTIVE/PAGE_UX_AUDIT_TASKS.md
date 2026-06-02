@@ -14,6 +14,17 @@
 
 
 
+
+## ✅ סבב 11 — בוצע ונפרס (2026-06-02 · cache `v20260602ze` · SW `bloom-v25.4`)
+
+**Trophy Road — סולם חברתי (★★★★★, מנגנון השימור #1 — Clash Royale):**
+
+- **🥊 "הסולם שלך"** — מודאל הגביעים הציג רק את עצמך. עכשיו: שרת `GET /api/trophies/nearby` ([server.js](server.js)) מחזיר דירוג-עולמי + 3 שחקנים מעליך/מתחתיך בגביעים + יעד-עקיפה. לקוח ([34-trophy-road.js](src/34-trophy-road.js)) מרנדר סולם — מעליך · **⭐ אתה** (מודגש זהב) · מתחתיך — עם פס אדום פועם "🎯 X לפניך ב-N🏆 — תעקוף אותו!" (ובראש: "👑 אתה בראש הסולם"). זה ה-hook של פחד-עקיפה שמניע return.
+- מגודר: מסתתר אם אין מספיק שחקנים בקרבתך; דירוג מוצג רק כש-total≥5. שמות עוברים escape, דגלי-מדינה ב-codepoint.
+
+> **ציון הדף: 66 → ~76 (משוער).** CSS חדש ([home-v2.css](public/css/home-v2.css)) על הקארד הכהה. reduced-motion-safe.
+
+---
 ## ✅ סבב 10 — בוצע ונפרס (2026-06-02 · cache `v20260602zd` · SW `bloom-v25.3`)
 
 **Contests (69) — חיכוך-יצירה (★★★★ focus):**
@@ -567,7 +578,7 @@
 
 **🛠️ משימות לביצוע (7):**
 
-- [ ] **🟠 גבוה · מאמץ `L` · ★★★★★ · התמכרות** — **Trophy Road has no social/ladder comparison — half the Clash Royale hook is missing**
+- [x] ✅ **בוצע (סבב 11)** · **🟠 גבוה · מאמץ `L` · ★★★★★ · התמכרות** — **Trophy Road has no social/ladder comparison — half the Clash Royale hook is missing**
   - **הבעיה:** Clash Royale's Trophy Road is addictive because trophies are the RANKED LADDER — you constantly see 'players near you' and fear being overtaken. BLOOM's trophy modal shows only your own trophies, your own arena progress, and your own milestone gems (34:145-232). There is zero 'who else is in your arena', no rank, no rival-near-you pressure. The loss-aversion is real but purely self-referential, which caps the compulsion.
   - 📍 **הוכחה:** `renderTrophyBody (34:145) renders header + next-arena + 3 personal stats + milestones + arena ladder + tips — none reference other players. No /api/trophies/leaderboard call anywhere in 34-trophy-road.js.`
   - 🔧 **לעשות:** Add a 'מי באזור שלך' section to renderTrophyBody (34-trophy-road.js) backed by a new /api/trophies/nearby endpoint returning the 2 players just above and 2 below the device in trophy count (same arena). Show name + trophy count + a gold '⚔️ עוד N🏆 לעקוף את X' pill for the nearest-above player (mirror the dyn-boards next-target pill pattern). This converts a solo number into competitive pressure.
