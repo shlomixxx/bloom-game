@@ -569,3 +569,51 @@ html[data-theme="dark"] .friend-search-req-row-canceled { background: rgba(255, 
 html[data-theme="dark"] .friend-search-req-status-accepted { background: rgba(79, 189, 139, 0.2); color: #6FD4A4; }
 html[data-theme="dark"] .friend-search-req-status-declined { background: rgba(200, 71, 47, 0.2); color: #FF8B73; }
 html[data-theme="dark"] .friend-search-req-status-canceled { background: rgba(255, 255, 255, 0.08); color: #8A887F; }
+
+/* ============================================================
+   Unified friends-hub tabs (showFriendsModal — one window: 👥 / 🔍 / 📨).
+   Replaces the old "open a second modal" search button. Pink to match the
+   hub's pink-gold header (distinct from the green standalone search modal).
+   ============================================================ */
+.dyn-friends-tabs {
+  display: flex;
+  flex-shrink: 0;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.07);
+  background: #FFFDF8;
+}
+.dyn-friends-tab {
+  flex: 1;
+  padding: 12px 6px;
+  border: 0;
+  background: transparent;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  color: #6F6E68;
+  cursor: pointer;
+  border-bottom: 3px solid transparent;
+  transition: color 0.15s ease, border-color 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+}
+.dyn-friends-tab.active { color: #C2185B; border-bottom-color: #FF6B9D; }
+.dyn-friends-tab-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #E03B3B;
+  color: #FFFFFF;
+  font-size: 10px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.dyn-friends-tabpane { flex: 1; min-height: 0; overflow-y: auto; }
+html[data-theme="dark"] .dyn-friends-tabs { background: #1F1D1A; border-color: rgba(255,255,255,0.06); }
+html[data-theme="dark"] .dyn-friends-tab { color: #B8B5AE; }
+html[data-theme="dark"] .dyn-friends-tab.active { color: #FF8FB4; border-bottom-color: #FF6B9D; }

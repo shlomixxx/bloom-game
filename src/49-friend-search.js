@@ -27,6 +27,14 @@
   }
 
   function showModal(initialTab) {
+    // Unified friends experience: one window with 3 tabs (👥 חברים / 🔍 חיפוש /
+    // 📨 בקשות) lives in the friends hub (showFriendsModal). Delegate to it so
+    // there's never a second stacked modal. This standalone modal remains only
+    // as a fallback if the hub module isn't loaded.
+    if (typeof window.showFriendsModal === 'function') {
+      window.showFriendsModal(initialTab === 'requests' ? 'requests' : 'search');
+      return;
+    }
     var existing = document.getElementById('friend-search-modal');
     if (existing) { existing.remove(); return; }
 
@@ -526,7 +534,12 @@
   setTimeout(autoOpenFromUrl, 800);
 
   // ===== Public API =====
+  // renderSearchInto / renderRequestsInto let the friends hub embed these
+  // panes inline (one window, tabbed) instead of opening a second modal.
   window.__bloomFriendSearch = {
-    showModal: showModal
+    showModal: showModal,
+    renderSearchInto: renderSearchTab,
+    renderRequestsInto: renderRequestsTab,
+    refreshRequestsBadge: refreshRequestsBadge
   };
 })();

@@ -253,10 +253,11 @@
 
   function openRequests() {
     try {
-      if (window.__bloomFriendSearch && typeof window.__bloomFriendSearch.showModal === 'function') {
+      // Unified hub on the 📨 בקשות tab (one window, no second modal).
+      if (typeof window.showFriendsModal === 'function') {
+        window.showFriendsModal('requests');
+      } else if (window.__bloomFriendSearch && typeof window.__bloomFriendSearch.showModal === 'function') {
         window.__bloomFriendSearch.showModal('requests');
-      } else if (typeof window.showFriendsModal === 'function') {
-        window.showFriendsModal();
       }
     } catch (e) {}
   }

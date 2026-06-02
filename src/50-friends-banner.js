@@ -54,20 +54,23 @@
       if (!el) {
         el = document.createElement('button');
         el.id = 'friends-banner';
-        el.onclick = function() {
-          // Open the friends HUB (online status + one-tap ⚔️ duel / 🎯 challenge
-          // per friend), not the bare search — so "N friends online" leads
-          // straight to acting on them. Falls back to search if unavailable.
-          if (typeof window.showFriendsModal === 'function') {
-            window.showFriendsModal();
-          } else if (window.__bloomFriendSearch && typeof window.__bloomFriendSearch.showModal === 'function') {
-            window.__bloomFriendSearch.showModal('search');
-          }
-        };
         // Append to the home tile area (below the hero) — slim, so it never
         // competes with the primary PLAY CTA.
         home.appendChild(el);
       }
+      // Re-bind every render so the route reflects the CURRENT friend count.
+      // Opens the unified friends hub straight on the right tab: a player with
+      // no friends lands on 🔍 חיפוש (add someone now); everyone else lands on
+      // 👥 חברים (see who's online + one-tap ⚔️ duel / 🎯 challenge). One window,
+      // no drilling into a second modal.
+      el.onclick = function() {
+        var tab = (count === 0) ? 'search' : 'friends';
+        if (typeof window.showFriendsModal === 'function') {
+          window.showFriendsModal(tab);
+        } else if (window.__bloomFriendSearch && typeof window.__bloomFriendSearch.showModal === 'function') {
+          window.__bloomFriendSearch.showModal(tab === 'friends' ? 'search' : tab);
+        }
+      };
       // Task #22 — entrance via the shared micro-interaction token (ui-pop-in).
       el.className = 'friends-banner ui-pop-in ' + cls;
       el.innerHTML =

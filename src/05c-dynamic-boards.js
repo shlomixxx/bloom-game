@@ -2296,7 +2296,7 @@
     var el = document.getElementById('dyn-friends-modal');
     if (el) el.remove();
   }
-  function showFriendsModal() {
+  function showFriendsModal(initialTab) {
     closeFriendsModal();
     var myCode = getMyPlayerCodeForShare();
     var bonus = dynConfigInt('friends_signup_bonus', 200);
@@ -2310,41 +2310,70 @@
           '<button class="dyn-friends-modal-close" aria-label="סגור">✕</button>' +
           '<div class="dyn-friends-modal-title">👥 חברים</div>' +
           '<div class="dyn-friends-modal-sub">הזמן חבר → שניכם מקבלים <strong>' + bonus + '💎</strong> · בכל יום ששניכם תשחקו = <strong>+' + sharedBonus + '💎</strong> כל אחד</div>' +
-          // FD.2 — entry point to the search + requests panel.
-          '<button class="dyn-friends-search-btn" id="dyn-friends-search-btn" type="button">🔍 חפש שחקנים + 📨 בקשות חברות</button>' +
         '</div>' +
-        '<div class="dyn-friends-share-row">' +
-          (myCode
-            ? '<div class="dyn-friends-mycode">הקוד שלך: <strong>' + escapeHtml(myCode) + '</strong></div>' +
-              '<div class="dyn-friends-share-btns">' +
-                '<button class="dyn-friends-share-wa">💬 שתף ב-WhatsApp</button>' +
-                '<button class="dyn-friends-share-native">📤 שתף</button>' +
-                '<button class="dyn-friends-share-copy">📋 העתק קישור</button>' +
-              '</div>'
-            : '<div class="dyn-friends-mycode-missing">⏳ הקוד שלך עוד לא זמין · סיים משחק אחד קודם</div>') +
+        // Unified tabs — everything in ONE window, no stacked modals / no X-to-go-back.
+        '<div class="dyn-friends-tabs">' +
+          '<button class="dyn-friends-tab" data-tab="friends" type="button">👥 חברים</button>' +
+          '<button class="dyn-friends-tab" data-tab="search" type="button">🔍 חיפוש</button>' +
+          '<button class="dyn-friends-tab" data-tab="requests" type="button">📨 בקשות<span class="dyn-friends-tab-badge" id="dyn-friends-req-badge" style="display:none"></span></button>' +
         '</div>' +
-        '<div class="dyn-friends-add-row">' +
-          '<label class="dyn-friends-add-label">הוסף חבר לפי קוד</label>' +
-          '<div class="dyn-friends-add-input-row">' +
-            '<input type="text" id="dyn-friends-add-input" placeholder="BLOOM-XXXX" maxlength="14" />' +
-            '<button class="dyn-friends-add-btn" id="dyn-friends-add-btn">➕ הוסף</button>' +
+        '<div class="dyn-friends-tabpane" data-pane="friends">' +
+          '<div class="dyn-friends-share-row">' +
+            (myCode
+              ? '<div class="dyn-friends-mycode">הקוד שלך: <strong>' + escapeHtml(myCode) + '</strong></div>' +
+                '<div class="dyn-friends-share-btns">' +
+                  '<button class="dyn-friends-share-wa">💬 שתף ב-WhatsApp</button>' +
+                  '<button class="dyn-friends-share-native">📤 שתף</button>' +
+                  '<button class="dyn-friends-share-copy">📋 העתק קישור</button>' +
+                '</div>'
+              : '<div class="dyn-friends-mycode-missing">⏳ הקוד שלך עוד לא זמין · סיים משחק אחד קודם</div>') +
           '</div>' +
-          '<div class="dyn-friends-add-status" id="dyn-friends-add-status"></div>' +
+          '<div class="dyn-friends-add-row">' +
+            '<label class="dyn-friends-add-label">הוסף חבר לפי קוד</label>' +
+            '<div class="dyn-friends-add-input-row">' +
+              '<input type="text" id="dyn-friends-add-input" placeholder="BLOOM-XXXX" maxlength="14" />' +
+              '<button class="dyn-friends-add-btn" id="dyn-friends-add-btn">➕ הוסף</button>' +
+            '</div>' +
+            '<div class="dyn-friends-add-status" id="dyn-friends-add-status"></div>' +
+          '</div>' +
+          '<div class="dyn-friends-list-host" id="dyn-friends-list-host">' +
+            '<div class="board-lb-loading">⏳ טוען חברים...</div>' +
+          '</div>' +
         '</div>' +
-        '<div class="dyn-friends-list-host" id="dyn-friends-list-host">' +
-          '<div class="board-lb-loading">⏳ טוען חברים...</div>' +
-        '</div>' +
+        '<div class="dyn-friends-tabpane" data-pane="search" style="display:none"></div>' +
+        '<div class="dyn-friends-tabpane" data-pane="requests" style="display:none"></div>' +
       '</div>';
     document.body.appendChild(ov);
     ov.querySelector('.dyn-friends-modal-close').onclick = closeFriendsModal;
     ov.addEventListener('click', function(e) { if (e.target === ov) closeFriendsModal(); });
-    // FD.2 — open the search + requests modal alongside (not instead of).
-    var searchBtn = ov.querySelector('#dyn-friends-search-btn');
-    if (searchBtn) searchBtn.onclick = function() {
-      if (window.__bloomFriendSearch && typeof window.__bloomFriendSearch.showModal === 'function') {
-        window.__bloomFriendSearch.showModal('search');
+    // Unified tabs — switch panes in-place. Search + requests render inline via
+    // the friend-search module (no second modal). 👥 חברים keeps the list/share/add.
+    var fs = window.__bloomFriendSearch || {};
+    var reqBadge = ov.querySelector('#dyn-friends-req-badge');
+    if (reqBadge && typeof fs.refreshRequestsBadge === 'function') fs.refreshRequestsBadge(reqBadge);
+    function activateFriendsTab(which) {
+      ov.querySelectorAll('.dyn-friends-tab').forEach(function(t) {
+        t.classList.toggle('active', t.getAttribute('data-tab') === which);
+      });
+      ov.querySelectorAll('.dyn-friends-tabpane').forEach(function(p) {
+        p.style.display = (p.getAttribute('data-pane') === which) ? '' : 'none';
+      });
+      if (which === 'search') {
+        var sh = ov.querySelector('.dyn-friends-tabpane[data-pane="search"]');
+        if (sh && !sh._loaded && typeof fs.renderSearchInto === 'function') {
+          fs.renderSearchInto(sh); sh._loaded = true;
+        }
+      } else if (which === 'requests') {
+        var rh = ov.querySelector('.dyn-friends-tabpane[data-pane="requests"]');
+        if (rh && typeof fs.renderRequestsInto === 'function') {
+          while (rh.firstChild) rh.removeChild(rh.firstChild); // always fresh
+          fs.renderRequestsInto(rh, reqBadge);
+        }
       }
-    };
+    }
+    ov.querySelectorAll('.dyn-friends-tab').forEach(function(t) {
+      t.onclick = function() { activateFriendsTab(t.getAttribute('data-tab')); };
+    });
     var waBtn = ov.querySelector('.dyn-friends-share-wa');
     if (waBtn) waBtn.onclick = shareInviteViaWhatsApp;
     var natBtn = ov.querySelector('.dyn-friends-share-native');
@@ -2480,6 +2509,10 @@
       });
     }
     renderFriendsList();
+    // Open on the requested tab (banner: 0 friends → 'search'; FN.1/deep-link →
+    // 'requests'). Defaults to the friends list.
+    var startTab = (initialTab === 'search' || initialTab === 'requests') ? initialTab : 'friends';
+    activateFriendsTab(startTab);
   }
   window.showFriendsModal = showFriendsModal;
   window.closeFriendsModal = closeFriendsModal;

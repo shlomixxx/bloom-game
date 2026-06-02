@@ -10175,7 +10175,7 @@
     var el = document.getElementById('dyn-friends-modal');
     if (el) el.remove();
   }
-  function showFriendsModal() {
+  function showFriendsModal(initialTab) {
     closeFriendsModal();
     var myCode = getMyPlayerCodeForShare();
     var bonus = dynConfigInt('friends_signup_bonus', 200);
@@ -10189,41 +10189,70 @@
           '<button class="dyn-friends-modal-close" aria-label="סגור">✕</button>' +
           '<div class="dyn-friends-modal-title">👥 חברים</div>' +
           '<div class="dyn-friends-modal-sub">הזמן חבר → שניכם מקבלים <strong>' + bonus + '💎</strong> · בכל יום ששניכם תשחקו = <strong>+' + sharedBonus + '💎</strong> כל אחד</div>' +
-          // FD.2 — entry point to the search + requests panel.
-          '<button class="dyn-friends-search-btn" id="dyn-friends-search-btn" type="button">🔍 חפש שחקנים + 📨 בקשות חברות</button>' +
         '</div>' +
-        '<div class="dyn-friends-share-row">' +
-          (myCode
-            ? '<div class="dyn-friends-mycode">הקוד שלך: <strong>' + escapeHtml(myCode) + '</strong></div>' +
-              '<div class="dyn-friends-share-btns">' +
-                '<button class="dyn-friends-share-wa">💬 שתף ב-WhatsApp</button>' +
-                '<button class="dyn-friends-share-native">📤 שתף</button>' +
-                '<button class="dyn-friends-share-copy">📋 העתק קישור</button>' +
-              '</div>'
-            : '<div class="dyn-friends-mycode-missing">⏳ הקוד שלך עוד לא זמין · סיים משחק אחד קודם</div>') +
+        // Unified tabs — everything in ONE window, no stacked modals / no X-to-go-back.
+        '<div class="dyn-friends-tabs">' +
+          '<button class="dyn-friends-tab" data-tab="friends" type="button">👥 חברים</button>' +
+          '<button class="dyn-friends-tab" data-tab="search" type="button">🔍 חיפוש</button>' +
+          '<button class="dyn-friends-tab" data-tab="requests" type="button">📨 בקשות<span class="dyn-friends-tab-badge" id="dyn-friends-req-badge" style="display:none"></span></button>' +
         '</div>' +
-        '<div class="dyn-friends-add-row">' +
-          '<label class="dyn-friends-add-label">הוסף חבר לפי קוד</label>' +
-          '<div class="dyn-friends-add-input-row">' +
-            '<input type="text" id="dyn-friends-add-input" placeholder="BLOOM-XXXX" maxlength="14" />' +
-            '<button class="dyn-friends-add-btn" id="dyn-friends-add-btn">➕ הוסף</button>' +
+        '<div class="dyn-friends-tabpane" data-pane="friends">' +
+          '<div class="dyn-friends-share-row">' +
+            (myCode
+              ? '<div class="dyn-friends-mycode">הקוד שלך: <strong>' + escapeHtml(myCode) + '</strong></div>' +
+                '<div class="dyn-friends-share-btns">' +
+                  '<button class="dyn-friends-share-wa">💬 שתף ב-WhatsApp</button>' +
+                  '<button class="dyn-friends-share-native">📤 שתף</button>' +
+                  '<button class="dyn-friends-share-copy">📋 העתק קישור</button>' +
+                '</div>'
+              : '<div class="dyn-friends-mycode-missing">⏳ הקוד שלך עוד לא זמין · סיים משחק אחד קודם</div>') +
           '</div>' +
-          '<div class="dyn-friends-add-status" id="dyn-friends-add-status"></div>' +
+          '<div class="dyn-friends-add-row">' +
+            '<label class="dyn-friends-add-label">הוסף חבר לפי קוד</label>' +
+            '<div class="dyn-friends-add-input-row">' +
+              '<input type="text" id="dyn-friends-add-input" placeholder="BLOOM-XXXX" maxlength="14" />' +
+              '<button class="dyn-friends-add-btn" id="dyn-friends-add-btn">➕ הוסף</button>' +
+            '</div>' +
+            '<div class="dyn-friends-add-status" id="dyn-friends-add-status"></div>' +
+          '</div>' +
+          '<div class="dyn-friends-list-host" id="dyn-friends-list-host">' +
+            '<div class="board-lb-loading">⏳ טוען חברים...</div>' +
+          '</div>' +
         '</div>' +
-        '<div class="dyn-friends-list-host" id="dyn-friends-list-host">' +
-          '<div class="board-lb-loading">⏳ טוען חברים...</div>' +
-        '</div>' +
+        '<div class="dyn-friends-tabpane" data-pane="search" style="display:none"></div>' +
+        '<div class="dyn-friends-tabpane" data-pane="requests" style="display:none"></div>' +
       '</div>';
     document.body.appendChild(ov);
     ov.querySelector('.dyn-friends-modal-close').onclick = closeFriendsModal;
     ov.addEventListener('click', function(e) { if (e.target === ov) closeFriendsModal(); });
-    // FD.2 — open the search + requests modal alongside (not instead of).
-    var searchBtn = ov.querySelector('#dyn-friends-search-btn');
-    if (searchBtn) searchBtn.onclick = function() {
-      if (window.__bloomFriendSearch && typeof window.__bloomFriendSearch.showModal === 'function') {
-        window.__bloomFriendSearch.showModal('search');
+    // Unified tabs — switch panes in-place. Search + requests render inline via
+    // the friend-search module (no second modal). 👥 חברים keeps the list/share/add.
+    var fs = window.__bloomFriendSearch || {};
+    var reqBadge = ov.querySelector('#dyn-friends-req-badge');
+    if (reqBadge && typeof fs.refreshRequestsBadge === 'function') fs.refreshRequestsBadge(reqBadge);
+    function activateFriendsTab(which) {
+      ov.querySelectorAll('.dyn-friends-tab').forEach(function(t) {
+        t.classList.toggle('active', t.getAttribute('data-tab') === which);
+      });
+      ov.querySelectorAll('.dyn-friends-tabpane').forEach(function(p) {
+        p.style.display = (p.getAttribute('data-pane') === which) ? '' : 'none';
+      });
+      if (which === 'search') {
+        var sh = ov.querySelector('.dyn-friends-tabpane[data-pane="search"]');
+        if (sh && !sh._loaded && typeof fs.renderSearchInto === 'function') {
+          fs.renderSearchInto(sh); sh._loaded = true;
+        }
+      } else if (which === 'requests') {
+        var rh = ov.querySelector('.dyn-friends-tabpane[data-pane="requests"]');
+        if (rh && typeof fs.renderRequestsInto === 'function') {
+          while (rh.firstChild) rh.removeChild(rh.firstChild); // always fresh
+          fs.renderRequestsInto(rh, reqBadge);
+        }
       }
-    };
+    }
+    ov.querySelectorAll('.dyn-friends-tab').forEach(function(t) {
+      t.onclick = function() { activateFriendsTab(t.getAttribute('data-tab')); };
+    });
     var waBtn = ov.querySelector('.dyn-friends-share-wa');
     if (waBtn) waBtn.onclick = shareInviteViaWhatsApp;
     var natBtn = ov.querySelector('.dyn-friends-share-native');
@@ -10359,6 +10388,10 @@
       });
     }
     renderFriendsList();
+    // Open on the requested tab (banner: 0 friends → 'search'; FN.1/deep-link →
+    // 'requests'). Defaults to the friends list.
+    var startTab = (initialTab === 'search' || initialTab === 'requests') ? initialTab : 'friends';
+    activateFriendsTab(startTab);
   }
   window.showFriendsModal = showFriendsModal;
   window.closeFriendsModal = closeFriendsModal;
@@ -34580,6 +34613,14 @@ try {
   }
 
   function showModal(initialTab) {
+    // Unified friends experience: one window with 3 tabs (👥 חברים / 🔍 חיפוש /
+    // 📨 בקשות) lives in the friends hub (showFriendsModal). Delegate to it so
+    // there's never a second stacked modal. This standalone modal remains only
+    // as a fallback if the hub module isn't loaded.
+    if (typeof window.showFriendsModal === 'function') {
+      window.showFriendsModal(initialTab === 'requests' ? 'requests' : 'search');
+      return;
+    }
     var existing = document.getElementById('friend-search-modal');
     if (existing) { existing.remove(); return; }
 
@@ -35079,8 +35120,13 @@ try {
   setTimeout(autoOpenFromUrl, 800);
 
   // ===== Public API =====
+  // renderSearchInto / renderRequestsInto let the friends hub embed these
+  // panes inline (one window, tabbed) instead of opening a second modal.
   window.__bloomFriendSearch = {
-    showModal: showModal
+    showModal: showModal,
+    renderSearchInto: renderSearchTab,
+    renderRequestsInto: renderRequestsTab,
+    refreshRequestsBadge: refreshRequestsBadge
   };
 })();
 // ============================================================
@@ -35139,20 +35185,23 @@ try {
       if (!el) {
         el = document.createElement('button');
         el.id = 'friends-banner';
-        el.onclick = function() {
-          // Open the friends HUB (online status + one-tap ⚔️ duel / 🎯 challenge
-          // per friend), not the bare search — so "N friends online" leads
-          // straight to acting on them. Falls back to search if unavailable.
-          if (typeof window.showFriendsModal === 'function') {
-            window.showFriendsModal();
-          } else if (window.__bloomFriendSearch && typeof window.__bloomFriendSearch.showModal === 'function') {
-            window.__bloomFriendSearch.showModal('search');
-          }
-        };
         // Append to the home tile area (below the hero) — slim, so it never
         // competes with the primary PLAY CTA.
         home.appendChild(el);
       }
+      // Re-bind every render so the route reflects the CURRENT friend count.
+      // Opens the unified friends hub straight on the right tab: a player with
+      // no friends lands on 🔍 חיפוש (add someone now); everyone else lands on
+      // 👥 חברים (see who's online + one-tap ⚔️ duel / 🎯 challenge). One window,
+      // no drilling into a second modal.
+      el.onclick = function() {
+        var tab = (count === 0) ? 'search' : 'friends';
+        if (typeof window.showFriendsModal === 'function') {
+          window.showFriendsModal(tab);
+        } else if (window.__bloomFriendSearch && typeof window.__bloomFriendSearch.showModal === 'function') {
+          window.__bloomFriendSearch.showModal(tab === 'friends' ? 'search' : tab);
+        }
+      };
       // Task #22 — entrance via the shared micro-interaction token (ui-pop-in).
       el.className = 'friends-banner ui-pop-in ' + cls;
       el.innerHTML =
@@ -35424,10 +35473,11 @@ try {
 
   function openRequests() {
     try {
-      if (window.__bloomFriendSearch && typeof window.__bloomFriendSearch.showModal === 'function') {
+      // Unified hub on the 📨 בקשות tab (one window, no second modal).
+      if (typeof window.showFriendsModal === 'function') {
+        window.showFriendsModal('requests');
+      } else if (window.__bloomFriendSearch && typeof window.__bloomFriendSearch.showModal === 'function') {
         window.__bloomFriendSearch.showModal('requests');
-      } else if (typeof window.showFriendsModal === 'function') {
-        window.showFriendsModal();
       }
     } catch (e) {}
   }
