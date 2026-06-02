@@ -1472,6 +1472,7 @@
           : 'נסה שוב!');
     ov.innerHTML =
       '<div class="lrr-card lrr-' + (won ? 'won' : tied ? 'tie' : 'lost') + '">' +
+        '<button class="lrr-close" aria-label="סגור">×</button>' +
         '<div class="lrr-emoji">' + emoji + '</div>' +
         '<div class="lrr-title">' + title + '</div>' +
         '<div class="lrr-scores">' +
@@ -1483,6 +1484,11 @@
         '<button class="lrr-btn" onclick="this.closest(\'.live-race-result-overlay\').remove()">המשך</button>' +
       '</div>';
     document.body.appendChild(ov);
+    // UX audit 2026-06-02: honour the close contract — backdrop tap + ✕
+    // (the ESC/back-gesture path is covered via the allowlist + aria-label).
+    ov.addEventListener('click', function (e) { if (e.target === ov) ov.remove(); });
+    var lrrClose = ov.querySelector('.lrr-close');
+    if (lrrClose) lrrClose.onclick = function () { ov.remove(); };
     try { if (typeof soundMilestone === 'function') soundMilestone(won ? 7 : 3); } catch (e) {}
     try { if (typeof buzz === 'function') buzz(won ? [80,60,100,60,120,80,140] : [40,30,60]); } catch (e) {}
     if (won && window.__bloomBumpBal && typeof playerBalance !== 'undefined') {

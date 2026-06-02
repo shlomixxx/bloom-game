@@ -412,8 +412,13 @@
   function showToast(text, type) {
     if (!text) return null;
     type = type || 'info';
+    // UX audit 2026-06-02 (theme #1): the 'info' toast was hardcoded white
+    // (#FFF) so it flashed a blinding white pill on the dark theme. Use the
+    // surface/text/border design tokens, which flip under html[data-theme=
+    // "dark"] — info now reads correctly in both themes. The branded
+    // success/error/warning colors are intentionally theme-agnostic.
     var palette = {
-      info:    { bg: '#FFF',     fg: '#1C1A18', border: 'rgba(0,0,0,0.10)' },
+      info:    { bg: 'var(--color-surface,#FFF)', fg: 'var(--color-text,#1C1A18)', border: 'var(--color-border,rgba(0,0,0,0.10))' },
       success: { bg: '#2E8B6F',  fg: '#FFF',    border: 'transparent' },
       error:   { bg: '#FF8C42',  fg: '#FFF',    border: 'transparent' },
       warning: { bg: '#FAC775',  fg: '#412402', border: 'transparent' }
@@ -924,6 +929,14 @@
       '.dyn-friends-modal-overlay, .gem-bank-overlay, .ghost-confirm-overlay, ' +
       '.gacha-history-overlay, .squad-modal-overlay, .squad-tournament-modal-overlay, ' +
       '.rivalry-modal-overlay, .leagues-modal-overlay, ' +
+      // UX audit 2026-06-02 (theme #3): these overlays used non-"modal"
+      // class names and were silently un-closable by ESC / back-gesture,
+      // so players felt "stuck". Each has an aria-label="סגור" close
+      // button (found by the dismiss selector) except live-race-result,
+      // which falls back to remove(). Claim/celebration variants stay
+      // in EXCLUDE below so a reward overlay can't be ESC-skipped.
+      '.login-cal-overlay, .inbox-overlay, .wr-overlay, .wr-share-overlay, ' +
+      '.live-race-result-overlay, .pet-name-overlay, ' +
       // .info-modal is the legacy class used by 14+ surfaces (name prompt,
       // country picker, score info, share dialog, shop, etc.). Adding here
       // so ESC + back-gesture close all of them through the unified path.

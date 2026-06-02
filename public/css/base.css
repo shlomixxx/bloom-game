@@ -1805,9 +1805,15 @@
      WCAG 2.5.5 requires 44×44px minimum for primary interactive UI;
      several modals had 28-32px close buttons that were finger-miss
      prone on phones. */
+     UX audit 2026-06-02 (theme #4): widened [class$="modal-close"]
+     → [class*="-close"] so it also catches the ~40 close buttons that
+     end in just "-close" (login-cal-close, inbox-close, wr-close,
+     gem-bank-close, dr-close, ts-close, gacha-summary-close, …) — not
+     only the "*modal-close" suffix. Every "-close" class in the app is
+     a close button (verified), so there is no false-positive risk. */
   .dyn-boards-close,
   .info-card .info-close,
-  [class$="modal-close"],
+  [class*="-close"],
   [aria-label="סגור"]:not(.no-min-target) {
     min-width: 44px;
     min-height: 44px;
@@ -1815,3 +1821,21 @@
   /* When the original styling already gave a small box, keep the
      visual size + just expand the hit-area via padding-only. */
   .dyn-boards-close { padding: 6px; }
+
+  /* ============================================================
+     Global reduced-motion guard (UX audit 2026-06-02, theme #2).
+     Fires ONLY when the player has set the OS "reduce motion"
+     preference — default players are unaffected. Neutralizes the
+     240+ infinite animations across the app (incl. viral.css
+     celebrations, which had ZERO coverage before). Lands on the
+     final keyframe (iteration-count:1) so reveals/pulses settle to
+     their end state instead of vanishing. Standard a11y-project
+     pattern; !important so per-component rules can't override it. */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }

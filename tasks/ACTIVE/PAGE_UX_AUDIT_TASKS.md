@@ -4,6 +4,23 @@
 
 > **ציון המשחק הכולל: 67/100 (B-)** · 21 מסכים · 141 ממצאים (0 קריטי · 34 גבוה · 65 בינוני · 42 נמוך).
 
+## ✅ סבב 1 — בוצע ונפרס (2026-06-02 · cache `v20260602u` · SW `bloom-v24.4`)
+
+**4 תיקונים רוחביים (מרימים את כל 21 הדפים) + 4 quick-wins ממוקדים:**
+
+- **🎨 theme #2 — `prefers-reduced-motion` גלובלי** ([base.css](public/css/base.css)): בלוק `@media (prefers-reduced-motion:reduce)` שמנטרל את כל 240+ האנימציות האינסופיות (כולל `viral.css` שהיה אפס) — רק כשהשחקן הפעיל הגדרת מערכת. מכסה את ממצאי ה-reduced-motion בכל הדפים בבת-אחת.
+- **👆 theme #4 — יעדי-מגע ≥44px** ([base.css](public/css/base.css)): גילוי חשוב — **37 מ-40 כפתורי הסגירה כבר היו 44px** דרך כלל `[aria-label="סגור"]` קיים; ממצאי ה-"32px" של רוב הדפים היו **false-positive** (הסוכנים קראו `width:32px` ב-CSS הפר-מודאלי ופספסו את ה-override הגלובלי). הורחב `[class$="modal-close"]`→`[class*="-close"]` כדי לכסות את ה-3 שנותרו (`dr-close`/`ts-close`/`gacha-summary-close`) + כל עתידי.
+- **🚪 theme #3 — חורי-סגירה** ([04-ui-utils.js](src/04-ui-utils.js)): הוספו ל-ESC/back allowlist: `login-cal-overlay`, `inbox-overlay`, `wr-overlay`, `wr-share-overlay`, `live-race-result-overlay`, `pet-name-overlay`. (סוגר את ממצאי ה-closability של פרסים/קהילה/wrapped/דו-קרב/חיית-מחמד.)
+- **🎨 theme #1a — toast dark-mode** ([04-ui-utils.js](src/04-ui-utils.js)): variant `info` עבר מ-`#FFF` קשיח ל-`var(--color-surface)` שמתהפך ב-dark. (ה-z-index migration המלא נדחה — effort L.)
+- **🐛 מסך-סיום — countdown קפוא** ([11-game.js](src/11-game.js)): `startNextRewardCountdown()` היה **קרוא-אך-לא-מוגדר** (נכשל בשקט ב-try/catch) — עכשיו מוגדר ומתקתק כל שנייה, מנקה את עצמו כשהמסך נעלם.
+- **⚔️ דו-קרב — סגירת live-race result** ([02-shop.js](src/02-shop.js)+[home-v2.css](public/css/home-v2.css)): נוסף ✕ (aria-label="סגור") + סגירת-backdrop + ESC.
+- **🏠 בית — כותרת-משנה ל-CTA** ([05a-home-v2.js](src/05a-home-v2.js)): `#home-v2-cta-sub` שהיה ריק מקבל hook אישי (loss-aversion רצף / "תשבור את השיא").
+- **🏠 בית — 3 חרירי balance מתים** ([05a-home-v2.js](src/05a-home-v2.js)): 💎→בנק (`__bloomBank.open`), ❤️→מילוי-חיים, ⭐→מפת-פיצ׳רים. (תוקן גם שם-global שגוי בהמלצת האודיט: `__bloomBank` ולא `__bloomGemBank`.)
+
+> **נדחה בכוונה:** מסע אימוץ-tokens המלא (3,738 hex, effort L) + אכיפת היררכיית z-index המלאה — מצריכים sprint ייעודי בגלל סיכון-רגרסיה ויזואלית. נשארים כפרויקטים גדולים ברשימה.
+
+---
+
 ## איך קוראים את זה
 
 - **ה-ציון לכל דף** = ממוצע משוקלל: התמכרות 30% · יופי 18% · נוחות 12% · בהירות 12% · פוקוס 12% · סגירוּת 8% · רלוונטיות 8%. (ה"prime directive" של BLOOM הוא התמכרות, ולכן המשקל הגבוה ביותר — אבל ביקשת גם "נוח ויפה" אז יופי+נוחות יחד = 30%.)
@@ -255,7 +272,7 @@
   - **הבעיה:** The whole point of base.css :root tokens is ONE source of truth so the app stops feeling like stitched-together screens — but adoption is in the low single digits. Across all CSS: 3,738 hardcoded hex values vs only 172 var(--color) references (~4.4%), 26 var(--radius), and just 3 var(--z-) references against 200 z-index declarations. Even base.css itself has 259 hardcoded hex and only 12 var(--color) uses. This means a brand re-theme requires editing thousands of literals, dark-mode gaps creep in per-surface, and radius/shadow/spacing drift screen-to-screen — exactly the 'feels like different apps' problem tokens were meant to solve.
   - 📍 **הוכחה:** `base.css:17-87 defines tokens; grep shows 3738 hardcoded hex vs 172 var(--color) / 26 var(--radius) / 3 var(--z-) across public/css/*.css. base.css internal: 259 hex vs 12 var(--color).`
   - 🔧 **לעשות:** Run an incremental token-migration sweep, highest-traffic surfaces first: in base.css, dark.css, home-v2.css, screens.css, replace literal accent golds (#FAC775/#BA7517/#412402), neutrals (#1C1A18/#F2EFE9/#6F6E68), and semantic greens/oranges with var(--color-accent / -accent-soft / -accent-ink / -text / -text-muted / -success / -danger). Replace border-radius literals 8/12/18px with var(--radius-sm/md/lg) and box-shadow literals with var(--shadow-sm/md). This makes the existing dark.css overrides automatic for migrated rules and turns the token block into the real source of truth.
-- [ ] **🟡 בינוני · מאמץ `S` · ★★★ · נוחות** — **Toast 'info' variant is hardcoded white — breaks in dark mode and ignores the token palette**
+- [x] ✅ **בוצע (סבב 1)** · **🟡 בינוני · מאמץ `S` · ★★★ · נוחות** — **Toast 'info' variant is hardcoded white — breaks in dark mode and ignores the token palette**
   - **הבעיה:** showToast's palette object (04-ui-utils.js:415-420) hardcodes the default 'info' toast as bg:#FFF / fg:#1C1A18. In dark mode (the home meta theme-color goes to #1A1816) a pure-white toast slab is a jarring bright flash against a warm-dark UI — the opposite of 'comfortable/beautiful'. The toast is the single most reused confirmation surface in the app (join contest, save name, ad watch, errors), so every confirmation in dark mode looks off-brand. It also bypasses --color-surface / --color-text entirely, so it never inherits the established dark neutrals.
   - 📍 **הוכחה:** `04-ui-utils.js:415-420 palette: info { bg:'#FFF', fg:'#1C1A18' ... }; dark theme bg is #1A1816 (dark.css:10). No html[data-theme] awareness in the inline style built at 04-ui-utils.js:430-436.`
   - 🔧 **לעשות:** In showToast (04-ui-utils.js:412), swap the info palette to token-driven values: bg:'var(--color-surface)', fg:'var(--color-text)', border:'var(--color-border)'. Success/error/warning can keep their saturated brand colors (they read fine on both themes) but also pull from --color-success/--color-danger/--color-warning. Result: the default toast adapts to light/dark automatically and matches the rest of the UI.
@@ -263,7 +280,7 @@
   - **הבעיה:** The streak calendar (04-ui-utils.js:686) is a strong loss-aversion surface, but two ergonomics gaps: (1) its close button .streak-cal-close is 32x32px (home-v2.css:2197-2198) — below the 40px tap-target minimum the project's own UX gate Q4 demands, hard to hit with a thumb. (2) Its overlay class is 'streak-cal-overlay' which does NOT contain the substring 'modal-overlay' and is NOT in the curated extras list (04-ui-utils.js:922-936), so the global ESC + browser-back handler can't close it. It survives via its own backdrop-tap + close handler, so it's not stuck — but it's inconsistent with the unified closability system that every other modal uses, and keyboard users can't ESC out of it.
   - 📍 **הוכחה:** `04-ui-utils.js:743-755 builds streak-cal-overlay + streak-cal-close; home-v2.css:2197-2198 width/height 32px; class 'streak-cal-overlay' fails the 'modal-overlay' substring match in __bloomGetCloseableModals (04-ui-utils.js:919) and is absent from the extras list (lines 922-936).`
   - 🔧 **לעשות:** In home-v2.css:2190 bump .streak-cal-close to width/height:40px (font-size:24px) and keep it top-start for RTL. In 04-ui-utils.js __bloomGetCloseableModals, add '.streak-cal-overlay' to the curated extras querySelectorAll list (line 922-936) so ESC + browser-back close it through the unified path. Confirm the close button carries class .modal-close OR add [data-close-modal] so __bloomDismissTopmostModal's selector at line 979 finds it.
-- [ ] **🟡 בינוני · מאמץ `M` · ★★★ · יופי** — **366 keyframes / 240 infinite animations but only 9 reduced-motion guards — viral.css (the celebration backbone) has ZERO**
+- [x] ✅ **בוצע (סבב 1)** · **🟡 בינוני · מאמץ `M` · ★★★ · יופי** — **366 keyframes / 240 infinite animations but only 9 reduced-motion guards — viral.css (the celebration backbone) has ZERO**
   - **הבעיה:** The home and celebration surfaces are animation-dense (the codebase itself flags '156 infinite animations on one page = visual chaos'). Across all 13 CSS files there are 366 @keyframes and 240 'infinite' loops, but only 9 prefers-reduced-motion blocks total — and 10 of 13 files (including viral.css with 13 keyframes / 4 infinite loops of streak-hero / addiction-badge / FTUE animation, plus dark.css, social.css, discovery.css, bottom-nav.css, home.css, tiles-aurora.css) have NONE. Users who set reduced-motion (vestibular sensitivity) still get the full pulsing/glowing barrage, which is both an accessibility miss and a 'comfortable' miss. base.css only guards its 5 shared utility classes, not the hundreds of bespoke animations.
   - 📍 **הוכחה:** `grep: 366 @keyframes, 240 'infinite', 9 prefers-reduced-motion across public/css/*.css. Per-file reduced-motion: base.css 3, boards.css 2, screens.css 2, home-v2.css 1, home-v3.css 1, ALL others incl viral.css = 0. base.css:100-102 only guards .ui-* utility classes.`
   - 🔧 **לעשות:** Add a global reduced-motion fallback at the END of base.css: @media (prefers-reduced-motion: reduce){ *, *::before, *::after { animation-duration:0.01ms!important; animation-iteration-count:1!important; transition-duration:0.01ms!important; } } with targeted opt-outs for genuinely load-bearing transforms. Then add scoped @media blocks in viral.css for the streak-hero / addiction-badge / FTUE keyframes so those high-motion surfaces freeze gracefully. This makes the whole app respect the OS setting in one stroke.
@@ -291,7 +308,7 @@
 
 **🛠️ משימות לביצוע (6):**
 
-- [ ] **🟠 גבוה · מאמץ `S` · ★★★★ · סגירוּת** — **ESC / browser-back do NOT close either Wrapped modal**
+- [x] ✅ **בוצע (סבב 1)** · **🟠 גבוה · מאמץ `S` · ★★★★ · סגירוּת** — **ESC / browser-back do NOT close either Wrapped modal**
   - **הבעיה:** The recap overlay class is `wr-overlay` (40-weekly-recap.js:95) and the share-image overlay is `wr-share-overlay` (line 251). The global close handler __bloomGetCloseableModals only matches `[class*="modal-overlay"]` plus a curated extras list (04-ui-utils.js:919-936) — neither wr class matches either path, so ESC and the mobile back-gesture both fail to dismiss these full-screen overlays. Worse, the EXCLUDE table references `wrapped-share-overlay` (04-ui-utils.js:946) which is NOT the real class name (`wr-share-overlay`), so even that dead exclusion is wrong. Closing relies solely on the 32px ✕ and backdrop tap.
   - 📍 **הוכחה:** `src/40-weekly-recap.js:95 (className 'wr-overlay'), :251 ('wr-share-overlay'); src/04-ui-utils.js:919-936 (allowlist), :946 (wrong exclude name)`
   - 🔧 **לעשות:** In src/04-ui-utils.js __bloomGetCloseableModals(), add `.wr-overlay, .wr-share-overlay` to the curated `extras` selector string (line ~922-936) so ESC + history-back route through the unified dismiss. Remove the stale `'wrapped-share-overlay'` key from EXCLUDE (line 946). Verify the topmost-modal logic closes the share overlay before the recap card when both are open. Result: ESC and Android/iOS back-swipe close Wrapped like every other modal.
@@ -334,7 +351,7 @@
 
 **🛠️ משימות לביצוע (6):**
 
-- [ ] **🟠 גבוה · מאמץ `S` · ★★★★ · התמכרות** — **Next-reward countdown is frozen — startNextRewardCountdown() is never defined**
+- [x] ✅ **בוצע (סבב 1)** · **🟠 גבוה · מאמץ `S` · ★★★★ · התמכרות** — **Next-reward countdown is frozen — startNextRewardCountdown() is never defined**
   - **הבעיה:** The AD.6 'next daily rewards in HH:MM:SS' return-hook (the strongest 'come back at a specific time' lever) renders its value once at game-over and then never ticks. The render code calls startNextRewardCountdown() at game-over, but that function is not defined anywhere in src/ or the built app.js — the call is swallowed by a try/catch, so #onr-countdown displays a static timestamp that never moves. A frozen clock reads as broken and kills the urgency.
   - 📍 **הוכחה:** `src/12-tour-info.js:1338 `try { startNextRewardCountdown(); } catch (e) {}` — but grep across all src/*.js and public/app.js finds only this single occurrence of the identifier (no `function startNextRewardCountdown`). The #onr-countdown span is set once at src/12-tour-info.js:926-927 via formatCountdown(msUntilNextIsraelMidnight()).`
   - 🔧 **לעשות:** Define startNextRewardCountdown() (e.g. in src/06-contests.js next to equipOverlay, or in 12-tour-info.js) that: finds #onr-countdown, sets a setInterval(1000) re-writing el.textContent = formatCountdown(msUntilNextIsraelMidnight()), and self-clears when the element is gone (clearInterval if !document.getElementById('onr-countdown')). Mirror the existing startCountdown() ticker for the daily timer. Result: the gold 🎁 pill counts down live to Israel midnight, restoring the return-time urgency.
@@ -379,7 +396,7 @@
 
 **🛠️ משימות לביצוע (7):**
 
-- [ ] **🟠 גבוה · מאמץ `S` · ★★★★ · סגירוּת** — **Live Race result overlay has NO ESC / backdrop / ✕ close — only one button**
+- [x] ✅ **בוצע (סבב 1)** · **🟠 גבוה · מאמץ `S` · ★★★★ · סגירוּת** — **Live Race result overlay has NO ESC / backdrop / ✕ close — only one button**
   - **הבעיה:** showLiveRaceResult builds .live-race-result-overlay (z-index 10020) with a single 'המשך' button whose only close path is an inline onclick='this.closest(...).remove()'. There is no ✕, the backdrop is not clickable (no overlay-level click handler), and the overlay class is NOT in __bloomGetCloseableModals so ESC and the browser-back gesture do nothing. A player who taps outside or presses back is stuck staring at the result with the body still in live-race-active state.
   - 📍 **הוכחה:** `src/02-shop.js:1454-1493 (overlay built, only lrr-btn closes); src/04-ui-utils.js:917-936 (closeable selector lists info-modal/board-lb/etc but NOT live-race-result-overlay); public/css/home-v2.css:5127 (.live-race-result-overlay has no backdrop handler)`
   - 🔧 **לעשות:** In src/02-shop.js showLiveRaceResult, add an overlay-level backdrop click handler (ov.onclick = function(e){ if(e.target===ov) ov.remove(); }) and a 40px ✕ close button top-left of .lrr-card, AND add '.live-race-result-overlay' to the curated extras selector in src/04-ui-utils.js __bloomGetCloseableModals so ESC + history-back dismiss it. Result: three independent ways to close, satisfying UX gate Q4.
@@ -753,11 +770,11 @@
 
 **🛠️ משימות לביצוע (7):**
 
-- [ ] **🟠 גבוה · מאמץ `S` · ★★★★ · התמכרות** — **The dominant CTA has an empty subtitle — biggest unused hook on the most-tapped element**
+- [x] ✅ **בוצע (סבב 1)** · **🟠 גבוה · מאמץ `S` · ★★★★ · התמכרות** — **The dominant CTA has an empty subtitle — biggest unused hook on the most-tapped element**
   - **הבעיה:** The giant primary 'שחק עכשיו' button renders a #home-v2-cta-sub span that is created empty (src/05a-home-v2.js:146) and is NEVER populated anywhere in the codebase (grep confirms zero setters in src/). The single most-viewed, most-tapped surface in the game carries no streak/return-time/reward micro-copy. Players get no loss-aversion or 'come back at X' pull at the exact moment of highest intent. The CSS even styles .home-v2-cta-sub:not(:empty) (home-v2.css:456) — the slot was designed for content that never arrived.
   - 📍 **הוכחה:** `src/05a-home-v2.js:146 (empty span), no setter in src/; public/css/home-v2.css:456 + :5234 style an :not(:empty) state that never fires`
   - 🔧 **לעשות:** In src/05a-home-v2.js, add updateHomeCtaSub() called from showHomeV2()'s render pass (near renderHeroBannerV2). Populate #home-v2-cta-sub with the strongest of: daily-challenge not played → '🎁 האתגר היומי מחכה'; streak.count>=3 and !todayPlayed → '🔥 שמור על רצף ' + count + ' ימים'; else 'נצח את השיא: ' + best.toLocaleString(). Use the existing --color-accent-soft styling already in place. Result: the dominant button now carries a personalized addiction hook.
-- [ ] **🟠 גבוה · מאמץ `S` · ★★★★ · נוחות** — **3 of 4 balance-bar slots are dead — gems/lives/level do nothing on tap**
+- [x] ✅ **בוצע (סבב 1)** · **🟠 גבוה · מאמץ `S` · ★★★★ · נוחות** — **3 of 4 balance-bar slots are dead — gems/lives/level do nothing on tap**
   - **הבעיה:** The balance bar is the most-viewed widget (top of every home view) but only the streak slot is interactive (it's a <button> opening the streak calendar, 05a:115+488). The 💎 gems slot (05a:107), ❤️ lives slot (05a:111) and ⭐ level slot (05a:119) are plain <div>s with no handler. Tapping 💎 — the most monetization-relevant element on screen — is a dead-end: no route to the gem bank or shop. Tapping ❤️ doesn't open the lives-refill modal. This is both a friction/comfort miss and a lost monetization/return funnel.
   - 📍 **הוכחה:** `src/05a-home-v2.js:107 (gems <div>), :111 (lives <div>), :119 (level <div>) vs :115 (streak <button> wired at :485-489)`
   - 🔧 **לעשות:** In src/05a-home-v2.js showHomeV2(): convert #home-v2-bal-gems-slot and #home-v2-bal-lives-slot to <button type=button>. Wire gems → window.__bloomGemBank?.openModal() (fallback showShop), lives → window.__bloomLives?.openModal(). Leave level as a <button> opening the discovery/level modal (__bloomDiscovery) or the level-progress sheet. Add :active{transform:scale(0.96)} matching the streak slot (home-v2.css:90). Result: every glanceable stat becomes a 1-tap entry to its system.
@@ -946,7 +963,7 @@
 
 **🛠️ משימות לביצוע (7):**
 
-- [ ] **🟠 גבוה · מאמץ `S` · ★★★ · סגירוּת** — **Login Calendar modal can't be closed with ESC or back-gesture**
+- [x] ✅ **בוצע (סבב 1)** · **🟠 גבוה · מאמץ `S` · ★★★ · סגירוּת** — **Login Calendar modal can't be closed with ESC or back-gesture**
   - **הבעיה:** The login-cal modal uses class 'login-cal-overlay' which does NOT contain the 'modal-overlay' substring the global ESC handler matches on (src/04-ui-utils.js:919), and it is NOT in the curated extras allowlist (lines 922-936). So unlike its three siblings (spin/deal/calendar all match '*modal-overlay*'), the login calendar can only be closed via the 32px ✕ or a backdrop tap — ESC and the mobile back-gesture do nothing, which is a dead-end on Android where back-swipe is the primary dismiss gesture.
   - 📍 **הוכחה:** `src/41-login-cal.js:91 sets className='login-cal-overlay'; src/04-ui-utils.js:919 matches [class*="modal-overlay"]; grep for 'login-cal-overlay' in the curated extras (04-ui-utils.js lines 922-936) returns nothing.`
   - 🔧 **לעשות:** In src/04-ui-utils.js, add '.login-cal-overlay' to the curated `extras` querySelectorAll string (around line 925, next to '.gem-bank-overlay'). Confirm it is NOT in the EXCLUDE map (only the celebration overlay 'login-cal-claim-overlay' should be excluded). Result: ESC + back-gesture close the login calendar like every other modal in the cluster.
@@ -995,7 +1012,7 @@
 
 **🛠️ משימות לביצוע (7):**
 
-- [ ] **🟠 גבוה · מאמץ `S` · ★★★★ · סגירוּת** — **Inbox panel cannot be closed with ESC or browser-back**
+- [x] ✅ **בוצע (סבב 1)** · **🟠 גבוה · מאמץ `S` · ★★★★ · סגירוּת** — **Inbox panel cannot be closed with ESC or browser-back**
   - **הבעיה:** The inbox is the single most-tapped surface in the cluster, but its overlay uses class .inbox-overlay — which does NOT end in '-modal-overlay' and is NOT in the curated extras allowlist of the global ESC/back-gesture handler. Verified: grep for 'inbox-overlay' in src/04-ui-utils.js returns 0 matches. So the only ways to close it are the tiny × button or a backdrop tap. The mobile back-swipe — the most natural close gesture — silently does nothing, and on a phone the right-anchored slide-in panel leaves almost no backdrop to tap.
   - 📍 **הוכחה:** `src/36-inbox.js:111 (overlay.className='inbox-overlay'); src/04-ui-utils.js:922-936 (extras list — inbox-overlay absent); panel is justify-content:flex-end width:min(380px,92vw) in public/css/home-v2.css:2766-2771 (minimal backdrop on phone).`
   - 🔧 **לעשות:** In src/04-ui-utils.js __bloomGetCloseableModals(), add '#inbox-panel, .inbox-overlay' to the `extras` querySelectorAll string (line ~922-936). Confirm __bloomDismissTopmostModal's close-button selector finds '.inbox-close' (it matches via [aria-label="סגור"]). Result: ESC + Android/iOS back-gesture close the inbox like every other modal.

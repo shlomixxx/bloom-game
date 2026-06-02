@@ -5136,6 +5136,7 @@ body.live-race-active .app {
   animation: streakCalFade 0.3s ease-out;
 }
 .lrr-card {
+  position: relative;
   background: linear-gradient(160deg, #FFFAEC 0%, #FFEFB8 100%);
   border-radius: 22px;
   padding: 30px 28px;
@@ -5150,6 +5151,16 @@ body.live-race-active .app {
 .lrr-won { border-color: #FFD93D; background: linear-gradient(160deg, #FFFAEC 0%, #FFD93D 100%); }
 .lrr-tie { border-color: #B59FFA; }
 .lrr-lost { border-color: #FF8DA1; }
+/* UX audit 2026-06-02: the result overlay had only one button + no ✕/backdrop
+   close, breaking the close contract. The ✕ (aria-label="סגור") is now found
+   by the global ESC handler and sized 44px by the [class*="-close"] rule. */
+.lrr-close {
+  position: absolute; top: 8px; left: 8px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: rgba(0, 0, 0, 0.12); border: none; border-radius: 50%;
+  color: #5a4a2a; font-size: 20px; line-height: 1; cursor: pointer;
+  padding: 0;
+}
 .lrr-emoji {
   font-size: 76px;
   line-height: 1;

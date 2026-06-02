@@ -104,22 +104,25 @@
       // makes the player feel "I have something" → encourages spending.
       // Lives slot hidden when admin disabled the lives system.
       '<div class="home-v2-balance-bar" id="home-v2-balance-bar">' +
-        '<div class="home-v2-bal-slot home-v2-bal-gems" id="home-v2-bal-gems-slot" title="יתרת יהלומים">' +
+        // UX audit 2026-06-02: these were dead <div>s. Now <button>s that
+        // open the gem bank / lives refill — the most-viewed widget is now
+        // a 1-tap entry into its system instead of a dead-end.
+        '<button class="home-v2-bal-slot home-v2-bal-gems" id="home-v2-bal-gems-slot" title="יתרת יהלומים — לחץ לבנק" type="button">' +
           '<span class="home-v2-bal-icon">💎</span>' +
           '<span class="home-v2-bal-val" id="home-v2-bal-gems">--</span>' +
-        '</div>' +
-        '<div class="home-v2-bal-slot home-v2-bal-lives" id="home-v2-bal-lives-slot" style="display:none" title="חיים">' +
+        '</button>' +
+        '<button class="home-v2-bal-slot home-v2-bal-lives" id="home-v2-bal-lives-slot" style="display:none" title="חיים — לחץ למילוי" type="button">' +
           '<span class="home-v2-bal-icon">❤️</span>' +
           '<span class="home-v2-bal-val" id="home-v2-bal-lives">--</span>' +
-        '</div>' +
+        '</button>' +
         '<button class="home-v2-bal-slot home-v2-bal-streak" id="home-v2-bal-streak-slot" title="רצף ימים — לחץ ללוח שנה" type="button">' +
           '<span class="home-v2-bal-icon">🔥</span>' +
           '<span class="home-v2-bal-val" id="home-v2-bal-streak">--</span>' +
         '</button>' +
-        '<div class="home-v2-bal-slot home-v2-bal-level" id="home-v2-bal-level-slot" title="דרגה">' +
+        '<button class="home-v2-bal-slot home-v2-bal-level" id="home-v2-bal-level-slot" title="דרגה — לחץ למפת הפיצ׳רים" type="button">' +
           '<span class="home-v2-bal-icon">⭐</span>' +
           '<span class="home-v2-bal-val" id="home-v2-bal-level">1</span>' +
-        '</div>' +
+        '</button>' +
       '</div>' +
 
       // ── Compact brand area ──
@@ -487,6 +490,28 @@
       ensureAudio();
       if (typeof window.__bloomShowStreakCal === 'function') window.__bloomShowStreakCal();
     };
+    // UX audit 2026-06-02 — the other 3 balance slots were dead. Each is now
+    // a 1-tap entry into its system (the most-viewed widget = a funnel, not
+    // a dead-end). Defensive: only wire when the target module is loaded.
+    var gemsSlot = document.getElementById('home-v2-bal-gems-slot');
+    if (gemsSlot) gemsSlot.onclick = function() {
+      ensureAudio();
+      if (window.__bloomBank && typeof window.__bloomBank.open === 'function') window.__bloomBank.open();
+      else if (typeof showShop === 'function') showShop();
+    };
+    var livesSlot2 = document.getElementById('home-v2-bal-lives-slot');
+    if (livesSlot2) livesSlot2.onclick = function() {
+      ensureAudio();
+      if (typeof window.showLivesRefillModal === 'function') window.showLivesRefillModal();
+    };
+    var levelSlot = document.getElementById('home-v2-bal-level-slot');
+    if (levelSlot) levelSlot.onclick = function() {
+      ensureAudio();
+      if (window.__bloomDiscovery && typeof window.__bloomDiscovery.showModal === 'function') window.__bloomDiscovery.showModal();
+    };
+    // UX audit 2026-06-02 — fill the empty CTA subtitle (the strongest,
+    // previously-unused hook on the most-tapped element).
+    updateHomeCtaSubV2();
 
     // T1.1 — apply level gates initially (hides high-level tiles for
     // new players). Re-run on a few delays to catch tiles that mount
@@ -1376,6 +1401,32 @@
       levelEl.textContent = String(lvl);
     }
   }
+  // UX audit 2026-06-02 — the primary "🎮 שחק עכשיו" button had an empty
+  // subtitle slot (#home-v2-cta-sub), the single most-tapped element in the
+  // game. Populate it with the strongest personalized hook that matches what
+  // the button actually does (plays practice/last-mode → improves best /
+  // extends today's streak). Loss-aversion streak prompt wins; else beat-best;
+  // else stay empty for a brand-new player (the label alone reads clean).
+  function updateHomeCtaSubV2() {
+    var el = document.getElementById('home-v2-cta-sub');
+    if (!el) return;
+    var msg = '';
+    try {
+      var bestEver = parseInt(localStorage.getItem(BEST_KEY) || '0', 10) || 0;
+      var count = 0;
+      try { var s = (typeof loadStreak === 'function') ? loadStreak() : null; if (s && typeof s.count === 'number') count = s.count | 0; } catch (e) {}
+      var today = (typeof todayInIsrael === 'function') ? todayInIsrael() : null;
+      var todayPlayed = false;
+      try { todayPlayed = !!(today && typeof DAILY_PLAYED_PREFIX !== 'undefined' && localStorage.getItem(DAILY_PLAYED_PREFIX + today)); } catch (e) {}
+      if (count >= 1 && !todayPlayed) {
+        msg = '🔥 רצף ' + count + ' ימים — שחק היום לשמור עליו!';
+      } else if (bestEver > 0) {
+        msg = '🏆 השיא שלך: ' + bestEver.toLocaleString() + ' — תשבור אותו!';
+      }
+    } catch (e) {}
+    el.textContent = msg;
+  }
+
   // Bump animation on gem-change. Called from earnCredits via
   // window.__bloomBumpBal so the widget reacts instantly to rewards.
   function bumpBalanceGems(newBalance, delta) {

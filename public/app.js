@@ -2229,6 +2229,7 @@
           : 'נסה שוב!');
     ov.innerHTML =
       '<div class="lrr-card lrr-' + (won ? 'won' : tied ? 'tie' : 'lost') + '">' +
+        '<button class="lrr-close" aria-label="סגור">×</button>' +
         '<div class="lrr-emoji">' + emoji + '</div>' +
         '<div class="lrr-title">' + title + '</div>' +
         '<div class="lrr-scores">' +
@@ -2240,6 +2241,11 @@
         '<button class="lrr-btn" onclick="this.closest(\'.live-race-result-overlay\').remove()">המשך</button>' +
       '</div>';
     document.body.appendChild(ov);
+    // UX audit 2026-06-02: honour the close contract — backdrop tap + ✕
+    // (the ESC/back-gesture path is covered via the allowlist + aria-label).
+    ov.addEventListener('click', function (e) { if (e.target === ov) ov.remove(); });
+    var lrrClose = ov.querySelector('.lrr-close');
+    if (lrrClose) lrrClose.onclick = function () { ov.remove(); };
     try { if (typeof soundMilestone === 'function') soundMilestone(won ? 7 : 3); } catch (e) {}
     try { if (typeof buzz === 'function') buzz(won ? [80,60,100,60,120,80,140] : [40,30,60]); } catch (e) {}
     if (won && window.__bloomBumpBal && typeof playerBalance !== 'undefined') {
@@ -4738,8 +4744,13 @@
   function showToast(text, type) {
     if (!text) return null;
     type = type || 'info';
+    // UX audit 2026-06-02 (theme #1): the 'info' toast was hardcoded white
+    // (#FFF) so it flashed a blinding white pill on the dark theme. Use the
+    // surface/text/border design tokens, which flip under html[data-theme=
+    // "dark"] — info now reads correctly in both themes. The branded
+    // success/error/warning colors are intentionally theme-agnostic.
     var palette = {
-      info:    { bg: '#FFF',     fg: '#1C1A18', border: 'rgba(0,0,0,0.10)' },
+      info:    { bg: 'var(--color-surface,#FFF)', fg: 'var(--color-text,#1C1A18)', border: 'var(--color-border,rgba(0,0,0,0.10))' },
       success: { bg: '#2E8B6F',  fg: '#FFF',    border: 'transparent' },
       error:   { bg: '#FF8C42',  fg: '#FFF',    border: 'transparent' },
       warning: { bg: '#FAC775',  fg: '#412402', border: 'transparent' }
@@ -5250,6 +5261,14 @@
       '.dyn-friends-modal-overlay, .gem-bank-overlay, .ghost-confirm-overlay, ' +
       '.gacha-history-overlay, .squad-modal-overlay, .squad-tournament-modal-overlay, ' +
       '.rivalry-modal-overlay, .leagues-modal-overlay, ' +
+      // UX audit 2026-06-02 (theme #3): these overlays used non-"modal"
+      // class names and were silently un-closable by ESC / back-gesture,
+      // so players felt "stuck". Each has an aria-label="סגור" close
+      // button (found by the dismiss selector) except live-race-result,
+      // which falls back to remove(). Claim/celebration variants stay
+      // in EXCLUDE below so a reward overlay can't be ESC-skipped.
+      '.login-cal-overlay, .inbox-overlay, .wr-overlay, .wr-share-overlay, ' +
+      '.live-race-result-overlay, .pet-name-overlay, ' +
       // .info-modal is the legacy class used by 14+ surfaces (name prompt,
       // country picker, score info, share dialog, shop, etc.). Adding here
       // so ESC + back-gesture close all of them through the unified path.
@@ -5756,22 +5775,25 @@
       // makes the player feel "I have something" → encourages spending.
       // Lives slot hidden when admin disabled the lives system.
       '<div class="home-v2-balance-bar" id="home-v2-balance-bar">' +
-        '<div class="home-v2-bal-slot home-v2-bal-gems" id="home-v2-bal-gems-slot" title="יתרת יהלומים">' +
+        // UX audit 2026-06-02: these were dead <div>s. Now <button>s that
+        // open the gem bank / lives refill — the most-viewed widget is now
+        // a 1-tap entry into its system instead of a dead-end.
+        '<button class="home-v2-bal-slot home-v2-bal-gems" id="home-v2-bal-gems-slot" title="יתרת יהלומים — לחץ לבנק" type="button">' +
           '<span class="home-v2-bal-icon">💎</span>' +
           '<span class="home-v2-bal-val" id="home-v2-bal-gems">--</span>' +
-        '</div>' +
-        '<div class="home-v2-bal-slot home-v2-bal-lives" id="home-v2-bal-lives-slot" style="display:none" title="חיים">' +
+        '</button>' +
+        '<button class="home-v2-bal-slot home-v2-bal-lives" id="home-v2-bal-lives-slot" style="display:none" title="חיים — לחץ למילוי" type="button">' +
           '<span class="home-v2-bal-icon">❤️</span>' +
           '<span class="home-v2-bal-val" id="home-v2-bal-lives">--</span>' +
-        '</div>' +
+        '</button>' +
         '<button class="home-v2-bal-slot home-v2-bal-streak" id="home-v2-bal-streak-slot" title="רצף ימים — לחץ ללוח שנה" type="button">' +
           '<span class="home-v2-bal-icon">🔥</span>' +
           '<span class="home-v2-bal-val" id="home-v2-bal-streak">--</span>' +
         '</button>' +
-        '<div class="home-v2-bal-slot home-v2-bal-level" id="home-v2-bal-level-slot" title="דרגה">' +
+        '<button class="home-v2-bal-slot home-v2-bal-level" id="home-v2-bal-level-slot" title="דרגה — לחץ למפת הפיצ׳רים" type="button">' +
           '<span class="home-v2-bal-icon">⭐</span>' +
           '<span class="home-v2-bal-val" id="home-v2-bal-level">1</span>' +
-        '</div>' +
+        '</button>' +
       '</div>' +
 
       // ── Compact brand area ──
@@ -6139,6 +6161,28 @@
       ensureAudio();
       if (typeof window.__bloomShowStreakCal === 'function') window.__bloomShowStreakCal();
     };
+    // UX audit 2026-06-02 — the other 3 balance slots were dead. Each is now
+    // a 1-tap entry into its system (the most-viewed widget = a funnel, not
+    // a dead-end). Defensive: only wire when the target module is loaded.
+    var gemsSlot = document.getElementById('home-v2-bal-gems-slot');
+    if (gemsSlot) gemsSlot.onclick = function() {
+      ensureAudio();
+      if (window.__bloomBank && typeof window.__bloomBank.open === 'function') window.__bloomBank.open();
+      else if (typeof showShop === 'function') showShop();
+    };
+    var livesSlot2 = document.getElementById('home-v2-bal-lives-slot');
+    if (livesSlot2) livesSlot2.onclick = function() {
+      ensureAudio();
+      if (typeof window.showLivesRefillModal === 'function') window.showLivesRefillModal();
+    };
+    var levelSlot = document.getElementById('home-v2-bal-level-slot');
+    if (levelSlot) levelSlot.onclick = function() {
+      ensureAudio();
+      if (window.__bloomDiscovery && typeof window.__bloomDiscovery.showModal === 'function') window.__bloomDiscovery.showModal();
+    };
+    // UX audit 2026-06-02 — fill the empty CTA subtitle (the strongest,
+    // previously-unused hook on the most-tapped element).
+    updateHomeCtaSubV2();
 
     // T1.1 — apply level gates initially (hides high-level tiles for
     // new players). Re-run on a few delays to catch tiles that mount
@@ -7028,6 +7072,32 @@
       levelEl.textContent = String(lvl);
     }
   }
+  // UX audit 2026-06-02 — the primary "🎮 שחק עכשיו" button had an empty
+  // subtitle slot (#home-v2-cta-sub), the single most-tapped element in the
+  // game. Populate it with the strongest personalized hook that matches what
+  // the button actually does (plays practice/last-mode → improves best /
+  // extends today's streak). Loss-aversion streak prompt wins; else beat-best;
+  // else stay empty for a brand-new player (the label alone reads clean).
+  function updateHomeCtaSubV2() {
+    var el = document.getElementById('home-v2-cta-sub');
+    if (!el) return;
+    var msg = '';
+    try {
+      var bestEver = parseInt(localStorage.getItem(BEST_KEY) || '0', 10) || 0;
+      var count = 0;
+      try { var s = (typeof loadStreak === 'function') ? loadStreak() : null; if (s && typeof s.count === 'number') count = s.count | 0; } catch (e) {}
+      var today = (typeof todayInIsrael === 'function') ? todayInIsrael() : null;
+      var todayPlayed = false;
+      try { todayPlayed = !!(today && typeof DAILY_PLAYED_PREFIX !== 'undefined' && localStorage.getItem(DAILY_PLAYED_PREFIX + today)); } catch (e) {}
+      if (count >= 1 && !todayPlayed) {
+        msg = '🔥 רצף ' + count + ' ימים — שחק היום לשמור עליו!';
+      } else if (bestEver > 0) {
+        msg = '🏆 השיא שלך: ' + bestEver.toLocaleString() + ' — תשבור אותו!';
+      }
+    } catch (e) {}
+    el.textContent = msg;
+  }
+
   // Bump animation on gem-change. Called from earnCredits via
   // window.__bloomBumpBal so the widget reacts instantly to rewards.
   function bumpBalanceGems(newBalance, delta) {
@@ -16420,6 +16490,24 @@
     if (countdownTimer) clearInterval(countdownTimer);
     tick();
     countdownTimer = setInterval(tick, 1000);
+  }
+
+  // AD.6 / UX audit 2026-06-02 fix — the over-screen renders a "next daily
+  // rewards in HH:MM:SS" pill (#onr-countdown) and calls this to make it
+  // tick. It was referenced at 12-tour-info.js but never defined, so the
+  // strongest "come back at a specific time" hook showed a frozen value.
+  // Mirrors startCountdown(): repaints every 1s, self-clears when the
+  // over-screen (and #onr-countdown) leaves the DOM.
+  function startNextRewardCountdown() {
+    if (window._nextRewardTimer) { clearInterval(window._nextRewardTimer); window._nextRewardTimer = null; }
+    if (typeof msUntilNextIsraelMidnight !== 'function' || typeof formatCountdown !== 'function') return;
+    function tick() {
+      var el = document.getElementById('onr-countdown');
+      if (!el) { if (window._nextRewardTimer) { clearInterval(window._nextRewardTimer); window._nextRewardTimer = null; } return; }
+      el.textContent = formatCountdown(msUntilNextIsraelMidnight());
+    }
+    tick();
+    window._nextRewardTimer = setInterval(tick, 1000);
   }
 
   function renderLeaderboard() {

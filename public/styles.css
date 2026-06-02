@@ -1805,9 +1805,15 @@
      WCAG 2.5.5 requires 44×44px minimum for primary interactive UI;
      several modals had 28-32px close buttons that were finger-miss
      prone on phones. */
+     UX audit 2026-06-02 (theme #4): widened [class$="modal-close"]
+     → [class*="-close"] so it also catches the ~40 close buttons that
+     end in just "-close" (login-cal-close, inbox-close, wr-close,
+     gem-bank-close, dr-close, ts-close, gacha-summary-close, …) — not
+     only the "*modal-close" suffix. Every "-close" class in the app is
+     a close button (verified), so there is no false-positive risk. */
   .dyn-boards-close,
   .info-card .info-close,
-  [class$="modal-close"],
+  [class*="-close"],
   [aria-label="סגור"]:not(.no-min-target) {
     min-width: 44px;
     min-height: 44px;
@@ -1815,6 +1821,24 @@
   /* When the original styling already gave a small box, keep the
      visual size + just expand the hit-area via padding-only. */
   .dyn-boards-close { padding: 6px; }
+
+  /* ============================================================
+     Global reduced-motion guard (UX audit 2026-06-02, theme #2).
+     Fires ONLY when the player has set the OS "reduce motion"
+     preference — default players are unaffected. Neutralizes the
+     240+ infinite animations across the app (incl. viral.css
+     celebrations, which had ZERO coverage before). Lands on the
+     final keyframe (iteration-count:1) so reveals/pulses settle to
+     their end state instead of vanishing. Standard a11y-project
+     pattern; !important so per-component rules can't override it. */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
   /* ============ TOUR / TUTORIAL ("סייר") ============ */
   .tour-card {
     background: #FFFFFF; border-radius: 18px; padding: 0;
@@ -7706,6 +7730,7 @@ body.live-race-active .app {
   animation: streakCalFade 0.3s ease-out;
 }
 .lrr-card {
+  position: relative;
   background: linear-gradient(160deg, #FFFAEC 0%, #FFEFB8 100%);
   border-radius: 22px;
   padding: 30px 28px;
@@ -7720,6 +7745,16 @@ body.live-race-active .app {
 .lrr-won { border-color: #FFD93D; background: linear-gradient(160deg, #FFFAEC 0%, #FFD93D 100%); }
 .lrr-tie { border-color: #B59FFA; }
 .lrr-lost { border-color: #FF8DA1; }
+/* UX audit 2026-06-02: the result overlay had only one button + no ✕/backdrop
+   close, breaking the close contract. The ✕ (aria-label="סגור") is now found
+   by the global ESC handler and sized 44px by the [class*="-close"] rule. */
+.lrr-close {
+  position: absolute; top: 8px; left: 8px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: rgba(0, 0, 0, 0.12); border: none; border-radius: 50%;
+  color: #5a4a2a; font-size: 20px; line-height: 1; cursor: pointer;
+  padding: 0;
+}
 .lrr-emoji {
   font-size: 76px;
   line-height: 1;

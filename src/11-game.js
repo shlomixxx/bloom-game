@@ -970,6 +970,24 @@
     countdownTimer = setInterval(tick, 1000);
   }
 
+  // AD.6 / UX audit 2026-06-02 fix — the over-screen renders a "next daily
+  // rewards in HH:MM:SS" pill (#onr-countdown) and calls this to make it
+  // tick. It was referenced at 12-tour-info.js but never defined, so the
+  // strongest "come back at a specific time" hook showed a frozen value.
+  // Mirrors startCountdown(): repaints every 1s, self-clears when the
+  // over-screen (and #onr-countdown) leaves the DOM.
+  function startNextRewardCountdown() {
+    if (window._nextRewardTimer) { clearInterval(window._nextRewardTimer); window._nextRewardTimer = null; }
+    if (typeof msUntilNextIsraelMidnight !== 'function' || typeof formatCountdown !== 'function') return;
+    function tick() {
+      var el = document.getElementById('onr-countdown');
+      if (!el) { if (window._nextRewardTimer) { clearInterval(window._nextRewardTimer); window._nextRewardTimer = null; } return; }
+      el.textContent = formatCountdown(msUntilNextIsraelMidnight());
+    }
+    tick();
+    window._nextRewardTimer = setInterval(tick, 1000);
+  }
+
   function renderLeaderboard() {
     const isContest = mode === 'contest';
     const headerText = isContest
