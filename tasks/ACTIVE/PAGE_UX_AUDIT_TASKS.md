@@ -15,6 +15,17 @@
 
 
 
+
+## ✅ סבב 12 — בוצע ונפרס (2026-06-02 · cache `v20260602zf` · SW `bloom-v25.5`)
+
+**מודאל confirm מותג (רוחבי — מחליף confirm() נייטיב שנראה שבור):**
+
+- **🪟 `window.__bloomConfirm(msg, opts)`** ([04-ui-utils.js](src/04-ui-utils.js)) — מודאל RTL יפה (Promise<boolean>) עם אייקון, כפתורי אישור/ביטול 44px, מצב danger אדום, ESC/backdrop, dark-mode. **אומת ב-Playwright**: רנדור נכון + לחיצה→resolve(true) + הסרה. CSS ב-[base.css](public/css/base.css).
+- **הומרו 5 אתרי-confirm נייטיב** (כל אחד עם fallback ל-window.confirm): משיכת-בנק · prestige · עזיבת-קלאן · ניתוק-תחרות · החלפת-זהות. הדפוס: `async` + `await __bloomConfirm` (אפס code-wrapping, סיכון מינימלי).
+
+> נשארו 6 אתרי confirm (דו-קרב/restart/premium) — לסבב המשך. **שיפור-יופי רוחבי על כל פעולה הרסנית.**
+
+---
 ## ✅ סבב 11 — בוצע ונפרס (2026-06-02 · cache `v20260602ze` · SW `bloom-v25.4`)
 
 **Trophy Road — סולם חברתי (★★★★★, מנגנון השימור #1 — Clash Royale):**
@@ -586,7 +597,7 @@
   - **הבעיה:** The דרגות/progress tab simultaneously hosts trophy-home-tile, league-home-tile, lifetime-home-tile, and album-home-tile (confirmed routed to 'progress' in src/46-bottom-nav.js:65-69). All four are full-width tiles with their own progress bars, claim badges, and (for trophy) an embedded 8-node arena strip. When several have unclaimed rewards, multiple gold 🎁 badges and 'has-claim/has-reward/can-prestige' pulse classes fire at once, so no single highest-emotion signal dominates — exactly the overload the project's Priority Calmer was built to prevent.
   - 📍 **הוכחה:** `src/46-bottom-nav.js:65-69 routes all four to 'progress'; trophy tile embeds renderTrophyStrip (34:84) inside the tile body; each tile adds its own pulse class (34:45 has-claim, 30:105 has-reward, 26:72 can-prestige).`
   - 🔧 **לעשות:** In the progress tab, apply the existing Priority Calmer pattern (src/80-polish.js): rank these four by urgency (trophy milestone-claimable > league reward unclaimed > prestige-ready > album-claimable), give ONLY the top one the .polish-spotlight halo and add .polish-calmed (desaturate + pause animation + dim) to the other three. Result: the eye lands on the single most rewarding action.
-- [ ] **🟡 בינוני · מאמץ `M` · ★★★★ · יופי** — **Lifetime prestige uses a native confirm() — breaks the polished aesthetic and RTL**
+- [x] ✅ **בוצע (סבב 12)** · **🟡 בינוני · מאמץ `M` · ★★★★ · יופי** — **Lifetime prestige uses a native confirm() — breaks the polished aesthetic and RTL**
   - **הבעיה:** The single most ceremonial action in the longest meta-arc (Prestige = restart from L1 for a permanent ⭐) is gated by a raw browser confirm() dialog (26:184). It renders in the OS chrome, ignores the app's gold/purple theme, is left-aligned LTR on most browsers (mangling the Hebrew bullet list), and feels like a 1998 web prompt right before a confetti celebration. It's the jarring exception in an otherwise custom-styled cluster.
   - 📍 **הוכחה:** `src/26-lifetime.js:178-184 confirmAndPrestige builds a multi-line string and calls if (!confirm(msg)) return;`
   - 🔧 **לעשות:** Replace the confirm() in confirmAndPrestige (26-lifetime.js) with a custom themed confirmation overlay (reuse the lifetime-modal-card visual language: purple-gold gradient, ⭐ icon, the 3 bullet consequences, a primary 'בצע פרסטיג' button and a secondary 'ביטול'). Use design tokens (--radius-lg, --shadow-glow) and direction:rtl so the bullets align right. This makes the highest-stakes decision feel premium.
@@ -835,7 +846,7 @@
   - **הבעיה:** When a player has never joined a contest, showContestMenu shows only the bare 'create' and 'join' cards (the 'התחרויות שלי' continue card is gated on activeContestCode). There is no aspirational copy, no example, no 'compete with family for bragging rights' framing, and no live social proof — so the highest-emotion reason to start a contest (status competition with people you know) is invisible at the exact decision moment. New players get a flat chooser instead of a pull.
   - 📍 **הוכחה:** `src/06-contests.js:33-100 — continueCard only built when activeContestCode is truthy (:40); otherwise the screen is just title + sub + two generic action cards (:52-76), no value-prop or social-proof element.`
   - 🔧 **לעשות:** In showContestMenu (src/06-contests.js:33), when there is no active contest, inject a small aspirational hero above the cards: a one-line value prop ('🏆 מי במשפחה הכי טוב ב-BLOOM?') plus, if cheap to fetch, a live-players or 'X contests running now' social-proof pill. Keep it lightweight and torn down with the screen. Result: the empty menu becomes a pull toward creating/joining instead of a neutral chooser.
-- [ ] **⚪ נמוך · מאמץ `S` · ★★ · יופי** — **Destructive 'leave contest' uses a raw native confirm() — off-brand and jarring**
+- [x] ✅ **בוצע (סבב 12)** · **⚪ נמוך · מאמץ `S` · ★★ · יופי** — **Destructive 'leave contest' uses a raw native confirm() — off-brand and jarring**
   - **הבעיה:** The 'נתק ממכשיר זה' action fires a native browser confirm() dialog. It's unstyled, breaks the RTL/branded aesthetic, and on iOS shows the URL/host in the dialog chrome — exactly the kind of 'this feels like a webpage, not a game' break the owner wants gone. It's also visually the same weight as a benign action despite being destructive.
   - 📍 **הוכחה:** `src/06-contests.js:1470 — `if (!confirm('לנתק את המכשיר מהתחרות? ...')) return;``
   - 🔧 **לעשות:** Replace the native confirm() at src/06-contests.js:1470 with a small branded modal-overlay confirm (reuse the existing toast/overlay pattern or a lightweight .modal-overlay) styled with --color-danger for the confirm button and a clear cancel. Register it in __bloomGetCloseableModals if it's full-screen. Result: the destructive action gets a consistent, on-brand confirmation instead of browser chrome.
@@ -1203,7 +1214,7 @@
   - **הבעיה:** Every shop modal's ✕ is 32×32px, under the project's own ≥40px tap-target rule (UX gate Q4 / comfort). On a phone in RTL the ✕ sits top-left (the harder thumb corner), making it a small, awkwardly-placed target. IS.5 already fixed an overlap bug here but the size was never bumped.
   - 📍 **הוכחה:** `src/boards.css:4237-4243 (.sp-modal-close width/height 32px), boards.css:4932-4937 (.gacha-modal-close 32px), boards.css:6314 (.bundle-modal-close), home-v2.css:4244-4255 (.gem-bank-close 32px), home-v2.css:2617 (.booster-modal-close).`
   - 🔧 **לעשות:** Bump .sp-modal-close, .gacha-modal-close, .bundle-modal-close, .gem-bank-close, .booster-modal-close to width/height:40px (keep border-radius:50%), and increase the tap area without growing the visible glyph via a transparent hit-padding or min 44px hit box. Verify the badge/ribbon (IS.5) still clears the larger circle. Result: all close buttons meet the 40px+ standard, easier one-thumb dismissal.
-- [ ] **🟡 בינוני · מאמץ `M` · ★★★ · נוחות** — **Gem-bank withdraw uses a blocking native confirm() — off-brand and jarring**
+- [x] ✅ **בוצע (סבב 12)** · **🟡 בינוני · מאמץ `M` · ★★★ · נוחות** — **Gem-bank withdraw uses a blocking native confirm() — off-brand and jarring**
   - **הבעיה:** Withdrawing gems pops a native browser confirm() dialog. This breaks the polished branded look, is non-RTL-styled, can be themed inconsistently by the OS, and on iOS PWA looks like a system error. The rest of the app moved off alert()/native dialogs (T0.4), but this confirm survived.
   - 📍 **הוכחה:** `src/42-gem-bank.js:223 — if (!confirm('למשוך ' + amt + '💎? עמלה: ...')) return;`
   - 🔧 **לעשות:** Replace the native confirm() in wireActionButtons (withBtn handler) with an in-modal inline confirmation step: on first tap, swap the withdraw button label to 'אשר משיכה · תקבל N💎 (עמלה M💎)' for ~4s; a second tap within that window calls doWithdraw. Or render a small branded confirm row inside .gem-bank-action-withdraw. Result: no native dialog, consistent RTL branded UX, clear fee disclosure preserved.

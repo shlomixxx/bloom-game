@@ -252,7 +252,7 @@
     errBox.className = 'device-sync-err';
     host.appendChild(errBox);
 
-    redeemBtn.onclick = function() {
+    redeemBtn.onclick = async function() {
       errBox.textContent = '';
       var code = (input.value || '').toUpperCase().replace(/[^A-HJ-NP-Z2-9]/g, '');
       if (code.length !== 6) {
@@ -260,7 +260,10 @@
         return;
       }
       // Final confirmation — this is destructive on the current browser.
-      if (!window.confirm('להחליף את הזהות במכשיר הזה? כל ההתקדמות הקיימת בדפדפן הזה תוחלף בזהות שמהקוד.')) {
+      var syncOk = (typeof window.__bloomConfirm === 'function')
+        ? await window.__bloomConfirm('להחליף את הזהות במכשיר הזה?\nכל ההתקדמות הקיימת בדפדפן הזה תוחלף בזהות שמהקוד.', { icon: '🔗', danger: true, confirmText: 'החלף זהות' })
+        : window.confirm('להחליף את הזהות במכשיר הזה? כל ההתקדמות הקיימת בדפדפן הזה תוחלף בזהות שמהקוד.');
+      if (!syncOk) {
         return;
       }
       redeemBtn.disabled = true;

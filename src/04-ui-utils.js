@@ -449,6 +449,45 @@
   // pattern (or future src/15-ftue.js etc) can still call it.
   try { window.__bloomToast = showToast; } catch (e) {}
 
+  // UX audit 2026-06-02 — branded confirm dialog replacing native confirm()
+  // (which renders an off-brand LTR OS dialog on a polished RTL game). Returns
+  // a Promise<boolean>. Handles its own ESC/backdrop (resolve false). The class
+  // intentionally does NOT contain "modal-overlay" so the global ESC handler
+  // doesn't double-fire on it. Usage: if (!(await window.__bloomConfirm(msg, {danger:true}))) return;
+  function __bloomConfirm(message, opts) {
+    opts = opts || {};
+    return new Promise(function(resolve) {
+      var ov = document.createElement('div');
+      ov.className = 'bloom-confirm-overlay';
+      var safe = String(message == null ? '' : message)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
+      ov.innerHTML =
+        '<div class="bloom-confirm-card" role="dialog" aria-modal="true">' +
+          (opts.icon ? '<div class="bloom-confirm-icon">' + opts.icon + '</div>' : '') +
+          '<div class="bloom-confirm-msg">' + safe + '</div>' +
+          '<div class="bloom-confirm-actions">' +
+            '<button class="bloom-confirm-cancel" type="button">' + (opts.cancelText || 'ביטול') + '</button>' +
+            '<button class="bloom-confirm-ok' + (opts.danger ? ' danger' : '') + '" type="button">' + (opts.confirmText || 'אישור') + '</button>' +
+          '</div>' +
+        '</div>';
+      document.body.appendChild(ov);
+      var done = false, escH;
+      function finish(val) {
+        if (done) return; done = true;
+        try { document.removeEventListener('keydown', escH); } catch (e) {}
+        try { ov.remove(); } catch (e) {}
+        resolve(val);
+      }
+      escH = function(e) { if (e.key === 'Escape' || e.keyCode === 27) finish(false); };
+      document.addEventListener('keydown', escH);
+      ov.querySelector('.bloom-confirm-ok').onclick = function() { finish(true); };
+      ov.querySelector('.bloom-confirm-cancel').onclick = function() { finish(false); };
+      ov.addEventListener('click', function(e) { if (e.target === ov) finish(false); });
+      try { ov.querySelector('.bloom-confirm-ok').focus(); } catch (e) {}
+    });
+  }
+  try { window.__bloomConfirm = __bloomConfirm; } catch (e) {}
+
   function showNewBestBanner() {
     showTransientBanner({
       tag: 'new-best',

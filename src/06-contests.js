@@ -1482,7 +1482,10 @@
     if (switchBtn) switchBtn.onclick = showMyContestsList;
     const leaveBtn = document.getElementById('clb-leave');
     if (leaveBtn) leaveBtn.onclick = async function() {
-      if (!confirm('לנתק את המכשיר מהתחרות? הציון נשמר בלוח ותוכל להצטרף מחדש עם הקוד.')) return;
+      var __leaveOk = (typeof window.__bloomConfirm === 'function')
+        ? await window.__bloomConfirm('לנתק מהתחרות?\nהציון נשמר בלוח ותוכל להצטרף מחדש עם הקוד.', { icon: '🚪', confirmText: 'נתק' })
+        : confirm('לנתק את המכשיר מהתחרות? הציון נשמר בלוח ותוכל להצטרף מחדש עם הקוד.');
+      if (!__leaveOk) return;
       // Server-side soft-leave FIRST — without this the contest pops back
       // into /api/contests/mine on the next page load and the leave looks
       // broken. Fire-and-forget is intentional: the local cleanup below is

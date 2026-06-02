@@ -4784,6 +4784,45 @@
   // pattern (or future src/15-ftue.js etc) can still call it.
   try { window.__bloomToast = showToast; } catch (e) {}
 
+  // UX audit 2026-06-02 — branded confirm dialog replacing native confirm()
+  // (which renders an off-brand LTR OS dialog on a polished RTL game). Returns
+  // a Promise<boolean>. Handles its own ESC/backdrop (resolve false). The class
+  // intentionally does NOT contain "modal-overlay" so the global ESC handler
+  // doesn't double-fire on it. Usage: if (!(await window.__bloomConfirm(msg, {danger:true}))) return;
+  function __bloomConfirm(message, opts) {
+    opts = opts || {};
+    return new Promise(function(resolve) {
+      var ov = document.createElement('div');
+      ov.className = 'bloom-confirm-overlay';
+      var safe = String(message == null ? '' : message)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
+      ov.innerHTML =
+        '<div class="bloom-confirm-card" role="dialog" aria-modal="true">' +
+          (opts.icon ? '<div class="bloom-confirm-icon">' + opts.icon + '</div>' : '') +
+          '<div class="bloom-confirm-msg">' + safe + '</div>' +
+          '<div class="bloom-confirm-actions">' +
+            '<button class="bloom-confirm-cancel" type="button">' + (opts.cancelText || 'ביטול') + '</button>' +
+            '<button class="bloom-confirm-ok' + (opts.danger ? ' danger' : '') + '" type="button">' + (opts.confirmText || 'אישור') + '</button>' +
+          '</div>' +
+        '</div>';
+      document.body.appendChild(ov);
+      var done = false, escH;
+      function finish(val) {
+        if (done) return; done = true;
+        try { document.removeEventListener('keydown', escH); } catch (e) {}
+        try { ov.remove(); } catch (e) {}
+        resolve(val);
+      }
+      escH = function(e) { if (e.key === 'Escape' || e.keyCode === 27) finish(false); };
+      document.addEventListener('keydown', escH);
+      ov.querySelector('.bloom-confirm-ok').onclick = function() { finish(true); };
+      ov.querySelector('.bloom-confirm-cancel').onclick = function() { finish(false); };
+      ov.addEventListener('click', function(e) { if (e.target === ov) finish(false); });
+      try { ov.querySelector('.bloom-confirm-ok').focus(); } catch (e) {}
+    });
+  }
+  try { window.__bloomConfirm = __bloomConfirm; } catch (e) {}
+
   function showNewBestBanner() {
     showTransientBanner({
       tag: 'new-best',
@@ -12705,7 +12744,10 @@
     if (switchBtn) switchBtn.onclick = showMyContestsList;
     const leaveBtn = document.getElementById('clb-leave');
     if (leaveBtn) leaveBtn.onclick = async function() {
-      if (!confirm('לנתק את המכשיר מהתחרות? הציון נשמר בלוח ותוכל להצטרף מחדש עם הקוד.')) return;
+      var __leaveOk = (typeof window.__bloomConfirm === 'function')
+        ? await window.__bloomConfirm('לנתק מהתחרות?\nהציון נשמר בלוח ותוכל להצטרף מחדש עם הקוד.', { icon: '🚪', confirmText: 'נתק' })
+        : confirm('לנתק את המכשיר מהתחרות? הציון נשמר בלוח ותוכל להצטרף מחדש עם הקוד.');
+      if (!__leaveOk) return;
       // Server-side soft-leave FIRST — without this the contest pops back
       // into /api/contests/mine on the next page load and the leave looks
       // broken. Fire-and-forget is intentional: the local cleanup below is
@@ -27200,13 +27242,16 @@
     }
   }
 
-  function confirmAndPrestige(btn) {
+  async function confirmAndPrestige(btn) {
     var msg = '⭐ בצע פרסטיג\'?\n\n' +
               '• הדרגה שלך תתחיל מחדש מ-1\n' +
               '• ⭐ ייוסף לפרופיל לעולם\n' +
               '• תקבל ' + ((_lifetimeCache.data && _lifetimeCache.data.prestigeReward) || 5000).toLocaleString() + '💎\n\n' +
               'להמשיך?';
-    if (!confirm(msg)) return;
+    var ok = (typeof window.__bloomConfirm === 'function')
+      ? await window.__bloomConfirm(msg, { icon: '⭐', confirmText: 'בצע פרסטיג\'' })
+      : confirm(msg);
+    if (!ok) return;
     if (btn) { btn.disabled = true; btn.innerHTML = '⏳ מעבד...'; }
     var deviceId = (typeof getDeviceId === 'function') ? getDeviceId() : '';
     var token = (typeof deviceToken !== 'undefined') ? deviceToken : null;
@@ -27937,8 +27982,11 @@
         });
       }
     };
-    document.getElementById('guild-leave-btn').onclick = function() {
-      if (!confirm('בטוח שאתה רוצה לעזוב את "' + g.name + '"?')) return;
+    document.getElementById('guild-leave-btn').onclick = async function() {
+      var ok = (typeof window.__bloomConfirm === 'function')
+        ? await window.__bloomConfirm('לעזוב את הקלאן "' + g.name + '"?', { icon: '🛡', danger: true, confirmText: 'עזוב' })
+        : confirm('בטוח שאתה רוצה לעזוב את "' + g.name + '"?');
+      if (!ok) return;
       doGuildLeave(close);
     };
   }
@@ -32730,12 +32778,15 @@ try {
       doDeposit(amt, depBtn);
     };
     var withBtn = document.getElementById('gem-bank-withdraw-btn');
-    if (withBtn) withBtn.onclick = function() {
+    if (withBtn) withBtn.onclick = async function() {
       var amt = parseInt(document.getElementById('gem-bank-withdraw-amount').value, 10) || 0;
       if (amt < 1) return;
       var fee = Math.ceil(amt * d.withdrawalFeePct / 100);
       var net = amt - fee;
-      if (!confirm('למשוך ' + amt.toLocaleString() + '💎? עמלה: ' + fee + '💎. תקבל ' + net.toLocaleString() + '💎.')) return;
+      var ok = (typeof window.__bloomConfirm === 'function')
+        ? await window.__bloomConfirm('למשוך ' + amt.toLocaleString() + '💎?\nעמלה: ' + fee + '💎 · תקבל ' + net.toLocaleString() + '💎', { icon: '🏦', confirmText: 'משוך' })
+        : window.confirm('למשוך ' + amt.toLocaleString() + '💎? עמלה: ' + fee + '💎. תקבל ' + net.toLocaleString() + '💎.');
+      if (!ok) return;
       doWithdraw(amt, withBtn);
     };
   }
@@ -35110,7 +35161,7 @@ try {
     errBox.className = 'device-sync-err';
     host.appendChild(errBox);
 
-    redeemBtn.onclick = function() {
+    redeemBtn.onclick = async function() {
       errBox.textContent = '';
       var code = (input.value || '').toUpperCase().replace(/[^A-HJ-NP-Z2-9]/g, '');
       if (code.length !== 6) {
@@ -35118,7 +35169,10 @@ try {
         return;
       }
       // Final confirmation — this is destructive on the current browser.
-      if (!window.confirm('להחליף את הזהות במכשיר הזה? כל ההתקדמות הקיימת בדפדפן הזה תוחלף בזהות שמהקוד.')) {
+      var syncOk = (typeof window.__bloomConfirm === 'function')
+        ? await window.__bloomConfirm('להחליף את הזהות במכשיר הזה?\nכל ההתקדמות הקיימת בדפדפן הזה תוחלף בזהות שמהקוד.', { icon: '🔗', danger: true, confirmText: 'החלף זהות' })
+        : window.confirm('להחליף את הזהות במכשיר הזה? כל ההתקדמות הקיימת בדפדפן הזה תוחלף בזהות שמהקוד.');
+      if (!syncOk) {
         return;
       }
       redeemBtn.disabled = true;

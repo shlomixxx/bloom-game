@@ -375,8 +375,11 @@
         });
       }
     };
-    document.getElementById('guild-leave-btn').onclick = function() {
-      if (!confirm('בטוח שאתה רוצה לעזוב את "' + g.name + '"?')) return;
+    document.getElementById('guild-leave-btn').onclick = async function() {
+      var ok = (typeof window.__bloomConfirm === 'function')
+        ? await window.__bloomConfirm('לעזוב את הקלאן "' + g.name + '"?', { icon: '🛡', danger: true, confirmText: 'עזוב' })
+        : confirm('בטוח שאתה רוצה לעזוב את "' + g.name + '"?');
+      if (!ok) return;
       doGuildLeave(close);
     };
   }

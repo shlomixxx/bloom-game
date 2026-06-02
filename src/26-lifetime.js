@@ -175,13 +175,16 @@
     }
   }
 
-  function confirmAndPrestige(btn) {
+  async function confirmAndPrestige(btn) {
     var msg = '⭐ בצע פרסטיג\'?\n\n' +
               '• הדרגה שלך תתחיל מחדש מ-1\n' +
               '• ⭐ ייוסף לפרופיל לעולם\n' +
               '• תקבל ' + ((_lifetimeCache.data && _lifetimeCache.data.prestigeReward) || 5000).toLocaleString() + '💎\n\n' +
               'להמשיך?';
-    if (!confirm(msg)) return;
+    var ok = (typeof window.__bloomConfirm === 'function')
+      ? await window.__bloomConfirm(msg, { icon: '⭐', confirmText: 'בצע פרסטיג\'' })
+      : confirm(msg);
+    if (!ok) return;
     if (btn) { btn.disabled = true; btn.innerHTML = '⏳ מעבד...'; }
     var deviceId = (typeof getDeviceId === 'function') ? getDeviceId() : '';
     var token = (typeof deviceToken !== 'undefined') ? deviceToken : null;

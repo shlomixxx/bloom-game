@@ -215,12 +215,15 @@
       doDeposit(amt, depBtn);
     };
     var withBtn = document.getElementById('gem-bank-withdraw-btn');
-    if (withBtn) withBtn.onclick = function() {
+    if (withBtn) withBtn.onclick = async function() {
       var amt = parseInt(document.getElementById('gem-bank-withdraw-amount').value, 10) || 0;
       if (amt < 1) return;
       var fee = Math.ceil(amt * d.withdrawalFeePct / 100);
       var net = amt - fee;
-      if (!confirm('למשוך ' + amt.toLocaleString() + '💎? עמלה: ' + fee + '💎. תקבל ' + net.toLocaleString() + '💎.')) return;
+      var ok = (typeof window.__bloomConfirm === 'function')
+        ? await window.__bloomConfirm('למשוך ' + amt.toLocaleString() + '💎?\nעמלה: ' + fee + '💎 · תקבל ' + net.toLocaleString() + '💎', { icon: '🏦', confirmText: 'משוך' })
+        : window.confirm('למשוך ' + amt.toLocaleString() + '💎? עמלה: ' + fee + '💎. תקבל ' + net.toLocaleString() + '💎.');
+      if (!ok) return;
       doWithdraw(amt, withBtn);
     };
   }

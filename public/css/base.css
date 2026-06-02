@@ -1847,3 +1847,33 @@
       scroll-behavior: auto !important;
     }
   }
+
+  /* ============================================================
+     UX audit 2026-06-02 — branded confirm dialog (__bloomConfirm)
+     replacing the off-brand native confirm(). Topmost z so it can be
+     triggered from inside another modal. ============================ */
+  .bloom-confirm-overlay {
+    position: fixed; inset: 0; z-index: 10060;
+    background: rgba(0,0,0,0.6);
+    display: flex; align-items: center; justify-content: center;
+    padding: 20px; direction: rtl;
+  }
+  .bloom-confirm-card {
+    background: var(--color-surface, #FFFFFF); color: var(--color-text, #1C1A18);
+    border-radius: 18px; padding: 22px 20px; max-width: 340px; width: 100%;
+    text-align: center; box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+    animation: bloomConfirmPop 0.25s cubic-bezier(0.34,1.56,0.64,1);
+  }
+  @keyframes bloomConfirmPop { 0% { transform: scale(0.9); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+  .bloom-confirm-icon { font-size: 38px; margin-bottom: 8px; }
+  .bloom-confirm-msg { font-size: 15px; font-weight: 600; line-height: 1.5; margin-bottom: 18px; }
+  .bloom-confirm-actions { display: flex; gap: 10px; }
+  .bloom-confirm-actions button {
+    flex: 1; padding: 12px; border: none; border-radius: 12px;
+    font-size: 15px; font-weight: 700; font-family: inherit; cursor: pointer; min-height: 44px;
+  }
+  .bloom-confirm-cancel { background: var(--color-surface-2, #F0EDE6); color: var(--color-text, #1C1A18); }
+  .bloom-confirm-ok { background: var(--color-accent, #BA7517); color: #FFFFFF; }
+  .bloom-confirm-ok.danger { background: linear-gradient(135deg, #FF6B6B, #D32F2F); }
+  html[data-theme="dark"] .bloom-confirm-card { background: #2A2825; color: #F2EFE9; }
+  html[data-theme="dark"] .bloom-confirm-cancel { background: #3A3733; color: #F2EFE9; }
