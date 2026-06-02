@@ -1013,7 +1013,7 @@ body[data-home-variant="hero"] .home-v2-hero { padding: 0; background: transpare
   to { transform: scale(1) translateY(0); opacity: 1; }
 }
 .spin-modal-close {
-  position: absolute;
+  position: absolute; z-index: 6;
   top: 12px;
   left: 12px;
   width: 36px;
@@ -1352,7 +1352,7 @@ body[data-home-variant="hero"] .home-v2-hero { padding: 0; background: transpare
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.7);
 }
 .gw-modal-close {
-  position: absolute;
+  position: absolute; z-index: 6;
   top: 12px;
   left: 12px;
   width: 36px;
@@ -1733,7 +1733,7 @@ body[data-home-variant="hero"] .home-v2-hero { padding: 0; background: transpare
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.7);
 }
 .trophy-modal-close {
-  position: absolute;
+  position: absolute; z-index: 6;
   top: 12px;
   left: 12px;
   width: 36px;
@@ -2221,7 +2221,7 @@ html[data-theme="dark"] .polish-tooltip-body {
   box-shadow: 0 18px 48px rgba(255, 100, 0, 0.35);
 }
 .streak-cal-close {
-  position: absolute;
+  position: absolute; z-index: 6;
   top: 10px;
   left: 14px;
   background: rgba(255, 255, 255, 0.18);
@@ -2648,7 +2648,7 @@ html[data-theme="dark"] .booster-strip.booster-strip-bottom {
   direction: rtl;
 }
 .booster-modal-close {
-  position: absolute;
+  position: absolute; z-index: 6;
   top: 8px;
   left: 14px;
   background: rgba(0, 0, 0, 0.08);
@@ -3165,7 +3165,7 @@ html[data-theme="dark"] .home-skel-shimmer {
   box-shadow: 0 18px 48px rgba(184, 115, 46, 0.4);
 }
 .chests-modal-close {
-  position: absolute;
+  position: absolute; z-index: 6;
   top: 10px; left: 14px;
   background: rgba(255, 255, 255, 0.18);
   color: #FFF;
@@ -3384,7 +3384,7 @@ html[data-theme="dark"] .home-skel-shimmer {
 }
 .fc-list-card { max-width: 420px; }
 .fc-modal-close {
-  position: absolute;
+  position: absolute; z-index: 6;
   top: 10px; left: 14px;
   background: rgba(0,0,0,0.06);
   border: none;
@@ -3777,7 +3777,7 @@ html[data-theme="dark"] .fc-list-empty-title { color: #E8E6E2; }
   100% { transform: scale(1) translateY(0); opacity: 1; }
 }
 .wr-close {
-  position: absolute;
+  position: absolute; z-index: 6;
   top: 10px; left: 14px;
   background: rgba(255, 255, 255, 0.18);
   color: #FFF;
@@ -3913,7 +3913,7 @@ html[data-theme="dark"] .fc-list-empty-title { color: #E8E6E2; }
   position: relative;
 }
 .wr-share-close {
-  position: absolute;
+  position: absolute; z-index: 6;
   top: 8px; left: 14px;
   background: rgba(255, 255, 255, 0.15);
   color: #FFF;
@@ -4042,7 +4042,7 @@ html[data-theme="dark"] .fc-list-empty-title { color: #E8E6E2; }
   box-shadow: 0 20px 60px rgba(92, 63, 184, 0.5);
 }
 .login-cal-close {
-  position: absolute;
+  position: absolute; z-index: 6;
   top: 10px; left: 14px;
   background: rgba(255, 255, 255, 0.18);
   color: #FFF;
@@ -4275,7 +4275,7 @@ html[data-theme="dark"] .fc-list-empty-title { color: #E8E6E2; }
   box-shadow: 0 22px 56px rgba(46, 125, 50, 0.5);
 }
 .gem-bank-close {
-  position: absolute;
+  position: absolute; z-index: 6;
   top: 10px; left: 14px;
   background: rgba(255, 255, 255, 0.18);
   color: #FFF;
@@ -4477,7 +4477,7 @@ html[data-theme="dark"] .fc-list-empty-title { color: #E8E6E2; }
   box-shadow: 0 22px 56px rgba(15, 76, 129, 0.5);
 }
 .squad-close {
-  position: absolute;
+  position: absolute; z-index: 6;
   top: 10px; left: 14px;
   background: rgba(255, 255, 255, 0.18);
   color: #FFF;
@@ -4735,7 +4735,7 @@ html[data-theme="dark"] .fc-list-empty-title { color: #E8E6E2; }
 }
 .ghost-loading-text { font-size: 16px; font-weight: 700; margin-top: 8px; }
 .ghost-confirm-close {
-  position: absolute; top: 10px; left: 14px;
+  position: absolute; z-index: 6; top: 10px; left: 14px;
   background: rgba(255,255,255,0.18); color: #FFF;
   border: none; width: 32px; height: 32px;
   border-radius: 50%; font-size: 22px;
@@ -5188,7 +5188,7 @@ body.live-race-active .app {
    close, breaking the close contract. The ✕ (aria-label="סגור") is now found
    by the global ESC handler and sized 44px by the [class*="-close"] rule. */
 .lrr-close {
-  position: absolute; top: 8px; left: 8px;
+  position: absolute; z-index: 6; top: 8px; left: 8px;
   display: inline-flex; align-items: center; justify-content: center;
   background: rgba(0, 0, 0, 0.12); border: none; border-radius: 50%;
   color: #5a4a2a; font-size: 20px; line-height: 1; cursor: pointer;
@@ -5625,7 +5625,7 @@ html[data-theme="dark"] .pid2-referrals-label { color: #F0E8E2; }
   to { transform: translateY(0); opacity: 1; }
 }
 .referrals-modal-close {
-  position: absolute; top: 12px; left: 12px;
+  position: absolute; z-index: 6; top: 12px; left: 12px;
   width: 44px; height: 44px;
   background: rgba(28, 26, 24, 0.08);
   border: none; border-radius: 50%;

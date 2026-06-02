@@ -229,7 +229,7 @@
   }
   .dr-tomorrow strong { color: #412402; }
   .dr-close {
-    position: absolute; top: 12px; left: 12px;
+    position: absolute; z-index: 6; top: 12px; left: 12px;
     width: 28px; height: 28px; border-radius: 50%;
     background: rgba(0,0,0,0.06); border: none;
     cursor: pointer; display: flex; align-items: center; justify-content: center;

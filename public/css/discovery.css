@@ -178,7 +178,7 @@
   border-bottom: 1px solid rgba(0, 0, 0, 0.06);
 }
 .discovery-modal-close {
-  position: absolute;
+  position: absolute; z-index: 6;
   top: 8px;
   left: 8px;
   width: 32px;
