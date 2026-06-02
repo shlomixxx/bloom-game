@@ -101,6 +101,21 @@
     .ui-pop-in, .ui-pop-out, .ui-bounce-land, .ui-pulse-glow, .ui-slide-up { animation: none; }
   }
 
+  /* Task #42 — global keyboard focus-rings (:focus-visible only fires on
+     keyboard nav, never on touch/mouse, so gameplay is unaffected for the vast
+     majority). Accessibility = players who rely on keyboard nav don't bounce. */
+  button:focus-visible,
+  a:focus-visible,
+  input:focus-visible,
+  textarea:focus-visible,
+  select:focus-visible,
+  [role="button"]:focus-visible,
+  [tabindex]:focus-visible {
+    outline: 3px solid var(--color-accent, #FAC775);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
   html[data-theme="dark"] {
     --color-bg:            #1A1816;
     --color-surface:       #2C2A28;

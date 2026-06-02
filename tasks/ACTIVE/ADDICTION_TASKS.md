@@ -121,6 +121,11 @@
 > build חי: `v20260602m` / SW `bloom-v23.6`.
 > - ✅ **#32** (rematch ל-rival שפג) — endpoint חדש `POST /api/rival/find-random` ([server.js](server.js)): מזווג מיידית את השחקן עם השחקן-האחרון-הקרוב-ביותר-בניקוד שאין לו יריב פעיל (מראה את לוגיקת ה-matchmaker לשחקן יחיד), במקום להמתין עד 4 שעות. **בוטי auto-fleet נמצאים ב-daily_scores → תמיד יש יריב (לעולם לא "ריק")**. rate-limit 10/hr, anti-cheat (כבר-יש-יריב/no_opponent/disabled). כפתור "🔍 מצא יריב חדש עכשיו" במצב-ללא-יריב במודאל הרייבלים ([src/29-rivals.js](src/29-rivals.js)) → קורא לאנדפוינט → מרענן. CSS אדום-כתום. הסרת-חיכוך = שמירה על לולאת התחרות-האישית.
 
+## 📊 session 4 — מצב מדויק של #33-#45 (2026-06-02)
+> ✅ **#33** done (spectator tier-ladder, batch4). ✅ **#36** done **via #2** (chip "🌟 ×N XP" תוך-משחק ב-`#mode-extras`, batch5 — אומת ב-app.js). ✅ **#38** done **via TC.4/T6.4** (home-skeleton + skeleton CSS קיימים — אומת ב-app.js+styles.css). ✅ **#30** done via TD.1. ✅ **#42** done (batch15) — #22 הוסיף `@media(prefers-reduced-motion)` ל-ui-*, ונוספו focus-rings גלובליים `:focus-visible` (נראים רק בניווט-מקלדת — לא משפיעים על משחק touch/mouse). ✅ **#45 חלקי** — AD.2 הוסיף כפתור "🌍 מלא עולם"; חסר פאנל "האם המשחק חי כרגע" (real-vs-bot counts).
+> **נותר אמיתי (next session, בסדר):** **#34** (toast "חבר הצטרף לתחרות" + 1-click join — דורש זיהוי-שרת של friend-join + client), **#35** (ספירה-לאחור לאתגר יומי + toasts תקופתיים, `src/09-challenges.js`), **#37** (8px grid + type-scale tokens — #22 הניח animation tokens; חסר `--space-*`/`--type-*` + טאב-עיצוב), **#39** (ritual "בוקר טוב" swipe-אחד לכל ה-dailies — איחוד Stage 26 checklist), **#40** (העשרת milestone-streak ל-overlay מלא + double-confetti ב-3/7/30/365 — כרגע יש banner ב-over-screen, לא overlay), **#41** (בוחר שם+מדינה בפתיחה-ראשונה לפני הבית — כרגע נורה ב-leaderboard-submit), **#45-השלמה** (פאנל admin "is game live").
+> **⚠️ דורש החלטת בעלים (מוחזק, לא דילגתי):** **#27** (FTUE מנוע-אמיתי — engine §10), **#43** (שער-energy ל-core loop — controversial, יכול להעלות retention או לגרום uninstalls כמו Lives), **#44** (drop-arc animation — נוגע ב-render/innerHTML של ה-engine paint path, סיכון לשבור את לולאת-המשחק הראשית).
+
 ## איך לקרוא את הקובץ
 בצע מלמעלה למטה — דירוג 1 הוא ההשפעה הגדולה ביותר על "השחקן לא מצליח להפסיק". קודם תקן את הבאגים האדומים (שוברים אמון = הורגים התמכרות), אחר כך רד ברשימה המדורגת לפי ROI.
 
