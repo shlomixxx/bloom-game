@@ -2235,32 +2235,58 @@ INSERT INTO game_config (key, value) VALUES ('gacha_featured_boost_pct', '30')  
 INSERT INTO game_config (key, value) VALUES ('gacha_show_on_home',       'true') ON CONFLICT (key) DO NOTHING;
 INSERT INTO game_config (key, value) VALUES ('gacha_dups_to_gems_pct',   '50')   ON CONFLICT (key) DO NOTHING;
 
--- Seed the pool with 17 entries (covers all 5 rarities, all reward types).
--- Admin can edit/disable/add via the panel.
-INSERT INTO gacha_pool (rarity, reward_type, amount, skin_id, display_name, emoji, weight) VALUES
-  -- Common (60%): small payouts so consolation prizes feel ok
-  ('common',    'gems',  20,  NULL,      '20 יהלומים',         '💎',  100),
-  ('common',    'gems',  30,  NULL,      '30 יהלומים',         '💎',  60),
-  ('common',    'gems',  50,  NULL,      '50 יהלומים',         '💎',  30),
-  -- Uncommon (25%): useful consumables
-  ('uncommon',  'gems',  100, NULL,      '100 יהלומים',        '💎',  100),
-  ('uncommon',  'chest', 1,   NULL,      'תיבת הפתעה',          '🎁',  60),
-  ('uncommon',  'freeze',1,   NULL,      'הקפאת רצף',           '🛡',  40),
-  -- Rare (12%): bigger items
-  ('rare',      'gems',  300, NULL,      '300 יהלומים',        '💎',  80),
-  ('rare',      'chest', 3,   NULL,      '3 תיבות הפתעה',       '🎁',  60),
-  ('rare',      'bp_tier',1,  NULL,      'דרגת Battle Pass',    '🎖',  40),
-  ('rare',      'skin',  NULL,'fire',    'סקין: אש',           '🔥',  20),
-  -- Legendary (2.5%): the dopamine hits
-  ('legendary', 'gems',  1500,NULL,      '1500 יהלומים',       '💎',  60),
-  ('legendary', 'bp_tier',3,  NULL,      '3 דרגות Battle Pass', '🎖',  40),
-  ('legendary', 'skin',  NULL,'space',   'סקין: חלל',          '🚀',  30),
-  ('legendary', 'skin',  NULL,'gold',    'סקין: זהב',          '👑',  25),
-  -- Mythic (0.5%): the rare-mention moments. Players remember these for years.
-  ('mythic',    'gems',  5000,NULL,      '5000 יהלומים',       '💎',  50),
-  ('mythic',    'skin',  NULL,'aurora',  'סקין: זוהר',         '✨',  30),
-  ('mythic',    'bp_tier',10, NULL,      '10 דרגות Battle Pass','🎖',  20)
-ON CONFLICT DO NOTHING;
+-- One-time self-healing cleanup. This seed historically had no EFFECTIVE
+-- idempotency guard: the trailing `ON CONFLICT DO NOTHING` had no unique target
+-- to match (gacha_pool's only constraint is its SERIAL id), so all 17 rows
+-- re-inserted on EVERY boot — the live pool had ballooned to thousands of exact
+-- copies. Collapse duplicate rows, keeping the lowest id of each distinct entry.
+-- Rates were never affected (every entry duplicated equally), and nothing FKs
+-- to gacha_pool.id except the optional gacha_featured_id config (graceful if
+-- stale). Idempotent — a no-op once the pool is deduped.
+DELETE FROM gacha_pool a
+  USING gacha_pool b
+ WHERE a.id > b.id
+   AND a.rarity       =  b.rarity
+   AND a.reward_type  =  b.reward_type
+   AND a.amount       IS NOT DISTINCT FROM b.amount
+   AND a.skin_id      IS NOT DISTINCT FROM b.skin_id
+   AND a.display_name IS NOT DISTINCT FROM b.display_name
+   AND a.emoji        IS NOT DISTINCT FROM b.emoji
+   AND a.weight       =  b.weight
+   AND a.is_featured  =  b.is_featured
+   AND a.is_enabled   =  b.is_enabled;
+
+-- Seed the pool with 17 entries (covers all 5 rarities, all reward types),
+-- but ONLY when the table is empty — so re-running schema.sql on every boot can
+-- never re-duplicate the seed again. Admin can edit/disable/add via the panel.
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM gacha_pool) THEN
+    INSERT INTO gacha_pool (rarity, reward_type, amount, skin_id, display_name, emoji, weight) VALUES
+      -- Common (60%): small payouts so consolation prizes feel ok
+      ('common',    'gems',  20,  NULL,      '20 יהלומים',         '💎',  100),
+      ('common',    'gems',  30,  NULL,      '30 יהלומים',         '💎',  60),
+      ('common',    'gems',  50,  NULL,      '50 יהלומים',         '💎',  30),
+      -- Uncommon (25%): useful consumables
+      ('uncommon',  'gems',  100, NULL,      '100 יהלומים',        '💎',  100),
+      ('uncommon',  'chest', 1,   NULL,      'תיבת הפתעה',          '🎁',  60),
+      ('uncommon',  'freeze',1,   NULL,      'הקפאת רצף',           '🛡',  40),
+      -- Rare (12%): bigger items
+      ('rare',      'gems',  300, NULL,      '300 יהלומים',        '💎',  80),
+      ('rare',      'chest', 3,   NULL,      '3 תיבות הפתעה',       '🎁',  60),
+      ('rare',      'bp_tier',1,  NULL,      'דרגת Battle Pass',    '🎖',  40),
+      ('rare',      'skin',  NULL,'fire',    'סקין: אש',           '🔥',  20),
+      -- Legendary (2.5%): the dopamine hits
+      ('legendary', 'gems',  1500,NULL,      '1500 יהלומים',       '💎',  60),
+      ('legendary', 'bp_tier',3,  NULL,      '3 דרגות Battle Pass', '🎖',  40),
+      ('legendary', 'skin',  NULL,'space',   'סקין: חלל',          '🚀',  30),
+      ('legendary', 'skin',  NULL,'gold',    'סקין: זהב',          '👑',  25),
+      -- Mythic (0.5%): the rare-mention moments. Players remember these for years.
+      ('mythic',    'gems',  5000,NULL,      '5000 יהלומים',       '💎',  50),
+      ('mythic',    'skin',  NULL,'aurora',  'סקין: זוהר',         '✨',  30),
+      ('mythic',    'bp_tier',10, NULL,      '10 דרגות Battle Pass','🎖',  20);
+  END IF;
+END $$;
 
 -- ============================================================
 -- Daily Deals (Stage 21 — rotating daily offer, May 2026)
