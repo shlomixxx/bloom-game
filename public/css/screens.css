@@ -130,6 +130,16 @@
     margin-top: 8px;
   }
   .contest-submit-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  /* UX audit 2026-06-02 — collapsible advanced-options for the create-form. */
+  .contest-advanced-toggle {
+    width: 100%; padding: 11px; margin: 6px 0 10px;
+    background: transparent; color: var(--color-text-muted, #6F6E68);
+    border: 1px dashed var(--color-border, rgba(0,0,0,0.18)); border-radius: 10px;
+    font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; direction: rtl;
+  }
+  .contest-advanced-toggle:hover { color: var(--color-text, #1C1A18); border-color: var(--color-accent, #BA7517); }
+  .contest-advanced-toggle.open { color: var(--color-accent, #BA7517); border-style: solid; }
+  html[data-theme="dark"] .contest-advanced-toggle { color: #B8B4AC; border-color: rgba(255,255,255,0.18); }
   .contest-secondary-btn {
     width: 100%;
     padding: 12px;

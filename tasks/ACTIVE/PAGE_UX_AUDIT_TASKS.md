@@ -13,6 +13,16 @@
 
 
 
+
+## ✅ סבב 10 — בוצע ונפרס (2026-06-02 · cache `v20260602zd` · SW `bloom-v25.3`)
+
+**Contests (69) — חיכוך-יצירה (★★★★ focus):**
+
+- **📋 progressive disclosure בטופס יצירת-תחרות** ([06-contests.js](src/06-contests.js)): היו 7 בלוקי-החלטה לפני submit. עכשיו רק **שם-תחרות + השם-שלך** גלויים + כפתור "צור", וכל השאר (משך/סוג-לוח/קושי/ספירת-נקודות/הימור) מאחורי "⚙️ אפשרויות מתקדמות" מקופל — עם ברירות-המחדל הנוכחיות, כך שההתנהגות זהה כשמקופל. כל ה-ids/handlers נשמרו (submit עדיין קורא כל שדה). הזרימה המרכזית "הזמן משפחה" = שם + כפתור אחד.
+
+> **ציון הדף: 69 → ~76 (משוער).** CSS חדש ([screens.css](public/css/screens.css)) + dark override.
+
+---
 ## ✅ סבב 9ב — בוצע ונפרס (2026-06-02 · admin static · ללא cache bump)
 
 **Admin (71) — 3 ממצאים (כלי-הבעלים, prime directive "אדמין שולט בכל מנוף"):**
@@ -794,7 +804,7 @@
 
 **🛠️ משימות לביצוע (6):**
 
-- [ ] **🟠 גבוה · מאמץ `M` · ★★★★ · פוקוס** — **Create-contest form is a 7-section wall — heavy friction for the core 'invite family' use case**
+- [x] ✅ **בוצע (סבב 10)** · **🟠 גבוה · מאמץ `M` · ★★★★ · פוקוס** — **Create-contest form is a 7-section wall — heavy friction for the core 'invite family' use case**
   - **הבעיה:** showCreateContestForm renders SEVEN stacked decision blocks before the submit button: name, host display name, duration (3 pills), board type (2 pills), difficulty (5 pills), score mode (2 pills), wager (number input). For the prime use case ('משפחת כהן · פסח' — a casual family contest), 5 of these are advanced knobs the host doesn't care about. Every extra decision is a drop-off point, and the host is the viral seed — losing them kills the whole invite tree. The screen scrolls well past one viewport on a phone.
   - 📍 **הוכחה:** `src/06-contests.js:196-243 — name input (205), host (207), duration row (209), board-type row (215), difficulty row (221, 5 pills), score-mode row (230), wager input (237), submit (241). All seven are always visible, no progressive disclosure.`
   - 🔧 **לעשות:** In showCreateContestForm (src/06-contests.js:196), collapse difficulty + score-mode + wager into a single collapsed '⚙️ הגדרות מתקדמות' accordion that defaults closed (sensible defaults already exist: default/cumulative/0-wager). Keep only name + host + duration above the fold so the happy path is name → duration → 'צור והעתק קוד'. The accordion expands on tap with a chevron rotation. Result: 3-decision happy path, advanced users still reach everything in one tap.

@@ -11428,6 +11428,12 @@
         '<input class="contest-input" id="ctf-name" placeholder="משפחת כהן · פסח" maxlength="100" />' +
         '<div class="contest-form-label">השם שלך בלוח</div>' +
         '<input class="contest-input" id="ctf-host" autocapitalize="words" placeholder="סבא משה" maxlength="50" value="' + escapeHtml(getPlayerName()) + '" />' +
+        // UX audit 2026-06-02 — progressive disclosure: name + host are the only
+        // fields most hosts touch; duration/board/difficulty/score-mode/wager
+        // keep their (already-selected) defaults behind an expander so the core
+        // "invite family" flow is name + one button.
+        '<button type="button" class="contest-advanced-toggle" id="ctf-advanced-toggle">⚙️ אפשרויות מתקדמות</button>' +
+        '<div id="ctf-advanced" style="display:none">' +
         '<div class="contest-form-label">משך התחרות</div>' +
         '<div class="contest-duration-row" id="ctf-duration">' +
           '<div class="contest-duration-pill" data-days="1">יום</div>' +
@@ -11461,6 +11467,7 @@
           '<span style="font-size:12px;color:#6F6E68">💎 כל משתתף · קופה מחולקת לזוכים</span>' +
         '</div>' +
         '<div style="font-size:11px;color:#A8A6A0;direction:rtl;margin-bottom:8px">היתרה שלך: <strong style="color:#BA7517">' + playerBalance + ' 💎</strong> · מינימום הימור: 10 · 0 = ללא הימור</div>' +
+        '</div>' +  // end #ctf-advanced
         '<button class="contest-submit-btn" id="ctf-submit">צור והעתק קוד</button>' +
         '<div class="contest-error" id="ctf-error"></div>' +
       '</div>';
@@ -11479,6 +11486,14 @@
       medium:  '🎯 בינוני · יותר אריחים גבוהים, פחות מקום לטעויות',
       hard:    '🔥 קשה · בעיקר tier 3-5 נופלים — ניקוד גבוה אבל game-over מהיר',
       insane:  '💀 גהינום · אבן/עלה לא נופלים בכלל — לרוצחים סדרתיים בלבד'
+    };
+    var advToggle = document.getElementById('ctf-advanced-toggle');
+    var advBox = document.getElementById('ctf-advanced');
+    if (advToggle && advBox) advToggle.onclick = function() {
+      var isOpen = advBox.style.display !== 'none';
+      advBox.style.display = isOpen ? 'none' : '';
+      advToggle.textContent = isOpen ? '⚙️ אפשרויות מתקדמות' : '▲ הסתר אפשרויות מתקדמות';
+      advToggle.classList.toggle('open', !isOpen);
     };
     document.querySelectorAll('#ctf-duration .contest-duration-pill').forEach(function(pill) {
       pill.onclick = function() {
