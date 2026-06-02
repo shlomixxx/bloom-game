@@ -619,6 +619,69 @@
     margin: 6px 0;
   }
 
+  /* ===== UX audit 2026-06-02 — BLOOM Challenges polish (page #1, 59→) ===== */
+  /* Live countdown — tabular digits; red + pulse in the final stretch. The
+     global prefers-reduced-motion guard already neutralizes the pulse. */
+  .chal-countdown { font-variant-numeric: tabular-nums; }
+  .chal-countdown-urgent {
+    color: #D32F2F; font-weight: 800;
+    animation: chalCountdownPulse 1s ease-in-out infinite;
+  }
+  @keyframes chalCountdownPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
+
+  /* Full-width prize row on list cards (was an 11px corner pill). */
+  .challenge-card-prize-row {
+    display: flex; align-items: center; gap: 8px;
+    margin: 8px 0 2px; padding: 8px 10px; direction: rtl;
+    background: linear-gradient(135deg, #FFF7E6 0%, #FFE9C2 100%);
+    border: 1px solid #F0D9A8; border-radius: 12px;
+  }
+  .challenge-card-prize-row .ccpr-gift { font-size: 18px; }
+  .challenge-card-prize-row .ccpr-val { font-size: 15px; font-weight: 800; color: #6B4B00; flex: 1; text-align: right; }
+  .challenge-card-prize-row .ccpr-badge {
+    font-size: 9px; font-weight: 800; letter-spacing: 0.06em; color: #fff;
+    background: #BA7517; border-radius: 999px; padding: 3px 7px; white-space: nowrap;
+  }
+
+  /* Scarcity — card chip + detail strip. */
+  .challenge-scarcity {
+    font-size: 10px; font-weight: 800; color: #fff; white-space: nowrap;
+    background: linear-gradient(135deg, #FF6B6B, #D32F2F);
+    border-radius: 999px; padding: 3px 8px;
+    animation: chalCountdownPulse 1.2s ease-in-out infinite;
+  }
+  .challenge-scarcity-strip {
+    max-width: 340px; margin: 8px auto 0; padding: 8px 12px; direction: rtl;
+    font-size: 13px; font-weight: 800; text-align: center; color: #fff;
+    background: linear-gradient(135deg, #FF6B6B, #D32F2F); border-radius: 12px;
+    animation: chalCountdownPulse 1.2s ease-in-out infinite;
+  }
+
+  /* "How to win" plain-language clarity line. */
+  .challenge-howto {
+    max-width: 340px; margin: 8px auto 0; padding: 9px 13px; direction: rtl;
+    font-size: 12.5px; color: #3F3A6E; text-align: right;
+    background: #F2F0FF; border: 1px solid #DCD7FB; border-radius: 10px;
+  }
+
+  /* Empty active-list — anticipation card (no more "try tomorrow" dead-end). */
+  .challenge-empty-card {
+    max-width: 320px; margin: 24px auto; padding: 24px 20px; text-align: center; direction: rtl;
+    background: linear-gradient(160deg, #FFF7E6 0%, #FCEFD2 100%);
+    border: 1px solid #F0D9A8; border-radius: 18px;
+  }
+  .challenge-empty-emoji { font-size: 44px; }
+  .challenge-empty-title { font-size: 18px; font-weight: 800; color: #6B4B00; margin-top: 6px; }
+  .challenge-empty-sub { font-size: 13px; color: #8A6A2A; margin: 6px 0 14px; }
+  .challenge-empty-card .btn { width: 100%; margin-top: 8px; }
+
+  /* Win toast — gold climax instead of flat green. */
+  .challenge-win-toast {
+    background: linear-gradient(135deg, #FFD93D, #BA7517) !important;
+    color: #2A1A00 !important; font-weight: 800;
+    box-shadow: 0 8px 28px rgba(186,117,23,0.45) !important;
+  }
+
   .contest-live-dot {
     display: inline-block;
     width: 6px; height: 6px; border-radius: 50%;

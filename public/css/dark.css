@@ -148,6 +148,13 @@
   html[data-theme="dark"] .challenge-standings-rank { color: #8E8A82; }
   html[data-theme="dark"] .challenge-claim-form input { background: #1A1816; color: #F2EFE9; border-color: rgba(255,255,255,0.12); }
   html[data-theme="dark"] .challenge-warn { background: #3D2E0A; color: #FAC775; border-color: rgba(250,199,117,0.4); }
+  /* UX audit 2026-06-02 — Challenges polish dark overrides */
+  html[data-theme="dark"] .challenge-card-prize-row { background: linear-gradient(135deg, #3D2E0A 0%, #2A2010 100%); border-color: rgba(250,199,117,0.28); }
+  html[data-theme="dark"] .challenge-card-prize-row .ccpr-val { color: #FAC775; }
+  html[data-theme="dark"] .challenge-howto { background: #24224A; color: #CECBF6; border-color: rgba(206,203,246,0.22); }
+  html[data-theme="dark"] .challenge-empty-card { background: linear-gradient(160deg, #3D2E0A 0%, #2A2010 100%); border-color: rgba(250,199,117,0.28); }
+  html[data-theme="dark"] .challenge-empty-title { color: #FAC775; }
+  html[data-theme="dark"] .challenge-empty-sub { color: #C9A86A; }
   /* Spectator view */
   html[data-theme="dark"] .spectator-grid { filter: saturate(0.95) brightness(0.95); }
   html[data-theme="dark"] .spectator-header-name { color: #F2EFE9; }

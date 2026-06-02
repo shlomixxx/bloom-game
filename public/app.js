@@ -14543,21 +14543,52 @@
     }
     if (!host.isConnected) return;  // user navigated away mid-fetch
     if (!list || !list.length) {
-      host.innerHTML = '<div class="contest-board-empty">' +
-        (challengeListTab === 'history' ? 'אין עדיין אתגרים שהסתיימו' : 'אין אתגרים פעילים כרגע. נסה מחר.') +
+      if (challengeListTab === 'history') {
+        host.innerHTML = '<div class="contest-board-empty">אין עדיין אתגרים שהסתיימו</div>';
+        return;
+      }
+      // UX audit 2026-06-02 — the old "נסה מחר" empty-state literally told the
+      // player to leave. Keep them in-game: warm anticipation copy + a push
+      // opt-in for the next prize drop + a practice fallback so the session
+      // continues.
+      host.innerHTML =
+        '<div class="challenge-empty-card">' +
+          '<div class="challenge-empty-emoji">🎁</div>' +
+          '<div class="challenge-empty-title">האתגר הבא בקרוב</div>' +
+          '<div class="challenge-empty-sub">פרסים אמיתיים · ניסיון אחד · אל תפספס</div>' +
+          '<button class="btn challenge-empty-notify" id="chal-empty-notify">🔔 הודיעו לי כשמתחיל</button>' +
+          '<button class="btn secondary challenge-empty-play" id="chal-empty-play">🎮 בינתיים — שחק פרקטיס</button>' +
         '</div>';
+      var notifyBtn = document.getElementById('chal-empty-notify');
+      if (notifyBtn) notifyBtn.onclick = function() {
+        try { ensureAudio(); } catch (e) {}
+        if (typeof window.__bloomMaybeAskPush === 'function') window.__bloomMaybeAskPush('challenge_drop');
+        else if (typeof showToast === 'function') showToast('נודיע לך כשאתגר חדש מתחיל 🔔', 'success');
+      };
+      var playBtn = document.getElementById('chal-empty-play');
+      if (playBtn) playBtn.onclick = function() {
+        try { ensureAudio(); } catch (e) {}
+        if (typeof window.__bloomStartMode === 'function') window.__bloomStartMode('practice', { fresh: true });
+        else if (typeof init === 'function') init('practice', { fresh: true });
+      };
       return;
     }
     host.innerHTML = list.map(function(c) {
       const entered = !!c.myEntry;
       const winnersFilled = c.winnersFilled | 0;
+      const winnersRemaining = (c.winnersCount | 0) - winnersFilled;
       const isHistory = challengeListTab === 'history';
+      // UX audit 2026-06-02 — scarcity is the sharpest lever; surface it loudly
+      // when the prize is almost gone (only for joinable, non-entered cards).
+      const scarcityChip = (!isHistory && !entered && winnersRemaining > 0 && winnersRemaining <= 2)
+        ? '<span class="challenge-scarcity">🔥 ' + (winnersRemaining === 1 ? 'מקום אחרון לזכייה!' : 'נשארו ' + winnersRemaining + ' מקומות!') + '</span>'
+        : '';
       const meta = entered
         ? (c.myEntry.is_winner ? '👑 זכית · מקום ' + c.myEntry.winner_rank : '✓ השתתפת · ' + (c.myEntry.score | 0).toLocaleString() + ' נק׳')
         : (winnersFilled > 0 ? winnersFilled + '/' + c.winnersCount + ' זוכים כבר נסגרו' : c.entriesCount + ' משתתפים');
       const rightSide = isHistory
         ? 'הסתיים <strong>' + escapeHtml(formatRelativeTime(c.endsAt) || fmtEndsDate(c.endsAt)) + '</strong>'
-        : 'נותרו <strong>' + escapeHtml(challengeTimeLeft(c.endsAt)) + '</strong>';
+        : 'נותרו <strong class="chal-card-time" data-ends="' + escapeHtml(c.endsAt) + '">' + escapeHtml(challengeTimeLeft(c.endsAt)) + '</strong>';
       // Top winners line (history only): show the names of who won.
       let winnersLine = '';
       if (isHistory && c.topWinners && c.topWinners.length) {
@@ -14571,8 +14602,17 @@
       return '<button class="challenge-card' + (entered ? ' entered' : '') + (isHistory ? ' ended' : '') + '" data-slug="' + escapeHtml(c.slug) + '">' +
         '<div class="challenge-card-top">' +
           '<div class="challenge-card-name">' + escapeHtml(c.name) + '</div>' +
-          '<div class="challenge-card-prize">🎁 ' + escapeHtml(c.prizeText) + '</div>' +
+          scarcityChip +
         '</div>' +
+        // UX audit 2026-06-02 — prize is the whole reason the feature exists;
+        // promote it from an 11px corner pill to a full-width row with a "real
+        // prize" badge so it dominates the card.
+        (isHistory ? '' :
+          '<div class="challenge-card-prize-row">' +
+            '<span class="ccpr-gift">🎁</span>' +
+            '<span class="ccpr-val">' + escapeHtml(c.prizeText) + '</span>' +
+            '<span class="ccpr-badge">פרס אמיתי</span>' +
+          '</div>') +
         (c.description ? '<div class="challenge-card-desc">' + escapeHtml(c.description) + '</div>' : '') +
         winnersLine +
         '<div class="challenge-card-meta">' +
@@ -14584,10 +14624,55 @@
     host.querySelectorAll('.challenge-card').forEach(function(b) {
       b.onclick = function() { showChallengeDetail(b.getAttribute('data-slug')); };
     });
+    startChallengeCountdownTicker();
   }
   function fmtEndsDate(iso) {
     if (!iso) return '';
     try { return new Date(iso).toLocaleDateString('he-IL'); } catch (e) { return iso; }
+  }
+
+  // UX audit 2026-06-02 — a single-attempt real-prize contest is the strongest
+  // FOMO lever in the app, but the deadline was a static coarse string ("3
+  // ימים") baked once into innerHTML. This 1s ticker makes it visibly count
+  // down: the detail header always shows live HH:MM:SS; list cards switch to a
+  // ticking clock + red pulse in the final 2 hours. Self-clears when the
+  // challenge screen leaves the DOM.
+  function startChallengeCountdownTicker() {
+    if (window._chalCountdownTimer) { clearInterval(window._chalCountdownTimer); window._chalCountdownTimer = null; }
+    if (typeof formatCountdown !== 'function') return;
+    function tick() {
+      if (!document.getElementById('challenge-screen')) {
+        clearInterval(window._chalCountdownTimer); window._chalCountdownTimer = null; return;
+      }
+      var d = document.getElementById('chal-countdown');
+      if (d && d.dataset.ends) {
+        var dms = new Date(d.dataset.ends) - new Date();
+        d.textContent = dms <= 0 ? 'הסתיים' : formatCountdown(dms);
+        d.classList.toggle('chal-countdown-urgent', dms > 0 && dms < 3600000);
+      }
+      document.querySelectorAll('.chal-card-time[data-ends]').forEach(function(el) {
+        var ms = new Date(el.dataset.ends) - new Date();
+        if (ms <= 0) { el.textContent = 'הסתיים'; el.classList.remove('chal-countdown-urgent'); return; }
+        if (ms < 2 * 3600000) { el.textContent = formatCountdown(ms); el.classList.add('chal-countdown-urgent'); }
+        else { el.textContent = challengeTimeLeft(el.dataset.ends); el.classList.remove('chal-countdown-urgent'); }
+      });
+    }
+    tick();
+    window._chalCountdownTimer = setInterval(tick, 1000);
+  }
+
+  // UX audit 2026-06-02 — the type pill is terse ("מרוץ ל-50,000"). This is the
+  // plain-language "how do I actually win?" sentence shown under the prize.
+  function challengeTypeExplain(c) {
+    var t = c.challengeType;
+    if (t === 'race') return 'הראשונים שמגיעים ל-' + (c.thresholdScore || 0).toLocaleString() + ' נקודות זוכים';
+    if (t === 'top_n') return (c.winnersCount || 1) + ' בעלי הניקוד הגבוה ביותר עד סוף האתגר זוכים';
+    if (t === 'beat') return 'כל מי שעובר ' + (c.thresholdScore || 0).toLocaleString() + ' נקודות זוכה';
+    if (t === 'first_to_tier') {
+      var tier = (typeof getActiveTiers === 'function') ? getActiveTiers()[c.thresholdTier | 0] : null;
+      return 'הראשונים שמגיעים ל' + (tier ? tier.name : 'דרגה ' + (c.thresholdTier || '?')) + ' זוכים';
+    }
+    return '';
   }
 
   async function showChallengeDetail(slug) {
@@ -14617,6 +14702,7 @@
     const completed  = entered && myEntry.status === 'completed';
     const isWinner   = entered && myEntry.is_winner;
     const winnersFull = (c.winnersFilled | 0) >= (c.winnersCount | 0) && c.challengeType !== 'top_n' && c.challengeType !== 'beat';
+    const winnersRemaining = (c.winnersCount | 0) - (c.winnersFilled | 0);
     const standingsHtml = (data.standings || []).slice(0, 10).map(function(s, i) {
       const rank = s.winner_rank ? s.winner_rank : (i + 1);
       return '<div class="challenge-standings-row' + (s.is_winner ? ' winner' : '') + '">' +
@@ -14643,14 +14729,18 @@
     screen.innerHTML =
       createBackButton('challenges-list') +
       '<div class="contest-title">' + escapeHtml(c.name) + '</div>' +
-      '<div class="contest-sub">' + escapeHtml(challengeTypeLabel(c)) + ' · ' + (c.winnersCount | 0) + ' זוכים · נותרו ' + challengeTimeLeft(c.endsAt) + '</div>' +
+      '<div class="contest-sub">' + escapeHtml(challengeTypeLabel(c)) + ' · ' + (c.winnersCount | 0) + ' זוכים · נותרו <span class="chal-countdown" id="chal-countdown" data-ends="' + escapeHtml(c.endsAt) + '">' + escapeHtml(challengeTimeLeft(c.endsAt)) + '</span></div>' +
+      ((!winnersFull && winnersRemaining > 0 && winnersRemaining <= 2)
+        ? '<div class="challenge-scarcity-strip">🔥 ' + (winnersRemaining === 1 ? 'נשאר מקום אחד לזכייה!' : 'נשארו ' + winnersRemaining + ' מקומות לזכייה!') + '</div>'
+        : '') +
       '<div class="challenge-prize-banner">' +
         prizeImg +
         '<div class="label">הפרס</div>' +
         '<div class="prize">🎁 ' + escapeHtml(c.prizeText) + '</div>' +
         (c.description ? '<div class="sub">' + escapeHtml(c.description) + '</div>' : '') +
       '</div>' +
-      (c.rulesText ? '<div class="challenge-rules">' + escapeHtml(c.rulesText) + '</div>' : '') +
+      (challengeTypeExplain(c) ? '<div class="challenge-howto">🎯 איך זוכים? ' + escapeHtml(challengeTypeExplain(c)) + '</div>' : '') +
+      (c.rulesText ? '<div class="challenge-rules"><strong>📜 תקנון:</strong> ' + escapeHtml(c.rulesText) + '</div>' : '') +
       (standingsHtml
         ? '<div class="challenge-standings"><h4>הניקודים המובילים</h4>' + standingsHtml + '</div>'
         : '') +
@@ -14659,6 +14749,7 @@
     if (startBtn) startBtn.onclick = function() { showChallengePreEnter(c); };
     const claimBtn = document.getElementById('chal-claim');
     if (claimBtn) claimBtn.onclick = function() { showChallengeClaim(c); };
+    startChallengeCountdownTicker();
   }
 
   function showChallengePreEnter(c) {
@@ -14738,9 +14829,15 @@
         '<div class="info-title">🎉 ניצחת באתגר!</div>' +
         '<div class="info-sub">פרס: ' + escapeHtml(c.prizeText) + ' — מלא פרטים ויצור קשר.</div>' +
         '<div class="challenge-claim-form">' +
-          '<input id="cc-name" autocapitalize="words" placeholder="שם מלא"        maxlength="80"  />' +
-          '<input id="cc-phone" placeholder="טלפון / WhatsApp" maxlength="40" />' +
-          '<input id="cc-email" placeholder="אימייל (אופציונלי)" maxlength="120" />' +
+          // UX audit 2026-06-02 — the most important conversion step (a winner
+          // claiming a real prize) had placeholder-only inputs that popped the
+          // wrong mobile keyboard. Correct type/inputmode/autocomplete + labels.
+          '<label class="contest-form-label" for="cc-name">שם מלא</label>' +
+          '<input id="cc-name" type="text" autocomplete="name" autocapitalize="words" placeholder="שם מלא" maxlength="80" />' +
+          '<label class="contest-form-label" for="cc-phone">טלפון / WhatsApp</label>' +
+          '<input id="cc-phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="050-0000000" maxlength="40" />' +
+          '<label class="contest-form-label" for="cc-email">אימייל (אופציונלי)</label>' +
+          '<input id="cc-email" type="email" inputmode="email" autocomplete="email" autocapitalize="off" placeholder="name@example.com" maxlength="120" />' +
           '<button class="contest-submit-btn" id="cc-go">שלח לאדמין</button>' +
           '<div class="contest-error" id="cc-err"></div>' +
           '<div class="help" style="font-size:11px;color:#A8A6A0;margin-top:8px;text-align:right">הפרטים שלך נשמרים בדשבורד פרטי בלבד. ייצרו איתך קשר תוך 48 שעות.</div>' +
@@ -14834,11 +14931,14 @@
   }
 
   function showChallengeWinToast() {
+    // UX audit 2026-06-02 — crossing the prize threshold is a peak moment;
+    // give it gold + a milestone chime + haptic instead of a flat green pill.
     const t = document.createElement('div');
-    t.className = 'spectator-toast';
-    t.style.background = '#1B5E20';
-    t.textContent = '🎉 חצית את הרף — אתה זוכה!';
+    t.className = 'spectator-toast challenge-win-toast';
+    t.textContent = '👑 חצית את הרף — אתה זוכה!';
     document.body.appendChild(t);
+    try { if (typeof soundMilestone === 'function') soundMilestone(5); } catch (e) {}
+    try { if (typeof buzz === 'function') buzz([40, 30, 60, 30, 90]); } catch (e) {}
     setTimeout(function() { if (t.parentNode) t.parentNode.removeChild(t); }, 3200);
   }
 
@@ -14893,9 +14993,12 @@
         '</div>' +
         '<div class="challenge-warn"><strong>צעד אחרון:</strong> השאר פרטים ליצירת קשר.</div>' +
         '<div class="challenge-claim-form">' +
-          '<input id="cr-name" autocapitalize="words" placeholder="שם מלא"        maxlength="80"  value="' + escapeHtml(getPlayerName() || '') + '"/>' +
-          '<input id="cr-phone" placeholder="טלפון / WhatsApp" maxlength="40" />' +
-          '<input id="cr-email" placeholder="אימייל (אופציונלי)" maxlength="120" />' +
+          '<label class="contest-form-label" for="cr-name">שם מלא</label>' +
+          '<input id="cr-name" type="text" autocomplete="name" autocapitalize="words" placeholder="שם מלא" maxlength="80" value="' + escapeHtml(getPlayerName() || '') + '"/>' +
+          '<label class="contest-form-label" for="cr-phone">טלפון / WhatsApp</label>' +
+          '<input id="cr-phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="050-0000000" maxlength="40" />' +
+          '<label class="contest-form-label" for="cr-email">אימייל (אופציונלי)</label>' +
+          '<input id="cr-email" type="email" inputmode="email" autocomplete="email" autocapitalize="off" placeholder="name@example.com" maxlength="120" />' +
           '<button class="btn" id="cr-submit">שלח לאדמין</button>' +
           '<div class="contest-error" id="cr-err"></div>' +
         '</div>';
@@ -14960,6 +15063,17 @@
     // share/back buttons); equip the overlay so the bottom buttons are
     // reachable via internal scroll on shorter phones.
     equipOverlay();
+    // UX audit 2026-06-02 — winning a real prize is the single highest-emotion
+    // event the feature can produce; it previously had ZERO celebration. Fire
+    // the full dopamine peak (confetti + milestone chime + victory haptic), to
+    // match every other win surface in the game and drive screenshot-shares.
+    if (isWinner) {
+      try { if (typeof window.__bloomConfetti === 'function') window.__bloomConfetti(60); } catch (e) {}
+      setTimeout(function() {
+        try { if (typeof soundMilestone === 'function') soundMilestone(7); } catch (e) {}
+        try { if (typeof buzz === 'function') buzz([40, 30, 60, 30, 90, 40, 120]); } catch (e) {}
+      }, 220);
+    }
   }
 
   // beforeunload — warn if mid-game with meaningful score.
