@@ -5,6 +5,20 @@
 > **ציון המשחק הכולל: 67/100 (B-)** · 21 מסכים · 141 ממצאים (0 קריטי · 34 גבוה · 65 בינוני · 42 נמוך).
 
 
+
+## ✅ סבב 3 — בוצע ונפרס (2026-06-02 · cache `v20260602w` · SW `bloom-v24.6`)
+
+**Spectator (62/C+, הדף ה-2 הכי נמוך) — 5/6 ממצאים נסגרו:**
+
+- **🥊 "אני מולם"** ([10-spectator.js](src/10-spectator.js)): רצועת השוואה חדשה — "אתה X · 🔥 הוא לפניך ב-N · הם Y" — פועמת אדום כשהיריב עוקף. ה-hook הצופֶה/תחרותי הכי חזק, שהיה חסר לגמרי. (הצופה כבר חושף את הניקוד שלו לשרת — עכשיו מוצג.)
+- **⚡ לוח חי באמת**: ה-render עבר מ-rebuild מלא כל שנייה (שגרם ל-tiles לקפוץ) ל-**עדכון-במקום** עם diff-תאים (appear/merge/clear) + count-up לניקוד. עם fallback בטוח ל-rebuild מלא אם משהו משתבש.
+- **🚪 ESC ליציאה**: תצוגת-הצפייה מחליפה את grid-wrap (לא modal), אז ה-ESC הגלובלי לא תפס אותה — נוסף מאזין ייעודי שמנקה את עצמו ב-stopSpectator.
+- **🔄 picker מתרענן**: הרשימה נתקעה אחרי fetch אחד — עכשיו רענון כל 4ש כל עוד פתוח, מנקה את עצמו בסגירה.
+- **👆 controls נגישים**: כפתורי יציאה/החלפה הפכו sticky-bottom (תמיד בהישג-אגודל).
+
+> ה-medium שנותר (hex→tokens) שייך למסע ה-tokens הנדחה. **ציון הדף: 62 → ~80 (משוער).** reduced-motion-safe דרך ה-guard מסבב 1.
+
+---
 ## ✅ סבב 2 — בוצע ונפרס (2026-06-02 · cache `v20260602v` · SW `bloom-v24.5`)
 
 **הדף עם הציון הנמוך ביותר — BLOOM Challenges (59/C) — נסגר כמעט במלואו (6/7 ממצאים):**
@@ -187,19 +201,19 @@
 
 **🛠️ משימות לביצוע (6):**
 
-- [ ] **🟠 גבוה · מאמץ `M` · ★★★★★ · התמכרות** — **No 'me vs them' comparison — the single biggest voyeuristic/competitive hook is missing**
+- [x] ✅ **בוצע (סבב 3)** · **🟠 גבוה · מאמץ `M` · ★★★★★ · התמכרות** — **No 'me vs them' comparison — the single biggest voyeuristic/competitive hook is missing**
   - **הבעיה:** The spectator header shows only the watched player's live score + tier (src/10-spectator.js:277-288). The watcher already exposes their own score to the server (spectatorHeartbeat sends watcherLastScore, src/10-spectator.js:124-130) and knows their own contest standing, but the view never tells the watcher 'they're 4,200 ahead of you' or 'you'd still beat them'. Watching a rival is only compulsive when it's framed as a threat or an opportunity against ME. As built it's a neutral TV broadcast — informative, not addictive.
   - 📍 **הוכחה:** `src/10-spectator.js:287 renders only `<div class="spectator-header-score">` for the target; no delta vs getLastFinalScore(s.code) or the watcher's contest score is computed or shown.`
   - 🔧 **לעשות:** In renderSpectatorView (src/10-spectator.js:220-295), compute a delta = targetLiveScore − myContestScore (read my score via the same getLastFinalScore/contest-data path used in spectatorHeartbeat). Add a pill under the score: behind → red '⚔️ הוא לפניך ב-4,200' with subtle pulse; ahead → gold '👑 אתה עדיין מוביל ב-1,100'. Add a CTA when behind: 'שחק עכשיו ועקוף אותו' that exits spectate and starts a contest game. New CSS class .spectator-delta-pill in screens.css using --color-danger / --color-accent tokens. Result: turns watching into a personal challenge — the strongest return/compulsion lever this screen can have.
-- [ ] **🟠 גבוה · מאמץ `M` · ★★★★ · התמכרות** — **Static board between ticks + no merge/score juice — watching feels frozen, not 'live'**
+- [x] ✅ **בוצע (סבב 3)** · **🟠 גבוה · מאמץ `M` · ★★★★ · התמכרות** — **Static board between ticks + no merge/score juice — watching feels frozen, not 'live'**
   - **הבעיה:** Every 1s tick rebuilds the entire grid via wrap.innerHTML (src/10-spectator.js:277-295) with zero transition — tiles teleport, the score number snaps, and there is no merge flash, no chain pop, no score count-up. A 1-second-resolution board with no motion reads as a still photo refreshing, which kills the 'someone is playing RIGHT NOW' tension that makes spectating compelling. The only animated element is the LIVE dot (screens.css:910-914) and the next-tier dot (screens.css:953-957).
   - 📍 **הוכחה:** `renderSpectatorView does a full innerHTML replace each tick (src/10-spectator.js:277); .spectator-grid .cell has no entrance/merge animation (screens.css:931-934); liveScoreText is set directly with no count-up (src/10-spectator.js:245,287).`
   - 🔧 **לעשות:** Diff snapshots between ticks: keep a per-cell tier map on spectatorSession; on tick, only update changed cells and add a one-shot class (.spec-cell-pop scale 0.7→1.12→1 on a new tile, .spec-cell-merge brightness flash on an upgrade) — mirror the dspecAppear/dspecMerge pattern already used elsewhere. Animate the header score with a short count-up (lerp old→new over ~400ms, tabular-nums already set). Respect prefers-reduced-motion. Result: the board visibly 'plays', restoring the voyeuristic live tension.
-- [ ] **🟡 בינוני · מאמץ `S` · ★★★ · סגירוּת** — **ESC / back-gesture does nothing during live watch — the global close path is silently dead**
+- [x] ✅ **בוצע (סבב 3)** · **🟡 בינוני · מאמץ `S` · ★★★ · סגירוּת** — **ESC / back-gesture does nothing during live watch — the global close path is silently dead**
   - **הבעיה:** The ESC/history-back handler (__bloomGetCloseableModals, src/04-ui-utils.js:917-936) targets a selector '#spectator-screen' that is NEVER created in the DOM — the live view is injected as .spectator-view INTO #grid-wrap (src/10-spectator.js:277). So pressing ESC or swiping back while watching closes nothing; the player is trapped to the on-screen buttons only. The picker modal (.info-modal) IS covered, but the full-screen watch view is not. The same phantom id is guarded against in 14-events.js:27 (`if (getElementById('spectator-screen')) return false`), so bonus-event suppression during spectate also never fires.
   - 📍 **הוכחה:** `grep shows '#spectator-screen' referenced only in src/04-ui-utils.js:935 and src/14-events.js:27, never created — the real view is `wrap.innerHTML = '<div class="spectator-view">…'` (src/10-spectator.js:277).`
   - 🔧 **לעשות:** Either (a) give the injected view a real hook: add id/class 'spectator-screen' to the .spectator-view wrapper in src/10-spectator.js:278 AND make __bloomDismissTopmostModal route it to stopSpectator('exit') instead of clicking a back button; or (b) in src/04-ui-utils.js add a branch: if spectatorSession is active, call stopSpectator('exit') and return true. Also update 14-events.js:27 to check `window.spectatorSession` instead of the phantom id so bonus events can't spawn over the spectator grid. Result: ESC/back-gesture exits the watch cleanly, matching the UX-gate Q4 'one obvious way to close'.
-- [ ] **🟡 בינוני · מאמץ `S` · ★★★ · נוחות** — **Picker auto-refreshes once and then goes stale — empty/list state freezes**
+- [x] ✅ **בוצע (סבב 3)** · **🟡 בינוני · מאמץ `S` · ★★★ · נוחות** — **Picker auto-refreshes once and then goes stale — empty/list state freezes**
   - **הבעיה:** refreshSpectatorPicker (src/10-spectator.js:29-70) fetches the live-player list exactly ONCE on open. There is no polling interval, so a player who opens the picker on 'אין כרגע שחקנים פעילים' (src/10-spectator.js:43) must close and reopen to discover someone went live; conversely the +liveScore numbers shown are frozen at open-time and grow stale within seconds. There's also no loading skeleton beyond a plain 'טוען…' text and no manual refresh affordance.
   - 📍 **הוכחה:** `openSpectatorPicker calls refreshSpectatorPicker() once (src/10-spectator.js:26); no setInterval anywhere in the picker path; empty state is terminal text (src/10-spectator.js:43).`
   - 🔧 **לעשות:** In openSpectatorPicker, store a picker poll timer (setInterval(refreshSpectatorPicker, 4000)) and clear it in the close handler at src/10-spectator.js:24-25 and inside the row onclick before startSpectator (src/10-spectator.js:66). Add a small skeleton-row shimmer for the 'טוען…' state and a '🔄 רענן' affordance on the empty state. Guard against clobbering focus/scroll on re-render. Result: the picker stays live, +scores tick up, and a newly-active rival appears without a manual reopen.
@@ -207,7 +221,7 @@
   - **הבעיה:** The entire spectator stylesheet uses hardcoded hex/rgba (#FAFAF6, #1B5E20, #C8472F, #6F6E68, rgba(255,107,157,…)) instead of the base.css :root tokens (--color-surface, --color-success, --color-danger, --color-accent, --radius-md, --shadow-*). This is why dark mode needs ~12 separate manual overrides in dark.css (lines 90,152-154,224-232,286,368) and why the green '+score' / live-tag red can drift from the rest of the app. The reconnect banner is even inline-styled in JS with raw hex (src/10-spectator.js:208).
   - 📍 **הוכחה:** `screens.css:855 background:#FAFAF6; :870 color:#1B5E20; :904 background:#C8472F; :959 color:#8B3E0A; reconnect banner inline cssText at src/10-spectator.js:208 uses rgba(0,0,0,0.78)/#FAC775.`
   - 🔧 **לעשות:** Refactor public/css/screens.css spectator block (847-974) to use tokens: surfaces → var(--color-surface)/var(--color-surface-2); positive score → var(--color-success); live-tag/behind → var(--color-danger); radii → var(--radius-md/--radius-lg); the reconnect/toast/header shadows → var(--shadow-md). Move the reconnect-banner styling out of JS inline cssText into a .spectator-reconnect class. Then delete the now-redundant dark.css overrides. Result: automatic dark-mode parity, app-wide visual consistency ('יפה'), and one less place colors can drift.
-- [ ] **⚪ נמוך · מאמץ `S` · ★★ · נוחות** — **Exit/switch buttons sit below the fold; no thumb-anchored controls**
+- [x] ✅ **בוצע (סבב 3)** · **⚪ נמוך · מאמץ `S` · ★★ · נוחות** — **Exit/switch buttons sit below the fold; no thumb-anchored controls**
   - **הבעיה:** .spectator-controls is rendered after the grid + tier-ladder in normal document flow with margin-top:14px (screens.css:935-939), and .spectator-view has no fixed/sticky footer. On a tall phone with the ~280px grid + header + 8-dot ladder, the exit/switch row can land near or below the comfortable thumb zone, and during a 'reconnecting' state the controls don't move up. The switch/exit buttons are also equal-weight (flex:1 each), so the primary action (exit) doesn't visually dominate.
   - 📍 **הוכחה:** `screens.css:935-939 .spectator-controls is flow-positioned with both buttons flex:1; .spectator-controls .btn.secondary just gets a grey background (screens.css:940), no size/weight differentiation; no position:sticky/fixed.`
   - 🔧 **לעשות:** Make .spectator-controls position:sticky; bottom: calc(8px + env(safe-area-inset-bottom)) within the view (or fixed within grid-wrap), give the primary exit button more visual weight (full accent fill via --color-accent, slightly larger) and keep 'החלפת שחקן' as a lighter secondary. Ensure ≥44px tap height. Result: one-thumb reach, clearer primary action, no scrolling to leave.

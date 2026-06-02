@@ -9840,9 +9840,43 @@ html[data-theme="dark"] .friends-banner-empty .friends-banner-title { color: #F9
   .spectator-controls {
     display: flex; gap: 8px; width: 100%; max-width: 340px;
     margin-top: 14px;
+    /* UX audit 2026-06-02 — anchor the exit/switch controls so they're always
+       thumb-reachable rather than below the fold on short phones. */
+    position: sticky; bottom: calc(8px + env(safe-area-inset-bottom, 0px)); z-index: 5;
   }
   .spectator-controls .btn { margin-top: 0; flex: 1; }
   .spectator-controls .btn.secondary { background: #F5F2EC; color: #1C1A18; }
+
+  /* ===== UX audit 2026-06-02 — Spectator "me vs them" + live board juice ===== */
+  .spectator-vs {
+    width: 100%; max-width: 340px; margin: 8px auto 0;
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    padding: 8px 12px; border-radius: 12px; direction: rtl;
+    font-weight: 800; font-size: 13px;
+    background: #F2F0FF; border: 1px solid #DCD7FB;
+  }
+  .spectator-vs .spec-vs-me { color: #2E8B6F; white-space: nowrap; }
+  .spectator-vs .spec-vs-them { color: #6B5BD3; white-space: nowrap; }
+  .spectator-vs .spec-vs-delta { flex: 1; text-align: center; font-size: 12px; }
+  .spectator-vs.spec-vs-behind {
+    background: linear-gradient(135deg, #FFE3E3, #FFD0D0); border-color: #F5B5B5;
+    animation: specVsPulse 1.1s ease-in-out infinite;
+  }
+  .spectator-vs.spec-vs-behind .spec-vs-delta { color: #D32F2F; }
+  .spectator-vs.spec-vs-ahead {
+    background: linear-gradient(135deg, #FFF4D6, #FFE7A8); border-color: #F0D9A8;
+  }
+  .spectator-vs.spec-vs-ahead .spec-vs-delta { color: #BA7517; }
+  .spectator-vs.spec-vs-tie .spec-vs-delta { color: #6B5BD3; }
+  @keyframes specVsPulse { 0%, 100% { box-shadow: 0 0 0 rgba(211,47,47,0); } 50% { box-shadow: 0 0 14px rgba(211,47,47,0.45); } }
+  /* Live cell-diff animations (mirror the duel spectator widget). The global
+     prefers-reduced-motion guard neutralizes these for sensitive users. */
+  @keyframes specCellAppear { 0% { transform: scale(0.5) translateY(-8px); opacity: 0; } 60% { transform: scale(1.12); opacity: 1; } 100% { transform: scale(1); opacity: 1; } }
+  @keyframes specCellMerge { 0% { transform: scale(1); filter: brightness(1); } 40% { transform: scale(1.28); filter: brightness(1.4) drop-shadow(0 0 6px #FFD93D); } 100% { transform: scale(1); filter: brightness(1); } }
+  @keyframes specCellClear { 0% { transform: scale(1); opacity: 1; } 100% { transform: scale(0.7); opacity: 0.2; } }
+  .spectator-grid .cell.spec-cell-appear { animation: specCellAppear 420ms cubic-bezier(0.34, 1.56, 0.64, 1); }
+  .spectator-grid .cell.spec-cell-merge { animation: specCellMerge 360ms ease-out; }
+  .spectator-grid .cell.spec-cell-clear { animation: specCellClear 280ms ease-in; }
   /* ── Task #33 — spectator tier-ladder micro-narrative ── */
   .spectator-tier-ladder {
     width: 100%; max-width: 340px; margin: 12px auto 0;
@@ -21521,6 +21555,11 @@ html[data-theme="dark"] .dyn-friends-tab.active { color: #FF8FB4; border-bottom-
   /* Spectator view */
   html[data-theme="dark"] .spectator-grid { filter: saturate(0.95) brightness(0.95); }
   html[data-theme="dark"] .spectator-header-name { color: #F2EFE9; }
+  html[data-theme="dark"] .spectator-vs { background: #24224A; border-color: rgba(206,203,246,0.22); }
+  html[data-theme="dark"] .spectator-vs.spec-vs-behind { background: linear-gradient(135deg, #3A1E1E, #4A2020); border-color: rgba(245,181,181,0.3); }
+  html[data-theme="dark"] .spectator-vs.spec-vs-ahead { background: linear-gradient(135deg, #3D2E0A, #2A2010); border-color: rgba(250,199,117,0.3); }
+  html[data-theme="dark"] .spectator-vs .spec-vs-me { color: #6FD9B5; }
+  html[data-theme="dark"] .spectator-vs .spec-vs-them { color: #CECBF6; }
   html[data-theme="dark"] .spectator-header-meta { color: #8E8A82; }
   html[data-theme="dark"] .audience-list { background: #232121; }
   html[data-theme="dark"] .audience-list-row { background: #2C2A28; }

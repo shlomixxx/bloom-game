@@ -24,6 +24,16 @@
     document.getElementById('spm-close').onclick = function() { modal.remove(); };
     modal.onclick = function(e) { if (e.target === modal) modal.remove(); };
     refreshSpectatorPicker();
+    // UX audit 2026-06-02 — the picker used to fetch once and then go stale
+    // (a player who just started a game never appeared). Re-poll every 4s
+    // while the modal is open; self-clears when it closes.
+    if (window._spmRefreshTimer) { clearInterval(window._spmRefreshTimer); window._spmRefreshTimer = null; }
+    window._spmRefreshTimer = setInterval(function() {
+      if (!document.getElementById('spectator-picker-modal')) {
+        clearInterval(window._spmRefreshTimer); window._spmRefreshTimer = null; return;
+      }
+      refreshSpectatorPicker();
+    }, 4000);
   }
 
   async function refreshSpectatorPicker() {
@@ -112,6 +122,15 @@
     spectatorTick(true);
     spectatorSession.pollTimer = setInterval(spectatorTick, 1000);
     spectatorSession.heartbeatTimer = setInterval(spectatorHeartbeat, 5000);
+    // UX audit 2026-06-02 — the spectator view replaces grid-wrap (it is not a
+    // modal), so the global ESC/back handler never matched it and ESC did
+    // nothing. Wire a dedicated ESC-to-exit, torn down in stopSpectator.
+    spectatorSession._escHandler = function(e) {
+      if ((e.key === 'Escape' || e.keyCode === 27) && spectatorSession && !document.getElementById('spectator-picker-modal')) {
+        stopSpectator('exit');
+      }
+    };
+    document.addEventListener('keydown', spectatorSession._escHandler);
   }
 
   async function spectatorHeartbeat() {
@@ -217,30 +236,164 @@
     if (b) b.remove();
   }
 
+  // UX audit 2026-06-02 — the watcher already exposes their own score to the
+  // server; surface it here as the competitive "me vs them" hook (the single
+  // biggest voyeuristic lever). Returns the watcher's reference score (their
+  // current in-progress score if mid-game-paused, else last completed game).
+  function spectatorMyRef() {
+    const s = spectatorSession;
+    if (!s) return 0;
+    let myRef = getLastFinalScore(s.code) | 0;
+    const midGamePause = s.entryFrom !== 'game-over' && mode === 'contest' && !contestSubmitted
+      && Array.isArray(grid) && grid.some(function(row) { return row.some(function(c) { return c > 0; }); });
+    if (midGamePause) myRef = score | 0;
+    return myRef | 0;
+  }
+  function spectatorVsHtml() {
+    const s = spectatorSession; if (!s) return '';
+    const myRef = spectatorMyRef();
+    if (myRef <= 0) return '';   // no comparison when the watcher has no score
+    const theirs = s.lastSnap ? (s.lastSnap.score | 0) : 0;
+    const delta = theirs - myRef;
+    const cls = delta > 0 ? 'spec-vs-behind' : delta < 0 ? 'spec-vs-ahead' : 'spec-vs-tie';
+    const mid = delta > 0 ? '🔥 הוא לפניך ב-' + delta.toLocaleString()
+      : delta < 0 ? '💪 אתה לפניו ב-' + (-delta).toLocaleString() : '⚔️ שווים!';
+    return '<div class="spectator-vs ' + cls + '" id="spectator-vs">' +
+      '<span class="spec-vs-me">אתה ' + myRef.toLocaleString() + '</span>' +
+      '<span class="spec-vs-delta">' + mid + '</span>' +
+      '<span class="spec-vs-them">הם ' + theirs.toLocaleString() + '</span>' +
+    '</div>';
+  }
+  function updateSpectatorVs() {
+    const el = document.getElementById('spectator-vs');
+    if (!el) return;
+    const s = spectatorSession; if (!s) return;
+    const myRef = spectatorMyRef();
+    const theirs = s.lastSnap ? (s.lastSnap.score | 0) : 0;
+    const delta = theirs - myRef;
+    el.className = 'spectator-vs ' + (delta > 0 ? 'spec-vs-behind' : delta < 0 ? 'spec-vs-ahead' : 'spec-vs-tie');
+    el.innerHTML =
+      '<span class="spec-vs-me">אתה ' + myRef.toLocaleString() + '</span>' +
+      '<span class="spec-vs-delta">' + (delta > 0 ? '🔥 הוא לפניך ב-' + delta.toLocaleString()
+        : delta < 0 ? '💪 אתה לפניו ב-' + (-delta).toLocaleString() : '⚔️ שווים!') + '</span>' +
+      '<span class="spec-vs-them">הם ' + theirs.toLocaleString() + '</span>';
+  }
+  // Tier-ladder micro-narrative (Task #33) — extracted so it can repaint each tick.
+  function spectatorTierLadderInner(tier) {
+    const maxT = (typeof MAX_TIER !== 'undefined') ? MAX_TIER : 8;
+    let dots = '';
+    for (let t = 1; t <= maxT; t++) {
+      const on = t <= tier;
+      const isNext = (t === tier + 1);
+      const to = getActiveTiers()[t];
+      const emoji = (to && to.emoji) ? to.emoji : '·';
+      dots += '<span class="spec-tier-dot' + (on ? ' on' : '') + (isNext ? ' next' : '') + '">' + emoji + '</span>';
+    }
+    const toGo = Math.max(0, maxT - tier);
+    const label = tier >= maxT ? '👑 הגיע/ה לכתר!'
+      : tier <= 0 ? 'מתחיל/ה לטפס…'
+      : ('דרגה ' + tier + ' · עוד ' + toGo + ' לכתר 👑');
+    return '<div class="spec-tier-dots">' + dots + '</div>' +
+           '<div class="spec-tier-label">' + label + '</div>';
+  }
+  function updateSpectatorTierLadder(tier) {
+    const el = document.getElementById('spectator-tier-ladder');
+    if (el) el.innerHTML = spectatorTierLadderInner(tier);
+  }
+  // Smooth count-up so the score climbs instead of snapping (UX audit).
+  function animateSpectatorScore(el, target) {
+    target = target | 0;
+    const from = parseInt(el.dataset.val || '0', 10) || 0;
+    el.dataset.val = String(target);
+    if (from === target) { el.textContent = target.toLocaleString(); return; }
+    const start = (window.performance && performance.now) ? performance.now() : 0;
+    const dur = 380;
+    function step(now) {
+      const t = Math.min(1, ((now || 0) - start) / dur);
+      const eased = 1 - Math.pow(1 - t, 3);
+      el.textContent = Math.round(from + (target - from) * eased).toLocaleString();
+      if (t < 1) requestAnimationFrame(step);
+      else el.textContent = target.toLocaleString();
+    }
+    requestAnimationFrame(step);
+  }
+  // In-place tick update — diffs the grid cells (appear/merge/clear anims),
+  // counts up the score, repaints tier badge/name/ladder + the vs strip. No
+  // full innerHTML rebuild, so tiles no longer teleport between ticks.
+  function updateSpectatorLive() {
+    const s = spectatorSession;
+    if (!s) return;
+    const snap = s.lastSnap;
+    const tier = snap ? (snap.tier | 0) : 0;
+    const scoreEl = document.getElementById('spectator-score');
+    if (scoreEl) animateSpectatorScore(scoreEl, snap ? (snap.score | 0) : 0);
+    const tierObj = getActiveTiers()[tier];
+    const nm = document.getElementById('spectator-tier-name');
+    if (nm) nm.textContent = (tierObj && tierObj.name) ? tierObj.name : '—';
+    const badge = document.getElementById('spectator-tier-badge');
+    if (badge) {
+      if (tierObj) { badge.className = 'contest-board-tier'; badge.style.background = tierObj.bg; badge.style.color = tierObj.fg; badge.innerHTML = tierObj.svg; }
+      else { badge.className = 'contest-board-tier contest-board-tier-empty'; badge.style.background = ''; badge.style.color = ''; badge.textContent = '·'; }
+    }
+    const gridEl = document.getElementById('spectator-grid-el');
+    if (gridEl && gridEl.children.length === 24 && snap && Array.isArray(snap.grid) && snap.grid.length === 24) {
+      const cells = gridEl.children;
+      for (let i = 0; i < 24; i++) {
+        const cell = cells[i];
+        const newT = snap.grid[i] | 0;
+        const oldT = parseInt(cell.dataset.tier || '0', 10) || 0;
+        if (newT === oldT) continue;
+        cell.dataset.tier = String(newT);
+        cell.classList.remove('spec-cell-appear', 'spec-cell-merge', 'spec-cell-clear');
+        void cell.offsetWidth;
+        if (newT > 0 && getActiveTiers()[newT]) {
+          const ti = getActiveTiers()[newT];
+          cell.className = 'cell filled';
+          cell.style.background = ti.bg; cell.style.color = ti.fg;
+          cell.innerHTML = ti.svg;
+          cell.classList.add(oldT > 0 && newT > oldT ? 'spec-cell-merge' : 'spec-cell-appear');
+        } else {
+          cell.className = 'cell';
+          cell.style.background = ''; cell.style.color = '';
+          cell.innerHTML = '';
+          cell.classList.add('spec-cell-clear');
+        }
+      }
+    }
+    updateSpectatorVs();
+    updateSpectatorTierLadder(tier);
+  }
+
   function renderSpectatorView() {
     const s = spectatorSession;
     if (!s) return;
     const wrap = document.getElementById('grid-wrap');
     if (!wrap) return;
+    // If the shell is already mounted for this session, update live data IN
+    // PLACE instead of rebuilding the whole view every second (which made
+    // tiles teleport + the score snap). Falls back to a full rebuild on error.
+    if (wrap.querySelector('.spectator-view')) {
+      try { updateSpectatorLive(); return; } catch (e) {}
+    }
     const snap = s.lastSnap;
     const tier = snap ? (snap.tier | 0) : 0;
     const tierObj = getActiveTiers()[tier];
     const tierBadge = tierObj
-      ? '<div class="contest-board-tier" style="background:' + tierObj.bg + ';color:' + tierObj.fg + '">' + tierObj.svg + '</div>'
-      : '<div class="contest-board-tier contest-board-tier-empty">·</div>';
+      ? '<div class="contest-board-tier" id="spectator-tier-badge" style="background:' + tierObj.bg + ';color:' + tierObj.fg + '">' + tierObj.svg + '</div>'
+      : '<div class="contest-board-tier contest-board-tier-empty" id="spectator-tier-badge">·</div>';
     let cellsHtml = '';
     if (snap && Array.isArray(snap.grid) && snap.grid.length === 24) {
       for (let i = 0; i < 24; i++) {
         const t = snap.grid[i] | 0;
         if (t > 0 && getActiveTiers()[t]) {
           const ti = getActiveTiers()[t];
-          cellsHtml += '<div class="cell filled" style="background:' + ti.bg + ';color:' + ti.fg + '">' + ti.svg + '</div>';
+          cellsHtml += '<div class="cell filled" data-tier="' + t + '" style="background:' + ti.bg + ';color:' + ti.fg + '">' + ti.svg + '</div>';
         } else {
-          cellsHtml += '<div class="cell"></div>';
+          cellsHtml += '<div class="cell" data-tier="0"></div>';
         }
       }
     } else {
-      for (let i = 0; i < 24; i++) cellsHtml += '<div class="cell"></div>';
+      for (let i = 0; i < 24; i++) cellsHtml += '<div class="cell" data-tier="0"></div>';
     }
     const liveScoreText = snap ? (snap.score | 0).toLocaleString() : '—';
     const tierName = (tierObj && tierObj.name) ? tierObj.name : '—';
@@ -250,30 +403,6 @@
     const exitLabel = willResumeGame ? 'חזור למשחק שלי'
       : s.entryFrom === 'contest-screen' ? 'חזור ללוח התחרות'
       : 'צא מהצפייה';
-    // Task #33 — tier-ladder micro-narrative under the grid. Turns watching
-    // from "what's the score" into "they're at tier 5 — 3 away from crown",
-    // which holds attention. Uses snap.tier only (no extra server data).
-    let tierLadderHtml = '';
-    (function() {
-      const maxT = (typeof MAX_TIER !== 'undefined') ? MAX_TIER : 8;
-      let dots = '';
-      for (let t = 1; t <= maxT; t++) {
-        const on = t <= tier;
-        const isNext = (t === tier + 1);
-        const to = getActiveTiers()[t];
-        const emoji = (to && to.emoji) ? to.emoji : '·';
-        dots += '<span class="spec-tier-dot' + (on ? ' on' : '') + (isNext ? ' next' : '') + '">' + emoji + '</span>';
-      }
-      const toGo = Math.max(0, maxT - tier);
-      const label = tier >= maxT ? '👑 הגיע/ה לכתר!'
-        : tier <= 0 ? 'מתחיל/ה לטפס…'
-        : ('דרגה ' + tier + ' · עוד ' + toGo + ' לכתר 👑');
-      tierLadderHtml =
-        '<div class="spectator-tier-ladder">' +
-          '<div class="spec-tier-dots">' + dots + '</div>' +
-          '<div class="spec-tier-label">' + label + '</div>' +
-        '</div>';
-    })();
     wrap.innerHTML =
       '<div class="spectator-view">' +
         '<div class="spectator-header">' +
@@ -282,17 +411,20 @@
               '<span>צופה ב ' + escapeHtml(s.name || 'שחקן') + '</span>' +
               '<span class="live-tag">LIVE</span>' +
             '</div>' +
-            '<div class="spectator-header-meta">דרגה: ' + escapeHtml(tierName) + '</div>' +
+            '<div class="spectator-header-meta">דרגה: <span id="spectator-tier-name">' + escapeHtml(tierName) + '</span></div>' +
           '</div>' +
-          '<div class="spectator-header-score">' + liveScoreText + '</div>' +
+          '<div class="spectator-header-score" id="spectator-score">' + liveScoreText + '</div>' +
         '</div>' +
+        spectatorVsHtml() +
         '<div class="spectator-grid"><div class="grid" id="spectator-grid-el">' + cellsHtml + '</div></div>' +
-        tierLadderHtml +
+        '<div class="spectator-tier-ladder" id="spectator-tier-ladder">' + spectatorTierLadderInner(tier) + '</div>' +
         '<div class="spectator-controls">' +
           '<button class="btn secondary" id="spec-switch">החלפת שחקן</button>' +
           '<button class="btn" id="spec-exit">' + exitLabel + '</button>' +
         '</div>' +
       '</div>';
+    const se = document.getElementById('spectator-score');
+    if (se) se.dataset.val = String(snap ? (snap.score | 0) : 0);
     const sw = document.getElementById('spec-switch');
     const ex = document.getElementById('spec-exit');
     if (sw) sw.onclick = function() {
@@ -313,6 +445,7 @@
     clearSpectatorReconnecting(s);
     if (s.pollTimer) { clearInterval(s.pollTimer); s.pollTimer = null; }
     if (s.heartbeatTimer) { clearInterval(s.heartbeatTimer); s.heartbeatTimer = null; }
+    if (s._escHandler) { try { document.removeEventListener('keydown', s._escHandler); } catch (e) {} s._escHandler = null; }
     // Best-effort unwatch — the server TTL will clean us up regardless.
     try {
       fetch(API_BASE + '/api/contests/' + encodeURIComponent(s.code) + '/unwatch', {
