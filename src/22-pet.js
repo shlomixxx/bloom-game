@@ -66,13 +66,71 @@
       dotsHtml = '<span class="pet-widget-dots">' + dots.join(' ') + '</span>';
     }
     var moodClass = data.mood === 'crying' || data.mood === 'sad' ? ' pet-widget-needs-attention' : '';
+    // UX audit 2026-06-02 — actionable guilt: when the pet is sad/crying the
+    // widget pulsed red but tapping only opened the modal. Now it carries a
+    // one-tap direct CTA so the loss-aversion is something the player can
+    // resolve instantly ("feed me now" Tamagotchi pattern).
+    var ctaHtml = '';
+    if (data.mood === 'crying' || data.mood === 'sad') {
+      if (data.canPet) ctaHtml = '<button class="pet-widget-cta" data-petcta="pet">💗 ליטוף עכשיו · הרגע אותו</button>';
+      else if (data.canFeed) ctaHtml = '<button class="pet-widget-cta" data-petcta="feed">🍽 האכל אותי עכשיו</button>';
+    }
     return (
       '<div class="pet-widget-emoji">' + stageEmoji + '</div>' +
       '<div class="pet-widget-body">' +
         '<div class="pet-widget-name">' + nameHtml + '<span class="pet-widget-mood">' + mood.emoji + '</span></div>' +
         '<div class="pet-widget-meta">דרגה ' + data.level + ' · ' + (data.stage && data.stage.label || '') + dotsHtml + '</div>' +
-      '</div>'
+      '</div>' +
+      ctaHtml
     );
+  }
+  // Wire the needs-attention CTA (stopPropagation so it doesn't also open
+  // the modal). pet → instant inline pet; feed → open the modal (cost-aware).
+  function wireWidgetCta(w) {
+    if (!w) return;
+    var cta = w.querySelector('.pet-widget-cta');
+    if (!cta) return;
+    cta.onclick = function(e) {
+      e.stopPropagation();
+      if (cta.getAttribute('data-petcta') === 'pet') quickPetFromWidget(cta);
+      else if (_petCache.data) showPetModal(_petCache.data);
+    };
+  }
+  // One-tap pet straight from the home widget — instant relief + reward,
+  // no modal hop. Mirrors doPetAction's server flow, widget-scoped UI.
+  function quickPetFromWidget(btn) {
+    if (!btn || btn._busy) return;
+    btn._busy = true;
+    var orig = btn.textContent;
+    btn.textContent = '⏳';
+    var deviceId = (typeof getDeviceId === 'function') ? getDeviceId() : '';
+    var token = (typeof deviceToken !== 'undefined') ? deviceToken : null;
+    fetch('/api/pet/pet', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ deviceId: deviceId, token: token })
+    })
+      .then(function(r) { return r.json(); }).catch(function() { return null; })
+      .then(function(d) {
+        if (d && d.ok) {
+          if (typeof d.newBalance === 'number') {
+            try { if (typeof playerBalance !== 'undefined') playerBalance = d.newBalance; } catch (e) {}
+            try { if (typeof window.__bloomBumpBal === 'function') window.__bloomBumpBal(d.newBalance, d.reward || 0); } catch (e) {}
+          }
+          try { if (typeof soundMilestone === 'function') soundMilestone(5); } catch (e) {}
+          try { if (typeof buzz === 'function') buzz([60, 40, 80]); } catch (e) {}
+          try { if (typeof showToast === 'function') showToast('💗 ליטפת! הפרח שלך מחייך עכשיו · +' + (d.reward || 20) + '💎', 'success'); } catch (e) {}
+          fetchPetState(true).then(function(fresh) { if (fresh) updatePetWidget(fresh); });
+        } else {
+          btn._busy = false; btn.textContent = orig;
+          var reason = d && d.reason;
+          if (reason === 'already_petted_today') {
+            if (typeof showToast === 'function') showToast('💗 כבר ליטפת היום! בוא מחר', 'info');
+            fetchPetState(true).then(function(fresh) { if (fresh) updatePetWidget(fresh); });
+          } else if (typeof showToast === 'function') {
+            showToast('שגיאה — נסה שוב', 'error');
+          }
+        }
+      });
   }
 
   function mountPetWidget(homeEl, data) {
@@ -103,6 +161,7 @@
         showPetModal(_petCache.data || data);
       }
     };
+    wireWidgetCta(w);
   }
 
   function updatePetWidget(data) {
@@ -111,6 +170,7 @@
     w.className = 'pet-home-widget';
     if (data.mood === 'crying' || data.mood === 'sad') w.classList.add('pet-widget-needs-attention');
     w.innerHTML = renderWidgetInner(data);
+    wireWidgetCta(w);
   }
 
   function promptForPetName() {
@@ -119,6 +179,7 @@
     ov.className = 'pet-name-overlay';
     ov.innerHTML =
       '<div class="pet-name-card">' +
+        '<button class="pet-name-close" aria-label="סגור">×</button>' +
         '<div class="pet-name-emoji">🌱</div>' +
         '<div class="pet-name-title">תן לי שם!</div>' +
         '<div class="pet-name-sub">הפרח שלך יגדל איתך — איך תקרא לו?</div>' +
@@ -129,6 +190,8 @@
     document.body.appendChild(ov);
     var close = function() { try { ov.remove(); } catch (e) {} };
     document.getElementById('pet-name-skip').onclick = close;
+    var nameCloseBtn = ov.querySelector('.pet-name-close');
+    if (nameCloseBtn) nameCloseBtn.onclick = close;
     ov.addEventListener('click', function(e) { if (e.target === ov) close(); });
     var input = document.getElementById('pet-name-input');
     if (input) setTimeout(function() { input.focus(); }, 80);
@@ -172,6 +235,21 @@
     };
   }
 
+  // UX audit 2026-06-02 — evolution anticipation: tease the NEXT stage so the
+  // modal pulls progression ("2 more levels to full bloom 🌸") instead of only
+  // showing the current state. Stage thresholds mirror the server (6/11/16).
+  function nextStageInfo(level) {
+    var stages = [
+      { at: 6,  emoji: '🌿', label: 'שתיל' },
+      { at: 11, emoji: '🌸', label: 'פריחה מלאה' },
+      { at: 16, emoji: '🌺', label: 'מלך פריחה' }
+    ];
+    for (var i = 0; i < stages.length; i++) {
+      if (level < stages[i].at) return { emoji: stages[i].emoji, label: stages[i].label, toGo: stages[i].at - level };
+    }
+    return null;
+  }
+
   function showPetModal(data) {
     var ex = document.getElementById('pet-modal');
     if (ex) ex.remove();
@@ -197,6 +275,14 @@
         '<div class="pet-modal-stage">' + stageLabel + ' · דרגה ' + data.level + ' / ' + data.maxLevel + '</div>' +
         '<div class="pet-modal-bar"><div class="pet-modal-bar-fill" style="width:' + xpPct + '%"></div></div>' +
         '<div class="pet-modal-xp-text">' + data.xpIntoLevel + ' / ' + data.xpPerLevel + ' XP · עוד ' + data.xpToNext + ' לדרגה הבאה</div>' +
+
+        // Next-stage evolution tease (UX audit 2026-06-02)
+        (function() {
+          var ns = nextStageInfo(data.level);
+          return ns
+            ? '<div class="pet-modal-next-stage">' + ns.emoji + ' עוד ' + ns.toGo + ' דרגות ל' + ns.label + '!</div>'
+            : '<div class="pet-modal-next-stage pet-modal-next-stage-max">👑 הפרח שלך הגיע לשיא הפריחה!</div>';
+        })() +
 
         // Mood-based message
         '<div class="pet-modal-msg pet-modal-msg-' + data.mood + '">' +

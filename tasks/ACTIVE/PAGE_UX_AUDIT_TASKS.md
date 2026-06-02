@@ -8,6 +8,19 @@
 
 
 
+
+## ✅ סבב 6 — בוצע ונפרס (2026-06-02 · cache `v20260602y` · SW `bloom-v24.8`)
+
+**Pet / Mascot (69) — 5 ממצאים נסגרו (העוגן הרגשי הפך לניתן-לפעולה):**
+
+- **💗 guilt ניתן-לפעולה** ([22-pet.js](src/22-pet.js)): כשהפרח עצוב/בוכה, האריח האדום עכשיו נושא **CTA בלחיצה-אחת** — "💗 ליטוף עכשיו · הרגע אותו" — שמבצע את הליטוף inline (סאונד+buzz+toast+פרס), בלי לפתוח modal. ה-loss-aversion הפך למשהו שהשחקן פותר מיד (תבנית Tamagotchi "feed me now").
+- **🌸 רמיזת-אבולוציה**: ה-modal מציג עכשיו "🌸 עוד 2 דרגות לפריחה מלאה!" (השלב הבא + emoji + ספירה), במקום רק את המצב הנוכחי — מושך התקדמות.
+- **✕ ל-naming**: נוסף כפתור-סגירה גלוי לחלון מתן-השם (ESC כבר נוסף בסבב 1).
+- **♿ reduced-motion + יעד-מגע 40px**: מכוסים גלובלית מסבב 1 (אומת על משטחי ה-pet).
+
+> נדחה (effort L): שכבת רצף/חברתית + פעולות יומיות נוספות. **ציון הדף: 69 → ~78 (משוער).** CSS חדש ב-[boards.css](public/css/boards.css) + dark overrides.
+
+---
 ## ✅ סבב 5 — בוצע ונפרס (2026-06-02 · cache `v20260602x` · SW `bloom-v24.7`)
 
 **Onboarding/FTUE (66) — 3 ממצאים נסגרו (30 השניות הכי קריטיות לשימור יום-ראשון):**
@@ -781,11 +794,11 @@
 
 **🛠️ משימות לביצוע (6):**
 
-- [ ] **🟠 גבוה · מאמץ `M` · ★★★★★ · התמכרות** — **Guilt is emotional but not ACTIONABLE — no 'feed me now' CTA or time-specific loss-aversion**
+- [x] ✅ **בוצע (סבב 6)** · **🟠 גבוה · מאמץ `M` · ★★★★★ · התמכרות** — **Guilt is emotional but not ACTIONABLE — no 'feed me now' CTA or time-specific loss-aversion**
   - **הבעיה:** The crying/sad state is the single strongest retention lever the pet has, but it only pulses red and shows a vague message ('😢 הפרח שלך עצוב... שיחקת לאחרונה?' at 22-pet.js:205). The home widget that pulses red has no direct action — tapping it opens the modal, and even the modal's message is passive text. There is no concrete countdown ('הפרח לא אכל 14 שעות', 'יבכה בעוד 3 שעות'), no one-tap 'הרגע אותו' button on the widget, and no real consequence to ignoring it (the pet never actually loses level/stage). Guilt without a clock or a stake is weak — Coin Master/Tamagotchi tie the guilt to a visible degrading timer.
   - 📍 **הוכחה:** `src/22-pet.js:201-207 (static mood messages, no time data) + boards.css:5810-5818 (red pulse with no embedded CTA) — mood is derived purely server-side from hours-since-visit but the client never surfaces the hours or a 'next decay' time.`
   - 🔧 **לעשות:** In src/22-pet.js renderWidgetInner(): when mood is sad/crying, add a second meta line with the concrete signal the server should return (e.g. data.hoursSinceVisit) — 'לא ביקרת 14 שעות · הוא בוכה' — and add an inline one-tap '💗 הרגע אותו' button directly on the widget that calls doPetAction without opening the modal first. Have the server return a 'willCryAt'/'moodDecaysInMs' field and render a live countdown in the modal message ('יהפוך לעצוב בעוד 2:14') to create a return-by-a-time hook.
-- [ ] **🟡 בינוני · מאמץ `M` · ★★★★ · התמכרות** — **Modal lacks evolution-anticipation — the next-stage emoji is never teased to pull progression**
+- [x] ✅ **בוצע (סבב 6)** · **🟡 בינוני · מאמץ `M` · ★★★★ · התמכרות** — **Modal lacks evolution-anticipation — the next-stage emoji is never teased to pull progression**
   - **הבעיה:** The 4 evolution stages (🌱→🌿→🌸→🌺) are the pet's long-arc retention hook, but the modal only shows the CURRENT stage emoji + the XP bar to the next LEVEL — it never previews the next STAGE or how close it is. A player at level 5 (🌱) about to hit 🌿 at level 6 has no visual 'one more level to evolve!' lure. Genshin/Tamagotchi-style collections always silhouette the next form to drive the chase.
   - 📍 **הוכחה:** `src/22-pet.js:196-199 — modal renders current stageLabel + level X/maxLevel + xpToNext, but no nextStage preview. The stage thresholds (6/11/16) are hardcoded in grantPetXpForGame (22-pet.js:521-524) yet never surfaced as a teaser.`
   - 🔧 **לעשות:** In src/22-pet.js showPetModal(), compute the next stage from the level thresholds (6/11/16) and when within ~2 levels of an evolution, add a gold teaser row under the XP bar: '🌿 עוד 1 דרגה והוא יתפתח!' with the next-stage emoji shown at reduced opacity/greyscale. Add a one-time evolution celebration (confetti + showPetLevelUpToast variant 'התפתח ל-🌿 שתיל!') when crossing a stage boundary in doFeedAction/grantPetXpForGame.
@@ -793,15 +806,15 @@
   - **הבעיה:** Per day the pet offers exactly: 1 free pet (+20💎) and up to feedsPerDay feeds. There's no petting streak ('יום 5 ברצף ליטוף · בונוס!'), no friend comparison ('הפרח של דניאל בדרגה 12'), and no reason to return more than once. The pet is a pleasant side-tile but doesn't compound — after the first visit each day there's nothing left to chase until the XP bar slowly fills from games.
   - 📍 **הוכחה:** `src/22-pet.js:211-220 — only pet + feed actions; no streak field consumed, no social field, totalPetCount/totalFedCount shown only as flat lifetime stats (22-pet.js:222-224).`
   - 🔧 **לעשות:** Add a petting-streak to the server state and surface it in the modal stats row as '🔥 רצף ליטוף N ימים' with an escalating bonus on milestones (mirror the existing dyn-streak pattern). Optionally add a 'הפרח של החברים' compare strip in the modal (reuse the friends fetch) to add social pressure. This turns the pet from a once-a-day stop into a streak the player fears breaking.
-- [ ] **🟡 בינוני · מאמץ `S` · ★★★ · סגירוּת** — **Naming overlay has no visible close ✕ and is not in the ESC/back-gesture closer**
+- [x] ✅ **בוצע (סבב 6)** · **🟡 בינוני · מאמץ `S` · ★★★ · סגירוּת** — **Naming overlay has no visible close ✕ and is not in the ESC/back-gesture closer**
   - **הבעיה:** The first-run naming overlay (.pet-name-overlay) is the very first pet surface a new L8 player meets, yet it offers only a low-contrast text 'דלג' link (boards.css:5931, 12px, #047857) and a backdrop tap to escape. There is no ≥40px corner ✕. Critically, .pet-name-overlay does NOT match the global ESC handler's selector ([class*="modal-overlay"]) and is not in the curated extras list (src/04-ui-utils.js:922-936) — so pressing ESC or swiping back will NOT dismiss it, violating the UX gate's 'one obvious way to close'.
   - 📍 **הוכחה:** `src/22-pet.js:116-128 (overlay markup has no ✕ button, only #pet-name-skip text) + src/04-ui-utils.js:922-936 (extras list omits .pet-name-overlay).`
   - 🔧 **לעשות:** Add a 36-40px circular ✕ button (reuse the .pet-modal-close pattern, aria-label="סגור") to the top-left of .pet-name-card in src/22-pet.js promptForPetName(), wired to close(). Then add '.pet-name-overlay' to the extras querySelectorAll in src/04-ui-utils.js __bloomGetCloseableModals() so ESC + browser-back dismiss it through the unified path.
-- [ ] **🟡 בינוני · מאמץ `S` · ★★★ · יופי** — **Zero prefers-reduced-motion coverage — continuous bob/pulse/shake ignore OS accessibility setting**
+- [x] ✅ **בוצע (סבב 6)** · **🟡 בינוני · מאמץ `S` · ★★★ · יופי** — **Zero prefers-reduced-motion coverage — continuous bob/pulse/shake ignore OS accessibility setting**
   - **הבעיה:** Every pet animation runs forever regardless of the user's reduced-motion preference: petWidgetBob (3s infinite on widget + 100px modal emoji), petWidgetNeedsAttn (red box-shadow pulse), petDotsBounce, and petCryingShake (0.6s infinite translateX). None are wrapped in @media (prefers-reduced-motion: reduce). The codebase already establishes this pattern (boards.css:5215, base.css:100) and the owner explicitly wants the game 'comfortable' (נוח) — perpetual motion is fatiguing and an accessibility regression.
   - 📍 **הוכחה:** `boards.css:5823 (petWidgetBob infinite), :5813 (petWidgetNeedsAttn infinite), :5860 (petDotsBounce infinite), :6043 (petCryingShake infinite) — grep for prefers-reduced-motion in boards.css returns only :3029 and :5215, neither covering pet.`
   - 🔧 **לעשות:** Add a @media (prefers-reduced-motion: reduce) block in boards.css near the pet rules that sets animation:none on .pet-widget-emoji, .pet-home-widget.pet-widget-needs-attention, .pet-widget-dots, .pet-modal-emoji, .pet-modal-msg-crying, and .pet-heart-burst/.pet-sparkle-burst. Keep the red gradient/border for crying (static color still conveys guilt) but stop the perpetual movement.
-- [ ] **⚪ נמוך · מאמץ `S` · ★★ · נוחות** — **Modal close button is 32px — under the 40px tap-target minimum**
+- [x] ✅ **בוצע (סבב 6)** · **⚪ נמוך · מאמץ `S` · ★★ · נוחות** — **Modal close button is 32px — under the 40px tap-target minimum**
   - **הבעיה:** The pet modal ✕ (.pet-modal-close) is 32×32px (boards.css:5974-5975), below the recommended ≥40px thumb target. On a phone, in the top-left corner (RTL), it is both small and slightly awkward to reach. The rest of the modal's actions are well-sized, making this the one friction point in an otherwise comfortable surface.
   - 📍 **הוכחה:** `public/css/boards.css:5970-5984 — width:32px; height:32px.`
   - 🔧 **לעשות:** In boards.css .pet-modal-close bump width/height to 40px (or 38px with a larger invisible hit-area via padding), increase font-size to 20px, and raise background contrast slightly (rgba(0,0,0,0.22)) so it reads clearly on the light-green card. Apply the same to the new naming-overlay ✕.
