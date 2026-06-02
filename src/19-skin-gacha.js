@@ -16,6 +16,7 @@
 
   var _gachaCache = { data: null, fetchedAt: 0 };
   var _gachaInFlight = false;
+  var _gachaPulling = false; // guards against a second pull firing before the first resolves
 
   function fetchGachaState(force) {
     if (!force && _gachaCache.data && (Date.now() - _gachaCache.fetchedAt) < 60000) {
@@ -214,6 +215,12 @@
   }
 
   function doPull(count, free) {
+    // Prevent a second pull from firing before the first resolves — a fast
+    // double-tap on "פול חינם" used to trigger the free pull, then a second
+    // request that the server rejected with a confusing "already claimed"
+    // error. One pull at a time.
+    if (_gachaPulling) return;
+    _gachaPulling = true;
     var deviceId = (typeof getDeviceId === 'function') ? getDeviceId() : '';
     var token    = (typeof deviceToken !== 'undefined') ? deviceToken : null;
     // Close the modal during the reveal — keep the screen clean.
@@ -235,6 +242,7 @@
       .then(function(r) { return r.json(); })
       .catch(function() { return null; })
       .then(function(d) {
+        _gachaPulling = false;
         if (d && d.ok) {
           if (typeof d.newBalance === 'number') {
             try { if (typeof playerBalance !== 'undefined') playerBalance = d.newBalance; } catch (e) {}
@@ -268,7 +276,10 @@
           if (reason === 'insufficient_funds') {
             showToast('💎 חסר ביתרה. צריך ' + (d.price || 0) + '💎, יש לך ' + (d.balance || 0) + '💎', 'warning');
           } else if (reason === 'free_already_claimed') {
-            showToast('🎁 כבר קיבלת את הפול החינם של היום. חוזרים מחר!', 'info');
+            // Not an error — the player already used today's free pull. Fix the
+            // cached state so the button repaints as "מחר", and say so kindly.
+            if (_gachaCache.data) _gachaCache.data.freeAvailable = false;
+            showToast('🎁 כבר קיבלת היום את הפול החינם! פול חינם חדש מחכה לך מחר 🌅', 'info');
           } else {
             showToast('שגיאה: ' + (reason || 'unknown'), 'error');
           }
@@ -297,19 +308,33 @@
 
     function renderCard(res) {
       var rar = RARITY_LABELS[res.rarity] || RARITY_LABELS.common;
-      var dupBadge = res.duplicateConverted
-        ? '<div class="gacha-card-dup">🔄 כפול → ' + (res.gems || 0) + '💎</div>'
-        : '';
+      var reward = res.reward || {};
+      var rewardType = reward.type || '';
       var pityBadge = res.wasPity ? '<div class="gacha-card-pity">🔥 פיטי!</div>' : '';
       var featBadge = res.wasFeatured ? '<div class="gacha-card-featured">⭐ פיצ\'רד!</div>' : '';
+      // Reveal the concrete prize the player ACTUALLY received. Chest/freeze
+      // rewards are credited as gems server-side, duplicate skins convert to
+      // gems, and bp_tier advances the Battle Pass — none of which is obvious
+      // from the item name. Without this the "🎁 תיבת הפתעה" card looked like an
+      // unopened box ("לא רואים במה זכיתי"). Now every box visibly OPENS.
+      var valueBadge = '';
+      if (res.duplicateConverted) {
+        valueBadge = '<div class="gacha-card-value gacha-card-value-dup">🔄 כבר היה לך — הומר ל-<strong>' + (res.gems || 0).toLocaleString() + '💎</strong></div>';
+      } else if (typeof res.convertedToGems === 'number' && res.convertedToGems > 0) {
+        valueBadge = '<div class="gacha-card-value gacha-card-value-open">🎉 נפתח! קיבלת <strong>+' + res.convertedToGems.toLocaleString() + '💎</strong></div>';
+      } else if (rewardType === 'bp_tier' && typeof res.xpBoost === 'number' && res.xpBoost > 0) {
+        valueBadge = '<div class="gacha-card-value gacha-card-value-bp">🎖 התקדמת <strong>+' + (reward.amount || 1) + ' דרגות</strong> ב-Battle Pass</div>';
+      } else if (rewardType === 'skin') {
+        valueBadge = '<div class="gacha-card-value gacha-card-value-skin">🎨 סקין חדש נפתח לך!</div>';
+      }
       card.style.borderColor = rar.color;
       card.style.background = 'linear-gradient(135deg,' + rar.bg + ',rgba(255,255,255,0.6))';
       card.style.boxShadow = '0 12px 60px ' + rar.glow + ', 0 0 0 4px ' + rar.color + '30';
       card.innerHTML =
         '<div class="gacha-card-rarity" style="color:' + rar.color + '">' + rar.he + '</div>' +
-        '<div class="gacha-card-emoji">' + (res.reward.emoji || '🎁') + '</div>' +
-        '<div class="gacha-card-name">' + escapeHtml(res.reward.displayName || '') + '</div>' +
-        pityBadge + featBadge + dupBadge;
+        '<div class="gacha-card-emoji">' + (reward.emoji || '🎁') + '</div>' +
+        '<div class="gacha-card-name">' + escapeHtml(reward.displayName || '') + '</div>' +
+        valueBadge + pityBadge + featBadge;
       // Trigger CSS animation by re-adding the class.
       card.classList.remove('gacha-card-animate');
       void card.offsetWidth;
