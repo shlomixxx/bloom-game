@@ -18,13 +18,19 @@
   // animation keyframes (pop/merge) as the real game so the muscle
   // memory transfers cleanly to first real play.
 
-  // `var` (not `const`) — read by ftueAlreadyDone() which is called from
-  // 13-boot.js at module-eval time (BEFORE this file evaluates). const would
-  // be in TDZ; var hoists with `undefined` so the localStorage.getItem call
-  // gracefully no-ops (returns null) in the catch path.
+  // FTUE_KEY is used by ftueMarkDone() (runs at finishFTUE time — well after
+  // module-eval, so the assignment below has already landed). ftueAlreadyDone()
+  // is DIFFERENT: 13-boot.js (concatenated BEFORE this file) calls it
+  // SYNCHRONOUSLY at module-eval time — BEFORE this `var FTUE_KEY = ...`
+  // assignment executes. At that instant the hoisted `FTUE_KEY` is still
+  // `undefined`, so reading via FTUE_KEY would do localStorage.getItem(undefined)
+  // → always null → the done-flag would be IGNORED and the FTUE re-fires on
+  // every visit (masked only by the games_played>0 gate in boot — so it bit the
+  // narrow cohort who saw the tutorial but hadn't finished a game yet). Fix:
+  // read the LITERAL key string here so it's independent of concat/eval order.
   var FTUE_KEY = 'bloom_ftue_done';
   function ftueAlreadyDone() {
-    try { return !!localStorage.getItem(FTUE_KEY); } catch (e) { return false; }
+    try { return !!localStorage.getItem('bloom_ftue_done'); } catch (e) { return false; }
   }
   function ftueShouldRun() {
     // Skip in bot / spectator / watch contexts — those have URL params.
@@ -49,35 +55,48 @@
   // `var` (not `const`) — read by renderStep() which is reached through
   // startFTUE() → buildOverlay() → renderStep(0) when 13-boot.js triggers
   // first-time FTUE at module-eval time. const would be in TDZ at that point.
+  // The REAL engine rule (src/11-game.js findGroup + `group.length >= 2`):
+  // TWO or more identical tiles that touch ORTHOGONALLY (horizontally OR
+  // vertically) merge automatically into the next tier. The demo MUST match
+  // this — an earlier version taught "three identical" and pre-stacked two
+  // un-merged same-tier tiles (a board state that's impossible in the real
+  // engine, since two adjacent equals would have already merged). Each `after`
+  // descriptor fully drives the animation (no hardcoded row math):
+  //   landRow  — where the dropped tile lands (top of the existing stack)
+  //   popCells — the cells that visually pop during the merge
+  //   mergedAt — where the merged (next-tier) tile is placed
+  //   chainWith / chainResultAt / chainTier — the follow-on adjacent merge
   var FTUE_STEPS = [
     {
       pre:   [0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0],
       next:  1,
       col:   1,
       teach: 'הקש על העמודה כדי להפיל את האבן',
-      after: { type: 'drop', col: 1, row: 5 },
+      after: { type: 'drop', col: 1, landRow: 5 },
       cheer: { text: '🎯 כל הכבוד! זו הייתה ההפלה הראשונה שלך', sound: 'drop' }
     },
     {
-      // Two tier-1 tiles already sitting in column 1 (rows 4,5). The player
-      // drops a third tier-1 there → 3 in a column → merge to tier-2.
-      pre:   [0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0, 0,1,0,0, 0,1,0,0],
+      // ONE tier-1 sits at the bottom of column 1 (row 5). The player drops a
+      // SECOND tier-1 on top (row 4) → two identical touch vertically → merge
+      // to tier-2. This matches the real "two equals → merge" rule exactly.
+      pre:   [0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0, 0,1,0,0],
       next:  1,
       col:   1,
-      teach: 'שלוש אבנים זהות → מיזוג! שדרוג לדרגה הבאה',
-      after: { type: 'merge', col: 1, row: 5, mergedTier: 2 },
+      teach: 'שתי אבנים זהות שנפגשות → מתמזגות ומשדרגות לדרגה הבאה!',
+      after: { type: 'merge', col: 1, landRow: 4, popCells: [[4,1],[5,1]], mergedTier: 2, mergedAt: [5,1] },
       cheer: { text: 'WOW! המיזוג הראשון שלך 🎉', sound: 'merge', vibrate: true }
     },
     {
-      // Column 1 has tier-1 at rows 4,5. Column 2 has a tier-2 at row 5.
-      // Player drops tier-1 in column 1 → 3-tier-1 merge → tier-2 at row 5.
-      // That new tier-2 is now adjacent to the existing tier-2 in column 2
-      // (still at row 5 after gravity). Chain ×2 → tier-3.
-      pre:   [0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0, 0,1,0,0, 0,1,2,0],
+      // Column 1 has ONE tier-1 (row 5). Column 2 has a tier-2 (row 5). The
+      // player drops a tier-1 in column 1 → the two tier-1 merge → tier-2 at
+      // [5,1], now HORIZONTALLY adjacent to the tier-2 at [5,2] → they chain
+      // → tier-3. Teaches "a merge that triggers another merge = a chain".
+      pre:   [0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0, 0,1,2,0],
       next:  1,
       col:   1,
-      teach: 'מיזוג שגורר עוד מיזוג = שרשרת ×2!',
-      after: { type: 'chain', col: 1, row: 5, mergedTier: 3, chain: 2 },
+      teach: 'מיזוג שגורר עוד מיזוג = שרשרת! בונוס ניקוד ענק 🔥',
+      after: { type: 'chain', col: 1, landRow: 4, popCells: [[4,1],[5,1]], mergedTier: 2, mergedAt: [5,1],
+               chainWith: [5,2], chainTier: 3, chainResultAt: [5,1], chain: 2 },
       cheer: { text: '🔥 שרשרת ×2! עכשיו אתה תופס איך זה עובד', sound: 'chain', confetti: true }
     }
   ];
@@ -147,11 +166,24 @@
     if (steps) steps.style.display = 'none';
     if (!welcome) { finishFTUE(true); return; }
     welcome.style.display = '';
+    // Complaint #1 fix — the demo never explained the special tiles that show
+    // up during play (bomb/star/gift/fever/freeze/target). We teach them here,
+    // at the LAST screen before play, as a recognition card (icon + one-liner)
+    // rather than 6 more forced interactions — so the player knows what each
+    // tile does the first time it appears, without overloading the tutorial.
     welcome.innerHTML =
       '<div class="ftue-grad-emoji">🌸</div>' +
-      '<div class="ftue-welcome-title">מוכן? בוא נשחק!</div>' +
-      '<div class="ftue-grad-sub">עכשיו תורך — בנה את הכתר שלך 👑</div>' +
-      '<button class="ftue-welcome-start" id="ftue-grad-start">🎮 התחל לשחק</button>';
+      '<div class="ftue-welcome-title">כמעט מוכן!</div>' +
+      '<div class="ftue-grad-sub">תוך כדי משחק יופיעו אריחים מיוחדים — הכירו אותם:</div>' +
+      '<div class="ftue-bonus-grid">' +
+        '<div class="ftue-bonus-item"><span class="ftue-bonus-emoji">💣</span><div><b>פצצה</b><span>מפוצצת אזור שלם</span></div></div>' +
+        '<div class="ftue-bonus-item"><span class="ftue-bonus-emoji">⭐</span><div><b>כוכב</b><span>משדרג אריח בדרגה</span></div></div>' +
+        '<div class="ftue-bonus-item"><span class="ftue-bonus-emoji">🎁</span><div><b>מתנה</b><span>יהלומים חינם</span></div></div>' +
+        '<div class="ftue-bonus-item"><span class="ftue-bonus-emoji">🔥</span><div><b>טירוף</b><span>ניקוד כפול לזמן קצר</span></div></div>' +
+        '<div class="ftue-bonus-item"><span class="ftue-bonus-emoji">❄️</span><div><b>הקפאה</b><span>אריח קפוא — מזגו לידו</span></div></div>' +
+        '<div class="ftue-bonus-item"><span class="ftue-bonus-emoji">🎯</span><div><b>מטרה</b><span>הגיעו לדרגת היעד</span></div></div>' +
+      '</div>' +
+      '<button class="ftue-welcome-start" id="ftue-grad-start">🎮 התחל לשחק 👑</button>';
     var gb = welcome.querySelector('#ftue-grad-start');
     if (gb) gb.onclick = function() {
       try { if (typeof ensureAudio === 'function') ensureAudio(); } catch (e) {}
@@ -175,7 +207,7 @@
           '<div class="ftue-welcome-title">מזגו פרחים. הגיעו לכתר 👑</div>' +
           '<div class="ftue-welcome-ladder" id="ftue-welcome-ladder"></div>' +
           '<div class="ftue-welcome-bullets">' +
-            '<div>🌱 מזגו 3 אבנים זהות → שדרוג לדרגה הבאה</div>' +
+            '<div>🌱 מזגו 2 אבנים זהות שנוגעות (אופקי/אנכי) → שדרוג</div>' +
             '<div>👑 טפסו 8 דרגות עד הכתר</div>' +
             '<div>🏆 התחרו על המקום הראשון בעולם</div>' +
           '</div>' +
@@ -331,29 +363,23 @@
   }
 
   function performStepAnimation(step) {
-    const cols = 4;
     const after = step.after;
-    // Build the falling tile at the top of the target column
-    const targetCell = ftueState.gridEl.querySelector('[data-row="' + after.row + '"][data-col="' + after.col + '"]');
+    const landRow = (after.landRow != null) ? after.landRow : 5;
+    // The cell the dropped tile lands in (top of the existing stack).
+    const targetCell = ftueState.gridEl.querySelector('[data-row="' + landRow + '"][data-col="' + after.col + '"]');
     if (!targetCell) { advanceAfterCheer(step); return; }
 
-    // Drop animation: clone a tile at the top, animate it down to target row.
+    // Drop animation: spawn a tile at the top of the column, slide it down.
     const topCell = ftueState.gridEl.querySelector('[data-row="0"][data-col="' + after.col + '"]');
     const dropTile = buildFtueTileNode(step.next);
     dropTile.classList.add('ftue-drop-anim');
     topCell.appendChild(dropTile);
-
-    // Use a CSS transition driven by the row gap
     const cellH = topCell.getBoundingClientRect().height;
-    const translateY = cellH * after.row;
     requestAnimationFrame(function() {
-      dropTile.style.transform = 'translateY(' + translateY + 'px)';
+      dropTile.style.transform = 'translateY(' + (cellH * landRow) + 'px)';
     });
 
-    // After the drop, run the step-type-specific animation
     setTimeout(function() {
-      // Move the tile into the target cell so the row remains correct after
-      // any merge/chain anims that follow.
       if (dropTile.parentElement) dropTile.parentElement.removeChild(dropTile);
       const landed = buildFtueTileNode(step.next);
       landed.classList.add('pop');
@@ -361,23 +387,13 @@
       try { if (typeof soundDrop === 'function') soundDrop(); } catch (e) {}
       try { if (typeof buzz === 'function') buzz([6]); } catch (e) {}
 
-      if (after.type === 'drop') {
-        celebrate(step);
-        return;
-      }
+      if (after.type === 'drop') { celebrate(step); return; }
 
-      // For merge / chain we need to crunch the column. Run a small
-      // animation that pops the matching tiles, then place the merged
-      // tile at the target cell.
+      // merge / chain — pop the matching tiles, then place the merged tile.
       setTimeout(function() {
-        animateMergeAt(after.col, after.row, after.mergedTier, function() {
+        animateMergeAt(after.popCells, after.mergedTier, after.mergedAt, function() {
           if (after.type === 'chain') {
-            // Adjacent merge: locate any tile sharing the merged tier in
-            // a neighbor cell, animate a second merge into a tier+1 result.
-            const upTier = after.mergedTier + 1;
-            // The pre-state put a same-tier neighbor at (row=5, col=2)
-            const neighborCol = 2, neighborRow = 5;
-            animateChainHop(after.col, after.row, neighborCol, neighborRow, upTier, function() {
+            animateChainHop(after.mergedAt, after.chainWith, after.chainTier, after.chainResultAt, function() {
               celebrate(step);
             });
           } else {
@@ -388,21 +404,22 @@
     }, 380);
   }
 
-  function animateMergeAt(col, row, mergedTier, cb) {
-    // Pop the bottom 3 tiles in this column (positions row, row-1, row-2)
-    // then replace the bottom with the merged tier.
+  // Pop every cell in popCells (the matching same-tier tiles), then place the
+  // merged next-tier tile at mergedAt. Driven entirely by the step descriptor
+  // so it stays correct for a 2-tile merge (the real rule) — no hardcoded
+  // "bottom 3 in the column".
+  function animateMergeAt(popCells, mergedTier, mergedAt, cb) {
     const targets = [];
-    for (let r = row; r >= Math.max(0, row - 2); r--) {
-      const c = ftueState.gridEl.querySelector('[data-row="' + r + '"][data-col="' + col + '"]');
-      if (c && c.firstChild) targets.push({ cellEl: c, tileEl: c.firstChild });
-    }
-    targets.forEach(function(t) { t.tileEl.classList.add('merge'); });
+    (popCells || []).forEach(function(rc) {
+      const c = ftueState.gridEl.querySelector('[data-row="' + rc[0] + '"][data-col="' + rc[1] + '"]');
+      if (c && c.firstChild) targets.push(c);
+    });
+    targets.forEach(function(c) { c.firstChild.classList.add('merge'); });
     try { if (typeof soundMerge === 'function') soundMerge(mergedTier); } catch (e) {}
     setTimeout(function() {
-      // Clear them
-      targets.forEach(function(t) { t.cellEl.innerHTML = ''; });
-      // Place merged tile at the bottom target
-      const bottom = ftueState.gridEl.querySelector('[data-row="' + row + '"][data-col="' + col + '"]');
+      targets.forEach(function(c) { c.innerHTML = ''; });
+      const at = mergedAt || (popCells && popCells[popCells.length - 1]);
+      const bottom = at && ftueState.gridEl.querySelector('[data-row="' + at[0] + '"][data-col="' + at[1] + '"]');
       if (bottom) {
         const merged = buildFtueTileNode(mergedTier);
         merged.classList.add('pop');
@@ -412,23 +429,26 @@
     }, 260);
   }
 
-  function animateChainHop(fromCol, fromRow, toCol, toRow, upTier, cb) {
-    const fromCell = ftueState.gridEl.querySelector('[data-row="' + fromRow + '"][data-col="' + fromCol + '"]');
-    const toCell = ftueState.gridEl.querySelector('[data-row="' + toRow + '"][data-col="' + toCol + '"]');
-    if (!fromCell || !toCell) { cb && cb(); return; }
-    // Pop both
+  // The follow-on adjacent merge: the just-merged tile at fromRC and the
+  // existing same-tier tile at withRC both pop, and the higher-tier result
+  // lands at resultAtRC. [r,c] arrays everywhere — no hardcoded neighbor.
+  function animateChainHop(fromRC, withRC, resultTier, resultAtRC, cb) {
+    const fromCell = fromRC && ftueState.gridEl.querySelector('[data-row="' + fromRC[0] + '"][data-col="' + fromRC[1] + '"]');
+    const withCell = withRC && ftueState.gridEl.querySelector('[data-row="' + withRC[0] + '"][data-col="' + withRC[1] + '"]');
+    if (!fromCell || !withCell) { cb && cb(); return; }
     if (fromCell.firstChild) fromCell.firstChild.classList.add('merge');
-    if (toCell.firstChild) toCell.firstChild.classList.add('merge');
+    if (withCell.firstChild) withCell.firstChild.classList.add('merge');
     try { if (typeof soundChain === 'function') soundChain(2); } catch (e) {}
     setTimeout(function() {
       fromCell.innerHTML = '';
-      toCell.innerHTML = '';
-      // Place the higher-tier merged tile in the "to" cell (visually anchored
-      // to the neighbor that triggered the chain).
-      const merged = buildFtueTileNode(upTier);
-      merged.classList.add('pop');
-      toCell.appendChild(merged);
-      // Banner: "שרשרת ×2"
+      withCell.innerHTML = '';
+      const at = resultAtRC || fromRC;
+      const resCell = ftueState.gridEl.querySelector('[data-row="' + at[0] + '"][data-col="' + at[1] + '"]');
+      if (resCell) {
+        const merged = buildFtueTileNode(resultTier);
+        merged.classList.add('pop');
+        resCell.appendChild(merged);
+      }
       showChainBanner(2);
       cb && cb();
     }, 280);

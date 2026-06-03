@@ -384,6 +384,7 @@
     display: flex; align-items: center; justify-content: center;
     direction: rtl;
     padding: 24px 16px;
+    overflow-y: auto; /* graduation card (bonus-elements grid) can be tall on short screens */
     animation: ftueIn 0.35s cubic-bezier(.2,1.1,.4,1);
   }
   .ftue-overlay.ftue-leaving { animation: ftueOut 0.32s ease-in forwards; }
@@ -460,7 +461,13 @@
   .ftue-arrow {
     position: absolute;
     top: 0;
-    transform: translateX(50%); /* RTL: position from right */
+    /* JS sets `left` to the target column's CENTER (in px). translateX(-50%)
+       centers the arrow ON that point. The old translateX(50%) shifted it
+       RIGHT by a full arrow-width (~28px ≈ half a column), so the arrow
+       pointed at the gap next to the highlighted column — a brand-new player
+       following it tapped the WRONG column. (RTL-agnostic: `left` + getBCR
+       are both physical-left.) */
+    transform: translateX(-50%);
     font-size: 28px;
     opacity: 0;
     transition: opacity 0.4s ease, left 0.3s ease;
@@ -468,16 +475,16 @@
     animation: ftueArrowBounce 1.2s ease-in-out infinite;
   }
   @keyframes ftueArrowBounce {
-    0%, 100% { transform: translateX(50%) translateY(0); }
-    50%      { transform: translateX(50%) translateY(8px); }
+    0%, 100% { transform: translateX(-50%) translateY(0); }
+    50%      { transform: translateX(-50%) translateY(8px); }
   }
   .ftue-arrow.ftue-arrow-nudge {
     animation: ftueArrowNudge 0.4s ease;
   }
   @keyframes ftueArrowNudge {
-    0%, 100% { transform: translateX(50%) translateY(0); }
-    25%      { transform: translateX(50%) translateY(0) rotate(-12deg); }
-    75%      { transform: translateX(50%) translateY(0) rotate(12deg); }
+    0%, 100% { transform: translateX(-50%) translateY(0); }
+    25%      { transform: translateX(-50%) translateY(0) rotate(-12deg); }
+    75%      { transform: translateX(-50%) translateY(0) rotate(12deg); }
   }
 
   .ftue-grid {
@@ -507,14 +514,19 @@
   html[data-theme="dark"] .ftue-cell { background: rgba(255,255,255,0.04); }
   html[data-theme="dark"] .ftue-cell.hint-col { background: rgba(250,199,117,0.10); }
 
+  /* Match the REAL in-game tile (src/12-tour-info.js render + base.css .cell):
+     the tile FILLS the cell as a rounded square (border-radius 10px, SVG 62%),
+     NOT an inset circle. The old circle (border-radius:50%, 88%, svg 70%) made
+     the demo look like a different game, so the muscle memory the FTUE is
+     supposed to build didn't transfer to first real play. */
   .ftue-tile {
-    width: 88%; height: 88%;
-    border-radius: 50%;
+    width: 100%; height: 100%;
+    border-radius: 10px;
     display: flex; align-items: center; justify-content: center;
     font-weight: 700;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.18);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.08);
   }
-  .ftue-tile svg { width: 70%; height: 70%; }
+  .ftue-tile svg { width: 62%; height: 62%; }
   .ftue-drop-anim {
     position: relative;
     z-index: 2;
@@ -614,3 +626,22 @@
   @keyframes ftueGradPop { 0% { transform: scale(0.4); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
   .ftue-grad-sub { font-size: 14px; color: var(--color-text-muted, #6F6E68); text-align: center; }
   html[data-theme="dark"] .ftue-welcome-bullets > div { background: #252320; border-color: rgba(255,255,255,0.06); color: #C9C6C0; }
+
+  /* Special-elements explainer on the graduation card (complaint #1 fix). */
+  .ftue-bonus-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+    width: 100%; max-width: 330px; direction: rtl; margin: 2px 0;
+  }
+  .ftue-bonus-item {
+    display: flex; align-items: center; gap: 8px; text-align: right;
+    background: var(--color-surface-2, #FAFAF6);
+    border: 1px solid var(--color-border, rgba(0,0,0,0.06));
+    border-radius: var(--radius-md, 12px); padding: 8px 10px;
+  }
+  .ftue-bonus-emoji { font-size: 22px; line-height: 1; flex-shrink: 0; }
+  .ftue-bonus-item > div { display: flex; flex-direction: column; min-width: 0; }
+  .ftue-bonus-item b { font-size: 13px; font-weight: 800; color: var(--color-text, #1C1A18); }
+  .ftue-bonus-item span { font-size: 11px; color: var(--color-text-muted, #6F6E68); line-height: 1.25; }
+  html[data-theme="dark"] .ftue-bonus-item { background: #252320; border-color: rgba(255,255,255,0.06); }
+  html[data-theme="dark"] .ftue-bonus-item b { color: #EDE9E1; }
+  html[data-theme="dark"] .ftue-bonus-item span { color: #B7B3AB; }

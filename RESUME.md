@@ -51,6 +51,8 @@
 
 **6. [tasks/ACTIVE/PAGE_UX_AUDIT_TASKS.md](tasks/ACTIVE/PAGE_UX_AUDIT_TASKS.md)** — ביקורת UX+התמכרות לכל 21 הדפים (2026-06-02, 21-agent workflow). ציון משחק כולל **67/100 (B-)**, 141 ממצאים (0 קריטי / 34 גבוה / 65 בינוני / 42 נמוך). טבלת ציונים מדורגת לפי ROI + 8 תמות-רוחב (tokens לא-מאומצים, reduced-motion חסר, חורי-סגירה, tap-targets<40px, hooks ריקים/קפואים, חוסר שיא-דופמין, overload, חוסר השוואה-חברתית) + 18 quick-wins + 11 פרויקטים גדולים. כל ממצא = משימה עם file:line + הוראת-ביצוע.
 
+**7. [tasks/ACTIVE/ONBOARDING_TASKS.md](tasks/ACTIVE/ONBOARDING_TASKS.md)** — FTUE / מדריך / חוויית-שחקן-חדש. FT.1 (2026-06-03) תיקן 5 באגים שדווחו ("המדריך לא נכון"): חוק-מיזוג שגוי (3→2 אריחים), חץ בכיוון שגוי (+28px), אריחים שונים מהמשחק (עיגול→ריבוע ממלא-תא), חוסר הסבר על אלמנטים מיוחדים (פצצה/כוכב/וכו'), ובאג שגרם למדריך לחזור בכל כניסה (done-flag לא נקרא ב-boot). Backlog: FT.2-FT.8 (מדריך אינטראקטיבי על המנוע האמיתי, אנליטיקת skip, A/B, ועוד).
+
 ### 📚 קבצי context (לא משימות — הקשר היסטורי)
 
 - **[CLAUDE.md](CLAUDE.md)** — Living spec של הפרויקט. §0 = retention stages tracker (49 stages). §5 = current features.
