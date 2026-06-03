@@ -117,9 +117,13 @@
   }
 
   function isInGame() {
-    if (document.getElementById('home-screen')) return false;
-    if (document.getElementById('contest-screen')) return false;
-    if (document.getElementById('challenge-screen')) return false;
+    // Check VISIBILITY, not mere presence: the home / home-v2 screen stays in
+    // the DOM (display:none) while a game is running, so a presence check would
+    // wrongly report "not in game" and the bot would never drop. (This matters
+    // for 'current' mode, which intentionally does NOT remove the home node.)
+    function visible(id) { var e = document.getElementById(id); return !!(e && e.offsetParent !== null); }
+    if (visible('home-screen') || visible('home-screen-v2')) return false;
+    if (visible('contest-screen') || visible('challenge-screen')) return false;
     const grid = document.getElementById('grid');
     return !!(grid && grid.children.length > 0);
   }
