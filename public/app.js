@@ -20153,6 +20153,12 @@
   // TIER svgs for illustrations so the player learns the actual icon set.
   // ================================================================
   const TOUR_KEY = 'bloom_tour_seen';
+  // The merge illustrations live in an RTL container, so the OUTPUT tile (last
+  // in DOM) renders on the LEFT and the inputs on the RIGHT. The connector
+  // arrow must therefore point LEFT (←, toward the output) — a → would point
+  // back at the inputs and read backwards ("flower → 2 leaves" / "fire → 4
+  // flowers"). Single source so the direction can't drift per-illustration.
+  var TOUR_MERGE_ARROW = '<span class="tour-arrow">←</span>';
   function tourTile(tier, sizeClass) {
     const t = (getActiveTiers() && getActiveTiers()[tier]) || null;
     const cls = 'tour-tile' + (sizeClass ? ' ' + sizeClass : '');
@@ -20200,7 +20206,7 @@
         illustration:
           '<div class="tour-row">' +
             tourTile(2) + tourTile(2) +
-            '<span class="tour-arrow">→</span>' +
+            TOUR_MERGE_ARROW +
             tourTile(3) +
           '</div>',
         title: 'שני זהים → מיזוג',
@@ -20214,7 +20220,7 @@
               tourTile(3, 'tour-tile-sm') + tourTile(3, 'tour-tile-sm') +
               tourTile(3, 'tour-tile-sm') + tourTile(3, 'tour-tile-sm') +
             '</div>' +
-            '<span class="tour-arrow">→</span>' +
+            TOUR_MERGE_ARROW +
             tourTile(4) +
           '</div>',
         title: 'מיזוג גדול = ניקוד גדול',
@@ -20226,11 +20232,11 @@
           '<div class="tour-welcome">' +
             '<div class="tour-row">' +
               tourTile(2, 'tour-tile-sm') + tourTile(2, 'tour-tile-sm') +
-              '<span class="tour-arrow">→</span>' + tourTile(3, 'tour-tile-sm') +
+              TOUR_MERGE_ARROW + tourTile(3, 'tour-tile-sm') +
             '</div>' +
             '<div class="tour-row">' +
               tourTile(3, 'tour-tile-sm') + tourTile(3, 'tour-tile-sm') +
-              '<span class="tour-arrow">→</span>' + tourTile(4, 'tour-tile-sm') +
+              TOUR_MERGE_ARROW + tourTile(4, 'tour-tile-sm') +
             '</div>' +
             '<div class="tour-row" style="margin-top:6px">' +
               '<span style="background:#FAC775;color:#412402;padding:3px 10px;border-radius:999px;font-weight:800;font-size:12px">שרשרת ×3</span>' +

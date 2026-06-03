@@ -89,3 +89,9 @@ tiles), live-verified after deploy. Cache `v20260603a`, SW `bloom-v26.3`.
 - **`ftueAlreadyDone()` must read the literal key** (eval-order safe). Don't
   "optimize" it back to `FTUE_KEY`.
 - Every change runs through the **UX 5-questions gate** (see CLAUDE.md §10b).
+- **RTL arrow direction (FT.1.1):** the game is RTL, so in any "inputs → result"
+  tile illustration the result renders on the LEFT. A connector arrow must point
+  LEFT (`←`, toward the result), not `→` (which reads backwards as "result →
+  inputs"). The in-game tour uses the shared `TOUR_MERGE_ARROW` constant for this
+  — keep it. Inline text arrows inside sentences ("הזמן חבר → +200💎") are
+  idiomatic and stay `→`.
