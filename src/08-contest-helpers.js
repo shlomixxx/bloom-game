@@ -13,7 +13,12 @@
   }
 
   function getPlayerName() {
-    return localStorage.getItem(NAME_KEY) || '';
+    // Real chosen name if set; otherwise the code-based default ("KDPF") so
+    // the displayed identity always matches the BLOOM-XXXX code. The
+    // hasRealPlayerName() check (NAME_KEY non-empty) stays the discriminator
+    // for "did they pick a real name", so onboarding nudges are unaffected.
+    var n = (localStorage.getItem(NAME_KEY) || '').trim();
+    return n || ((typeof defaultPlayerName === 'function') ? defaultPlayerName(deviceId) : '');
   }
 
   function setPlayerName(name) {

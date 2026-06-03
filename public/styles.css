@@ -2985,6 +2985,14 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+  /* Placeholder identity (= BLOOM code suffix, e.g. "KDPF") shown until the
+     player picks a real name. Monospace + slightly muted so it reads as a
+     code-style handle that matches the BLOOM-XXXX below it. */
+  .pid2-name.pid2-name-default {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    letter-spacing: 0.5px;
+    opacity: 0.82;
+  }
   .pid2-edit {
     background: transparent;
     border: 1px solid var(--color-border, rgba(0,0,0,0.08));

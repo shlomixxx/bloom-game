@@ -203,10 +203,26 @@
   // their deviceId so they can play immediately and *opt into* a real name
   // later — either via the ✏️ on the home pid, or the "קבע שם אמיתי" CTA
   // that appears on game-over while the name is still a default.
+  // The player's BLOOM-XXXX code suffix (e.g. "KDPF"), once the code is
+  // known. Read straight from localStorage so it works even before the
+  // `playerCode` closure var is declared further down (this is used at boot).
+  function bloomCodeSuffix() {
+    var c = '';
+    try { c = (localStorage.getItem('bloom_player_code') || '').trim(); } catch (e) {}
+    var m = /^BLOOM-([A-Za-z0-9]{4})$/i.exec(c);
+    return m ? m[1].toUpperCase() : '';
+  }
+  function deviceSuffix(devId) {
+    var s = String(devId || '').replace(/[^A-Za-z0-9]/g, '').slice(-4).toUpperCase();
+    if (s.length < 4) s = (s + '0000').slice(0, 4);
+    return s;
+  }
   function defaultPlayerName(devId) {
-    var suffix = String(devId || '').replace(/[^A-Za-z0-9]/g, '').slice(-4).toUpperCase();
-    if (suffix.length < 4) suffix = (suffix + '0000').slice(0, 4);
-    return 'שחקן ' + suffix;
+    // The default identity IS the player's BLOOM code suffix (e.g. "KDPF"),
+    // so the name shown always matches the BLOOM-XXXX code under it. Until
+    // the code loads, fall back to a deviceId-derived 4-char placeholder;
+    // fetchPlayerCode recomputes to the real suffix the moment it arrives.
+    return bloomCodeSuffix() || deviceSuffix(devId);
   }
   // Anyone who actually picked a real name has it in localStorage. The
   // default is computed lazily and never persisted — that's how the rest
@@ -218,6 +234,20 @@
   if (!playerName) {
     playerName = defaultPlayerName(deviceId);
   }
+  // Migrate the legacy auto-generated placeholder that older builds persisted
+  // ("שחקן <deviceId-suffix>") — it doesn't match the BLOOM code and reads as
+  // a wrong name. Only the EXACT old auto value is cleared (a real typed name
+  // is never touched), so getPlayerName() falls through to the code-based
+  // default and hasRealPlayerName() correctly reports "no real name yet".
+  (function migrateLegacyPlaceholderName() {
+    try {
+      var cur = (localStorage.getItem(NAME_KEY) || '').trim();
+      if (cur && cur === 'שחקן ' + deviceSuffix(deviceId)) {
+        localStorage.removeItem(NAME_KEY);
+        playerName = defaultPlayerName(deviceId);
+      }
+    } catch (e) {}
+  })();
 
   // ============ COUNTRY (for the country/world leaderboard tabs) ============
   // Player-chosen ISO-3166 alpha-2. Set once via the flag picker after the
@@ -359,6 +389,16 @@
             localStorage.setItem(PLAYER_LEVEL_KEY, String(playerLevel));
             localStorage.setItem(PLAYER_LEVEL_TITLE_KEY, playerLevelTitle);
           } catch(e) {}
+          // Brand-new players boot before the code is known, so the name fell
+          // back to the deviceId placeholder. Now that the real BLOOM suffix
+          // is here, recompute it (only while still on a placeholder) and
+          // refresh the home pid so it shows "KDPF" matching the code.
+          if (typeof hasRealPlayerName !== 'function' || !hasRealPlayerName()) {
+            playerName = defaultPlayerName(deviceId);
+            if (typeof renderPlayerIdV2 === 'function' && document.getElementById('home-v2-pid')) {
+              try { renderPlayerIdV2(); } catch (e) {}
+            }
+          }
           updateBalanceDisplay();
           processReferral();
         }

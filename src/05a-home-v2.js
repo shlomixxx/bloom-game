@@ -1094,7 +1094,7 @@
 
     const nameLine = isReal
       ? '<span class="pid2-name">' + escapeHtmlV2(nm) + '</span> <button class="pid2-edit" type="button" aria-label="ערוך שם">✏️</button>'
-      : '<button class="pid2-edit pid2-edit-prompt" type="button">✏️ קבע את השם שלך</button>';
+      : '<span class="pid2-name pid2-name-default">' + escapeHtmlV2(nm) + '</span> <button class="pid2-edit pid2-edit-prompt" type="button" aria-label="קבע שם אמיתי" title="קבע שם אמיתי">✏️</button>';
 
     el.innerHTML =
       '<div class="pid2-line pid2-line-name">' + nameLine + '</div>' +
