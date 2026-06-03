@@ -17075,6 +17075,27 @@ app.get('/api/referrals/mine', async (req, res) => {
     const totalQ = await pool.query(
       `SELECT COUNT(*)::int AS n, COALESCE(SUM(credits_awarded), 0)::int AS earned
          FROM referrals WHERE referrer_device = $1`, [deviceId]);
+    // Per-joiner friendship/pending flags so the client can render the right
+    // "add as friend" button state (FN.3 — let the referrer connect with the
+    // people who joined via their link, straight from this list).
+    const joinerDevices = r.rows.map(row => row.referred_device).filter(Boolean);
+    const friendSet = new Set();
+    const pendingSet = new Set();
+    if (joinerDevices.length) {
+      const fr = await pool.query(
+        `SELECT device_a, device_b FROM friendships
+          WHERE (device_a = $1 AND device_b = ANY($2::text[]))
+             OR (device_b = $1 AND device_a = ANY($2::text[]))`,
+        [deviceId, joinerDevices]);
+      fr.rows.forEach(x => friendSet.add(x.device_a === deviceId ? x.device_b : x.device_a));
+      const pend = await pool.query(
+        `SELECT from_device, to_device FROM friend_requests
+          WHERE status = 'pending'
+            AND ((from_device = $1 AND to_device = ANY($2::text[]))
+              OR (to_device = $1   AND from_device = ANY($2::text[])))`,
+        [deviceId, joinerDevices]);
+      pend.rows.forEach(x => pendingSet.add(x.from_device === deviceId ? x.to_device : x.from_device));
+    }
     res.json({
       ok: true,
       total: (totalQ.rows[0] && totalQ.rows[0].n) || 0,
@@ -17084,7 +17105,9 @@ app.get('/api/referrals/mine', async (req, res) => {
         code: row.player_code,
         country: row.country,
         creditsAwarded: row.credits_awarded,
-        createdAt: row.created_at
+        createdAt: row.created_at,
+        alreadyFriends: friendSet.has(row.referred_device),
+        requestPending: pendingSet.has(row.referred_device)
       }))
     });
   } catch (e) {

@@ -1299,12 +1299,73 @@
             rowEl.appendChild(codeEl);
             rowEl.appendChild(whenEl);
             rowEl.appendChild(creditEl);
+            // FN.3 — "add as friend" button per joiner. The person joined via
+            // your link, so let you connect with them right here. Sends a
+            // friend request via their code; they'll see it as a pending
+            // request (now surfaced prominently on their home banner).
+            if (row.code) {
+              var addBtn = document.createElement('button');
+              addBtn.type = 'button';
+              addBtn.className = 'referrals-modal-row-add';
+              if (row.alreadyFriends) {
+                addBtn.textContent = '✓ חבר';
+                addBtn.classList.add('is-friend');
+                addBtn.disabled = true;
+              } else if (row.requestPending) {
+                addBtn.textContent = '⏳ נשלחה';
+                addBtn.classList.add('is-pending');
+                addBtn.disabled = true;
+              } else {
+                addBtn.textContent = '➕ הוסף כחבר';
+                addBtn.onclick = function() { sendReferralFriendRequest(row.code, addBtn); };
+              }
+              rowEl.appendChild(addBtn);
+            }
             listEl.appendChild(rowEl);
           });
         }
       })
       .catch(function() {});
   }
+  // FN.3 — send a friend request to a joiner from the referrals list.
+  function sendReferralFriendRequest(code, btn) {
+    if (!code || !btn || btn.disabled) return;
+    var did = (typeof deviceId !== 'undefined' && deviceId) ? deviceId : (localStorage.getItem('bloom_device_id') || '');
+    var token = '';
+    try { token = localStorage.getItem('bloom_device_token') || ''; } catch (e) {}
+    btn.disabled = true;
+    btn.textContent = '⏳ שולח…';
+    fetch('/api/friends/request-send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ deviceId: did, token: token, targetCode: code })
+    })
+      .then(function(r) { return r.json(); })
+      .catch(function() { return null; })
+      .then(function(d) {
+        if (d && d.ok) {
+          if (d.alreadyFriends || d.accepted) {
+            btn.textContent = '✓ חבר';
+            btn.classList.add('is-friend');
+            if (typeof __bloomToast === 'function') __bloomToast('🤝 הוספתם זה את זה! +200💎 לשניכם', 'success');
+          } else {
+            btn.textContent = '⏳ נשלחה';
+            btn.classList.add('is-pending');
+            if (typeof __bloomToast === 'function') __bloomToast('📨 בקשת חברות נשלחה', 'success');
+          }
+        } else {
+          var reason = d && d.reason;
+          btn.disabled = false;
+          btn.textContent = '➕ הוסף כחבר';
+          var msg = reason === 'max_friends_reached' ? 'הגעת למקסימום חברים'
+                  : reason === 'target_not_found' ? 'השחקן לא נמצא'
+                  : reason === 'disabled' ? 'הפיצ׳ר מושבת'
+                  : 'לא ניתן לשלוח כרגע';
+          if (typeof __bloomToast === 'function') __bloomToast(msg, 'error');
+        }
+      });
+  }
+
   window.__bloomShowReferralsModal = showReferralsModal;
 
   // ── Your week stats — small scannable line ──

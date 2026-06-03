@@ -7012,12 +7012,73 @@
             rowEl.appendChild(codeEl);
             rowEl.appendChild(whenEl);
             rowEl.appendChild(creditEl);
+            // FN.3 — "add as friend" button per joiner. The person joined via
+            // your link, so let you connect with them right here. Sends a
+            // friend request via their code; they'll see it as a pending
+            // request (now surfaced prominently on their home banner).
+            if (row.code) {
+              var addBtn = document.createElement('button');
+              addBtn.type = 'button';
+              addBtn.className = 'referrals-modal-row-add';
+              if (row.alreadyFriends) {
+                addBtn.textContent = '✓ חבר';
+                addBtn.classList.add('is-friend');
+                addBtn.disabled = true;
+              } else if (row.requestPending) {
+                addBtn.textContent = '⏳ נשלחה';
+                addBtn.classList.add('is-pending');
+                addBtn.disabled = true;
+              } else {
+                addBtn.textContent = '➕ הוסף כחבר';
+                addBtn.onclick = function() { sendReferralFriendRequest(row.code, addBtn); };
+              }
+              rowEl.appendChild(addBtn);
+            }
             listEl.appendChild(rowEl);
           });
         }
       })
       .catch(function() {});
   }
+  // FN.3 — send a friend request to a joiner from the referrals list.
+  function sendReferralFriendRequest(code, btn) {
+    if (!code || !btn || btn.disabled) return;
+    var did = (typeof deviceId !== 'undefined' && deviceId) ? deviceId : (localStorage.getItem('bloom_device_id') || '');
+    var token = '';
+    try { token = localStorage.getItem('bloom_device_token') || ''; } catch (e) {}
+    btn.disabled = true;
+    btn.textContent = '⏳ שולח…';
+    fetch('/api/friends/request-send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ deviceId: did, token: token, targetCode: code })
+    })
+      .then(function(r) { return r.json(); })
+      .catch(function() { return null; })
+      .then(function(d) {
+        if (d && d.ok) {
+          if (d.alreadyFriends || d.accepted) {
+            btn.textContent = '✓ חבר';
+            btn.classList.add('is-friend');
+            if (typeof __bloomToast === 'function') __bloomToast('🤝 הוספתם זה את זה! +200💎 לשניכם', 'success');
+          } else {
+            btn.textContent = '⏳ נשלחה';
+            btn.classList.add('is-pending');
+            if (typeof __bloomToast === 'function') __bloomToast('📨 בקשת חברות נשלחה', 'success');
+          }
+        } else {
+          var reason = d && d.reason;
+          btn.disabled = false;
+          btn.textContent = '➕ הוסף כחבר';
+          var msg = reason === 'max_friends_reached' ? 'הגעת למקסימום חברים'
+                  : reason === 'target_not_found' ? 'השחקן לא נמצא'
+                  : reason === 'disabled' ? 'הפיצ׳ר מושבת'
+                  : 'לא ניתן לשלוח כרגע';
+          if (typeof __bloomToast === 'function') __bloomToast(msg, 'error');
+        }
+      });
+  }
+
   window.__bloomShowReferralsModal = showReferralsModal;
 
   // ── Your week stats — small scannable line ──
@@ -35903,7 +35964,19 @@ try {
     var home = document.getElementById('home-screen-v2') || document.getElementById('home-screen');
     if (!home) return;
     if (typeof window.fetchFriends !== 'function') return;
-    window.fetchFriends(false).then(function(d) {
+    // Fetch friends + pending requests together. PENDING INCOMING REQUESTS take
+    // top priority — they are the single most-missed social signal: push
+    // adoption is near-zero and the in-app pop-up is one-shot, so without a
+    // persistent home surface a request just vanishes. This banner re-checks
+    // on every home mount and stays until the request is actually answered.
+    var did = '';
+    try { did = localStorage.getItem('bloom_device_id') || ''; } catch (e) {}
+    var reqP = (did && did.length >= 8)
+      ? fetch('/api/friends/requests?deviceId=' + encodeURIComponent(did), { cache: 'no-store' })
+          .then(function(r) { return r.ok ? r.json() : null; }).catch(function() { return null; })
+      : Promise.resolve(null);
+    Promise.all([window.fetchFriends(false), reqP]).then(function(arr) {
+      var d = arr[0], reqData = arr[1];
       if (!d || !d.ok) return;
       var friends = Array.isArray(d.friends) ? d.friends : [];
       var count = friends.length;
@@ -35912,9 +35985,14 @@ try {
         if (friends[i] && friends[i].onlineNow) online++;
         if (friends[i] && friends[i].playedToday) today++;
       }
+      var pendingReq = (reqData && reqData.ok) ? (reqData.unreadIncoming | 0) : 0;
 
-      var icon, title, sub, cls;
-      if (count === 0) {
+      var icon, title, sub, cls, forceTab = null;
+      if (pendingReq > 0) {
+        cls = 'friends-banner-requests'; icon = '📨'; forceTab = 'requests';
+        title = pendingReq === 1 ? 'בקשת חברות חדשה ממתינה לך!' : pendingReq + ' בקשות חברות ממתינות לך!';
+        sub = 'אשר → +200💎 לשניכם · 👆 לחץ לאישור';
+      } else if (count === 0) {
         cls = 'friends-banner-empty'; icon = '👥';
         title = 'חבר ראשון = +200💎 לשניכם';
         sub = 'הוסף חבר ושחקו יחד · 👆 לחץ להזמין';
@@ -35952,7 +36030,7 @@ try {
       // 👥 חברים (see who's online + one-tap ⚔️ duel / 🎯 challenge). One window,
       // no drilling into a second modal.
       el.onclick = function() {
-        var tab = (count === 0) ? 'search' : 'friends';
+        var tab = forceTab || ((count === 0) ? 'search' : 'friends');
         if (typeof window.showFriendsModal === 'function') {
           window.showFriendsModal(tab);
         } else if (window.__bloomFriendSearch && typeof window.__bloomFriendSearch.showModal === 'function') {

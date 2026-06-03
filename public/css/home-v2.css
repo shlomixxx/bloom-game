@@ -5687,6 +5687,7 @@ html[data-theme="dark"] .pid2-referrals-label { color: #F0E8E2; }
 .referrals-modal-row {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
   padding: 10px 12px;
   background: #FAFAF6;
@@ -5694,6 +5695,27 @@ html[data-theme="dark"] .pid2-referrals-label { color: #F0E8E2; }
   border-radius: 10px;
   font-size: 13px;
 }
+/* FN.3 — "add as friend" action per joiner. Wraps to its own line on narrow
+   screens (the row is flex-wrap) so it never squeezes the name/code. */
+.referrals-modal-row-add {
+  border: none;
+  border-radius: 8px;
+  padding: 7px 12px;
+  min-height: 36px;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  margin-inline-start: auto;
+  background: linear-gradient(135deg, #F59E0B, #EC4899);
+  color: #fff;
+}
+.referrals-modal-row-add.is-friend  { background: rgba(74,139,54,0.16);  color: #2F6B22; }
+.referrals-modal-row-add.is-pending { background: rgba(120,118,110,0.16); color: #5A5953; }
+.referrals-modal-row-add:disabled   { cursor: default; }
+html[data-theme="dark"] .referrals-modal-row-add.is-friend  { color: #86EFAC; background: rgba(74,139,54,0.22); }
+html[data-theme="dark"] .referrals-modal-row-add.is-pending { color: #C9C7BF; background: rgba(120,118,110,0.25); }
 .referrals-modal-row-name {
   flex: 1; font-weight: 700; color: #1C1A18;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
@@ -5786,6 +5808,24 @@ html[data-theme="dark"] .friends-banner-sub,
 html[data-theme="dark"] .friends-banner-arrow { color: #A5B4FC; }
 html[data-theme="dark"] .friends-banner-live  .friends-banner-title { color: #86EFAC; }
 html[data-theme="dark"] .friends-banner-empty .friends-banner-title { color: #F9A8D4; }
+/* FN.3 — pending friend-request state. Top priority + attention pulse so a
+   waiting request is impossible to miss (push adoption is near-zero). The
+   global prefers-reduced-motion guard neutralises the pulse for those users. */
+.friends-banner-requests {
+  background: linear-gradient(135deg, rgba(245,158,11,0.22), rgba(236,72,153,0.16));
+  border: 1.5px solid rgba(245,158,11,0.5);
+  animation: friendsReqPulse 1.8s ease-in-out infinite;
+}
+.friends-banner-requests .friends-banner-title { color: #92400E; }
+.friends-banner-requests .friends-banner-sub,
+.friends-banner-requests .friends-banner-arrow { color: #B45309; }
+html[data-theme="dark"] .friends-banner-requests .friends-banner-title { color: #FCD34D; }
+html[data-theme="dark"] .friends-banner-requests .friends-banner-sub,
+html[data-theme="dark"] .friends-banner-requests .friends-banner-arrow { color: #FBBF24; }
+@keyframes friendsReqPulse {
+  0%, 100% { box-shadow: 0 2px 10px rgba(245,158,11,0.18); }
+  50%      { box-shadow: 0 4px 18px rgba(245,158,11,0.42); }
+}
 
 /* ============================================================
    Real-time friend social pop-ups (src/51-friend-notify.js)

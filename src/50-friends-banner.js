@@ -21,7 +21,19 @@
     var home = document.getElementById('home-screen-v2') || document.getElementById('home-screen');
     if (!home) return;
     if (typeof window.fetchFriends !== 'function') return;
-    window.fetchFriends(false).then(function(d) {
+    // Fetch friends + pending requests together. PENDING INCOMING REQUESTS take
+    // top priority — they are the single most-missed social signal: push
+    // adoption is near-zero and the in-app pop-up is one-shot, so without a
+    // persistent home surface a request just vanishes. This banner re-checks
+    // on every home mount and stays until the request is actually answered.
+    var did = '';
+    try { did = localStorage.getItem('bloom_device_id') || ''; } catch (e) {}
+    var reqP = (did && did.length >= 8)
+      ? fetch('/api/friends/requests?deviceId=' + encodeURIComponent(did), { cache: 'no-store' })
+          .then(function(r) { return r.ok ? r.json() : null; }).catch(function() { return null; })
+      : Promise.resolve(null);
+    Promise.all([window.fetchFriends(false), reqP]).then(function(arr) {
+      var d = arr[0], reqData = arr[1];
       if (!d || !d.ok) return;
       var friends = Array.isArray(d.friends) ? d.friends : [];
       var count = friends.length;
@@ -30,9 +42,14 @@
         if (friends[i] && friends[i].onlineNow) online++;
         if (friends[i] && friends[i].playedToday) today++;
       }
+      var pendingReq = (reqData && reqData.ok) ? (reqData.unreadIncoming | 0) : 0;
 
-      var icon, title, sub, cls;
-      if (count === 0) {
+      var icon, title, sub, cls, forceTab = null;
+      if (pendingReq > 0) {
+        cls = 'friends-banner-requests'; icon = '📨'; forceTab = 'requests';
+        title = pendingReq === 1 ? 'בקשת חברות חדשה ממתינה לך!' : pendingReq + ' בקשות חברות ממתינות לך!';
+        sub = 'אשר → +200💎 לשניכם · 👆 לחץ לאישור';
+      } else if (count === 0) {
         cls = 'friends-banner-empty'; icon = '👥';
         title = 'חבר ראשון = +200💎 לשניכם';
         sub = 'הוסף חבר ושחקו יחד · 👆 לחץ להזמין';
@@ -70,7 +87,7 @@
       // 👥 חברים (see who's online + one-tap ⚔️ duel / 🎯 challenge). One window,
       // no drilling into a second modal.
       el.onclick = function() {
-        var tab = (count === 0) ? 'search' : 'friends';
+        var tab = forceTab || ((count === 0) ? 'search' : 'friends');
         if (typeof window.showFriendsModal === 'function') {
           window.showFriendsModal(tab);
         } else if (window.__bloomFriendSearch && typeof window.__bloomFriendSearch.showModal === 'function') {
