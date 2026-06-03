@@ -1573,6 +1573,12 @@
         <div class="rewards-grid" data-keys="referral_enabled,referral_reward,referred_bonus"></div>
       </div>
 
+      <!-- Group: Friends + friend-requests (the viral loop) -->
+      <div data-rewards-group="friends" style="margin-bottom:14px">
+        <div style="font-size:13px;font-weight:700;color:var(--gold);margin-bottom:6px">👥 חברים + בקשות חברות</div>
+        <div class="rewards-grid" data-keys="friends_enabled,friends_signup_bonus,friends_shared_day_bonus,friends_max_per_device,friend_requests_enabled,friend_requests_max_pending"></div>
+      </div>
+
       <!-- Group: Spend (negative direction — costs in 💎) -->
       <div data-rewards-group="spend" style="margin-bottom:8px">
         <div style="font-size:13px;font-weight:700;color:var(--gold);margin-bottom:6px">💸 הוצאות (מחירים ב-💎)</div>
@@ -2571,7 +2577,11 @@
             <option value="medium">🟡 בינוני</option>
             <option value="low">🟢 קל</option>
           </select>
+          <input id="issues-filter-kind" placeholder="סוג (kind)…" style="padding:4px 8px;border:1px solid var(--border);border-radius:6px;font-size:11px;width:120px" />
+          <input id="issues-filter-after" type="datetime-local" title="מתאריך" style="padding:3px 6px;border:1px solid var(--border);border-radius:6px;font-size:10px" />
+          <input id="issues-filter-before" type="datetime-local" title="עד תאריך" style="padding:3px 6px;border:1px solid var(--border);border-radius:6px;font-size:10px" />
           <button class="btn sm" id="issues-refresh">↻ רענן</button>
+          <button class="btn sm" id="issues-clear-old" title="מסמן כבוטלו את כל התקלות האוטומטיות (api_*) הישנות מ-24 שעות. מנקה הצפות משרת שבור — לא נוגע בתקלות שדווחו או שפוצו." style="background:#FEF3C7;border-color:#F59E0B">🧹 נקה הצפות ישנות</button>
         </span>
       </h2>
       <div id="issues-list" style="display:flex;flex-direction:column;gap:8px;min-height:80px">
@@ -2911,6 +2921,10 @@
     issues_auto_compensate_critical: ['true', 'false'],
     issues_client_report_max_per_hour: [5, 10, 20],
     issues_default_compensation: [50, 100, 200],
+    issues_auto_clear_enabled: ['true', 'false'],
+    issues_auto_clear_hours: [6, 12, 24, 48],
+    ftue_enabled: ['true', 'false'],
+    tour_enabled: ['true', 'false'],
     // AD.2 — auto-fleet
     bots_auto_enabled: ['true', 'false'],
     bots_auto_count: [6, 8, 10, 15, 20],
@@ -3299,9 +3313,13 @@
     friend_search_min_chars: 'מינימום תווים לפני שחיפוש שחקנים מתחיל לרוץ (חוסך עומס שרת).<div class="tip-example">📊 ברירת מחדל 2.</div>',
     friend_search_max_results: 'כמה תוצאות להחזיר בחיפוש שחקנים.<div class="tip-example">📊 ברירת מחדל 20.</div>',
     // ---- Issues / tickets (auto error reports + player compensation) ----
-    issues_client_report_max_per_hour: 'תקרת דיווחי-שגיאה אוטומטיים מהקליינט לכל מכשיר בשעה (אנטי-הצפה).<div class="tip-example">📊 ברירת מחדל 10.</div>',
-    issues_auto_compensate_critical: 'פיצוי אוטומטי ביהלומים לשחקנים שנפגעו מתקלה קריטית.<div class="tip-example">⚠️ ברירת מחדל <code>false</code> — הדלק בזהירות (יכול לחלק הרבה 💎). הסכום נקבע ב-issues_default_compensation.</div>',
+    issues_client_report_max_per_hour: 'תקרת דיווחי-שגיאה אוטומטיים מהקליינט לכל מכשיר בשעה (אנטי-הצפה).<div class="tip-example">📊 מונע שקליינט עם שגיאה מתפרצת יציף את טבלת התקלות.<br>• <code>≤3</code> = שגיאות אמיתיות עלולות ליפול בשקט<br>• <code>10</code> (ברירת מחדל) = איזון טוב<br>• <code>≥30</code> = ה-DB מתמלא כפילויות</div>',
+    issues_auto_compensate_critical: 'פיצוי אוטומטי ביהלומים לשחקנים שנפגעו מתקלה קריטית.<div class="tip-example">⚠️ ברירת מחדל <code>false</code> — הדלק בזהירות (יכול לחלק הרבה 💎). כשדלוק: תקלה קריטית מזכה אוטומטית ב-issues_default_compensation💎 ומסומנת כנפתרה (אין תשלום כפול).</div>',
     issues_default_compensation: 'כמות היהלומים בפיצוי ברירת-מחדל על תקלה.<div class="tip-example">📊 ברירת מחדל 100💎.</div>',
+    issues_auto_clear_enabled: 'ניקוי אוטומטי של תקלות api_* ישנות שנרשמו אוטומטית (כדי שהצפה משרת שבור לא תטביע את הטבלה).<div class="tip-example">✅ <code>true</code> (ברירת מחדל): cron שעתי מסמן כבוטלו תקלות api_* פתוחות, אוטומטיות, לא-מפוצות, ישנות מ-issues_auto_clear_hours. לא נוגע בתקלות שדווחו מהלקוח או שפוצו.</div>',
+    issues_auto_clear_hours: 'גיל (בשעות) שאחריו תקלת api_* אוטומטית מנוקה ע״י ה-cron.<div class="tip-example">📊 ברירת מחדל 24. נמוך = ניקוי אגרסיבי; גבוה = שמירה ארוכה יותר לבדיקה.</div>',
+    ftue_enabled: 'מתג-על למדריך הראשוני (FTUE) שרץ פעם אחת לשחקנים חדשים.<div class="tip-example">✅ <code>true</code> (ברירת מחדל): שחקן חדש רואה את ההדגמה (הפלה→מיזוג→שרשרת) לפני הבית.<br>🔴 <code>false</code>: דילוג ישיר לבית — שימושי ל-A/B על השפעת המדריך על D1. (נכנס לתוקף מהטעינה הבאה, נקרא מ-localStorage).</div>',
+    tour_enabled: 'מתג-על לסיור המלא ("📖 איך משחקים?") — גם האוטומטי בכניסה הראשונה וגם הכפתור הידני.<div class="tip-example">✅ <code>true</code> (ברירת מחדל). <code>false</code>: הסיור לא ייפתח כלל (הזרימה ממשיכה רגיל).</div>',
     // ---- AD.2 Auto-fleet (world never empty) ----
     bots_auto_enabled: 'בוטים אוטומטיים — נדלקים לבד עם עליית השרת כדי שהמשחק אף פעם לא ירגיש ריק. הם משחקים, מזרימים heartbeat, ומאכלסים את לוח המובילים היומי.<div class="tip-example">💡 התיקון מס׳ 1 לתחושת ״ריק״. השאר על <code>true</code>. כפתור ״⏹ עצור״ בפאנל הבוטים מכבה את זה; ״🌍 מלא עולם״ מדליק שוב.</div>',
     bots_auto_count: 'כמה בוטים אוטומטיים להריץ במקביל.<div class="tip-example">📊 8-15 = תחושת חיים בלי להעמיס. שעות שיא? 20. עלות שרת זניחה עד 50.</div>',
@@ -4235,9 +4253,15 @@
   async function loadIssues() {
     var statusF = $('issues-filter-status') ? $('issues-filter-status').value : 'open';
     var sevF = $('issues-filter-severity') ? $('issues-filter-severity').value : '';
+    var kindF = $('issues-filter-kind') ? $('issues-filter-kind').value.trim() : '';
+    var afterF = $('issues-filter-after') ? $('issues-filter-after').value : '';
+    var beforeF = $('issues-filter-before') ? $('issues-filter-before').value : '';
     var qs = [];
     if (statusF) qs.push('status=' + encodeURIComponent(statusF));
     if (sevF) qs.push('severity=' + encodeURIComponent(sevF));
+    if (kindF) qs.push('kind=' + encodeURIComponent(kindF));
+    if (afterF) qs.push('reported_after=' + encodeURIComponent(afterF));
+    if (beforeF) qs.push('reported_before=' + encodeURIComponent(beforeF));
     var d = await api('/issues' + (qs.length ? '?' + qs.join('&') : ''));
     var listEl = $('issues-list');
     if (!d || !d.ok) {
@@ -4367,7 +4391,19 @@
   setTimeout(function() {
     var sf = $('issues-filter-status'); if (sf) sf.onchange = loadIssues;
     var svf = $('issues-filter-severity'); if (svf) svf.onchange = loadIssues;
+    var kf = $('issues-filter-kind'); if (kf) kf.onchange = loadIssues;
+    var af = $('issues-filter-after'); if (af) af.onchange = loadIssues;
+    var bf = $('issues-filter-before'); if (bf) bf.onchange = loadIssues;
     var rf = $('issues-refresh'); if (rf) rf.onclick = loadIssues;
+    var co = $('issues-clear-old');
+    if (co) co.onclick = async function() {
+      if (!confirm('לסמן כבוטלו את כל התקלות האוטומטיות (api_*) הפתוחות הישנות מ-24 שעות?\nזה מנקה הצפות משרת שבור. תקלות שדווחו מהלקוח או שכבר פוצו לא ייגעו.')) return;
+      co.disabled = true; co.textContent = '⏳ מנקה…';
+      var r = await api('/issues/clear-old', { method: 'POST', body: JSON.stringify({ hours: 24, kindLike: 'api_%' }) });
+      co.disabled = false; co.textContent = '🧹 נקה הצפות ישנות';
+      if (r && r.ok) { alert('נוקו ' + (r.cleared | 0) + ' תקלות ישנות.'); loadIssues(); }
+      else alert('שגיאה בניקוי.');
+    };
   }, 100);
 
   // ---------- LIVE ----------

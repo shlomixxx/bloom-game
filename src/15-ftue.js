@@ -38,6 +38,10 @@
       const params = new URLSearchParams(window.location.search);
       if (params.get('bot') || params.get('botui') || params.get('watch')) return false;
     } catch (e) {}
+    // Admin master toggle (ftue_enabled). The FTUE fires synchronously at boot
+    // before /api/config resolves, so we read the localStorage value cached by
+    // loadGameConfig() on the previous load (see src/03-audio.js).
+    try { if (localStorage.getItem('bloom_cfg_ftue_enabled') === 'false') return false; } catch (e) {}
     return !ftueAlreadyDone();
   }
   function ftueMarkDone() {

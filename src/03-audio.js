@@ -9,6 +9,14 @@
       .then(function(d) {
         if (d && d.config) {
           gameConfig = d.config;
+          // Cache boot-time gating flags to localStorage: the FTUE fires
+          // synchronously at boot BEFORE this async fetch resolves, so it can't
+          // read gameConfig directly. Persisting these lets the next boot honor
+          // the admin's ftue_enabled / tour_enabled toggles synchronously.
+          try {
+            if (d.config.ftue_enabled != null) localStorage.setItem('bloom_cfg_ftue_enabled', String(d.config.ftue_enabled));
+            if (d.config.tour_enabled != null) localStorage.setItem('bloom_cfg_tour_enabled', String(d.config.tour_enabled));
+          } catch (e) {}
           // Task #22 — apply the admin-tunable animation duration multiplier
           // to the --anim-mult token so every ui-* micro-interaction scales.
           try {

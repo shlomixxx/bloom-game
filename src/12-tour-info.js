@@ -151,6 +151,15 @@
   let _tourOnDone = null;
   function showTour(opts) {
     opts = opts || {};
+    // Admin master toggle (tour_enabled). Gated at the single entry point so it
+    // covers BOTH the auto-show-on-first-home and the manual "📖 איך משחקים?"
+    // button. When disabled we still fire onDone so the auto-show caller's
+    // "proceed" flow isn't stranded.
+    try {
+      var _tourOff = (typeof gameConfig === 'object' && gameConfig && gameConfig.tour_enabled === 'false');
+      if (!_tourOff) { try { _tourOff = localStorage.getItem('bloom_cfg_tour_enabled') === 'false'; } catch (e) {} }
+      if (_tourOff) { if (typeof opts.onDone === 'function') { try { opts.onDone(); } catch (e) {} } return; }
+    } catch (e) {}
     tourCurrentStep = (typeof opts.step === 'number') ? opts.step : 0;
     if (opts.onDone) _tourOnDone = opts.onDone;
     const existing = document.getElementById('tour-modal');

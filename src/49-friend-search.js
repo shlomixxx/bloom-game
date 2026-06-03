@@ -303,6 +303,7 @@
           btn.textContent = orig;
           var reasons = {
             disabled: 'הפיצ׳ר מושבת', target_not_found: 'שחקן לא נמצא',
+            profile_missing: 'השחקן עדיין לא פעיל במשחק',
             cant_self_request: 'אי אפשר לבקש מעצמך', max_friends_reached: 'הגעת ל-50 חברים',
             max_pending_reached: 'יותר מדי בקשות שנשלחו', rate_limited: 'יותר מדי בקשות — נסה שוב מאוחר יותר',
             network: 'שגיאת רשת'

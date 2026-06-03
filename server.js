@@ -1184,7 +1184,8 @@ app.get('/api/leaderboard/v2', async (req, res) => {
       const rr = await pool.query(rankQ);
       if (rr.rows.length && rr.rows[0].has_score) rank = parseInt(rr.rows[0].rank, 10);
     }
-    const total = (await pool.query(totalQ)).rows[0].c;
+    const totalRes = await pool.query(totalQ);
+    const total = totalRes.rows.length ? totalRes.rows[0].c : 0;
     res.json({
       list, total, rank,
       from: startDate, to: endDate, period, scope,
@@ -1236,13 +1237,13 @@ app.get('/api/leaderboard/range/:period', async (req, res) => {
                 EXISTS (SELECT 1 FROM me) AS has_score`,
         [startDate, endDate, deviceId]
       );
-      if (rankRes.rows[0].has_score) rank = parseInt(rankRes.rows[0].rank, 10);
+      if (rankRes.rows.length && rankRes.rows[0].has_score) rank = parseInt(rankRes.rows[0].rank, 10);
     }
     const totalRes = await pool.query(
       `SELECT COUNT(DISTINCT device_id)::int AS c FROM daily_scores WHERE date >= $1 AND date <= $2`,
       [startDate, endDate]
     );
-    res.json({ list, total: totalRes.rows[0].c, rank, from: startDate, to: endDate, period });
+    res.json({ list, total: totalRes.rows.length ? totalRes.rows[0].c : 0, rank, from: startDate, to: endDate, period });
   } catch (e) {
     console.error('GET /api/leaderboard/range', e);
     res.status(500).json({ error: 'server' });
@@ -9697,6 +9698,7 @@ app.post('/api/friend-challenges/send', requireDeviceAuth, async (req, res) => {
       [challengerDevice, challengedDevice, challengerName, challengedName,
        tgt, cleanBoardId, cleanBoardName, cleanMessage, String(hours)]
     );
+    if (!ins.rows.length) return res.json({ ok: false, reason: 'insert_failed' });
     // Fire-and-forget push to the challenged player.
     if (typeof sendPushToDevice === 'function') {
       sendPushToDevice(challengedDevice, {
@@ -9953,7 +9955,34 @@ async function _reportIssue(opts) {
         opts.source || 'auto'
       ]
     );
-    return (ins.rows[0] && ins.rows[0].id) || null;
+    const newId = (ins.rows[0] && ins.rows[0].id) || null;
+    // Auto-compensate critical issues when the admin opted in (default off).
+    // The server detected the player lost value (e.g. a chest credit failed),
+    // so refund issues_default_compensation immediately and mark the issue
+    // resolved+compensated so it never sits 'open' (prevents manual double-pay).
+    if (newId && sev === 'critical') {
+      try {
+        const acfg = await getCachedConfigPrefix('issues_');
+        if (acfg.issues_auto_compensate_critical === 'true') {
+          const comp = Math.max(0, Math.min(100000, parseInt(acfg.issues_default_compensation, 10) || 0));
+          if (comp > 0) {
+            const upd = await pool.query(
+              `UPDATE player_profiles SET balance = balance + $1, total_earned = total_earned + $1, updated_at = NOW()
+                WHERE device_id = $2 RETURNING device_id`,
+              [comp, opts.deviceId]);
+            if (upd.rows.length) {
+              await pool.query(
+                `UPDATE player_issues SET status='resolved', resolved_at=NOW(),
+                        compensation_amount=$1, compensation_paid=TRUE,
+                        resolution_notes=COALESCE(resolution_notes,'auto-compensated (critical)')
+                  WHERE id=$2`,
+                [comp, newId]);
+            }
+          }
+        }
+      } catch (ce) { console.warn('_reportIssue auto-comp', ce.message); }
+    }
+    return newId;
   } catch (e) { console.warn('_reportIssue', e.message); return null; }
 }
 
@@ -9962,7 +9991,9 @@ async function _reportIssue(opts) {
 app.post('/api/issues/report', requireDeviceAuth, async (req, res) => {
   try {
     const deviceId = req.deviceId;
-    if (!checkRateLimit('issue:report', deviceId, 10, 60 * 60 * 1000)) {
+    const _icfg = await getCachedConfigPrefix('issues_').catch(() => ({}));
+    const maxPerHour = Math.max(1, Math.min(500, parseInt(_icfg.issues_client_report_max_per_hour, 10) || 10));
+    if (!checkRateLimit('issue:report', deviceId, maxPerHour, 60 * 60 * 1000)) {
       return res.status(429).json({ error: 'rate_limited' });
     }
     const body = req.body || {};
@@ -12013,6 +12044,11 @@ app.post('/api/friends/request-send', requireDeviceAuth, async (req, res) => {
     if (!checkRateLimit('fr_send', deviceId, 30, 60 * 60 * 1000)) {
       return res.status(429).json({ error: 'rate_limited' });
     }
+    // The sender may not have a profile yet (e.g. they joined via a link and
+    // opened the referrals modal before finishing a game). Without this, the
+    // both-profiles check below returns 'profile_missing' → the client showed a
+    // confusing generic error. Guarantee the sender's profile up front.
+    await ensurePlayerProfile(deviceId);
     const cfg = await pool.query(
       `SELECT key, value FROM game_config WHERE key IN ('friend_requests_enabled','friend_requests_max_pending','friends_max_per_device')`
     );
@@ -13548,12 +13584,18 @@ if (ADMIN_PATH && ADMIN_PASSWORD) {
       const status = String(req.query.status || '').slice(0, 15);
       const kind = String(req.query.kind || '').slice(0, 40);
       const severity = String(req.query.severity || '').slice(0, 10);
+      // Optional ISO-8601 date-range filter — isolate errors from a deploy window.
+      const after = String(req.query.reported_after || '').slice(0, 40);
+      const before = String(req.query.reported_before || '').slice(0, 40);
+      const isIso = (s) => /^\d{4}-\d{2}-\d{2}([T ]\d{2}:\d{2}(:\d{2})?(\.\d+)?Z?)?$/.test(s);
       const limit = Math.min(200, Math.max(1, parseInt(req.query.limit, 10) || 50));
       const offset = Math.max(0, parseInt(req.query.offset, 10) || 0);
       const where = [], params = [];
       if (status)   { params.push(status);   where.push(`status = $${params.length}`); }
       if (kind)     { params.push(kind);     where.push(`kind = $${params.length}`); }
       if (severity) { params.push(severity); where.push(`severity = $${params.length}`); }
+      if (after && isIso(after))   { params.push(after);  where.push(`reported_at >= $${params.length}`); }
+      if (before && isIso(before)) { params.push(before); where.push(`reported_at <= $${params.length}`); }
       const whereSql = where.length ? 'WHERE ' + where.join(' AND ') : '';
       params.push(limit, offset);
       const r = await pool.query(
@@ -13646,6 +13688,83 @@ if (ADMIN_PATH && ADMIN_PASSWORD) {
       }
     } catch (e) {
       console.error('admin POST /issues/:id/resolve', e);
+      res.status(500).json({ error: 'server' });
+    }
+  });
+
+  // POST /admin/api/issues/bulk-resolve
+  //   body: { ids: [..], dismiss: bool, compensation: 0|N }
+  // Resolve/dismiss many issues in one transaction. When compensation>0 and
+  // !dismiss, credits each affected player. One audit row for the batch.
+  adminRouter.post('/api/issues/bulk-resolve', async (req, res) => {
+    try {
+      const ids = Array.isArray(req.body && req.body.ids)
+        ? req.body.ids.map(n => parseInt(n, 10)).filter(n => n > 0).slice(0, 500)
+        : [];
+      if (!ids.length) return res.status(400).json({ error: 'no_ids' });
+      const dismiss = !!(req.body && req.body.dismiss);
+      const comp = Math.max(0, Math.min(100000, parseInt((req.body && req.body.compensation) || 0, 10) || 0));
+      const newStatus = dismiss ? 'dismissed' : 'resolved';
+      const client = await pool.connect();
+      let affected = 0, compensated = 0;
+      try {
+        await client.query('BEGIN');
+        const open = await client.query(
+          `SELECT id, device_id FROM player_issues WHERE id = ANY($1::bigint[]) AND status = 'open' FOR UPDATE`,
+          [ids]);
+        for (const row of open.rows) {
+          if (comp > 0 && !dismiss && row.device_id) {
+            await client.query(
+              `UPDATE player_profiles SET balance = balance + $1, total_earned = total_earned + $1, updated_at = NOW()
+                WHERE device_id = $2`, [comp, row.device_id]);
+            compensated++;
+          }
+          await client.query(
+            `UPDATE player_issues SET status = $1, resolved_at = NOW(),
+                    compensation_amount = $2, compensation_paid = $3
+              WHERE id = $4`,
+            [newStatus, comp, comp > 0 && !dismiss, row.id]);
+          affected++;
+        }
+        await client.query('COMMIT');
+      } catch (err) {
+        try { await client.query('ROLLBACK'); } catch (_) {}
+        throw err;
+      } finally {
+        client.release();
+      }
+      await logAdminAction(dismiss ? 'issue.bulk_dismiss' : 'issue.bulk_resolve',
+        'player_issues', ids.slice(0, 50).join(','), { count: affected, compensation: comp, compensated });
+      res.json({ ok: true, affected, compensated });
+    } catch (e) {
+      console.error('admin POST /issues/bulk-resolve', e);
+      res.status(500).json({ error: 'server' });
+    }
+  });
+
+  // POST /admin/api/issues/clear-old
+  //   body: { hours?: 24, kindLike?: 'api_%' }
+  // Auto-dismiss the flood: a single broken endpoint can log hundreds of
+  // auto-detected api_* issues. This dismisses OPEN auto-logged issues older
+  // than N hours matching the kind pattern (never touches client-reported or
+  // compensated issues). The nightly cron does the same automatically.
+  adminRouter.post('/api/issues/clear-old', async (req, res) => {
+    try {
+      const hours = Math.max(0, Math.min(8760, parseInt((req.body && req.body.hours), 10) || 24));
+      const kindLike = String((req.body && req.body.kindLike) || 'api_%').slice(0, 40);
+      const r = await pool.query(
+        `UPDATE player_issues
+            SET status = 'dismissed', resolved_at = NOW(),
+                resolution_notes = COALESCE(resolution_notes, 'auto-cleared (stale auto-logged)')
+          WHERE status = 'open' AND source = 'auto' AND compensation_paid = FALSE
+            AND kind LIKE $1
+            AND reported_at < NOW() - ($2 || ' hours')::interval
+          RETURNING id`,
+        [kindLike, String(hours)]);
+      await logAdminAction('issue.clear_old', 'player_issues', kindLike, { hours, cleared: r.rows.length });
+      res.json({ ok: true, cleared: r.rows.length });
+    } catch (e) {
+      console.error('admin POST /issues/clear-old', e);
       res.status(500).json({ error: 'server' });
     }
   });
@@ -15565,6 +15684,10 @@ async function ensurePlayerProfile(deviceId) {
       throw e;
     }
   }
+  // All 6 collision retries failed (astronomically rare). Throw instead of
+  // returning silently — a silent no-op leaves the device with no profile and
+  // surfaces later as confusing "profile_missing" errors downstream.
+  throw new Error('ensurePlayerProfile failed after 6 collision retries for ' + deviceId);
 }
 
 // GET /api/player/code — get or create player code
@@ -16270,33 +16393,39 @@ app.post('/api/player/gift-friend', requireDeviceAuth, async (req, res) => {
     // credit recipient, insert gift row. Wrapped in a transaction so a
     // partial failure doesn't leave the ledger inconsistent.
     let newBalance = sender.balance;
-    await pool.query('BEGIN');
+    // Atomicity requires a single dedicated connection — BEGIN/COMMIT on the
+    // pool route to arbitrary connections, so concurrent gifts could both pass
+    // the balance check and double-deduct/double-credit. Acquire one client.
+    const giftClient = await pool.connect();
     try {
-      const deduct = await pool.query(
+      await giftClient.query('BEGIN');
+      const deduct = await giftClient.query(
         `UPDATE player_profiles
             SET balance = balance - $1, total_spent = total_spent + $1
           WHERE device_id = $2 AND balance >= $1
           RETURNING balance`,
         [amt, deviceId]);
       if (!deduct.rows.length) {
-        await pool.query('ROLLBACK');
+        await giftClient.query('ROLLBACK');
         return res.json({ ok: false, reason: 'insufficient_balance' });
       }
       newBalance = deduct.rows[0].balance;
-      await pool.query(
+      await giftClient.query(
         `UPDATE player_profiles
             SET balance = balance + $1, total_earned = total_earned + $1
           WHERE device_id = $2`,
         [amt, recipient.device_id]);
-      await pool.query(
+      await giftClient.query(
         `INSERT INTO player_gifts
            (sender_device, sender_code, sender_name, recipient_device, recipient_code, amount, message)
          VALUES ($1, $2, $3, $4, $5, $6, $7)`,
         [deviceId, sender.player_code, sender.display_name, recipient.device_id, fullCode, amt, safeMessage]);
-      await pool.query('COMMIT');
+      await giftClient.query('COMMIT');
     } catch (txErr) {
-      await pool.query('ROLLBACK');
+      try { await giftClient.query('ROLLBACK'); } catch (_) {}
       throw txErr;
+    } finally {
+      giftClient.release();
     }
     res.json({ ok: true, amount: amt, recipientCode: fullCode, newBalance });
 
@@ -17012,11 +17141,19 @@ app.post('/api/referral', requireDeviceAuth, async (req, res) => {
     if (cfg.referral_enabled === 'false') return res.json({ ok: false, reason: 'referrals_disabled' });
     const reward = parseInt(cfg.referral_reward, 10) || 50;
     const bonus = parseInt(cfg.referred_bonus, 10) || 25;
-    // Record referral
-    await pool.query(
+    // Record referral. ON CONFLICT (referred_device) DO NOTHING makes this
+    // idempotent + race-safe: the earlier SELECT check is not atomic, so two
+    // concurrent joins for the same device would otherwise make the 2nd INSERT
+    // throw a UNIQUE violation → 500. If no row was inserted, this device was
+    // already referred (by a concurrent request) — bail BEFORE crediting so we
+    // never double-pay.
+    const refIns = await pool.query(
       `INSERT INTO referrals (referrer_code, referrer_device, referred_device, credits_awarded)
-       VALUES ($1, $2, $3, $4)`,
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (referred_device) DO NOTHING
+       RETURNING id`,
       [refCode, referrerDevice, deviceId, reward]);
+    if (!refIns.rows.length) return res.json({ ok: false, reason: 'already_referred' });
     // Award credits to referrer
     await pool.query(
       `UPDATE player_profiles SET balance = balance + $1, total_earned = total_earned + $1
@@ -18665,6 +18802,33 @@ setInterval(async () => {
     await pool.query(`DELETE FROM game_config WHERE key LIKE '_gift_rate:%' AND updated_at < NOW() - INTERVAL '1 day'`);
   } catch (e) {
     console.warn('[cleanup] game_config purge failed', e.message);
+  }
+}, 60 * 60 * 1000); // hourly
+
+// Auto-clear stale auto-logged issues. A single broken endpoint can flood
+// player_issues with hundreds of auto-detected api_* rows (the res.json
+// interceptor logs every 500). Without a sweep the 🚨 tab fills with noise that
+// drowns out real, actionable issues. Hourly: dismiss OPEN, source='auto',
+// uncompensated api_* issues older than N hours. Never touches client-reported
+// or compensated issues. Admin-tunable; default ON / 24h.
+setInterval(async () => {
+  try {
+    const cfg = await pool.query(
+      `SELECT key, value FROM game_config WHERE key IN ('issues_auto_clear_enabled','issues_auto_clear_hours')`);
+    const m = {}; cfg.rows.forEach(r => { m[r.key] = r.value; });
+    if (m.issues_auto_clear_enabled === 'false') return;
+    const hours = Math.max(1, Math.min(8760, parseInt(m.issues_auto_clear_hours, 10) || 24));
+    const r = await pool.query(
+      `UPDATE player_issues
+          SET status = 'dismissed', resolved_at = NOW(),
+              resolution_notes = COALESCE(resolution_notes, 'auto-cleared (stale auto-logged)')
+        WHERE status = 'open' AND source = 'auto' AND compensation_paid = FALSE
+          AND kind LIKE 'api_%'
+          AND reported_at < NOW() - ($1 || ' hours')::interval`,
+      [String(hours)]);
+    if (r.rowCount > 0) console.log(`[cleanup] auto-cleared ${r.rowCount} stale api_* issues (>${hours}h)`);
+  } catch (e) {
+    console.warn('[cleanup] issues auto-clear failed', e.message);
   }
 }, 60 * 60 * 1000); // hourly
 

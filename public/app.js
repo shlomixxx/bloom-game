@@ -3743,6 +3743,14 @@
       .then(function(d) {
         if (d && d.config) {
           gameConfig = d.config;
+          // Cache boot-time gating flags to localStorage: the FTUE fires
+          // synchronously at boot BEFORE this async fetch resolves, so it can't
+          // read gameConfig directly. Persisting these lets the next boot honor
+          // the admin's ftue_enabled / tour_enabled toggles synchronously.
+          try {
+            if (d.config.ftue_enabled != null) localStorage.setItem('bloom_cfg_ftue_enabled', String(d.config.ftue_enabled));
+            if (d.config.tour_enabled != null) localStorage.setItem('bloom_cfg_tour_enabled', String(d.config.tour_enabled));
+          } catch (e) {}
           // Task #22 — apply the admin-tunable animation duration multiplier
           // to the --anim-mult token so every ui-* micro-interaction scales.
           try {
@@ -7071,8 +7079,12 @@
           btn.disabled = false;
           btn.textContent = '➕ הוסף כחבר';
           var msg = reason === 'max_friends_reached' ? 'הגעת למקסימום חברים'
-                  : reason === 'target_not_found' ? 'השחקן לא נמצא'
-                  : reason === 'disabled' ? 'הפיצ׳ר מושבת'
+                  : reason === 'target_not_found' ? 'השחקן עדיין לא פעיל במשחק'
+                  : reason === 'profile_missing' ? 'השחקן עדיין לא פעיל במשחק'
+                  : reason === 'cant_self_request' ? 'אי אפשר להוסיף את עצמך'
+                  : reason === 'max_pending_reached' ? 'יותר מדי בקשות ממתינות — נסה מאוחר יותר'
+                  : reason === 'rate_limited' ? 'יותר מדי בקשות — נסה שוב בעוד רגע'
+                  : reason === 'disabled' ? 'הוספת חברים מושבתת כרגע'
                   : 'לא ניתן לשלוח כרגע';
           if (typeof __bloomToast === 'function') __bloomToast(msg, 'error');
         }
@@ -20306,6 +20318,15 @@
   let _tourOnDone = null;
   function showTour(opts) {
     opts = opts || {};
+    // Admin master toggle (tour_enabled). Gated at the single entry point so it
+    // covers BOTH the auto-show-on-first-home and the manual "📖 איך משחקים?"
+    // button. When disabled we still fire onDone so the auto-show caller's
+    // "proceed" flow isn't stranded.
+    try {
+      var _tourOff = (typeof gameConfig === 'object' && gameConfig && gameConfig.tour_enabled === 'false');
+      if (!_tourOff) { try { _tourOff = localStorage.getItem('bloom_cfg_tour_enabled') === 'false'; } catch (e) {} }
+      if (_tourOff) { if (typeof opts.onDone === 'function') { try { opts.onDone(); } catch (e) {} } return; }
+    } catch (e) {}
     tourCurrentStep = (typeof opts.step === 'number') ? opts.step : 0;
     if (opts.onDone) _tourOnDone = opts.onDone;
     const existing = document.getElementById('tour-modal');
@@ -23433,6 +23454,10 @@
       const params = new URLSearchParams(window.location.search);
       if (params.get('bot') || params.get('botui') || params.get('watch')) return false;
     } catch (e) {}
+    // Admin master toggle (ftue_enabled). The FTUE fires synchronously at boot
+    // before /api/config resolves, so we read the localStorage value cached by
+    // loadGameConfig() on the previous load (see src/03-audio.js).
+    try { if (localStorage.getItem('bloom_cfg_ftue_enabled') === 'false') return false; } catch (e) {}
     return !ftueAlreadyDone();
   }
   function ftueMarkDone() {
@@ -35787,6 +35812,7 @@ try {
           btn.textContent = orig;
           var reasons = {
             disabled: 'הפיצ׳ר מושבת', target_not_found: 'שחקן לא נמצא',
+            profile_missing: 'השחקן עדיין לא פעיל במשחק',
             cant_self_request: 'אי אפשר לבקש מעצמך', max_friends_reached: 'הגעת ל-50 חברים',
             max_pending_reached: 'יותר מדי בקשות שנשלחו', rate_limited: 'יותר מדי בקשות — נסה שוב מאוחר יותר',
             network: 'שגיאת רשת'

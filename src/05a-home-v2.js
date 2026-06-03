@@ -1358,8 +1358,12 @@
           btn.disabled = false;
           btn.textContent = '➕ הוסף כחבר';
           var msg = reason === 'max_friends_reached' ? 'הגעת למקסימום חברים'
-                  : reason === 'target_not_found' ? 'השחקן לא נמצא'
-                  : reason === 'disabled' ? 'הפיצ׳ר מושבת'
+                  : reason === 'target_not_found' ? 'השחקן עדיין לא פעיל במשחק'
+                  : reason === 'profile_missing' ? 'השחקן עדיין לא פעיל במשחק'
+                  : reason === 'cant_self_request' ? 'אי אפשר להוסיף את עצמך'
+                  : reason === 'max_pending_reached' ? 'יותר מדי בקשות ממתינות — נסה מאוחר יותר'
+                  : reason === 'rate_limited' ? 'יותר מדי בקשות — נסה שוב בעוד רגע'
+                  : reason === 'disabled' ? 'הוספת חברים מושבתת כרגע'
                   : 'לא ניתן לשלוח כרגע';
           if (typeof __bloomToast === 'function') __bloomToast(msg, 'error');
         }

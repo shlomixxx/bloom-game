@@ -2669,6 +2669,12 @@ CREATE INDEX IF NOT EXISTS idx_player_issues_kind ON player_issues (kind, report
 INSERT INTO game_config (key, value) VALUES ('issues_default_compensation',      '100') ON CONFLICT (key) DO NOTHING;
 INSERT INTO game_config (key, value) VALUES ('issues_client_report_max_per_hour','10')  ON CONFLICT (key) DO NOTHING;
 INSERT INTO game_config (key, value) VALUES ('issues_auto_compensate_critical',  'false') ON CONFLICT (key) DO NOTHING;
+-- Auto-clear stale auto-logged api_* issues so a broken endpoint's flood doesn't drown the 🚨 tab.
+INSERT INTO game_config (key, value) VALUES ('issues_auto_clear_enabled',        'true') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('issues_auto_clear_hours',          '24')   ON CONFLICT (key) DO NOTHING;
+-- FTUE tutorial + in-game tour master toggles (admin can disable / A-B test).
+INSERT INTO game_config (key, value) VALUES ('ftue_enabled',                     'true') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('tour_enabled',                     'true') ON CONFLICT (key) DO NOTHING;
 
 -- ============================================================
 -- BL.1 — Bot social-proof + auto-fallback for duels (May 2026)

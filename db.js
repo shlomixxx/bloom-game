@@ -674,6 +674,10 @@ export async function initDb() {
     `INSERT INTO game_config (key, value) VALUES ('friend_requests_max_pending', '50')   ON CONFLICT (key) DO NOTHING`,
     `INSERT INTO game_config (key, value) VALUES ('friend_search_min_chars',     '2')    ON CONFLICT (key) DO NOTHING`,
     `INSERT INTO game_config (key, value) VALUES ('friend_search_max_results',   '20')   ON CONFLICT (key) DO NOTHING`,
+    `INSERT INTO game_config (key, value) VALUES ('issues_auto_clear_enabled',   'true') ON CONFLICT (key) DO NOTHING`,
+    `INSERT INTO game_config (key, value) VALUES ('issues_auto_clear_hours',     '24')   ON CONFLICT (key) DO NOTHING`,
+    `INSERT INTO game_config (key, value) VALUES ('ftue_enabled',                'true') ON CONFLICT (key) DO NOTHING`,
+    `INSERT INTO game_config (key, value) VALUES ('tour_enabled',                'true') ON CONFLICT (key) DO NOTHING`,
     `CREATE TABLE IF NOT EXISTS device_transfer_codes (
       code              VARCHAR(8) PRIMARY KEY,
       source_device_id  VARCHAR(64) NOT NULL,
