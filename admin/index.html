@@ -2584,6 +2584,14 @@
           <button class="btn sm" id="issues-clear-old" title="מסמן כבוטלו את כל התקלות האוטומטיות (api_*) הישנות מ-24 שעות. מנקה הצפות משרת שבור — לא נוגע בתקלות שדווחו או שפוצו." style="background:#FEF3C7;border-color:#F59E0B">🧹 נקה הצפות ישנות</button>
         </span>
       </h2>
+      <!-- Bulk-action bar: act on ALL currently-shown OPEN issues at once
+           (the status/severity/kind/date filters above ARE the selection). -->
+      <div id="issues-bulk-bar" style="display:none;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 10px;margin-bottom:10px;background:#F0F9FF;border:1px solid #7DD3FC;border-radius:8px;font-size:12px">
+        <span>פעולה על <b id="issues-bulk-count">0</b> התקלות הפתוחות המוצגות:</span>
+        <input type="number" id="issues-bulk-comp" value="0" min="0" max="100000" title="פיצוי 💎 לכל אחת (0 = ללא)" style="width:70px;padding:4px 6px;border:1px solid var(--border);border-radius:6px;font-size:11px;text-align:center"/>
+        <button class="btn sm" id="issues-bulk-resolve" style="background:#9FE1CB;color:#04342C;font-weight:700">✓ פתור הכל המוצג</button>
+        <button class="btn sm" id="issues-bulk-dismiss" style="background:rgba(0,0,0,0.08)">⊘ בטל הכל המוצג</button>
+      </div>
       <div id="issues-list" style="display:flex;flex-direction:column;gap:8px;min-height:80px">
         <div style="color:var(--muted);text-align:center;padding:14px">⏳ טוען...</div>
       </div>
@@ -4344,11 +4352,38 @@
     });
     listEl.querySelectorAll('[data-issue-dismiss]').forEach(function(b) {
       b.onclick = function() {
-        if (!confirm('לבטל את הדיווח? (לא יינתן פיצוי לשחקן)')) return;
         var id = b.getAttribute('data-issue-dismiss');
+        // Clarity (audit B): dismiss IGNORES any typed compensation — warn so
+        // the admin doesn't believe they paid the player. To pay, use "💎 פצה".
+        var compInp = $('comp-' + id);
+        var typed = compInp ? (parseInt(compInp.value, 10) || 0) : 0;
+        var msg = typed > 0
+          ? 'לבטל את הדיווח? הסכום שהקלדת (' + typed + '💎) לא יינתן לשחקן — לפיצוי לחץ "💎 פצה" במקום.'
+          : 'לבטל את הדיווח? (לא יינתן פיצוי לשחקן)';
+        if (!confirm(msg)) return;
         resolveIssue(id, 0, '', true);
       };
     });
+    // Bulk bar — the status/kind/date filters above ARE the selection. Collect
+    // the currently-shown OPEN issue ids; show the bar when 2+ are visible.
+    window._issuesShownOpenIds = (d.issues || []).filter(function(i) { return i.status === 'open'; }).map(function(i) { return i.id; });
+    var bulkBar = $('issues-bulk-bar');
+    if (bulkBar) {
+      var nOpen = window._issuesShownOpenIds.length;
+      bulkBar.style.display = nOpen > 1 ? 'flex' : 'none';
+      var bcEl = $('issues-bulk-count'); if (bcEl) bcEl.textContent = nOpen;
+    }
+  }
+  async function bulkResolveShown(dismiss) {
+    var ids = window._issuesShownOpenIds || [];
+    if (!ids.length) { toast('אין תקלות פתוחות מוצגות'); return; }
+    var compEl = $('issues-bulk-comp');
+    var comp = (!dismiss && compEl) ? (parseInt(compEl.value, 10) || 0) : 0;
+    var verb = dismiss ? 'לבטל' : (comp > 0 ? 'לפתור ולפצות ב-' + comp + '💎' : 'לפתור');
+    if (!confirm(verb + ' את ' + ids.length + ' התקלות המוצגות?')) return;
+    var r = await api('/issues/bulk-resolve', { method: 'POST', body: JSON.stringify({ ids: ids, dismiss: !!dismiss, compensation: comp }) });
+    if (r && r.ok) { toast('בוצע: ' + (r.affected | 0) + ' תקלות' + (r.compensated ? ' · פוצו ' + r.compensated : '')); loadIssues(); }
+    else toast('שגיאה בפעולה מרובה');
   }
   async function resolveIssue(issueId, compensation, notes, dismiss) {
     var r = await api('/issues/' + issueId + '/resolve', {
@@ -4404,6 +4439,8 @@
       if (r && r.ok) { alert('נוקו ' + (r.cleared | 0) + ' תקלות ישנות.'); loadIssues(); }
       else alert('שגיאה בניקוי.');
     };
+    var br = $('issues-bulk-resolve'); if (br) br.onclick = function() { bulkResolveShown(false); };
+    var bd = $('issues-bulk-dismiss'); if (bd) bd.onclick = function() { bulkResolveShown(true); };
   }, 100);
 
   // ---------- LIVE ----------
@@ -9610,6 +9647,23 @@
         failures.push({ path: path, status: 'NETWORK', error: e.message });
         dbgLog('ENDPOINT', 'error', path + ' → NETWORK FAIL: ' + e.message, e);
       }
+    }
+    // Auth-enforcement check (audit C): the GET checks above ride the already-
+    // authenticated admin session, so they'd pass even if requireAdmin were
+    // broken. Fetch an admin endpoint WITHOUT credentials — it MUST be rejected
+    // (401/403). A 200 means the admin API is exposed unauthenticated.
+    try {
+      var au = await fetch(location.origin + API + '/dashboard', { credentials: 'omit', cache: 'no-store' });
+      if (au.status === 401 || au.status === 403) {
+        dbgLog('ENDPOINT', 'log', 'auth enforced (no-creds → ' + au.status + ') ✓');
+      } else {
+        failures.push({ path: 'AUTH', status: au.status, note: 'admin API not protected' });
+        dbgLog('ENDPOINT', 'error', '⚠ AUTH NOT ENFORCED: /dashboard returned ' + au.status + ' without credentials — requireAdmin may be broken', { status: au.status });
+      }
+    } catch (e) {
+      // A network/CORS error means the unauthenticated request did NOT succeed
+      // — the safe outcome. Treat as pass.
+      dbgLog('ENDPOINT', 'log', 'auth enforced (no-creds blocked) ✓');
     }
     return failures;
   }

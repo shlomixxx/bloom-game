@@ -385,6 +385,7 @@
       slug:           challengeMeta.slug,
       name:           challengeMeta.name,
       prizeText:      challengeMeta.prizeText || enterResp.prizeText,
+      prizeImageUrl:  challengeMeta.prizeImageUrl || enterResp.prizeImageUrl || null,
       challengeType:  enterResp.challengeType,
       thresholdScore: enterResp.thresholdScore,
       thresholdTier:  enterResp.thresholdTier,

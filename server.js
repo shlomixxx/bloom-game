@@ -2196,7 +2196,8 @@ app.post('/api/challenges/:slug/enter', requireDeviceAuth, async (req, res) => {
       thresholdScore: c.threshold_score,
       thresholdTier:  c.threshold_tier,
       winnersCount:  c.winners_count,
-      prizeText:     c.prize_text
+      prizeText:     c.prize_text,
+      prizeImageUrl: c.prize_image_url || null
     });
   } catch (e) {
     console.error('POST /api/challenges/:slug/enter', e);

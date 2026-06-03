@@ -479,9 +479,22 @@
     return '';
   }
 
+  // Compact large stat numbers so they fit the narrow stats boxes. The #best
+  // (שיא) box is flex:1 — a 7-digit "1,175,567" overflowed + got hard-clipped
+  // ("1,175,5…"). Small values stay exact for the satisfying climb; 100K+ →
+  // "118K"; 1M+ → "1.2M". (The val-lg/val-xl font-shrink classes were also
+  // silently defeated by the compaction `.stat-val{font-size:14px!important}`
+  // rule — fixed in base.css — but compaction alone makes the values fit.)
+  function fmtStatNum(n) {
+    n = Math.max(0, n | 0);
+    if (n >= 1000000) { var m = n / 1000000; return (m >= 10 ? Math.round(m) : Math.round(m * 10) / 10) + 'M'; }
+    if (n >= 100000) return Math.round(n / 1000) + 'K';
+    return n.toLocaleString();
+  }
+
   function render(opts) {
     opts = opts || {};
-    document.getElementById('score').textContent = score.toLocaleString();
+    document.getElementById('score').textContent = fmtStatNum(score);
     // Auto-shrink font for large scores
     var scoreEl = document.getElementById('score');
     if (scoreEl) {
@@ -490,7 +503,7 @@
       else if (score >= 100000) scoreEl.classList.add('score-lg');
     }
     var bestStatEl = document.getElementById('best');
-    bestStatEl.textContent = best.toLocaleString();
+    bestStatEl.textContent = fmtStatNum(best);
     bestStatEl.classList.remove('val-lg', 'val-xl');
     if (best >= 1000000) bestStatEl.classList.add('val-xl');
     else if (best >= 100000) bestStatEl.classList.add('val-lg');
@@ -499,7 +512,13 @@
     if (score > best && best > 0 && !skinTrialMode && !opts.over) {
       best = score;
       try { localStorage.setItem(BEST_KEY, String(best)); } catch(e) {}
-      document.getElementById('best').textContent = best.toLocaleString();
+      var bestLiveEl = document.getElementById('best');
+      bestLiveEl.textContent = fmtStatNum(best);
+      // Re-apply the shrink class for the new value (was only set once above,
+      // so a best that crossed 100K/1M mid-game kept the wrong size).
+      bestLiveEl.classList.remove('val-lg', 'val-xl');
+      if (best >= 1000000) bestLiveEl.classList.add('val-xl');
+      else if (best >= 100000) bestLiveEl.classList.add('val-lg');
       // One-time "new best!" celebration during gameplay
       if (!bestBeatenThisGame) {
         bestBeatenThisGame = true;
