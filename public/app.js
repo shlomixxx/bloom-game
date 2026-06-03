@@ -22454,6 +22454,17 @@
       },
       drop: function(col) { return drop(col); },
       restart: function() { init('practice'); },
+      // Restart the CURRENT mode/board without navigating away — for the bot's
+      // "current screen" mode so it never jumps to a different board. For
+      // dynamic it re-applies window._activeDynamicBoard; daily/practice replay.
+      restartCurrent: function() {
+        try { init(mode || 'practice', { fresh: true }); return true; }
+        catch (e) { try { init('practice'); } catch (_) {} return false; }
+      },
+      // The live in-game event (💣 bomb / ⭐ star / 🎁 gift / 🔥 fever / ❄️ freeze)
+      // currently on the board — { type, row, col, emoji } or null. Triggers
+      // when a tile is dropped into its COLUMN (see 14-events.js checkEventTrigger).
+      getActiveEvent: function() { return window.__bloomActiveEvent || null; },
       // Bot extras (May 2026) — let the bot drive mode switching + read
       // dynamic-board context without depending on internal IIFE state.
       setMode: function(nextMode) {
@@ -22696,6 +22707,7 @@
       if (activeEvent.interval) clearInterval(activeEvent.interval);
       activeEvent = null;
     }
+    try { window.__bloomActiveEvent = null; } catch (e) {}
     var el = document.getElementById('event-drop-overlay');
     if (el) el.remove();
   }
@@ -22819,6 +22831,11 @@
       timer: timerSec,
       startTime: Date.now()
     };
+    // Expose the active event so the dev auto-play bot (public/bot.js, a
+    // separate file outside this IIFE) can SEE it and aim for its column —
+    // bomb/star/fever boost score, gift gives gems, freeze should be avoided.
+    // Same object reference, so the live timer mutations stay visible.
+    try { window.__bloomActiveEvent = { type: activeEvent.type, row: activeEvent.row, col: activeEvent.col, emoji: activeEvent.emoji }; } catch (e) {}
 
     renderEventOnCell(activeEvent);
     // Sound: "ding!" when event appears

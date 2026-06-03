@@ -619,6 +619,17 @@
       },
       drop: function(col) { return drop(col); },
       restart: function() { init('practice'); },
+      // Restart the CURRENT mode/board without navigating away — for the bot's
+      // "current screen" mode so it never jumps to a different board. For
+      // dynamic it re-applies window._activeDynamicBoard; daily/practice replay.
+      restartCurrent: function() {
+        try { init(mode || 'practice', { fresh: true }); return true; }
+        catch (e) { try { init('practice'); } catch (_) {} return false; }
+      },
+      // The live in-game event (💣 bomb / ⭐ star / 🎁 gift / 🔥 fever / ❄️ freeze)
+      // currently on the board — { type, row, col, emoji } or null. Triggers
+      // when a tile is dropped into its COLUMN (see 14-events.js checkEventTrigger).
+      getActiveEvent: function() { return window.__bloomActiveEvent || null; },
       // Bot extras (May 2026) — let the bot drive mode switching + read
       // dynamic-board context without depending on internal IIFE state.
       setMode: function(nextMode) {

@@ -40,7 +40,7 @@
     speed: 'normal',
     autoRestart: true,
     submitToLB: false,         // ☑ allow LB submits (off by default)
-    targetMode: 'auto',        // auto | practice | daily | dynamic
+    targetMode: 'current',     // current | auto | practice | daily | dynamic | duel
     selectedBoardId: null,     // null = random | id | '__rotation__'
     rotationIndex: 0,          // cursor for '__rotation__' mode
     currentBoardName: '',      // populated when starting a dynamic board
@@ -469,6 +469,11 @@
     const COLS = grid[0].length;
     const ctx = getBoardContext();
     const ms = multStats(ctx, COLS);
+    // Event awareness — the live in-game event (💣 bomb / ⭐ star / 🎁 gift /
+    // 🔥 fever / ❄️ freeze) triggers when a tile is dropped into its COLUMN
+    // (see 14-events.js checkEventTrigger). Bias toward the valuable ones and
+    // away from freezing a good tile. Read once per move.
+    const evt = (window.BloomDebug.getActiveEvent && window.BloomDebug.getActiveEvent()) || null;
     // Expected next piece — tier 1 is most common under default weights;
     // tier 2 is the second-most. Score both, take the better follow-up to
     // approximate "the next move will at least be playable."
@@ -490,6 +495,15 @@
         }
       }
       if (bestFollowup > -Infinity) s += bestFollowup * 0.55;
+
+      // Event bias — strongly prefer triggering a valuable event in this column.
+      if (evt && evt.col === col) {
+        if (evt.type === 'bomb') s += 700;         // +2000 per destroyed tile — huge
+        else if (evt.type === 'fever') s += 400;   // opens a ×3 score window
+        else if (evt.type === 'star') s += 280;    // +1 tier on the landed tile
+        else if (evt.type === 'gift') s += 160;     // free 💎 (for a real player)
+        else if (evt.type === 'freeze') s -= 12 * piece * piece; // don't freeze a good tile
+      }
 
       s += Math.random() * 1.5;
       if (s > bestScore) { bestScore = s; bestCol = col; }
@@ -545,6 +559,12 @@
   async function navigateToTargetMode() {
     if (!window.BloomDebug) return;
     const mode = bot.targetMode;
+    if (mode === 'current') {
+      // Play wherever the user already is — NEVER navigate or restart, so the
+      // bot can be turned on while sitting on a specific board/contest/duel/
+      // challenge and stays put. (The user explicitly asked for this.)
+      return;
+    }
     if (mode === 'auto') {
       // If we're not in a game, default to practice.
       if (!isInGame()) {
@@ -650,8 +670,13 @@
       window.BloomDebug.restart();
       await sleep(400);
     }
-    const homeScreen = document.getElementById('home-screen');
-    if (homeScreen) homeScreen.remove();
+    // 'current' mode plays whatever's already open — don't tear down home (the
+    // user may not be in a game yet; the loop just waits). Other modes already
+    // navigated/restarted into a game, so a stale home node is safe to remove.
+    if (bot.targetMode !== 'current') {
+      const homeScreen = document.getElementById('home-screen');
+      if (homeScreen) homeScreen.remove();
+    }
 
     bot.currentGameStart = Date.now();
     bot.sawCrownThisGame = false;
@@ -693,9 +718,14 @@
         if (!bot.autoRestart) { bot.stopRequested = true; break; }
         await sleep(1500);
         if (bot.stopRequested) break;
-        await navigateToTargetMode();
-        if (bot.targetMode === 'auto' || bot.targetMode === 'practice') {
-          window.BloomDebug.restart();
+        if (bot.targetMode === 'current') {
+          // Replay the SAME board/mode — never jump elsewhere.
+          if (window.BloomDebug.restartCurrent) window.BloomDebug.restartCurrent();
+        } else {
+          await navigateToTargetMode();
+          if (bot.targetMode === 'auto' || bot.targetMode === 'practice') {
+            window.BloomDebug.restart();
+          }
         }
         await sleep(600);
         bot.currentGameStart = Date.now();
@@ -754,7 +784,8 @@
         <div class="bbp-row">
           <label class="bbp-label">Mode</label>
           <select id="bbp-mode">
-            <option value="auto">🎮 Auto (current screen)</option>
+            <option value="current">📍 הלוח הנוכחי · בלי קפיצה</option>
+            <option value="auto">🎮 Auto (restart practice)</option>
             <option value="practice">🎯 Practice</option>
             <option value="daily">📅 Daily Challenge</option>
             <option value="dynamic">✨ Dynamic Board</option>

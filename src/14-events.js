@@ -126,6 +126,7 @@
       if (activeEvent.interval) clearInterval(activeEvent.interval);
       activeEvent = null;
     }
+    try { window.__bloomActiveEvent = null; } catch (e) {}
     var el = document.getElementById('event-drop-overlay');
     if (el) el.remove();
   }
@@ -249,6 +250,11 @@
       timer: timerSec,
       startTime: Date.now()
     };
+    // Expose the active event so the dev auto-play bot (public/bot.js, a
+    // separate file outside this IIFE) can SEE it and aim for its column —
+    // bomb/star/fever boost score, gift gives gems, freeze should be avoided.
+    // Same object reference, so the live timer mutations stay visible.
+    try { window.__bloomActiveEvent = { type: activeEvent.type, row: activeEvent.row, col: activeEvent.col, emoji: activeEvent.emoji }; } catch (e) {}
 
     renderEventOnCell(activeEvent);
     // Sound: "ding!" when event appears
