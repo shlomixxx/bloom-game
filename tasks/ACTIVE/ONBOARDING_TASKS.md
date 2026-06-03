@@ -68,7 +68,7 @@ tiles), live-verified after deploy. Cache `v20260603a`, SW `bloom-v26.3`.
 
 | # | Task | Why | Effort |
 |---|------|-----|--------|
-| **FT.2** | **Interactive FTUE on the REAL engine** (seed-controlled `init`, intercept the first 2-3 drops, pause/resume the tour). Replaces the scripted demo. | The demo now matches the rule, but a player learning on the actual board is the gold standard. Deferred originally for engine-risk; revisit if D1 data demands it. | L |
+| ~~**FT.2**~~ | ✅ **DONE (2026-06-03)** — Interactive FTUE on the REAL engine. Not via `init` surgery (too risky) but via a sandboxed local `tutGrid` that the real `findGroup`/`applyGravity` resolve through `withTutGrid` (sync grid-swap, restored in `finally`). Shared `MERGE_MIN_GROUP` constant = single source of truth (engine + demo + copy). Demo colourised to leaf→flower→fire. `expect`-based runtime drift guard. Verified locally on the built bundle (drop / merge→flower / chain→fire + banner, 0 JS errors). | The demo now IS the engine — can't drift. | L |
 | **FT.3** | **Explicit horizontal-merge beat.** Step 2 stacks vertically; step 3 shows a horizontal chain. Add/clarify a beat where two tiles meet **side-by-side** so the "אופקי גם נחשב" lesson is unmistakable. | Players over-learn "stack in a column" and miss horizontal merges. | S |
 | **FT.4** | **Skip-rate analytics per step.** `tutorial_step` / `tutorial_skip` already fire — build an admin view of where players bail. | Find the exact beat that loses new players; tune copy/pacing. | S |
 | **FT.5** | **Replayable tutorial** from the info/"איך משחקים?" modal for players who skipped or want a refresher. | The FTUE is once-and-done; there's no way back to it today. | S |

@@ -2248,6 +2248,13 @@
     } catch (e) {}
   }
 
+  // The merge threshold — TWO or more orthogonally-adjacent same-tier tiles
+  // merge into the next tier. Single source of truth: processChains reads it
+  // below, and the FTUE tutorial (src/15-ftue.js) reads it via mergeMinGroup()
+  // so the demo can NEVER teach a different number than the engine enforces.
+  const MERGE_MIN_GROUP = 2;
+  function mergeMinGroup() { return MERGE_MIN_GROUP; }
+
   function findGroup(sr, sc, tier) {
     const visited = new Set();
     const group = [];
@@ -2965,7 +2972,7 @@
           const t = grid[r][c];
           if (t === 0) continue;
           const group = findGroup(r, c, t);
-          if (group.length >= 2) {
+          if (group.length >= MERGE_MIN_GROUP) {
             // ── CROWN MERGE SPECIAL: two crowns → explosion ──
             if (t === MAX_TIER && gameConfig.crown_merge_enabled !== 'false') {
               // Clear ALL crowns in the group
