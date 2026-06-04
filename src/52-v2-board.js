@@ -139,24 +139,12 @@
     // cells were rebuilt by render() → ghost geometry + pulse are stale; clear
     // them. They reappear on the next pointer hover/drag.
     try { v2ClearAim(); } catch (e) {}
-    try { v2ToggleFeedbackFab(true); } catch (e) {}
   }
 
   // ---- Beta feedback (reuses GV.2 /api/feedback + admin panel) ----
   var FB_DONE_KEY = 'bloom_v2_feedback_done';
   var _v2GameOvers = 0, _fbRating = 0, _fbSubmitting = false;
   function v2FbDone() { try { return !!localStorage.getItem(FB_DONE_KEY); } catch (e) { return false; } }
-  function v2ToggleFeedbackFab(show) {
-    if (!v2On()) return;
-    var fab = document.getElementById('v2-fb-fab');
-    if (!fab && show) {
-      fab = document.createElement('button'); fab.id = 'v2-fb-fab'; fab.type = 'button';
-      fab.setAttribute('aria-label', 'משוב'); fab.textContent = '💬';
-      fab.addEventListener('click', function() { v2OpenFeedback(false); });
-      document.body.appendChild(fab);
-    }
-    if (fab) fab.style.display = show ? 'flex' : 'none';
-  }
   function v2BuildFeedbackPanel() {
     if (document.getElementById('v2-fb-overlay')) return;
     var ov = document.createElement('div'); ov.id = 'v2-fb-overlay';
