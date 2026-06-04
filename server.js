@@ -409,6 +409,58 @@ function requireAdmin(req, res, next) {
   next();
 }
 
+// ============================================================
+// FEATURE FLAGS — Game v2 A/B rollout (2026-06)
+// ============================================================
+// Stable, password-DERIVED force key. Knowing it lets an admin force a variant
+// on their own browser (via ?bb_force=v2&bb_key=...), but it is NOT the admin
+// password — leaking it only allows previewing v2, never admin access. Empty
+// when ADMIN_PASSWORD is unset (force then disabled — bucket logic still runs).
+const V2_FORCE_KEY = ADMIN_PASSWORD
+  ? createHmac('sha256', ADMIN_PASSWORD).update('game_v2_force_v1').digest('hex').slice(0, 40)
+  : '';
+function v2ForceKeyValid(supplied) {
+  if (!V2_FORCE_KEY || !supplied || typeof supplied !== 'string') return false;
+  const a = Buffer.from(supplied);
+  const b = Buffer.from(V2_FORCE_KEY);
+  if (a.length !== b.length) return false;
+  try { return timingSafeEqual(a, b); } catch (e) { return false; }
+}
+// Spec-mandated bucket: deterministic hash(uid) % 100 → sticky per device.
+function v2Bucket(id) {
+  let h = 0;
+  const s = String(id || '');
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  return h % 100;
+}
+// 15s in-memory cache of the single game_v2 row so the per-page-load read costs
+// ~nothing. Busted immediately on admin write so a rollout change is felt live.
+let _gameV2Flag = null;
+let _gameV2FlagTs = 0;
+async function getGameV2Flag() {
+  const now = Date.now();
+  if (_gameV2Flag && (now - _gameV2FlagTs) < 15000) return _gameV2Flag;
+  try {
+    const r = await pool.query(`SELECT enabled, rollout_pct FROM feature_flags WHERE key = 'game_v2'`);
+    const row = r.rows[0] || { enabled: false, rollout_pct: 0 };
+    _gameV2Flag = {
+      enabled: !!row.enabled,
+      rollout_pct: Math.max(0, Math.min(100, parseInt(row.rollout_pct, 10) || 0))
+    };
+  } catch (e) {
+    // Fail safe to OFF → everyone classic. A DB blip must never flip players to v2.
+    _gameV2Flag = { enabled: false, rollout_pct: 0 };
+  }
+  _gameV2FlagTs = now;
+  return _gameV2Flag;
+}
+function bustGameV2FlagCache() { _gameV2Flag = null; _gameV2FlagTs = 0; }
+function readCookie(req, name) {
+  const c = req.headers.cookie || '';
+  const m = c.match(new RegExp('(?:^|;\\s*)' + name + '=([^;]*)'));
+  return m ? decodeURIComponent(m[1]) : '';
+}
+
 async function logAdminAction(action, targetType, targetId, metadata) {
   try {
     await pool.query(
@@ -484,7 +536,12 @@ function cleanCountry(c) {
 
 // Valid difficulty labels for the leaderboard query/insert path. The actual
 // gameplay presets live in DIFFICULTY_PRESETS; this is just the input gate.
-const DIFFICULTY_LABELS = ['default', 'easy', 'medium', 'hard', 'insane'];
+// 'v2' is an isolation label for the Game-v2 A/B variant: its scores flow
+// through the existing /api/score/practice endpoint but are stored under their
+// own difficulty_scores label so they never mix into the daily or default
+// practice leaderboards classic players compete on. The classic difficulty
+// tabs (src/11-game.js) are a hardcoded list, so 'v2' never surfaces a tab.
+const DIFFICULTY_LABELS = ['default', 'easy', 'medium', 'hard', 'insane', 'v2'];
 function cleanDifficultyLabel(v) {
   const s = String(v || 'default').toLowerCase().trim();
   return DIFFICULTY_LABELS.includes(s) ? s : 'default';
@@ -632,6 +689,46 @@ app.post('/api/register', (req, res) => {
   } catch (e) {
     console.error('POST /api/register', e);
     res.status(500).json({ error: 'server' });
+  }
+});
+
+// GET /api/flags/game_v2 — PUBLIC read. Returns the caller's sticky variant.
+//   uid  = ?deviceId (the stable bloom_device_id) → same variant every load;
+//          falls back to a long-lived bb_uid cookie for no-JS / curl callers.
+//   enabled=false is the KILL SWITCH — everyone gets classic, force is ignored.
+//   When enabled, bucket(uid) % 100 < rollout_pct → 'v2'.
+//   ?force=v2|classic is honored ONLY with a valid ?force_key (admin-derived),
+//   so a regular user cannot self-select into the experiment.
+app.get('/api/flags/game_v2', async (req, res) => {
+  try {
+    const flag = await getGameV2Flag();
+    let uid = '';
+    const qd = (req.query && typeof req.query.deviceId === 'string') ? req.query.deviceId.trim() : '';
+    if (qd.length >= 8 && qd.length <= 64) uid = qd;
+    if (!uid) {
+      uid = readCookie(req, 'bb_uid');
+      if (!uid || uid.length < 8 || uid.length > 64) {
+        uid = 'bb-' + randomBytes(12).toString('hex');
+        try {
+          res.cookie('bb_uid', uid, {
+            maxAge: 365 * 24 * 60 * 60 * 1000,
+            httpOnly: false, sameSite: 'Lax',
+            secure: (req.headers['x-forwarded-proto'] === 'https')
+          });
+        } catch (e) {}
+      }
+    }
+    let variant = 'classic';
+    if (flag.enabled && v2Bucket(uid) < flag.rollout_pct) variant = 'v2';
+    const force = (req.query && typeof req.query.force === 'string') ? req.query.force : '';
+    if (flag.enabled && (force === 'v2' || force === 'classic') && v2ForceKeyValid(req.query.force_key)) {
+      variant = force;
+    }
+    res.set('Cache-Control', 'no-store');
+    res.json({ enabled: flag.enabled, rollout_pct: flag.rollout_pct, variant });
+  } catch (e) {
+    // Never block the player — any error defaults to classic.
+    res.json({ enabled: false, rollout_pct: 0, variant: 'classic' });
   }
 });
 
@@ -14172,6 +14269,49 @@ if (ADMIN_PATH && ADMIN_PASSWORD) {
       await logAdminAction('event.golden_hour.stop', 'game_config', 'event_golden_hour', {});
       res.json({ ok: true });
     } catch (e) {
+      res.status(500).json({ error: 'server' });
+    }
+  });
+
+  // ---------- FEATURE FLAGS (Game v2 A/B rollout) ----------
+  // Read returns current values + the admin's force link (so the panel can
+  // show a one-click "force v2 on myself" URL). Write is the only mutator and
+  // lives here behind requireAdmin (Basic Auth) — never publicly reachable.
+  adminRouter.get('/api/flags/game_v2', async (_req, res) => {
+    try {
+      const flag = await getGameV2Flag();
+      res.json({
+        ok: true,
+        enabled: flag.enabled,
+        rollout_pct: flag.rollout_pct,
+        force_key: V2_FORCE_KEY,
+        force_url_v2: '/?bb_force=v2&bb_key=' + V2_FORCE_KEY,
+        force_url_classic: '/?bb_force=classic&bb_key=' + V2_FORCE_KEY,
+        force_url_off: '/?bb_force=off'
+      });
+    } catch (e) {
+      res.status(500).json({ error: 'server' });
+    }
+  });
+  adminRouter.post('/api/flags/game_v2', async (req, res) => {
+    try {
+      const body = req.body || {};
+      const enabled = body.enabled === true || body.enabled === 'true';
+      let pct = parseInt(body.rollout_pct, 10);
+      if (!Number.isFinite(pct)) pct = 0;
+      pct = Math.max(0, Math.min(100, pct));
+      await pool.query(
+        `INSERT INTO feature_flags (key, enabled, rollout_pct, updated_at)
+         VALUES ('game_v2', $1, $2, NOW())
+         ON CONFLICT (key) DO UPDATE
+           SET enabled = EXCLUDED.enabled, rollout_pct = EXCLUDED.rollout_pct, updated_at = NOW()`,
+        [enabled, pct]
+      );
+      bustGameV2FlagCache();
+      await logAdminAction('flag.update', 'feature_flags', 'game_v2', { enabled, rollout_pct: pct });
+      res.json({ ok: true, enabled, rollout_pct: pct });
+    } catch (e) {
+      console.error('admin POST /api/flags/game_v2', e);
       res.status(500).json({ error: 'server' });
     }
   });

@@ -1,0 +1,118 @@
+/* ============================================================
+   BLOOM Game v2 — styles (A/B variant, 2026-06)
+   ============================================================
+   Modularized from bloom-demo.html. EVERY selector is scoped under
+   #bloom-v2-root and every @keyframes is renamed with a `v2` prefix
+   (keyframes are the one truly-global CSS namespace) so this file can
+   NEVER affect the classic game. It is loaded by the variant loader in
+   index.html ONLY when a player is assigned variant 'v2'.
+   Build note: this file is intentionally NOT in build.sh's styles.css
+   concatenation list — it ships as a standalone stylesheet. */
+
+@import url('https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700;800&display=swap');
+
+/* Page-level: only when the loader marked <html data-bloom-variant="v2">. */
+html[data-bloom-variant="v2"] body { margin: 0; background: #FAF6EE; }
+
+/* The root IS the v2 app container (merges the demo's body-centering + #app). */
+#bloom-v2-root {
+  --bg:#FAF6EE; --card:#FFFFFF; --cell:#EFEADE; --ink:#3A352E; --muted:#A9A293;
+  --dark:#1D1B18; --gold:#C9923B; --peach:#FBEBD2; --peach-ink:#C9853A;
+  --shadow:0 2px 10px rgba(120,100,60,.08);
+  font-family:'Rubik',-apple-system,system-ui,sans-serif;
+  background:var(--bg); color:var(--ink);
+  width:100%; max-width:430px; margin:0 auto;
+  padding:10px 14px calc(18px + env(safe-area-inset-bottom));
+  display:flex; flex-direction:column; gap:11px;
+  min-height:100dvh; box-sizing:border-box;
+  overscroll-behavior:none; user-select:none; -webkit-user-select:none;
+}
+#bloom-v2-root * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+
+#bloom-v2-root .top{display:flex;justify-content:space-between;align-items:center;direction:ltr;}
+#bloom-v2-root .pill{background:var(--peach);color:var(--peach-ink);font-weight:700;font-size:15px;padding:9px 15px;
+      border-radius:16px;display:flex;align-items:center;gap:7px;box-shadow:var(--shadow);}
+#bloom-v2-root .pill .chev{opacity:.5;font-size:11px;}
+#bloom-v2-root .icons{display:flex;gap:9px;}
+#bloom-v2-root .iconbtn{width:46px;height:42px;background:var(--card);border:1px solid #EFE9DC;border-radius:13px;display:flex;
+         align-items:center;justify-content:center;box-shadow:var(--shadow);font-size:18px;cursor:pointer;
+         transition:transform .12s;color:#7a7468;}
+#bloom-v2-root .iconbtn:active{transform:scale(.92);}
+
+#bloom-v2-root .stats{display:flex;gap:9px;direction:ltr;}
+#bloom-v2-root .stat{flex:1;background:var(--card);border:1px solid #F0EADC;border-radius:16px;padding:9px 6px;text-align:center;
+      box-shadow:var(--shadow);min-width:0;}
+#bloom-v2-root .stat .lab{font-size:12px;color:var(--muted);font-weight:600;display:flex;gap:4px;justify-content:center;align-items:center;}
+#bloom-v2-root .stat .val{font-size:22px;font-weight:800;margin-top:2px;line-height:1;white-space:nowrap;}
+#bloom-v2-root .stat.score{background:var(--dark);border-color:var(--dark);}
+#bloom-v2-root .stat.score .lab{color:var(--gold);}
+#bloom-v2-root .stat.score .val{color:#fff;}
+#bloom-v2-root .stat.streak .val{color:#E0613A;display:flex;gap:5px;justify-content:center;align-items:center;}
+
+#bloom-v2-root .legendwrap{position:relative;border-bottom:1px solid #EDE7D9;padding-bottom:9px;}
+#bloom-v2-root .legend{display:flex;justify-content:space-between;gap:3px;direction:ltr;}
+#bloom-v2-root .leg{display:flex;flex-direction:column;align-items:center;gap:3px;flex:1;}
+#bloom-v2-root .leg .chip{width:100%;max-width:42px;aspect-ratio:1;border-radius:13px;display:flex;align-items:center;justify-content:center;transition:.2s;}
+#bloom-v2-root .leg .chip svg{width:58%;height:58%;}
+#bloom-v2-root .leg .pts{font-size:12px;font-weight:700;color:var(--muted);}
+#bloom-v2-root .leg.active .chip{box-shadow:0 0 0 3px #fff,0 0 0 6px currentColor;transform:translateY(-1px);}
+#bloom-v2-root .leg.active .pts{color:var(--ink);}
+
+#bloom-v2-root .launch{display:flex;align-items:flex-end;justify-content:space-between;direction:ltr;padding:0 4px;}
+#bloom-v2-root .slot{display:flex;flex-direction:column;align-items:center;gap:5px;}
+#bloom-v2-root .slot .lab{font-size:12px;font-weight:600;color:var(--muted);}
+#bloom-v2-root .holdbox,#bloom-v2-root .nextbox{width:54px;height:54px;border-radius:15px;display:flex;align-items:center;justify-content:center;
+                  border:2px dashed #DAD3C2;background:#FBF8F1;}
+#bloom-v2-root .holdbox{cursor:pointer;transition:transform .12s;}
+#bloom-v2-root .holdbox:active{transform:scale(.9);}
+#bloom-v2-root .tile-mini{width:100%;height:100%;border-radius:13px;display:flex;align-items:center;justify-content:center;}
+#bloom-v2-root .tile-mini svg{width:56%;height:56%;}
+#bloom-v2-root .current{width:70px;height:70px;border-radius:18px;display:flex;align-items:center;justify-content:center;
+         box-shadow:0 6px 16px rgba(120,90,40,.18);animation:v2bob 1.6s ease-in-out infinite;}
+#bloom-v2-root .current svg{width:56%;height:56%;}
+@keyframes v2bob{0%,100%{transform:translateY(0);}50%{transform:translateY(-5px);}}
+
+#bloom-v2-root #boardwrap{position:relative;}
+#bloom-v2-root #board{position:relative;width:100%;background:#F4F0E6;border-radius:20px;direction:ltr;touch-action:none;cursor:pointer;}
+#bloom-v2-root .bgcell{position:absolute;background:var(--cell);border-radius:13px;pointer-events:none;}
+#bloom-v2-root #tiles,#bloom-v2-root #fx,#bloom-v2-root #ghostlayer{position:absolute;inset:0;pointer-events:none;}
+#bloom-v2-root .tile{position:absolute;border-radius:13px;display:flex;align-items:center;justify-content:center;
+      transition:transform .17s cubic-bezier(.34,1.25,.64,1);will-change:transform;}
+#bloom-v2-root .tile svg{width:56%;height:56%;}
+#bloom-v2-root .tile.pop{animation:v2pop .26s ease;}
+@keyframes v2pop{0%{transform:var(--t) scale(1);}40%{transform:var(--t) scale(1.32);}100%{transform:var(--t) scale(1);}}
+#bloom-v2-root .tile.vanish{animation:v2vanish .18s ease forwards;}
+@keyframes v2vanish{to{opacity:0;transform:var(--t) scale(.2);}}
+#bloom-v2-root .colhi{position:absolute;border-radius:13px;background:rgba(201,146,59,.12);border:2px solid rgba(201,146,59,.4);opacity:0;transition:opacity .1s;}
+#bloom-v2-root .ghost{position:absolute;border-radius:13px;opacity:0;display:flex;align-items:center;justify-content:center;transition:transform .07s;}
+#bloom-v2-root .ghost svg{width:56%;height:56%;}
+#bloom-v2-root .pulse{animation:v2pulse .6s ease infinite;}
+@keyframes v2pulse{0%,100%{box-shadow:0 0 0 0 rgba(224,97,58,0);}50%{box-shadow:0 0 0 4px rgba(224,97,58,.55);}}
+
+#bloom-v2-root .shake{animation:v2shake var(--sd,.3s) ease;}
+@keyframes v2shake{10%,90%{transform:translate(-1px,0);}20%,80%{transform:translate(2px,0);}
+                 30%,50%,70%{transform:translate(calc(var(--si,4px)*-1),1px);}40%,60%{transform:translate(var(--si,4px),-1px);}}
+
+#bloom-v2-root .particle{position:absolute;border-radius:50%;pointer-events:none;}
+
+#bloom-v2-root #callout{position:absolute;top:36%;left:0;right:0;text-align:center;pointer-events:none;z-index:30;}
+#bloom-v2-root #callout .word{display:inline-block;font-weight:800;font-size:42px;color:#fff;-webkit-text-stroke:2px rgba(0,0,0,.08);
+               text-shadow:0 6px 16px rgba(0,0,0,.18);opacity:0;}
+#bloom-v2-root #callout .word.show{animation:v2cpop .7s cubic-bezier(.2,1.5,.5,1) forwards;}
+@keyframes v2cpop{0%{opacity:0;transform:scale(.4) rotate(-6deg);}25%{opacity:1;transform:scale(1.1) rotate(2deg);}
+                70%{opacity:1;transform:scale(1);}100%{opacity:0;transform:scale(1.05) translateY(-14px);}}
+
+#bloom-v2-root #over{position:absolute;inset:0;background:rgba(30,27,24,.72);border-radius:20px;display:none;flex-direction:column;
+      align-items:center;justify-content:center;gap:14px;color:#fff;z-index:40;backdrop-filter:blur(3px);}
+#bloom-v2-root #over.show{display:flex;}
+#bloom-v2-root #over h2{margin:0;font-size:30px;font-weight:800;}
+#bloom-v2-root #over p{margin:0;font-size:16px;opacity:.85;}
+#bloom-v2-root #over button{background:var(--gold);color:#fff;border:none;font-family:inherit;font-weight:700;font-size:17px;
+             padding:13px 30px;border-radius:14px;cursor:pointer;box-shadow:0 6px 16px rgba(0,0,0,.25);}
+#bloom-v2-root #over button:active{transform:scale(.95);}
+#bloom-v2-root .hint{font-size:12px;color:var(--muted);text-align:center;margin-top:-2px;}
+
+/* Respect reduced-motion (matches the classic global guard). */
+@media (prefers-reduced-motion: reduce){
+  #bloom-v2-root .current{animation:none;}
+}

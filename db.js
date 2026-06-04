@@ -701,6 +701,16 @@ export async function initDb() {
     `CREATE INDEX IF NOT EXISTS idx_dtc_active ON device_transfer_codes (expires_at) WHERE used_at IS NULL`,
     `INSERT INTO game_config (key, value) VALUES ('device_sync_enabled', 'true') ON CONFLICT (key) DO NOTHING`,
     `INSERT INTO game_config (key, value) VALUES ('device_sync_ttl_min', '10')   ON CONFLICT (key) DO NOTHING`,
+    // Feature flags — Game v2 A/B rollout (full def in schema.sql). Belt-and-
+    // suspenders so the table + the game_v2 row exist even if schema.sql fails
+    // to parse. Default OFF (enabled=false, 0%) — a deploy changes nothing.
+    `CREATE TABLE IF NOT EXISTS feature_flags (
+      key          TEXT PRIMARY KEY,
+      enabled      BOOLEAN NOT NULL DEFAULT FALSE,
+      rollout_pct  INTEGER NOT NULL DEFAULT 0 CHECK (rollout_pct BETWEEN 0 AND 100),
+      updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`,
+    `INSERT INTO feature_flags (key, enabled, rollout_pct) VALUES ('game_v2', FALSE, 0) ON CONFLICT (key) DO NOTHING`,
   ];
   for (const sql of migrations) {
     try { await pool.query(sql); } catch (e) {

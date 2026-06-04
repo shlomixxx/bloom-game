@@ -92,6 +92,7 @@ The daily run is gated by `localStorage`; on a second visit the same day, the pl
 - **`showToast()` helper** — generic info/success/error/warning toast available globally via `window.__bloomToast`
 - **Security**: HMAC device-token (`/api/register`) required on all credit/state-mutating endpoints, atomic balance updates everywhere, strict CORS allowlist, `Strict-Transport-Security` + `Content-Security-Policy` headers, `drops`-mandatory anti-cheat, server-decided gift jackpots (no client-supplied amounts), single-submission guard on duel scores, server-authoritative skin ownership (`player_skins` table), strict per-day dedup on `/api/player/earn`, periodic DB cleanup of dedup keys and stale live-state rows
 - **Backups**: Railway-side `DAILY` (retention 6 days) + `WEEKLY` (Saturday, retention 27 days) volume snapshots on `Postgres-z2RQ` plus a manual `manual-baseline-20260520` snapshot. Configured via the `volumeInstanceBackupScheduleUpdate` mutation after the 2026-05-13 incident (see CLAUDE.md §11 for the full post-mortem).
+- **Game v2 A/B feature flag** (GV.1) — an isolated, opt-in "v2" gameplay variant (new 4×7 board + hold/ghost mechanics) lives behind a Postgres `feature_flags` row the admin controls (🧪 Game v2 card in the 🎮 משחק tab: enable toggle + 0-100% rollout slider + a signed "force on yourself" preview link). **Default OFF** — classic is unchanged for everyone until the admin opts in. Assignment is sticky per device, instantly kill-switchable, and every player is tagged `bloom_variant` in GA4 for retention/score/session comparison. Ships as standalone `public/js/game-v2.js` + `public/css/game-v2.css` (not part of the classic build); v2 game-over scores flow into the existing score API under an isolated `v2` leaderboard label so they never affect the classic boards.
 
 ## NOT currently in the build
 
@@ -154,6 +155,7 @@ All endpoints are JSON. Bodies are limited to 4 KB.
 | Method | Path | Body / query | Returns |
 | --- | --- | --- | --- |
 | `GET` | `/api/health` | — | `{ ok: true }` |
+| `GET` | `/api/flags/game_v2` | `?deviceId&force=v2\|classic&force_key` | `{ enabled, rollout_pct, variant }` — the player's sticky game variant (GV.1 A/B flag). `enabled=false` = kill switch (classic for all); else `bucket(deviceId)%100 < rollout_pct` → `v2`. `force` honored only with the admin-derived `force_key`. Write is admin-only under `/<ADMIN_PATH>/api/flags/game_v2`. |
 | `GET` | `/api/stats/live` | — | `{ activeNow, playingNow, gamesToday }` — social-proof counters for the home pulse bar (UX audit §1.4). Polled every 15s; cheap aggregate queries with no auth. |
 | `POST` | `/api/score` | `{ date, deviceId, token, name, score, tier, drops, country? }` | `{ ok, rank, total }` — upserts only if new score is higher; `total` is the count of players who submitted today (so the game-over rank pill can say "#23 מתוך 847"). |
 | `GET` | `/api/leaderboard/:date` | `?deviceId=...` | `{ list (top 50), total, rank }` — single-day board |

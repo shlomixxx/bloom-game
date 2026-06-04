@@ -73,7 +73,7 @@ function trackEvent(n,p){try{gtag('event',n,p||{});}catch(e){}}
 })();
 </script>
 
-<link rel="stylesheet" href="/styles.css?v=20260604f">
+<link rel="stylesheet" href="/styles.css?v=20260605a">
 </head>
 <body>
 
@@ -141,10 +141,90 @@ function trackEvent(n,p){try{gtag('event',n,p||{});}catch(e){}}
   <div class="grid-wrap" id="grid-wrap"><div class="grid" id="grid"></div></div>
 </div>
 
-<script src="/app.js?v=20260604f"></script>
+<!-- Game v2 mount point (A/B variant). Empty + [hidden] in classic; game-v2.css
+     isn't loaded in classic so this stays display:none and affects nothing.
+     The loader reveals + mounts the isolated v2 module into it for v2 players. -->
+<div id="bloom-v2-root" hidden></div>
 
-
-<script src="/bot.js?v=20260604f"></script>
+<!-- ============================================================
+     VARIANT LOADER — classic (default) vs Game v2 (feature-flagged)
+     ============================================================
+     Decides which game to run BEFORE loading it, keyed by the server feature
+     flag (GET /api/flags/game_v2). Sticky per device, fail-safe to classic on
+     any error, instant on repeat loads via a localStorage cache. Classic boots
+     EXACTLY as before (app.js then bot.js); v2 hides .app, never loads app.js,
+     and mounts the isolated module into #bloom-v2-root. Default flag = OFF, so
+     until an admin opts in this always resolves to classic. -->
+<script>
+(function(){
+  "use strict";
+  var CB = 'v=20260605a';
+  function loadScript(src){ return new Promise(function(res,rej){ var s=document.createElement('script'); s.src=src; s.onload=res; s.onerror=rej; document.body.appendChild(s); }); }
+  function loadClassic(){
+    document.documentElement.removeAttribute('data-bloom-variant');
+    var app=document.querySelector('.app'); if(app) app.style.display='';
+    var root=document.getElementById('bloom-v2-root'); if(root) root.setAttribute('hidden','');
+    loadScript('/app.js?'+CB).then(function(){ return loadScript('/bot.js?'+CB); }).catch(function(){});
+  }
+  function loadV2(){
+    document.documentElement.setAttribute('data-bloom-variant','v2');
+    var app=document.querySelector('.app'); if(app) app.style.display='none';
+    var root=document.getElementById('bloom-v2-root'); if(root) root.removeAttribute('hidden');
+    var link=document.createElement('link'); link.rel='stylesheet'; link.href='/css/game-v2.css?'+CB; document.head.appendChild(link);
+    import('/js/game-v2.js?'+CB).then(function(m){
+      if(m && typeof m.start==='function'){ m.start(root); }
+      else { throw new Error('v2 module has no start()'); }
+    }).catch(function(e){
+      try{ console.error('[bloom] v2 load failed — falling back to classic', e); }catch(_){}
+      loadClassic();
+    });
+  }
+  function applyVariant(variant){
+    var v = (variant==='v2') ? 'v2' : 'classic';
+    try{ localStorage.setItem('bloom_variant', v); }catch(e){}
+    try{ if(window.gtag){ gtag('set','user_properties',{bloom_variant:v}); gtag('event','variant_assigned',{bloom_variant:v}); } }catch(e){}
+    try{ if(window.clarity){ clarity('set','bloom_variant', v); } }catch(e){}  /* no-op until Clarity is added */
+    if(v==='v2') loadV2(); else loadClassic();
+  }
+  // Stable anonymous id (same key classic uses). Created HERE — before the
+  // first flag fetch — so a brand-new player's bucket is decided once and never
+  // flips between load 1 and 2. classic's getDeviceId() reuses this exact value.
+  function ensureDid(){
+    var id=''; try{ id=localStorage.getItem('bloom_device_id')||''; }catch(e){}
+    if(!id){ try{
+      id=(window.crypto&&crypto.randomUUID)?crypto.randomUUID():(Math.random().toString(36).slice(2)+Math.random().toString(36).slice(2)+Date.now().toString(36));
+      localStorage.setItem('bloom_device_id', id);
+    }catch(e){} }
+    return id;
+  }
+  var did = ensureDid();
+  // Admin force override: /?bb_force=v2|classic&bb_key=<key from admin panel>.
+  // Persisted so the admin keeps forcing across reloads; /?bb_force=off clears.
+  var qs = new URLSearchParams(location.search);
+  var force = qs.get('bb_force')||'', fkey = qs.get('bb_key')||'';
+  try{
+    if(force==='off'){ localStorage.removeItem('bloom_v2_force'); localStorage.removeItem('bloom_v2_force_key'); force=''; fkey=''; }
+    else if(force){ localStorage.setItem('bloom_v2_force', force); if(fkey) localStorage.setItem('bloom_v2_force_key', fkey); }
+    else { force=localStorage.getItem('bloom_v2_force')||''; fkey=localStorage.getItem('bloom_v2_force_key')||''; }
+  }catch(e){}
+  var url='/api/flags/game_v2'+(did?('?deviceId='+encodeURIComponent(did)):'?_=1');
+  if(force){ url += '&force='+encodeURIComponent(force) + (fkey?('&force_key='+encodeURIComponent(fkey)):''); }
+  var cached=''; try{ cached=localStorage.getItem('bloom_variant')||''; }catch(e){}
+  if(cached && !force){
+    // Instant boot from the sticky cache, then revalidate quietly for the NEXT
+    // load (never hot-swap mid-session — that would be a jarring reload).
+    applyVariant(cached);
+    fetch(url).then(function(r){return r.json();}).then(function(f){ if(f&&f.variant){ try{localStorage.setItem('bloom_variant', f.variant);}catch(e){} } }).catch(function(){});
+  } else {
+    // First visit (or admin force): wait for the clean server decision so the
+    // A/B assignment never flickers. Fail-safe to classic after 2.5s.
+    var done=false;
+    var t=setTimeout(function(){ if(done)return; done=true; applyVariant(cached||'classic'); }, 2500);
+    fetch(url).then(function(r){return r.json();}).then(function(f){ if(done)return; done=true; clearTimeout(t); applyVariant((f&&f.variant)||'classic'); })
+      .catch(function(){ if(done)return; done=true; clearTimeout(t); applyVariant('classic'); });
+  }
+})();
+</script>
 
 </body>
 </html>

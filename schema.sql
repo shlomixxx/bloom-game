@@ -20,6 +20,25 @@ CREATE TABLE IF NOT EXISTS daily_scores (
 CREATE INDEX IF NOT EXISTS idx_daily_scores_date_score
   ON daily_scores (date, score DESC);
 
+-- ============================================================
+-- FEATURE FLAGS — A/B rollout control (Game v2 integration, 2026-06)
+-- ============================================================
+-- Generic key → { enabled, rollout_pct } flag table the admin controls from
+-- the dashboard. Currently drives 'game_v2': which game variant a player sees.
+-- Sticky per-device (server hashes the device id), kill-switchable instantly
+-- (enabled=false → everyone classic). Default OFF so a deploy changes nothing
+-- until the admin opts in. See the public GET /api/flags/game_v2 +
+-- adminRouter POST /api/flags/game_v2 in server.js.
+CREATE TABLE IF NOT EXISTS feature_flags (
+  key          TEXT PRIMARY KEY,
+  enabled      BOOLEAN NOT NULL DEFAULT FALSE,
+  rollout_pct  INTEGER NOT NULL DEFAULT 0 CHECK (rollout_pct BETWEEN 0 AND 100),
+  updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+INSERT INTO feature_flags (key, enabled, rollout_pct)
+VALUES ('game_v2', FALSE, 0)
+ON CONFLICT (key) DO NOTHING;
+
 -- Country (ISO-3166 alpha-2). Populated from the flag picker on first home.
 -- NULL = player hasn't picked yet. Used for the "מדינתי" leaderboard tab.
 ALTER TABLE daily_scores ADD COLUMN IF NOT EXISTS country VARCHAR(2);

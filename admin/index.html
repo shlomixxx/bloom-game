@@ -931,6 +931,44 @@
   </div>
 
   <!-- ============================================================
+       Game v2 — A/B feature flag (2026-06)
+       Isolated new-mechanics build behind a Postgres flag. Default OFF.
+       ============================================================ -->
+  <section id="gamev2-section" style="margin-bottom:12px">
+    <h2>🧪 Game v2 — גרסת מנגנונים חדשה <button class="tip-btn" data-tip-text="<strong>Game v2 (Feature Flag)</strong><br>מריץ את גרסת המנגנונים החדשה על חלק מהשחקנים, מאחורי דגל — בלי לגעת במשחק הקיים (classic).<div class=&quot;tip-example&quot;>🟢 <strong>פעיל</strong> + <strong>0%</strong> = אף אחד לא מקבל v2 (חוץ ממך, עם קישור ה-Force למטה).<br>פתח ל-10-30% → עקוב במדדים יום-יומיים → אם v2 מנצח, העלה ל-100%. אם לא — כבה.<br><br>🔴 <strong>כבוי</strong> = כולם חוזרים ל-classic מיידית (kill switch, בלי deploy).<br><br>השיוך <strong>דביק</strong>: כל שחקן תמיד רואה את אותה גרסה (לפי hash של מזהה המכשיר).<br><br>📊 כל שחקן מתויג ב-GA4 (<code>bloom_variant</code>) — אפשר להשוות retention / ניקוד / אורך-סשן בין v2 ל-classic.</div>">?</button></h2>
+    <div style="padding:14px 16px;background:var(--card);border-radius:10px;margin-top:8px">
+      <div id="gamev2-status" style="font-size:12px;color:var(--muted);margin-bottom:12px">טוען…</div>
+
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+        <strong style="font-size:13px;min-width:64px">סטטוס:</strong>
+        <button class="btn sm" id="gamev2-enabled-on"  style="min-width:84px">🟢 פעיל</button>
+        <button class="btn sm" id="gamev2-enabled-off" style="min-width:84px">🔴 כבוי</button>
+      </div>
+
+      <div style="margin-bottom:14px">
+        <div style="font-size:13px;font-weight:700;margin-bottom:6px">אחוז שחקנים שמקבלים v2: <span id="gamev2-rollout-label" style="color:var(--gold)">0%</span></div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <input type="range" id="gamev2-rollout-range" min="0" max="100" step="1" value="0" style="flex:1">
+          <input type="number" id="gamev2-rollout-num" min="0" max="100" step="1" value="0" style="width:64px;padding:6px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--ink);text-align:center">
+        </div>
+      </div>
+
+      <button class="btn" id="btn-gamev2-save" style="background:#9FE1CB;color:#1C1A18;font-weight:800;min-width:120px">💾 שמור</button>
+
+      <div style="margin-top:14px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.08)">
+        <div style="font-size:12px;font-weight:700;color:var(--gold);margin-bottom:4px">🔬 בדוק על עצמך (Force)</div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:8px">הפעל את הדגל (🟢) ואז פתח את הקישור הזה בדפדפן שלך — תקבל v2 ללא קשר לאחוז. שחקן רגיל לא יכול לכפות (הקישור חתום במפתח).</div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <input type="text" id="gamev2-force-url" readonly style="flex:1;min-width:200px;padding:6px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--ink);font-family:monospace;font-size:11px" value="">
+          <button class="btn sm" id="btn-gamev2-copy-force" style="min-width:84px">📋 העתק</button>
+          <a id="gamev2-force-open" href="#" target="_blank" rel="noopener" class="btn sm" style="min-width:84px;text-align:center;text-decoration:none">↗ פתח v2</a>
+        </div>
+        <div style="font-size:11px;color:var(--muted);margin-top:6px">חזרה ל-classic על המכשיר שלך: <a id="gamev2-force-off" href="#" target="_blank" rel="noopener" style="color:var(--gold)">בטל Force</a></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================
        Stage 35 — Home Variant Picker (May 2026)
        Switches the home-screen layout globally for all players.
        ============================================================ -->
@@ -4962,7 +5000,7 @@
   function _buildTabLoaders() {
     return {
       dashboard: [loadDashboard, loadFunnel, loadRetention, loadHeatmap, loadEngagementOverview],
-      game:      [loadBoards, loadSkins, loadDailySpecialPicker, loadHomeVariant],
+      game:      [loadGameV2Flag, loadBoards, loadSkins, loadDailySpecialPicker, loadHomeVariant],
       economy:   [loadEconomy, loadSeasonPassTiers, loadDailyDeals, loadGachaPool, loadCalendarEvents,
                   loadBundles, loadAchLb, loadSmartPush, loadReplayStats, loadGuildsAdmin,
                   loadRivalryStats, loadSpinStats, loadGuildWars, loadPromos, loadTrophyStats],
@@ -5379,6 +5417,66 @@
     { id: 'hero',     icon: '🎯', label: 'Hero Card', desc: 'כרטיס ענק יחיד' },
     { id: 'jit',      icon: '🎓', label: 'Just-In-Time', desc: 'פתיחה הדרגתית' }
   ];
+
+  // ============================================================
+  // Game v2 — A/B feature flag (2026-06)
+  // ============================================================
+  var _gamev2State = { enabled: false, rollout_pct: 0 };
+  async function loadGameV2Flag() {
+    var statusEl = $('gamev2-status');
+    if (!statusEl) return;
+    var d = await api('/flags/game_v2');
+    if (!d || !d.ok) { statusEl.textContent = 'שגיאת טעינה'; return; }
+    _gamev2State.enabled = !!d.enabled;
+    _gamev2State.rollout_pct = d.rollout_pct | 0;
+    renderGameV2(d);
+    wireGameV2();
+  }
+  function renderGameV2(d) {
+    var statusEl = $('gamev2-status');
+    var onBtn = $('gamev2-enabled-on'), offBtn = $('gamev2-enabled-off');
+    var range = $('gamev2-rollout-range'), num = $('gamev2-rollout-num'), lbl = $('gamev2-rollout-label');
+    if (statusEl) statusEl.innerHTML = _gamev2State.enabled
+      ? ('🟢 <strong>פעיל</strong> · ' + _gamev2State.rollout_pct + '% מהשחקנים מקבלים v2')
+      : '🔴 <strong>כבוי</strong> · כל השחקנים מקבלים classic';
+    if (onBtn)  onBtn.style.outline  = _gamev2State.enabled ? '3px solid #4A9F7F' : 'none';
+    if (offBtn) offBtn.style.outline = !_gamev2State.enabled ? '3px solid #C0556E' : 'none';
+    if (range) range.value = _gamev2State.rollout_pct;
+    if (num) num.value = _gamev2State.rollout_pct;
+    if (lbl) lbl.textContent = _gamev2State.rollout_pct + '%';
+    if (d) {
+      var origin = location.origin;
+      var fUrl = $('gamev2-force-url'); if (fUrl && d.force_url_v2) fUrl.value = origin + d.force_url_v2;
+      var fOpen = $('gamev2-force-open'); if (fOpen && d.force_url_v2) fOpen.href = origin + d.force_url_v2;
+      var fOff = $('gamev2-force-off'); if (fOff && d.force_url_off) fOff.href = origin + d.force_url_off;
+    }
+  }
+  function wireGameV2() {
+    var onBtn = $('gamev2-enabled-on'), offBtn = $('gamev2-enabled-off');
+    var range = $('gamev2-rollout-range'), num = $('gamev2-rollout-num'), lbl = $('gamev2-rollout-label');
+    var saveBtn = $('btn-gamev2-save'), copyBtn = $('btn-gamev2-copy-force');
+    if (onBtn && !onBtn.dataset.wired) { onBtn.dataset.wired = '1'; onBtn.addEventListener('click', function() { _gamev2State.enabled = true; renderGameV2(null); }); }
+    if (offBtn && !offBtn.dataset.wired) { offBtn.dataset.wired = '1'; offBtn.addEventListener('click', function() { _gamev2State.enabled = false; renderGameV2(null); }); }
+    if (range && !range.dataset.wired) { range.dataset.wired = '1'; range.addEventListener('input', function() { var v = Math.max(0, Math.min(100, parseInt(range.value, 10) || 0)); _gamev2State.rollout_pct = v; if (num) num.value = v; if (lbl) lbl.textContent = v + '%'; }); }
+    if (num && !num.dataset.wired) { num.dataset.wired = '1'; num.addEventListener('input', function() { var v = Math.max(0, Math.min(100, parseInt(num.value, 10) || 0)); _gamev2State.rollout_pct = v; if (range) range.value = v; if (lbl) lbl.textContent = v + '%'; }); }
+    if (saveBtn && !saveBtn.dataset.wired) { saveBtn.dataset.wired = '1'; saveBtn.addEventListener('click', saveGameV2Flag); }
+    if (copyBtn && !copyBtn.dataset.wired) { copyBtn.dataset.wired = '1'; copyBtn.addEventListener('click', function() { var inp = $('gamev2-force-url'); if (!inp) return; inp.select(); try { navigator.clipboard.writeText(inp.value); } catch (e) { try { document.execCommand('copy'); } catch (_) {} } copyBtn.textContent = '✓'; setTimeout(function() { copyBtn.textContent = '📋 העתק'; }, 1500); }); }
+  }
+  async function saveGameV2Flag() {
+    var saveBtn = $('btn-gamev2-save');
+    var r = await api('/flags/game_v2', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled: _gamev2State.enabled, rollout_pct: _gamev2State.rollout_pct })
+    });
+    if (r && r.ok) {
+      _gamev2State.enabled = !!r.enabled; _gamev2State.rollout_pct = r.rollout_pct | 0;
+      renderGameV2(null);
+      if (saveBtn) { saveBtn.textContent = '✓ נשמר'; setTimeout(function() { saveBtn.textContent = '💾 שמור'; }, 1500); }
+      toast('✓ Game v2: ' + (r.enabled ? ('פעיל · ' + r.rollout_pct + '%') : 'כבוי'));
+    } else {
+      toast('שגיאה בשמירה');
+    }
+  }
 
   async function loadHomeVariant() {
     var host = $('home-variant-options');
