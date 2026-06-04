@@ -441,15 +441,16 @@ async function getGameV2Flag() {
   const now = Date.now();
   if (_gameV2Flag && (now - _gameV2FlagTs) < 15000) return _gameV2Flag;
   try {
-    const r = await pool.query(`SELECT enabled, rollout_pct FROM feature_flags WHERE key = 'game_v2'`);
-    const row = r.rows[0] || { enabled: false, rollout_pct: 0 };
+    const r = await pool.query(`SELECT enabled, rollout_pct, beta_enabled FROM feature_flags WHERE key = 'game_v2'`);
+    const row = r.rows[0] || { enabled: false, rollout_pct: 0, beta_enabled: false };
     _gameV2Flag = {
       enabled: !!row.enabled,
-      rollout_pct: Math.max(0, Math.min(100, parseInt(row.rollout_pct, 10) || 0))
+      rollout_pct: Math.max(0, Math.min(100, parseInt(row.rollout_pct, 10) || 0)),
+      beta_enabled: !!row.beta_enabled
     };
   } catch (e) {
     // Fail safe to OFF → everyone classic. A DB blip must never flip players to v2.
-    _gameV2Flag = { enabled: false, rollout_pct: 0 };
+    _gameV2Flag = { enabled: false, rollout_pct: 0, beta_enabled: false };
   }
   _gameV2FlagTs = now;
   return _gameV2Flag;
@@ -718,17 +719,66 @@ app.get('/api/flags/game_v2', async (req, res) => {
         } catch (e) {}
       }
     }
+    // Resolution order (lowest → highest priority): random rollout → beta link
+    // → admin force. enabled/beta_enabled are independent toggles.
+    const cookieOpts = { maxAge: 180 * 24 * 60 * 60 * 1000, httpOnly: false, sameSite: 'Lax', secure: (req.headers['x-forwarded-proto'] === 'https') };
     let variant = 'classic';
+    // (3) random rollout
     if (flag.enabled && v2Bucket(uid) < flag.rollout_pct) variant = 'v2';
+    // (2) beta link — sticky via bb_beta cookie, gated by beta_enabled
+    const betaQ = (req.query && typeof req.query.beta === 'string') ? req.query.beta : '';
+    let betaCookie = readCookie(req, 'bb_beta');
+    if (betaQ === 'classic') {
+      try { res.cookie('bb_beta', '', { ...cookieOpts, maxAge: 0 }); } catch (e) {}
+      betaCookie = '';
+    } else if (betaQ === 'v2' && flag.beta_enabled) {
+      try { res.cookie('bb_beta', 'v2', cookieOpts); } catch (e) {}
+      betaCookie = 'v2';
+    }
+    if (flag.beta_enabled && betaCookie === 'v2') variant = 'v2';
+    // (1) admin override — key-gated, works regardless of enabled/beta (admin preview)
     const force = (req.query && typeof req.query.force === 'string') ? req.query.force : '';
-    if (flag.enabled && (force === 'v2' || force === 'classic') && v2ForceKeyValid(req.query.force_key)) {
+    if ((force === 'v2' || force === 'classic') && v2ForceKeyValid(req.query.force_key)) {
       variant = force;
     }
     res.set('Cache-Control', 'no-store');
-    res.json({ enabled: flag.enabled, rollout_pct: flag.rollout_pct, variant });
+    res.json({ enabled: flag.enabled, rollout_pct: flag.rollout_pct, beta_enabled: flag.beta_enabled, variant });
   } catch (e) {
     // Never block the player — any error defaults to classic.
-    res.json({ enabled: false, rollout_pct: 0, variant: 'classic' });
+    res.json({ enabled: false, rollout_pct: 0, beta_enabled: false, variant: 'classic' });
+  }
+});
+
+// POST /api/feedback — PUBLIC (Game v2 in-game feedback widget). Stores a
+// 👍/👎 + optional one-line comment tagged by variant. No auth (feedback isn't
+// sensitive); rate-limited per device/IP. comment capped at 500 chars.
+app.post('/api/feedback', async (req, res) => {
+  try {
+    const b = req.body || {};
+    const rlKey = (typeof b.deviceId === 'string' && b.deviceId) ? b.deviceId
+      : (req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'anon');
+    if (!checkRateLimit('feedback', String(rlKey).slice(0, 64), 20, 60 * 60 * 1000)) {
+      return res.status(429).json({ error: 'rate_limited' });
+    }
+    let rating = null;
+    if (b.rating === 1 || b.rating === '1' || b.rating === 1.0) rating = 1;
+    else if (b.rating === -1 || b.rating === '-1') rating = -1;
+    const comment = (typeof b.comment === 'string' && b.comment.trim()) ? b.comment.trim().slice(0, 500) : null;
+    if (rating === null && !comment) return res.status(400).json({ error: 'empty_feedback' });
+    const variant = (b.variant === 'v2' || b.variant === 'classic') ? b.variant : 'v2';
+    const userId = (typeof b.deviceId === 'string' && b.deviceId.length >= 8 && b.deviceId.length <= 64) ? b.deviceId : null;
+    let score = null;
+    if (typeof b.score === 'number' && Number.isFinite(b.score) && b.score >= 0 && b.score <= 10_000_000) score = Math.floor(b.score);
+    const ua = String(req.headers['user-agent'] || '').slice(0, 400);
+    await pool.query(
+      `INSERT INTO feedback (variant, user_id, rating, comment, score, user_agent)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [variant, userId, rating, comment, score, ua]
+    );
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('POST /api/feedback', e);
+    res.status(500).json({ error: 'server' });
   }
 });
 
@@ -14284,10 +14334,13 @@ if (ADMIN_PATH && ADMIN_PASSWORD) {
         ok: true,
         enabled: flag.enabled,
         rollout_pct: flag.rollout_pct,
+        beta_enabled: flag.beta_enabled,
         force_key: V2_FORCE_KEY,
         force_url_v2: '/?bb_force=v2&bb_key=' + V2_FORCE_KEY,
         force_url_classic: '/?bb_force=classic&bb_key=' + V2_FORCE_KEY,
-        force_url_off: '/?bb_force=off'
+        force_url_off: '/?bb_force=off',
+        beta_url_v2: '/?beta=v2',
+        beta_url_classic: '/?beta=classic'
       });
     } catch (e) {
       res.status(500).json({ error: 'server' });
@@ -14297,21 +14350,50 @@ if (ADMIN_PATH && ADMIN_PASSWORD) {
     try {
       const body = req.body || {};
       const enabled = body.enabled === true || body.enabled === 'true';
+      const betaEnabled = body.beta_enabled === true || body.beta_enabled === 'true';
       let pct = parseInt(body.rollout_pct, 10);
       if (!Number.isFinite(pct)) pct = 0;
       pct = Math.max(0, Math.min(100, pct));
       await pool.query(
-        `INSERT INTO feature_flags (key, enabled, rollout_pct, updated_at)
-         VALUES ('game_v2', $1, $2, NOW())
+        `INSERT INTO feature_flags (key, enabled, rollout_pct, beta_enabled, updated_at)
+         VALUES ('game_v2', $1, $2, $3, NOW())
          ON CONFLICT (key) DO UPDATE
-           SET enabled = EXCLUDED.enabled, rollout_pct = EXCLUDED.rollout_pct, updated_at = NOW()`,
-        [enabled, pct]
+           SET enabled = EXCLUDED.enabled, rollout_pct = EXCLUDED.rollout_pct,
+               beta_enabled = EXCLUDED.beta_enabled, updated_at = NOW()`,
+        [enabled, pct, betaEnabled]
       );
       bustGameV2FlagCache();
-      await logAdminAction('flag.update', 'feature_flags', 'game_v2', { enabled, rollout_pct: pct });
-      res.json({ ok: true, enabled, rollout_pct: pct });
+      await logAdminAction('flag.update', 'feature_flags', 'game_v2', { enabled, rollout_pct: pct, beta_enabled: betaEnabled });
+      res.json({ ok: true, enabled, rollout_pct: pct, beta_enabled: betaEnabled });
     } catch (e) {
       console.error('admin POST /api/flags/game_v2', e);
+      res.status(500).json({ error: 'server' });
+    }
+  });
+  // GV.2 — v2 feedback panel: 👍/👎 counts + the 50 most recent comments.
+  adminRouter.get('/api/feedback', async (_req, res) => {
+    try {
+      const counts = await pool.query(
+        `SELECT
+           COUNT(*) FILTER (WHERE rating = 1)  AS up,
+           COUNT(*) FILTER (WHERE rating = -1) AS down,
+           COUNT(*)                            AS total
+         FROM feedback`
+      );
+      const recent = await pool.query(
+        `SELECT id, variant, user_id, rating, comment, score, created_at
+         FROM feedback ORDER BY created_at DESC LIMIT 50`
+      );
+      const c = counts.rows[0] || { up: 0, down: 0, total: 0 };
+      res.json({
+        ok: true,
+        up: parseInt(c.up, 10) || 0,
+        down: parseInt(c.down, 10) || 0,
+        total: parseInt(c.total, 10) || 0,
+        recent: recent.rows
+      });
+    } catch (e) {
+      console.error('admin GET /api/feedback', e);
       res.status(500).json({ error: 'server' });
     }
   });

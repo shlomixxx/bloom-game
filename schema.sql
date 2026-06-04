@@ -33,11 +33,27 @@ CREATE TABLE IF NOT EXISTS feature_flags (
   key          TEXT PRIMARY KEY,
   enabled      BOOLEAN NOT NULL DEFAULT FALSE,
   rollout_pct  INTEGER NOT NULL DEFAULT 0 CHECK (rollout_pct BETWEEN 0 AND 100),
+  beta_enabled BOOLEAN NOT NULL DEFAULT FALSE,   -- public beta link (?beta=v2) active?
   updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-INSERT INTO feature_flags (key, enabled, rollout_pct)
-VALUES ('game_v2', FALSE, 0)
+-- beta_enabled added after the initial GV.1 ship — idempotent for live DBs.
+ALTER TABLE feature_flags ADD COLUMN IF NOT EXISTS beta_enabled BOOLEAN NOT NULL DEFAULT FALSE;
+INSERT INTO feature_flags (key, enabled, rollout_pct, beta_enabled)
+VALUES ('game_v2', FALSE, 0, FALSE)
 ON CONFLICT (key) DO NOTHING;
+
+-- In-game feedback (Game v2 testers): 👍/👎 + optional comment, tagged by variant.
+CREATE TABLE IF NOT EXISTS feedback (
+  id          BIGSERIAL PRIMARY KEY,
+  variant     TEXT NOT NULL,
+  user_id     TEXT,                    -- nullable for anonymous
+  rating      SMALLINT,                -- 1 = 👍 , -1 = 👎
+  comment     TEXT,
+  score       INTEGER,
+  user_agent  TEXT,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_feedback_recent ON feedback (created_at DESC);
 
 -- Country (ISO-3166 alpha-2). Populated from the flag picker on first home.
 -- NULL = player hasn't picked yet. Used for the "מדינתי" leaderboard tab.

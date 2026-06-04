@@ -362,10 +362,85 @@ export function start(root) {
     for (let i = 1; i <= 8; i++) { const t = TIERS[i], d = document.createElement('div'); d.className = 'leg'; d.innerHTML = `<div class="chip" style="background:${t.bg}">${svg(t.icon, t.fg)}</div><div class="pts">${t.val}</div>`; L.appendChild(d); }
   }
 
+  /* ============ FEEDBACK WIDGET (v2 only) ============ */
+  // The heart of the GV.2 ask: a non-blocking 💬 pill always available + a
+  // gentle one-time 👍/👎 prompt after the 2nd game-over of the session.
+  var FB_DONE_KEY = 'bloom_v2_feedback_done';
+  var _fbGameOvers = 0, _fbRating = 0, _fbSubmitting = false;
+  function fbDone() { try { return !!localStorage.getItem(FB_DONE_KEY); } catch (e) { return false; } }
+  function fbMarkDone() { try { localStorage.setItem(FB_DONE_KEY, '1'); } catch (e) {} }
+  function buildFeedbackWidget() {
+    var pill = document.createElement('button');
+    pill.id = 'v2-fb-pill'; pill.type = 'button'; pill.textContent = '💬 משוב';
+    pill.addEventListener('click', function() { openFeedback(false); });
+    root.appendChild(pill);
+    var panel = document.createElement('div');
+    panel.id = 'v2-fb-panel'; panel.hidden = true;
+    panel.innerHTML =
+      '<div class="v2-fb-card">' +
+        '<button type="button" class="v2-fb-x" aria-label="סגור">✕</button>' +
+        '<div class="v2-fb-title" id="v2-fb-title">נהנית מהגרסה החדשה?</div>' +
+        '<div class="v2-fb-rate">' +
+          '<button type="button" class="v2-fb-up" data-r="1">👍</button>' +
+          '<button type="button" class="v2-fb-down" data-r="-1">👎</button>' +
+        '</div>' +
+        '<input type="text" class="v2-fb-input" id="v2-fb-input" maxlength="500" placeholder="ספר/י לנו (לא חובה)">' +
+        '<button type="button" class="v2-fb-send" id="v2-fb-send">שלח</button>' +
+        '<div class="v2-fb-thanks" id="v2-fb-thanks" hidden>תודה! 🙏</div>' +
+      '</div>';
+    root.appendChild(panel);
+    panel.querySelector('.v2-fb-x').addEventListener('click', function() { closeFeedback(true); });
+    panel.querySelectorAll('.v2-fb-rate button').forEach(function(b) {
+      b.addEventListener('click', function() {
+        _fbRating = parseInt(b.getAttribute('data-r'), 10) || 0;
+        panel.querySelector('.v2-fb-up').classList.toggle('sel', _fbRating === 1);
+        panel.querySelector('.v2-fb-down').classList.toggle('sel', _fbRating === -1);
+      });
+    });
+    panel.querySelector('#v2-fb-send').addEventListener('click', submitFeedback);
+  }
+  function openFeedback(isAuto) {
+    var panel = root.querySelector('#v2-fb-panel'); if (!panel) return;
+    panel.hidden = false; panel.classList.add('show');
+    var t = root.querySelector('#v2-fb-title');
+    if (t) t.textContent = isAuto ? 'נהנית מהגרסה החדשה?' : '💬 ספר/י לנו מה דעתך';
+  }
+  function closeFeedback(markDone) {
+    var panel = root.querySelector('#v2-fb-panel'); if (!panel) return;
+    panel.classList.remove('show'); panel.hidden = true;
+    if (markDone) fbMarkDone();  // dismissing the prompt also means "don't nag again"
+  }
+  function submitFeedback() {
+    if (_fbSubmitting) return;
+    var input = root.querySelector('#v2-fb-input');
+    var comment = input ? (input.value || '').trim().slice(0, 500) : '';
+    if (!_fbRating && !comment) {
+      var t = root.querySelector('#v2-fb-title'); if (t) t.textContent = 'בחר/י 👍 או 👎 (או כתוב/כתבי משהו)';
+      return;
+    }
+    _fbSubmitting = true;
+    var body = { rating: _fbRating || null, comment: comment || null, score: Math.floor(score) || 0, variant: 'v2', deviceId: DID };
+    fetch('/api/feedback', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      .catch(function() {})
+      .then(function() {
+        fbMarkDone();
+        var thanks = root.querySelector('#v2-fb-thanks'); if (thanks) thanks.hidden = false;
+        ['#v2-fb-title', '.v2-fb-rate', '#v2-fb-input', '#v2-fb-send'].forEach(function(sel) { var el = root.querySelector(sel); if (el) el.style.display = 'none'; });
+        setTimeout(function() { closeFeedback(true); }, 1400);
+      });
+  }
+  function maybeAutoFeedback() {
+    _fbGameOvers++;
+    if (_fbGameOvers === 2 && !fbDone()) {
+      setTimeout(function() { openFeedback(true); }, 900);  // let the game-over overlay settle first
+    }
+  }
+
   /* ============ GAME OVER / RESET ============ */
   function endGame() {
     gameover = true; submitV2Score(); overSound();
     $('finalScore').textContent = fmt(score); $('over').classList.add('show');
+    maybeAutoFeedback();
   }
   function reset() {
     gameover = false; busy = false; score = 0; streak = 0; hold = null;
@@ -391,4 +466,5 @@ export function start(root) {
   }
   window.addEventListener('resize', () => { measure(); buildBg(); layout(); clearAim(); });
   init();
+  buildFeedbackWidget();
 }

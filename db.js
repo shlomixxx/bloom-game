@@ -711,6 +711,19 @@ export async function initDb() {
       updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )`,
     `INSERT INTO feature_flags (key, enabled, rollout_pct) VALUES ('game_v2', FALSE, 0) ON CONFLICT (key) DO NOTHING`,
+    // GV.2 — public beta link + in-game feedback (full def in schema.sql).
+    `ALTER TABLE feature_flags ADD COLUMN IF NOT EXISTS beta_enabled BOOLEAN NOT NULL DEFAULT FALSE`,
+    `CREATE TABLE IF NOT EXISTS feedback (
+      id          BIGSERIAL PRIMARY KEY,
+      variant     TEXT NOT NULL,
+      user_id     TEXT,
+      rating      SMALLINT,
+      comment     TEXT,
+      score       INTEGER,
+      user_agent  TEXT,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_feedback_recent ON feedback (created_at DESC)`,
   ];
   for (const sql of migrations) {
     try { await pool.query(sql); } catch (e) {

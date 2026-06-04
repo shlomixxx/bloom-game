@@ -112,7 +112,32 @@ html[data-bloom-variant="v2"] body { margin: 0; background: #FAF6EE; }
 #bloom-v2-root #over button:active{transform:scale(.95);}
 #bloom-v2-root .hint{font-size:12px;color:var(--muted);text-align:center;margin-top:-2px;}
 
+/* ---- Feedback widget (GV.2) ---- */
+#bloom-v2-root #v2-fb-pill{position:fixed;left:12px;bottom:calc(12px + env(safe-area-inset-bottom));
+  z-index:45;background:var(--card);color:var(--ink);border:1px solid #EFE9DC;border-radius:999px;
+  font-family:inherit;font-weight:700;font-size:13px;padding:8px 14px;box-shadow:var(--shadow);cursor:pointer;}
+#bloom-v2-root #v2-fb-pill:active{transform:scale(.94);}
+#bloom-v2-root #v2-fb-panel{position:fixed;inset:0;z-index:60;display:none;align-items:center;justify-content:center;
+  background:rgba(30,27,24,.45);backdrop-filter:blur(2px);padding:18px;}
+#bloom-v2-root #v2-fb-panel.show{display:flex;}
+#bloom-v2-root .v2-fb-card{position:relative;width:100%;max-width:330px;background:var(--card);border-radius:18px;
+  padding:22px 18px 18px;box-shadow:0 12px 40px rgba(0,0,0,.28);text-align:center;}
+#bloom-v2-root .v2-fb-x{position:absolute;top:8px;left:10px;background:none;border:none;font-size:18px;color:var(--muted);cursor:pointer;line-height:1;}
+#bloom-v2-root .v2-fb-title{font-weight:800;font-size:17px;margin-bottom:14px;color:var(--ink);}
+#bloom-v2-root .v2-fb-rate{display:flex;gap:14px;justify-content:center;margin-bottom:14px;}
+#bloom-v2-root .v2-fb-rate button{width:60px;height:54px;border-radius:14px;border:2px solid #EAE3D4;background:#FBF8F1;
+  font-size:26px;cursor:pointer;transition:transform .1s, border-color .15s, background .15s;}
+#bloom-v2-root .v2-fb-rate button:active{transform:scale(.9);}
+#bloom-v2-root .v2-fb-rate button.sel{border-color:var(--gold);background:var(--peach);transform:scale(1.06);}
+#bloom-v2-root .v2-fb-input{width:100%;box-sizing:border-box;padding:10px 12px;border-radius:12px;border:1px solid #DAD3C2;
+  background:#FBF8F1;font-family:inherit;font-size:14px;color:var(--ink);margin-bottom:12px;}
+#bloom-v2-root .v2-fb-send{width:100%;background:var(--gold);color:#fff;border:none;font-family:inherit;font-weight:700;
+  font-size:16px;padding:12px;border-radius:13px;cursor:pointer;box-shadow:0 4px 12px rgba(201,146,59,.3);}
+#bloom-v2-root .v2-fb-send:active{transform:scale(.97);}
+#bloom-v2-root .v2-fb-thanks{font-weight:800;font-size:18px;color:var(--gold);padding:8px 0;}
+
 /* Respect reduced-motion (matches the classic global guard). */
 @media (prefers-reduced-motion: reduce){
   #bloom-v2-root .current{animation:none;}
+  #bloom-v2-root .v2-fb-rate button{transition:none;}
 }

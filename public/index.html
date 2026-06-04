@@ -73,7 +73,7 @@ function trackEvent(n,p){try{gtag('event',n,p||{});}catch(e){}}
 })();
 </script>
 
-<link rel="stylesheet" href="/styles.css?v=20260605a">
+<link rel="stylesheet" href="/styles.css?v=20260605b">
 </head>
 <body>
 
@@ -158,7 +158,7 @@ function trackEvent(n,p){try{gtag('event',n,p||{});}catch(e){}}
 <script>
 (function(){
   "use strict";
-  var CB = 'v=20260605a';
+  var CB = 'v=20260605b';
   function loadScript(src){ return new Promise(function(res,rej){ var s=document.createElement('script'); s.src=src; s.onload=res; s.onerror=rej; document.body.appendChild(s); }); }
   function loadClassic(){
     document.documentElement.removeAttribute('data-bloom-variant');
@@ -202,6 +202,9 @@ function trackEvent(n,p){try{gtag('event',n,p||{});}catch(e){}}
   // Persisted so the admin keeps forcing across reloads; /?bb_force=off clears.
   var qs = new URLSearchParams(location.search);
   var force = qs.get('bb_force')||'', fkey = qs.get('bb_key')||'';
+  // Beta link (?beta=v2|classic) — opt selected testers in/out of v2. The
+  // server makes it sticky via a bb_beta cookie; we just forward the param.
+  var beta = qs.get('beta')||'';
   try{
     if(force==='off'){ localStorage.removeItem('bloom_v2_force'); localStorage.removeItem('bloom_v2_force_key'); force=''; fkey=''; }
     else if(force){ localStorage.setItem('bloom_v2_force', force); if(fkey) localStorage.setItem('bloom_v2_force_key', fkey); }
@@ -209,18 +212,20 @@ function trackEvent(n,p){try{gtag('event',n,p||{});}catch(e){}}
   }catch(e){}
   var url='/api/flags/game_v2'+(did?('?deviceId='+encodeURIComponent(did)):'?_=1');
   if(force){ url += '&force='+encodeURIComponent(force) + (fkey?('&force_key='+encodeURIComponent(fkey)):''); }
+  if(beta){ url += '&beta='+encodeURIComponent(beta); }
+  var opt = { credentials:'include' };  // round-trip the bb_beta / bb_uid cookies
   var cached=''; try{ cached=localStorage.getItem('bloom_variant')||''; }catch(e){}
-  if(cached && !force){
+  if(cached && !force && !beta){
     // Instant boot from the sticky cache, then revalidate quietly for the NEXT
     // load (never hot-swap mid-session — that would be a jarring reload).
     applyVariant(cached);
-    fetch(url).then(function(r){return r.json();}).then(function(f){ if(f&&f.variant){ try{localStorage.setItem('bloom_variant', f.variant);}catch(e){} } }).catch(function(){});
+    fetch(url, opt).then(function(r){return r.json();}).then(function(f){ if(f&&f.variant){ try{localStorage.setItem('bloom_variant', f.variant);}catch(e){} } }).catch(function(){});
   } else {
-    // First visit (or admin force): wait for the clean server decision so the
-    // A/B assignment never flickers. Fail-safe to classic after 2.5s.
+    // First visit / admin force / beta link: wait for the clean server decision
+    // so the A/B assignment never flickers. Fail-safe to classic after 2.5s.
     var done=false;
     var t=setTimeout(function(){ if(done)return; done=true; applyVariant(cached||'classic'); }, 2500);
-    fetch(url).then(function(r){return r.json();}).then(function(f){ if(done)return; done=true; clearTimeout(t); applyVariant((f&&f.variant)||'classic'); })
+    fetch(url, opt).then(function(r){return r.json();}).then(function(f){ if(done)return; done=true; clearTimeout(t); applyVariant((f&&f.variant)||'classic'); })
       .catch(function(){ if(done)return; done=true; clearTimeout(t); applyVariant('classic'); });
   }
 })();
