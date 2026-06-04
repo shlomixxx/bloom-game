@@ -969,6 +969,20 @@
     </details>
   </section>
 
+  <!-- AS.1 — Anti-stall + Flow -->
+  <section id="antistall-section" style="margin-bottom:12px">
+    <h2>⏱ אנטי-סטיכה + זרימה</h2>
+    <div style="font-size:11.5px;color:var(--muted);margin:4px 0 10px;line-height:1.5">
+      סוגר את הניצול שבו שחקנים <strong>לא מפילים ומחכים שתגיע אליהם פצצה</strong>. שלושה מנגנונים: <strong>A</strong> — בונוס מופיע רק אחרי שהשחקן הפיל מספיק אריחים (לא רק לפי זמן); <strong>C</strong> — מד זרימה שמתגמל הפלות מהירות במכפיל ניקוד; <strong>B</strong> — לחץ נגד חוסר-פעילות. הכל מכוון כאן ומיידי.
+    </div>
+    <div style="font-size:12px;font-weight:700;color:var(--gold);margin-bottom:6px">A · בונוסים לפי פעילות</div>
+    <div class="rewards-grid" data-keys="events_activity_gate_enabled,events_min_drops_since_last"></div>
+    <div style="font-size:12px;font-weight:700;color:var(--gold);margin:10px 0 6px">C · מד זרימה (מכפיל ניקוד)</div>
+    <div class="rewards-grid" data-keys="flow_meter_enabled,flow_window_ms,flow_mult_per_level,flow_max_mult"></div>
+    <div style="font-size:12px;font-weight:700;color:var(--gold);margin:10px 0 6px">B · לחץ נגד חוסר-פעילות</div>
+    <div class="rewards-grid" data-keys="idle_pressure_enabled,idle_warn_seconds,idle_action_seconds,idle_action"></div>
+  </section>
+
   <!-- Difficulty + Speed + Slot Machine -->
   <section id="difficulty-section" style="margin-bottom:12px">
     <h2>🎮 קושי, מהירות וסלוט <button class="tip-btn" data-tip="difficulty">?</button></h2>
@@ -2918,6 +2932,17 @@
     bots_in_live_stats_enabled: ['true', 'false'],
     bots_live_stats_max_multiplier: [2, 2.5, 3],
     bots_live_stats_floor_when_zero_real: [0, 4, 6, 8],
+    // AS.1 — anti-stall + flow
+    events_activity_gate_enabled: ['true', 'false'],
+    events_min_drops_since_last: [2, 3, 5, 8],
+    flow_meter_enabled: ['true', 'false'],
+    flow_window_ms: [1500, 2000, 2500, 4000],
+    flow_mult_per_level: [0.1, 0.15, 0.2, 0.3],
+    flow_max_mult: [1.5, 2, 2.5, 3],
+    idle_pressure_enabled: ['true', 'false'],
+    idle_warn_seconds: [8, 10, 15],
+    idle_action_seconds: [15, 18, 25, 30],
+    idle_action: ['warn', 'autodrop', 'expire'],
     // FD.2 — device sync + friends
     device_sync_enabled: ['true', 'false'],
     device_sync_ttl_min: [5, 10, 15],
@@ -3327,6 +3352,16 @@
     issues_auto_clear_enabled: 'ניקוי אוטומטי של תקלות api_* ישנות שנרשמו אוטומטית (כדי שהצפה משרת שבור לא תטביע את הטבלה).<div class="tip-example">✅ <code>true</code> (ברירת מחדל): cron שעתי מסמן כבוטלו תקלות api_* פתוחות, אוטומטיות, לא-מפוצות, ישנות מ-issues_auto_clear_hours. לא נוגע בתקלות שדווחו מהלקוח או שפוצו.</div>',
     issues_auto_clear_hours: 'גיל (בשעות) שאחריו תקלת api_* אוטומטית מנוקה ע״י ה-cron.<div class="tip-example">📊 ברירת מחדל 24. נמוך = ניקוי אגרסיבי; גבוה = שמירה ארוכה יותר לבדיקה.</div>',
     ftue_enabled: 'מתג-על למדריך הראשוני (FTUE) שרץ פעם אחת לשחקנים חדשים.<div class="tip-example">✅ <code>true</code> (ברירת מחדל): שחקן חדש רואה את ההדגמה (הפלה→מיזוג→שרשרת) לפני הבית.<br>🔴 <code>false</code>: דילוג ישיר לבית — שימושי ל-A/B על השפעת המדריך על D1. (נכנס לתוקף מהטעינה הבאה, נקרא מ-localStorage).</div>',
+    events_activity_gate_enabled: 'אנטי-סטיכה: בונוס (פצצה/כוכב/וכו\') יופיע רק אחרי שהשחקן הפיל מספיק אריחים מאז הבונוס הקודם — לא רק לפי זמן.<div class="tip-example">🎯 <strong>סוגר את הניצול</strong>: שחקנים חיכו בלי לשחק עד שמגיעה פצצה. עכשיו סטולר (0 הפלות) לא מקבל כלום, והבונוסים הופכים לתגמול על משחק אקטיבי. ✅ true מומלץ.</div>',
+    events_min_drops_since_last: 'כמה הפלות נדרשות מאז הבונוס הקודם כדי שבונוס חדש יופיע.<div class="tip-example">📊 <code>3</code> (ברירת מחדל) = איזון טוב. גבוה יותר = בונוסים נדירים יותר (צריך לשחק יותר). 0 = מבטל את שער-הפעילות.</div>',
+    flow_meter_enabled: 'מד "זרימה": הפלות מהירות רצופות בונות מכפיל ניקוד שדועך בחוסר-פעילות.<div class="tip-example">🔥 <strong>מנוע התמכרות</strong>: מתגמל שחק מהיר ואגרסיבי, והופך סטיכה למפסידה. ✅ true מומלץ.<br>⚠️ מעלה ניקוד למשחק מהיר → מעט אינפלציה בלוחות מול ציונים ישנים (הוגן — מתגמל מיומנות אחיד).</div>',
+    flow_window_ms: 'חלון הזמן (מילישניות) בין הפלות לשמירה על הזרימה. הפלה בתוך החלון מעלה דרגה; איטית יותר מאפסת.<div class="tip-example">📊 <code>2500</code> (2.5ש, ברירת מחדל). נמוך = דורש משחק מהיר מאוד; גבוה = סלחני יותר.</div>',
+    flow_mult_per_level: 'כמה מכפיל-הניקוד עולה לכל דרגת זרימה.<div class="tip-example">📊 <code>0.15</code> = כל דרגה +15% (×1.15, ×1.30…). גבוה = תגמול אגרסיבי יותר לזרימה.</div>',
+    flow_max_mult: 'תקרת מכפיל הזרימה.<div class="tip-example">📊 <code>2.0</code> = עד ×2 ניקוד בזרימה מקסימלית. הורד ל-1.5 אם הניקוד מתנפח מדי; העלה ל-3 ליותר התמכרות (ופחות הוגנות-לוחות).</div>',
+    idle_pressure_enabled: 'לחץ נגד חוסר-פעילות: אזהרה (ואופציונלית פעולה) כשהשחקן לא מפיל זמן רב.<div class="tip-example">⏰ עוצר סטיכה גם כשהלוח ריק. ✅ true מומלץ עם action=warn (עדין).</div>',
+    idle_warn_seconds: 'כמה שניות חוסר-פעילות עד שמופיעה אזהרה ("⏰ שחק!").<div class="tip-example">📊 <code>10</code> (ברירת מחדל). נמוך מדי יציק לשחקן שחושב; אל תרד מ-8.</div>',
+    idle_action_seconds: 'כמה שניות חוסר-פעילות עד שמתבצעת פעולת-לחץ (לפי idle_action).<div class="tip-example">📊 <code>18</code> (ברירת מחדל). שמור על מרווח נדיב מ-idle_warn_seconds.</div>',
+    idle_action: 'מה קורה בחוסר-פעילות ממושך.<div class="tip-example">• <code>warn</code> (ברירת מחדל, הכי בטוח): רק אזהרה.<br>• <code>autodrop</code>: מפיל את החלק הנוכחי בעמודה הבטוחה — מסיר "סטיכה ללא סיכון".<br>• <code>expire</code>: מנקה את הבונוס הממתין כך שהסטולר מאבד אותו.<br>⚠️ autodrop אגרסיבי — סיכון תסכול; התחל מ-warn.</div>',
     tour_enabled: 'מתג-על לסיור המלא ("📖 איך משחקים?") — גם האוטומטי בכניסה הראשונה וגם הכפתור הידני.<div class="tip-example">✅ <code>true</code> (ברירת מחדל). <code>false</code>: הסיור לא ייפתח כלל (הזרימה ממשיכה רגיל).</div>',
     // ---- AD.2 Auto-fleet (world never empty) ----
     bots_auto_enabled: 'בוטים אוטומטיים — נדלקים לבד עם עליית השרת כדי שהמשחק אף פעם לא ירגיש ריק. הם משחקים, מזרימים heartbeat, ומאכלסים את לוח המובילים היומי.<div class="tip-example">💡 התיקון מס׳ 1 לתחושת ״ריק״. השאר על <code>true</code>. כפתור ״⏹ עצור״ בפאנל הבוטים מכבה את זה; ״🌍 מלא עולם״ מדליק שוב.</div>',

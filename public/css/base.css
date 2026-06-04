@@ -1886,3 +1886,60 @@
   .bloom-confirm-ok.danger { background: linear-gradient(135deg, #FF6B6B, #D32F2F); }
   html[data-theme="dark"] .bloom-confirm-card { background: #2A2825; color: #F2EFE9; }
   html[data-theme="dark"] .bloom-confirm-cancel { background: #3A3733; color: #F2EFE9; }
+
+  /* ============================================================
+     AS.1 — Anti-stall: Flow meter pill + Idle-pressure banner
+     ============================================================ */
+  /* Flow pill — floats top-center under the header, builds as the combo grows.
+     Gold at low flow, hot pink-red at ×1.6+. Pure dopamine juice. */
+  .flow-pill {
+    position: fixed;
+    top: calc(env(safe-area-inset-top, 0px) + 6px);
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: var(--z-floating, 50);
+    background: linear-gradient(135deg, #FFE08A, #FF9F1C);
+    color: #412402;
+    font-size: 13px; font-weight: 900;
+    padding: 5px 14px; border-radius: 999px;
+    box-shadow: 0 4px 14px rgba(255, 159, 28, 0.45);
+    pointer-events: none; white-space: nowrap; direction: rtl;
+    letter-spacing: 0.01em;
+  }
+  .flow-pill.flow-hot {
+    background: linear-gradient(135deg, #FFD96A 0%, #FF6B9D 55%, #C8472F 100%);
+    color: #FFF;
+    box-shadow: 0 0 16px 2px rgba(255, 107, 157, 0.5), 0 5px 18px rgba(200, 71, 47, 0.45);
+  }
+  .flow-pill.flow-pop { animation: flowPop 0.34s cubic-bezier(0.2, 1.5, 0.4, 1); }
+  @keyframes flowPop {
+    0% { transform: translateX(-50%) scale(0.82); }
+    60% { transform: translateX(-50%) scale(1.16); }
+    100% { transform: translateX(-50%) scale(1); }
+  }
+
+  /* Idle-pressure banner — appears when the player stalls. Pulsing amber so it
+     reads as "do something" without being alarming. */
+  .idle-warn-banner {
+    position: fixed;
+    top: calc(env(safe-area-inset-top, 0px) + 40px);
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: var(--z-floating, 50);
+    background: linear-gradient(135deg, #FBBF24, #F97316);
+    color: #3A2300;
+    font-size: 13px; font-weight: 800;
+    padding: 8px 16px; border-radius: 999px;
+    box-shadow: 0 6px 20px rgba(249, 115, 22, 0.45);
+    pointer-events: none; white-space: nowrap; direction: rtl;
+    animation: idleWarnPulse 1.1s ease-in-out infinite;
+  }
+  @keyframes idleWarnPulse {
+    0%, 100% { transform: translateX(-50%) scale(1); opacity: 0.92; }
+    50% { transform: translateX(-50%) scale(1.06); opacity: 1; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .flow-pill.flow-pop { animation: none; }
+    .idle-warn-banner { animation: none; }
+  }
+  html[data-theme="dark"] .flow-pill { box-shadow: 0 4px 14px rgba(255, 159, 28, 0.35); }

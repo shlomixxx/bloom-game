@@ -19042,7 +19042,10 @@
             // Pass survivor column (kc) so an active column-multiplier is
             // applied at the chokepoint. When no multiplier is active,
             // pointsFor returns the vanilla score with zero overhead.
-            const points = Math.round(pointsFor(nt, group.length, multiplier, kc) * eventMult);
+            // AS.1 — × the flow multiplier so fast, engaged play scores more
+            // (and stalling, which can't build flow, scores less). flowMultiplier()
+            // returns 1 when the meter is disabled/empty — zero overhead then.
+            const points = Math.round(pointsFor(nt, group.length, multiplier, kc) * eventMult * flowMultiplier());
             score += points;
             // Dynamic Boards — Special Cell: Bonus (phase 3C, May 2026).
             // If the merge survivor lands on a bonus cell, add the cell's
@@ -19440,6 +19443,112 @@
 
   let queuedCol = -1; // next move queued while busy
 
+  // ============================================================
+  // AS.1 — Anti-stall: Flow meter (C) + Idle pressure (B)
+  // ============================================================
+  // Kills the "stall and wait for a bomb" exploit and rewards engaged play.
+  // The flow meter builds with fast consecutive drops and multiplies merge
+  // score; it resets when the player idles past the window. The idle watcher
+  // nudges (and optionally acts) when the player camps. All admin-tunable via
+  // gameConfig (flow_*, idle_*); every helper no-ops when its toggle is off.
+  var flowLevel = 0;            // current flow level (0 = no bonus)
+  var flowLastActivity = 0;     // ts of the last drop (also drives idle watch)
+  var _idleTimer = null;        // idle-pressure interval handle
+  var idleWarnEl = null;        // on-screen idle warning banner
+
+  function _flowCfgNum(key, def) {
+    var v = (typeof gameConfig === 'object' && gameConfig) ? gameConfig[key] : undefined;
+    var n = parseFloat(v); return isFinite(n) ? n : def;
+  }
+  function _flowCfgOn(key) {
+    return !(typeof gameConfig === 'object' && gameConfig && gameConfig[key] === 'false');
+  }
+  function flowMultiplier() {
+    if (!_flowCfgOn('flow_meter_enabled') || flowLevel <= 0) return 1;
+    return Math.min(_flowCfgNum('flow_max_mult', 2.0), 1 + flowLevel * _flowCfgNum('flow_mult_per_level', 0.15));
+  }
+  function flowMaxLevel() {
+    var per = _flowCfgNum('flow_mult_per_level', 0.15);
+    return per > 0 ? Math.ceil((_flowCfgNum('flow_max_mult', 2.0) - 1) / per) : 0;
+  }
+  function flowOnDrop() {
+    if (!_flowCfgOn('flow_meter_enabled')) { flowLevel = 0; return; }
+    var now = Date.now();
+    var win = _flowCfgNum('flow_window_ms', 2500);
+    if (flowLastActivity && (now - flowLastActivity) <= win) flowLevel = Math.min(flowMaxLevel(), flowLevel + 1);
+    else flowLevel = 0; // too slow — start a fresh combo
+    paintFlowPill();
+  }
+  function paintFlowPill() {
+    var pill = document.getElementById('flow-pill');
+    var m = flowMultiplier();
+    if (!_flowCfgOn('flow_meter_enabled') || flowLevel <= 0 || m <= 1 || window.__bloomGameOver) {
+      if (pill) pill.remove();
+      return;
+    }
+    if (!pill) {
+      pill = document.createElement('div');
+      pill.id = 'flow-pill';
+      pill.className = 'flow-pill';
+      document.body.appendChild(pill);
+    }
+    pill.textContent = '🔥 זרימה ×' + (Math.round(m * 10) / 10);
+    pill.classList.toggle('flow-hot', m >= 1.6);
+    pill.classList.remove('flow-pop'); void pill.offsetWidth; pill.classList.add('flow-pop');
+  }
+  function resetFlow() {
+    flowLevel = 0; flowLastActivity = 0;
+    var pill = document.getElementById('flow-pill'); if (pill) pill.remove();
+  }
+  function showIdleWarn() {
+    if (idleWarnEl && document.body.contains(idleWarnEl)) return;
+    idleWarnEl = document.createElement('div');
+    idleWarnEl.className = 'idle-warn-banner';
+    idleWarnEl.id = 'idle-warn-banner';
+    idleWarnEl.textContent = '⏰ שחק! הבונוסים מגיעים רק כשמשחקים';
+    document.body.appendChild(idleWarnEl);
+  }
+  function doIdleAction() {
+    var action = (typeof gameConfig === 'object' && gameConfig && gameConfig.idle_action) || 'warn';
+    if (action === 'expire') { try { if (typeof clearActiveEvent === 'function') clearActiveEvent(); } catch (e) {} showIdleWarn(); return; }
+    if (action === 'autodrop') {
+      try {
+        if (window.__bloomGameOver || busy) return;
+        var bestCol = 0, bestRoom = -1;
+        for (var c = 0; c < getBoardCols(); c++) {
+          var room = 0;
+          for (var r = 0; r < getBoardRows(); r++) { if (grid[r] && grid[r][c] === 0 && !isShapeInactiveAt(r, c) && !isLockedAt(r, c)) room++; }
+          if (room > bestRoom) { bestRoom = room; bestCol = c; }
+        }
+        if (bestRoom > 0) drop(bestCol);
+      } catch (e) {}
+      return;
+    }
+    showIdleWarn(); // 'warn' (default) — gentle nudge only
+  }
+  function startIdleWatch() {
+    stopIdleWatch();
+    if (!_flowCfgOn('idle_pressure_enabled')) return;
+    flowLastActivity = Date.now();
+    _idleTimer = setInterval(function() {
+      if (window.__bloomGameOver || busy || !flowLastActivity) return;
+      // Only act during visible gameplay — never nudge/auto-drop on home, the
+      // over-screen, a contest/challenge menu, etc.
+      if (typeof isGameSurfaceVisible === 'function' && !isGameSurfaceVisible()) return;
+      var idleMs = Date.now() - flowLastActivity;
+      // Flow decays once the player idles past the window — a staller can't
+      // keep a high multiplier by waiting.
+      if (flowLevel > 0 && idleMs > _flowCfgNum('flow_window_ms', 2500)) { flowLevel = 0; paintFlowPill(); }
+      var idleSec = idleMs / 1000;
+      if (idleSec >= _flowCfgNum('idle_action_seconds', 18)) { doIdleAction(); flowLastActivity = Date.now(); }
+      else if (idleSec >= _flowCfgNum('idle_warn_seconds', 10)) { showIdleWarn(); }
+    }, 1000);
+  }
+  function stopIdleWatch() {
+    if (_idleTimer) { clearInterval(_idleTimer); _idleTimer = null; }
+    if (idleWarnEl) { try { idleWarnEl.remove(); } catch (e) {} idleWarnEl = null; }
+  }
+
   async function drop(col) {
     if (busy) {
       // Queue the next move — drops as soon as current finishes
@@ -19636,6 +19745,13 @@
     }, 5000);
     queuedCol = -1;
     dropsCount++;
+    // AS.1 — anti-stall: this is the canonical "a real drop happened" point.
+    // Build the flow meter (rewards fast consecutive drops) and reset the
+    // idle timer (so the idle-pressure watcher only fires when the player
+    // is genuinely camping).
+    flowOnDrop();
+    flowLastActivity = Date.now();
+    if (idleWarnEl) { try { idleWarnEl.remove(); } catch (e) {} idleWarnEl = null; }
     // A9 — Ghost Mode: record the column of every drop so the player's
     // run can be replayed as a ghost by another player later. Stored
     // in-memory; serialized into the score submission payload at game-over.
@@ -22586,6 +22702,13 @@
 
   var activeEvent = null;       // { type, row, col, timer, maxTimer, interval }
   var lastEventTime = 0;        // timestamp of last event end
+  var _dropsAtLastEvent = 0;    // AS.1 — snapshot of dropsCount at the last event boundary
+  // AS.1 — mark the boundary after an event ends/starts: reset BOTH the time
+  // and the activity (drops) reference so the next event needs fresh play.
+  function _markEventBoundary() {
+    lastEventTime = Date.now();
+    _dropsAtLastEvent = (typeof dropsCount === 'number') ? dropsCount : 0;
+  }
   var eventSpawnTimer = null;    // setInterval handle
   var eventInitTimer = null;     // setTimeout for the "force first event" boot
   var eventSystemRunning = false; // gates async callbacks scheduled before stop
@@ -22632,9 +22755,15 @@
 
   function startEventSystem() {
     stopEventSystem();
+    // AS.1 — flow meter + idle pressure run during active gameplay, independent
+    // of whether the bonus-event system itself is enabled. (Defined in
+    // 11-game.js, same IIFE.) Reset the flow and (re)arm the idle watcher here,
+    // before the events-enabled gate below.
+    if (typeof resetFlow === 'function') resetFlow();
+    if (typeof startIdleWatch === 'function') startIdleWatch();
     if (!eventsEnabled()) return;
     eventSystemRunning = true;
-    lastEventTime = Date.now();
+    _markEventBoundary();
     eventSpawnTimer = setInterval(function() {
       if (!eventSystemRunning) return;
       try { trySpawnEvent(); } catch(e) { /* silent */ }
@@ -22659,6 +22788,9 @@
     eventSystemRunning = false;
     if (eventSpawnTimer) { clearInterval(eventSpawnTimer); eventSpawnTimer = null; }
     if (eventInitTimer) { clearTimeout(eventInitTimer); eventInitTimer = null; }
+    // AS.1 — tear down the flow meter + idle watcher with the event system.
+    if (typeof stopIdleWatch === 'function') stopIdleWatch();
+    if (typeof resetFlow === 'function') resetFlow();
     clearActiveEvent();
     clearComboCounter();
     feverActive = false;
@@ -22762,6 +22894,16 @@
     var elapsed = Date.now() - lastEventTime;
     if (elapsed < minGap) return;
 
+    // AS.1 — ACTIVITY GATE: a bonus spawns only after the player has actually
+    // dropped N tiles since the last event. Kills the "stall and wait for a
+    // bomb" exploit (a staller makes 0 drops → never qualifies) and reframes
+    // bonuses as a reward for PLAYING. Admin-tunable; can be disabled.
+    if (getEventConfig('events_activity_gate_enabled', 'true') === 'true') {
+      var minDrops = getEventNum('events_min_drops_since_last', 3);
+      var dropsSince = ((typeof dropsCount === 'number') ? dropsCount : 0) - _dropsAtLastEvent;
+      if (dropsSince < minDrops) return;
+    }
+
     var minEmpty = getEventNum('events_min_empty_cells', 4);
     if (countEmptyCells() < minEmpty) return;
 
@@ -22858,7 +23000,7 @@
       }
       if (activeEvent.timer <= 0) {
         clearActiveEvent();
-        lastEventTime = Date.now();
+        _markEventBoundary();
       }
     }, 100);
   }
@@ -22943,7 +23085,7 @@
   function triggerEvent(evt, landingRow) {
     var type = evt.type;
     clearActiveEvent();
-    lastEventTime = Date.now();
+    _markEventBoundary();
     buzz([60, 40]);
 
     if (type === 'bomb') triggerBomb(evt);
@@ -23290,7 +23432,7 @@
       console.log('[target] activated', 'target_tier=t' + targetTier, '(' + getActiveTiers()[targetTier].name + ')', 'duration=' + timerSec + 's');
     }
     showEventBanner('🎯 מטרה!', 'מזג ' + getActiveTiers()[targetTier].name + ' תוך ' + timerSec + 's!', 'target');
-    lastEventTime = Date.now();
+    _markEventBoundary();
 
     // Timer
     setTimeout(function() {

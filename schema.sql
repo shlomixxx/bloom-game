@@ -980,6 +980,20 @@ INSERT INTO game_config (key, value) VALUES ('events_start_delay', '30') ON CONF
 INSERT INTO game_config (key, value) VALUES ('events_min_gap', '20') ON CONFLICT (key) DO NOTHING;
 INSERT INTO game_config (key, value) VALUES ('events_max_gap', '45') ON CONFLICT (key) DO NOTHING;
 INSERT INTO game_config (key, value) VALUES ('events_min_empty_cells', '4') ON CONFLICT (key) DO NOTHING;
+-- AS.1 Anti-stall + flow (kills the "wait for a bomb without playing" exploit).
+-- A — events require activity: a bonus spawns only after N drops since the last one (a staller earns nothing).
+INSERT INTO game_config (key, value) VALUES ('events_activity_gate_enabled', 'true') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('events_min_drops_since_last',  '3')    ON CONFLICT (key) DO NOTHING;
+-- C — flow/combo meter: fast consecutive drops build a score multiplier that decays when idle.
+INSERT INTO game_config (key, value) VALUES ('flow_meter_enabled',   'true') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('flow_window_ms',       '2500') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('flow_mult_per_level',  '0.15') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('flow_max_mult',        '2.0')  ON CONFLICT (key) DO NOTHING;
+-- B — idle pressure: warn then act when the player stalls.
+INSERT INTO game_config (key, value) VALUES ('idle_pressure_enabled', 'true') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('idle_warn_seconds',     '10')   ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('idle_action_seconds',   '18')   ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('idle_action',           'warn') ON CONFLICT (key) DO NOTHING;
 INSERT INTO game_config (key, value) VALUES ('event_bomb_enabled', 'true') ON CONFLICT (key) DO NOTHING;
 INSERT INTO game_config (key, value) VALUES ('event_bomb_weight', '25') ON CONFLICT (key) DO NOTHING;
 INSERT INTO game_config (key, value) VALUES ('event_bomb_timer', '8') ON CONFLICT (key) DO NOTHING;

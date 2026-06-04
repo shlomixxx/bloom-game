@@ -5,6 +5,13 @@
 
   var activeEvent = null;       // { type, row, col, timer, maxTimer, interval }
   var lastEventTime = 0;        // timestamp of last event end
+  var _dropsAtLastEvent = 0;    // AS.1 — snapshot of dropsCount at the last event boundary
+  // AS.1 — mark the boundary after an event ends/starts: reset BOTH the time
+  // and the activity (drops) reference so the next event needs fresh play.
+  function _markEventBoundary() {
+    lastEventTime = Date.now();
+    _dropsAtLastEvent = (typeof dropsCount === 'number') ? dropsCount : 0;
+  }
   var eventSpawnTimer = null;    // setInterval handle
   var eventInitTimer = null;     // setTimeout for the "force first event" boot
   var eventSystemRunning = false; // gates async callbacks scheduled before stop
@@ -51,9 +58,15 @@
 
   function startEventSystem() {
     stopEventSystem();
+    // AS.1 — flow meter + idle pressure run during active gameplay, independent
+    // of whether the bonus-event system itself is enabled. (Defined in
+    // 11-game.js, same IIFE.) Reset the flow and (re)arm the idle watcher here,
+    // before the events-enabled gate below.
+    if (typeof resetFlow === 'function') resetFlow();
+    if (typeof startIdleWatch === 'function') startIdleWatch();
     if (!eventsEnabled()) return;
     eventSystemRunning = true;
-    lastEventTime = Date.now();
+    _markEventBoundary();
     eventSpawnTimer = setInterval(function() {
       if (!eventSystemRunning) return;
       try { trySpawnEvent(); } catch(e) { /* silent */ }
@@ -78,6 +91,9 @@
     eventSystemRunning = false;
     if (eventSpawnTimer) { clearInterval(eventSpawnTimer); eventSpawnTimer = null; }
     if (eventInitTimer) { clearTimeout(eventInitTimer); eventInitTimer = null; }
+    // AS.1 — tear down the flow meter + idle watcher with the event system.
+    if (typeof stopIdleWatch === 'function') stopIdleWatch();
+    if (typeof resetFlow === 'function') resetFlow();
     clearActiveEvent();
     clearComboCounter();
     feverActive = false;
@@ -181,6 +197,16 @@
     var elapsed = Date.now() - lastEventTime;
     if (elapsed < minGap) return;
 
+    // AS.1 — ACTIVITY GATE: a bonus spawns only after the player has actually
+    // dropped N tiles since the last event. Kills the "stall and wait for a
+    // bomb" exploit (a staller makes 0 drops → never qualifies) and reframes
+    // bonuses as a reward for PLAYING. Admin-tunable; can be disabled.
+    if (getEventConfig('events_activity_gate_enabled', 'true') === 'true') {
+      var minDrops = getEventNum('events_min_drops_since_last', 3);
+      var dropsSince = ((typeof dropsCount === 'number') ? dropsCount : 0) - _dropsAtLastEvent;
+      if (dropsSince < minDrops) return;
+    }
+
     var minEmpty = getEventNum('events_min_empty_cells', 4);
     if (countEmptyCells() < minEmpty) return;
 
@@ -277,7 +303,7 @@
       }
       if (activeEvent.timer <= 0) {
         clearActiveEvent();
-        lastEventTime = Date.now();
+        _markEventBoundary();
       }
     }, 100);
   }
@@ -362,7 +388,7 @@
   function triggerEvent(evt, landingRow) {
     var type = evt.type;
     clearActiveEvent();
-    lastEventTime = Date.now();
+    _markEventBoundary();
     buzz([60, 40]);
 
     if (type === 'bomb') triggerBomb(evt);
@@ -709,7 +735,7 @@
       console.log('[target] activated', 'target_tier=t' + targetTier, '(' + getActiveTiers()[targetTier].name + ')', 'duration=' + timerSec + 's');
     }
     showEventBanner('🎯 מטרה!', 'מזג ' + getActiveTiers()[targetTier].name + ' תוך ' + timerSec + 's!', 'target');
-    lastEventTime = Date.now();
+    _markEventBoundary();
 
     // Timer
     setTimeout(function() {
