@@ -20,11 +20,11 @@ export function start(root) {
   // ---- markup (the demo's #app inner content) ----
   root.innerHTML =
     '<div class="top">' +
-      '<div class="pill">חופשי 🎮 <span class="chev">▾</span></div>' +
+      '<div class="v2-brand">BLOOM <span class="v2-brand-tag">חדש</span></div>' +
       '<div class="icons">' +
-        '<div class="iconbtn" id="btnRestart" title="אתחל">•••</div>' +
-        '<div class="iconbtn" title="סטטיסטיקה">📊</div>' +
-        '<div class="iconbtn" id="btnSound" title="סאונד">🔊</div>' +
+        '<button class="iconbtn" id="v2-fb-btn" type="button" title="משוב" aria-label="שלח משוב">💬</button>' +
+        '<button class="iconbtn" id="btnRestart" type="button" title="התחל מחדש" aria-label="התחל מחדש">↻</button>' +
+        '<button class="iconbtn" id="btnSound" type="button" title="סאונד" aria-label="הפעל/השתק סאונד">🔊</button>' +
       '</div>' +
     '</div>' +
     '<div class="stats">' +
@@ -88,6 +88,7 @@ export function start(root) {
   let cell = 0, aimCol = -1, tileId = 0;
   // v2 telemetry for the existing score API (drops drive the anti-cheat check).
   let dropsCount = 0, maxTierReached = 1, _v2Submitted = false;
+  let _startBest = best, _bestCelebrated = false;
 
   const $ = id => root.querySelector('#' + id);
   const boardEl = $('board'), tilesEl = $('tiles'), fxEl = $('fx'), ghostEl = $('ghost'), colhiEl = $('colhi');
@@ -162,10 +163,31 @@ export function start(root) {
   }
 
   /* ============ LAYOUT ============ */
+  // Height-AWARE sizing (mirrors classic's fitGrid). #boardwrap is flex:1 and
+  // fills the leftover vertical space; we size the 4×7 board to the LARGER tile
+  // that still fits BOTH the available width and height, then center it. This
+  // is what keeps the whole game on-screen (no overflow/scroll) on every phone
+  // — the bloom-demo's width-only measure() overflowed tall phones like the 13 Pro.
+  const wrapEl = root.querySelector('#boardwrap');
   function measure() {
-    const w = boardEl.clientWidth || 360;
-    cell = Math.floor((w - PAD * 2 - GAP * (COLS - 1)) / COLS);
+    const availW = (wrapEl.clientWidth || boardEl.clientWidth || 360);
+    const availH = (wrapEl.clientHeight || 400);
+    const cellW = Math.floor((availW - PAD * 2 - GAP * (COLS - 1)) / COLS);
+    const cellH = Math.floor((availH - PAD * 2 - GAP * (ROWS - 1)) / ROWS);
+    cell = Math.max(1, Math.min(cellW, cellH));
+    boardEl.style.width = (PAD * 2 + cell * COLS + GAP * (COLS - 1)) + 'px';
     boardEl.style.height = (PAD * 2 + cell * ROWS + GAP * (ROWS - 1)) + 'px';
+  }
+  // Re-fit when the layout has actually settled (CSS may apply a frame after
+  // start()); retry on rAF until #boardwrap has a real height, capped.
+  function relayout() {
+    if (!wrapEl || wrapEl.clientHeight < 40 || wrapEl.clientWidth < 40) {
+      relayout._t = (relayout._t || 0) + 1;
+      if (relayout._t <= 40) requestAnimationFrame(relayout);
+      return;
+    }
+    relayout._t = 0;
+    measure(); buildBg(); layout(); clearAim();
   }
   const X = c => PAD + c * (cell + GAP), Y = r => PAD + r * (cell + GAP);
   function buildBg() {
@@ -262,6 +284,21 @@ export function start(root) {
     w.style.color = TIERS[Math.min(combo + 1, 8)].fg; w.style.fontSize = (40 + combo * 4) + 'px';
     w.classList.remove('show'); void w.offsetWidth; w.classList.add('show');
   }
+  // New-best celebration — the strongest "one more game" lever. Fires once per
+  // game when the live score first crosses the player's previous best.
+  function bestCelebration() {
+    try { mergeSound(5); } catch (e) {}
+    const host = $('boardwrap'); if (host) {
+      const b = document.createElement('div'); b.className = 'v2-newbest'; b.textContent = '🏆 שיא חדש!';
+      host.appendChild(b); setTimeout(function() { b.remove(); }, 1600);
+    }
+    const card = ($('best') || {}).closest ? $('best').closest('.stat') : null;
+    if (card) { card.classList.remove('v2-best-pop'); void card.offsetWidth; card.classList.add('v2-best-pop'); }
+  }
+  function bumpScoreStat() {
+    const card = ($('score') || {}).closest ? $('score').closest('.stat') : null;
+    if (card) { card.classList.remove('v2-score-pop'); void card.offsetWidth; card.classList.add('v2-score-pop'); }
+  }
 
   /* ============ RESOLVE ============ */
   async function resolve() {
@@ -278,7 +315,9 @@ export function start(root) {
         gained += pts; coins += Math.ceil(pts / 200);
         particles(tgt.r, tgt.c, Math.min(old + 1, 8), combo); mergeSound(combo);
       }
-      score += gained; total += gained; if (score > best) best = score;
+      score += gained; total += gained;
+      if (score > best) { best = score; if (!_bestCelebrated && _startBest > 0 && best > _startBest) { _bestCelebrated = true; bestCelebration(); } }
+      bumpScoreStat();
       callout(combo); shake(combo); hud();
       await sleep(combo >= 3 ? 260 : 150);
       gravity();
@@ -370,10 +409,9 @@ export function start(root) {
   function fbDone() { try { return !!localStorage.getItem(FB_DONE_KEY); } catch (e) { return false; } }
   function fbMarkDone() { try { localStorage.setItem(FB_DONE_KEY, '1'); } catch (e) {} }
   function buildFeedbackWidget() {
-    var pill = document.createElement('button');
-    pill.id = 'v2-fb-pill'; pill.type = 'button'; pill.textContent = '💬 משוב';
-    pill.addEventListener('click', function() { openFeedback(false); });
-    root.appendChild(pill);
+    // Trigger lives in the header (#v2-fb-btn) so it never overlaps the board.
+    var btn = root.querySelector('#v2-fb-btn');
+    if (btn) btn.addEventListener('click', function() { openFeedback(false); });
     var panel = document.createElement('div');
     panel.id = 'v2-fb-panel'; panel.hidden = true;
     panel.innerHTML =
@@ -461,10 +499,15 @@ export function start(root) {
   function init() {
     cells = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
     dropsCount = 0; maxTierReached = 1; _v2Submitted = false;
-    buildLegend(); measure(); buildBg(); current = spawn(); next = spawn(); hud();
+    _startBest = best; _bestCelebrated = false;
+    buildLegend(); current = spawn(); next = spawn(); hud(); relayout();
     try { if (window.trackEvent) window.trackEvent('v2_game_start', {}); } catch (e) {}
   }
-  window.addEventListener('resize', () => { measure(); buildBg(); layout(); clearAim(); });
+  var _reflowTimer = null;
+  function scheduleReflow() { clearTimeout(_reflowTimer); _reflowTimer = setTimeout(relayout, 60); }
+  window.addEventListener('resize', scheduleReflow);
+  window.addEventListener('orientationchange', function() { setTimeout(relayout, 250); });
+  if (window.visualViewport) window.visualViewport.addEventListener('resize', scheduleReflow);
   init();
   buildFeedbackWidget();
 }

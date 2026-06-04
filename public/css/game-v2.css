@@ -14,7 +14,11 @@
 /* Page-level: only when the loader marked <html data-bloom-variant="v2">. */
 html[data-bloom-variant="v2"] body { margin: 0; background: #FAF6EE; }
 
-/* The root IS the v2 app container (merges the demo's body-centering + #app). */
+/* The root IS the v2 app container (merges the demo's body-centering + #app).
+   FIXED to the viewport height with overflow hidden so the whole game always
+   fits on screen — the board (#boardwrap, flex:1) absorbs the leftover height
+   and JS sizes the 4×7 grid to fit it. Safe-area insets keep content clear of
+   the notch + home indicator (viewport-fit=cover is set in index.html). */
 #bloom-v2-root {
   --bg:#FAF6EE; --card:#FFFFFF; --cell:#EFEADE; --ink:#3A352E; --muted:#A9A293;
   --dark:#1D1B18; --gold:#C9923B; --peach:#FBEBD2; --peach-ink:#C9853A;
@@ -22,22 +26,25 @@ html[data-bloom-variant="v2"] body { margin: 0; background: #FAF6EE; }
   font-family:'Rubik',-apple-system,system-ui,sans-serif;
   background:var(--bg); color:var(--ink);
   width:100%; max-width:430px; margin:0 auto;
-  padding:10px 14px calc(18px + env(safe-area-inset-bottom));
-  display:flex; flex-direction:column; gap:11px;
-  min-height:100dvh; box-sizing:border-box;
+  padding:max(8px, env(safe-area-inset-top)) 14px calc(8px + env(safe-area-inset-bottom));
+  display:flex; flex-direction:column; gap:8px;
+  height:100dvh; max-height:100dvh; box-sizing:border-box; overflow:hidden;
   overscroll-behavior:none; user-select:none; -webkit-user-select:none;
 }
 #bloom-v2-root * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+/* Chrome rows keep their natural height; only the board flexes. */
+#bloom-v2-root .top, #bloom-v2-root .stats, #bloom-v2-root .legendwrap,
+#bloom-v2-root .launch, #bloom-v2-root .hint { flex:0 0 auto; }
 
 #bloom-v2-root .top{display:flex;justify-content:space-between;align-items:center;direction:ltr;}
-#bloom-v2-root .pill{background:var(--peach);color:var(--peach-ink);font-weight:700;font-size:15px;padding:9px 15px;
-      border-radius:16px;display:flex;align-items:center;gap:7px;box-shadow:var(--shadow);}
-#bloom-v2-root .pill .chev{opacity:.5;font-size:11px;}
+/* Brand label — a title, NOT a button (no tap affordance). */
+#bloom-v2-root .v2-brand{font-weight:800;font-size:19px;letter-spacing:.5px;color:var(--ink);display:flex;align-items:center;gap:8px;}
+#bloom-v2-root .v2-brand-tag{font-size:10px;font-weight:800;color:var(--peach-ink);background:var(--peach);border-radius:999px;padding:2px 8px;letter-spacing:0;}
 #bloom-v2-root .icons{display:flex;gap:9px;}
 #bloom-v2-root .iconbtn{width:46px;height:42px;background:var(--card);border:1px solid #EFE9DC;border-radius:13px;display:flex;
-         align-items:center;justify-content:center;box-shadow:var(--shadow);font-size:18px;cursor:pointer;
+         align-items:center;justify-content:center;box-shadow:var(--shadow);font:inherit;font-size:18px;line-height:1;padding:0;cursor:pointer;
          transition:transform .12s;color:#7a7468;}
-#bloom-v2-root .iconbtn:active{transform:scale(.92);}
+#bloom-v2-root .iconbtn:active{transform:scale(.9);}
 
 #bloom-v2-root .stats{display:flex;gap:9px;direction:ltr;}
 #bloom-v2-root .stat{flex:1;background:var(--card);border:1px solid #F0EADC;border-radius:16px;padding:9px 6px;text-align:center;
@@ -72,8 +79,8 @@ html[data-bloom-variant="v2"] body { margin: 0; background: #FAF6EE; }
 #bloom-v2-root .current svg{width:56%;height:56%;}
 @keyframes v2bob{0%,100%{transform:translateY(0);}50%{transform:translateY(-5px);}}
 
-#bloom-v2-root #boardwrap{position:relative;}
-#bloom-v2-root #board{position:relative;width:100%;background:#F4F0E6;border-radius:20px;direction:ltr;touch-action:none;cursor:pointer;}
+#bloom-v2-root #boardwrap{position:relative;flex:1 1 auto;min-height:0;display:flex;align-items:center;justify-content:center;}
+#bloom-v2-root #board{position:relative;background:#F4F0E6;border-radius:20px;direction:ltr;touch-action:none;cursor:pointer;}
 #bloom-v2-root .bgcell{position:absolute;background:var(--cell);border-radius:13px;pointer-events:none;}
 #bloom-v2-root #tiles,#bloom-v2-root #fx,#bloom-v2-root #ghostlayer{position:absolute;inset:0;pointer-events:none;}
 #bloom-v2-root .tile{position:absolute;border-radius:13px;display:flex;align-items:center;justify-content:center;
@@ -112,11 +119,19 @@ html[data-bloom-variant="v2"] body { margin: 0; background: #FAF6EE; }
 #bloom-v2-root #over button:active{transform:scale(.95);}
 #bloom-v2-root .hint{font-size:12px;color:var(--muted);text-align:center;margin-top:-2px;}
 
+/* ---- New-best celebration + stat pops (addiction polish) ---- */
+#bloom-v2-root .v2-newbest{position:absolute;top:8%;left:50%;transform:translateX(-50%);z-index:36;
+  background:linear-gradient(135deg,var(--gold),#E0613A);color:#fff;font-weight:800;font-size:17px;
+  padding:9px 18px;border-radius:999px;box-shadow:0 8px 22px rgba(201,146,59,.4);white-space:nowrap;
+  pointer-events:none;animation:v2NewBest 1.6s ease forwards;}
+@keyframes v2NewBest{0%{opacity:0;transform:translateX(-50%) scale(.5) translateY(8px);}
+  18%{opacity:1;transform:translateX(-50%) scale(1.12);}35%{transform:translateX(-50%) scale(1);}
+  80%{opacity:1;}100%{opacity:0;transform:translateX(-50%) translateY(-12px);}}
+#bloom-v2-root .stat.v2-score-pop{animation:v2StatPop .26s ease;}
+#bloom-v2-root .stat.v2-best-pop{animation:v2StatPop .4s ease;}
+@keyframes v2StatPop{0%{transform:scale(1);}45%{transform:scale(1.09);}100%{transform:scale(1);}}
+
 /* ---- Feedback widget (GV.2) ---- */
-#bloom-v2-root #v2-fb-pill{position:fixed;left:12px;bottom:calc(12px + env(safe-area-inset-bottom));
-  z-index:45;background:var(--card);color:var(--ink);border:1px solid #EFE9DC;border-radius:999px;
-  font-family:inherit;font-weight:700;font-size:13px;padding:8px 14px;box-shadow:var(--shadow);cursor:pointer;}
-#bloom-v2-root #v2-fb-pill:active{transform:scale(.94);}
 #bloom-v2-root #v2-fb-panel{position:fixed;inset:0;z-index:60;display:none;align-items:center;justify-content:center;
   background:rgba(30,27,24,.45);backdrop-filter:blur(2px);padding:18px;}
 #bloom-v2-root #v2-fb-panel.show{display:flex;}
@@ -140,4 +155,6 @@ html[data-bloom-variant="v2"] body { margin: 0; background: #FAF6EE; }
 @media (prefers-reduced-motion: reduce){
   #bloom-v2-root .current{animation:none;}
   #bloom-v2-root .v2-fb-rate button{transition:none;}
+  #bloom-v2-root .v2-newbest{animation:none;}
+  #bloom-v2-root .stat.v2-score-pop,#bloom-v2-root .stat.v2-best-pop{animation:none;}
 }
