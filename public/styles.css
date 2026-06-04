@@ -22174,3 +22174,92 @@ html[data-theme="dark"] .dyn-friends-tab.active { color: #FF8FB4; border-bottom-
   html[data-theme="dark"] .name-input:focus {
     box-shadow: 0 0 0 3px rgba(250, 199, 117, 0.18);
   }
+/* ============================================================
+   BLOOM Game v2 mechanics — IN the classic app (GV.4)
+   ============================================================
+   EVERY rule is scoped under body.bloom-v2, which the classic app adds ONLY
+   when the player is assigned the v2 variant (src/01-constants.js
+   syncBodyVariantClass). Flag OFF → no class → none of this applies → pure
+   classic. This styles the new board mechanics (hold slot, ghost-landing
+   preview, drag-aim column highlight, same-tier pulse, feedback) + a tasteful
+   v2 accent. Built into styles.css (last in build.sh) so it can layer over
+   theme rules; safe because it's class-gated. */
+
+/* ---- tasteful v2 board accent (subtle; doesn't fight classic/dark) ---- */
+body.bloom-v2 .grid-wrap { position: relative; }
+body.bloom-v2 .cell { border-radius: 14px; }
+body.bloom-v2 .cell.filled { box-shadow: 0 3px 10px rgba(120,90,40,.10); }
+
+/* ---- Hold / swap slot ---- */
+body.bloom-v2 #v2-hold {
+  position: absolute; top: 6px; inset-inline-start: 6px; z-index: 8;
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  background: rgba(255,255,255,.82); backdrop-filter: blur(6px);
+  border: 1px solid rgba(201,146,59,.30); border-radius: 14px;
+  padding: 5px 7px 6px; box-shadow: 0 4px 12px rgba(120,100,60,.14);
+  cursor: pointer; user-select: none; transition: transform .12s, opacity .15s;
+}
+body.bloom-v2 #v2-hold:active { transform: scale(.92); }
+body.bloom-v2 #v2-hold.v2-hold-used { opacity: .45; }
+body.bloom-v2 #v2-hold .v2-hold-lbl { font-size: 9px; font-weight: 800; color: #9A7B3C; letter-spacing: .3px; }
+body.bloom-v2 #v2-hold .v2-hold-slot {
+  width: 40px; height: 40px; border-radius: 11px; display: flex; align-items: center; justify-content: center;
+  background: #FBF6EA; border: 2px dashed rgba(201,146,59,.4);
+}
+body.bloom-v2 #v2-hold .v2-hold-slot.has-tile { border-style: solid; border-color: transparent; }
+body.bloom-v2 #v2-hold .v2-hold-slot svg { width: 64%; height: 64%; }
+html[data-theme="dark"] body.bloom-v2 #v2-hold { background: rgba(40,36,30,.82); border-color: rgba(201,146,59,.4); }
+html[data-theme="dark"] body.bloom-v2 #v2-hold .v2-hold-slot { background: #2A251E; }
+
+/* ---- Aim overlay: ghost landing preview + column highlight ---- */
+body.bloom-v2 #v2-aim { position: absolute; inset: 0; pointer-events: none; z-index: 6; }
+body.bloom-v2 .v2-col-hi {
+  position: absolute; top: 0; bottom: 0; border-radius: 12px;
+  background: rgba(201,146,59,.10); border: 2px solid rgba(201,146,59,.34);
+  transition: inset-inline-start .06s ease, left .06s ease;
+}
+body.bloom-v2 .v2-ghost-tile {
+  position: absolute; border-radius: 14px; display: flex; align-items: center; justify-content: center;
+  opacity: .42; transition: transform .07s ease, left .07s ease, top .07s ease;
+}
+body.bloom-v2 .v2-ghost-tile svg { width: 60%; height: 60%; }
+
+/* ---- Same-tier neighbor pulse (merge hint) ---- */
+body.bloom-v2 .cell.v2-pulse { animation: v2Pulse .7s ease-in-out infinite; }
+@keyframes v2Pulse { 0%,100%{ box-shadow: 0 0 0 0 rgba(224,97,58,0);} 50%{ box-shadow: 0 0 0 4px rgba(224,97,58,.5);} }
+
+/* ---- Feedback button (v2 only) ---- */
+body.bloom-v2 #v2-fb-fab {
+  position: fixed; inset-inline-start: 12px; bottom: calc(12px + env(safe-area-inset-bottom));
+  z-index: 9500; width: 44px; height: 44px; border-radius: 50%;
+  background: #fff; border: 1px solid #EFE9DC; box-shadow: 0 4px 14px rgba(120,100,60,.18);
+  font-size: 20px; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center;
+}
+body.bloom-v2 #v2-fb-fab:active { transform: scale(.9); }
+html[data-theme="dark"] body.bloom-v2 #v2-fb-fab { background: #2A251E; border-color: #4A4236; }
+#v2-fb-overlay {
+  position: fixed; inset: 0; z-index: 10050; display: none; align-items: center; justify-content: center;
+  background: rgba(30,27,24,.5); backdrop-filter: blur(2px); padding: 18px;
+}
+#v2-fb-overlay.show { display: flex; }
+#v2-fb-overlay .v2-fb-card {
+  position: relative; width: 100%; max-width: 320px; background: #fff; border-radius: 18px;
+  padding: 22px 18px 18px; box-shadow: 0 12px 40px rgba(0,0,0,.28); text-align: center; font-family: inherit;
+}
+html[data-theme="dark"] #v2-fb-overlay .v2-fb-card { background: #26221C; color: #F3ECE0; }
+#v2-fb-overlay .v2-fb-x { position: absolute; top: 8px; inset-inline-start: 10px; background: none; border: none; font-size: 18px; color: #A9A293; cursor: pointer; }
+#v2-fb-overlay .v2-fb-title { font-weight: 800; font-size: 17px; margin-bottom: 14px; }
+#v2-fb-overlay .v2-fb-rate { display: flex; gap: 14px; justify-content: center; margin-bottom: 14px; }
+#v2-fb-overlay .v2-fb-rate button { width: 60px; height: 54px; border-radius: 14px; border: 2px solid #EAE3D4; background: #FBF8F1; font-size: 26px; cursor: pointer; transition: transform .1s, border-color .15s, background .15s; }
+#v2-fb-overlay .v2-fb-rate button:active { transform: scale(.9); }
+#v2-fb-overlay .v2-fb-rate button.sel { border-color: #C9923B; background: #FBEBD2; transform: scale(1.06); }
+#v2-fb-overlay .v2-fb-input { width: 100%; box-sizing: border-box; padding: 10px 12px; border-radius: 12px; border: 1px solid #DAD3C2; background: #FBF8F1; font-family: inherit; font-size: 14px; margin-bottom: 12px; }
+html[data-theme="dark"] #v2-fb-overlay .v2-fb-input { background: #2A251E; color: #F3ECE0; border-color: #4A4236; }
+#v2-fb-overlay .v2-fb-send { width: 100%; background: #C9923B; color: #fff; border: none; font-family: inherit; font-weight: 700; font-size: 16px; padding: 12px; border-radius: 13px; cursor: pointer; }
+#v2-fb-overlay .v2-fb-send:active { transform: scale(.97); }
+#v2-fb-overlay .v2-fb-thanks { font-weight: 800; font-size: 18px; color: #C9923B; padding: 8px 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  body.bloom-v2 .cell.v2-pulse { animation: none; }
+  body.bloom-v2 #v2-hold, body.bloom-v2 .v2-ghost-tile, body.bloom-v2 .v2-col-hi { transition: none; }
+}

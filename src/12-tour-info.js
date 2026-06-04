@@ -597,6 +597,8 @@
       // then render the escalating meter above the replay CTA below.
       var winStreakState = updateWinStreakForGame(score, opts);
       var winStreakHtml = renderWinStreakMeterHtml(winStreakState);
+      // GV.4 — v2 beta: auto-prompt for feedback once (after the 2nd game-over).
+      try { if (v2On() && typeof v2OnGameOver === 'function') v2OnGameOver(); } catch (e) {}
       const tierRows = [];
       for (let t = 1; t <= MAX_TIER; t++) {
         const ti = getActiveTiers()[t];
@@ -1592,6 +1594,9 @@
     if (activeEvent && !opts.over) {
       requestAnimationFrame(repositionEventOverlay);
     }
+    // GV.4 — paint the v2 board layers (hold chip + ghost/drag aim). Self-gated
+    // on v2On(); a pure no-op in classic.
+    try { if (!opts.over && v2On() && typeof paintV2Layers === 'function') paintV2Layers(); } catch (e) {}
   }
 
   document.getElementById('reset').onclick = function() {

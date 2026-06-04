@@ -1,0 +1,233 @@
+  // ============================================================
+  // GAME v2 — board mechanics layered INTO the classic engine (GV.4)
+  // ============================================================
+  // This file is concatenated INSIDE the main IIFE (no wrapper), so it can call
+  // the classic engine directly (drop/render/pickPiece/grid/nextPiece/...).
+  // EVERYTHING here is gated by v2On() (src/01-constants.js) — when the admin
+  // flag is OFF, v2On() is false and none of this runs: pure classic, instant
+  // revert. Adds: hold/swap slot, ghost-landing preview + drag-to-aim + same-
+  // tier pulse, and a beta feedback prompt. Board stays 4×6 + classic scoring,
+  // so every meta system (trophies/BP/leaderboards/...) is untouched.
+
+  var _v2LastAimCol = -1;
+  var _v2Wired = false;
+
+  // ---- Hold / swap slot ----
+  function v2SwapHold() {
+    if (!v2On() || busy || window.__bloomGameOver) return;
+    if (typeof nextPiece === 'undefined' || typeof pickPiece !== 'function') return;
+    if (heldPiece == null) { heldPiece = nextPiece; nextPiece = pickPiece(); }
+    else { var t = heldPiece; heldPiece = nextPiece; nextPiece = t; }
+    try { if (typeof highlightNextTier === 'function') highlightNextTier(nextPiece); } catch (e) {}
+    paintV2Hold();
+    try { if (typeof soundDrop === 'function') soundDrop(); } catch (e) {}
+    try { if (typeof buzz === 'function') buzz([18]); } catch (e) {}
+  }
+  function paintV2Hold() {
+    if (!v2On()) return;
+    var wrap = document.getElementById('grid-wrap'); if (!wrap) return;
+    var chip = document.getElementById('v2-hold');
+    if (!chip) {
+      chip = document.createElement('div'); chip.id = 'v2-hold';
+      chip.innerHTML = '<div class="v2-hold-lbl">החזקה</div><div class="v2-hold-slot" id="v2-hold-slot"></div>';
+      chip.addEventListener('click', function(e) { e.stopPropagation(); v2SwapHold(); });
+      wrap.appendChild(chip);
+    }
+    var slot = document.getElementById('v2-hold-slot'); if (!slot) return;
+    var tiers = (typeof getActiveTiers === 'function') ? getActiveTiers() : null;
+    if (heldPiece && tiers && tiers[heldPiece]) {
+      slot.classList.add('has-tile'); slot.style.background = tiers[heldPiece].bg; slot.innerHTML = tiers[heldPiece].svg;
+    } else { slot.classList.remove('has-tile'); slot.style.background = ''; slot.innerHTML = ''; }
+  }
+
+  // ---- Aim overlay: ghost landing preview + column highlight + neighbor pulse ----
+  function v2LandingRow(col) {
+    if (typeof grid === 'undefined' || !grid) return -1;
+    var rows = (typeof getBoardRows === 'function') ? getBoardRows() : grid.length;
+    for (var r = rows - 1; r >= 0; r--) {
+      var row = grid[r]; if (!row) continue;
+      if (row[col] === 0) {
+        // respect shape voids if the helper exists (dynamic boards); else accept.
+        if (typeof isShapeInactiveAt === 'function' && isShapeInactiveAt(r, col)) continue;
+        return r;
+      }
+    }
+    return -1;
+  }
+  function v2ClearAim() {
+    var hi = document.getElementById('v2-col-hi'), ghost = document.getElementById('v2-ghost');
+    if (hi) hi.style.display = 'none';
+    if (ghost) ghost.style.display = 'none';
+    v2ClearPulse();
+  }
+  function v2ClearPulse() {
+    var els = document.querySelectorAll('.cell.v2-pulse');
+    for (var i = 0; i < els.length; i++) els[i].classList.remove('v2-pulse');
+  }
+  function paintV2Aim(col) {
+    if (!v2On()) return;
+    var wrap = document.getElementById('grid-wrap'), gridEl = document.getElementById('grid');
+    if (!wrap || !gridEl) return;
+    var aim = document.getElementById('v2-aim');
+    if (!aim) {
+      aim = document.createElement('div'); aim.id = 'v2-aim';
+      aim.innerHTML = '<div class="v2-col-hi" id="v2-col-hi"></div><div class="v2-ghost-tile" id="v2-ghost"></div>';
+      wrap.appendChild(aim);
+    }
+    var hi = document.getElementById('v2-col-hi'), ghost = document.getElementById('v2-ghost');
+    _v2LastAimCol = (col == null ? -1 : col);
+    if (col == null || col < 0 || busy || window.__bloomGameOver) { v2ClearAim(); return; }
+    var wr = wrap.getBoundingClientRect();
+    var anyCell = gridEl.querySelector('.cell[data-c="' + col + '"]');
+    if (!anyCell) { v2ClearAim(); return; }
+    var ar = anyCell.getBoundingClientRect();
+    if (hi) { hi.style.display = 'block'; hi.style.left = (ar.left - wr.left) + 'px'; hi.style.width = ar.width + 'px'; }
+    var lr = v2LandingRow(col);
+    if (lr < 0) { if (ghost) ghost.style.display = 'none'; v2ClearPulse(); return; }
+    var landCell = gridEl.querySelector('.cell[data-r="' + lr + '"][data-c="' + col + '"]');
+    var tiers = (typeof getActiveTiers === 'function') ? getActiveTiers() : null;
+    if (ghost && landCell && tiers && tiers[nextPiece]) {
+      var lcr = landCell.getBoundingClientRect();
+      ghost.style.display = 'flex';
+      ghost.style.left = (lcr.left - wr.left) + 'px'; ghost.style.top = (lcr.top - wr.top) + 'px';
+      ghost.style.width = lcr.width + 'px'; ghost.style.height = lcr.height + 'px';
+      ghost.style.background = tiers[nextPiece].bg; ghost.innerHTML = tiers[nextPiece].svg;
+    }
+    v2PaintPulse(lr, col);
+  }
+  function v2PaintPulse(lr, col) {
+    v2ClearPulse();
+    if (lr < 0 || typeof grid === 'undefined') return;
+    var gridEl = document.getElementById('grid'); if (!gridEl) return;
+    var rows = (typeof getBoardRows === 'function') ? getBoardRows() : grid.length;
+    var cols = (typeof getBoardCols === 'function') ? getBoardCols() : (grid[0] || []).length;
+    var nb = [[lr - 1, col], [lr + 1, col], [lr, col - 1], [lr, col + 1]];
+    for (var k = 0; k < 4; k++) {
+      var rr = nb[k][0], cc = nb[k][1];
+      if (rr >= 0 && rr < rows && cc >= 0 && cc < cols && grid[rr] && grid[rr][cc] === nextPiece) {
+        var cell = gridEl.querySelector('.cell[data-r="' + rr + '"][data-c="' + cc + '"]');
+        if (cell) cell.classList.add('v2-pulse');
+      }
+    }
+  }
+  function v2ColFromEvent(e) {
+    var x = (e.touches && e.touches[0]) ? e.touches[0].clientX : e.clientX;
+    var y = (e.touches && e.touches[0]) ? e.touches[0].clientY : e.clientY;
+    if (x == null) return -1;
+    var el = document.elementFromPoint(x, y);
+    var cell = el && el.closest ? el.closest('.cell') : null;
+    if (!cell || cell.dataset == null || cell.dataset.c == null) return -1;
+    var c = parseInt(cell.dataset.c, 10);
+    return Number.isFinite(c) ? c : -1;
+  }
+  function v2WireAim() {
+    if (_v2Wired) return;
+    var wrap = document.getElementById('grid-wrap'); if (!wrap) return;
+    _v2Wired = true;
+    var onMove = function(e) { if (!v2On() || busy || window.__bloomGameOver) return; var c = v2ColFromEvent(e); if (c >= 0) paintV2Aim(c); };
+    wrap.addEventListener('pointerdown', onMove);   // aim preview only — never preventDefault, so the cell onclick still drops
+    wrap.addEventListener('pointermove', onMove);
+    wrap.addEventListener('pointerleave', function() { if (v2On()) v2ClearAim(); });
+    wrap.addEventListener('pointerup', function() { /* the cell's onclick performs the drop; render() repaints */ });
+  }
+
+  // ---- Repaint hook, called from render() (gated) ----
+  function paintV2Layers() {
+    if (!v2On()) return;
+    try { v2WireAim(); } catch (e) {}
+    try { paintV2Hold(); } catch (e) {}
+    // cells were rebuilt by render() → ghost geometry + pulse are stale; clear
+    // them. They reappear on the next pointer hover/drag.
+    try { v2ClearAim(); } catch (e) {}
+    try { v2ToggleFeedbackFab(true); } catch (e) {}
+  }
+
+  // ---- Beta feedback (reuses GV.2 /api/feedback + admin panel) ----
+  var FB_DONE_KEY = 'bloom_v2_feedback_done';
+  var _v2GameOvers = 0, _fbRating = 0, _fbSubmitting = false;
+  function v2FbDone() { try { return !!localStorage.getItem(FB_DONE_KEY); } catch (e) { return false; } }
+  function v2ToggleFeedbackFab(show) {
+    if (!v2On()) return;
+    var fab = document.getElementById('v2-fb-fab');
+    if (!fab && show) {
+      fab = document.createElement('button'); fab.id = 'v2-fb-fab'; fab.type = 'button';
+      fab.setAttribute('aria-label', 'משוב'); fab.textContent = '💬';
+      fab.addEventListener('click', function() { v2OpenFeedback(false); });
+      document.body.appendChild(fab);
+    }
+    if (fab) fab.style.display = show ? 'flex' : 'none';
+  }
+  function v2BuildFeedbackPanel() {
+    if (document.getElementById('v2-fb-overlay')) return;
+    var ov = document.createElement('div'); ov.id = 'v2-fb-overlay';
+    ov.innerHTML =
+      '<div class="v2-fb-card">' +
+        '<button type="button" class="v2-fb-x" aria-label="סגור">✕</button>' +
+        '<div class="v2-fb-title" id="v2-fb-title">איך הלוח החדש?</div>' +
+        '<div class="v2-fb-rate">' +
+          '<button type="button" class="v2-fb-up" data-r="1">👍</button>' +
+          '<button type="button" class="v2-fb-down" data-r="-1">👎</button>' +
+        '</div>' +
+        '<input type="text" class="v2-fb-input" id="v2-fb-input" maxlength="500" placeholder="ספר/י לנו (לא חובה)">' +
+        '<button type="button" class="v2-fb-send" id="v2-fb-send">שלח</button>' +
+        '<div class="v2-fb-thanks" id="v2-fb-thanks" hidden>תודה! 🙏</div>' +
+      '</div>';
+    document.body.appendChild(ov);
+    ov.querySelector('.v2-fb-x').addEventListener('click', function() { v2CloseFeedback(true); });
+    ov.addEventListener('click', function(e) { if (e.target === ov) v2CloseFeedback(true); });
+    ov.querySelectorAll('.v2-fb-rate button').forEach(function(b) {
+      b.addEventListener('click', function() {
+        _fbRating = parseInt(b.getAttribute('data-r'), 10) || 0;
+        ov.querySelector('.v2-fb-up').classList.toggle('sel', _fbRating === 1);
+        ov.querySelector('.v2-fb-down').classList.toggle('sel', _fbRating === -1);
+      });
+    });
+    ov.querySelector('#v2-fb-send').addEventListener('click', v2SubmitFeedback);
+  }
+  function v2OpenFeedback(isAuto) {
+    if (!v2On()) return;
+    v2BuildFeedbackPanel();
+    var ov = document.getElementById('v2-fb-overlay'); if (!ov) return;
+    var t = document.getElementById('v2-fb-title');
+    if (t) t.textContent = isAuto ? 'נהנית מהלוח החדש?' : '💬 ספר/י לנו מה דעתך';
+    ov.classList.add('show');
+  }
+  function v2CloseFeedback(markDone) {
+    var ov = document.getElementById('v2-fb-overlay'); if (ov) ov.classList.remove('show');
+    if (markDone) { try { localStorage.setItem(FB_DONE_KEY, '1'); } catch (e) {} }
+  }
+  function v2SubmitFeedback() {
+    if (_fbSubmitting) return;
+    var input = document.getElementById('v2-fb-input');
+    var comment = input ? (input.value || '').trim().slice(0, 500) : '';
+    if (!_fbRating && !comment) { var t = document.getElementById('v2-fb-title'); if (t) t.textContent = 'בחר/י 👍 או 👎 (או כתוב/כתבי משהו)'; return; }
+    _fbSubmitting = true;
+    var did = ''; try { did = localStorage.getItem('bloom_device_id') || ''; } catch (e) {}
+    var sc = 0; try { sc = (typeof score === 'number') ? Math.floor(score) : 0; } catch (e) {}
+    try {
+      fetch(API_BASE + '/api/feedback', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rating: _fbRating || null, comment: comment || null, score: sc, variant: 'v2', deviceId: did })
+      }).catch(function() {});
+    } catch (e) {}
+    try { localStorage.setItem(FB_DONE_KEY, '1'); } catch (e) {}
+    var thanks = document.getElementById('v2-fb-thanks'); if (thanks) thanks.hidden = false;
+    ['#v2-fb-title', '.v2-fb-rate', '#v2-fb-input', '#v2-fb-send'].forEach(function(s) { var el = document.querySelector('#v2-fb-overlay ' + s); if (el) el.style.display = 'none'; });
+    setTimeout(function() { v2CloseFeedback(true); }, 1300);
+  }
+  // Called from the game-over render (gated). Auto-prompts once, after the 2nd
+  // real game-over of the session.
+  function v2OnGameOver() {
+    if (!v2On()) return;
+    if (window.__bloomBotActive || (typeof skinTrialMode !== 'undefined' && skinTrialMode)) return;
+    _v2GameOvers++;
+    if (_v2GameOvers === 2 && !v2FbDone()) { setTimeout(function() { v2OpenFeedback(true); }, 1100); }
+  }
+
+  // Expose for cross-file callers / debugging.
+  try {
+    window.__bloomV2 = {
+      swapHold: v2SwapHold, paintLayers: paintV2Layers, onGameOver: v2OnGameOver,
+      openFeedback: function() { v2OpenFeedback(false); }
+    };
+  } catch (e) {}

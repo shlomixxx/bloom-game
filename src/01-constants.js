@@ -304,6 +304,38 @@
     else document.addEventListener('DOMContentLoaded', syncBodySkinClass, { once: true });
   }
 
+  // ============ GAME v2 VARIANT (GV.4) ============
+  // The index.html loader exposes the assigned variant (window.__bloomVariant /
+  // <html data-bloom-variant> / localStorage 'bloom_variant') BEFORE app.js
+  // loads. When 'v2', the classic app enables the new board mechanics — hold /
+  // ghost / drag-to-aim / v2 look / extra juice — ALL gated by v2On(). Flag OFF
+  // → v2On() is false → only the classic code path runs (instant revert). In
+  // node (engine self-test) window/document are undefined → false → classic.
+  var _bloomV2On = (function() {
+    try {
+      var v = (typeof window !== 'undefined' && window.__bloomVariant) ||
+        (typeof document !== 'undefined' && document.documentElement && document.documentElement.getAttribute('data-bloom-variant')) ||
+        '';
+      if (!v) { try { v = localStorage.getItem('bloom_variant') || ''; } catch (e) {} }
+      return v === 'v2';
+    } catch (e) { return false; }
+  })();
+  function v2On() { return _bloomV2On; }
+  var _appliedVariantClass = null;
+  function syncBodyVariantClass() {
+    if (typeof document === 'undefined' || !document.body) return;
+    if (_appliedVariantClass) { document.body.classList.remove(_appliedVariantClass); _appliedVariantClass = null; }
+    if (_bloomV2On) { document.body.classList.add('bloom-v2'); _appliedVariantClass = 'bloom-v2'; }
+  }
+  if (typeof document !== 'undefined') {
+    if (document.body) syncBodyVariantClass();
+    else document.addEventListener('DOMContentLoaded', syncBodyVariantClass, { once: true });
+  }
+  try { window.__bloomV2On = v2On; } catch (e) {}
+  // Held piece for the v2 hold/swap slot (shared engine scope). Always null in
+  // classic (v2On false → never read/shown). Reset on every new game in init().
+  var heldPiece = null;
+
   // Rebuild SKIN_PACKS from the server's skin_configurations catalog. Called
   // at boot; falls back silently to the hardcoded packs above if the fetch
   // fails (offline, server down). Each server tier carries svg_key — we map

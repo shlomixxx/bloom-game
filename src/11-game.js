@@ -164,6 +164,7 @@
     if (mode === 'practice') sessionDifficulty = readPracticeDifficulty();
     grid = Array.from({length: getBoardRows()}, function() { return Array(getBoardCols()).fill(0); });
     score = 0; highestTier = 1; busy = false; dropsCount = 0;
+    heldPiece = null; // GV.4 — clear the v2 hold slot on every new game (no-op in classic)
     // A9 — Reset ghost-mode drop recording for this fresh game.
     try { window.__bloomDropsSeq = []; } catch (e) {}
     window.__bloomGameOver = false; // new game = active again
