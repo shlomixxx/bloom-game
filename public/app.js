@@ -2434,10 +2434,23 @@
   // comes first). Updates the in-flight result overlay in place.
   function pollDuelUntilSettled(duelId, myScore, oppName) {
     var attempts = 0;
-    var maxAttempts = 150; // 150 × 2s = 5 minutes of active polling
+    var maxAttempts = 150; // live race: 150 × 2s = 5 minutes of active polling
+    // Async duels: the opponent may only play hours later — don't trap the
+    // finisher on a spinner. After a short grace, switch to the friendly
+    // "score locked, we'll notify you" state. Admin-tunable; default 45s.
+    var asyncWaitSec = 45;
+    try {
+      if (typeof gameConfig === 'object' && gameConfig && gameConfig.duel_async_wait_seconds) {
+        var _w = parseInt(gameConfig.duel_async_wait_seconds, 10);
+        if (isFinite(_w) && _w >= 10) asyncWaitSec = _w;
+      }
+    } catch (e) {}
+    var asyncMax = Math.max(5, Math.ceil(asyncWaitSec / 2));
+    var isLive = null; // resolved from the duel row on the first successful poll
     var poller = setInterval(function() {
       attempts++;
-      if (attempts > maxAttempts) {
+      var cap = (isLive === false) ? asyncMax : maxAttempts;
+      if (attempts > cap) {
         // The duel hasn't resolved in 5 minutes. Don't leave the player
         // staring at a frozen spinner — swap the overlay to a friendly
         // "go do something else, we'll notify you" state and stop the
@@ -2448,21 +2461,29 @@
         stopDuelLiveSpectator();
         replaceDuelResultOverlay({
           result: 'unresolved',
-          opponentName: oppName
+          opponentName: oppName,
+          async: (isLive === false)
         }, myScore, oppName);
-        // 🚨 Log to admin issue tracker — player waited 5 minutes for
-        // an opponent that never finished. Admin can comp them.
-        try {
-          if (typeof window.__bloomReportIssue === 'function') {
-            window.__bloomReportIssue({
-              kind: 'duel_unresolved_5min',
-              severity: 'medium',
-              title: 'דו-קרב #' + duelId + ' לא נפתר ב-5 דקות',
-              detail: 'השחקן סיים את ציונו (' + myScore + ') אבל היריב לא שיחק. השחקן ראה מסך "ממתין".',
-              context: { duelId: duelId, myScore: myScore, oppName: oppName }
-            });
-          }
-        } catch (e) {}
+        // 🚨 Log to the admin issue tracker ONLY for a LIVE race that genuinely
+        // failed to settle — that's abnormal (both sides play concurrently in
+        // 60s) and worth a comp. An async duel waiting for an offline opponent
+        // is the NORMAL flow: the score is safely submitted server-side, the
+        // home poll (every 60s) + push will surface the result, and
+        // expireStaleAcceptedDuels forfeit-wins the finisher at expiry. Logging
+        // that as a "stuck" issue just floods the tab with non-bugs.
+        if (isLive !== false) {
+          try {
+            if (typeof window.__bloomReportIssue === 'function') {
+              window.__bloomReportIssue({
+                kind: 'duel_unresolved_5min',
+                severity: 'medium',
+                title: 'דו-קרב #' + duelId + ' לא נפתר ב-5 דקות',
+                detail: 'השחקן סיים את ציונו (' + myScore + ') אבל היריב לא שיחק. השחקן ראה מסך "ממתין".',
+                context: { duelId: duelId, myScore: myScore, oppName: oppName }
+              });
+            }
+          } catch (e) {}
+        }
         return;
       }
       fetch(API_BASE + '/api/duels/' + duelId + '?deviceId=' + encodeURIComponent(deviceId), { method: 'GET' })
@@ -2470,6 +2491,7 @@
         .then(function(resp) {
           if (!resp || !resp.duel) return;
           var u = resp.duel;
+          if (isLive === null) isLive = !!u.is_live; // drives the async early-exit cap
           var isChallenger = u.challenger_device === deviceId;
           // Settled / tie — the normal happy path.
           if (u.status === 'settled' || u.status === 'tie') {
@@ -22690,9 +22712,17 @@
   window.addEventListener('unhandledrejection', function(ev) {
     try {
       var r = ev && ev.reason;
-      var msg = r && (r.message || String(r)) || 'unhandled rejection';
-      var stack = r && r.stack;
-      _reportJsError('js_rejection', msg, '', 0, 0, stack);
+      var msg = r && (r.message || (typeof r === 'string' ? r : '')) || '';
+      var stack = r && r.stack ? String(r.stack) : '';
+      // Skip non-actionable noise: a rejection with NO message AND NO stack is
+      // undebuggable (a promise rejected with undefined/null/{}, a cross-origin
+      // "Script error.", or an aborted fetch). Logging it just fills the 🚨 tab
+      // with "src=?:0:0" rows nobody can act on.
+      if (!stack && (!msg || msg === '[object Object]' || msg === 'undefined' || msg === 'null')) return;
+      // Skip transient connectivity blips — these are the player's network, not
+      // a code bug, and they self-recover.
+      if (/Load failed|Failed to fetch|NetworkError|network connection was lost|operation was aborted|AbortError|\baborted\b|cancell?ed/i.test(msg)) return;
+      _reportJsError('js_rejection', msg || 'unhandled rejection', '', 0, 0, stack);
     } catch (e) {}
   });
   // ============================================================
@@ -26269,10 +26299,18 @@
     // then insertBefore throws "The object can not be found here." (Safari)
     // / "node ... is not a child of this node" (Chrome). 106 such crashes in
     // the issues tab. Guard the anchor; fall back to append.
-    if (anchor && anchor.parentNode === homeEl) {
-      homeEl.insertBefore(w, anchor);
-    } else {
-      homeEl.appendChild(w);
+    try {
+      if (anchor && anchor.parentNode === homeEl) {
+        homeEl.insertBefore(w, anchor);
+      } else {
+        homeEl.appendChild(w);
+      }
+    } catch (e) {
+      // Belt-and-suspenders: even with the parentNode guard above, Safari has
+      // thrown "The object can not be found here" from insertBefore (historically
+      // the single most common crash in the 🚨 tab). A plain append can NEVER
+      // throw here, so the pet widget can't take down the whole home render.
+      try { homeEl.appendChild(w); } catch (e2) {}
     }
     w.onclick = function() {
       if (!data.name) {

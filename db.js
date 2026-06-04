@@ -649,6 +649,7 @@ export async function initDb() {
     `INSERT INTO game_config (key, value) VALUES ('duel_wager_widen_band',          '50')     ON CONFLICT (key) DO NOTHING`,
     `INSERT INTO game_config (key, value) VALUES ('duel_random_max_wager',          '100000') ON CONFLICT (key) DO NOTHING`,
     `INSERT INTO game_config (key, value) VALUES ('duel_pre_submit_display_cap',    '8000')   ON CONFLICT (key) DO NOTHING`,
+    `INSERT INTO game_config (key, value) VALUES ('duel_async_wait_seconds',       '45')     ON CONFLICT (key) DO NOTHING`,
     `INSERT INTO game_config (key, value) VALUES ('bot_duel_trajectory_truth',     'true')   ON CONFLICT (key) DO NOTHING`,
     `INSERT INTO game_config (key, value) VALUES ('bot_traj_candidate_count',      '6')      ON CONFLICT (key) DO NOTHING`,
     `INSERT INTO game_config (key, value) VALUES ('bot_traj_pick_percentile',      '0.40')   ON CONFLICT (key) DO NOTHING`,

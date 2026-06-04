@@ -1677,10 +1677,23 @@
   // comes first). Updates the in-flight result overlay in place.
   function pollDuelUntilSettled(duelId, myScore, oppName) {
     var attempts = 0;
-    var maxAttempts = 150; // 150 × 2s = 5 minutes of active polling
+    var maxAttempts = 150; // live race: 150 × 2s = 5 minutes of active polling
+    // Async duels: the opponent may only play hours later — don't trap the
+    // finisher on a spinner. After a short grace, switch to the friendly
+    // "score locked, we'll notify you" state. Admin-tunable; default 45s.
+    var asyncWaitSec = 45;
+    try {
+      if (typeof gameConfig === 'object' && gameConfig && gameConfig.duel_async_wait_seconds) {
+        var _w = parseInt(gameConfig.duel_async_wait_seconds, 10);
+        if (isFinite(_w) && _w >= 10) asyncWaitSec = _w;
+      }
+    } catch (e) {}
+    var asyncMax = Math.max(5, Math.ceil(asyncWaitSec / 2));
+    var isLive = null; // resolved from the duel row on the first successful poll
     var poller = setInterval(function() {
       attempts++;
-      if (attempts > maxAttempts) {
+      var cap = (isLive === false) ? asyncMax : maxAttempts;
+      if (attempts > cap) {
         // The duel hasn't resolved in 5 minutes. Don't leave the player
         // staring at a frozen spinner — swap the overlay to a friendly
         // "go do something else, we'll notify you" state and stop the
@@ -1691,21 +1704,29 @@
         stopDuelLiveSpectator();
         replaceDuelResultOverlay({
           result: 'unresolved',
-          opponentName: oppName
+          opponentName: oppName,
+          async: (isLive === false)
         }, myScore, oppName);
-        // 🚨 Log to admin issue tracker — player waited 5 minutes for
-        // an opponent that never finished. Admin can comp them.
-        try {
-          if (typeof window.__bloomReportIssue === 'function') {
-            window.__bloomReportIssue({
-              kind: 'duel_unresolved_5min',
-              severity: 'medium',
-              title: 'דו-קרב #' + duelId + ' לא נפתר ב-5 דקות',
-              detail: 'השחקן סיים את ציונו (' + myScore + ') אבל היריב לא שיחק. השחקן ראה מסך "ממתין".',
-              context: { duelId: duelId, myScore: myScore, oppName: oppName }
-            });
-          }
-        } catch (e) {}
+        // 🚨 Log to the admin issue tracker ONLY for a LIVE race that genuinely
+        // failed to settle — that's abnormal (both sides play concurrently in
+        // 60s) and worth a comp. An async duel waiting for an offline opponent
+        // is the NORMAL flow: the score is safely submitted server-side, the
+        // home poll (every 60s) + push will surface the result, and
+        // expireStaleAcceptedDuels forfeit-wins the finisher at expiry. Logging
+        // that as a "stuck" issue just floods the tab with non-bugs.
+        if (isLive !== false) {
+          try {
+            if (typeof window.__bloomReportIssue === 'function') {
+              window.__bloomReportIssue({
+                kind: 'duel_unresolved_5min',
+                severity: 'medium',
+                title: 'דו-קרב #' + duelId + ' לא נפתר ב-5 דקות',
+                detail: 'השחקן סיים את ציונו (' + myScore + ') אבל היריב לא שיחק. השחקן ראה מסך "ממתין".',
+                context: { duelId: duelId, myScore: myScore, oppName: oppName }
+              });
+            }
+          } catch (e) {}
+        }
         return;
       }
       fetch(API_BASE + '/api/duels/' + duelId + '?deviceId=' + encodeURIComponent(deviceId), { method: 'GET' })
@@ -1713,6 +1734,7 @@
         .then(function(resp) {
           if (!resp || !resp.duel) return;
           var u = resp.duel;
+          if (isLive === null) isLive = !!u.is_live; // drives the async early-exit cap
           var isChallenger = u.challenger_device === deviceId;
           // Settled / tie — the normal happy path.
           if (u.status === 'settled' || u.status === 'tie') {

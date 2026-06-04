@@ -739,8 +739,16 @@
   window.addEventListener('unhandledrejection', function(ev) {
     try {
       var r = ev && ev.reason;
-      var msg = r && (r.message || String(r)) || 'unhandled rejection';
-      var stack = r && r.stack;
-      _reportJsError('js_rejection', msg, '', 0, 0, stack);
+      var msg = r && (r.message || (typeof r === 'string' ? r : '')) || '';
+      var stack = r && r.stack ? String(r.stack) : '';
+      // Skip non-actionable noise: a rejection with NO message AND NO stack is
+      // undebuggable (a promise rejected with undefined/null/{}, a cross-origin
+      // "Script error.", or an aborted fetch). Logging it just fills the 🚨 tab
+      // with "src=?:0:0" rows nobody can act on.
+      if (!stack && (!msg || msg === '[object Object]' || msg === 'undefined' || msg === 'null')) return;
+      // Skip transient connectivity blips — these are the player's network, not
+      // a code bug, and they self-recover.
+      if (/Load failed|Failed to fetch|NetworkError|network connection was lost|operation was aborted|AbortError|\baborted\b|cancell?ed/i.test(msg)) return;
+      _reportJsError('js_rejection', msg || 'unhandled rejection', '', 0, 0, stack);
     } catch (e) {}
   });

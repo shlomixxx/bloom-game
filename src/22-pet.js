@@ -149,10 +149,18 @@
     // then insertBefore throws "The object can not be found here." (Safari)
     // / "node ... is not a child of this node" (Chrome). 106 such crashes in
     // the issues tab. Guard the anchor; fall back to append.
-    if (anchor && anchor.parentNode === homeEl) {
-      homeEl.insertBefore(w, anchor);
-    } else {
-      homeEl.appendChild(w);
+    try {
+      if (anchor && anchor.parentNode === homeEl) {
+        homeEl.insertBefore(w, anchor);
+      } else {
+        homeEl.appendChild(w);
+      }
+    } catch (e) {
+      // Belt-and-suspenders: even with the parentNode guard above, Safari has
+      // thrown "The object can not be found here" from insertBefore (historically
+      // the single most common crash in the 🚨 tab). A plain append can NEVER
+      // throw here, so the pet widget can't take down the whole home render.
+      try { homeEl.appendChild(w); } catch (e2) {}
     }
     w.onclick = function() {
       if (!data.name) {

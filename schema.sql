@@ -743,6 +743,12 @@ INSERT INTO game_config (key, value) VALUES ('duel_enabled', 'true')
   ON CONFLICT (key) DO NOTHING;
 INSERT INTO game_config (key, value) VALUES ('duel_timeout_hours', '24')
   ON CONFLICT (key) DO NOTHING;
+-- IS.7 — how long the finisher of an ASYNC duel waits on the result overlay
+-- before it flips to the friendly "score locked, we'll notify you" state.
+-- (A live 60s race always uses the full 5-min poll.) Keeps players from being
+-- trapped on a spinner when the opponent is offline.
+INSERT INTO game_config (key, value) VALUES ('duel_async_wait_seconds', '45')
+  ON CONFLICT (key) DO NOTHING;
 
 -- Weekly auto-challenge settings
 INSERT INTO game_config (key, value) VALUES ('weekly_enabled', 'true')
