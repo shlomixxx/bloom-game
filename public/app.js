@@ -36935,12 +36935,21 @@ try {
         var gridEl = document.getElementById('grid'); if (!gridEl) { resolve(); return; }
         var cell = gridEl.querySelector('.cell[data-r="' + row + '"][data-c="' + col + '"]');
         if (!cell) { resolve(); return; }
+        // render() just rebuilt the grid DOM and fitGrid may not have re-applied
+        // to the fresh cells yet, so a brand-new cell can momentarily report a
+        // collapsed rect (~tiny). Force the sizer, then derive the fall distance
+        // from BOTH the cell rect AND the grid height (take the max) so a
+        // not-yet-sized cell can never shrink the fall. The tile starts one
+        // cell-height above the grid's TOP edge → it streaks down through every
+        // empty row above the landing cell (those rows are always empty: the tile
+        // fell to the lowest empty slot, so nothing floats above it).
+        try { if (typeof fitGrid === 'function') fitGrid(); } catch (e) {}
         var gridRect = gridEl.getBoundingClientRect();
         var cellRect = cell.getBoundingClientRect();
-        // start one cell-height above the grid's TOP edge → streaks down through
-        // every empty row above the landing cell (those rows are always empty:
-        // the tile fell to the lowest empty slot, so nothing floats above it).
-        var dist = (cellRect.top - gridRect.top) + cellRect.height;
+        var rows = (typeof getBoardRows === 'function') ? getBoardRows() : 6;
+        var byCell = (cellRect.top - gridRect.top) + cellRect.height;
+        var byGrid = (rows > 0) ? ((row + 1) * (gridRect.height / rows)) : 0;
+        var dist = Math.round(Math.max(byCell, byGrid));
         if (!(dist > 6)) { resolve(); return; } // landed at the very top → no real fall
         var dur = Math.min(360, Math.max(150, Math.round(dist * 1.05)));
         try { if (typeof gameSpeedScale === 'function') dur = Math.max(90, Math.round(dur * gameSpeedScale())); } catch (e) {}
