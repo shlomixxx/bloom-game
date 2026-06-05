@@ -19,25 +19,39 @@
     if (heldPiece == null) { heldPiece = nextPiece; nextPiece = pickPiece(); }
     else { var t = heldPiece; heldPiece = nextPiece; nextPiece = t; }
     try { if (typeof highlightNextTier === 'function') highlightNextTier(nextPiece); } catch (e) {}
-    paintV2Hold();
+    paintV2Launch();
     try { if (typeof soundDrop === 'function') soundDrop(); } catch (e) {}
     try { if (typeof buzz === 'function') buzz([18]); } catch (e) {}
   }
-  function paintV2Hold() {
+  // The v2 launch row: Hold · Current · Next (replaces the old floating chip).
+  // "Current" = nextPiece (what drops on tap); "Next" = the v2NextUp lookahead.
+  function paintV2Launch() {
     if (!v2On()) return;
-    var wrap = document.getElementById('grid-wrap'); if (!wrap) return;
-    var chip = document.getElementById('v2-hold');
-    if (!chip) {
-      chip = document.createElement('div'); chip.id = 'v2-hold';
-      chip.innerHTML = '<div class="v2-hold-lbl">החזקה</div><div class="v2-hold-slot" id="v2-hold-slot"></div>';
-      chip.addEventListener('click', function(e) { e.stopPropagation(); v2SwapHold(); });
-      wrap.appendChild(chip);
+    var row = document.getElementById('v2-launch'); if (!row) return;
+    if (typeof v2NextUp !== 'undefined' && v2NextUp == null && typeof pickPiece === 'function') {
+      try { v2NextUp = pickPiece(); } catch (e) {}
     }
-    var slot = document.getElementById('v2-hold-slot'); if (!slot) return;
+    if (!row.dataset.built) {
+      row.dataset.built = '1';
+      row.innerHTML =
+        '<div class="v2-slot"><span class="v2-slot-lbl">החזקה</span>' +
+          '<button class="v2-slot-box v2-hold" id="v2-hold-box" type="button" aria-label="החלף אריח"></button></div>' +
+        '<div class="v2-slot v2-slot-cur"><span class="v2-slot-lbl">נוכחי</span>' +
+          '<div class="v2-slot-box v2-cur" id="v2-cur-box"></div></div>' +
+        '<div class="v2-slot"><span class="v2-slot-lbl">הבא</span>' +
+          '<div class="v2-slot-box v2-next" id="v2-next-box"></div></div>';
+      var hb = document.getElementById('v2-hold-box');
+      if (hb) hb.addEventListener('click', function(e) { e.stopPropagation(); v2SwapHold(); });
+    }
     var tiers = (typeof getActiveTiers === 'function') ? getActiveTiers() : null;
-    if (heldPiece && tiers && tiers[heldPiece]) {
-      slot.classList.add('has-tile'); slot.style.background = tiers[heldPiece].bg; slot.innerHTML = tiers[heldPiece].svg;
-    } else { slot.classList.remove('has-tile'); slot.style.background = ''; slot.innerHTML = ''; }
+    function fill(id, tier) {
+      var el = document.getElementById(id); if (!el) return;
+      if (tier && tiers && tiers[tier]) { el.classList.add('has-tile'); el.style.background = tiers[tier].bg; el.style.color = tiers[tier].fg; el.innerHTML = tiers[tier].svg; }
+      else { el.classList.remove('has-tile'); el.style.background = ''; el.innerHTML = ''; }
+    }
+    fill('v2-hold-box', heldPiece);
+    fill('v2-cur-box', (typeof nextPiece !== 'undefined' ? nextPiece : 0));
+    fill('v2-next-box', (typeof v2NextUp !== 'undefined' ? v2NextUp : 0));
   }
 
   // ---- Aim overlay: ghost landing preview + column highlight + neighbor pulse ----
@@ -135,7 +149,7 @@
   function paintV2Layers() {
     if (!v2On()) return;
     try { v2WireAim(); } catch (e) {}
-    try { paintV2Hold(); } catch (e) {}
+    try { paintV2Launch(); } catch (e) {}
     // cells were rebuilt by render() → ghost geometry + pulse are stale; clear
     // them. They reappear on the next pointer hover/drag.
     try { v2ClearAim(); } catch (e) {}

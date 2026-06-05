@@ -335,6 +335,9 @@
   // Held piece for the v2 hold/swap slot (shared engine scope). Always null in
   // classic (v2On false → never read/shown). Reset on every new game in init().
   var heldPiece = null;
+  // v2 1-deep next-piece lookahead so the launch row can preview what's coming.
+  // Classic never reads it. Lazily picked in rollNextPiece; reset in init().
+  var v2NextUp = null;
 
   // Rebuild SKIN_PACKS from the server's skin_configurations catalog. Called
   // at boot; falls back silently to the hardcoded packs above if the fetch

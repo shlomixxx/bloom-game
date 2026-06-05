@@ -399,13 +399,23 @@
   // a non-blocking visual indicator (~600ms total) — it never gates input.
   function rollNextPiece() {
     const chosen = pickPiece();
-    nextPiece = chosen;
+    // GV.4 — in v2, a 1-deep lookahead drives the launch-row "next" preview:
+    // the piece that drops next is the previously-previewed one; `chosen`
+    // becomes the new preview. Classic is unchanged (nextPiece = chosen).
+    if (typeof v2On === 'function' && v2On()) {
+      if (v2NextUp == null) v2NextUp = pickPiece();
+      nextPiece = v2NextUp;
+      v2NextUp = chosen;
+    } else {
+      nextPiece = chosen;
+    }
     // Snap the tier bar to the new piece right now (the animation may still
     // be playing; revealToken makes it a no-op if a newer roll fired).
-    highlightNextTier(chosen);
+    highlightNextTier(nextPiece);
     // Fire-and-forget the cycle. If the player taps fast, the next call to
     // rollNextPiece will bump revealToken and the in-flight animation bails.
-    revealNextTier(chosen);
+    revealNextTier(nextPiece);
+    try { if (typeof v2On === 'function' && v2On() && typeof paintV2Launch === 'function') paintV2Launch(); } catch (e) {}
   }
 
   // ────────────────────────────────────────────────────────────────

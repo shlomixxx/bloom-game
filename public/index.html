@@ -73,7 +73,7 @@ function trackEvent(n,p){try{gtag('event',n,p||{});}catch(e){}}
 })();
 </script>
 
-<link rel="stylesheet" href="/styles.css?v=20260605e">
+<link rel="stylesheet" href="/styles.css?v=20260605f">
 </head>
 <body>
 
@@ -138,6 +138,9 @@ function trackEvent(n,p){try{gtag('event',n,p||{});}catch(e){}}
     <div class="mode-tabs" id="mode-tabs"></div>
   </div>
   <div class="tier-bar" id="tier-bar" aria-label="סולם האריחים"></div>
+  <!-- GV.4 — v2 launch row (Hold · Current · Next). Hidden in classic via CSS
+       (#v2-launch{display:none}); shown + populated only under body.bloom-v2. -->
+  <div class="v2-launch" id="v2-launch" aria-hidden="true"></div>
   <div class="grid-wrap" id="grid-wrap"><div class="grid" id="grid"></div></div>
 </div>
 
@@ -154,7 +157,7 @@ function trackEvent(n,p){try{gtag('event',n,p||{});}catch(e){}}
 <script>
 (function(){
   "use strict";
-  var CB = 'v=20260605e';
+  var CB = 'v=20260605f';
   var _booted = false;
   function loadScript(src){ return new Promise(function(res,rej){ var s=document.createElement('script'); s.src=src; s.onload=res; s.onerror=rej; document.body.appendChild(s); }); }
   function boot(variant){

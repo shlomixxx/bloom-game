@@ -14,26 +14,40 @@ body.bloom-v2 .grid-wrap { position: relative; }
 body.bloom-v2 .cell { border-radius: 14px; }
 body.bloom-v2 .cell.filled { box-shadow: 0 3px 10px rgba(120,90,40,.10); }
 
-/* ---- Hold / swap slot ---- */
-body.bloom-v2 #v2-hold {
-  position: absolute; top: 6px; inset-inline-start: 6px; z-index: 8;
-  display: flex; flex-direction: column; align-items: center; gap: 3px;
-  background: rgba(255,255,255,.82); backdrop-filter: blur(6px);
-  border: 1px solid rgba(201,146,59,.30); border-radius: 14px;
-  padding: 5px 7px 6px; box-shadow: 0 4px 12px rgba(120,100,60,.14);
-  cursor: pointer; user-select: none; transition: transform .12s, opacity .15s;
+/* ---- v2 drop animation: the dropped tile FALLS from above + settles ----
+   (classic .appearing is a pop-in-place; this mirrors the demo's fall.) */
+body.bloom-v2 .cell.appearing { animation: v2Drop .30s cubic-bezier(.34,1.32,.64,1) both; }
+@keyframes v2Drop {
+  0%   { transform: translateY(-38px) scale(.82); opacity: 0; }
+  55%  { transform: translateY(5px)   scale(1.10); opacity: 1; }
+  74%  { transform: translateY(-2px)  scale(.97); }
+  100% { transform: translateY(0)     scale(1); }
 }
-body.bloom-v2 #v2-hold:active { transform: scale(.92); }
-body.bloom-v2 #v2-hold.v2-hold-used { opacity: .45; }
-body.bloom-v2 #v2-hold .v2-hold-lbl { font-size: 9px; font-weight: 800; color: #9A7B3C; letter-spacing: .3px; }
-body.bloom-v2 #v2-hold .v2-hold-slot {
-  width: 40px; height: 40px; border-radius: 11px; display: flex; align-items: center; justify-content: center;
-  background: #FBF6EA; border: 2px dashed rgba(201,146,59,.4);
+
+/* ---- Launch row: Hold · Current · Next (replaces the old floating chip) ---- */
+#v2-launch { display: none; }            /* hidden in classic */
+body.bloom-v2 #v2-launch {
+  display: flex; align-items: flex-end; justify-content: space-around; gap: 8px;
+  direction: ltr; padding: 2px 8px 4px; flex: 0 0 auto;
 }
-body.bloom-v2 #v2-hold .v2-hold-slot.has-tile { border-style: solid; border-color: transparent; }
-body.bloom-v2 #v2-hold .v2-hold-slot svg { width: 64%; height: 64%; }
-html[data-theme="dark"] body.bloom-v2 #v2-hold { background: rgba(40,36,30,.82); border-color: rgba(201,146,59,.4); }
-html[data-theme="dark"] body.bloom-v2 #v2-hold .v2-hold-slot { background: #2A251E; }
+body.bloom-v2 .v2-slot { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+body.bloom-v2 .v2-slot-lbl { font-size: 10px; font-weight: 800; color: var(--color-text-muted, #A9A293); letter-spacing: .3px; }
+body.bloom-v2 .v2-slot-box {
+  width: 46px; height: 46px; border-radius: 13px; display: flex; align-items: center; justify-content: center;
+  background: #FBF6EA; border: 2px dashed rgba(201,146,59,.38); padding: 0; transition: transform .12s, box-shadow .15s;
+}
+body.bloom-v2 .v2-slot-box.has-tile { border-style: solid; border-color: transparent; box-shadow: 0 3px 9px rgba(120,90,40,.16); }
+body.bloom-v2 .v2-slot-box svg { width: 62%; height: 62%; }
+/* Current piece is the hero — bigger + a gentle bob so the eye lands on it. */
+body.bloom-v2 .v2-slot-cur .v2-slot-lbl { color: #C9923B; }
+body.bloom-v2 .v2-cur { width: 62px; height: 62px; border-radius: 17px; box-shadow: 0 6px 16px rgba(120,90,40,.20); }
+body.bloom-v2 .v2-cur.has-tile { animation: v2Bob 1.7s ease-in-out infinite; }
+@keyframes v2Bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+/* Hold slot is the only interactive one. */
+body.bloom-v2 .v2-hold { cursor: pointer; }
+body.bloom-v2 .v2-hold:active { transform: scale(.9); }
+html[data-theme="dark"] body.bloom-v2 .v2-slot-box { background: #2A251E; border-color: rgba(201,146,59,.45); }
+@media (max-width: 360px) { body.bloom-v2 .v2-slot-box { width: 40px; height: 40px; } body.bloom-v2 .v2-cur { width: 54px; height: 54px; } }
 
 /* ---- Aim overlay: ghost landing preview + column highlight ---- */
 body.bloom-v2 #v2-aim { position: absolute; inset: 0; pointer-events: none; z-index: 6; }
@@ -85,5 +99,7 @@ html[data-theme="dark"] #v2-fb-overlay .v2-fb-input { background: #2A251E; color
 
 @media (prefers-reduced-motion: reduce) {
   body.bloom-v2 .cell.v2-pulse { animation: none; }
-  body.bloom-v2 #v2-hold, body.bloom-v2 .v2-ghost-tile, body.bloom-v2 .v2-col-hi { transition: none; }
+  body.bloom-v2 .cell.appearing { animation: none; }
+  body.bloom-v2 .v2-cur.has-tile { animation: none; }
+  body.bloom-v2 .v2-ghost-tile, body.bloom-v2 .v2-col-hi, body.bloom-v2 .v2-slot-box { transition: none; }
 }

@@ -335,6 +335,9 @@
   // Held piece for the v2 hold/swap slot (shared engine scope). Always null in
   // classic (v2On false → never read/shown). Reset on every new game in init().
   var heldPiece = null;
+  // v2 1-deep next-piece lookahead so the launch row can preview what's coming.
+  // Classic never reads it. Lazily picked in rollNextPiece; reset in init().
+  var v2NextUp = null;
 
   // Rebuild SKIN_PACKS from the server's skin_configurations catalog. Called
   // at boot; falls back silently to the hardcoded packs above if the fetch
@@ -16198,7 +16201,7 @@
     if (mode === 'practice') sessionDifficulty = readPracticeDifficulty();
     grid = Array.from({length: getBoardRows()}, function() { return Array(getBoardCols()).fill(0); });
     score = 0; highestTier = 1; busy = false; dropsCount = 0;
-    heldPiece = null; // GV.4 — clear the v2 hold slot on every new game (no-op in classic)
+    heldPiece = null; v2NextUp = null; // GV.4 — clear the v2 hold slot + next-up lookahead on every new game (no-op in classic)
     // A9 — Reset ghost-mode drop recording for this fresh game.
     try { window.__bloomDropsSeq = []; } catch (e) {}
     window.__bloomGameOver = false; // new game = active again
@@ -20738,13 +20741,23 @@
   // a non-blocking visual indicator (~600ms total) — it never gates input.
   function rollNextPiece() {
     const chosen = pickPiece();
-    nextPiece = chosen;
+    // GV.4 — in v2, a 1-deep lookahead drives the launch-row "next" preview:
+    // the piece that drops next is the previously-previewed one; `chosen`
+    // becomes the new preview. Classic is unchanged (nextPiece = chosen).
+    if (typeof v2On === 'function' && v2On()) {
+      if (v2NextUp == null) v2NextUp = pickPiece();
+      nextPiece = v2NextUp;
+      v2NextUp = chosen;
+    } else {
+      nextPiece = chosen;
+    }
     // Snap the tier bar to the new piece right now (the animation may still
     // be playing; revealToken makes it a no-op if a newer roll fired).
-    highlightNextTier(chosen);
+    highlightNextTier(nextPiece);
     // Fire-and-forget the cycle. If the player taps fast, the next call to
     // rollNextPiece will bump revealToken and the in-flight animation bails.
-    revealNextTier(chosen);
+    revealNextTier(nextPiece);
+    try { if (typeof v2On === 'function' && v2On() && typeof paintV2Launch === 'function') paintV2Launch(); } catch (e) {}
   }
 
   // ────────────────────────────────────────────────────────────────
@@ -36732,25 +36745,39 @@ try {
     if (heldPiece == null) { heldPiece = nextPiece; nextPiece = pickPiece(); }
     else { var t = heldPiece; heldPiece = nextPiece; nextPiece = t; }
     try { if (typeof highlightNextTier === 'function') highlightNextTier(nextPiece); } catch (e) {}
-    paintV2Hold();
+    paintV2Launch();
     try { if (typeof soundDrop === 'function') soundDrop(); } catch (e) {}
     try { if (typeof buzz === 'function') buzz([18]); } catch (e) {}
   }
-  function paintV2Hold() {
+  // The v2 launch row: Hold · Current · Next (replaces the old floating chip).
+  // "Current" = nextPiece (what drops on tap); "Next" = the v2NextUp lookahead.
+  function paintV2Launch() {
     if (!v2On()) return;
-    var wrap = document.getElementById('grid-wrap'); if (!wrap) return;
-    var chip = document.getElementById('v2-hold');
-    if (!chip) {
-      chip = document.createElement('div'); chip.id = 'v2-hold';
-      chip.innerHTML = '<div class="v2-hold-lbl">החזקה</div><div class="v2-hold-slot" id="v2-hold-slot"></div>';
-      chip.addEventListener('click', function(e) { e.stopPropagation(); v2SwapHold(); });
-      wrap.appendChild(chip);
+    var row = document.getElementById('v2-launch'); if (!row) return;
+    if (typeof v2NextUp !== 'undefined' && v2NextUp == null && typeof pickPiece === 'function') {
+      try { v2NextUp = pickPiece(); } catch (e) {}
     }
-    var slot = document.getElementById('v2-hold-slot'); if (!slot) return;
+    if (!row.dataset.built) {
+      row.dataset.built = '1';
+      row.innerHTML =
+        '<div class="v2-slot"><span class="v2-slot-lbl">החזקה</span>' +
+          '<button class="v2-slot-box v2-hold" id="v2-hold-box" type="button" aria-label="החלף אריח"></button></div>' +
+        '<div class="v2-slot v2-slot-cur"><span class="v2-slot-lbl">נוכחי</span>' +
+          '<div class="v2-slot-box v2-cur" id="v2-cur-box"></div></div>' +
+        '<div class="v2-slot"><span class="v2-slot-lbl">הבא</span>' +
+          '<div class="v2-slot-box v2-next" id="v2-next-box"></div></div>';
+      var hb = document.getElementById('v2-hold-box');
+      if (hb) hb.addEventListener('click', function(e) { e.stopPropagation(); v2SwapHold(); });
+    }
     var tiers = (typeof getActiveTiers === 'function') ? getActiveTiers() : null;
-    if (heldPiece && tiers && tiers[heldPiece]) {
-      slot.classList.add('has-tile'); slot.style.background = tiers[heldPiece].bg; slot.innerHTML = tiers[heldPiece].svg;
-    } else { slot.classList.remove('has-tile'); slot.style.background = ''; slot.innerHTML = ''; }
+    function fill(id, tier) {
+      var el = document.getElementById(id); if (!el) return;
+      if (tier && tiers && tiers[tier]) { el.classList.add('has-tile'); el.style.background = tiers[tier].bg; el.style.color = tiers[tier].fg; el.innerHTML = tiers[tier].svg; }
+      else { el.classList.remove('has-tile'); el.style.background = ''; el.innerHTML = ''; }
+    }
+    fill('v2-hold-box', heldPiece);
+    fill('v2-cur-box', (typeof nextPiece !== 'undefined' ? nextPiece : 0));
+    fill('v2-next-box', (typeof v2NextUp !== 'undefined' ? v2NextUp : 0));
   }
 
   // ---- Aim overlay: ghost landing preview + column highlight + neighbor pulse ----
@@ -36848,7 +36875,7 @@ try {
   function paintV2Layers() {
     if (!v2On()) return;
     try { v2WireAim(); } catch (e) {}
-    try { paintV2Hold(); } catch (e) {}
+    try { paintV2Launch(); } catch (e) {}
     // cells were rebuilt by render() → ghost geometry + pulse are stale; clear
     // them. They reappear on the next pointer hover/drag.
     try { v2ClearAim(); } catch (e) {}
