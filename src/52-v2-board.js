@@ -201,10 +201,15 @@
         var gridRect = gridEl.getBoundingClientRect();
         var cellRect = cell.getBoundingClientRect();
         var rows = (typeof getBoardRows === 'function') ? getBoardRows() : 6;
+        // grid.style.height is the inline px the sizer (fitGrid) set; it persists
+        // across render()'s innerHTML rebuild and stays correct even when a freshly
+        // built cell — or the grid's own box — momentarily reports a COLLAPSED
+        // getBoundingClientRect at this exact synchronous instant (which happens on
+        // quick successive drops). Prefer it; fall back to the live rects.
+        var gh = parseFloat(gridEl.style.height) || gridRect.height || gridEl.clientHeight || 0;
         var byCell = (cellRect.top - gridRect.top) + cellRect.height;
-        var byGrid = (rows > 0) ? ((row + 1) * (gridRect.height / rows)) : 0;
+        var byGrid = (rows > 0 && gh > 0) ? ((row + 1) * (gh / rows)) : 0;
         var dist = Math.round(Math.max(byCell, byGrid));
-        try { window.__v2FallDebug = { row: row, col: col, rows: rows, gridH: Math.round(gridRect.height), cellTop: Math.round(cellRect.top - gridRect.top), cellH: Math.round(cellRect.height), byCell: Math.round(byCell), byGrid: Math.round(byGrid), dist: dist }; } catch (e) {}
         if (!(dist > 6)) { resolve(); return; } // landed at the very top → no real fall
         var dur = Math.min(360, Math.max(150, Math.round(dist * 1.05)));
         try { if (typeof gameSpeedScale === 'function') dur = Math.max(90, Math.round(dur * gameSpeedScale())); } catch (e) {}
