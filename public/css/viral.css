@@ -596,6 +596,8 @@
   .ftue-welcome-ladder {
     display: flex; gap: 5px; justify-content: center; flex-wrap: nowrap;
     padding: 4px 0;
+    /* stone-LEFT → crown-RIGHT, matches the in-game tier-bar + home ladder */
+    direction: ltr;
   }
   .ftue-welcome-ladder .ftue-tile {
     width: 30px; height: 30px; border-radius: 8px;

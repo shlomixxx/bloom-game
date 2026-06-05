@@ -99,6 +99,10 @@
   .tour-row {
     display: flex; align-items: center; justify-content: center;
     gap: 6px;
+    /* Tier/merge progression reads stone-LEFT → crown-RIGHT (matches the
+       in-game tier-bar). Paired with TOUR_MERGE_ARROW='→' in 12-tour-info.js
+       — both must stay in sync (an ltr row with a ← arrow reads backwards). */
+    direction: ltr;
   }
   .tour-mini-grid {
     display: grid; grid-template-columns: repeat(4, 32px); gap: 3px;
@@ -150,7 +154,7 @@
     color: #1C1A18; margin: 0;
   }
   html[data-theme="dark"] .tour-welcome .brand { color: #F2EFE9; }
-  .tour-welcome .icons-row { display: flex; gap: 6px; }
+  .tour-welcome .icons-row { display: flex; gap: 6px; direction: ltr; }
   .info-title { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
   .info-sub { font-size: 12px; color: #6F6E68; margin-bottom: 12px; }
   .credits {

@@ -11,10 +11,29 @@
 // ============================================================
 (function() {
 
-  var VALID = ['standard', 'carousel', 'hero', 'jit'];
+  // 'tiles' (2026-06-06): PLAY-first home built on the real game tiles —
+  // dominant breathing PLAY, a tier-ladder progress strip (stone→crown),
+  // a merge-tease, and a single stable hot card. Admin-selectable.
+  var VALID = ['standard', 'carousel', 'hero', 'jit', 'tiles'];
 
   function getHomeVariant() {
     try {
+      // Preview override: ?hv=<variant> lets the admin/owner preview ANY
+      // variant live without changing the global default for everyone. It
+      // sticks (localStorage) across the SPA's reloads; ?hv=auto clears it.
+      var ov = null;
+      try {
+        var qs = new URLSearchParams(location.search || '');
+        var q = qs.get('hv');
+        if (q != null) {
+          q = String(q).trim().toLowerCase();
+          if (q === 'auto' || q === 'reset' || q === '') { localStorage.removeItem('bloom_home_variant_force'); }
+          else { localStorage.setItem('bloom_home_variant_force', q); ov = q; }
+        }
+        if (!ov) ov = localStorage.getItem('bloom_home_variant_force');
+      } catch (e) {}
+      if (ov) { ov = String(ov).trim().toLowerCase(); if (VALID.indexOf(ov) !== -1) return ov; }
+
       var v = (typeof gameConfig === 'object' && gameConfig && gameConfig.home_variant) || 'standard';
       v = String(v).trim().toLowerCase();
       if (VALID.indexOf(v) === -1) return 'standard';
@@ -187,6 +206,7 @@
         if (variant === 'carousel') applyCarouselVariant();
         else if (variant === 'hero') applyHeroVariant();
         else if (variant === 'jit') applyJustInTimeVariant();
+        else if (variant === 'tiles') applyTilesVariant();
       } catch (e) { console.error('[home-variant]', variant, e); }
     }, 3400);
   }
@@ -697,6 +717,158 @@
   //  removed — replaced by collectHotSignals + renderRotatingHeroCard
   //  which return ALL signals and rotate through them every 5s for
   //  variable-reward novelty on the home screen.)
+
+  // ════════════════════════════════════════════════════════════
+  // VARIANT 5 — TILES  (2026-06-06, owner-approved redesign)
+  // ════════════════════════════════════════════════════════════
+  // PLAY-first home built on the REAL game tiles (getActiveTiers, so it
+  // respects the player's skin). Four moves on the home tab:
+  //   1. PLAY wins the fold — the existing CTA is hoisted above the hero
+  //      slot + pid and styled as the dominant breathing hero.
+  //   2. Tier-ladder progress strip (stone-LEFT → crown-RIGHT) showing the
+  //      player's reached tiers (✓) + the next one pulsing — near-goal pull.
+  //   3. Single STABLE hot card (no auto-rotating carousel) reusing the
+  //      collectHotSignals() ranking — one clear, calm signal.
+  //   4. A looping merge-tease (leaf+leaf→flower) inside PLAY + faint
+  //      drifting tiles in the background — the satisfying core loop, teased.
+  // Decorator only — reuses every tile/handler/fetch. All CSS scoped under
+  // body[data-home-variant="tiles"] so the other variants are untouched.
+  function applyTilesVariant() {
+    var home = document.getElementById('home-screen');
+    if (!home) return;
+    if (document.getElementById('home-tiles-ladder')) return; // re-entry guard
+    document.body.classList.add('home-tiles');
+
+    var play = document.getElementById('home-v2-start');
+    var hero = document.getElementById('home-v2-hero');
+
+    // 1. PLAY wins the fold — hoist it above the hero slot (+ pid below it).
+    if (play && hero && play.parentNode && hero.parentNode === play.parentNode) {
+      try { hero.parentNode.insertBefore(play, hero); } catch (e) {}
+    }
+
+    // 2. Tier-ladder right after PLAY.
+    if (play && play.parentNode) {
+      var ladder = buildTileLadder();
+      if (ladder) { try { play.parentNode.insertBefore(ladder, play.nextSibling); } catch (e) {} }
+    }
+
+    // 3. Single stable hot card in the hero slot, placed after the ladder.
+    try {
+      var signals = collectHotSignals();
+      if (signals.length) renderSingleHotCard(signals[0]);
+      else if (hero) hero.style.display = 'none';
+      var ladderEl = document.getElementById('home-tiles-ladder');
+      if (hero && ladderEl && ladderEl.parentNode === hero.parentNode && hero.previousSibling !== ladderEl) {
+        ladderEl.parentNode.insertBefore(hero, ladderEl.nextSibling);
+      }
+    } catch (e) {}
+
+    // 4. Merge-tease inside PLAY + faint drifting tiles behind the home.
+    try { injectMergeTease(play); } catch (e) {}
+    try { addFloatingTiles(home); } catch (e) {}
+
+    // Belt-and-suspenders: let the bottom-nav claim any straggler tiles.
+    if (typeof window.__bloomMigrateTilesToTabs === 'function') {
+      try { window.__bloomMigrateTilesToTabs(); } catch (e) {}
+    }
+  }
+
+  function tilesActiveTiers() {
+    try { if (typeof getActiveTiers === 'function') return getActiveTiers() || null; } catch (e) {}
+    return null;
+  }
+
+  function buildTileLadder() {
+    var tiers = tilesActiveTiers();
+    if (!tiers || tiers.length < 2) return null;
+    var best = 1;
+    try {
+      if (typeof loadLifetimeInt === 'function' && typeof BEST_TIER_KEY !== 'undefined') {
+        best = loadLifetimeInt(BEST_TIER_KEY) || 1;
+      }
+    } catch (e) {}
+    if (best < 1) best = 1;
+    if (best > tiers.length) best = tiers.length;
+    // reached = indices [0 .. best-1]; next = index best (if best < length).
+    var atTop = best >= tiers.length;
+    var nextTier = (!atTop && tiers[best]) ? tiers[best] : null;
+    var headRight = atTop
+      ? '👑 הגעת לכתר!'
+      : '🔼 כמעט! עוד דרגה ל' + ((nextTier && nextTier.name) ? nextTier.name : 'דרגה הבאה');
+
+    var wrap = document.createElement('div');
+    wrap.id = 'home-tiles-ladder';
+    wrap.className = 'home-tiles-ladder' + (atTop ? ' htl-maxed' : '');
+    var html = '<div class="htl-head"><span class="htl-t">🪜 הדרגות שלך</span>' +
+               '<span class="htl-n">' + headRight + '</span></div>' +
+               '<div class="htl-row">';
+    for (var i = 0; i < tiers.length; i++) {
+      var t = tiers[i];
+      var cls = (i < best) ? 'reached' : (i === best ? 'next' : '');
+      if (i > 0) html += '<span class="htl-sep">›</span>';
+      html += '<div class="htl-tile ' + cls + '" style="background:' + (t.bg || '#ccc') +
+              ';color:' + (t.fg || '#222') + '">' + (t.svg || '') + '</div>';
+    }
+    html += '</div>';
+    wrap.innerHTML = html;
+    // The ladder is a "go climb" affordance → tap starts a game.
+    wrap.addEventListener('click', function() {
+      var p = document.getElementById('home-v2-start');
+      if (p && typeof p.click === 'function') p.click();
+    });
+    return wrap;
+  }
+
+  function renderSingleHotCard(signal) {
+    var hero = document.getElementById('home-v2-hero');
+    if (!hero || !signal) return;
+    hero.style.display = '';
+    var card = document.createElement('div');
+    card.className = 'hvar-hero-big ' + (signal.cls || '');
+    paintHeroCardContent(card, signal); // reuse Power Hero's painter (no nav chrome → static)
+    hero.innerHTML = '';
+    hero.appendChild(card);
+  }
+
+  function injectMergeTease(play) {
+    if (!play || play.querySelector('.htl-tease')) return;
+    var tiers = tilesActiveTiers();
+    if (!tiers || tiers.length < 3) return;
+    var leaf = tiers[1], flower = tiers[2];
+    var tz = document.createElement('div');
+    tz.className = 'htl-tease';
+    tz.setAttribute('aria-hidden', 'true');
+    tz.innerHTML =
+      '<div class="htl-tz htl-tz-a" style="background:' + leaf.bg + ';color:' + leaf.fg + '">' + (leaf.svg || '') + '</div>' +
+      '<div class="htl-tz htl-tz-b" style="background:' + leaf.bg + ';color:' + leaf.fg + '">' + (leaf.svg || '') + '</div>' +
+      '<div class="htl-tz htl-tz-c" style="background:' + flower.bg + ';color:' + flower.fg + '">' + (flower.svg || '') + '</div>';
+    play.appendChild(tz);
+  }
+
+  function addFloatingTiles(home) {
+    if (!home || document.getElementById('home-tiles-float')) return;
+    var tiers = tilesActiveTiers();
+    if (!tiers || tiers.length < 8) return;
+    var layer = document.createElement('div');
+    layer.id = 'home-tiles-float';
+    layer.className = 'home-tiles-float';
+    layer.setAttribute('aria-hidden', 'true');
+    var spots = [
+      { l: 10, d: 21, s: 30, t: 1 }, { l: 78, d: 26, s: 34, t: 3 },
+      { l: 44, d: 30, s: 22, t: 5 }, { l: 90, d: 23, s: 26, t: 6 },
+      { l: 26, d: 28, s: 20, t: 7 }
+    ];
+    var html = '';
+    for (var i = 0; i < spots.length; i++) {
+      var sp = spots[i]; var t = tiers[sp.t] || tiers[0];
+      html += '<div class="htf-tile" style="left:' + sp.l + '%;width:' + sp.s + 'px;height:' + sp.s +
+              'px;background:' + (t.bg || '#ccc') + ';color:' + (t.fg || '#222') +
+              ';animation-duration:' + sp.d + 's;animation-delay:-' + (i * 4) + 's">' + (t.svg || '') + '</div>';
+    }
+    layer.innerHTML = html;
+    home.insertBefore(layer, home.firstChild);
+  }
 
   // ════════════════════════════════════════════════════════════
   // VARIANT 3 — JUST-IN-TIME  (idea #6, score 8.75 — TOP PICK)

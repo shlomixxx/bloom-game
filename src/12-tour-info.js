@@ -5,12 +5,13 @@
   // TIER svgs for illustrations so the player learns the actual icon set.
   // ================================================================
   const TOUR_KEY = 'bloom_tour_seen';
-  // The merge illustrations live in an RTL container, so the OUTPUT tile (last
-  // in DOM) renders on the LEFT and the inputs on the RIGHT. The connector
-  // arrow must therefore point LEFT (←, toward the output) — a → would point
-  // back at the inputs and read backwards ("flower → 2 leaves" / "fire → 4
-  // flowers"). Single source so the direction can't drift per-illustration.
-  var TOUR_MERGE_ARROW = '<span class="tour-arrow">←</span>';
+  // The merge illustrations now live in an LTR container (.tour-row has
+  // direction:ltr) so the progression reads stone-LEFT → crown-RIGHT, matching
+  // the in-game tier-bar + the new home tier-ladder. Inputs render on the LEFT,
+  // OUTPUT on the RIGHT, so the connector arrow points RIGHT (→, toward the
+  // output): "2 leaves → flower". MUST stay paired with .tour-row direction:ltr
+  // — flipping only one re-breaks the read. Single source so it can't drift.
+  var TOUR_MERGE_ARROW = '<span class="tour-arrow">→</span>';
   function tourTile(tier, sizeClass) {
     const t = (getActiveTiers() && getActiveTiers()[tier]) || null;
     const cls = 'tour-tile' + (sizeClass ? ' ' + sizeClass : '');
