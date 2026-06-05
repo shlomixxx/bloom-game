@@ -64,6 +64,27 @@ body.bloom-v2 #v2-spine .tier-cell.climb-pop .tier-icon { animation: v2ClimbPop 
   100% { box-shadow: 0 0 0 0 rgba(201,146,59,0); filter: brightness(1); }
 }
 
+/* Ladder active rung = the CURRENT piece (drops NOW). A downward gold caret +
+   a live breathing halo make it the unmistakable "drops now" beacon — the hero
+   box now shows the NEXT piece, not this one. Pseudo-element + box-shadow ONLY,
+   never transform, so it can't fight the .active/.cycling scale or the
+   .climbed/.teaser/.climb-pop box-shadow animations on the same .tier-icon.
+   (position:relative is REQUIRED — .tier-icon has none, so the caret would
+   otherwise anchor to #v2-spine instead of the rung.) */
+body.bloom-v2 #v2-spine .tier-cell.active .tier-icon { position: relative; animation: v2NowHalo 1.4s ease-in-out infinite; }
+@keyframes v2NowHalo {
+  0%,100% { box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--color-accent,#C9923B), 0 4px 10px rgba(0,0,0,.12); }
+  50%     { box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--color-accent,#C9923B), 0 0 9px 3px rgba(201,146,59,.5); }
+}
+body.bloom-v2 #v2-spine .tier-cell.active .tier-icon::after {
+  content: ''; position: absolute; left: 50%; bottom: -6px; transform: translateX(-50%);
+  width: 0; height: 0; border-left: 5px solid transparent; border-right: 5px solid transparent;
+  border-top: 6px solid var(--color-accent, #C9923B);
+  filter: drop-shadow(0 1px 1px rgba(201,146,59,.4)); pointer-events: none;
+  animation: v2CaretBob 1.4s ease-in-out infinite;
+}
+@keyframes v2CaretBob { 0%,100% { bottom: -6px; opacity: .9; } 50% { bottom: -8px; opacity: 1; } }
+
 /* Launch zone: TWO clearly-labeled slots so there is ZERO ambiguity about which
    tile drops next. NEXT = the unmistakable drop piece (gold ring + glow + bob +
    "⬇ הבא" label directly above it); HOLD = obviously secondary ("החזקה" label,
@@ -78,14 +99,14 @@ body.bloom-v2 .v2-slot { display: flex; flex-direction: column; align-items: cen
 body.bloom-v2 .v2-slot-lbl { font-size: 8.5px; font-weight: 800; letter-spacing: .2px; line-height: 1.1; white-space: nowrap; }
 body.bloom-v2 .v2-lbl-next { color: var(--color-accent, #C9923B); }
 body.bloom-v2 .v2-lbl-hold { color: var(--color-text-muted, #A9A293); }
-/* NEXT = the "drops next" hero: bigger, gold ring, glow, gentle bob. */
+/* NEXT-IN-LINE hero (the v2NextUp lookahead): calm gold ring (the "live" cue is
+   the ladder caret/halo now); it only POPS when the lookahead actually advances
+   (.pop, JS-gated on a real v2NextUp change) — the per-drop planning beat. */
 body.bloom-v2 .v2-next-hero {
   width: 40px; height: 40px; border-radius: 13px;
   display: flex; align-items: center; justify-content: center;
   box-shadow: 0 0 0 2px #fff, 0 0 0 3px var(--color-accent, #C9923B), 0 4px 12px rgba(201,146,59,.28);
 }
-body.bloom-v2 .v2-next-hero.has-tile { animation: v2Bob 1.7s ease-in-out infinite; }
-@keyframes v2Bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
 body.bloom-v2 .v2-next-hero svg { width: 64%; height: 64%; }
 body.bloom-v2 .v2-next-hero.pop { animation: v2NextPop .34s cubic-bezier(.2,1.5,.4,1); }
 @keyframes v2NextPop { 0% { transform: scale(.82); } 60% { transform: scale(1.16); } 100% { transform: scale(1); } }
@@ -95,9 +116,18 @@ body.bloom-v2 .v2-hold-chip {
   background: #FBF6EA; border: 2px dashed rgba(201,146,59,.4);
   display: flex; align-items: center; justify-content: center; transition: transform .12s, box-shadow .15s;
 }
-body.bloom-v2 .v2-hold-chip.has-tile { border-style: solid; border-color: transparent; box-shadow: 0 2px 7px rgba(120,90,40,.16); }
+body.bloom-v2 .v2-hold-chip.has-tile { border-style: solid; border-color: transparent; box-shadow: 0 2px 7px rgba(120,90,40,.16); position: relative; }
 body.bloom-v2 .v2-hold-chip:active { transform: scale(.9); }
 body.bloom-v2 .v2-hold-chip svg { width: 62%; height: 62%; }
+/* HOLD reads as a side-utility: fenced off the NEXT line + a persistent swap hint when filled. */
+body.bloom-v2 .v2-slot-hold { border-inline-start: 1px solid rgba(0,0,0,.07); padding-inline-start: 12px; }
+html[data-theme="dark"] body.bloom-v2 .v2-slot-hold { border-color: rgba(255,255,255,.08); }
+body.bloom-v2 .v2-hold-chip.has-tile::after {
+  content: '↕'; position: absolute; top: -3px; inset-inline-end: -3px;
+  font-size: 9px; line-height: 1; color: var(--color-accent, #C9923B);
+  background: #fff; border-radius: 50%; padding: 0 2px; box-shadow: 0 1px 3px rgba(0,0,0,.18); pointer-events: none;
+}
+html[data-theme="dark"] body.bloom-v2 .v2-hold-chip.has-tile::after { background: #2A251E; }
 body.bloom-v2 .v2-next-pts { font-size: 12px; font-weight: 800; color: var(--color-accent, #C9923B); margin-inline-start: auto; align-self: center; direction: ltr; unicode-bidi: isolate; }
 /* Tighten on small phones — fires at <=390px (incl. iPhone 13 Pro) to protect board height */
 @media (max-width: 390px) {
@@ -165,6 +195,8 @@ html[data-theme="dark"] #v2-fb-overlay .v2-fb-input { background: #2A251E; color
   body.bloom-v2 .v2-next-hero.has-tile,
   body.bloom-v2 .v2-next-hero.pop,
   body.bloom-v2 #v2-spine .tier-cell.teaser .tier-icon,
-  body.bloom-v2 #v2-spine .tier-cell.climb-pop .tier-icon { animation: none; }
+  body.bloom-v2 #v2-spine .tier-cell.climb-pop .tier-icon,
+  body.bloom-v2 #v2-spine .tier-cell.active .tier-icon,
+  body.bloom-v2 #v2-spine .tier-cell.active .tier-icon::after { animation: none; }
   body.bloom-v2 .v2-ghost-tile, body.bloom-v2 .v2-col-hi, body.bloom-v2 .v2-hold-chip { transition: none; }
 }

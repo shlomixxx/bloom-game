@@ -36757,6 +36757,7 @@ try {
 
   var _v2LastAimCol = -1;
   var _v2Wired = false;
+  var _v2LastNextUp = null;   // last-painted v2NextUp; the NEXT-IN-LINE reveal-pop fires only on a real lookahead change
 
   // ---- Hold / swap slot ----
   function v2SwapHold() {
@@ -36789,13 +36790,15 @@ try {
     if (typeof v2NextUp !== 'undefined' && v2NextUp == null && typeof pickPiece === 'function') {
       try { v2NextUp = pickPiece(); } catch (e) {}
     }
-    // Launch zone = folded HOLD chip + a hero NEXT tile + the next-pair points.
-    // (Kept <=~43px tall so the board stays width-bound at ~90px.)
+    // Launch zone = NEXT-IN-LINE hero (the v2NextUp lookahead) + folded HOLD chip
+    // + the current piece's pair points. The CURRENT piece (nextPiece) is shown by
+    // the ladder active rung ONLY (caret + halo) — no duplication. Kept <=~43px tall
+    // so the board stays width-bound at ~90px.
     if (!row.dataset.built) {
       row.dataset.built = '1';
       row.innerHTML =
-        '<div class="v2-slot v2-slot-next"><span class="v2-slot-lbl v2-lbl-next">⬇ הבא</span>' +
-          '<div class="v2-next-hero" id="v2-cur-box"></div></div>' +
+        '<div class="v2-slot v2-slot-next"><span class="v2-slot-lbl v2-lbl-next">הבא בתור</span>' +
+          '<div class="v2-next-hero" id="v2-cur-box" aria-label="האריח הבא בתור"></div></div>' +
         '<div class="v2-slot v2-slot-hold"><span class="v2-slot-lbl v2-lbl-hold">החזקה</span>' +
           '<button class="v2-hold-chip" id="v2-hold-box" type="button" aria-label="החזק אריח"></button></div>' +
         '<span class="v2-next-pts" id="v2-next-pts"></span>';
@@ -36809,7 +36812,9 @@ try {
       else { el.classList.remove('has-tile'); el.style.background = ''; el.innerHTML = ''; }
     }
     fill('v2-hold-box', heldPiece);
-    fill('v2-cur-box', (typeof nextPiece !== 'undefined' ? nextPiece : 0));
+    // hero shows v2NextUp = the 1-deep lookahead (the piece that drops AFTER the
+    // current one). The current piece lives on the ladder (active rung) only.
+    fill('v2-cur-box', (typeof v2NextUp !== 'undefined' && v2NextUp != null) ? v2NextUp : 0);
     var pts = document.getElementById('v2-next-pts');
     if (pts) {
       try {
@@ -36817,9 +36822,15 @@ try {
         else pts.textContent = '';
       } catch (e) { pts.textContent = ''; }
     }
-    // "new piece arrived" pop on the hero tile
+    // Reveal-pop on the NEXT-IN-LINE hero ONLY when the lookahead actually advanced
+    // (after a drop loads a new v2NextUp) — the planning dopamine beat. A hold-swap
+    // leaves v2NextUp unchanged, so it correctly does NOT pop.
     var hero = document.getElementById('v2-cur-box');
-    if (hero) { try { hero.classList.remove('pop'); void hero.offsetWidth; hero.classList.add('pop'); } catch (e) {} }
+    var nu = (typeof v2NextUp !== 'undefined') ? v2NextUp : null;
+    if (hero && nu !== _v2LastNextUp) {
+      try { hero.classList.remove('pop'); void hero.offsetWidth; hero.classList.add('pop'); } catch (e) {}
+    }
+    _v2LastNextUp = nu;
     v2PaintClimb();
   }
 
