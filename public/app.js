@@ -36794,9 +36794,10 @@ try {
     if (!row.dataset.built) {
       row.dataset.built = '1';
       row.innerHTML =
-        '<button class="v2-hold-chip" id="v2-hold-box" type="button" aria-label="החלף אריח"></button>' +
-        '<span class="v2-next-lbl">הבא</span>' +
-        '<div class="v2-next-hero" id="v2-cur-box"></div>' +
+        '<div class="v2-slot v2-slot-next"><span class="v2-slot-lbl v2-lbl-next">⬇ הבא</span>' +
+          '<div class="v2-next-hero" id="v2-cur-box"></div></div>' +
+        '<div class="v2-slot v2-slot-hold"><span class="v2-slot-lbl v2-lbl-hold">החזקה</span>' +
+          '<button class="v2-hold-chip" id="v2-hold-box" type="button" aria-label="החזק אריח"></button></div>' +
         '<span class="v2-next-pts" id="v2-next-pts"></span>';
       var hb = document.getElementById('v2-hold-box');
       if (hb) hb.addEventListener('click', function(e) { e.stopPropagation(); v2SwapHold(); });
@@ -37005,8 +37006,14 @@ try {
         var byGrid = (rows > 0 && gh > 0) ? ((row + 1) * (gh / rows)) : 0;
         var dist = Math.round(Math.max(byCell, byGrid));
         if (!(dist > 6)) { resolve(); return; } // landed at the very top → no real fall
-        var dur = Math.min(360, Math.max(150, Math.round(dist * 1.05)));
-        try { if (typeof gameSpeedScale === 'function') dur = Math.max(90, Math.round(dur * gameSpeedScale())); } catch (e) {}
+        // Snappy by default (impatient tappers): ~full-column lands in <=180ms.
+        // Scale with the admin game speed (50%=2x fast, 200%=2x slow — same as the
+        // engine's gsleep), then HARD-CLAMP <=200ms so the fall never feels
+        // sluggish even when the game is globally slowed, and never gates fast
+        // tapping. (drop() awaits this; the queued-tap system catches taps mid-fall.)
+        var dur = Math.min(180, Math.max(70, Math.round(dist * 0.30)));
+        try { if (typeof gameSpeedScale === 'function') dur = Math.round(dur * gameSpeedScale()); } catch (e) {}
+        dur = Math.max(55, Math.min(200, dur));
         cell.style.willChange = 'transform';
         cell.style.transition = 'none';
         cell.style.transform = 'translateY(' + (-dist) + 'px)';

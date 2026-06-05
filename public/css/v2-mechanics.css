@@ -64,36 +64,46 @@ body.bloom-v2 #v2-spine .tier-cell.climb-pop .tier-icon { animation: v2ClimbPop 
   100% { box-shadow: 0 0 0 0 rgba(201,146,59,0); filter: brightness(1); }
 }
 
-/* Launch zone: HOLD · hero NEXT · points — keep <= ~43px total */
+/* Launch zone: TWO clearly-labeled slots so there is ZERO ambiguity about which
+   tile drops next. NEXT = the unmistakable drop piece (gold ring + glow + bob +
+   "⬇ הבא" label directly above it); HOLD = obviously secondary ("החזקה" label,
+   dashed when empty). RTL so the NEXT slot leads. Per-slot stacked labels add a
+   few px but kill the confusion; kept ~50px so the board stays ~90px. */
 #v2-launch { display: none; }            /* classic: inert */
 body.bloom-v2 #v2-launch {
-  display: flex; align-items: center; gap: 8px; direction: ltr;
-  padding: 2px 12px 4px; flex: 0 0 auto; min-height: 0;
+  display: flex; align-items: flex-end; gap: 16px; direction: rtl;
+  padding: 1px 14px 3px; flex: 0 0 auto; min-height: 0;
 }
+body.bloom-v2 .v2-slot { display: flex; flex-direction: column; align-items: center; gap: 1px; }
+body.bloom-v2 .v2-slot-lbl { font-size: 8.5px; font-weight: 800; letter-spacing: .2px; line-height: 1.1; white-space: nowrap; }
+body.bloom-v2 .v2-lbl-next { color: var(--color-accent, #C9923B); }
+body.bloom-v2 .v2-lbl-hold { color: var(--color-text-muted, #A9A293); }
+/* NEXT = the "drops next" hero: bigger, gold ring, glow, gentle bob. */
+body.bloom-v2 .v2-next-hero {
+  width: 40px; height: 40px; border-radius: 13px;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 0 0 2px #fff, 0 0 0 3px var(--color-accent, #C9923B), 0 4px 12px rgba(201,146,59,.28);
+}
+body.bloom-v2 .v2-next-hero.has-tile { animation: v2Bob 1.7s ease-in-out infinite; }
+@keyframes v2Bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
+body.bloom-v2 .v2-next-hero svg { width: 64%; height: 64%; }
+body.bloom-v2 .v2-next-hero.pop { animation: v2NextPop .34s cubic-bezier(.2,1.5,.4,1); }
+@keyframes v2NextPop { 0% { transform: scale(.82); } 60% { transform: scale(1.16); } 100% { transform: scale(1); } }
+/* HOLD = secondary, clearly tap-to-hold. */
 body.bloom-v2 .v2-hold-chip {
-  width: 36px; height: 36px; border-radius: 11px; flex: 0 0 auto; cursor: pointer;
+  width: 34px; height: 34px; border-radius: 10px; cursor: pointer;
   background: #FBF6EA; border: 2px dashed rgba(201,146,59,.4);
   display: flex; align-items: center; justify-content: center; transition: transform .12s, box-shadow .15s;
 }
 body.bloom-v2 .v2-hold-chip.has-tile { border-style: solid; border-color: transparent; box-shadow: 0 2px 7px rgba(120,90,40,.16); }
 body.bloom-v2 .v2-hold-chip:active { transform: scale(.9); }
 body.bloom-v2 .v2-hold-chip svg { width: 62%; height: 62%; }
-body.bloom-v2 .v2-next-lbl { font-size: 9px; font-weight: 800; color: #C9923B; letter-spacing: .3px; }
-body.bloom-v2 .v2-next-hero {
-  width: 40px; height: 40px; border-radius: 13px; flex: 0 0 auto;
-  display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(120,90,40,.18);
-}
-body.bloom-v2 .v2-next-hero.has-tile { animation: v2Bob 1.7s ease-in-out infinite; }
-@keyframes v2Bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
-body.bloom-v2 .v2-next-hero svg { width: 62%; height: 62%; }
-body.bloom-v2 .v2-next-hero.pop { animation: v2NextPop .34s cubic-bezier(.2,1.5,.4,1); }
-@keyframes v2NextPop { 0% { transform: scale(.82); } 60% { transform: scale(1.16); } 100% { transform: scale(1); } }
-body.bloom-v2 .v2-next-pts { font-size: 11px; font-weight: 800; color: var(--color-text-muted, #6F6E68); margin-inline-start: auto; direction: ltr; unicode-bidi: isolate; }
-/* Tighten on small phones — fire at <=390px (SE + dynamic-board cases) to protect board height */
+body.bloom-v2 .v2-next-pts { font-size: 12px; font-weight: 800; color: var(--color-accent, #C9923B); margin-inline-start: auto; align-self: center; direction: ltr; unicode-bidi: isolate; }
+/* Tighten on small phones — fires at <=390px (incl. iPhone 13 Pro) to protect board height */
 @media (max-width: 390px) {
   body.bloom-v2 #v2-spine .tier-icon { width: 26px; height: 26px; }
-  body.bloom-v2 .v2-next-hero { width: 36px; height: 36px; }
-  body.bloom-v2 .v2-hold-chip { width: 34px; height: 34px; }
+  body.bloom-v2 .v2-next-hero { width: 38px; height: 38px; }
+  body.bloom-v2 .v2-hold-chip { width: 32px; height: 32px; }
 }
 html[data-theme="dark"] body.bloom-v2 #v2-spine { border-color: rgba(255,255,255,.06); }
 html[data-theme="dark"] body.bloom-v2 .v2-hold-chip { background: #2A251E; border-color: rgba(201,146,59,.45); }
