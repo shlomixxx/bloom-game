@@ -204,6 +204,7 @@
         var byCell = (cellRect.top - gridRect.top) + cellRect.height;
         var byGrid = (rows > 0) ? ((row + 1) * (gridRect.height / rows)) : 0;
         var dist = Math.round(Math.max(byCell, byGrid));
+        try { window.__v2FallDebug = { row: row, col: col, rows: rows, gridH: Math.round(gridRect.height), cellTop: Math.round(cellRect.top - gridRect.top), cellH: Math.round(cellRect.height), byCell: Math.round(byCell), byGrid: Math.round(byGrid), dist: dist }; } catch (e) {}
         if (!(dist > 6)) { resolve(); return; } // landed at the very top → no real fall
         var dur = Math.min(360, Math.max(150, Math.round(dist * 1.05)));
         try { if (typeof gameSpeedScale === 'function') dur = Math.max(90, Math.round(dur * gameSpeedScale())); } catch (e) {}
