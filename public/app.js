@@ -5379,6 +5379,9 @@
       // in EXCLUDE below so a reward overlay can't be ESC-skipped.
       '.login-cal-overlay, .inbox-overlay, .wr-overlay, .wr-share-overlay, ' +
       '.live-race-result-overlay, .pet-name-overlay, ' +
+      // GV.2 beta-feedback prompt — pops over game-over; its ✕ has
+      // aria-label="סגור" so the dismiss handler clicks it on ESC.
+      '#v2-fb-overlay, ' +
       // .info-modal is the legacy class used by 14+ surfaces (name prompt,
       // country picker, score info, share dialog, shop, etc.). Adding here
       // so ESC + back-gesture close all of them through the unified path.
@@ -6335,8 +6338,9 @@
     // event is active. Re-fetch every 60s while home open.
     if (window.__bloomEvents && typeof window.__bloomEvents.maybeShow === 'function') {
       setTimeout(function() { try { window.__bloomEvents.maybeShow(); } catch (e) {} }, 400);
-      setInterval(function() {
-        if (!document.getElementById('home-screen')) return;
+      if (homeV2EventsTimer) clearInterval(homeV2EventsTimer);
+      homeV2EventsTimer = setInterval(function() {
+        if (!document.getElementById('home-screen')) { clearInterval(homeV2EventsTimer); homeV2EventsTimer = null; return; }
         if (window.__bloomEvents) try { window.__bloomEvents.refresh(); } catch (e) {}
       }, 60 * 1000);
     }
@@ -6354,8 +6358,9 @@
     // surfaces without requiring a navigation.
     if (window.__bloomInbox && typeof window.__bloomInbox.mount === 'function') {
       try { window.__bloomInbox.mount(); } catch (e) {}
-      setInterval(function() {
-        if (!document.getElementById('home-screen')) return;
+      if (homeV2InboxTimer) clearInterval(homeV2InboxTimer);
+      homeV2InboxTimer = setInterval(function() {
+        if (!document.getElementById('home-screen')) { clearInterval(homeV2InboxTimer); homeV2InboxTimer = null; return; }
         if (window.__bloomInbox && typeof window.__bloomInbox.refresh === 'function') {
           try { window.__bloomInbox.refresh(); } catch (e) {}
         }
@@ -6430,6 +6435,8 @@
 
   function hideHomeV2() {
     stopHomeV2LivePulse();
+    if (homeV2EventsTimer) { clearInterval(homeV2EventsTimer); homeV2EventsTimer = null; }
+    if (homeV2InboxTimer) { clearInterval(homeV2InboxTimer); homeV2InboxTimer = null; }
     // Stop the dynamic-boards FOMO tick so we don't keep updating a
     // detached DOM node every minute.
     if (typeof window.stopDynamicBoardsTick === 'function') window.stopDynamicBoardsTick();
@@ -7317,6 +7324,10 @@
 
   // ── §A2: live-pulse with tiered fallback (never hides) ──
   let homeV2PulseTimer = null;
+  // D6 — these were created fresh on every showHomeV2() with no teardown,
+  // leaking a 60s + 90s interval per home↔game↔home cycle. Stored + cleared.
+  let homeV2EventsTimer = null;
+  let homeV2InboxTimer = null;
   function startHomeV2LivePulse() {
     stopHomeV2LivePulse();
     refreshHomeV2LivePulse();
@@ -13025,7 +13036,19 @@
     const cols = getBoardCols();
     const rows = getBoardRows();
     const W = Math.max(0, wrap.clientWidth - 2 * padX);
-    const H = Math.max(0, wrap.clientHeight - padY - 6);
+    // GV.4.x — in v2 the board fills the full height (the tier-bar is
+    // relocated into the spine), so the floating booster strip would
+    // overlap the bottom row. When the strip is mounted, reserve space at
+    // the bottom so the board sizes to sit above it. The grid is
+    // flex-start in .grid-wrap, so the freed space lands at the bottom
+    // exactly where the strip floats. Classic keeps its natural bottom
+    // gap, so this only matters for v2.
+    let extraBottom = 0;
+    if (document.body.classList.contains('bloom-v2') &&
+        document.getElementById('booster-strip')) {
+      extraBottom = 64;
+    }
+    const H = Math.max(0, wrap.clientHeight - padY - 6 - extraBottom);
     if (W <= 0 || H <= 0) {
       // BUG FIX 2026-06-03 ("tiles disappear" / empty grid): the wrap was
       // momentarily collapsed (mid-transition, or before a late-mounting
@@ -22722,8 +22745,20 @@
   window.__bloomStartMode = function(modeName, opts) {
     var allowed = { daily: 1, practice: 1, contest: 1, dynamic: 1, challenge: 1 };
     if (!allowed[modeName]) return false;
-    try { init(modeName, opts || { fresh: true }); return true; }
-    catch (e) { return false; }
+    try {
+      // The home Play CTA tears down the home screen via hideHomeV2 before
+      // init(). Deep-link entry (inbox / push / ?mode= / friend-challenge)
+      // skipped that, so #home-screen (z:250) stayed mounted ON TOP of the
+      // running game. Mirror the CTA teardown here.
+      if (typeof hideHomeV2 === 'function') { try { hideHomeV2(); } catch (e) {} }
+      var h = document.getElementById('home-screen');
+      if (h) h.remove();
+      if (typeof window.__bloomUnmountBottomNav === 'function') {
+        try { window.__bloomUnmountBottomNav(); } catch (e) {}
+      }
+      init(modeName, opts || { fresh: true });
+      return true;
+    } catch (e) { return false; }
   };
 
   // ============ PWA INSTALL PROMPTS ============
@@ -25179,11 +25214,21 @@
     // Position after starter/deals banners if present.
     var sp = document.getElementById('starter-pack-home-banner');
     var dd = document.getElementById('daily-deal-home-banner');
+    // IS.1/IS.2 crash class: the reference banner (daily-deal / starter)
+    // may have been relocated into a bottom-nav tab, so its nextSibling
+    // is no longer a child of homeEl → insertBefore throws NotFoundError.
+    // Guard the parent + try/catch with an appendChild fallback.
     var insertAfter = dd || sp;
-    if (insertAfter && insertAfter.nextSibling) {
-      homeEl.insertBefore(banner, insertAfter.nextSibling);
-    } else {
-      homeEl.insertBefore(banner, homeEl.firstChild);
+    try {
+      if (insertAfter && insertAfter.parentNode === homeEl && insertAfter.nextSibling) {
+        homeEl.insertBefore(banner, insertAfter.nextSibling);
+      } else if (homeEl.firstChild) {
+        homeEl.insertBefore(banner, homeEl.firstChild);
+      } else {
+        homeEl.appendChild(banner);
+      }
+    } catch (e) {
+      try { homeEl.appendChild(banner); } catch (e2) {}
     }
     banner.querySelector('.gacha-banner-cta').onclick = function() { showGachaModal(data); };
     // No dismiss/✕ — gacha is a permanent feature surface, not deletable.
@@ -31172,11 +31217,14 @@ function maybeMountBoosterStrip() {
   // Tear down any previous strip so a mode-switch doesn't leave a stale one.
   var existing = document.getElementById('booster-strip');
   if (existing) existing.remove();
-  if (!boostersAreEnabled()) return;
+  // Re-fit the board after a possible removal so the v2 board reclaims the
+  // reserved bottom space when the strip isn't mounted (fitGrid keys off
+  // #booster-strip presence).
+  if (!boostersAreEnabled()) { try { if (typeof fitGrid === 'function') fitGrid(); } catch (e) {} return; }
   // TB.1 — game-over guard. After game-over the strip would float over
   // the over screen, which (a) is useless (boosters need an in-progress
   // game) and (b) overlays the share / play-again CTAs. Bail early.
-  if (window.__bloomGameOver) return;
+  if (window.__bloomGameOver) { try { if (typeof fitGrid === 'function') fitGrid(); } catch (e) {} return; }
   // TB.1 — bottom floating bar instead of an in-flow strip above the
   // grid. The old position cost ~73px from the grid height (margin +
   // padding + emoji + label + price), shrinking each cell ~20% on
@@ -31190,6 +31238,10 @@ function maybeMountBoosterStrip() {
   strip.innerHTML = renderBoosterStripInner();
   document.body.appendChild(strip);
   wireBoosterStrip(strip);
+  // v2: re-fit so the board shrinks just enough to clear the floating strip
+  // (the strip mounts on document.body, so the ResizeObserver on grid-wrap
+  // never fires — we must trigger the re-fit explicitly).
+  try { if (typeof fitGrid === 'function') fitGrid(); } catch (e) {}
 }
 
 function renderBoosterStripInner() {
@@ -34913,7 +34965,7 @@ try {
       teaser: ['5 דרגות נדירות — common עד mythic',
                'משיכה חופשית אחת ביום',
                'אחרי 50 משיכות — מובטח סקין אגדי'],
-      tileSelector: '#gacha-banner', openGlobal: '__bloomGacha.showModal' },
+      tileSelector: '#gacha-home-banner' },
     { id: 'bundles', emoji: '🎁', name: 'חבילות חג', category: 'economy', minLevel: 18,
       description: 'חבילות מוגבלות בזמן — חנוכה / ולנטיין / בלאק פריידי',
       teaser: ['ערכת חבילה ייחודית לכל חג',
@@ -34966,7 +35018,7 @@ try {
                'בכל יום ששניכם תשחקו = +100💎 לאחד',
                'תעקוב מי שיחק היום ומי לא'],
       tileSelector: '#dyn-friends-pill', openGlobal: 'showFriendsModal' },
-    { id: 'clan', emoji: '🛡', name: 'קלאן', category: 'social', minLevel: 8,
+    { id: 'clan', emoji: '🛡', name: 'קלאן', category: 'social', minLevel: 3,
       description: 'הצטרף לקלאן — מטרה משותפת + פרסים יומיים',
       teaser: ['30 שחקנים בקלאן',
                'מטרה משותפת: 30 כתרים = 200💎 לאיש',
@@ -35009,7 +35061,7 @@ try {
       teaser: ['💗 לטף יום-יומי = 20💎',
                '🍽 האכל = +50 XP (10💎)',
                'חוזר בעצב אם לא ביקרת 48ש'],
-      tileSelector: '#pet-tile' },
+      tileSelector: '#pet-home-widget' },
     { id: 'ach_lb', emoji: '🏅', name: 'לוח הישגים', category: 'collection', minLevel: 8,
       description: 'דירוג גלובלי לפי מספר הישגים — תחרות לאוסף',
       teaser: ['11 הישגים בכל לוח דינמי',
@@ -37290,6 +37342,13 @@ try {
       if (seen[id]) return;
       var el = document.getElementById(id);
       if (!el || el.style.display === 'none') return;
+      // D4 — the bottom-nav observer relocates tiles into hidden tab bodies.
+      // el.style.display only checks the tile's own inline display, not an
+      // ancestor tab's. offsetParent === null catches an ancestor that's
+      // display:none, so the balloon never points at empty top-left space.
+      if (el.offsetParent === null) return;
+      var r0 = el.getBoundingClientRect();
+      if (r0.width === 0 && r0.height === 0) return;
       // Only show ONE tutorial at a time to avoid overload.
       if (document.querySelector('.polish-micro-tooltip')) return;
       showMicroTooltip(el, TUTORIAL_TEXT[id]);

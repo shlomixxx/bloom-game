@@ -1630,7 +1630,19 @@
     const cols = getBoardCols();
     const rows = getBoardRows();
     const W = Math.max(0, wrap.clientWidth - 2 * padX);
-    const H = Math.max(0, wrap.clientHeight - padY - 6);
+    // GV.4.x — in v2 the board fills the full height (the tier-bar is
+    // relocated into the spine), so the floating booster strip would
+    // overlap the bottom row. When the strip is mounted, reserve space at
+    // the bottom so the board sizes to sit above it. The grid is
+    // flex-start in .grid-wrap, so the freed space lands at the bottom
+    // exactly where the strip floats. Classic keeps its natural bottom
+    // gap, so this only matters for v2.
+    let extraBottom = 0;
+    if (document.body.classList.contains('bloom-v2') &&
+        document.getElementById('booster-strip')) {
+      extraBottom = 64;
+    }
+    const H = Math.max(0, wrap.clientHeight - padY - 6 - extraBottom);
     if (W <= 0 || H <= 0) {
       // BUG FIX 2026-06-03 ("tiles disappear" / empty grid): the wrap was
       // momentarily collapsed (mid-transition, or before a late-mounting

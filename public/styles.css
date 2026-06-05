@@ -1922,7 +1922,11 @@
      reads as "do something" without being alarming. */
   .idle-warn-banner {
     position: fixed;
-    top: calc(env(safe-area-inset-top, 0px) + 40px);
+    /* Mid-screen over the (static, idle) board — clears the header, the v2
+       spine, and the bottom booster strip. It's transient (clears on the
+       first drop) so briefly overlaying the idle board is fine, and it no
+       longer collides with the mode-chip / ⋯ / 🔊 header buttons. */
+    top: 42%;
     left: 50%;
     transform: translateX(-50%);
     z-index: var(--z-floating, 50);

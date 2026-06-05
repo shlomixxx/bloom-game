@@ -976,6 +976,9 @@
       // in EXCLUDE below so a reward overlay can't be ESC-skipped.
       '.login-cal-overlay, .inbox-overlay, .wr-overlay, .wr-share-overlay, ' +
       '.live-race-result-overlay, .pet-name-overlay, ' +
+      // GV.2 beta-feedback prompt — pops over game-over; its ✕ has
+      // aria-label="סגור" so the dismiss handler clicks it on ESC.
+      '#v2-fb-overlay, ' +
       // .info-modal is the legacy class used by 14+ surfaces (name prompt,
       // country picker, score info, share dialog, shop, etc.). Adding here
       // so ESC + back-gesture close all of them through the unified path.

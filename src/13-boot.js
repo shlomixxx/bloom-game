@@ -678,8 +678,20 @@
   window.__bloomStartMode = function(modeName, opts) {
     var allowed = { daily: 1, practice: 1, contest: 1, dynamic: 1, challenge: 1 };
     if (!allowed[modeName]) return false;
-    try { init(modeName, opts || { fresh: true }); return true; }
-    catch (e) { return false; }
+    try {
+      // The home Play CTA tears down the home screen via hideHomeV2 before
+      // init(). Deep-link entry (inbox / push / ?mode= / friend-challenge)
+      // skipped that, so #home-screen (z:250) stayed mounted ON TOP of the
+      // running game. Mirror the CTA teardown here.
+      if (typeof hideHomeV2 === 'function') { try { hideHomeV2(); } catch (e) {} }
+      var h = document.getElementById('home-screen');
+      if (h) h.remove();
+      if (typeof window.__bloomUnmountBottomNav === 'function') {
+        try { window.__bloomUnmountBottomNav(); } catch (e) {}
+      }
+      init(modeName, opts || { fresh: true });
+      return true;
+    } catch (e) { return false; }
   };
 
   // ============ PWA INSTALL PROMPTS ============

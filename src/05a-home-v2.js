@@ -554,8 +554,9 @@
     // event is active. Re-fetch every 60s while home open.
     if (window.__bloomEvents && typeof window.__bloomEvents.maybeShow === 'function') {
       setTimeout(function() { try { window.__bloomEvents.maybeShow(); } catch (e) {} }, 400);
-      setInterval(function() {
-        if (!document.getElementById('home-screen')) return;
+      if (homeV2EventsTimer) clearInterval(homeV2EventsTimer);
+      homeV2EventsTimer = setInterval(function() {
+        if (!document.getElementById('home-screen')) { clearInterval(homeV2EventsTimer); homeV2EventsTimer = null; return; }
         if (window.__bloomEvents) try { window.__bloomEvents.refresh(); } catch (e) {}
       }, 60 * 1000);
     }
@@ -573,8 +574,9 @@
     // surfaces without requiring a navigation.
     if (window.__bloomInbox && typeof window.__bloomInbox.mount === 'function') {
       try { window.__bloomInbox.mount(); } catch (e) {}
-      setInterval(function() {
-        if (!document.getElementById('home-screen')) return;
+      if (homeV2InboxTimer) clearInterval(homeV2InboxTimer);
+      homeV2InboxTimer = setInterval(function() {
+        if (!document.getElementById('home-screen')) { clearInterval(homeV2InboxTimer); homeV2InboxTimer = null; return; }
         if (window.__bloomInbox && typeof window.__bloomInbox.refresh === 'function') {
           try { window.__bloomInbox.refresh(); } catch (e) {}
         }
@@ -649,6 +651,8 @@
 
   function hideHomeV2() {
     stopHomeV2LivePulse();
+    if (homeV2EventsTimer) { clearInterval(homeV2EventsTimer); homeV2EventsTimer = null; }
+    if (homeV2InboxTimer) { clearInterval(homeV2InboxTimer); homeV2InboxTimer = null; }
     // Stop the dynamic-boards FOMO tick so we don't keep updating a
     // detached DOM node every minute.
     if (typeof window.stopDynamicBoardsTick === 'function') window.stopDynamicBoardsTick();
@@ -1536,6 +1540,10 @@
 
   // ── §A2: live-pulse with tiered fallback (never hides) ──
   let homeV2PulseTimer = null;
+  // D6 — these were created fresh on every showHomeV2() with no teardown,
+  // leaking a 60s + 90s interval per home↔game↔home cycle. Stored + cleared.
+  let homeV2EventsTimer = null;
+  let homeV2InboxTimer = null;
   function startHomeV2LivePulse() {
     stopHomeV2LivePulse();
     refreshHomeV2LivePulse();

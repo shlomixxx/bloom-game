@@ -152,6 +152,13 @@
       if (seen[id]) return;
       var el = document.getElementById(id);
       if (!el || el.style.display === 'none') return;
+      // D4 — the bottom-nav observer relocates tiles into hidden tab bodies.
+      // el.style.display only checks the tile's own inline display, not an
+      // ancestor tab's. offsetParent === null catches an ancestor that's
+      // display:none, so the balloon never points at empty top-left space.
+      if (el.offsetParent === null) return;
+      var r0 = el.getBoundingClientRect();
+      if (r0.width === 0 && r0.height === 0) return;
       // Only show ONE tutorial at a time to avoid overload.
       if (document.querySelector('.polish-micro-tooltip')) return;
       showMicroTooltip(el, TUTORIAL_TEXT[id]);

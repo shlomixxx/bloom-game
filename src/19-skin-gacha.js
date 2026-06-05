@@ -73,11 +73,21 @@
     // Position after starter/deals banners if present.
     var sp = document.getElementById('starter-pack-home-banner');
     var dd = document.getElementById('daily-deal-home-banner');
+    // IS.1/IS.2 crash class: the reference banner (daily-deal / starter)
+    // may have been relocated into a bottom-nav tab, so its nextSibling
+    // is no longer a child of homeEl → insertBefore throws NotFoundError.
+    // Guard the parent + try/catch with an appendChild fallback.
     var insertAfter = dd || sp;
-    if (insertAfter && insertAfter.nextSibling) {
-      homeEl.insertBefore(banner, insertAfter.nextSibling);
-    } else {
-      homeEl.insertBefore(banner, homeEl.firstChild);
+    try {
+      if (insertAfter && insertAfter.parentNode === homeEl && insertAfter.nextSibling) {
+        homeEl.insertBefore(banner, insertAfter.nextSibling);
+      } else if (homeEl.firstChild) {
+        homeEl.insertBefore(banner, homeEl.firstChild);
+      } else {
+        homeEl.appendChild(banner);
+      }
+    } catch (e) {
+      try { homeEl.appendChild(banner); } catch (e2) {}
     }
     banner.querySelector('.gacha-banner-cta').onclick = function() { showGachaModal(data); };
     // No dismiss/✕ — gacha is a permanent feature surface, not deletable.

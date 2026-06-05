@@ -49,11 +49,14 @@ function maybeMountBoosterStrip() {
   // Tear down any previous strip so a mode-switch doesn't leave a stale one.
   var existing = document.getElementById('booster-strip');
   if (existing) existing.remove();
-  if (!boostersAreEnabled()) return;
+  // Re-fit the board after a possible removal so the v2 board reclaims the
+  // reserved bottom space when the strip isn't mounted (fitGrid keys off
+  // #booster-strip presence).
+  if (!boostersAreEnabled()) { try { if (typeof fitGrid === 'function') fitGrid(); } catch (e) {} return; }
   // TB.1 — game-over guard. After game-over the strip would float over
   // the over screen, which (a) is useless (boosters need an in-progress
   // game) and (b) overlays the share / play-again CTAs. Bail early.
-  if (window.__bloomGameOver) return;
+  if (window.__bloomGameOver) { try { if (typeof fitGrid === 'function') fitGrid(); } catch (e) {} return; }
   // TB.1 — bottom floating bar instead of an in-flow strip above the
   // grid. The old position cost ~73px from the grid height (margin +
   // padding + emoji + label + price), shrinking each cell ~20% on
@@ -67,6 +70,10 @@ function maybeMountBoosterStrip() {
   strip.innerHTML = renderBoosterStripInner();
   document.body.appendChild(strip);
   wireBoosterStrip(strip);
+  // v2: re-fit so the board shrinks just enough to clear the floating strip
+  // (the strip mounts on document.body, so the ResizeObserver on grid-wrap
+  // never fires — we must trigger the re-fit explicitly).
+  try { if (typeof fitGrid === 'function') fitGrid(); } catch (e) {}
 }
 
 function renderBoosterStripInner() {
