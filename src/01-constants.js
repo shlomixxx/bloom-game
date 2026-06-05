@@ -338,6 +338,9 @@
   // v2 1-deep next-piece lookahead so the launch row can preview what's coming.
   // Classic never reads it. Lazily picked in rollNextPiece; reset in init().
   var v2NextUp = null;
+  // v2 gravity-settle: applyGravity() pushes {toR,fromR,c} per moved tile; the
+  // next render() FLIP-slides those cells from old→new row, then clears it.
+  var _v2GravityMoves = [];
 
   // Rebuild SKIN_PACKS from the server's skin_configurations catalog. Called
   // at boot; falls back silently to the hardcoded packs above if the fetch

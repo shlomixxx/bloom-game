@@ -1604,9 +1604,14 @@
     if (activeEvent && !opts.over) {
       requestAnimationFrame(repositionEventOverlay);
     }
-    // GV.4 — paint the v2 board layers (hold chip + ghost/drag aim). Self-gated
-    // on v2On(); a pure no-op in classic.
-    try { if (!opts.over && v2On() && typeof paintV2Layers === 'function') paintV2Layers(); } catch (e) {}
+    // GV.4 — paint the v2 board layers (launch row + ghost/drag aim) + play the
+    // gravity-settle slide. Self-gated on v2On(); a pure no-op in classic.
+    try {
+      if (!opts.over && typeof v2On === 'function' && v2On()) {
+        if (typeof paintV2Layers === 'function') paintV2Layers();
+        if (typeof playV2GravitySlide === 'function') playV2GravitySlide();
+      }
+    } catch (e) {}
   }
 
   document.getElementById('reset').onclick = function() {

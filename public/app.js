@@ -338,6 +338,9 @@
   // v2 1-deep next-piece lookahead so the launch row can preview what's coming.
   // Classic never reads it. Lazily picked in rollNextPiece; reset in init().
   var v2NextUp = null;
+  // v2 gravity-settle: applyGravity() pushes {toR,fromR,c} per moved tile; the
+  // next render() FLIP-slides those cells from old→new row, then clears it.
+  var _v2GravityMoves = [];
 
   // Rebuild SKIN_PACKS from the server's skin_configurations catalog. Called
   // at boot; falls back silently to the hardcoded packs above if the fetch
@@ -16202,6 +16205,7 @@
     grid = Array.from({length: getBoardRows()}, function() { return Array(getBoardCols()).fill(0); });
     score = 0; highestTier = 1; busy = false; dropsCount = 0;
     heldPiece = null; v2NextUp = null; // GV.4 — clear the v2 hold slot + next-up lookahead on every new game (no-op in classic)
+    try { _v2GravityMoves.length = 0; } catch (e) {} // GV.4.2 — clear any stale gravity-slide moves
     // A9 — Reset ghost-mode drop recording for this fresh game.
     try { window.__bloomDropsSeq = []; } catch (e) {}
     window.__bloomGameOver = false; // new game = active again
@@ -18358,7 +18362,12 @@
           if (r - 1 < w) w = r - 1;
           continue;
         }
-        if (r !== w) { grid[w][c] = grid[r][c]; grid[r][c] = 0; moves++; }
+        if (r !== w) {
+          grid[w][c] = grid[r][c]; grid[r][c] = 0; moves++;
+          // GV.4.2 — record the move so render() can FLIP-slide this tile from
+          // its old row to its new row (smooth gravity settle, v2 only).
+          if (typeof v2On === 'function' && v2On()) { try { _v2GravityMoves.push({ toR: w, fromR: r, c: c }); } catch (e) {} }
+        }
         w--;
       }
     }
@@ -21946,9 +21955,14 @@
     if (activeEvent && !opts.over) {
       requestAnimationFrame(repositionEventOverlay);
     }
-    // GV.4 — paint the v2 board layers (hold chip + ghost/drag aim). Self-gated
-    // on v2On(); a pure no-op in classic.
-    try { if (!opts.over && v2On() && typeof paintV2Layers === 'function') paintV2Layers(); } catch (e) {}
+    // GV.4 — paint the v2 board layers (launch row + ghost/drag aim) + play the
+    // gravity-settle slide. Self-gated on v2On(); a pure no-op in classic.
+    try {
+      if (!opts.over && typeof v2On === 'function' && v2On()) {
+        if (typeof paintV2Layers === 'function') paintV2Layers();
+        if (typeof playV2GravitySlide === 'function') playV2GravitySlide();
+      }
+    } catch (e) {}
   }
 
   document.getElementById('reset').onclick = function() {
@@ -36869,6 +36883,36 @@ try {
     wrap.addEventListener('pointermove', onMove);
     wrap.addEventListener('pointerleave', function() { if (v2On()) v2ClearAim(); });
     wrap.addEventListener('pointerup', function() { /* the cell's onclick performs the drop; render() repaints */ });
+  }
+
+  // ---- Gravity settle: FLIP-slide tiles from old→new row after a merge ----
+  // applyGravity() recorded the exact {toR,fromR,c} moves; we render the tile at
+  // its NEW cell but start it offset to its OLD position and transition to rest,
+  // so it visibly slides down instead of teleporting. Classic rebuilds the grid
+  // DOM each render (no persistent tiles), so this FLIP is how we animate it.
+  function playV2GravitySlide() {
+    if (!v2On()) return;
+    if (typeof _v2GravityMoves === 'undefined' || !_v2GravityMoves || !_v2GravityMoves.length) return;
+    var moves = _v2GravityMoves.slice();
+    _v2GravityMoves.length = 0; // consume
+    var gridEl = document.getElementById('grid'); if (!gridEl) return;
+    for (var i = 0; i < moves.length; i++) {
+      (function(m) {
+        try {
+          var toCell = gridEl.querySelector('.cell[data-r="' + m.toR + '"][data-c="' + m.c + '"]');
+          var fromCell = gridEl.querySelector('.cell[data-r="' + m.fromR + '"][data-c="' + m.c + '"]');
+          if (!toCell || !fromCell) return;
+          var dy = toCell.getBoundingClientRect().top - fromCell.getBoundingClientRect().top; // >0 = moved down
+          if (!dy) return;
+          toCell.style.transition = 'none';
+          toCell.style.transform = 'translateY(' + (-dy) + 'px)';
+          void toCell.offsetWidth; // reflow so the start position registers
+          toCell.style.transition = 'transform .17s cubic-bezier(.34,1.08,.64,1)';
+          toCell.style.transform = 'translateY(0)';
+          setTimeout(function() { try { toCell.style.transition = ''; toCell.style.transform = ''; } catch (e) {} }, 230);
+        } catch (e) {}
+      })(moves[i]);
+    }
   }
 
   // ---- Repaint hook, called from render() (gated) ----

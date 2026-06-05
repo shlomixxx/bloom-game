@@ -145,6 +145,36 @@
     wrap.addEventListener('pointerup', function() { /* the cell's onclick performs the drop; render() repaints */ });
   }
 
+  // ---- Gravity settle: FLIP-slide tiles from old→new row after a merge ----
+  // applyGravity() recorded the exact {toR,fromR,c} moves; we render the tile at
+  // its NEW cell but start it offset to its OLD position and transition to rest,
+  // so it visibly slides down instead of teleporting. Classic rebuilds the grid
+  // DOM each render (no persistent tiles), so this FLIP is how we animate it.
+  function playV2GravitySlide() {
+    if (!v2On()) return;
+    if (typeof _v2GravityMoves === 'undefined' || !_v2GravityMoves || !_v2GravityMoves.length) return;
+    var moves = _v2GravityMoves.slice();
+    _v2GravityMoves.length = 0; // consume
+    var gridEl = document.getElementById('grid'); if (!gridEl) return;
+    for (var i = 0; i < moves.length; i++) {
+      (function(m) {
+        try {
+          var toCell = gridEl.querySelector('.cell[data-r="' + m.toR + '"][data-c="' + m.c + '"]');
+          var fromCell = gridEl.querySelector('.cell[data-r="' + m.fromR + '"][data-c="' + m.c + '"]');
+          if (!toCell || !fromCell) return;
+          var dy = toCell.getBoundingClientRect().top - fromCell.getBoundingClientRect().top; // >0 = moved down
+          if (!dy) return;
+          toCell.style.transition = 'none';
+          toCell.style.transform = 'translateY(' + (-dy) + 'px)';
+          void toCell.offsetWidth; // reflow so the start position registers
+          toCell.style.transition = 'transform .17s cubic-bezier(.34,1.08,.64,1)';
+          toCell.style.transform = 'translateY(0)';
+          setTimeout(function() { try { toCell.style.transition = ''; toCell.style.transform = ''; } catch (e) {} }, 230);
+        } catch (e) {}
+      })(moves[i]);
+    }
+  }
+
   // ---- Repaint hook, called from render() (gated) ----
   function paintV2Layers() {
     if (!v2On()) return;

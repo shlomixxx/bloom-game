@@ -165,6 +165,7 @@
     grid = Array.from({length: getBoardRows()}, function() { return Array(getBoardCols()).fill(0); });
     score = 0; highestTier = 1; busy = false; dropsCount = 0;
     heldPiece = null; v2NextUp = null; // GV.4 — clear the v2 hold slot + next-up lookahead on every new game (no-op in classic)
+    try { _v2GravityMoves.length = 0; } catch (e) {} // GV.4.2 — clear any stale gravity-slide moves
     // A9 — Reset ghost-mode drop recording for this fresh game.
     try { window.__bloomDropsSeq = []; } catch (e) {}
     window.__bloomGameOver = false; // new game = active again
@@ -2321,7 +2322,12 @@
           if (r - 1 < w) w = r - 1;
           continue;
         }
-        if (r !== w) { grid[w][c] = grid[r][c]; grid[r][c] = 0; moves++; }
+        if (r !== w) {
+          grid[w][c] = grid[r][c]; grid[r][c] = 0; moves++;
+          // GV.4.2 — record the move so render() can FLIP-slide this tile from
+          // its old row to its new row (smooth gravity settle, v2 only).
+          if (typeof v2On === 'function' && v2On()) { try { _v2GravityMoves.push({ toR: w, fromR: r, c: c }); } catch (e) {} }
+        }
         w--;
       }
     }
