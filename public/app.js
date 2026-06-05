@@ -30012,7 +30012,9 @@
 
   function buildTileLadder() {
     var tiers = tilesActiveTiers();
-    if (!tiers || tiers.length < 2) return null;
+    // TIERS is 1-INDEXED: index 0 is null, tiers 1..MAX live at indices 1..MAX.
+    if (!tiers || tiers.length < 3) return null;
+    var MAX = tiers.length - 1; // = 8 for the classic ladder
     var best = 1;
     try {
       if (typeof loadLifetimeInt === 'function' && typeof BEST_TIER_KEY !== 'undefined') {
@@ -30020,10 +30022,10 @@
       }
     } catch (e) {}
     if (best < 1) best = 1;
-    if (best > tiers.length) best = tiers.length;
-    // reached = indices [0 .. best-1]; next = index best (if best < length).
-    var atTop = best >= tiers.length;
-    var nextTier = (!atTop && tiers[best]) ? tiers[best] : null;
+    if (best > MAX) best = MAX;
+    // tiers 1..best are reached; the next tier is best+1 (if best < MAX).
+    var atTop = best >= MAX;
+    var nextTier = (!atTop && tiers[best + 1]) ? tiers[best + 1] : null;
     var headRight = atTop
       ? '👑 הגעת לכתר!'
       : '🔼 כמעט! עוד דרגה ל' + ((nextTier && nextTier.name) ? nextTier.name : 'דרגה הבאה');
@@ -30034,10 +30036,11 @@
     var html = '<div class="htl-head"><span class="htl-t">🪜 הדרגות שלך</span>' +
                '<span class="htl-n">' + headRight + '</span></div>' +
                '<div class="htl-row">';
-    for (var i = 0; i < tiers.length; i++) {
+    for (var i = 1; i <= MAX; i++) {
       var t = tiers[i];
-      var cls = (i < best) ? 'reached' : (i === best ? 'next' : '');
-      if (i > 0) html += '<span class="htl-sep">›</span>';
+      if (!t) continue; // null-safe (defensive)
+      var cls = (i <= best) ? 'reached' : (i === best + 1 ? 'next' : '');
+      if (i > 1) html += '<span class="htl-sep">›</span>';
       html += '<div class="htl-tile ' + cls + '" style="background:' + (t.bg || '#ccc') +
               ';color:' + (t.fg || '#222') + '">' + (t.svg || '') + '</div>';
     }
@@ -30065,8 +30068,10 @@
   function injectMergeTease(play) {
     if (!play || play.querySelector('.htl-tease')) return;
     var tiers = tilesActiveTiers();
-    if (!tiers || tiers.length < 3) return;
-    var leaf = tiers[1], flower = tiers[2];
+    // 1-indexed: leaf = tier 2, flower = tier 3 (leaf+leaf→flower).
+    if (!tiers || tiers.length < 4) return;
+    var leaf = tiers[2], flower = tiers[3];
+    if (!leaf || !flower) return;
     var tz = document.createElement('div');
     tz.className = 'htl-tease';
     tz.setAttribute('aria-hidden', 'true');
@@ -30080,19 +30085,21 @@
   function addFloatingTiles(home) {
     if (!home || document.getElementById('home-tiles-float')) return;
     var tiers = tilesActiveTiers();
-    if (!tiers || tiers.length < 8) return;
+    // 1-indexed; need tiers 1..8 → length >= 9.
+    if (!tiers || tiers.length < 9) return;
     var layer = document.createElement('div');
     layer.id = 'home-tiles-float';
     layer.className = 'home-tiles-float';
     layer.setAttribute('aria-hidden', 'true');
     var spots = [
-      { l: 10, d: 21, s: 30, t: 1 }, { l: 78, d: 26, s: 34, t: 3 },
+      { l: 10, d: 21, s: 30, t: 2 }, { l: 78, d: 26, s: 34, t: 3 },
       { l: 44, d: 30, s: 22, t: 5 }, { l: 90, d: 23, s: 26, t: 6 },
       { l: 26, d: 28, s: 20, t: 7 }
     ];
     var html = '';
     for (var i = 0; i < spots.length; i++) {
-      var sp = spots[i]; var t = tiers[sp.t] || tiers[0];
+      var sp = spots[i]; var t = tiers[sp.t] || tiers[1];
+      if (!t) continue;
       html += '<div class="htf-tile" style="left:' + sp.l + '%;width:' + sp.s + 'px;height:' + sp.s +
               'px;background:' + (t.bg || '#ccc') + ';color:' + (t.fg || '#222') +
               ';animation-duration:' + sp.d + 's;animation-delay:-' + (i * 4) + 's">' + (t.svg || '') + '</div>';
