@@ -31,37 +31,75 @@ body.bloom-v2 .cell.v2-landed { animation: v2Squash .18s ease-out both !importan
   100% { transform: scaleY(1) scaleX(1); }
 }
 
-/* ---- Board is the hero: in v2 the launch row (Hold·Current·Next) already
-   shows the next piece, so the classic 8-tier ladder strip is redundant.
-   Hiding it gives the height back that the launch row took, so the grid
-   grows big again (#grid-wrap is flex:1 → ResizeObserver auto-refits to
-   bigger cells). Flag OFF → no body.bloom-v2 → ladder shows as always. ---- */
-body.bloom-v2 #tier-bar { display: none !important; }
+/* ============================================================
+   BLOOM SPINE — the unified ladder+launch strip (design-team winner GV.4.4)
+   ============================================================
+   ONE strip = the always-visible 8-tier ladder (the #tier-bar node is RELOCATED
+   into here by JS — never duplicated) + a folded HOLD chip + a hero NEXT tile +
+   the next-pair points + a "climb" thermometer (gold rungs you've reached + a
+   breathing teaser on the tier just above your best). Replaces BOTH the old
+   tier-bar-hide and the old launch row, so the board reclaims ~57px and stays
+   width-bound at ~90px. flex:0 0 auto is LOAD-BEARING (the spine is not in
+   base.css's `.tier-bar{flex-shrink:0}` rule once #tier-bar moves inside it).
+   The launch zone is kept <=~43px so the board stays 90px (verified math). */
+#v2-spine { display: none; }            /* classic: inert */
+body.bloom-v2 #v2-spine {
+  display: flex; flex-direction: column; flex: 0 0 auto;
+  border-bottom: 1px solid rgba(0,0,0,.06);
+}
+/* Ladder zone: the relocated tier-bar, compacted to ~53px */
+body.bloom-v2 #v2-spine #tier-bar { border-bottom: none; padding: 3px 12px 1px; }
+body.bloom-v2 #v2-spine .tier-icon { width: 28px; height: 28px; }
+body.bloom-v2 #v2-spine .tier-score { font-size: 9px; }
 
-/* ---- Launch row: Hold · Current · Next (replaces the old floating chip) ---- */
-#v2-launch { display: none; }            /* hidden in classic */
+/* Climb thermometer — box-shadow/outline ONLY (never transform, so it can't
+   fight the .active/.cycling scale on the same .tier-cell). */
+body.bloom-v2 #v2-spine .tier-cell.climbed .tier-icon { outline: 2px solid rgba(201,146,59,.5); outline-offset: 1px; }
+body.bloom-v2 #v2-spine .tier-cell.teaser .tier-icon { animation: v2Teaser 2.2s ease-in-out infinite; }
+@keyframes v2Teaser { 0%,100% { box-shadow: 0 0 0 0 rgba(201,146,59,0); } 50% { box-shadow: 0 0 0 4px rgba(201,146,59,.42); } }
+body.bloom-v2 #v2-spine .tier-cell.climb-pop .tier-icon { animation: v2ClimbPop .6s cubic-bezier(.34,1.4,.64,1); }
+@keyframes v2ClimbPop {
+  0%   { box-shadow: 0 0 0 0 rgba(201,146,59,.85); filter: brightness(1); }
+  45%  { box-shadow: 0 0 0 9px rgba(201,146,59,0); filter: brightness(1.35); }
+  100% { box-shadow: 0 0 0 0 rgba(201,146,59,0); filter: brightness(1); }
+}
+
+/* Launch zone: HOLD · hero NEXT · points — keep <= ~43px total */
+#v2-launch { display: none; }            /* classic: inert */
 body.bloom-v2 #v2-launch {
-  display: flex; align-items: flex-end; justify-content: space-around; gap: 8px;
-  direction: ltr; padding: 0 8px 2px; flex: 0 0 auto;
+  display: flex; align-items: center; gap: 8px; direction: ltr;
+  padding: 2px 12px 4px; flex: 0 0 auto; min-height: 0;
 }
-body.bloom-v2 .v2-slot { display: flex; flex-direction: column; align-items: center; gap: 2px; }
-body.bloom-v2 .v2-slot-lbl { font-size: 9px; font-weight: 800; color: var(--color-text-muted, #A9A293); letter-spacing: .3px; line-height: 1; }
-body.bloom-v2 .v2-slot-box {
-  width: 46px; height: 46px; border-radius: 13px; display: flex; align-items: center; justify-content: center;
-  background: #FBF6EA; border: 2px dashed rgba(201,146,59,.38); padding: 0; transition: transform .12s, box-shadow .15s;
+body.bloom-v2 .v2-hold-chip {
+  width: 36px; height: 36px; border-radius: 11px; flex: 0 0 auto; cursor: pointer;
+  background: #FBF6EA; border: 2px dashed rgba(201,146,59,.4);
+  display: flex; align-items: center; justify-content: center; transition: transform .12s, box-shadow .15s;
 }
-body.bloom-v2 .v2-slot-box.has-tile { border-style: solid; border-color: transparent; box-shadow: 0 3px 9px rgba(120,90,40,.16); }
-body.bloom-v2 .v2-slot-box svg { width: 62%; height: 62%; }
-/* Current piece is the hero — bigger + a gentle bob so the eye lands on it. */
-body.bloom-v2 .v2-slot-cur .v2-slot-lbl { color: #C9923B; }
-body.bloom-v2 .v2-cur { width: 62px; height: 62px; border-radius: 17px; box-shadow: 0 6px 16px rgba(120,90,40,.20); }
-body.bloom-v2 .v2-cur.has-tile { animation: v2Bob 1.7s ease-in-out infinite; }
-@keyframes v2Bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
-/* Hold slot is the only interactive one. */
-body.bloom-v2 .v2-hold { cursor: pointer; }
-body.bloom-v2 .v2-hold:active { transform: scale(.9); }
-html[data-theme="dark"] body.bloom-v2 .v2-slot-box { background: #2A251E; border-color: rgba(201,146,59,.45); }
-@media (max-width: 360px) { body.bloom-v2 .v2-slot-box { width: 40px; height: 40px; } body.bloom-v2 .v2-cur { width: 54px; height: 54px; } }
+body.bloom-v2 .v2-hold-chip.has-tile { border-style: solid; border-color: transparent; box-shadow: 0 2px 7px rgba(120,90,40,.16); }
+body.bloom-v2 .v2-hold-chip:active { transform: scale(.9); }
+body.bloom-v2 .v2-hold-chip svg { width: 62%; height: 62%; }
+body.bloom-v2 .v2-next-lbl { font-size: 9px; font-weight: 800; color: #C9923B; letter-spacing: .3px; }
+body.bloom-v2 .v2-next-hero {
+  width: 40px; height: 40px; border-radius: 13px; flex: 0 0 auto;
+  display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(120,90,40,.18);
+}
+body.bloom-v2 .v2-next-hero.has-tile { animation: v2Bob 1.7s ease-in-out infinite; }
+@keyframes v2Bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
+body.bloom-v2 .v2-next-hero svg { width: 62%; height: 62%; }
+body.bloom-v2 .v2-next-hero.pop { animation: v2NextPop .34s cubic-bezier(.2,1.5,.4,1); }
+@keyframes v2NextPop { 0% { transform: scale(.82); } 60% { transform: scale(1.16); } 100% { transform: scale(1); } }
+body.bloom-v2 .v2-next-pts { font-size: 11px; font-weight: 800; color: var(--color-text-muted, #6F6E68); margin-inline-start: auto; direction: ltr; unicode-bidi: isolate; }
+/* Tighten on small phones — fire at <=390px (SE + dynamic-board cases) to protect board height */
+@media (max-width: 390px) {
+  body.bloom-v2 #v2-spine .tier-icon { width: 26px; height: 26px; }
+  body.bloom-v2 .v2-next-hero { width: 36px; height: 36px; }
+  body.bloom-v2 .v2-hold-chip { width: 34px; height: 34px; }
+}
+html[data-theme="dark"] body.bloom-v2 #v2-spine { border-color: rgba(255,255,255,.06); }
+html[data-theme="dark"] body.bloom-v2 .v2-hold-chip { background: #2A251E; border-color: rgba(201,146,59,.45); }
+/* Legacy-UI-within-v2 fallback: hide spine so the classic tier-bar position shows */
+body.bloom-v2.legacy-game-ui #v2-spine { display: none; }
+body.bloom-v2.legacy-game-ui #tier-bar { display: flex; }
 
 /* ---- Aim overlay: ghost landing preview + column highlight ---- */
 body.bloom-v2 #v2-aim { position: absolute; inset: 0; pointer-events: none; z-index: 6; }
@@ -114,6 +152,9 @@ html[data-theme="dark"] #v2-fb-overlay .v2-fb-input { background: #2A251E; color
 @media (prefers-reduced-motion: reduce) {
   body.bloom-v2 .cell.v2-pulse { animation: none; }
   body.bloom-v2 .cell.appearing { animation: none !important; }
-  body.bloom-v2 .v2-cur.has-tile { animation: none; }
-  body.bloom-v2 .v2-ghost-tile, body.bloom-v2 .v2-col-hi, body.bloom-v2 .v2-slot-box { transition: none; }
+  body.bloom-v2 .v2-next-hero.has-tile,
+  body.bloom-v2 .v2-next-hero.pop,
+  body.bloom-v2 #v2-spine .tier-cell.teaser .tier-icon,
+  body.bloom-v2 #v2-spine .tier-cell.climb-pop .tier-icon { animation: none; }
+  body.bloom-v2 .v2-ghost-tile, body.bloom-v2 .v2-col-hi, body.bloom-v2 .v2-hold-chip { transition: none; }
 }

@@ -36773,19 +36773,31 @@ try {
   // "Current" = nextPiece (what drops on tap); "Next" = the v2NextUp lookahead.
   function paintV2Launch() {
     if (!v2On()) return;
+    // GV.4.4 BLOOM Spine: one-time relocate the live #tier-bar INTO #v2-spine
+    // (above #v2-launch) so the ladder + launch are ONE strip and the board stays
+    // big. buildTierBar/highlightNextTier/revealNextTier target #tier-bar by id,
+    // never by DOM position, so this is engine-safe. Idempotent via dataset.fused.
+    var spine = document.getElementById('v2-spine');
+    if (spine && !spine.dataset.fused) {
+      try {
+        var tb = document.getElementById('tier-bar');
+        var lz0 = document.getElementById('v2-launch');
+        if (tb && lz0 && lz0.parentNode === spine) { spine.insertBefore(tb, lz0); spine.dataset.fused = '1'; }
+      } catch (e) {}
+    }
     var row = document.getElementById('v2-launch'); if (!row) return;
     if (typeof v2NextUp !== 'undefined' && v2NextUp == null && typeof pickPiece === 'function') {
       try { v2NextUp = pickPiece(); } catch (e) {}
     }
+    // Launch zone = folded HOLD chip + a hero NEXT tile + the next-pair points.
+    // (Kept <=~43px tall so the board stays width-bound at ~90px.)
     if (!row.dataset.built) {
       row.dataset.built = '1';
       row.innerHTML =
-        '<div class="v2-slot"><span class="v2-slot-lbl">החזקה</span>' +
-          '<button class="v2-slot-box v2-hold" id="v2-hold-box" type="button" aria-label="החלף אריח"></button></div>' +
-        '<div class="v2-slot v2-slot-cur"><span class="v2-slot-lbl">נוכחי</span>' +
-          '<div class="v2-slot-box v2-cur" id="v2-cur-box"></div></div>' +
-        '<div class="v2-slot"><span class="v2-slot-lbl">הבא</span>' +
-          '<div class="v2-slot-box v2-next" id="v2-next-box"></div></div>';
+        '<button class="v2-hold-chip" id="v2-hold-box" type="button" aria-label="החלף אריח"></button>' +
+        '<span class="v2-next-lbl">הבא</span>' +
+        '<div class="v2-next-hero" id="v2-cur-box"></div>' +
+        '<span class="v2-next-pts" id="v2-next-pts"></span>';
       var hb = document.getElementById('v2-hold-box');
       if (hb) hb.addEventListener('click', function(e) { e.stopPropagation(); v2SwapHold(); });
     }
@@ -36797,7 +36809,43 @@ try {
     }
     fill('v2-hold-box', heldPiece);
     fill('v2-cur-box', (typeof nextPiece !== 'undefined' ? nextPiece : 0));
-    fill('v2-next-box', (typeof v2NextUp !== 'undefined' ? v2NextUp : 0));
+    var pts = document.getElementById('v2-next-pts');
+    if (pts) {
+      try {
+        if (typeof nextPiece !== 'undefined' && typeof pieceValue === 'function') pts.textContent = '+' + pieceValue(nextPiece).toLocaleString();
+        else pts.textContent = '';
+      } catch (e) { pts.textContent = ''; }
+    }
+    // "new piece arrived" pop on the hero tile
+    var hero = document.getElementById('v2-cur-box');
+    if (hero) { try { hero.classList.remove('pop'); void hero.offsetWidth; hero.classList.add('pop'); } catch (e) {} }
+    v2PaintClimb();
+  }
+
+  // Climb thermometer: gold-outline every rung you've reached this game + breathe
+  // the rung just above your best (the "chase the crown" daily-return teaser) +
+  // a one-shot pop when you hit a NEW highest tier. Box-shadow/outline classes
+  // ONLY (never transform) so they can't fight the .active/.cycling scale on the
+  // same .tier-cell. Self-resets across games (highestTier drops to 1 on init).
+  var _v2LastHigh = 0;
+  function v2PaintClimb() {
+    if (!v2On()) return;
+    var bar = document.getElementById('tier-bar'); if (!bar) return;
+    var hi = (typeof highestTier !== 'undefined' && highestTier) ? highestTier : 1;
+    var max = (typeof MAX_TIER !== 'undefined') ? MAX_TIER : 8;
+    var cells = bar.querySelectorAll('.tier-cell');
+    for (var i = 0; i < cells.length; i++) {
+      var t = parseInt(cells[i].getAttribute('data-tier'), 10) || 0;
+      cells[i].classList.toggle('climbed', t > 0 && t <= hi);
+      cells[i].classList.toggle('teaser', t === hi + 1 && t <= max);
+    }
+    var prev = _v2LastHigh;
+    if (hi < prev) prev = hi; // new game -> highestTier reset; don't pop backwards
+    if (hi > prev && prev > 0) {
+      var cell = bar.querySelector('.tier-cell[data-tier="' + hi + '"]');
+      if (cell) { try { cell.classList.remove('climb-pop'); void cell.offsetWidth; cell.classList.add('climb-pop'); } catch (e) {} }
+    }
+    _v2LastHigh = hi;
   }
 
   // ---- Aim overlay: ghost landing preview + column highlight + neighbor pulse ----

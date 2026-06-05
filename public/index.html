@@ -73,7 +73,7 @@ function trackEvent(n,p){try{gtag('event',n,p||{});}catch(e){}}
 })();
 </script>
 
-<link rel="stylesheet" href="/styles.css?v=20260605l">
+<link rel="stylesheet" href="/styles.css?v=20260605m">
 </head>
 <body>
 
@@ -138,9 +138,14 @@ function trackEvent(n,p){try{gtag('event',n,p||{});}catch(e){}}
     <div class="mode-tabs" id="mode-tabs"></div>
   </div>
   <div class="tier-bar" id="tier-bar" aria-label="סולם האריחים"></div>
-  <!-- GV.4 — v2 launch row (Hold · Current · Next). Hidden in classic via CSS
-       (#v2-launch{display:none}); shown + populated only under body.bloom-v2. -->
-  <div class="v2-launch" id="v2-launch" aria-hidden="true"></div>
+  <!-- GV.4.4 — v2 BLOOM Spine: the unified ladder+launch strip. Inert in classic
+       (#v2-spine{display:none}). Under body.bloom-v2, JS relocates #tier-bar INTO
+       #v2-spine (above #v2-launch) so one strip is the ladder AND the next/hold
+       indicators — board stays big. #v2-launch keeps its id so existing callers
+       (paintV2Launch / getElementById('v2-launch')) work with no JS rename. -->
+  <div class="v2-spine" id="v2-spine" aria-hidden="true">
+    <div class="v2-launch" id="v2-launch"></div>
+  </div>
   <div class="grid-wrap" id="grid-wrap"><div class="grid" id="grid"></div></div>
 </div>
 
@@ -157,7 +162,7 @@ function trackEvent(n,p){try{gtag('event',n,p||{});}catch(e){}}
 <script>
 (function(){
   "use strict";
-  var CB = 'v=20260605l';
+  var CB = 'v=20260605m';
   var _booted = false;
   function loadScript(src){ return new Promise(function(res,rej){ var s=document.createElement('script'); s.src=src; s.onload=res; s.onerror=rej; document.body.appendChild(s); }); }
   function boot(variant){
