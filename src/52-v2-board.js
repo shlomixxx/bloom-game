@@ -175,6 +175,52 @@
     }
   }
 
+  // ---- v2 drop fall: the dropped tile FALLS from the top of the column down
+  // through every empty row to its landing cell (row,col). Classic .appearing is
+  // a pop-in-place; this is the demo's real fall. drop() AWAITS this (gated) right
+  // after render({appearing}), so the full fall plays before any merge render.
+  // Same FLIP idea as the gravity slide, but the start offset is the whole column
+  // height above the grid's top edge. Returns a Promise (resolves when it lands).
+  function v2PlayFall(row, col) {
+    return new Promise(function(resolve) {
+      try {
+        if (!v2On()) { resolve(); return; }
+        try { if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) { resolve(); return; } } catch (e) {}
+        var gridEl = document.getElementById('grid'); if (!gridEl) { resolve(); return; }
+        var cell = gridEl.querySelector('.cell[data-r="' + row + '"][data-c="' + col + '"]');
+        if (!cell) { resolve(); return; }
+        var gridRect = gridEl.getBoundingClientRect();
+        var cellRect = cell.getBoundingClientRect();
+        // start one cell-height above the grid's TOP edge → streaks down through
+        // every empty row above the landing cell (those rows are always empty:
+        // the tile fell to the lowest empty slot, so nothing floats above it).
+        var dist = (cellRect.top - gridRect.top) + cellRect.height;
+        if (!(dist > 6)) { resolve(); return; } // landed at the very top → no real fall
+        var dur = Math.min(360, Math.max(150, Math.round(dist * 1.05)));
+        try { if (typeof gameSpeedScale === 'function') dur = Math.max(90, Math.round(dur * gameSpeedScale())); } catch (e) {}
+        cell.style.willChange = 'transform';
+        cell.style.transition = 'none';
+        cell.style.transform = 'translateY(' + (-dist) + 'px)';
+        cell.style.opacity = '1';
+        void cell.offsetWidth; // reflow so the start offset registers before the transition
+        cell.style.transition = 'transform ' + dur + 'ms cubic-bezier(.45,.03,.85,.5)'; // accelerating = gravity
+        cell.style.transform = 'translateY(0)';
+        var done = false;
+        var finish = function() {
+          if (done) return; done = true;
+          try {
+            cell.style.transition = ''; cell.style.transform = ''; cell.style.opacity = ''; cell.style.willChange = '';
+            cell.classList.add('v2-landed'); // brief squash
+            setTimeout(function() { try { cell.classList.remove('v2-landed'); } catch (e) {} }, 200);
+          } catch (e) {}
+          resolve();
+        };
+        cell.addEventListener('transitionend', finish, { once: true });
+        setTimeout(finish, dur + 70); // safety fallback if transitionend doesn't fire
+      } catch (e) { resolve(); }
+    });
+  }
+
   // ---- Repaint hook, called from render() (gated) ----
   function paintV2Layers() {
     if (!v2On()) return;
@@ -260,6 +306,6 @@
   try {
     window.__bloomV2 = {
       swapHold: v2SwapHold, paintLayers: paintV2Layers, onGameOver: v2OnGameOver,
-      openFeedback: function() { v2OpenFeedback(false); }
+      playFall: v2PlayFall, openFeedback: function() { v2OpenFeedback(false); }
     };
   } catch (e) {}

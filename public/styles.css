@@ -22190,24 +22190,33 @@ body.bloom-v2 .grid-wrap { position: relative; }
 body.bloom-v2 .cell { border-radius: 14px; }
 body.bloom-v2 .cell.filled { box-shadow: 0 3px 10px rgba(120,90,40,.10); }
 
-/* ---- v2 drop animation: the dropped tile FALLS from above + settles ----
-   (classic .appearing is a pop-in-place; this mirrors the demo's fall.) */
-body.bloom-v2 .cell.appearing { animation: v2Drop .30s cubic-bezier(.34,1.32,.64,1) both; }
-@keyframes v2Drop {
-  0%   { transform: translateY(-38px) scale(.82); opacity: 0; }
-  55%  { transform: translateY(5px)   scale(1.10); opacity: 1; }
-  74%  { transform: translateY(-2px)  scale(.97); }
-  100% { transform: translateY(0)     scale(1); }
+/* ---- v2 drop animation: JS drives a TRUE full-column fall (v2PlayFall in
+   52-v2-board.js) — the tile starts above the board and falls through every
+   empty row down to its landing cell. We disable the classic pop so JS owns
+   the transform; JS adds .v2-landed for a tiny squash when it lands. ---- */
+body.bloom-v2 .cell.appearing { animation: none; }
+body.bloom-v2 .cell.v2-landed { animation: v2Squash .18s ease-out both; }
+@keyframes v2Squash {
+  0%   { transform: scaleY(.86) scaleX(1.08); }
+  55%  { transform: scaleY(1.05) scaleX(.97); }
+  100% { transform: scaleY(1) scaleX(1); }
 }
+
+/* ---- Board is the hero: in v2 the launch row (Hold·Current·Next) already
+   shows the next piece, so the classic 8-tier ladder strip is redundant.
+   Hiding it gives the height back that the launch row took, so the grid
+   grows big again (#grid-wrap is flex:1 → ResizeObserver auto-refits to
+   bigger cells). Flag OFF → no body.bloom-v2 → ladder shows as always. ---- */
+body.bloom-v2 #tier-bar { display: none !important; }
 
 /* ---- Launch row: Hold · Current · Next (replaces the old floating chip) ---- */
 #v2-launch { display: none; }            /* hidden in classic */
 body.bloom-v2 #v2-launch {
   display: flex; align-items: flex-end; justify-content: space-around; gap: 8px;
-  direction: ltr; padding: 2px 8px 4px; flex: 0 0 auto;
+  direction: ltr; padding: 0 8px 2px; flex: 0 0 auto;
 }
-body.bloom-v2 .v2-slot { display: flex; flex-direction: column; align-items: center; gap: 4px; }
-body.bloom-v2 .v2-slot-lbl { font-size: 10px; font-weight: 800; color: var(--color-text-muted, #A9A293); letter-spacing: .3px; }
+body.bloom-v2 .v2-slot { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+body.bloom-v2 .v2-slot-lbl { font-size: 9px; font-weight: 800; color: var(--color-text-muted, #A9A293); letter-spacing: .3px; line-height: 1; }
 body.bloom-v2 .v2-slot-box {
   width: 46px; height: 46px; border-radius: 13px; display: flex; align-items: center; justify-content: center;
   background: #FBF6EA; border: 2px dashed rgba(201,146,59,.38); padding: 0; transition: transform .12s, box-shadow .15s;

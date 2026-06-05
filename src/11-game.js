@@ -3873,6 +3873,12 @@
     var pendingEvent = (activeEvent && activeEvent.col === col) ? activeEvent : null;
     dismissCoach();
     render({ appearing: [row, col] });
+    // GV.4 — v2 ONLY: play the true full-column fall (tile falls from the top of
+    // the column through every empty row to its landing cell). Gated + awaited so
+    // the whole fall is visible before merges shift the board. Classic = no-op.
+    if (typeof v2On === 'function' && v2On() && typeof v2PlayFall === 'function') {
+      try { await v2PlayFall(row, col); } catch (e) {}
+    }
     try {
     await gsleep(80);
     // Trigger the event FIRST when the player drops in the event column —
