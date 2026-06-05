@@ -22194,8 +22194,13 @@ body.bloom-v2 .cell.filled { box-shadow: 0 3px 10px rgba(120,90,40,.10); }
    52-v2-board.js) — the tile starts above the board and falls through every
    empty row down to its landing cell. We disable the classic pop so JS owns
    the transform; JS adds .v2-landed for a tiny squash when it lands. ---- */
-body.bloom-v2 .cell.appearing { animation: none; }
-body.bloom-v2 .cell.v2-landed { animation: v2Squash .18s ease-out both; }
+/* !important is REQUIRED: base.css has `.cell.appearing { animation: tileDrop ...
+   !important }`, and a CSS animation overrides inline transform in the cascade —
+   so without !important here, tileDrop wins and v2PlayFall's inline fall never
+   shows. .v2-landed also !important + defined AFTER .appearing so it wins the
+   squash for the brief moment the cell carries both classes. */
+body.bloom-v2 .cell.appearing { animation: none !important; }
+body.bloom-v2 .cell.v2-landed { animation: v2Squash .18s ease-out both !important; }
 @keyframes v2Squash {
   0%   { transform: scaleY(.86) scaleX(1.08); }
   55%  { transform: scaleY(1.05) scaleX(.97); }
@@ -22284,7 +22289,7 @@ html[data-theme="dark"] #v2-fb-overlay .v2-fb-input { background: #2A251E; color
 
 @media (prefers-reduced-motion: reduce) {
   body.bloom-v2 .cell.v2-pulse { animation: none; }
-  body.bloom-v2 .cell.appearing { animation: none; }
+  body.bloom-v2 .cell.appearing { animation: none !important; }
   body.bloom-v2 .v2-cur.has-tile { animation: none; }
   body.bloom-v2 .v2-ghost-tile, body.bloom-v2 .v2-col-hi, body.bloom-v2 .v2-slot-box { transition: none; }
 }
