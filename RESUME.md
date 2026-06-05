@@ -2,7 +2,7 @@
 
 > **קובץ הזה הוא המסך הראשון לקרוא בכל סשן חדש.** הוא אומר במשפט אחד מה המצב, מה הצעד הבא, ולאן ללכת לפרטים מלאים.
 >
-> עדכון אחרון: **2026-05-25** · 49 שלבים חיים בפרודקשן · /api/health=ok · **M1 Self-Promo הושלם** 🎉
+> עדכון אחרון: **2026-06-06** · /api/health=ok · **HOME.1 — וריאנט בית חדש "🧩 אריחים" (PLAY-first + דופמין) + BUGFIX.1 (סריקה עמוקה, 6 באגים)** 🧩 · Cache `v20260606c`
 
 ---
 
@@ -13,7 +13,9 @@
 - ✅ **FUTURE_TASKS.md**: **10/10 משימות pure-addiction הושלמו** 🎉 (כל A1-A10)
 - ✅ **49 stages** ב-CLAUDE.md §0 — חיים בפרודקשן ([bloom-web-production-f3bd.up.railway.app](https://bloom-web-production-f3bd.up.railway.app))
 - ✅ **M1 Self-Promo Engine חי** — מחליף AdSense שלא מאשרים את ה-subdomain. כל "watch ad" הופך לקידום של מוצר שלנו (Starter Pack/Daily Deal/Gacha/BP/Gem Bank).
-- ✅ Cache `v20260525a` · SW `bloom-v13.3`
+- ✅ **HOME.1 (2026-06-06)**: וריאנט בית חדש `home_variant='tiles'` — PLAY ענק מנצח את הקיפול + סטריפ דרגות על אריחי המשחק האמיתיים (אבן→כתר, ✓ + "כמעט!") + כרטיס "חם" יציב + merge-tease. נבחר באדמין (🧩 "אריחים (חדש)"); **ברירת מחדל עדיין `hero`** — תצוגה מקדימה חיה ב-`?hv=tiles`. + תיקון כיוון "איך לשחק" (אבן-שמאל→כתר-ימין).
+- ✅ **BUGFIX.1 (2026-06-06)**: 6 באגים תוקנו+אומתו חי — GA4 CSP (אנליטיקה הייתה חסומה ב-100%), קריסת באנר גאצ׳ה, קישורי Discovery מתים, deep-link מעל המשחק, פס בוסטרים חופף, דליפות אינטרוול.
+- ✅ Cache `v20260606c` · SW auto-stamped
 
 **מה פתוח** — [MONETIZATION_TASKS.md](MONETIZATION_TASKS.md) 7 שלבים (M1-M7):
 - ✅ **M1 Self-Promo** (1.5 שעות — הושלם היום!) — admin CRUD + 6 פרסומות מסומנות
