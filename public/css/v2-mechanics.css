@@ -25,6 +25,24 @@ body.bloom-v2 .cell.filled { box-shadow: 0 3px 10px rgba(120,90,40,.10); }
    squash for the brief moment the cell carries both classes. */
 body.bloom-v2 .cell.appearing { animation: none !important; }
 body.bloom-v2 .cell.v2-landed { animation: v2Squash .18s ease-out both !important; }
+/* ── Dopamine glow: a gold burst on every merge + landing. box-shadow ONLY,
+   so it layers on TOP of the engine's transform `merge`/`v2Squash` animations
+   without touching them (project rule: never stack two transform anims on a
+   cell). Present while the class is on (~0.18-0.24s) → reads as a punchy flash;
+   the short transition softens the edges. Compounds across hundreds of merges
+   per session = the core-loop dopamine. */
+body.bloom-v2 .cell.merging {
+  box-shadow: 0 0 22px 5px rgba(244,178,62,.8), 0 0 8px 2px rgba(255,255,255,.5) !important;
+  transition: box-shadow .14s ease-out;
+  z-index: 3;
+}
+body.bloom-v2 .cell.v2-landed {
+  box-shadow: 0 0 14px 3px rgba(244,178,62,.5), 0 3px 10px rgba(120,90,40,.10) !important;
+  transition: box-shadow .2s ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  body.bloom-v2 .cell.merging, body.bloom-v2 .cell.v2-landed { transition: none; }
+}
 @keyframes v2Squash {
   0%   { transform: scaleY(.86) scaleX(1.08); }
   55%  { transform: scaleY(1.05) scaleX(.97); }
