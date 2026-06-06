@@ -5997,6 +5997,16 @@ body[data-home-variant="tiles"] .home-v2-cta .htl-tease {
 
 /* the single stable hot card reuses .hvar-hero-big (Power Hero styling) — no extra rules needed */
 
+/* ── Minimal home tab (2026-06-06): the launchpad shows only status + brand +
+   PLAY + ladder + ONE hot card + the play-mode actions. These secondary
+   surfaces are redundant on the home (the ladder + PLAY hook already show
+   progress; discovery opens from the ⭐ chip; the legacy-home toggle is a
+   footgun) — hidden here, still reachable elsewhere. */
+body[data-home-variant="tiles"] #home-v2-mystats,
+body[data-home-variant="tiles"] #discovery-tile,
+body[data-home-variant="tiles"] #discovery-next-unlock,
+body[data-home-variant="tiles"] #home-v2-switch { display: none !important; }
+
 /* dark theme */
 html[data-theme="dark"] .home-tiles-ladder {
   background: #211D19; border-color: rgba(255,255,255,.08);

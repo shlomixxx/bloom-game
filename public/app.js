@@ -34542,12 +34542,17 @@ try {
     //    pack, bundles, skins eventually)
     var TILE_TO_TAB = {
       // ── Home tab ──
-      '#home-v2-boards':           'home',
-      '#home-v2-season-pass':      'home',
-      '#lives-home-widget':        'home',
-      '#home-v2-featured':         'home',
-      '#home-weekly-host':         'home',
-      '#home-jackpot':             'home',
+      // 2026-06-06 declutter: the home is a LAUNCHPAD, not a dashboard. Only
+      // PLAY + progress + ONE reward should live on it. The secondary tiles
+      // below moved OUT to their semantic tabs so the home reads in 2 seconds.
+      // (collectHotSignals + the per-tile refreshers find them by id wherever
+      // they are, so the hot card + updates still work.)
+      '#home-v2-boards':           'rewards',   // 🎯 daily special / dynamic = a daily reward
+      '#home-v2-season-pass':      'progress',  // 🎖 Battle Pass = progression
+      '#lives-home-widget':        'home',       // play-gate (usually admin-off / absent)
+      '#home-v2-featured':         'social',     // dynamic duel/challenge CTA
+      '#home-weekly-host':         'social',     // 🏆 weekly contest vs the community
+      '#home-jackpot':             'rewards',    // 🎰 daily jackpot = a daily reward
       // The discovery surfaces are a cross-cutting "browse all features" zone;
       // they belong on the home tab. Mapped to 'home' so the observer claims
       // them (preventing the descendant-scan from touching them) but leaves
