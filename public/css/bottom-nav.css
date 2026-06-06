@@ -366,7 +366,7 @@ body.tab-cards-calm .bn-tab-screen-body > .bn-migrated {
 html[data-theme="dark"] body.tab-cards-calm .bn-tab-screen-body > .bn-migrated {
   border-color: rgba(255, 255, 255, 0.08) !important;
   box-shadow: 0 4px 16px -8px rgba(0, 0, 0, 0.50) !important;
-  filter: saturate(0.82);
+  filter: saturate(0.78);
 }
 
 /* UR.9 (2026-06-07) — per-tab spotlight. The single genuinely-hot card on a tab

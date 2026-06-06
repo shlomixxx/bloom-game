@@ -40,6 +40,10 @@
     // DAILY HOOKS — return-driver
     { sel: '#spin-home-tile.has-spin',                       priority: 70,  label: 'spin-available' },
     { sel: '.daily-deal-home-banner',                        priority: 65,  label: 'daily-deal' },
+    // Social tab anchor: the friends banner is the highest-K-factor card on the
+    // social tab ("invite a friend = +200💎" / "N online"). Above the 55 spotlight
+    // threshold so the social tab gets a clear anchor instead of a flat wall.
+    { sel: '#friends-banner',                                priority: 58,  label: 'friends-invite' },
     { sel: '.starter-pack-home-banner',                      priority: 60,  label: 'starter-pack' },
     { sel: '.bundle-home-banner',                            priority: 55,  label: 'limited-bundle' },
     // PROGRESS — feedback loops
