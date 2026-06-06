@@ -16837,6 +16837,12 @@
     if (clonedTarget) clonedTarget.removeAttribute('id');
     var clonedLeader = host.querySelector('.dyn-leader-chip');
     if (clonedLeader) clonedLeader.removeAttribute('id');
+    // Drop any leader/target chip with no REAL text yet (a lone "🏆"/"🎯" with no
+    // name/score loaded) — an icon-only chip is just noise above the board. It
+    // returns on the next render once it actually has data (digits/Hebrew).
+    Array.prototype.forEach.call(host.querySelectorAll('.dyn-leader-chip, .dyn-target-chip'), function(ch) {
+      if (!/[0-9֐-׿]/.test(ch.textContent || '')) ch.remove();
+    });
     // If nothing meaningful remains after dropping the duplicate difficulty,
     // hide the strip so it never wastes a row above the board.
     if (!host.querySelector('*') && !host.textContent.trim()) {
