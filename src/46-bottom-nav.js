@@ -351,6 +351,34 @@
     }
 
     // ────────────────────────────────────────────────────────────
+    // UR.6/UR.7 — unified "calm card" gate on the tab pages
+    // ────────────────────────────────────────────────────────────
+    // Precedence: ?cards=calm|classic (sticky in localStorage) → admin
+    // game_config.tab_cards_calm (default ON) → on. Toggling adds/removes the
+    // body.tab-cards-calm class; all the actual styling is CSS-gated under it,
+    // so this is a pure on/off with zero per-card JS.
+    function cardCalmDesired() {
+      try {
+        var qs = new URLSearchParams(location.search || '');
+        var q = qs.get('cards');
+        if (q != null) {
+          q = String(q).trim().toLowerCase();
+          if (q === 'classic' || q === 'off') localStorage.setItem('bloom_cards_force', 'classic');
+          else if (q === 'calm' || q === 'unified' || q === 'on') localStorage.setItem('bloom_cards_force', 'calm');
+          else if (q === 'auto' || q === 'reset') localStorage.removeItem('bloom_cards_force');
+        }
+        var f = localStorage.getItem('bloom_cards_force');
+        if (f === 'classic') return false;
+        if (f === 'calm') return true;
+      } catch (e) {}
+      try { if (typeof gameConfig === 'object' && gameConfig && gameConfig.tab_cards_calm === 'false') return false; } catch (e) {}
+      return true; // default ON
+    }
+    function applyCardCalm() {
+      try { document.body.classList.toggle('tab-cards-calm', cardCalmDesired()); } catch (e) {}
+    }
+
+    // ────────────────────────────────────────────────────────────
     // LIFECYCLE
     // ────────────────────────────────────────────────────────────
     function mountBottomNav() {
@@ -361,6 +389,12 @@
       _navEl = buildNav();
       document.body.appendChild(_navEl);
       document.body.setAttribute('data-active-tab', _activeTab);
+
+      // UR.6/UR.7 — unified "calm card" look on the tab pages (kills the
+      // rainbow-soup). Admin-controlled (game_config.tab_cards_calm, default on)
+      // + previewable via ?cards=calm|classic. Re-checked after config loads.
+      applyCardCalm();
+      setTimeout(applyCardCalm, 1800);
 
       // 2. Pre-create the 4 non-home tab screens (hidden until clicked).
       //    They live inside .app as siblings of #home-screen so the same
@@ -571,6 +605,7 @@
     window.__bloomSetTabBadge        = setBadge;
     window.__bloomGetActiveTab       = function() { return _activeTab; };
     window.__bloomMigrateTilesToTabs = migrateTilesToTabs;
+    window.__bloomApplyCardCalm      = applyCardCalm;   // admin/preview can re-apply after a config change
     // Debug helpers.
     window.__bloomBNDebug = function() {
       return {

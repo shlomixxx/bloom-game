@@ -20848,6 +20848,34 @@ html[data-theme="dark"] .bn-tabs-tip {
   border-color: rgba(250, 199, 117, 0.5);
 }
 html[data-theme="dark"] .bn-tabs-tip-close { color: #FAC775; }
+
+/* ════════════════════════════════════════════════════════════════
+   UR.6 / UR.7 (2026-06-07) — unified "calm card" look on the 4 tab pages
+   ════════════════════════════════════════════════════════════════
+   The audit's #1 "pages look overloaded" finding: every tab card carried its
+   own loud bespoke gradient + colored shadow → a "rainbow-soup" with no
+   cohesion. This gives EVERY migrated tab card ONE geometry (radius + a single
+   soft neutral shadow + a hairline) and dials the neon gradients back, so the
+   pages read as a calm, cohesive family — WITHOUT repainting each card's
+   internals (which would break the cards' own text/icon colors). Fully
+   reversible: everything is gated under body.tab-cards-calm, so dropping the
+   class restores every card byte-for-byte. Admin: game_config.tab_cards_calm
+   (default on). Preview live: ?cards=calm  /  ?cards=classic. */
+body.tab-cards-calm .bn-tab-screen-body > .bn-migrated {
+  border-radius: 18px !important;
+  /* one soft, neutral elevation instead of each card's loud colored shadow */
+  box-shadow: 0 4px 16px -8px rgba(60, 45, 25, 0.30) !important;
+  /* hairline keeps the card's edge defined once the loud shadow is gone */
+  border: 1px solid rgba(60, 45, 25, 0.10) !important;
+  /* dial the neon gradients back so the page reads calm, not a carnival.
+     Near-black / white text + icons stay legible under a mild saturate. */
+  filter: saturate(0.76);
+}
+html[data-theme="dark"] body.tab-cards-calm .bn-tab-screen-body > .bn-migrated {
+  border-color: rgba(255, 255, 255, 0.08) !important;
+  box-shadow: 0 4px 16px -8px rgba(0, 0, 0, 0.50) !important;
+  filter: saturate(0.82);
+}
 /* ============================================================
    FD.1 — Feature Discovery Map styles (May 29 2026)
 

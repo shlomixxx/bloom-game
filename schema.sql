@@ -2772,6 +2772,11 @@ INSERT INTO game_config (key, value) VALUES ('bots_auto_mode',     'daily') ON C
 INSERT INTO game_config (key, value) VALUES ('bots_games_today_floor', '0') ON CONFLICT (key) DO NOTHING;
 -- AD.4 — live "moves to survive" danger meter (loss-aversion). Default on.
 INSERT INTO game_config (key, value) VALUES ('danger_meter_enabled', 'true') ON CONFLICT (key) DO NOTHING;
+-- UR.6/UR.7 (2026-06-07) — unified "calm card" look on the 4 bottom-nav tab pages.
+-- ON = tab cards share one geometry + a softer, desaturated treatment (kills the
+-- "rainbow-soup" overload). OFF = each card keeps its loud bespoke gradient.
+-- Preview either look live with ?cards=calm / ?cards=classic. Default on.
+INSERT INTO game_config (key, value) VALUES ('tab_cards_calm', 'true') ON CONFLICT (key) DO NOTHING;
 -- Task #24 — in-session "hot streak" meter on game-over (consecutive games at/above
 -- the threshold). Default on; threshold = score that counts as a "win".
 INSERT INTO game_config (key, value) VALUES ('win_streak_enabled', 'true') ON CONFLICT (key) DO NOTHING;
