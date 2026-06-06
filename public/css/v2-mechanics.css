@@ -141,6 +141,24 @@ html[data-theme="dark"] body.bloom-v2 .v2-hold-chip { background: #2A251E; borde
 body.bloom-v2.legacy-game-ui #v2-spine { display: none; }
 body.bloom-v2.legacy-game-ui #tier-bar { display: flex; }
 
+/* ── HOME LEAK FIX (2026-06-06) ──────────────────────────────────────────
+   GV.4.4 RELOCATES #tier-bar INTO #v2-spine at runtime (once a v2 game has
+   run). That broke the home-v3.css `.app[data-home="active"] > .tier-bar`
+   hide rule (the tier-bar is no longer a DIRECT child of .app), and #v2-spine
+   itself was in no hide list — so after playing, the in-game spine (tier-bar
+   + the HOLD/NEXT launch row + col-mult bar) leaked onto the HOME, making it
+   look crowded + confusing (two ladder rows + an in-game hold/next strip).
+   Hide them whenever a #home-screen is mounted. `body:has(#home-screen)` is
+   the robust signal — the bottom-nav moves #home-screen so it's NOT a direct
+   child of .app, which makes both `.app:has(> .home-screen)` and
+   `.app[data-home] > …` unreliable. The data-home variant is a fallback for
+   browsers without :has. (The home's OWN tier-ladder strip — .home-tiles-ladder
+   — is unaffected; only the in-game #v2-spine is hidden.) */
+body:has(#home-screen) #v2-spine,
+body:has(#home-screen) .col-mult-bar,
+.app[data-home="active"] #v2-spine,
+.app[data-home="active"] .col-mult-bar { display: none !important; }
+
 /* ---- Aim overlay: ghost landing preview + column highlight ---- */
 body.bloom-v2 #v2-aim { position: absolute; inset: 0; pointer-events: none; z-index: 6; }
 body.bloom-v2 .v2-col-hi {
