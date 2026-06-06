@@ -16825,22 +16825,24 @@
     var mirrored = (subContent && (!isPlainText || subContent.length >= 60)) ? subContent : '';
     host.innerHTML = dsChip + mirrored;
     host.style.display = '';
-    // Re-wire the practice-diff-chip click since cloning innerHTML
-    // doesn't preserve event listeners.
+    // UR.1 (2026-06-06) — the difficulty is ALREADY shown (and editable) via the
+    // top-row .mode-chip, which opens the mode/difficulty picker on tap. So the
+    // mirrored .practice-diff-chip here was a pure DUPLICATE label ("ברירת מחדל"
+    // shown twice, one above the other). Drop it; keep only the value-add chips
+    // (personal-best target, board leader, daily-special XP).
     var clonedChip = host.querySelector('.practice-diff-chip');
-    if (clonedChip) {
-      // Cloned IDs would collide with original — strip the dup id.
-      clonedChip.removeAttribute('id');
-      clonedChip.onclick = function(e) {
-        e.stopPropagation();
-        showPracticeDifficultyPicker();
-      };
-    }
-    // Same for dyn-target-chip — strip duplicate id to avoid collisions.
+    if (clonedChip) clonedChip.remove();
+    // Strip duplicate ids on the cloned chips to avoid collisions with originals.
     var clonedTarget = host.querySelector('.dyn-target-chip');
     if (clonedTarget) clonedTarget.removeAttribute('id');
     var clonedLeader = host.querySelector('.dyn-leader-chip');
     if (clonedLeader) clonedLeader.removeAttribute('id');
+    // If nothing meaningful remains after dropping the duplicate difficulty,
+    // hide the strip so it never wastes a row above the board.
+    if (!host.querySelector('*') && !host.textContent.trim()) {
+      host.style.display = 'none';
+      host.innerHTML = '';
+    }
   }
 
   // Mode picker (May 2026, B7 revised) — opens when player taps the
@@ -19600,6 +19602,10 @@
     var pill = document.getElementById('flow-pill'); if (pill) pill.remove();
   }
   function showIdleWarn() {
+    // Don't nag before the first move of a game — a player reading a fresh
+    // board is not "stalling". The nudge only earns its place once they've
+    // engaged (dropsCount > 0). Removes the banner-over-the-board on entry.
+    if (typeof dropsCount === 'number' && dropsCount === 0) return;
     if (idleWarnEl && document.body.contains(idleWarnEl)) return;
     idleWarnEl = document.createElement('div');
     idleWarnEl.className = 'idle-warn-banner';
@@ -30035,9 +30041,20 @@
     // tiers 1..best are reached; the next tier is best+1 (if best < MAX).
     var atTop = best >= MAX;
     var nextTier = (!atTop && tiers[best + 1]) ? tiers[best + 1] : null;
-    var headRight = atTop
-      ? '👑 הגעת לכתר!'
-      : '🔼 כמעט! עוד דרגה ל' + ((nextTier && nextTier.name) ? nextTier.name : 'דרגה הבאה');
+    // UR.11 (2026-06-06) — a tier-maxed veteran used to see a dead "הגעת לכתר!"
+    // with nothing left to chase (the strongest near-goal pull went flat for the
+    // most-engaged players). Re-point the hook at their SCORE so there's always a
+    // next goal: "👑 שיא: 123K · תשבור?".
+    var headRight;
+    if (atTop) {
+      var bestScore = 0;
+      try { bestScore = parseInt(localStorage.getItem(typeof BEST_KEY !== 'undefined' ? BEST_KEY : 'bloom_best') || '0', 10) || 0; } catch (e) {}
+      var bs = bestScore >= 1000000 ? (Math.round(bestScore / 100000) / 10) + 'M'
+             : bestScore >= 1000 ? Math.round(bestScore / 1000) + 'K' : bestScore;
+      headRight = bestScore > 0 ? '👑 שיא: ' + bs + ' · תשבור?' : '👑 אלוף הכתר! שחק לשיא';
+    } else {
+      headRight = '🔼 כמעט! עוד דרגה ל' + ((nextTier && nextTier.name) ? nextTier.name : 'דרגה הבאה');
+    }
 
     var wrap = document.createElement('div');
     wrap.id = 'home-tiles-ladder';

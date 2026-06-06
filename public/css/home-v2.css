@@ -6015,7 +6015,25 @@ body[data-home-variant="tiles"] .home-v2-cta .htl-tease {
 }
 .home-tiles-ladder .htl-sep { color: #A89580; font-size: 9px; flex: 0 0 auto; }
 
-/* the single stable hot card reuses .hvar-hero-big (Power Hero styling) — no extra rules needed */
+/* ── Single hot card (UR.12, 2026-06-06) ──
+   It reuses .hvar-hero-big, but the Power-Hero base is a 70px-icon, ~272px-tall
+   centerpiece that dominated the launchpad and pushed the play-mode actions far
+   below the fold. On the tiles home the card is a SUPPORTING signal under PLAY,
+   so cap + calm it: smaller icon, tighter padding, no heavy infinite pulse.
+   Keeps the warm gradient family so it sits in BLOOM's gold/cream palette. */
+body[data-home-variant="tiles"] #home-v2-hero { margin: 0 0 16px; }
+body[data-home-variant="tiles"] .hvar-hero-big {
+  padding: 15px 16px 14px; border-radius: 20px; border-width: 2px; gap: 4px;
+  box-shadow: 0 8px 22px -8px rgba(201,145,26,.42);
+}
+body[data-home-variant="tiles"] .hvar-hero-big.hero-urgent {
+  /* keep the urgency colour, drop the heavy infinite box-shadow pulse for calm */
+  animation: hvarHeroFadeIn .4s ease-out;
+}
+body[data-home-variant="tiles"] .hvar-hero-icon { font-size: 40px; margin: 2px 0 0; animation: none; }
+body[data-home-variant="tiles"] .hvar-hero-title { font-size: 18px; }
+body[data-home-variant="tiles"] .hvar-hero-sub { font-size: 12.5px; }
+body[data-home-variant="tiles"] .hvar-hero-cta { margin-top: 9px; padding: 11px 24px; font-size: 15px; border-radius: 14px; }
 
 /* ── Minimal home tab (2026-06-06): the launchpad shows only status + brand +
    PLAY + ladder + ONE hot card + the play-mode actions. These secondary
