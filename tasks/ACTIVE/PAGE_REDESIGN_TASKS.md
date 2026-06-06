@@ -21,12 +21,32 @@
 
 ---
 
+## ✅ Shipped 2026-06-06 (`v20260606j`, deployed + live-verified on prod)
+
+The owner said "do everything to make the **home beautiful** and the **game very addictive**." The two PRIMARY surfaces were done + verified live (Playwright @390×844):
+
+| Task | What shipped | Live verification |
+|---|---|---|
+| **UR.1** ✅ | `#mode-extras` no longer mirrors the `.practice-diff-chip` — the duplicate "ברירת מחדל" above the board is gone (difficulty stays editable via the top-row `.mode-chip` → picker). Icon-only leader/target chips (a lone "🏆") are also dropped. | In-game `#mode-extras` now shows nothing duplicate (was "🏆 ברירת מחדל 📦"). |
+| **UR.3** ✅ | The idle "⏰ שחק!" nag is gated on `dropsCount>0` — never fires before the first move. | Waited **12s in-game without moving → no banner** (was nagging at ~10s over the board). |
+| **UR.11** ✅ | Tier-maxed veterans get a live SCORE chase instead of the dead "הגעת לכתר!". | Ladder now reads **"👑 שיא: 123K · תשבור?"**. |
+| **UR.12** ✅ | The single home hot-card is capped + calmed on the tiles home (icon 70→40px). | Hot-card **272→181px**; pid pulled above the fold (792→696), actions to the fold edge. |
+| **UR.14** ✅ | Added `<meta name="mobile-web-app-capable">`. | Console deprecation warning gone. |
+
+**Guardrails held:** engine untouched (self-test 200 games / 0 floating tiles every build); all CSS scoped to the tiles variant / `body.bloom-v2`; JS guarded; fully reversible (admin `🏠` picker + `?hv=` still work). Screenshots: `audit/08-home-after.png`, `audit/09-ingame-after.png`.
+
+### ⏭️ Recommended next (NOT shipped — need your eye / a reproduction)
+- **UR.6–UR.9 (unified `.bloom-card` system for the 4 tab pages)** — this is the "overloaded pages / rainbow-soup" fix and it's a broad, taste-sensitive visual change across ~20 feature cards. Per the project's own lesson (home v3 was built then rejected), this should be shipped with your eye on it — ideally as a previewable change. Fully specified below; ready to execute on your go.
+- **UR.10 (game-over banner cap)** — a refactor of the highest-emotion screen. The *overloaded* case (new-best + crown + streak-milestone + N achievements + N quests at once) can't be reproduced headlessly, so it shouldn't ship blind. Capture a real overloaded game-over first, then execute.
+
+---
+
 ## Scores (0–100, BLOOM's 7 dimensions: addiction 30% · visual 18% · comfort 12% · clarity 12% · focus 12% · closability 8% · relevance 8%)
 
 | Screen | addict | visual | comfort | clarity | focus | close | relev | **Overall** | One-line verdict |
 |---|---|---|---|---|---|---|---|---|---|
-| **In-game (v2 board)** | 72 | 62 | 60 | 56 | 58 | 82 | 55 | **63** | Board is good; the chrome above it is redundant + crowded on real phones. |
-| **Home (tiles)** | 80 | 74 | 78 | 76 | 82 | — | 70 | **77** | PLAY dominant + clean — but the 272px hot-card duplicates a tab, and the tier-maxed ladder is anticlimactic. |
+| **In-game (v2 board)** | 76 | 64 | 68 | 70 | 64 | 82 | 64 | **63 → ~70** ✅ | Board now clean: no duplicate difficulty, no idle nag over the board. Remaining: col-mult row intent (UR.2) + chrome height on real phones (UR.4). |
+| **Home (tiles)** | 82 | 80 | 80 | 78 | 86 | — | 78 | **77 → ~83** ✅ | Hot-card capped (272→181px) so PLAY+ladder+actions sit near the fold; tier-maxed ladder now a live score chase. |
 | **Tab pages (×4)** | 65 | 54 | 62 | 60 | 50 | 82 | 60 | **60** | "Rainbow-card-soup" — every card a loud gradient, no hierarchy. The #1 "overloaded" complaint. |
 | **Game-over** | 82 | 66 | 64 | 62 | 60 | 76 | 64 | **69** | Strong hooks, but up to 10–15 banners can stack = overload. |
 | **Modals (econ/progress/social)** | 78 | 76 | 78 | 76 | 74 | 84 | 72 | **77** | Generally good; just inconsistent headers/CTA between modules. |
