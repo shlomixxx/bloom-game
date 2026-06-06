@@ -582,6 +582,16 @@ export async function initDb() {
     // so existing installs need this one-time UPDATE. Idempotent — only flips
     // if the value is still the old default; respects any admin override.
     `UPDATE game_config SET value = 'hero' WHERE key = 'home_variant' AND value = 'standard'`,
+    // HOME.2 (2026-06-06): make the new minimal 'tiles' launchpad the default
+    // home everyone reaches. ONE-TIME + guarded by a sentinel so that if the
+    // admin later picks a different variant, this never re-overrides it on the
+    // next boot (unlike the unguarded PH.1 line above).
+    `DO $$ BEGIN
+       IF NOT EXISTS (SELECT 1 FROM game_config WHERE key = '_mig_home_tiles_default_v1') THEN
+         UPDATE game_config SET value = 'tiles' WHERE key = 'home_variant' AND value = 'hero';
+         INSERT INTO game_config (key, value) VALUES ('_mig_home_tiles_default_v1', '1') ON CONFLICT (key) DO NOTHING;
+       END IF;
+     END $$`,
     // BL.1 — Bot social-proof + auto-fallback for duels (May 2026).
     `ALTER TABLE duels ADD COLUMN IF NOT EXISTS is_bot_match BOOLEAN DEFAULT FALSE`,
     `ALTER TABLE duels ADD COLUMN IF NOT EXISTS bot_settle_at TIMESTAMPTZ`,
