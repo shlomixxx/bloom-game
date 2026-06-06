@@ -32,11 +32,14 @@ The owner said "do everything to make the **home beautiful** and the **game very
 | **UR.11** ✅ | Tier-maxed veterans get a live SCORE chase instead of the dead "הגעת לכתר!". | Ladder now reads **"👑 שיא: 123K · תשבור?"**. |
 | **UR.12** ✅ | The single home hot-card is capped + calmed on the tiles home (icon 70→40px). | Hot-card **272→181px**; pid pulled above the fold (792→696), actions to the fold edge. |
 | **UR.14** ✅ | Added `<meta name="mobile-web-app-capable">`. | Console deprecation warning gone. |
+| **UR.6 / UR.7** ✅ (`v20260606l`) | Unified "calm card" look on all 4 tab pages — every migrated card gets ONE geometry (18px radius + a single soft neutral shadow + a hairline) and the neon gradients are dialed back (`filter: saturate(.76)`), killing the rainbow-soup **without** repainting each card's bespoke internals. Gated under `body.tab-cards-calm` → fully reversible. Admin key `tab_cards_calm` (default on); preview live with `?cards=calm` / `?cards=classic`. | Live-verified on all 4 tabs: `saturate(0.76)`, radius 18px, one neutral shadow; `?cards=classic` restores the originals. Screenshots `audit/11-tab-rewards-calm.png`, `12-tab-progress-calm.png`, `13-tab-shop-calm.png`. |
 
 **Guardrails held:** engine untouched (self-test 200 games / 0 floating tiles every build); all CSS scoped to the tiles variant / `body.bloom-v2`; JS guarded; fully reversible (admin `🏠` picker + `?hv=` still work). Screenshots: `audit/08-home-after.png`, `audit/09-ingame-after.png`.
 
 ### ⏭️ Recommended next (NOT shipped — need your eye / a reproduction)
-- **UR.6–UR.9 (unified `.bloom-card` system for the 4 tab pages)** — this is the "overloaded pages / rainbow-soup" fix and it's a broad, taste-sensitive visual change across ~20 feature cards. Per the project's own lesson (home v3 was built then rejected), this should be shipped with your eye on it — ideally as a previewable change. Fully specified below; ready to execute on your go.
+- **UR.6/UR.7 — DONE** ✅ (calm v1, `v20260606l`, admin-toggleable + previewable). Optional **v2** if you want it bolder: a full surface-card redesign (white surface + a single category-accent stripe/icon-chip per card) — much stronger cohesion, but it needs per-card text-colour fixes on ~20 cards, so it's a reviewed follow-up. Or simply dial the calm stronger (lower the `saturate()` value in `public/css/bottom-nav.css`).
+- **UR.8 (de-duplicate features across surfaces)** — Spin shows on home + rewards; bundles/deals on rewards + shop. Pick one canonical home each (`TILE_TO_TAB`). Small.
+- **UR.9 (per-tab hierarchy)** — make only the single top card per tab vivid, calm the rest (extend `src/80-polish.js` Priority Calmer to tab panels). Medium; taste-sensitive (must pick the right "top" card), so review-first.
 - **UR.10 (game-over banner cap)** — a refactor of the highest-emotion screen. The *overloaded* case (new-best + crown + streak-milestone + N achievements + N quests at once) can't be reproduced headlessly, so it shouldn't ship blind. Capture a real overloaded game-over first, then execute.
 
 ---
@@ -47,7 +50,7 @@ The owner said "do everything to make the **home beautiful** and the **game very
 |---|---|---|---|---|---|---|---|---|---|
 | **In-game (v2 board)** | 76 | 64 | 68 | 70 | 64 | 82 | 64 | **63 → ~70** ✅ | Board now clean: no duplicate difficulty, no idle nag over the board. Remaining: col-mult row intent (UR.2) + chrome height on real phones (UR.4). |
 | **Home (tiles)** | 82 | 80 | 80 | 78 | 86 | — | 78 | **77 → ~83** ✅ | Hot-card capped (272→181px) so PLAY+ladder+actions sit near the fold; tier-maxed ladder now a live score chase. |
-| **Tab pages (×4)** | 65 | 54 | 62 | 60 | 50 | 82 | 60 | **60** | "Rainbow-card-soup" — every card a loud gradient, no hierarchy. The #1 "overloaded" complaint. |
+| **Tab pages (×4)** | 65 | 68 | 70 | 66 | 58 | 82 | 60 | **60 → ~72** ✅ | Unified "calm card" look (one geometry + softer neon) shipped — cohesive, less rainbow. Remaining: de-dup (UR.8) + per-tab hierarchy (UR.9). |
 | **Game-over** | 82 | 66 | 64 | 62 | 60 | 76 | 64 | **69** | Strong hooks, but up to 10–15 banners can stack = overload. |
 | **Modals (econ/progress/social)** | 78 | 76 | 78 | 76 | 74 | 84 | 72 | **77** | Generally good; just inconsistent headers/CTA between modules. |
 | **FTUE / tour** | 76 | 74 | 78 | 80 | 78 | 80 | 70 | **76** | Solid scripted demo; minor polish. |
