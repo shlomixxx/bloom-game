@@ -1947,3 +1947,22 @@
     .idle-warn-banner { animation: none; }
   }
   html[data-theme="dark"] .flow-pill { box-shadow: 0 4px 14px rgba(255, 159, 28, 0.35); }
+
+/* ════════════════════════════════════════════════════════════════
+   UR.4 (2026-06-07) — HERO THE LIVE SCORE (in-game)
+   ════════════════════════════════════════════════════════════════
+   The live score is the dopamine number the whole merge loop feeds — and the v2
+   particle stream (v2FlyParticlesToScore) flies straight to it. It used to be
+   one of four equal stat cells, so the payoff landed on a target that didn't
+   look important. Make the score cell DOMINATE the stats row (wider + larger)
+   and demote שיא/רצף/💎 to small chips — the Suika/Royal-Match "one growing
+   number" pull. v2-scoped (classic/legacy untouched); higher specificity +
+   !important to beat the media-query compaction rules above. */
+body.bloom-v2 .stats > .stat.stat-primary { flex: 1.7 1 0 !important; }
+body.bloom-v2 .stat-primary .stat-val { font-size: 30px !important; letter-spacing: -0.5px; }
+body.bloom-v2 .stat-primary .stat-label { opacity: 0.85; }
+body.bloom-v2 .stat-primary .stat-val.score-lg { font-size: 25px !important; }
+body.bloom-v2 .stat-primary .stat-val.score-xl { font-size: 20px !important; }
+body.bloom-v2 .stats > .stat:not(.stat-primary) { flex: 1 1 0 !important; }
+body.bloom-v2 .stats > .stat:not(.stat-primary) .stat-val { font-size: 13px !important; }
+body.bloom-v2 .stats > .stat:not(.stat-primary) .stat-label { opacity: 0.55; font-size: 9.5px !important; }

@@ -37591,6 +37591,54 @@ try {
     }
   }
 
+  // ────────────────────────────────────────────────────────────
+  // UR.9 — PER-TAB HIERARCHY (2026-06-07)
+  // ────────────────────────────────────────────────────────────
+  // After the bottom-nav routes tiles into tab panels, each tab is a stack of
+  // calm cards (body.tab-cards-calm). To kill "everything competes", spotlight
+  // the SINGLE highest-priority *hot* card per tab (full colour + a warm lift)
+  // and leave the rest calm. Only fires when a card is genuinely hot (a claim /
+  // free spin / live deal) — never arbitrarily highlights a passive card. Pure
+  // class toggle; all visuals are CSS-gated under body.tab-cards-calm.
+  function priorityForCard(card) {
+    var max = -1;
+    TILE_PRIORITIES.forEach(function(rule) {
+      try {
+        var hit;
+        if (rule.up) {
+          var desc = rule.sel.split(' ').slice(1).join(' ');
+          hit = card.matches(rule.up) && (desc ? !!card.querySelector(desc) : true);
+        } else {
+          hit = card.matches(rule.sel);
+        }
+        if (hit && rule.priority > max) max = rule.priority;
+      } catch (e) {}
+    });
+    return max;
+  }
+  function applyTabHierarchy() {
+    // Only meaningful in the unified calm look; in classic mode leave cards alone.
+    if (!document.body.classList.contains('tab-cards-calm')) {
+      var stale = document.querySelectorAll('.bn-migrated.tab-spotlight');
+      Array.prototype.forEach.call(stale, function(c) { c.classList.remove('tab-spotlight'); });
+      return;
+    }
+    var bodies = document.querySelectorAll('.bn-tab-screen-body');
+    Array.prototype.forEach.call(bodies, function(body) {
+      var cards = body.querySelectorAll('.bn-migrated');
+      var best = null, bestP = -1;
+      Array.prototype.forEach.call(cards, function(card) {
+        card.classList.remove('tab-spotlight');
+        var p = priorityForCard(card);
+        if (p > bestP) { bestP = p; best = card; }
+      });
+      // 55 = the "daily hooks / claims" band (spin-available, daily-deal, and all
+      // the *.has-claim reward states). Below that everything is passive → no
+      // spotlight, so a calm tab stays uniformly calm rather than faking urgency.
+      if (best && bestP >= 55) best.classList.add('tab-spotlight');
+    });
+  }
+
   // Recompute every 3s — tiles mount asynchronously over ~3.2s.
   // Once the home is stable, polling stops.
   var _calmerTickHandle = null;
@@ -37600,6 +37648,7 @@ try {
     var run = function() {
       if (!document.getElementById('home-screen')) { stopPolishLifecycle(); return; }
       applyPriorityCalmer();
+      applyTabHierarchy();
       maybeShowMicroTutorials();
       ticks++;
       if (ticks > 4) { stopPolishLifecycle(); }

@@ -368,3 +368,18 @@ html[data-theme="dark"] body.tab-cards-calm .bn-tab-screen-body > .bn-migrated {
   box-shadow: 0 4px 16px -8px rgba(0, 0, 0, 0.50) !important;
   filter: saturate(0.82);
 }
+
+/* UR.9 (2026-06-07) — per-tab spotlight. The single genuinely-hot card on a tab
+   (a claim / free spin / live deal — chosen by src/80-polish.js applyTabHierarchy)
+   pops to FULL colour + a warm lift above its calmed neighbours, so the eye lands
+   on the one action worth taking. The full-colour-amid-desaturated contrast IS the
+   hierarchy. Static (no animation) → reduced-motion-safe by construction. */
+body.tab-cards-calm .bn-tab-screen-body > .bn-migrated.tab-spotlight {
+  filter: none;
+  border-color: rgba(186, 117, 23, 0.50) !important;
+  box-shadow: 0 8px 24px -6px rgba(186, 117, 23, 0.55) !important;
+}
+html[data-theme="dark"] body.tab-cards-calm .bn-tab-screen-body > .bn-migrated.tab-spotlight {
+  border-color: rgba(250, 199, 117, 0.55) !important;
+  box-shadow: 0 8px 24px -6px rgba(250, 199, 117, 0.30) !important;
+}

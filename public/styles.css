@@ -1947,6 +1947,25 @@
     .idle-warn-banner { animation: none; }
   }
   html[data-theme="dark"] .flow-pill { box-shadow: 0 4px 14px rgba(255, 159, 28, 0.35); }
+
+/* ════════════════════════════════════════════════════════════════
+   UR.4 (2026-06-07) — HERO THE LIVE SCORE (in-game)
+   ════════════════════════════════════════════════════════════════
+   The live score is the dopamine number the whole merge loop feeds — and the v2
+   particle stream (v2FlyParticlesToScore) flies straight to it. It used to be
+   one of four equal stat cells, so the payoff landed on a target that didn't
+   look important. Make the score cell DOMINATE the stats row (wider + larger)
+   and demote שיא/רצף/💎 to small chips — the Suika/Royal-Match "one growing
+   number" pull. v2-scoped (classic/legacy untouched); higher specificity +
+   !important to beat the media-query compaction rules above. */
+body.bloom-v2 .stats > .stat.stat-primary { flex: 1.7 1 0 !important; }
+body.bloom-v2 .stat-primary .stat-val { font-size: 30px !important; letter-spacing: -0.5px; }
+body.bloom-v2 .stat-primary .stat-label { opacity: 0.85; }
+body.bloom-v2 .stat-primary .stat-val.score-lg { font-size: 25px !important; }
+body.bloom-v2 .stat-primary .stat-val.score-xl { font-size: 20px !important; }
+body.bloom-v2 .stats > .stat:not(.stat-primary) { flex: 1 1 0 !important; }
+body.bloom-v2 .stats > .stat:not(.stat-primary) .stat-val { font-size: 13px !important; }
+body.bloom-v2 .stats > .stat:not(.stat-primary) .stat-label { opacity: 0.55; font-size: 9.5px !important; }
   /* ============ TOUR / TUTORIAL ("סייר") ============ */
   .tour-card {
     background: #FFFFFF; border-radius: 18px; padding: 0;
@@ -20875,6 +20894,21 @@ html[data-theme="dark"] body.tab-cards-calm .bn-tab-screen-body > .bn-migrated {
   border-color: rgba(255, 255, 255, 0.08) !important;
   box-shadow: 0 4px 16px -8px rgba(0, 0, 0, 0.50) !important;
   filter: saturate(0.82);
+}
+
+/* UR.9 (2026-06-07) — per-tab spotlight. The single genuinely-hot card on a tab
+   (a claim / free spin / live deal — chosen by src/80-polish.js applyTabHierarchy)
+   pops to FULL colour + a warm lift above its calmed neighbours, so the eye lands
+   on the one action worth taking. The full-colour-amid-desaturated contrast IS the
+   hierarchy. Static (no animation) → reduced-motion-safe by construction. */
+body.tab-cards-calm .bn-tab-screen-body > .bn-migrated.tab-spotlight {
+  filter: none;
+  border-color: rgba(186, 117, 23, 0.50) !important;
+  box-shadow: 0 8px 24px -6px rgba(186, 117, 23, 0.55) !important;
+}
+html[data-theme="dark"] body.tab-cards-calm .bn-tab-screen-body > .bn-migrated.tab-spotlight {
+  border-color: rgba(250, 199, 117, 0.55) !important;
+  box-shadow: 0 8px 24px -6px rgba(250, 199, 117, 0.30) !important;
 }
 /* ============================================================
    FD.1 — Feature Discovery Map styles (May 29 2026)
