@@ -43,6 +43,16 @@ body.bloom-v2 .cell.v2-landed {
 @media (prefers-reduced-motion: reduce) {
   body.bloom-v2 .cell.merging, body.bloom-v2 .cell.v2-landed { transition: none; }
 }
+/* gold particle that flies from a merged cell to the score counter (v2FlyParticlesToScore) */
+.v2-score-particle {
+  position: fixed; width: 13px; height: 13px; border-radius: 50%;
+  margin-left: -6px; margin-top: -6px;
+  background: radial-gradient(circle at 35% 30%, #FFF1C4, #F4B23E 72%);
+  box-shadow: 0 0 8px 2px rgba(244, 178, 62, .7);
+  pointer-events: none; z-index: 9000; opacity: 0;
+  transform: translate(0, 0) scale(.4);
+  transition: transform .2s cubic-bezier(.34, 1.6, .5, 1), opacity .2s ease-out;
+}
 @keyframes v2Squash {
   0%   { transform: scaleY(.86) scaleX(1.08); }
   55%  { transform: scaleY(1.05) scaleX(.97); }

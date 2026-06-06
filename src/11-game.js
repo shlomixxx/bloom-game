@@ -3281,6 +3281,15 @@
         );
         if (mergedCellEl) auroraFlyParticlesToScore(mergedCellEl, Math.min(6, 2 + chainCount));
       }
+      // HOME.3 dopamine: v2 fires gold particles flying merged-cell → score on
+      // every merge (the core-loop reward made tactile). Gated v2On so classic
+      // skips even the lookup; the function self-skips bots / Aurora / reduced-motion.
+      if (typeof v2On === 'function' && v2On() && typeof v2FlyParticlesToScore === 'function') {
+        var v2MergedCellEl = document.querySelector(
+          '#grid .cell[data-r="' + merged[0] + '"][data-c="' + merged[1] + '"]'
+        );
+        if (v2MergedCellEl) v2FlyParticlesToScore(v2MergedCellEl, chainCount);
+      }
       await gsleep(150);
       render();
       await gsleep(80);

@@ -374,6 +374,51 @@
     ['#v2-fb-title', '.v2-fb-rate', '#v2-fb-input', '#v2-fb-send'].forEach(function(s) { var el = document.querySelector('#v2-fb-overlay ' + s); if (el) el.style.display = 'none'; });
     setTimeout(function() { v2CloseFeedback(true); }, 1300);
   }
+
+  // ── Core-loop dopamine: gold particles fly from a merged cell to the score
+  // counter (Royal Match / Toon Blast pattern). Visually connects the action
+  // (merge) to the reward (score ↑) — the single most-repeated, most satisfying
+  // beat in the game. Visual-only; the score itself already pops via bumpScore.
+  // Gated v2On + skips bots / reduced-motion / when the Aurora skin (which has
+  // its own particles) is active. ───────────────────────────────────────────
+  function v2FlyParticlesToScore(cellEl, chainCount) {
+    try {
+      if (typeof v2On === 'function' && !v2On()) return;
+      if (window.__bloomBotActive) return;
+      if (typeof auroraIsActive === 'function' && auroraIsActive()) return; // Aurora does its own
+      if (!cellEl) return;
+      if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+      var scoreEl = document.getElementById('score');
+      if (!scoreEl) return;
+      var from = cellEl.getBoundingClientRect();
+      var to = scoreEl.getBoundingClientRect();
+      if (!from.width || !to.width) return;
+      var sx = from.left + from.width / 2, sy = from.top + from.height / 2;
+      var tx = to.left + to.width / 2, ty = to.top + to.height / 2;
+      var n = Math.max(3, Math.min(7, 2 + (chainCount || 1)));
+      for (var i = 0; i < n; i++) {
+        (function (i) {
+          var p = document.createElement('div');
+          p.className = 'v2-score-particle';
+          p.style.left = sx + 'px';
+          p.style.top = sy + 'px';
+          document.body.appendChild(p);
+          var jx = (Math.random() - 0.5) * 42, jy = (Math.random() - 0.5) * 42;
+          requestAnimationFrame(function () {
+            p.style.transform = 'translate(' + jx + 'px,' + (jy - 16) + 'px) scale(1.15)';
+            p.style.opacity = '1';
+            setTimeout(function () {
+              p.style.transition = 'transform .44s cubic-bezier(.55,0,.35,1), opacity .44s ease-in';
+              p.style.transform = 'translate(' + (tx - sx) + 'px,' + (ty - sy) + 'px) scale(.35)';
+              p.style.opacity = '0';
+            }, 70 + i * 28);
+          });
+          setTimeout(function () { try { p.remove(); } catch (e) {} }, 70 + i * 28 + 480);
+        })(i);
+      }
+    } catch (e) {}
+  }
+
   // Called from the game-over render (gated). Auto-prompts once, after the 2nd
   // real game-over of the session.
   function v2OnGameOver() {
