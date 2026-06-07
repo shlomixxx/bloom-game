@@ -30014,6 +30014,23 @@
       }
     } catch (e) {}
 
+    // 3.5. Pull the play-mode actions onto the fold (right after the hot strip,
+    // ABOVE the identity line) and push the pid identity block down to the
+    // footer — תחרות/דו-קרב are the highest-retention loops and shouldn't be
+    // buried below the player's own name.
+    try {
+      var heroEl = document.getElementById('home-v2-hero');
+      var actions = home.querySelector('.home-v2-actions');
+      if (actions && heroEl && heroEl.parentNode === actions.parentNode) {
+        heroEl.parentNode.insertBefore(actions, heroEl.nextSibling);
+      }
+      var pidEl = document.getElementById('home-v2-pid');
+      var bottomEl = home.querySelector('.home-v2-bottom');
+      if (pidEl && bottomEl && bottomEl.parentNode === pidEl.parentNode) {
+        bottomEl.parentNode.insertBefore(pidEl, bottomEl);
+      }
+    } catch (e) {}
+
     // 4. Merge-tease inside PLAY + faint drifting tiles behind the home.
     try { injectMergeTease(play); } catch (e) {}
     try { addFloatingTiles(home); } catch (e) {}

@@ -6015,25 +6015,34 @@ body[data-home-variant="tiles"] .home-v2-cta .htl-tease {
 }
 .home-tiles-ladder .htl-sep { color: #A89580; font-size: 9px; flex: 0 0 auto; }
 
-/* ── Single hot card (UR.12, 2026-06-06) ──
-   It reuses .hvar-hero-big, but the Power-Hero base is a 70px-icon, ~272px-tall
-   centerpiece that dominated the launchpad and pushed the play-mode actions far
-   below the fold. On the tiles home the card is a SUPPORTING signal under PLAY,
-   so cap + calm it: smaller icon, tighter padding, no heavy infinite pulse.
-   Keeps the warm gradient family so it sits in BLOOM's gold/cream palette. */
-body[data-home-variant="tiles"] #home-v2-hero { margin: 0 0 16px; }
+/* ── Single hot card → a thin one-line REWARD STRIP (UR.8/UR.12, 2026-06-07) ──
+   The Power-Hero base is a 70px-icon, ~272px-tall centerpiece that dominated the
+   launchpad AND duplicated a tab card. On the tiles home it becomes a slim
+   horizontal strip (icon · one-line text · CTA) — a distinct shape from a tab
+   card (strip = "go claim now", card = "browse"), and it frees ~120px so the
+   play-mode actions (תחרות/דו-קרב/אתגרים/סקינים) reach the fold. */
+body[data-home-variant="tiles"] #home-v2-hero { margin: 0 0 12px; }
 body[data-home-variant="tiles"] .hvar-hero-big {
-  padding: 15px 16px 14px; border-radius: 20px; border-width: 2px; gap: 4px;
-  box-shadow: 0 8px 22px -8px rgba(201,145,26,.42);
+  flex-direction: row; align-items: center; text-align: right;
+  gap: 11px; padding: 11px 14px; border-radius: 16px; border-width: 1.5px;
+  box-shadow: 0 6px 18px -8px rgba(201,145,26,.40);
 }
-body[data-home-variant="tiles"] .hvar-hero-big.hero-urgent {
-  /* keep the urgency colour, drop the heavy infinite box-shadow pulse for calm */
-  animation: hvarHeroFadeIn .4s ease-out;
+body[data-home-variant="tiles"] .hvar-hero-big.hero-urgent { animation: hvarHeroFadeIn .4s ease-out; }
+body[data-home-variant="tiles"] .hvar-hero-icon { font-size: 28px; margin: 0; animation: none; flex: 0 0 auto; }
+body[data-home-variant="tiles"] .hvar-hero-title { font-size: 14.5px; line-height: 1.2; flex: 1 1 auto; text-align: right; padding: 0; }
+body[data-home-variant="tiles"] .hvar-hero-sub { display: none; }      /* strip = one line */
+body[data-home-variant="tiles"] .hvar-hero-cta {
+  margin: 0; padding: 9px 16px; font-size: 13px; border-radius: 12px;
+  flex: 0 0 auto; white-space: nowrap;
 }
-body[data-home-variant="tiles"] .hvar-hero-icon { font-size: 40px; margin: 2px 0 0; animation: none; }
-body[data-home-variant="tiles"] .hvar-hero-title { font-size: 18px; }
-body[data-home-variant="tiles"] .hvar-hero-sub { font-size: 12.5px; }
-body[data-home-variant="tiles"] .hvar-hero-cta { margin-top: 9px; padding: 11px 24px; font-size: 15px; border-radius: 14px; }
+/* Play-mode actions: compact 4-col row (mirror power-hero) so the social/
+   competitive loops sit ON the fold instead of buried below the identity line. */
+body[data-home-variant="tiles"] .home-v2-actions {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 0 0 14px;
+}
+body[data-home-variant="tiles"] .home-v2-action { padding: 10px 6px; font-size: 11px; border-radius: 12px; }
+body[data-home-variant="tiles"] .home-v2-action .home-v2-action-icon { font-size: 23px; }
+body[data-home-variant="tiles"] .home-v2-action .home-v2-action-label { font-size: 10.5px; }
 
 /* ── Minimal home tab (2026-06-06): the launchpad shows only status + brand +
    PLAY + ladder + ONE hot card + the play-mode actions. These secondary
