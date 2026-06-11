@@ -30095,7 +30095,11 @@
     for (var i = 1; i <= MAX; i++) {
       var t = tiers[i];
       if (!t) continue; // null-safe (defensive)
-      var cls = (i <= best) ? 'reached' : (i === best + 1 ? 'next' : '');
+      // UR.9-home (2026-06-12) — mark only the HIGHEST reached tier as 'current'
+      // ("you are here") so the ladder shows one progress marker instead of N
+      // identical ✓ checkmarks. Lower reached tiers stay full-colour (done) with
+      // no badge; the next tier pulses; beyond is dimmed.
+      var cls = (i < best) ? 'reached' : (i === best ? 'reached current' : (i === best + 1 ? 'next' : ''));
       if (i > 1) html += '<span class="htl-sep">›</span>';
       html += '<div class="htl-tile ' + cls + '" style="background:' + (t.bg || '#ccc') +
               ';color:' + (t.fg || '#222') + '">' + (t.svg || '') + '</div>';

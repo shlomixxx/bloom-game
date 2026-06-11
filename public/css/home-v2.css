@@ -6005,6 +6005,10 @@ body[data-home-variant="tiles"] .home-v2-cta .htl-tease {
   width: 15px; height: 15px; border-radius: 50%; display: grid; place-items: center;
   border: 1.5px solid #fff;
 }
+/* UR.9-home — show the ✓ only on the highest reached tier ("you are here"),
+   not on every reached tile, and ring it so the eye finds the current spot. */
+.home-tiles-ladder .htl-tile.reached:not(.current)::after { display: none; }
+.home-tiles-ladder .htl-tile.current { outline: 2.5px solid #36BE8C; outline-offset: 1px; }
 .home-tiles-ladder .htl-tile.next {
   filter: none; outline: 2.5px solid #F4B23E; outline-offset: 1px;
   animation: tilesNextPulse 1.3s ease-in-out infinite;
