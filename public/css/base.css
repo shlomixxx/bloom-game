@@ -1958,11 +1958,25 @@
    and demote שיא/רצף/💎 to small chips — the Suika/Royal-Match "one growing
    number" pull. v2-scoped (classic/legacy untouched); higher specificity +
    !important to beat the media-query compaction rules above. */
-body.bloom-v2 .stats > .stat.stat-primary { flex: 1.7 1 0 !important; }
-body.bloom-v2 .stat-primary .stat-val { font-size: 30px !important; letter-spacing: -0.5px; }
+body.bloom-v2 .stats > .stat.stat-primary {
+  flex: 1.9 1 0 !important;
+  overflow: visible !important;   /* the score cell must never clip its value */
+  min-width: 0;
+}
+/* FIX (2026-06-12) — the live score must ALWAYS show in FULL, never truncate to
+   "10,9…". The earlier 30px hero overflowed the fixed ~380px app's score box
+   (6-digit "22,643" = 104px in an 87px box) and the `text-overflow:ellipsis`
+   cut it. 24px fits a 6-digit score (fmtStatNum keeps ≥100K compact as 186K/1.2M
+   so it's always ≤6 chars) while still dominating the row (others are 13px); the
+   shrink classes cover the rare longer value; overflow:visible + text-overflow:
+   clip + max-width:none guarantee the ellipsis can NEVER appear again. */
+body.bloom-v2 .stat-primary .stat-val {
+  font-size: 24px !important; letter-spacing: -0.3px;
+  overflow: visible !important; text-overflow: clip !important; max-width: none !important;
+}
 body.bloom-v2 .stat-primary .stat-label { opacity: 0.85; }
-body.bloom-v2 .stat-primary .stat-val.score-lg { font-size: 25px !important; }
-body.bloom-v2 .stat-primary .stat-val.score-xl { font-size: 20px !important; }
+body.bloom-v2 .stat-primary .stat-val.score-lg { font-size: 22px !important; }
+body.bloom-v2 .stat-primary .stat-val.score-xl { font-size: 19px !important; }
 body.bloom-v2 .stats > .stat:not(.stat-primary) { flex: 1 1 0 !important; }
 body.bloom-v2 .stats > .stat:not(.stat-primary) .stat-val { font-size: 13px !important; }
 body.bloom-v2 .stats > .stat:not(.stat-primary) .stat-label { opacity: 0.55; font-size: 9.5px !important; }
