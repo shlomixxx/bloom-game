@@ -1991,3 +1991,26 @@
   color: rgba(255,255,255,0.85);
   letter-spacing: 0.2px;
 }
+
+/* UR.10 (2026-06-12) — collapsible "full report + share" on game-over.
+   The leaderboard + scoring table + per-tier game stats + emoji share-card used
+   to stack ~250px of report between the score and the actions, diluting the
+   win's dopamine. They now live behind one tap so the over-screen reads as a
+   DECISION (score → celebration → שחק שוב → share → return hook). */
+.over-extras {
+  margin: 10px auto 4px; max-width: 360px; width: 100%;
+  border-top: 1px solid var(--color-border, rgba(0,0,0,0.1));
+  padding-top: 6px;
+}
+.over-extras-sum {
+  list-style: none; cursor: pointer; text-align: center;
+  font-size: 13px; font-weight: 700; color: var(--color-text-muted, #6F6E68);
+  padding: 9px 12px; border-radius: 12px; user-select: none;
+  transition: background 0.15s ease;
+}
+.over-extras-sum::-webkit-details-marker { display: none; }
+.over-extras-sum::after { content: ' \25BE'; opacity: 0.6; }
+.over-extras[open] .over-extras-sum::after { content: ' \25B4'; }
+.over-extras-sum:hover { background: var(--color-surface, #F2EFE9); }
+html[data-theme="dark"] .over-extras-sum:hover { background: rgba(255,255,255,0.06); }
+.over-extras[open] .over-extras-sum { margin-bottom: 8px; }

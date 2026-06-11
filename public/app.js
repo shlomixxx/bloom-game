@@ -21388,6 +21388,14 @@
               '</div>' +
             '</div>'
           : '') +
+          // UR.10 (2026-06-12) — collapse the heavy analytics (top-50 board, the
+          // scoring table, the per-tier game stats, and the emoji share-card)
+          // behind a single tap. A great run's dopamine was diluted across ~250px
+          // of report between the score and the actions; now the over-screen reads
+          // as a DECISION (score → celebration → שחק שוב → share → return hook),
+          // with the full report one tap away. The viral "share your win" button
+          // above stays prominent.
+          '<details class="over-extras"><summary class="over-extras-sum">📊 הפירוט המלא + שיתוף</summary>' +
           (showLeaderboard ? renderLeaderboard() : '') +
           '<div class="tier-table">' + tierRows.join('') + '</div>' +
           // Game stats summary
@@ -21483,6 +21491,7 @@
               '<span>WhatsApp</span>' +
             '</button>' +
           '</div>' +
+          '</details>' +
           // UX audit 2026-06-02 — a clearly-labeled exit-to-home (the only path
           // home was the buried ⋯ menu). Secondary styling so it never competes
           // with the primary "play again".
