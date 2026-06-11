@@ -6039,7 +6039,16 @@
       // TA.1 — fresh:true ensures a click on home's play button always
       // starts a NEW game rather than restoring the prior over screen
       // from the LAST_GAME_KEY snapshot.
-      if (onOverScreen) init('practice', { fresh: true });
+      // BUGFIX (2026-06-12): the old code only re-init'd when a game-over
+      // OVERLAY was visibly mounted. But going home from a finished game via
+      // the ⋯ "חזרה לבית" menu removes the overlay while `window.__bloomGameOver`
+      // stays true — so PLAY then showed a DEAD board (drop() refuses every tap
+      // because the game-over flag is set, busy may be stuck) until the player
+      // changed the mode (which runs init). Now we ALSO re-init whenever the
+      // prior game is over, so PLAY always yields a live, tappable board.
+      // (A genuinely PAUSED in-progress game — flag false, no overlay — still
+      // resumes, so no mid-game progress is lost.)
+      if (onOverScreen || window.__bloomGameOver) init('practice', { fresh: true });
       playMusic('game');
       startEventSystem();
       if (mode === 'contest' && activeContestCode && !overtakeTimer) {
