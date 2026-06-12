@@ -3961,6 +3961,15 @@
         var __bs2 = document.getElementById('booster-strip');
         if (__bs2) __bs2.remove();
       } catch (e) {}
+      // === LIVE RACE board-full (second game-over path: board fills AFTER a
+      // merge/gravity settle, e.g. a גהינום game that reaches Crown). Same
+      // divert as the column-full branch above — without this, the practice
+      // over-screen stacks under the still-running live HUD and freezes the
+      // screen. Fully gated on _liveRaceMode. (live-race bug fix) ===
+      if (window._liveRaceMode && typeof window.__bloomOnLiveRaceBoardFull === 'function') {
+        try { window.__bloomOnLiveRaceBoardFull(); } catch (e) {}
+        return;
+      }
       // TA.1 — snapshot for refresh-restore (practice/dynamic/contest).
       saveLastGameSnapshot({ isNewBest: isNewBest });
       soundGameOver();
