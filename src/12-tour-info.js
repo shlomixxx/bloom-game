@@ -505,8 +505,14 @@
 
   function render(opts) {
     opts = opts || {};
-    document.getElementById('score').textContent = fmtStatNum(score);
-    // Auto-shrink font for large scores
+    // The live score ALWAYS shows the FULL number with commas (110,044) — never
+    // the "110K" abbreviation. fmtStatNum used to compact ≥100K, so the score
+    // flipped format as it crossed 100K (99,721 → 110K), which the owner disliked.
+    // The font-shrink classes below shrink the FONT (not the number) so the full
+    // value still fits the box at any length. (#best keeps fmtStatNum — its chip
+    // is too small for full digits.)
+    document.getElementById('score').textContent = score.toLocaleString();
+    // Auto-shrink font for large scores so the full number always fits.
     var scoreEl = document.getElementById('score');
     if (scoreEl) {
       scoreEl.classList.remove('score-lg', 'score-xl');

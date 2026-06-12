@@ -1975,8 +1975,12 @@ body.bloom-v2 .stat-primary .stat-val {
   overflow: visible !important; text-overflow: clip !important; max-width: none !important;
 }
 body.bloom-v2 .stat-primary .stat-label { opacity: 0.85; }
-body.bloom-v2 .stat-primary .stat-val.score-lg { font-size: 22px !important; }
-body.bloom-v2 .stat-primary .stat-val.score-xl { font-size: 19px !important; }
+/* Full numbers are longer than the old "K" form, so shrink the font a touch more
+   per length band to keep the COMPLETE value inside the box (a spill would put
+   white digits on the white app bg = invisible). 100K–999K = 7 chars @20px;
+   ≥1M = 9–10 chars @17px — both fit the ~93px score box. */
+body.bloom-v2 .stat-primary .stat-val.score-lg { font-size: 20px !important; }
+body.bloom-v2 .stat-primary .stat-val.score-xl { font-size: 17px !important; }
 body.bloom-v2 .stats > .stat:not(.stat-primary) { flex: 1 1 0 !important; }
 body.bloom-v2 .stats > .stat:not(.stat-primary) .stat-val { font-size: 13px !important; }
 body.bloom-v2 .stats > .stat:not(.stat-primary) .stat-label { opacity: 0.55; font-size: 9.5px !important; }
