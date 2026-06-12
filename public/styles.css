@@ -7997,6 +7997,83 @@ body.live-race-active .app {
 .lrr-btn:active { transform: scale(0.97); }
 
 /* ════════════════════════════════════════════════════════════
+   LIVE-RACE SPECTATOR (live-race bug fix, 2026-06-12)
+   ════════════════════════════════════════════════════════════
+   When the player's OWN board fills before the 60s clock, this panel
+   covers the (now frozen) board and shows the opponent's live board for
+   the remaining seconds, instead of the old freeze. Sits BELOW the HUD
+   (top:118px) so the HUD timer stays visible; below the result overlay
+   (z-index 9000 < 10020) so the winner reveal lands on top. */
+.live-race-spectate {
+  position: fixed;
+  top: 118px;
+  left: 0; right: 0; bottom: 0;
+  z-index: 9000;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 8px 12px max(12px, env(safe-area-inset-bottom));
+  background: linear-gradient(180deg, rgba(20,12,28,0.96), rgba(12,8,18,0.99));
+  animation: lrsFadeIn 240ms ease;
+}
+@keyframes lrsFadeIn { from { opacity: 0; } to { opacity: 1; } }
+.live-race-spectate .lrs-inner {
+  width: 100%;
+  max-width: 320px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+.live-race-spectate .lrs-head {
+  font-size: 13px;
+  font-weight: 800;
+  color: #FFE9A3;
+  text-align: center;
+  background: linear-gradient(135deg, rgba(122,42,90,0.5), rgba(60,26,120,0.5));
+  border: 1px solid rgba(255,217,61,0.3);
+  border-radius: 12px;
+  padding: 8px 14px;
+  line-height: 1.4;
+}
+.live-race-spectate .lrs-grid {
+  display: grid;
+  gap: 3px;
+  background: #0E0D0C;
+  padding: 6px;
+  border-radius: 10px;
+  width: 100%;
+  max-width: 240px;
+  direction: ltr;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.5);
+}
+.live-race-spectate .lrs-cell {
+  aspect-ratio: 1;
+  background: #2A2724;
+  border-radius: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+.live-race-spectate .lrs-cell svg { width: 64%; height: 64%; display: block; }
+.live-race-spectate .lrs-status {
+  font-size: 12px;
+  color: #C9C6CF;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+@keyframes lrsCellAppear { 0% { transform: scale(0.5) translateY(-8px); opacity: 0; } 60% { transform: scale(1.12); opacity: 1; } 100% { transform: scale(1); } }
+@keyframes lrsCellMerge { 0% { transform: scale(1); } 40% { transform: scale(1.28); filter: brightness(1.4) drop-shadow(0 0 6px #FFD93D); } 100% { transform: scale(1); filter: brightness(1); } }
+.live-race-spectate .lrs-cell-appear { animation: lrsCellAppear 420ms cubic-bezier(.34,1.56,.64,1); }
+.live-race-spectate .lrs-cell-merge { animation: lrsCellMerge 360ms ease-out; }
+@media (prefers-reduced-motion: reduce) {
+  .live-race-spectate { animation: none; }
+  .live-race-spectate .lrs-cell-appear,
+  .live-race-spectate .lrs-cell-merge { animation: none; }
+}
+
+/* ════════════════════════════════════════════════════════════
    POWER HERO MODE (May 2026)
    ════════════════════════════════════════════════════════════
    Activated by `body.power-hero` — set by applyHeroVariant() in

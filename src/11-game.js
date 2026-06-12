@@ -3635,6 +3635,18 @@
           var __bs1 = document.getElementById('booster-strip');
           if (__bs1) __bs1.remove();
         } catch (e) {}
+        // === LIVE RACE: the player's board filled before the 60-second clock. ===
+        // Do NOT fall through to the practice over-screen + submitDuelScore +
+        // difficulty-leaderboard path below — those overlays stack on top of the
+        // still-running live HUD + 1s poll and make the screen "go crazy" and
+        // freeze with the nav hidden. Hand off to the live-race module, which
+        // locks the score, spectates the opponent for the remaining seconds,
+        // then shows the winner at 0:00. Fully gated on _liveRaceMode → classic
+        // and ordinary practice are byte-identical. (live-race bug fix)
+        if (window._liveRaceMode && typeof window.__bloomOnLiveRaceBoardFull === 'function') {
+          try { window.__bloomOnLiveRaceBoardFull(); } catch (e) {}
+          return;
+        }
         // Save best score BEFORE rendering game-over
         var isNewBest = score > best && !skinTrialMode;
         if (isNewBest) { best = score; localStorage.setItem(BEST_KEY, String(best)); }

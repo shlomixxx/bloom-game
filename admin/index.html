@@ -3394,6 +3394,7 @@
     // Round 3 backfill (2026-05-25 second pass after debug scanner output)
     friends_enabled: 1,
     live_race_enabled: 1,
+    live_race_spectate_enabled: 1,
     promo_enabled: 1,
     push_enabled: 1,
     booster_enabled: 1,
@@ -3959,6 +3960,7 @@
     live_race_enabled: 'מתג ל-Live PvP Race (60-שניות 1v1 race).<div class="tip-example">✅ <code>true</code>: כפתור "⚡ דו-קרב חי 60 שניות" במודאל ה-duel.<br>💡 ה-feature הכי מרגש במשחק. הקצר ביותר. השאר on.</div>',
     live_race_duration: 'משך ה-race בשניות.<div class="tip-example">⏱ <code>60</code> (ברירת מחדל)=מאוזן, <code>30</code>=פיצוץ אדרנלין, <code>120</code>=stamina test.<br>💡 מתחת ל-30 = השחקנים לא מצליחים לבנות chains.</div>',
     live_race_winner_reward: 'תגמול למנצח ב-Live Race.<div class="tip-example">💎 ברירת מחדל 50💎.</div>',
+    live_race_spectate_enabled: 'כשהלוח של השחקן מתמלא לפני שנגמר הזמן — להראות לו את הלוח החי של היריב לשניות שנותרו.<div class="tip-example">✅ <code>true</code> (ברירת מחדל): השחקן צופה ביריב עד 0:00 (מרתק — "האם הבוט ישיג אותי?").<br>⬜ <code>false</code>: רק הודעת "ממתינים לסיום".<br>💡 תיקון הקיפאון אחרי 60 שניות פעיל תמיד — זה רק מתג לרשת-הצפייה.</div>',
     // ─── Promo Engine (M1) ───
     promo_enabled: 'מתג ל-Self-Promo Engine (פרסומות פנימיות במקום AdSense).<div class="tip-example">✅ <code>true</code>: פרסומות פנימיות מציעות פיצ׳רים של המשחק עצמו.<br>💡 כשתפעיל AdSense אמיתי → תוכל לכבות.</div>',
     promo_cooldown_minutes: 'דקות בין פרסומת לפרסומת.<div class="tip-example">⏱ ברירת מחדל 60 דק׳. ערך נמוך = יותר חשיפה, גבוה = פחות annoying.</div>',

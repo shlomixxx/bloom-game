@@ -455,6 +455,10 @@ INSERT INTO game_config (key, value) VALUES ('live_race_enabled',  'true') ON CO
 INSERT INTO game_config (key, value) VALUES ('live_race_duration', '60')   ON CONFLICT (key) DO NOTHING;
 -- Winner reward (taken from wager pool; if no wager, paid from house).
 INSERT INTO game_config (key, value) VALUES ('live_race_winner_reward', '50') ON CONFLICT (key) DO NOTHING;
+-- When the player's OWN board fills before the clock, show the opponent's live
+-- board for the remaining seconds (true) instead of just a "waiting" message
+-- (false). The freeze fix is always on; this only toggles the spectator grid.
+INSERT INTO game_config (key, value) VALUES ('live_race_spectate_enabled', 'true') ON CONFLICT (key) DO NOTHING;
 
 -- A9 — Ghost Mode. Stores the column-index sequence of every drop in
 -- a game so other players can "race the ghost" of someone who finished

@@ -1074,6 +1074,16 @@
   var _liveRaceHbTimer = null;
   var _liveRacePollTimer = null;
   var _liveRaceState = null; // { duelId, durationMs, opponentName, ... }
+  // live-race robustness (bug fix): a hard timeout guarantees the race ends
+  // even if polling fails; the _ending guard makes endLiveRace idempotent;
+  // _lastOppScore lets us show a result from the last known scores if the
+  // network is down at the finish; the spectator poller shows the opponent's
+  // board when the player's own board fills before the clock.
+  var _liveRaceHardTimeout = null;
+  var _liveRaceEnding = false;
+  var _liveRaceLastOppScore = 0;
+  var _liveRaceSpecPoller = null;
+  var _liveRaceSpecTargetId = null;
 
   var _liveRaceWager = 0; // DU.2 — escrowed stake for the active live search
 
@@ -1255,6 +1265,8 @@
     // value). updateModeBar reads sessionDifficulty to render.
     try { if (typeof updateModeBar === 'function') updateModeBar(); } catch (e) {}
     // Mount live HUD + timer.
+    _liveRaceEnding = false;
+    _liveRaceLastOppScore = 0;
     mountLiveRaceHUD();
     // Heartbeat: send my score every 1s.
     _liveRaceHbTimer = setInterval(sendLiveHeartbeat, 1000);
@@ -1262,6 +1274,15 @@
     setTimeout(function() {
       _liveRacePollTimer = setInterval(pollLiveRaceState, 1000);
     }, 500);
+    // HARD TIMEOUT (bug fix): the race must ALWAYS end. The only normal
+    // end-path is pollLiveRaceState seeing timeLeft<=0/settled — but if the
+    // /live-state poll ever stops returning ok (flaky network, server blip),
+    // endLiveRace would never fire and the player would be stuck on a frozen
+    // board with the nav hidden by body.live-race-active. This fallback
+    // force-ends the race a few seconds past the clock no matter what.
+    if (_liveRaceHardTimeout) { clearTimeout(_liveRaceHardTimeout); _liveRaceHardTimeout = null; }
+    var totalMs = (_liveRaceState && (_liveRaceState.durationMs | 0) > 0) ? (_liveRaceState.durationMs | 0) : 60000;
+    _liveRaceHardTimeout = setTimeout(function() { endLiveRace(null, 'timeout'); }, totalMs + 3500);
   }
 
   function sendLiveHeartbeat() {
@@ -1281,6 +1302,7 @@
       // Update HUD with opponent's score + time left.
       var oppScore = _liveRaceState.isChallenger ? d.opponentScore : d.challengerScore;
       var myScore = _liveRaceState.isChallenger ? d.challengerScore : d.opponentScore;
+      _liveRaceLastOppScore = oppScore | 0; // remembered for the no-network finish
       paintLiveRaceHUD(oppScore, myScore, d.timeLeft);
       // Auto-end when timer expires OR server marked settled.
       if (d.status === 'settled' || d.status === 'tie' || d.timeLeft <= 0) {
@@ -1334,21 +1356,43 @@
     var ok = true;
     try { ok = window.confirm('לפרוש מהמרוץ עכשיו? הניקוד הנוכחי יוגש והקרב יוכרע מיד.'); } catch (e) {}
     if (!ok) return;
+    if (_liveRaceEnding) return;
+    _liveRaceEnding = true;
     var ffBtn = document.getElementById('lrh-forfeit');
     if (ffBtn) { ffBtn.disabled = true; ffBtn.textContent = '…'; }
     var sc = (typeof score !== 'undefined' && score != null) ? (score | 0) : 0;
     var duelId = _liveRaceState.duelId;
     var isCh = _liveRaceState.isChallenger;
     var oppName = _liveRaceState.opponentName;
-    // Stop local timers so the normal expiry path can't double-fire a result.
+    // Stop ALL timers + the spectator so the expiry/hard-timeout paths can't
+    // double-fire a result on top of the forfeit result.
     if (_liveRaceHbTimer) { clearInterval(_liveRaceHbTimer); _liveRaceHbTimer = null; }
     if (_liveRacePollTimer) { clearInterval(_liveRacePollTimer); _liveRacePollTimer = null; }
+    if (_liveRaceHardTimeout) { clearTimeout(_liveRaceHardTimeout); _liveRaceHardTimeout = null; }
+    stopLiveRaceSpectator();
+    // Restore the UI IMMEDIATELY so a hung forfeit request can't freeze the
+    // screen with the nav hidden (same robustness as endLiveRace).
+    _liveRaceState = null;
+    window._duelMode = false;
+    window._liveRaceMode = false;
+    window.__bloomGameOver = true;
+    try { busy = true; } catch (e) {}
+    var hud0 = document.getElementById('live-race-hud');
+    if (hud0) hud0.remove();
+    try { document.body.classList.remove('live-race-active'); } catch (e) {}
+    var ffShown = false;
+    function ffPresent(myScore, oppScore, d) {
+      if (ffShown) return; ffShown = true;
+      showLiveRaceResult(myScore, oppScore, oppName, d);
+    }
+    var ffTo = setTimeout(function() { ffPresent(sc, _liveRaceLastOppScore | 0, null); }, 2500);
     apiPost('/api/duels/' + duelId + '/forfeit-live', { score: sc })
       .then(function() {
         return fetch('/api/duels/' + duelId + '/live-state').then(function(r){ return r.json(); }).catch(function(){ return null; });
       })
       .then(function(d) {
-        var myScore = sc, oppScore = 0;
+        clearTimeout(ffTo);
+        var myScore = sc, oppScore = _liveRaceLastOppScore | 0;
         if (d && d.ok) {
           if (d.challengerFinal != null) {
             myScore = isCh ? d.challengerFinal : d.opponentFinal;
@@ -1357,22 +1401,11 @@
             oppScore = isCh ? (d.opponentScore | 0) : (d.challengerScore | 0);
           }
         }
-        showLiveRaceResult(myScore, oppScore, oppName, d);
-        _liveRaceState = null;
-        window._duelMode = false;
-        window._liveRaceMode = false;
-        window.__bloomGameOver = true;
-        try { busy = true; } catch (e) {}
-        var hud = document.getElementById('live-race-hud');
-        if (hud) hud.remove();
-        try { document.body.classList.remove('live-race-active'); } catch (e) {}
+        ffPresent(myScore, oppScore, d);
       })
       .catch(function() {
-        var hud = document.getElementById('live-race-hud');
-        if (hud) hud.remove();
-        try { document.body.classList.remove('live-race-active'); } catch (e) {}
-        _liveRaceState = null;
-        window._liveRaceMode = false;
+        clearTimeout(ffTo);
+        ffPresent(sc, _liveRaceLastOppScore | 0, null);
       });
   }
 
@@ -1424,34 +1457,193 @@
   }
 
   function endLiveRace(stateData) {
+    // Idempotent: the 1s poll, the hard-timeout fallback, and a board-full
+    // finish can all race to call this. First caller wins; the rest no-op.
+    // This (plus clearing EVERY timer below) is what stops the screen from
+    // "going crazy" — previously multiple paths kept repainting the HUD on
+    // top of stacked over-screens.
+    if (_liveRaceEnding) return;
     if (!_liveRaceState) return;
+    _liveRaceEnding = true;
+    // Clear EVERY live-race timer up front so nothing keeps mutating the DOM
+    // after the race is over.
     if (_liveRaceHbTimer) { clearInterval(_liveRaceHbTimer); _liveRaceHbTimer = null; }
     if (_liveRacePollTimer) { clearInterval(_liveRacePollTimer); _liveRacePollTimer = null; }
-    // Force game end (busy/disable input).
+    if (_liveRaceHardTimeout) { clearTimeout(_liveRaceHardTimeout); _liveRaceHardTimeout = null; }
+    stopLiveRaceSpectator();
     window.__bloomGameOver = true;
     try { busy = true; } catch (e) {}
-    // Send one last heartbeat with final score so server records it.
-    sendLiveHeartbeat();
-    // Brief delay then show result overlay.
-    setTimeout(function() {
-      var myScore = _liveRaceState.isChallenger ? stateData.challengerScore : stateData.opponentScore;
-      var oppScore = _liveRaceState.isChallenger ? stateData.opponentScore : stateData.challengerScore;
-      // Re-fetch in case settlement just happened.
-      fetch('/api/duels/' + _liveRaceState.duelId + '/live-state').then(function(r) { return r.json(); }).catch(function() { return null; }).then(function(d) {
-        if (d && d.ok && d.challengerFinal != null) {
-          myScore = _liveRaceState.isChallenger ? d.challengerFinal : d.opponentFinal;
-          oppScore = _liveRaceState.isChallenger ? d.opponentFinal : d.challengerFinal;
-        }
-        showLiveRaceResult(myScore, oppScore, _liveRaceState.opponentName, d);
-        _liveRaceState = null;
-        window._duelMode = false;
-        window._liveRaceMode = false;
-        var hud = document.getElementById('live-race-hud');
-        if (hud) hud.remove();
-        // BL.1.4 — restore the regular game chrome.
-        try { document.body.classList.remove('live-race-active'); } catch (e) {}
+    var st = _liveRaceState;
+    var isCh = st.isChallenger;
+    var oppName = st.opponentName;
+    var duelId = st.duelId;
+    var myLocal = (typeof score !== 'undefined' && score != null) ? (score | 0) : 0;
+    // Final heartbeat so the server settles on my real number (fire-and-forget).
+    try { apiPost('/api/duels/' + duelId + '/live-heartbeat', { score: myLocal }); } catch (e) {}
+    // RESTORE THE UI IMMEDIATELY — never gate teardown on a network call. A
+    // hanging /live-state fetch used to leave the bottom-nav hidden + the board
+    // frozen with no result and no way out. Now the chrome is always back.
+    var hud = document.getElementById('live-race-hud');
+    if (hud) hud.remove();
+    try { document.body.classList.remove('live-race-active'); } catch (e) {}
+    window._duelMode = false;
+    window._liveRaceMode = false;
+    _liveRaceState = null;
+    // Resolve scores from whatever state we have, so a result ALWAYS shows.
+    function pick(d) {
+      var my = isCh ? d.challengerScore : d.opponentScore;
+      var op = isCh ? d.opponentScore : d.challengerScore;
+      if (d.challengerFinal != null) { my = isCh ? d.challengerFinal : d.opponentFinal; op = isCh ? d.opponentFinal : d.challengerFinal; }
+      return { my: my | 0, op: op | 0, d: d };
+    }
+    var provisional = (stateData && stateData.ok)
+      ? pick(stateData)
+      : { my: myLocal, op: _liveRaceLastOppScore | 0, d: stateData || null };
+    var shown = false;
+    function present(res) {
+      if (shown) return; shown = true;
+      showLiveRaceResult(res.my, res.op, oppName, res.d);
+    }
+    // Prefer the authoritative SETTLED finals, but race the fetch against a
+    // 2.2s timeout so a slow/hung settle can never block the winner reveal.
+    var to = setTimeout(function() { present(provisional); }, 2200);
+    fetch('/api/duels/' + duelId + '/live-state')
+      .then(function(r) { return r.json(); })
+      .catch(function() { return null; })
+      .then(function(d) {
+        clearTimeout(to);
+        if (d && d.ok && d.challengerFinal != null) present(pick(d));
+        else present(provisional);
       });
-    }, 800);
+  }
+
+  // ============================================================
+  // Live-race spectator: when the player's OWN board fills before the 60s
+  // clock, don't freeze on a stacked practice over-screen — keep the race
+  // running and show the opponent's live board for the remaining seconds.
+  // (live-race bug fix — the engine calls __bloomOnLiveRaceBoardFull.)
+  // ============================================================
+  function liveRaceSpectateEnabled() {
+    try {
+      if (typeof gameConfig === 'object' && gameConfig && gameConfig.live_race_spectate_enabled === 'false') return false;
+    } catch (e) {}
+    return true;
+  }
+
+  window.__bloomOnLiveRaceBoardFull = function () {
+    if (!_liveRaceState || _liveRaceEnding) return;
+    // Player's board is full → their score is locked. Lock input but DON'T end
+    // the race (the opponent keeps playing until the clock runs out — fair for
+    // human opponents; for a bot the final is already locked so the outcome is
+    // unchanged). The HUD timer + poll keep running and end the race at 0:00.
+    try { window.__bloomGameOver = true; busy = true; } catch (e) {}
+    mountLiveRaceSpectator();
+  };
+
+  function stopLiveRaceSpectator() {
+    if (_liveRaceSpecPoller) { clearInterval(_liveRaceSpecPoller); _liveRaceSpecPoller = null; }
+    _liveRaceSpecTargetId = null;
+    var p = document.getElementById('live-race-spectate');
+    if (p) { try { p.remove(); } catch (e) {} }
+  }
+
+  function mountLiveRaceSpectator() {
+    if (document.getElementById('live-race-spectate')) return;
+    var st = _liveRaceState;
+    if (!st) return;
+    var oppName = st.opponentName || 'יריב';
+    var panel = document.createElement('div');
+    panel.id = 'live-race-spectate';
+    panel.className = 'live-race-spectate';
+    var ROWS = (typeof getBoardRows === 'function') ? getBoardRows() : 6;
+    var COLS = (typeof getBoardCols === 'function') ? getBoardCols() : 4;
+    var withGrid = liveRaceSpectateEnabled();
+    var cellsHtml = '';
+    if (withGrid) { for (var i = 0; i < ROWS * COLS; i++) cellsHtml += '<div class="lrs-cell" data-i="' + i + '"></div>'; }
+    panel.innerHTML =
+      '<div class="lrs-inner">' +
+        '<div class="lrs-head">🔒 הלוח שלך מלא · ⚡ צופה ב' + escapeHtml(oppName) + '</div>' +
+        (withGrid
+          ? ('<div class="lrs-grid" style="grid-template-columns:repeat(' + COLS + ',1fr)">' + cellsHtml + '</div>' +
+             '<div class="lrs-status" id="lrs-status">טוען את הלוח של היריב…</div>')
+          : '<div class="lrs-status">⏰ הניקוד שלך ננעל — ממתינים לסיום המרוץ…</div>') +
+      '</div>';
+    document.body.appendChild(panel);
+    if (!withGrid) return;
+    // Resolve the opponent's deviceId. Prefer the duel row we already hold
+    // (zero round-trips → the board appears fast, fixing the "takes time to
+    // appear" complaint); fall back to fetching the duel detail.
+    var d = st.duel || {};
+    var oppId = (d.challenger_device === deviceId) ? d.opponent_device : d.challenger_device;
+    if (oppId) { startLiveRaceSpectatePoll(oppId); return; }
+    fetch(API_BASE + '/api/duels/' + st.duelId + '?deviceId=' + encodeURIComponent(deviceId))
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (resp) {
+        if (!resp || !resp.duel || !document.getElementById('live-race-spectate')) return;
+        var u = resp.duel;
+        var id = (u.challenger_device === deviceId) ? u.opponent_device : u.challenger_device;
+        if (id) startLiveRaceSpectatePoll(id);
+      })
+      .catch(function () {});
+  }
+
+  function startLiveRaceSpectatePoll(oppId) {
+    _liveRaceSpecTargetId = oppId;
+    pollLiveRaceSpectate();                                   // first poll immediately
+    _liveRaceSpecPoller = setInterval(pollLiveRaceSpectate, 1200);
+  }
+
+  function pollLiveRaceSpectate() {
+    if (!_liveRaceSpecTargetId) return;
+    var gridHost = document.querySelector('#live-race-spectate .lrs-grid');
+    if (!gridHost) { stopLiveRaceSpectator(); return; }
+    fetch(API_BASE + '/api/live-state/' + encodeURIComponent(_liveRaceSpecTargetId))
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) {
+        var statusEl = document.getElementById('lrs-status');
+        if (!document.querySelector('#live-race-spectate .lrs-grid')) return;
+        if (!d || !Array.isArray(d.grid)) {
+          if (statusEl && !gridHost.dataset.painted) statusEl.textContent = d ? 'מתחבר…' : '🔴 לא מחובר';
+          return;
+        }
+        if (statusEl) { statusEl.textContent = '🟢 ' + ((d.name || _liveRaceSpecOppName()) ) + ' · ' + ((d.score | 0).toLocaleString()) + ' נק׳'; }
+        gridHost.dataset.painted = '1';
+        var tiers = getActiveTiers();
+        var cells = gridHost.children;
+        var idx = 0;
+        for (var r = 0; r < d.grid.length; r++) {
+          var rowArr = d.grid[r] || [];
+          for (var c = 0; c < rowArr.length; c++) {
+            var cell = cells[idx];
+            if (cell) {
+              var t = rowArr[c] | 0;
+              var prevT = (cell.dataset.tier | 0) || 0;
+              var changed = t !== prevT;
+              if (t > 0 && tiers[t]) {
+                cell.style.background = tiers[t].bg;
+                cell.style.color = tiers[t].fg;
+                cell.innerHTML = tiers[t].svg || '';
+                if (changed) {
+                  cell.classList.remove('lrs-cell-appear', 'lrs-cell-merge');
+                  void cell.offsetWidth;
+                  cell.classList.add(prevT === 0 ? 'lrs-cell-appear' : 'lrs-cell-merge');
+                }
+              } else {
+                cell.style.background = '';
+                cell.style.color = '';
+                cell.innerHTML = '';
+              }
+              cell.dataset.tier = String(t);
+            }
+            idx++;
+          }
+        }
+      })
+      .catch(function () {});
+  }
+
+  function _liveRaceSpecOppName() {
+    return (_liveRaceState && _liveRaceState.opponentName) ? _liveRaceState.opponentName : 'יריב';
   }
 
   function showLiveRaceResult(myScore, oppScore, oppName, settleData) {
