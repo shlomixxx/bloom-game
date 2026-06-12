@@ -37,7 +37,11 @@
         '<span style="color:#BA7517">📋 העתק</span>' +
       '</div>';
     }
-    modal.innerHTML = '<div class="info-card" style="max-width:340px;direction:rtl">' +
+    modal.innerHTML = '<div class="info-card" style="position:relative;max-width:340px;direction:rtl">' +
+      // Visible top ✕ (audit fix): the modal previously had only a backdrop
+      // tap + a buried bottom "סגור" — touch users (no ESC) had no discoverable
+      // close. aria-label="סגור" also lets the ESC/back handler dismiss it.
+      '<button aria-label="סגור" style="position:absolute;top:6px;left:6px;width:36px;height:36px;border:none;border-radius:50%;background:rgba(0,0,0,0.06);color:#6F6E68;font-size:22px;line-height:1;cursor:pointer;z-index:3" onclick="var m=this.closest(\'.info-modal\'); if(m) m.remove();">×</button>' +
       '<div style="font-size:16px;font-weight:700;margin-bottom:12px">⚔️ דו-קרב 1v1</div>' +
       '<div style="font-size:12px;color:#6F6E68;margin-bottom:12px">אתגר שחקן ספציפי! שניכם משחקים על אותו לוח — מי שמשיג יותר נקודות מנצח.</div>' +
       myCodePill +
@@ -399,8 +403,8 @@
             startDuelGame(duelRow.id, duelRow.board_seed, duelRow);
           }, 600); // brief confirmation flash before transitioning
         } else {
-          var msgs = { self_duel: 'לא ניתן לאתגר את עצמך', opponent_not_found: 'שחקן לא נמצא', insufficient_balance: 'אין מספיק 💎', duels_disabled: 'דו-קרבות מושבתים' };
-          errEl.textContent = msgs[d.reason] || 'שגיאה';
+          var msgs = { self_duel: 'לא ניתן לאתגר את עצמך', opponent_not_found: 'שחקן לא נמצא', insufficient_balance: 'אין מספיק 💎', duels_disabled: 'דו-קרבות מושבתים', no_profile: 'נסה שוב בעוד רגע', missing_token: 'התחבר מחדש', bad_token: 'התחבר מחדש' };
+          errEl.textContent = msgs[d.reason] || 'לא הצלחנו לשלוח — נסה שוב';
         }
       } catch(e) { this.disabled = false; this.textContent = 'שלח אתגר ⚔️'; errEl.textContent = 'שגיאת רשת'; }
     };
@@ -495,7 +499,7 @@
         }
         html += '<div style="padding:6px 0;border-top:1px solid rgba(0,0,0,0.04);display:flex;align-items:center;gap:6px;flex-wrap:wrap">' +
           '<span style="flex:1;min-width:0">' +
-            '<span style="font-weight:600">vs ' + otherName + '</span>' + amtText + ' · ' + statusText + winText + scoreLine +
+            '<span style="font-weight:600">vs ' + escDuelHtml(otherName) + '</span>' + amtText + ' · ' + statusText + winText + scoreLine +
           '</span>' +
           actionBtn + rematchBtn +
         '</div>';
@@ -505,20 +509,26 @@
   }
 
   window.acceptDuel = async function(id) {
-    var r = await fetch(API_BASE + '/api/duels/' + id + '/accept', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ deviceId: deviceId, token: deviceToken })
-    });
-    var d = await r.json();
-    if (d && d.ok) {
-      markDuelAcknowledged(id); // clear it from the badge count
-      fetchPlayerCode();
-      loadMyDuels();
-      activeDuelOpponentName = d.duel ? (d.duel.challenger_name || d.duel.challenger_code || 'יריב') : 'יריב';
-      startDuelGame(id, d.duel.board_seed, d.duel);
-    } else {
-      var msgs = { not_opponent: 'אתה לא היריב', not_pending: 'כבר קיבלת', expired: 'פג תוקף', insufficient_balance: 'אין מספיק 💎' };
-      showToast(msgs[d && d.reason] || 'שגיאה', 'error');
+    try {
+      var r = await fetch(API_BASE + '/api/duels/' + id + '/accept', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deviceId: deviceId, token: deviceToken })
+      });
+      var d = await r.json();
+      // Guard d.duel — without the row we can't start a game; treat as an error
+      // instead of throwing "Cannot read board_seed of undefined".
+      if (d && d.ok && d.duel && d.duel.board_seed != null) {
+        markDuelAcknowledged(id); // clear it from the badge count
+        fetchPlayerCode();
+        loadMyDuels();
+        activeDuelOpponentName = d.duel.challenger_name || d.duel.challenger_code || 'יריב';
+        startDuelGame(id, d.duel.board_seed, d.duel);
+      } else {
+        var msgs = { not_opponent: 'אתה לא היריב', not_pending: 'כבר קיבלת', expired: 'פג תוקף', not_found: 'הדו-קרב לא נמצא (אולי פג תוקף)', insufficient_balance: 'אין מספיק 💎', no_profile: 'נסה שוב בעוד רגע', missing_token: 'התחבר מחדש', bad_token: 'התחבר מחדש' };
+        showToast(msgs[d && d.reason] || 'לא הצלחנו לקבל את הדו-קרב — נסה שוב', 'error');
+      }
+    } catch (e) {
+      showToast('אין חיבור — נסה שוב', 'error');
     }
   };
 
@@ -980,11 +990,17 @@
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ deviceId: deviceId, token: deviceToken, difficulty: difficulty, wager: _randomMatchWager })
     }).then(function(r) { return r.json(); }).catch(function() { return null; }).then(function(d) {
+      // Cancel-vs-match race: if the player tapped "ביטול" while this request
+      // was in flight, the poller is already cleared — do NOT match them into
+      // a duel they cancelled (which would re-escrow the refunded wager).
+      if (!_randomMatchPoller) return;
       if (!d || !d.ok) {
-        if (d && d.reason === 'insufficient_funds') {
-          // Roll back the optimistic deduction + stop searching.
+        var stopReasons = { insufficient_funds: '💎 אין מספיק יהלומים להימור', rate_limited: '⏳ יותר מדי חיפושים — נסה שוב בעוד דקה', disabled: 'דו-קרבות אקראיים מושבתים כרגע' };
+        if (d && stopReasons[d.reason]) {
+          // Roll back the optimistic deduction + stop searching with a clear
+          // message (otherwise the spinner runs forever on rate_limited/disabled).
           stopRandomMatchmaking('cancelled');
-          try { if (typeof showToast === 'function') showToast('💎 אין מספיק יהלומים להימור', 'error'); } catch (e) {}
+          try { if (typeof showToast === 'function') showToast(stopReasons[d.reason], 'error'); } catch (e) {}
         }
         // Soft fail otherwise — keep polling, update UI to "waiting".
         return;
@@ -1002,7 +1018,7 @@
             '<div class="rm-flash-emoji">⚔️</div>' +
             '<div class="rm-flash-title">נמצא יריב!</div>' +
             '<div class="rm-flash-name">' +
-              ((d.duel.challenger_device === deviceId ? d.duel.opponent_name : d.duel.challenger_name) || 'יריב') +
+              escDuelHtml((d.duel.challenger_device === deviceId ? d.duel.opponent_name : d.duel.challenger_name) || 'יריב') +
             '</div>' +
             '<div class="rm-flash-cta">המשחק מתחיל...</div>' +
           '</div>';
@@ -1043,7 +1059,7 @@
           '<span class="rm-stat">👥 <span id="rm-queue">--</span> בתור</span>' +
           '<span class="rm-stat">🏆 ±<span id="rm-range">50</span></span>' +
         '</div>' +
-        '<button class="rm-cancel" id="rm-cancel-btn">ביטול</button>' +
+        '<button class="rm-cancel" id="rm-cancel-btn" aria-label="סגור">ביטול</button>' +
       '</div>';
     document.body.appendChild(ov);
     _randomMatchOverlay = ov;
@@ -1178,7 +1194,7 @@
           '<span class="lrm-stat">👥 <span id="lrm-queue">--</span> בתור</span>' +
           '<span class="lrm-stat">🏆 ±<span id="lrm-range">50</span></span>' +
         '</div>' +
-        '<button class="lrm-cancel" id="lrm-cancel-btn">ביטול</button>' +
+        '<button class="lrm-cancel" id="lrm-cancel-btn" aria-label="סגור">ביטול</button>' +
       '</div>';
     document.body.appendChild(ov);
     _liveRaceOverlay = ov;
@@ -1946,10 +1962,19 @@
       }
     } catch (e) {}
     var asyncMax = Math.max(5, Math.ceil(asyncWaitSec / 2));
+    // A BOT async opponent ALWAYS settles within bot_duel_settle_delay_max_seconds
+    // (default 55s). The old asyncMax (~46s) gave up BEFORE the bot settled, so
+    // the player saw "we'll notify you" and then the real result landed seconds
+    // later via the home poll — contradictory. Wait long enough to catch the
+    // bot settle in-overlay. (audit C1 fix)
+    var botSettleMax = 55;
+    try { var _bs = parseInt((typeof gameConfig === 'object' && gameConfig || {}).bot_duel_settle_delay_max_seconds, 10); if (isFinite(_bs) && _bs > 0) botSettleMax = _bs; } catch (e) {}
+    var botMax = Math.max(asyncMax, Math.ceil((botSettleMax + 15) / 2));
     var isLive = null; // resolved from the duel row on the first successful poll
+    var isBot = false;
     var poller = setInterval(function() {
       attempts++;
-      var cap = (isLive === false) ? asyncMax : maxAttempts;
+      var cap = (isLive === false) ? (isBot ? botMax : asyncMax) : maxAttempts;
       if (attempts > cap) {
         // The duel hasn't resolved in 5 minutes. Don't leave the player
         // staring at a frozen spinner — swap the overlay to a friendly
@@ -1991,7 +2016,7 @@
         .then(function(resp) {
           if (!resp || !resp.duel) return;
           var u = resp.duel;
-          if (isLive === null) isLive = !!u.is_live; // drives the async early-exit cap
+          if (isLive === null) { isLive = !!u.is_live; isBot = !!u.is_bot_match; } // drives the async early-exit cap
           var isChallenger = u.challenger_device === deviceId;
           // Settled / tie — the normal happy path.
           if (u.status === 'settled' || u.status === 'tie') {
@@ -2300,7 +2325,11 @@
     var hideScoresVs = false;                  // hide the vs ... ... block when opponent didn't play
     if (d && d.result === 'settled' && d.winner === 'you') {
       emoji = '🏆'; title = 'ניצחת!'; color = '#2E8B6F'; showConfettiFlag = true;
-      detail = '<div style="font-size:14px;color:#9FE1CB;margin-top:6px">+' + (d.prize || 0) + ' 💎 פרס</div>';
+      // No-wager random duels pay 0💎 (trophies are the stake) — don't show a
+      // deflating "+0💎 פרס"; celebrate the win instead.
+      detail = ((d.prize | 0) > 0)
+        ? '<div style="font-size:14px;color:#9FE1CB;margin-top:6px">+' + (d.prize | 0).toLocaleString() + ' 💎 פרס</div>'
+        : '<div style="font-size:14px;color:#9FE1CB;margin-top:6px">🏆 ניצחת בקרב!</div>';
     } else if (d && d.result === 'settled' && d.winner === 'opponent') {
       emoji = '😔'; title = 'הפסדת'; color = '#C8472F';
       detail = '<div style="font-size:14px;color:#F5C4B3;margin-top:6px">היריב היה טוב יותר הפעם</div>';
@@ -2390,7 +2419,8 @@
     overlay.setAttribute('data-duel-result-overlay', '1');
     overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;display:flex;align-items:center;justify-content:center;direction:rtl';
     overlay.innerHTML =
-      '<div style="background:#1C1A18;border-radius:20px;padding:28px 24px;max-width:320px;width:90%;text-align:center;border:2px solid ' + color + ';box-shadow:0 0 40px ' + color + '33">' +
+      '<div style="position:relative;background:#1C1A18;border-radius:20px;padding:28px 24px;max-width:320px;width:90%;text-align:center;border:2px solid ' + color + ';box-shadow:0 0 40px ' + color + '33">' +
+        '<button class="duel-result-close" aria-label="סגור" style="position:absolute;top:8px;left:8px;width:34px;height:34px;border:none;border-radius:50%;background:rgba(255,255,255,0.08);color:#fff;font-size:20px;line-height:1;cursor:pointer;z-index:2">×</button>' +
         '<div style="font-size:48px;margin-bottom:8px">' + emoji + '</div>' +
         '<div style="font-size:24px;font-weight:900;color:' + color + '">' + title + '</div>' +
         scoresHtml +
@@ -2413,6 +2443,19 @@
         init('practice', { fresh: true });
       }
     });
+
+    // Closability (audit fix): the overlay used to have NO ✕ and NO backdrop
+    // close — the only exit was the CTA, so a player could be trapped (and ESC
+    // didn't reach it). Now ✕ + backdrop-tap dismiss → home (always a clean
+    // surface; the result is also surfaced via the home poll + push). The
+    // overlay is also added to the ESC/back allowlist in 04-ui-utils.js.
+    function dismissDuelResult() {
+      try { overlay.remove(); } catch (e) {}
+      try { if (typeof showHome === 'function' && !document.querySelector('#home-screen,#home-screen-v2')) showHome(); } catch (e) {}
+    }
+    var closeX = overlay.querySelector('.duel-result-close');
+    if (closeX) closeX.addEventListener('click', dismissDuelResult);
+    overlay.addEventListener('click', function (e) { if (e.target === overlay) dismissDuelResult(); });
 
     // Bug #16 / Task #10 — wire the rematch button to the existing
     // rematchDuel flow (closes overlay → reopens duel modal pre-filled

@@ -976,6 +976,11 @@
       // in EXCLUDE below so a reward overlay can't be ESC-skipped.
       '.login-cal-overlay, .inbox-overlay, .wr-overlay, .wr-share-overlay, ' +
       '.live-race-result-overlay, .pet-name-overlay, ' +
+      // Duel audit 2026-06-12: these had no ✕/backdrop close and were not
+      // ESC-dismissable. The result overlay's ✕ + the matchmaking overlays'
+      // cancel button both carry aria-label="סגור" so the dismiss helper
+      // clicks them (running the proper refund/teardown), not a raw remove.
+      '[data-duel-result-overlay], .random-match-overlay, .live-race-match-overlay, ' +
       // GV.2 beta-feedback prompt — pops over game-over; its ✕ has
       // aria-label="סגור" so the dismiss handler clicks it on ESC.
       '#v2-fb-overlay, ' +
