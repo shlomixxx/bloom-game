@@ -5253,6 +5253,43 @@ body.live-race-active .app {
 }
 .lrr-btn:active { transform: scale(0.97); }
 
+/* Opponent's final board recap inside the result overlay (2026-06-12) —
+   "see how they played" even when the race ends on the clock. */
+.lrr-oppboard {
+  margin: 4px auto 12px;
+  width: 100%;
+  max-width: 200px;
+  animation: lrsFadeIn 240ms ease;
+}
+.lrr-oppboard-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: rgba(255,255,255,0.78);
+  text-align: center;
+  margin-bottom: 7px;
+}
+.lrr-oppboard-grid {
+  display: grid;
+  gap: 3px;
+  background: rgba(0,0,0,0.28);
+  padding: 6px;
+  border-radius: 10px;
+  direction: ltr;
+  max-width: 168px;
+  margin: 0 auto;
+}
+.lrr-ob-cell {
+  aspect-ratio: 1;
+  background: rgba(255,255,255,0.07);
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+.lrr-ob-cell svg { width: 64%; height: 64%; display: block; }
+@media (prefers-reduced-motion: reduce) { .lrr-oppboard { animation: none; } }
+
 /* ════════════════════════════════════════════════════════════
    LIVE-RACE SPECTATOR (live-race bug fix, 2026-06-12)
    ════════════════════════════════════════════════════════════

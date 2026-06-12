@@ -1364,6 +1364,7 @@
     var duelId = _liveRaceState.duelId;
     var isCh = _liveRaceState.isChallenger;
     var oppName = _liveRaceState.opponentName;
+    var ffOppDeviceId = liveRaceOpponentDeviceId(_liveRaceState);
     // Stop ALL timers + the spectator so the expiry/hard-timeout paths can't
     // double-fire a result on top of the forfeit result.
     if (_liveRaceHbTimer) { clearInterval(_liveRaceHbTimer); _liveRaceHbTimer = null; }
@@ -1383,7 +1384,7 @@
     var ffShown = false;
     function ffPresent(myScore, oppScore, d) {
       if (ffShown) return; ffShown = true;
-      showLiveRaceResult(myScore, oppScore, oppName, d);
+      showLiveRaceResult(myScore, oppScore, oppName, d, ffOppDeviceId);
     }
     var ffTo = setTimeout(function() { ffPresent(sc, _liveRaceLastOppScore | 0, null); }, 2500);
     apiPost('/api/duels/' + duelId + '/forfeit-live', { score: sc })
@@ -1477,6 +1478,7 @@
     var isCh = st.isChallenger;
     var oppName = st.opponentName;
     var duelId = st.duelId;
+    var oppDeviceId = liveRaceOpponentDeviceId(st); // for the result-screen board recap
     var myLocal = (typeof score !== 'undefined' && score != null) ? (score | 0) : 0;
     // Final heartbeat so the server settles on my real number (fire-and-forget).
     try { apiPost('/api/duels/' + duelId + '/live-heartbeat', { score: myLocal }); } catch (e) {}
@@ -1502,7 +1504,7 @@
     var shown = false;
     function present(res) {
       if (shown) return; shown = true;
-      showLiveRaceResult(res.my, res.op, oppName, res.d);
+      showLiveRaceResult(res.my, res.op, oppName, res.d, oppDeviceId);
     }
     // Prefer the authoritative SETTLED finals, but race the fetch against a
     // 2.2s timeout so a slow/hung settle can never block the winner reveal.
@@ -1528,6 +1530,12 @@
       if (typeof gameConfig === 'object' && gameConfig && gameConfig.live_race_spectate_enabled === 'false') return false;
     } catch (e) {}
     return true;
+  }
+
+  // Opponent's deviceId from the duel row we already hold (zero round-trips).
+  function liveRaceOpponentDeviceId(st) {
+    var d = (st && st.duel) || {};
+    return (d.challenger_device === deviceId) ? d.opponent_device : d.challenger_device;
   }
 
   window.__bloomOnLiveRaceBoardFull = function () {
@@ -1573,8 +1581,7 @@
     // Resolve the opponent's deviceId. Prefer the duel row we already hold
     // (zero round-trips → the board appears fast, fixing the "takes time to
     // appear" complaint); fall back to fetching the duel detail.
-    var d = st.duel || {};
-    var oppId = (d.challenger_device === deviceId) ? d.opponent_device : d.challenger_device;
+    var oppId = liveRaceOpponentDeviceId(st);
     if (oppId) { startLiveRaceSpectatePoll(oppId); return; }
     fetch(API_BASE + '/api/duels/' + st.duelId + '?deviceId=' + encodeURIComponent(deviceId))
       .then(function (r) { return r.ok ? r.json() : null; })
@@ -1646,7 +1653,7 @@
     return (_liveRaceState && _liveRaceState.opponentName) ? _liveRaceState.opponentName : 'יריב';
   }
 
-  function showLiveRaceResult(myScore, oppScore, oppName, settleData) {
+  function showLiveRaceResult(myScore, oppScore, oppName, settleData, oppDeviceId) {
     var existing = document.getElementById('live-race-result');
     if (existing) existing.remove();
     var won = myScore > oppScore;
@@ -1665,6 +1672,14 @@
       : (tied
           ? (wagerAmt > 0 ? ('🔄 ההימור הוחזר · ' + wagerAmt.toLocaleString() + '💎') : 'אף אחד לא קיבל פרס')
           : 'נסה שוב!');
+    // Opponent's final board recap — so you ALWAYS see how they played, even
+    // when the race ends on the clock (not just when your board fills). Gated
+    // by the same admin toggle as the live spectator.
+    var showOppBoard = !!oppDeviceId && liveRaceSpectateEnabled();
+    var ROWS = (typeof getBoardRows === 'function') ? getBoardRows() : 6;
+    var COLS = (typeof getBoardCols === 'function') ? getBoardCols() : 4;
+    var oppCells = '';
+    if (showOppBoard) { for (var oi = 0; oi < ROWS * COLS; oi++) oppCells += '<div class="lrr-ob-cell"></div>'; }
     ov.innerHTML =
       '<div class="lrr-card lrr-' + (won ? 'won' : tied ? 'tie' : 'lost') + '">' +
         '<button class="lrr-close" aria-label="סגור">×</button>' +
@@ -1676,9 +1691,16 @@
           '<div class="lrr-side"><div class="lrr-side-name">' + escapeHtml(oppName) + '</div><div class="lrr-side-score">' + (oppScore | 0).toLocaleString() + '</div></div>' +
         '</div>' +
         '<div class="lrr-sub">' + sub + '</div>' +
+        (showOppBoard
+          ? ('<div class="lrr-oppboard" id="lrr-oppboard" style="display:none">' +
+               '<div class="lrr-oppboard-title">🎮 הלוח של ' + escapeHtml(oppName) + ' בסיום</div>' +
+               '<div class="lrr-oppboard-grid" id="lrr-oppboard-grid" style="grid-template-columns:repeat(' + COLS + ',1fr)">' + oppCells + '</div>' +
+             '</div>')
+          : '') +
         '<button class="lrr-btn" onclick="this.closest(\'.live-race-result-overlay\').remove()">המשך</button>' +
       '</div>';
     document.body.appendChild(ov);
+    if (showOppBoard) renderLiveRaceResultOppBoard(oppDeviceId);
     // UX audit 2026-06-02: honour the close contract — backdrop tap + ✕
     // (the ESC/back-gesture path is covered via the allowlist + aria-label).
     ov.addEventListener('click', function (e) { if (e.target === ov) ov.remove(); });
@@ -1691,6 +1713,49 @@
     } else if (tied && wagerAmt > 0 && window.__bloomBumpBal && typeof playerBalance !== 'undefined') {
       try { window.__bloomBumpBal(playerBalance + wagerAmt, wagerAmt); } catch (e) {}
     }
+  }
+
+  // Fetch + paint the opponent's FINAL board into the result overlay. A couple
+  // of quick retries cover the brief window where settle lags the fetch. Fully
+  // best-effort: if the grid never arrives, the section just stays hidden.
+  function renderLiveRaceResultOppBoard(oppDeviceId, attempt) {
+    attempt = attempt || 0;
+    var section = document.getElementById('lrr-oppboard');
+    var host = document.getElementById('lrr-oppboard-grid');
+    if (!section || !host) return; // result overlay was closed
+    fetch(API_BASE + '/api/live-state/' + encodeURIComponent(oppDeviceId))
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) {
+        if (!document.getElementById('lrr-oppboard-grid')) return;
+        if (!d || !Array.isArray(d.grid)) {
+          if (attempt < 3) setTimeout(function () { renderLiveRaceResultOppBoard(oppDeviceId, attempt + 1); }, 700);
+          return;
+        }
+        var tiers = getActiveTiers();
+        var cells = host.children;
+        var idx = 0, occupied = 0;
+        for (var r = 0; r < d.grid.length; r++) {
+          var rowArr = d.grid[r] || [];
+          for (var c = 0; c < rowArr.length; c++) {
+            var cell = cells[idx];
+            if (cell) {
+              var t = rowArr[c] | 0;
+              if (t > 0 && tiers[t]) {
+                cell.style.background = tiers[t].bg;
+                cell.style.color = tiers[t].fg;
+                cell.innerHTML = tiers[t].svg || '';
+                occupied++;
+              } else { cell.style.background = ''; cell.style.color = ''; cell.innerHTML = ''; }
+            }
+            idx++;
+          }
+        }
+        if (occupied > 0) { section.style.display = ''; }
+        else if (attempt < 3) { setTimeout(function () { renderLiveRaceResultOppBoard(oppDeviceId, attempt + 1); }, 700); }
+      })
+      .catch(function () {
+        if (attempt < 3) setTimeout(function () { renderLiveRaceResultOppBoard(oppDeviceId, attempt + 1); }, 700);
+      });
   }
 
   function escapeHtml(s) {
