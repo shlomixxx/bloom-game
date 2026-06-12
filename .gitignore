@@ -20,3 +20,7 @@ railway-backups-*/
 bloom-*.png
 .tmp-*
 .playwright-mcp/
+
+# playwright verification screenshots
+live-race-result-*.png
+.playwright-mcp/
