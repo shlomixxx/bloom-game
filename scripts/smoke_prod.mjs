@@ -70,7 +70,11 @@ async function main() {
   ];
   for (const ep of stateGets) {
     const rr = await get('/api/' + ep);
-    ok('GET ' + ep.split('?')[0], rr.status === 200 && rr.body && (rr.body.ok === true || rr.body.enabled === false), 'HTTP ' + rr.status + (rr.body && rr.body.error ? ' ' + rr.body.error : ''));
+    // Most endpoints wrap in {ok:true}; a few return raw data (leaderboard/v2 →
+    // {list,total,rank}) or {enabled:false} when a system is admin-disabled.
+    const good = rr.status === 200 && rr.body &&
+      (rr.body.ok === true || rr.body.enabled === false || Array.isArray(rr.body.list));
+    ok('GET ' + ep.split('?')[0], good, 'HTTP ' + rr.status + (rr.body && rr.body.error ? ' ' + rr.body.error : ''));
   }
 
   // --- a few write paths (on the throwaway device) ---
