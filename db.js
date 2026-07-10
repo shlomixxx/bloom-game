@@ -656,6 +656,10 @@ export async function initDb() {
     // DU.2 — Duel system overhaul (2026-05-30): wager-aware matchmaking + locked bot final
     `ALTER TABLE duel_matchmaking_queue ADD COLUMN IF NOT EXISTS wager INT NOT NULL DEFAULT 0`,
     `ALTER TABLE duels ADD COLUMN IF NOT EXISTS bot_final_score INT`,
+    // QA H4 — ~20 admin CRUD handlers INSERT into a `details` column that never existed,
+    // so every board/skin/tournament/deal/gacha/bundle/calendar/guild/push-broadcast audit
+    // row silently failed (all wrapped in .catch). Add the column so the audit trail records them.
+    `ALTER TABLE admin_actions ADD COLUMN IF NOT EXISTS details TEXT`,
     `INSERT INTO game_config (key, value) VALUES ('duel_wager_match_tolerance_pct', '0')      ON CONFLICT (key) DO NOTHING`,
     `INSERT INTO game_config (key, value) VALUES ('duel_wager_widen_after_polls',   '3')      ON CONFLICT (key) DO NOTHING`,
     `INSERT INTO game_config (key, value) VALUES ('duel_wager_widen_band',          '50')     ON CONFLICT (key) DO NOTHING`,

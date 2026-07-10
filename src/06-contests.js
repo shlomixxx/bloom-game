@@ -523,7 +523,7 @@
 
     screen.innerHTML =
       createBackButton('contest-menu') +
-      '<div class="contest-title">' + data.contest.name + '</div>' +
+      '<div class="contest-title">' + escapeHtml(data.contest.name) + '</div>' +
       '<div class="contest-sub">' + (ended ? 'התחרות הסתיימה' : (data.contest.host_device_id === deviceId ? 'התחרות שיצרת' : 'הוזמנת על ידי ' + escapeHtml(data.contest.host_name))) + '</div>' +
       '<div class="contest-info-card">' +
         '<div class="contest-info-row"><span>שחקנים</span><span>' + data.players.length + '</span></div>' +

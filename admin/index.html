@@ -4959,7 +4959,7 @@
     $('drawer-close').onclick = closePlayerDrawer;
     // #15 — wire moderation buttons (re-opens the drawer on success to refresh).
     async function _mod(action, body) {
-      var r = await api('/api/players/moderate', { method: 'POST', body: JSON.stringify(Object.assign({ deviceId: id, action: action }, body || {})) });
+      var r = await api('/players/moderate', { method: 'POST', body: JSON.stringify(Object.assign({ deviceId: id, action: action }, body || {})) });
       if (r && r.ok) { toast('✅ בוצע'); openPlayerDrawer(id); }
       else if (r) toast('שגיאה: ' + (r.error || r.msg || 'unknown'));
     }
@@ -5007,7 +5007,7 @@
     if (!host) return;
     host.innerHTML = '<div class="loading">טוען…</div>';
     function rc(p) { return (p >= 40 && p <= 70) ? '#3fbf6f' : (p < 25 || p > 85) ? '#c0392b' : '#d68910'; }
-    var d = await api('/api/economy');
+    var d = await api('/economy');
     if (!d || !d.ok) { host.innerHTML = '<p style="color:var(--muted)">שגיאה בטעינה</p>'; return; }
     var t = d.totals, a = d.active, h = '';
     h += '<div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:14px">';
@@ -9845,7 +9845,13 @@
       'dashboard', 'retention', 'funnel', 'heatmap', 'live', 'audit',
       'config', 'challenges', 'players?limit=1', 'boards', 'skins',
       'tournaments', 'trophies/stats', 'guild-wars', 'replay/stats',
-      'spin/stats', 'push/status'
+      'spin/stats', 'push/status',
+      // QA L6 — the scanner used to probe a subset that missed economy/moderate,
+      // so it would not have caught the dead economy panel. Cover every monitoring GET.
+      'economy', 'jackpot/stats', 'wager/stats', 'referrals', 'issues/stats',
+      'smart-push/status', 'rivalries/stats', 'guilds', 'gacha/pool',
+      'daily-deals', 'bundles', 'calendar/events', 'bot-duels/stats',
+      'version', 'feedback', 'promos'
     ];
     var failures = [];
     for (var i = 0; i < endpoints.length; i++) {
@@ -10000,6 +10006,26 @@
     return orphans;
   }
 
+  async function checkApiPathBugs() {
+    // QA L6 — the api() helper already prepends the /api segment, so any call
+    // written with a DOUBLED prefix resolves to BASE/api/api/... → 404. This
+    // static lint catches that class of dead-panel bug (it is exactly how the
+    // economy and player-moderation panels silently broke). Scans the live
+    // script text. NOTE: the strings below deliberately avoid the literal
+    // pattern (built via concatenation) so this function can't self-match.
+    var bugs = [];
+    try {
+      var script = await getAdminScriptText();
+      var re = /\bapi\(\s*(['"])\/api\//g, m;
+      while ((m = re.exec(script)) !== null) {
+        var ctx = script.slice(m.index, m.index + 60).replace(/\s+/g, ' ');
+        bugs.push({ snippet: ctx });
+        dbgLog('API-PATH', 'error', 'doubled /' + 'api/ prefix resolves to /api/api/... (404): ' + ctx, {});
+      }
+    } catch (e) {}
+    return bugs;
+  }
+
   async function runDebugScan() {
     var statusEl = document.getElementById('debug-status');
     var resultsEl = document.getElementById('debug-results');
@@ -10017,6 +10043,7 @@
       results.hiddenKeys = await checkHiddenConfigKeys();
       results.deadButtons = await checkDeadButtons();
       results.orphanTips = await checkOrphanedTipReferences();
+      results.apiPathBugs = await checkApiPathBugs();
     } catch (e) {
       console.error('[BLOOM DEBUG] scan crashed:', e);
     }
@@ -10030,7 +10057,8 @@
       { name: '🌐 Endpoints שכשלו', count: results.endpoints.length, items: results.endpoints, fmt: function(x) { return '<code>' + x.path + '</code> → ' + x.status + (x.ms ? ' (' + x.ms + 'ms)' : ''); } },
       { name: '❓ הגדרות בלי tooltip', count: results.hiddenKeys.length, items: results.hiddenKeys, fmt: function(x) { return '<code>' + x + '</code>'; } },
       { name: '🔘 לחצנים ללא handler ידני', count: results.deadButtons.length, items: results.deadButtons, fmt: function(x) { return 'id="<code>' + x.id + '</code>" — "' + x.text + '"'; } },
-      { name: '💬 data-tip יתום', count: results.orphanTips.length, items: results.orphanTips, fmt: function(x) { return '<code>' + x.key + '</code>'; } }
+      { name: '💬 data-tip יתום', count: results.orphanTips.length, items: results.orphanTips, fmt: function(x) { return '<code>' + x.key + '</code>'; } },
+      { name: '🔗 api() prefix כפול (/api/api)', count: (results.apiPathBugs || []).length, items: results.apiPathBugs || [], fmt: function(x) { return '<code>' + (x.snippet || '') + '</code>'; } }
     ];
 
     var totalIssues = summary.reduce(function(sum, s) { return sum + s.count; }, 0);

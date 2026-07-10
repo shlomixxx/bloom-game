@@ -862,16 +862,16 @@
         '<input id="duel-opponent-suffix" dir="ltr" maxlength="4" inputmode="latin" autocapitalize="characters" autocomplete="off" placeholder="XXXX" value="' + pre + '" style="flex:1;padding:8px;border:0;font-family:ui-monospace,monospace;font-size:16px;text-transform:uppercase;letter-spacing:0.2em;font-weight:700;text-align:center;outline:none;background:transparent;direction:ltr">' +
       '</div>' +
       '<div style="font-size:11px;font-weight:600;margin-bottom:4px">💪 רמת קושי (לשניכם)</div>' +
-      '<div id="duel-difficulty" style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:10px">' +
-        '<button type="button" class="diff-pill selected" data-diff="default" style="flex:1;min-width:60px;padding:5px 8px;font-size:11px;border:1px solid rgba(0,0,0,0.12);border-radius:6px;background:#1C1A18;color:#FAC775;font-weight:600;cursor:pointer">📦 רגיל</button>' +
-        '<button type="button" class="diff-pill" data-diff="easy" style="flex:1;min-width:60px;padding:5px 8px;font-size:11px;border:1px solid rgba(0,0,0,0.12);border-radius:6px;background:#F5F2EC;color:#1C1A18;font-weight:600;cursor:pointer">😊 קל</button>' +
-        '<button type="button" class="diff-pill" data-diff="medium" style="flex:1;min-width:60px;padding:5px 8px;font-size:11px;border:1px solid rgba(0,0,0,0.12);border-radius:6px;background:#F5F2EC;color:#1C1A18;font-weight:600;cursor:pointer">🎯 בינוני</button>' +
-        '<button type="button" class="diff-pill" data-diff="hard" style="flex:1;min-width:60px;padding:5px 8px;font-size:11px;border:1px solid rgba(0,0,0,0.12);border-radius:6px;background:#F5F2EC;color:#1C1A18;font-weight:600;cursor:pointer">🔥 קשה</button>' +
-        '<button type="button" class="diff-pill" data-diff="insane" style="flex:1;min-width:60px;padding:5px 8px;font-size:11px;border:1px solid rgba(0,0,0,0.12);border-radius:6px;background:#F5F2EC;color:#1C1A18;font-weight:600;cursor:pointer">💀 גהינום</button>' +
+      '<div id="duel-difficulty" style="display:grid;grid-template-columns:repeat(5,1fr);gap:4px;margin-bottom:10px">' +
+        '<button type="button" class="diff-pill selected" data-diff="default" style="min-width:0;padding:5px 3px;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border:1px solid rgba(0,0,0,0.12);border-radius:6px;background:#1C1A18;color:#FAC775;font-weight:600;cursor:pointer">📦 רגיל</button>' +
+        '<button type="button" class="diff-pill" data-diff="easy" style="min-width:0;padding:5px 3px;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border:1px solid rgba(0,0,0,0.12);border-radius:6px;background:#F5F2EC;color:#1C1A18;font-weight:600;cursor:pointer">😊 קל</button>' +
+        '<button type="button" class="diff-pill" data-diff="medium" style="min-width:0;padding:5px 3px;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border:1px solid rgba(0,0,0,0.12);border-radius:6px;background:#F5F2EC;color:#1C1A18;font-weight:600;cursor:pointer">🎯 בינוני</button>' +
+        '<button type="button" class="diff-pill" data-diff="hard" style="min-width:0;padding:5px 3px;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border:1px solid rgba(0,0,0,0.12);border-radius:6px;background:#F5F2EC;color:#1C1A18;font-weight:600;cursor:pointer">🔥 קשה</button>' +
+        '<button type="button" class="diff-pill" data-diff="insane" style="min-width:0;padding:5px 3px;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border:1px solid rgba(0,0,0,0.12);border-radius:6px;background:#F5F2EC;color:#1C1A18;font-weight:600;cursor:pointer">💀 גהינום</button>' +
       '</div>' +
       '<div style="font-size:11px;font-weight:600;margin-bottom:4px">💎 הימור (לכל המצבים)</div>' +
       '<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;flex-wrap:wrap">' +
-        '<input type="number" id="duel-amount" value="0" min="0" style="width:72px;padding:6px;border:1px solid rgba(0,0,0,0.12);border-radius:8px;font-family:inherit;font-size:14px;text-align:center;font-weight:700">' +
+        '<input type="number" id="duel-amount" value="0" min="0" max="' + (typeof playerBalance === 'number' ? Math.max(0, playerBalance | 0) : 1000000) + '" inputmode="numeric" oninput="var m=parseInt(this.max,10)||0; if((parseInt(this.value,10)||0)>m) this.value=m; if((parseInt(this.value,10)||0)<0) this.value=0;" style="width:72px;padding:6px;border:1px solid rgba(0,0,0,0.12);border-radius:8px;font-family:inherit;font-size:14px;text-align:center;font-weight:700">' +
         '<button type="button" class="wager-chip" data-wager="0" style="padding:4px 9px;font-size:11px;border:1px solid rgba(0,0,0,0.12);border-radius:6px;background:#1C1A18;color:#FAC775;font-weight:700;cursor:pointer">חינם</button>' +
         '<button type="button" class="wager-chip" data-wager="50" style="padding:4px 9px;font-size:11px;border:1px solid rgba(0,0,0,0.12);border-radius:6px;background:#F5F2EC;color:#1C1A18;font-weight:700;cursor:pointer">50</button>' +
         '<button type="button" class="wager-chip" data-wager="100" style="padding:4px 9px;font-size:11px;border:1px solid rgba(0,0,0,0.12);border-radius:6px;background:#F5F2EC;color:#1C1A18;font-weight:700;cursor:pointer">100</button>' +
@@ -1028,6 +1028,9 @@
     var giftBtn = document.getElementById('duel-gift');
     if (giftBtn) giftBtn.onclick = function() {
       var prefSuf = ((document.getElementById('duel-opponent-suffix') || {}).value || '').trim().toUpperCase().replace(/[^A-HJ-NP-Z2-9]/g, '');
+      // Close the duel modal FIRST so the gift modal doesn't stack on top of it
+      // (two open modals → ESC closes them one at a time, confusing "where am I").
+      try { var __dm = document.getElementById('duel-modal'); if (__dm) __dm.remove(); } catch (e) {}
       showGiftFriendModal(prefSuf);
     };
 
@@ -1166,7 +1169,7 @@
           body: JSON.stringify({ deviceId: deviceId, token: deviceToken, opponentCode: opp, amount: amt, difficulty: selectedDuelDifficulty })
         });
         var d = await r.json();
-        this.disabled = false; this.textContent = 'שלח אתגר ⚔️';
+        this.disabled = false; this.textContent = '⚔️ שלח אתגר · ♾️ בלי שעון';
         if (d && d.ok) {
           if (amt > 0) { playerBalance -= amt; updateBalanceDisplay(); }
           errEl.style.color = '#2E8B6F';
@@ -1201,7 +1204,7 @@
           var msgs = { self_duel: 'לא ניתן לאתגר את עצמך', opponent_not_found: 'שחקן לא נמצא', insufficient_balance: 'אין מספיק 💎', duels_disabled: 'דו-קרבות מושבתים', no_profile: 'נסה שוב בעוד רגע', missing_token: 'התחבר מחדש', bad_token: 'התחבר מחדש' };
           errEl.textContent = msgs[d.reason] || 'לא הצלחנו לשלוח — נסה שוב';
         }
-      } catch(e) { this.disabled = false; this.textContent = 'שלח אתגר ⚔️'; errEl.textContent = 'שגיאת רשת'; }
+      } catch(e) { this.disabled = false; this.textContent = '⚔️ שלח אתגר · ♾️ בלי שעון'; errEl.textContent = 'שגיאת רשת'; }
     };
   }
 
@@ -1570,6 +1573,14 @@
     // existing submitDuelScore() flow handles the server submission
     // and result-overlay rendering — we just reuse it.
     try { window.__bloomGameOver = true; } catch (e) {}
+    // Tear down the live game surface so the player isn't left listed as
+    // "in a game" in admin/live-state for 60s and no event overlay lingers
+    // behind the result overlay. (smoothness fix — exitDuelEarly used to
+    // rely entirely on the result overlay covering a still-running board.)
+    try { if (window.endHeartbeat) window.endHeartbeat(); } catch (e) {}
+    try { if (typeof stopEventSystem === 'function') stopEventSystem(); } catch (e) {}
+    try { var __bs = document.getElementById('booster-strip'); if (__bs) __bs.remove(); } catch (e) {}
+    try { if (typeof busy !== 'undefined') busy = true; } catch (e) {}
     try { if (typeof submitDuelScore === 'function') submitDuelScore(finalScore); } catch (e) {
       console.warn('[duel-hud] exit submit failed', e);
     }
@@ -1675,7 +1686,7 @@
       hud.classList.add('duel-hud-status-pending');
     } else if (state.oppStatus === 'accepted') {
       statusEl.textContent = 'מקבל אתגר';
-      scoreEl.textContent  = '0';
+      scoreEl.textContent  = '--'; // "--" (not "0") so it doesn't read as "opponent scored 0"
       hud.classList.add('duel-hud-status-accepted');
     } else if (state.oppStatus === 'playing') {
       statusEl.textContent = '🎮 משחק';
@@ -1718,10 +1729,15 @@
     if (oppScore == null) { el.textContent = ''; el.className = 'duel-hud-delta'; return; }
     var d = (myScore | 0) - (oppScore | 0);
     if (d > 0) {
-      el.textContent = '+' + d.toLocaleString() + ' 💪';
+      // Ahead → celebrate the lead.
+      el.textContent = '👑 מוביל +' + d.toLocaleString();
       el.className = 'duel-hud-delta duel-hud-delta-ahead';
     } else if (d < 0) {
-      el.textContent = d.toLocaleString() + ' 😬';
+      // Behind → frame as a GOAL ("X more to overtake"), not a demoralizing
+      // "-X you're losing". The opponent's score is the target to beat; this
+      // reads as motivation instead of defeat, especially at the start of an
+      // async duel where the opponent already has a full score. (smoothness fix)
+      el.textContent = '🎯 עוד ' + (-d).toLocaleString() + ' לעבור';
       el.className = 'duel-hud-delta duel-hud-delta-behind';
     } else {
       el.textContent = '= תיקו';
@@ -7446,7 +7462,7 @@
       .catch(function() { return null; })
       .then(function(d) {
         if (d && d.ok) {
-          if (d.alreadyFriends || d.accepted) {
+          if (d.alreadyFriends || d.accepted || d.status === 'accepted') {
             btn.textContent = '✓ חבר';
             btn.classList.add('is-friend');
             if (typeof __bloomToast === 'function') __bloomToast('🤝 הוספתם זה את זה! +200💎 לשניכם', 'success');
@@ -12243,7 +12259,7 @@
 
     screen.innerHTML =
       createBackButton('contest-menu') +
-      '<div class="contest-title">' + data.contest.name + '</div>' +
+      '<div class="contest-title">' + escapeHtml(data.contest.name) + '</div>' +
       '<div class="contest-sub">' + (ended ? 'התחרות הסתיימה' : (data.contest.host_device_id === deviceId ? 'התחרות שיצרת' : 'הוזמנת על ידי ' + escapeHtml(data.contest.host_name))) + '</div>' +
       '<div class="contest-info-card">' +
         '<div class="contest-info-row"><span>שחקנים</span><span>' + data.players.length + '</span></div>' +
@@ -19972,6 +19988,115 @@
     if (idleWarnEl) { try { idleWarnEl.remove(); } catch (e) {} idleWarnEl = null; }
   }
 
+  // QA C1 — universal game-over grants. These fire for EVERY game-over
+  // regardless of mode, and were previously inline in ONLY the column-full
+  // branch, so a game that ended via a post-chain settle (common on
+  // גהינום/Crown) silently skipped Trophy Road, Pet XP, Guild contribution
+  // and the Starter Pack offer. Now called from BOTH game-over branches.
+  // All grants are server-side-dedup'd per gameId, so a double call is safe.
+  function fireUniversalGrants() {
+    if (skinTrialMode || window.__bloomBotActive) return;
+    // Starter Pack trigger (throttled inside maybeOfferStarterPack).
+    if (typeof maybeOfferStarterPack === 'function') {
+      try { maybeOfferStarterPack(score); } catch (e) {}
+    }
+    // Pet XP — grows the pet from every game.
+    if (typeof grantPetXpForGame === 'function') {
+      try {
+        var __gid = (typeof getCurrentGameId === 'function') ? getCurrentGameId() : ('game-' + Date.now());
+        grantPetXpForGame(__gid);
+      } catch (e) {}
+    }
+    // Guild contribution — count crowns (tier-8) on the final grid.
+    if (typeof contributeToGuild === 'function') {
+      try {
+        var __crowns = 0;
+        try {
+          if (typeof grid !== 'undefined') {
+            for (var __cr = 0; __cr < grid.length; __cr++) {
+              for (var __cc = 0; __cc < (grid[__cr] || []).length; __cc++) {
+                if (grid[__cr][__cc] === 8) __crowns++;
+              }
+            }
+          }
+        } catch (e) {}
+        contributeToGuild(score, __crowns);
+      } catch (e) {}
+    }
+    // Trophy Road — server-rolled trophy delta from score + tier + isNewBest.
+    if (typeof grantTrophiesForGame === 'function') {
+      try {
+        var __gid2 = (typeof getCurrentGameId === 'function') ? getCurrentGameId() : '';
+        var __isNewBest = (score > 0 && score === best);
+        grantTrophiesForGame({
+          score: score, tier: highestTier,
+          isNewBest: __isNewBest,
+          source: mode || 'game',
+          gameId: __gid2
+        });
+      } catch (e) {}
+    }
+  }
+
+  // QA C1 — record dynamic-board progress on a game-over. The column-full
+  // branch had NO dynamic handling at all, so a dynamic game that topped out
+  // by column-full (the common ending on default difficulty) silently dropped
+  // its board-score submit, Season XP, Album, tournament score, streak and
+  // quests. This compact recorder fires those (fire-and-forget); the richer
+  // rank-pill / achievement-toast render stays in the post-settle branch.
+  // (Full unification of the two game-over paths is a follow-up refactor.)
+  function fireDynamicProgress() {
+    try {
+      var __b = window._activeDynamicBoard;
+      if (!__b) return;
+      var __boardId = __b.id;
+      try { if (typeof setBoardBest === 'function') setBoardBest(__boardId, score, highestTier); } catch (e) {}
+      try {
+        if (typeof recordDynamicStreakDay === 'function') {
+          var __sr = recordDynamicStreakDay();
+          if (__sr && __sr.milestoneHit && typeof earnCredits === 'function') {
+            earnCredits('dyn_streak_milestone', { milestone: __sr.milestoneHit });
+          }
+        }
+      } catch (e) {}
+      try { if (typeof checkAndGrantAchievements === 'function') checkAndGrantAchievements({ boardId: __boardId, score: score, tier: highestTier, rank: null, knownBoards: window._availableBoards || [] }); } catch (e) {}
+      try { if (typeof applyQuestProgressOnGameOver === 'function') applyQuestProgressOnGameOver({ boardId: __boardId, board: __b, score: score, tier: highestTier, rank: null, isBoardBest: false }); } catch (e) {}
+      try {
+        if (typeof grantSeasonXpForGame === 'function') {
+          var __g = (typeof getCurrentGameId === 'function') ? getCurrentGameId() : ('dyn-' + __boardId);
+          grantSeasonXpForGame(__g, score, highestTier, __boardId);
+        }
+      } catch (e) {}
+      try { if (typeof recordAlbumProgress === 'function' && highestTier >= 1) recordAlbumProgress(__boardId, highestTier); } catch (e) {}
+      try {
+        var __ds = window._dailySpecial;
+        if (__ds && __ds.enabled && __ds.id === __boardId && typeof markDailySpecialPlayed === 'function') {
+          markDailySpecialPlayed(__ds.date, __boardId);
+          if (typeof updateDynamicBoardsButton === 'function') { try { updateDynamicBoardsButton(); } catch (e) {} }
+        }
+      } catch (e) {}
+      try { if (typeof submitTournamentScoreFromGame === 'function') submitTournamentScoreFromGame(score, highestTier, window.__bloomDropCount || 0); } catch (e) {}
+      // Global per-board leaderboard submit (fire-and-forget).
+      try {
+        var __payload = {
+          deviceId: (typeof getDeviceId === 'function') ? getDeviceId() : '',
+          token: typeof deviceToken !== 'undefined' ? deviceToken : null,
+          name: (typeof getPlayerName === 'function') ? getPlayerName() : 'אנונימי',
+          score: score, tier: highestTier,
+          drops: window.__bloomDropCount || 0,
+          country: (typeof getCountry === 'function') ? getCountry() : null
+        };
+        fetch('/api/boards/' + __boardId + '/score', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(__payload)
+        }).catch(function() {});
+      } catch (e) {}
+      // Mystery Chest for the dynamic board.
+      try { if (typeof openMysteryChest === 'function') setTimeout(function() { try { openMysteryChest(); } catch (e) {} }, 900); } catch (e) {}
+    } catch (e) {}
+  }
+
   async function drop(col) {
     if (busy) {
       // Queue the next move — drops as soon as current finishes
@@ -20030,54 +20155,10 @@
         // TA.1 — snapshot for refresh-restore. Practice/dynamic/contest
         // only; daily is excluded (DAILY_PLAYED_PREFIX handles it).
         saveLastGameSnapshot({ isNewBest: isNewBest });
-        // Stage 20 — Starter Pack trigger: fire when player crosses trigger
-        // score for the first time. Throttled inside maybeOfferStarterPack.
-        // We fire it with the CURRENT game score (not best) so the trigger
-        // can stamp eligible_at on the very first qualifying game.
-        if (!skinTrialMode && !window.__bloomBotActive && typeof maybeOfferStarterPack === 'function') {
-          try { maybeOfferStarterPack(score); } catch (e) {}
-        }
-        // Stage 28 — Pet XP grant. Fires for ALL game modes so the pet
-        // grows continuously regardless of what the player chooses to play.
-        // Server-side dedup per gameId prevents double-grant.
-        if (!skinTrialMode && !window.__bloomBotActive && typeof grantPetXpForGame === 'function') {
-          try {
-            var __gid = (typeof getCurrentGameId === 'function') ? getCurrentGameId() : ('game-' + Date.now());
-            grantPetXpForGame(__gid);
-          } catch (e) {}
-        }
-        // Stage 27 — Guild contribution. Count crowns (tier-8 tiles) on the
-        // final grid. Server validates membership; safe no-op if not in a guild.
-        if (!skinTrialMode && !window.__bloomBotActive && typeof contributeToGuild === 'function') {
-          try {
-            var __crowns = 0;
-            try {
-              if (typeof grid !== 'undefined') {
-                for (var __cr = 0; __cr < grid.length; __cr++) {
-                  for (var __cc = 0; __cc < (grid[__cr] || []).length; __cc++) {
-                    if (grid[__cr][__cc] === 8) __crowns++;
-                  }
-                }
-              }
-            } catch (e) {}
-            contributeToGuild(score, __crowns);
-          } catch (e) {}
-        }
-        // Stage 38 — Trophy Road grant. Server-rolled trophy delta based on
-        // score + tier + isNewBest. Fire-and-forget; toast + arena celebration
-        // are rendered by the trophy module's own response handler.
-        if (!skinTrialMode && !window.__bloomBotActive && typeof grantTrophiesForGame === 'function') {
-          try {
-            var __gid2 = (typeof getCurrentGameId === 'function') ? getCurrentGameId() : '';
-            var __isNewBest = (score > 0 && score === best);
-            grantTrophiesForGame({
-              score: score, tier: highestTier,
-              isNewBest: __isNewBest,
-              source: mode || 'game',
-              gameId: __gid2
-            });
-          } catch (e) {}
-        }
+        // QA C1 — universal grants (Starter Pack / Pet XP / Guild / Trophy Road).
+        // Extracted to fireUniversalGrants() so the post-settle branch fires the
+        // exact same set (it previously fired none of these).
+        fireUniversalGrants();
         soundGameOver();
         buzz([60, 80, 100]);
         playMusic('fail');
@@ -20103,6 +20184,17 @@
             var result = await completeChallengeRun();
             renderChallengeResult(result);
           })();
+          return;
+        }
+        // QA C1 — dynamic-board game-over on the column-full branch: this path
+        // had NO dynamic handling, so a dynamic game that topped out by
+        // column-full (common on default difficulty) silently dropped its
+        // board-score submit / Season XP / Album / tournament / streak / quests.
+        // Render the over-screen, record the progress, and return so it never
+        // falls through to the daily/practice/contest dispatch below.
+        if (mode === 'dynamic' && window._activeDynamicBoard && !window.__bloomBotActive && !skinTrialMode) {
+          render({ over: true, isNewBest: isNewBest });
+          fireDynamicProgress();
           return;
         }
         // Daily + Practice: submit to leaderboard.
@@ -20363,6 +20455,11 @@
         try { localStorage.setItem(TOTAL_PLAY_TIME_KEY, String(totalMs)); } catch(e) {}
       }
       checkAchievements();
+      // QA C1 — this post-settle branch previously fired NONE of the universal
+      // grants (Trophy Road / Pet XP / Guild / Starter Pack). Fire them here so
+      // a game that ends via a chain-settle (common on גהינום/Crown) rewards the
+      // same as one that ends by column-full. Server dedup per gameId is safe.
+      fireUniversalGrants();
       // Challenges short-circuit the regular game-over screen — they get
       // their own bespoke "you won / you didn't" view from /complete.
       if (mode === 'challenge' && activeChallenge) {
@@ -20585,6 +20682,17 @@
         })();
       } else {
         render({ over: true, isNewBest: isNewBest });
+      }
+      // QA C1 — Mystery Chest for daily/practice/contest (dynamic fires its own
+      // inside its block). This post-settle branch was missing it, so a chain-
+      // settle game-over on those modes skipped the chest the column-full branch
+      // grants. Checked BEFORE submitDuelScore() nulls activeDuelId, so duels
+      // stay correctly excluded.
+      if (chestAllModesEnabled() && !window.__bloomBotActive && !skinTrialMode &&
+          !activeDuelId && !window._duelMode &&
+          (mode === 'daily' || mode === 'practice' || mode === 'contest') &&
+          typeof openMysteryChest === 'function') {
+        setTimeout(function() { try { openMysteryChest(); } catch (e) {} }, 950);
       }
       if (mode === 'practice') clearPracticeGameState();
       // Submit duel score if this was a duel game
@@ -31056,6 +31164,10 @@
 (function() {
   var _warCache = { data: null, fetchedAt: 0 };
   var _warInFlight = false;
+  // XSS guard — guild names (own + opponent) and contributor names are
+  // player-controlled and server `cleanName` does NOT strip <>& (see QA H1).
+  // Escape before every innerHTML interpolation.
+  function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
   var _claimedThisSession = false;
 
   function fetchWarState(force) {
@@ -31213,14 +31325,14 @@
           '<div class="gw-vs-row">' +
             '<div class="gw-team gw-team-mine">' +
               '<div class="gw-team-emoji">' + (w.myGuild.emoji || '🛡') + '</div>' +
-              '<div class="gw-team-name">' + (w.myGuild.name || 'הקלאן שלי') + '</div>' +
+              '<div class="gw-team-name">' + esc(w.myGuild.name || 'הקלאן שלי') + '</div>' +
               '<div class="gw-team-score">' + w.myGuild.score.toLocaleString() + '</div>' +
               '<div class="gw-team-games">' + w.myGuild.games + ' משחקים</div>' +
             '</div>' +
             '<div class="gw-vs-divider">VS</div>' +
             '<div class="gw-team gw-team-other">' +
               '<div class="gw-team-emoji">' + (w.otherGuild.emoji || '⚔️') + '</div>' +
-              '<div class="gw-team-name">' + (w.otherGuild.name || 'יריב') + '</div>' +
+              '<div class="gw-team-name">' + esc(w.otherGuild.name || 'יריב') + '</div>' +
               '<div class="gw-team-score">' + w.otherGuild.score.toLocaleString() + '</div>' +
               '<div class="gw-team-games">' + w.otherGuild.games + ' משחקים</div>' +
             '</div>' +
@@ -31243,7 +31355,7 @@
           var medal = i < 3 ? medals[i] : ('#' + (i + 1));
           html += '<div class="gw-contrib-row">' +
             '<span class="gw-contrib-medal">' + medal + '</span>' +
-            '<span class="gw-contrib-name">' + c.name + '</span>' +
+            '<span class="gw-contrib-name">' + esc(c.name) + '</span>' +
             '<span class="gw-contrib-score">' + c.score.toLocaleString() + '</span>' +
             '<span class="gw-contrib-games">(' + c.games + ' מ׳)</span>' +
           '</div>';

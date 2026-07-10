@@ -1357,7 +1357,7 @@
       .catch(function() { return null; })
       .then(function(d) {
         if (d && d.ok) {
-          if (d.alreadyFriends || d.accepted) {
+          if (d.alreadyFriends || d.accepted || d.status === 'accepted') {
             btn.textContent = '✓ חבר';
             btn.classList.add('is-friend');
             if (typeof __bloomToast === 'function') __bloomToast('🤝 הוספתם זה את זה! +200💎 לשניכם', 'success');

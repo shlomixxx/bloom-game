@@ -198,6 +198,7 @@ CREATE TABLE IF NOT EXISTS admin_actions (
   target_type  VARCHAR(50),
   target_id    VARCHAR(120),
   metadata     JSONB,
+  details      TEXT,        -- QA H4: ~20 CRUD handlers INSERT JSON.stringify(...) here; column was missing so those audit rows silently dropped
   created_at   TIMESTAMP NOT NULL DEFAULT NOW()
 );
 

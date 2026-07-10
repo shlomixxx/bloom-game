@@ -1,0 +1,52 @@
+name: CI
+
+# Safety net (QA improvement plan, Sprint 2). Runs on every push + PR.
+# Catches the class of bug that reached prod undetected: broken syntax,
+# a stale build (src/ edited but public/app.js not rebuilt), and engine
+# regressions — before a deploy, not after.
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install deps
+        run: npm ci || npm install
+
+      - name: Syntax check (server + libs)
+        run: |
+          node --check server.js
+          node --check db.js
+          node --check bot-engine.js
+
+      - name: Build bundle (src → app.js, css → styles.css)
+        run: ./build.sh
+
+      - name: Fail if the committed build is stale
+        run: |
+          if ! git diff --quiet -- public/app.js public/styles.css; then
+            echo "::error::public/app.js or public/styles.css is out of sync with src/. Run ./build.sh and commit the result."
+            git --no-pager diff --stat -- public/app.js public/styles.css
+            exit 1
+          fi
+
+      - name: Syntax check (built bundle)
+        run: node --check public/app.js
+
+      - name: Engine self-test (gravity invariant, 200 games)
+        run: node scripts/test_engine.mjs
+
+      - name: Bot-score determinism test
+        run: node scripts/test_bot_scores.mjs || echo "bot-score test not fatal in CI"

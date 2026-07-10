@@ -12,6 +12,10 @@
 (function() {
   var _warCache = { data: null, fetchedAt: 0 };
   var _warInFlight = false;
+  // XSS guard — guild names (own + opponent) and contributor names are
+  // player-controlled and server `cleanName` does NOT strip <>& (see QA H1).
+  // Escape before every innerHTML interpolation.
+  function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
   var _claimedThisSession = false;
 
   function fetchWarState(force) {
@@ -169,14 +173,14 @@
           '<div class="gw-vs-row">' +
             '<div class="gw-team gw-team-mine">' +
               '<div class="gw-team-emoji">' + (w.myGuild.emoji || '🛡') + '</div>' +
-              '<div class="gw-team-name">' + (w.myGuild.name || 'הקלאן שלי') + '</div>' +
+              '<div class="gw-team-name">' + esc(w.myGuild.name || 'הקלאן שלי') + '</div>' +
               '<div class="gw-team-score">' + w.myGuild.score.toLocaleString() + '</div>' +
               '<div class="gw-team-games">' + w.myGuild.games + ' משחקים</div>' +
             '</div>' +
             '<div class="gw-vs-divider">VS</div>' +
             '<div class="gw-team gw-team-other">' +
               '<div class="gw-team-emoji">' + (w.otherGuild.emoji || '⚔️') + '</div>' +
-              '<div class="gw-team-name">' + (w.otherGuild.name || 'יריב') + '</div>' +
+              '<div class="gw-team-name">' + esc(w.otherGuild.name || 'יריב') + '</div>' +
               '<div class="gw-team-score">' + w.otherGuild.score.toLocaleString() + '</div>' +
               '<div class="gw-team-games">' + w.otherGuild.games + ' משחקים</div>' +
             '</div>' +
@@ -199,7 +203,7 @@
           var medal = i < 3 ? medals[i] : ('#' + (i + 1));
           html += '<div class="gw-contrib-row">' +
             '<span class="gw-contrib-medal">' + medal + '</span>' +
-            '<span class="gw-contrib-name">' + c.name + '</span>' +
+            '<span class="gw-contrib-name">' + esc(c.name) + '</span>' +
             '<span class="gw-contrib-score">' + c.score.toLocaleString() + '</span>' +
             '<span class="gw-contrib-games">(' + c.games + ' מ׳)</span>' +
           '</div>';

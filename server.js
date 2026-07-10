@@ -4728,6 +4728,7 @@ async function _doGachaPull(deviceId, multiplier, isFree) {
       ok: true,
       results,
       newBalance,
+      cost: totalPrice, // QA L1 — client reads d.cost for the spend-flash delta
       pityCounter: pity,
       pityRemaining: Math.max(0, (parseInt(cfg.gacha_pity_threshold || '50', 10) || 50) - pity),
       totalPulls
@@ -9721,17 +9722,23 @@ setInterval(async function() {
 app.post('/api/duels/find-random/cancel', requireDeviceAuth, async (req, res) => {
   try {
     // DU.2 — refund the escrowed stake when leaving the queue unmatched.
+    // QA M2 — do the delete + credit ATOMICALLY in one CTE (was a DELETE then a
+    // separate UPDATE with `.catch(()=>{})`, so if the credit threw the stake was
+    // deleted from the queue but never returned to the wallet — silently lost).
     const del = await pool.query(
-      `DELETE FROM duel_matchmaking_queue WHERE device_id = $1 RETURNING wager`,
+      `WITH gone AS (
+         DELETE FROM duel_matchmaking_queue WHERE device_id = $1 RETURNING wager
+       ), credited AS (
+         UPDATE player_profiles p
+            SET balance = balance + g.wager
+           FROM gone g
+          WHERE p.device_id = $1 AND g.wager > 0
+          RETURNING g.wager
+       )
+       SELECT COALESCE((SELECT wager FROM credited), 0) AS refunded`,
       [req.deviceId]
     );
-    const refund = del.rows[0] ? (del.rows[0].wager | 0) : 0;
-    if (refund > 0) {
-      await pool.query(
-        `UPDATE player_profiles SET balance = balance + $1 WHERE device_id = $2`,
-        [refund, req.deviceId]
-      ).catch(() => {});
-    }
+    const refund = del.rows[0] ? (del.rows[0].refunded | 0) : 0;
     res.json({ ok: true, refunded: refund });
   } catch (e) {
     res.status(500).json({ error: 'internal' });
@@ -9969,26 +9976,39 @@ async function _resolveFriendChallengesForGame(deviceId, score, opts) {
     if (!candidatesR.rows.length) return [];
     const passed = [];
     for (const c of candidatesR.rows) {
-      // Atomic flip: WHERE status='pending' guards against double-resolve
-      // races with a parallel attempt.
-      const upd = await pool.query(
-        `UPDATE friend_challenges
-            SET status = 'passed', result_score = $1, result_at = NOW()
-          WHERE id = $2 AND status = 'pending'
-          RETURNING challenger_device, challenger_name, target_score`,
-        [score | 0, c.id]
-      );
-      if (!upd.rows.length) continue;
-      // Credit BOTH players: challenger for setting it + challenged for winning.
-      // Atomic: each in its own UPDATE.
-      await pool.query(
-        `UPDATE player_profiles SET balance = balance + $1, total_earned = total_earned + $1 WHERE device_id = $2`,
-        [reward, c.challenger_device]
-      ).catch(() => {});
-      await pool.query(
-        `UPDATE player_profiles SET balance = balance + $1, total_earned = total_earned + $1 WHERE device_id = $2`,
-        [reward, deviceId]
-      ).catch(() => {});
+      // QA M2 — flip + credit BOTH players in ONE transaction on a dedicated
+      // client. Was: an atomic flip, then two credit UPDATEs each with
+      // `.catch(()=>{})` + a "+N💎 לשניכם" push — so a swallowed credit left the
+      // challenge 'passed' and a push promising gems that never arrived. Now a
+      // credit failure rolls the flip back → the challenge stays pending and is
+      // retried on the winner's next qualifying game (no push until actually paid).
+      const fcClient = await pool.connect();
+      let upd;
+      try {
+        await fcClient.query('BEGIN');
+        // Atomic flip: WHERE status='pending' guards against double-resolve races.
+        upd = await fcClient.query(
+          `UPDATE friend_challenges
+              SET status = 'passed', result_score = $1, result_at = NOW()
+            WHERE id = $2 AND status = 'pending'
+            RETURNING challenger_device, challenger_name, target_score`,
+          [score | 0, c.id]
+        );
+        if (!upd.rows.length) { await fcClient.query('ROLLBACK'); continue; }
+        // Credit BOTH players (challenger for setting it + challenged for winning)
+        // in one statement, same txn as the flip.
+        await fcClient.query(
+          `UPDATE player_profiles SET balance = balance + $1, total_earned = total_earned + $1
+            WHERE device_id = ANY($2)`,
+          [reward, [c.challenger_device, deviceId]]
+        );
+        await fcClient.query('COMMIT');
+      } catch (fcErr) {
+        try { await fcClient.query('ROLLBACK'); } catch (e) {}
+        continue; // leave pending → retried on the next qualifying game
+      } finally {
+        fcClient.release();
+      }
       // Push the challenger: "you motivated them — they passed!"
       if (typeof sendPushToDevice === 'function') {
         sendPushToDevice(c.challenger_device, {
@@ -17574,7 +17594,25 @@ app.get('/api/duels/mine', async (req, res) => {
     const r = await pool.query(
       `SELECT * FROM duels WHERE challenger_device = $1 OR opponent_device = $1 OR opponent_code = $2
        ORDER BY created_at DESC LIMIT 20`, [deviceId, code]);
-    res.json({ ok: true, duels: r.rows });
+    // QA H5 — same anti-peek gating as GET /api/duels/:id. A `pending` duel
+    // matches the named opponent via opponent_code (opponent_device is still
+    // NULL pre-accept); without this the opponent could poll /mine, read the
+    // challenger's already-submitted score, and decline the wager risk-free.
+    const gated = r.rows.map(function(d) {
+      if (d.status === 'settled' || d.status === 'tie') return d;
+      const iAmChallenger = deviceId === d.challenger_device;
+      const iAmOpponentAccepted = deviceId === d.opponent_device;
+      const iAmOpponentPending = !d.opponent_device && !!code && d.opponent_code === code;
+      if (d.status === 'pending' && (iAmOpponentPending || iAmOpponentAccepted)) {
+        d.challenger_score = null;
+      }
+      if (!iAmChallenger && !iAmOpponentAccepted && !iAmOpponentPending) {
+        d.challenger_score = null;
+        d.opponent_score = null;
+      }
+      return d;
+    });
+    res.json({ ok: true, duels: gated });
   } catch (e) {
     res.status(500).json({ error: 'server' });
   }
@@ -17805,34 +17843,39 @@ app.post('/api/duels/:id/decline', requireDeviceAuth, async (req, res) => {
       return res.json({ ok: false, reason: 'not_opponent' });
     }
 
-    // Atomic transition + refund. The status='pending' guard on the
-    // UPDATE makes the whole thing race-safe against concurrent accepts.
-    await pool.query('BEGIN');
+    // Atomic transition + refund on a DEDICATED client (QA M1 — was on the
+    // shared pool, so BEGIN/UPDATE/COMMIT could interleave across connections
+    // and double-refund or lose the challenger's stake under concurrency).
+    // The status='pending' guard on the UPDATE keeps it race-safe vs accepts.
+    const declineClient = await pool.connect();
     try {
-      const upd = await pool.query(
+      await declineClient.query('BEGIN');
+      const upd = await declineClient.query(
         `UPDATE duels SET status = 'declined' WHERE id = $1 AND status = 'pending' RETURNING 1`,
         [duelId]);
       if (!upd.rows.length) {
-        await pool.query('ROLLBACK');
+        await declineClient.query('ROLLBACK');
         return res.json({ ok: false, reason: 'race' });
       }
       // Refund the challenger's wager if one was on the table.
       const bet = duel.amount | 0;
       if (bet > 0 && duel.challenger_device) {
-        await pool.query(
+        await declineClient.query(
           `UPDATE player_profiles
               SET balance = balance + $1, total_spent = total_spent - $1
             WHERE device_id = $2`,
           [bet, duel.challenger_device]);
-        await pool.query(
+        await declineClient.query(
           `INSERT INTO wager_settlements (contest_code, device_id, amount, type)
            VALUES ($1, $2, $3, 'duel_decline_refund')`,
           ['DUEL:' + duelId, duel.challenger_device, bet]);
       }
-      await pool.query('COMMIT');
+      await declineClient.query('COMMIT');
     } catch (txErr) {
-      await pool.query('ROLLBACK');
+      try { await declineClient.query('ROLLBACK'); } catch (e) {}
       throw txErr;
+    } finally {
+      declineClient.release();
     }
     res.json({ ok: true });
     // Notify the challenger that their challenge was declined.

@@ -67,16 +67,16 @@
         '<input id="duel-opponent-suffix" dir="ltr" maxlength="4" inputmode="latin" autocapitalize="characters" autocomplete="off" placeholder="XXXX" value="' + pre + '" style="flex:1;padding:8px;border:0;font-family:ui-monospace,monospace;font-size:16px;text-transform:uppercase;letter-spacing:0.2em;font-weight:700;text-align:center;outline:none;background:transparent;direction:ltr">' +
       '</div>' +
       '<div style="font-size:11px;font-weight:600;margin-bottom:4px">💪 רמת קושי (לשניכם)</div>' +
-      '<div id="duel-difficulty" style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:10px">' +
-        '<button type="button" class="diff-pill selected" data-diff="default" style="flex:1;min-width:60px;padding:5px 8px;font-size:11px;border:1px solid rgba(0,0,0,0.12);border-radius:6px;background:#1C1A18;color:#FAC775;font-weight:600;cursor:pointer">📦 רגיל</button>' +
-        '<button type="button" class="diff-pill" data-diff="easy" style="flex:1;min-width:60px;padding:5px 8px;font-size:11px;border:1px solid rgba(0,0,0,0.12);border-radius:6px;background:#F5F2EC;color:#1C1A18;font-weight:600;cursor:pointer">😊 קל</button>' +
-        '<button type="button" class="diff-pill" data-diff="medium" style="flex:1;min-width:60px;padding:5px 8px;font-size:11px;border:1px solid rgba(0,0,0,0.12);border-radius:6px;background:#F5F2EC;color:#1C1A18;font-weight:600;cursor:pointer">🎯 בינוני</button>' +
-        '<button type="button" class="diff-pill" data-diff="hard" style="flex:1;min-width:60px;padding:5px 8px;font-size:11px;border:1px solid rgba(0,0,0,0.12);border-radius:6px;background:#F5F2EC;color:#1C1A18;font-weight:600;cursor:pointer">🔥 קשה</button>' +
-        '<button type="button" class="diff-pill" data-diff="insane" style="flex:1;min-width:60px;padding:5px 8px;font-size:11px;border:1px solid rgba(0,0,0,0.12);border-radius:6px;background:#F5F2EC;color:#1C1A18;font-weight:600;cursor:pointer">💀 גהינום</button>' +
+      '<div id="duel-difficulty" style="display:grid;grid-template-columns:repeat(5,1fr);gap:4px;margin-bottom:10px">' +
+        '<button type="button" class="diff-pill selected" data-diff="default" style="min-width:0;padding:5px 3px;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border:1px solid rgba(0,0,0,0.12);border-radius:6px;background:#1C1A18;color:#FAC775;font-weight:600;cursor:pointer">📦 רגיל</button>' +
+        '<button type="button" class="diff-pill" data-diff="easy" style="min-width:0;padding:5px 3px;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border:1px solid rgba(0,0,0,0.12);border-radius:6px;background:#F5F2EC;color:#1C1A18;font-weight:600;cursor:pointer">😊 קל</button>' +
+        '<button type="button" class="diff-pill" data-diff="medium" style="min-width:0;padding:5px 3px;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border:1px solid rgba(0,0,0,0.12);border-radius:6px;background:#F5F2EC;color:#1C1A18;font-weight:600;cursor:pointer">🎯 בינוני</button>' +
+        '<button type="button" class="diff-pill" data-diff="hard" style="min-width:0;padding:5px 3px;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border:1px solid rgba(0,0,0,0.12);border-radius:6px;background:#F5F2EC;color:#1C1A18;font-weight:600;cursor:pointer">🔥 קשה</button>' +
+        '<button type="button" class="diff-pill" data-diff="insane" style="min-width:0;padding:5px 3px;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border:1px solid rgba(0,0,0,0.12);border-radius:6px;background:#F5F2EC;color:#1C1A18;font-weight:600;cursor:pointer">💀 גהינום</button>' +
       '</div>' +
       '<div style="font-size:11px;font-weight:600;margin-bottom:4px">💎 הימור (לכל המצבים)</div>' +
       '<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;flex-wrap:wrap">' +
-        '<input type="number" id="duel-amount" value="0" min="0" style="width:72px;padding:6px;border:1px solid rgba(0,0,0,0.12);border-radius:8px;font-family:inherit;font-size:14px;text-align:center;font-weight:700">' +
+        '<input type="number" id="duel-amount" value="0" min="0" max="' + (typeof playerBalance === 'number' ? Math.max(0, playerBalance | 0) : 1000000) + '" inputmode="numeric" oninput="var m=parseInt(this.max,10)||0; if((parseInt(this.value,10)||0)>m) this.value=m; if((parseInt(this.value,10)||0)<0) this.value=0;" style="width:72px;padding:6px;border:1px solid rgba(0,0,0,0.12);border-radius:8px;font-family:inherit;font-size:14px;text-align:center;font-weight:700">' +
         '<button type="button" class="wager-chip" data-wager="0" style="padding:4px 9px;font-size:11px;border:1px solid rgba(0,0,0,0.12);border-radius:6px;background:#1C1A18;color:#FAC775;font-weight:700;cursor:pointer">חינם</button>' +
         '<button type="button" class="wager-chip" data-wager="50" style="padding:4px 9px;font-size:11px;border:1px solid rgba(0,0,0,0.12);border-radius:6px;background:#F5F2EC;color:#1C1A18;font-weight:700;cursor:pointer">50</button>' +
         '<button type="button" class="wager-chip" data-wager="100" style="padding:4px 9px;font-size:11px;border:1px solid rgba(0,0,0,0.12);border-radius:6px;background:#F5F2EC;color:#1C1A18;font-weight:700;cursor:pointer">100</button>' +
@@ -233,6 +233,9 @@
     var giftBtn = document.getElementById('duel-gift');
     if (giftBtn) giftBtn.onclick = function() {
       var prefSuf = ((document.getElementById('duel-opponent-suffix') || {}).value || '').trim().toUpperCase().replace(/[^A-HJ-NP-Z2-9]/g, '');
+      // Close the duel modal FIRST so the gift modal doesn't stack on top of it
+      // (two open modals → ESC closes them one at a time, confusing "where am I").
+      try { var __dm = document.getElementById('duel-modal'); if (__dm) __dm.remove(); } catch (e) {}
       showGiftFriendModal(prefSuf);
     };
 
@@ -371,7 +374,7 @@
           body: JSON.stringify({ deviceId: deviceId, token: deviceToken, opponentCode: opp, amount: amt, difficulty: selectedDuelDifficulty })
         });
         var d = await r.json();
-        this.disabled = false; this.textContent = 'שלח אתגר ⚔️';
+        this.disabled = false; this.textContent = '⚔️ שלח אתגר · ♾️ בלי שעון';
         if (d && d.ok) {
           if (amt > 0) { playerBalance -= amt; updateBalanceDisplay(); }
           errEl.style.color = '#2E8B6F';
@@ -406,7 +409,7 @@
           var msgs = { self_duel: 'לא ניתן לאתגר את עצמך', opponent_not_found: 'שחקן לא נמצא', insufficient_balance: 'אין מספיק 💎', duels_disabled: 'דו-קרבות מושבתים', no_profile: 'נסה שוב בעוד רגע', missing_token: 'התחבר מחדש', bad_token: 'התחבר מחדש' };
           errEl.textContent = msgs[d.reason] || 'לא הצלחנו לשלוח — נסה שוב';
         }
-      } catch(e) { this.disabled = false; this.textContent = 'שלח אתגר ⚔️'; errEl.textContent = 'שגיאת רשת'; }
+      } catch(e) { this.disabled = false; this.textContent = '⚔️ שלח אתגר · ♾️ בלי שעון'; errEl.textContent = 'שגיאת רשת'; }
     };
   }
 
@@ -775,6 +778,14 @@
     // existing submitDuelScore() flow handles the server submission
     // and result-overlay rendering — we just reuse it.
     try { window.__bloomGameOver = true; } catch (e) {}
+    // Tear down the live game surface so the player isn't left listed as
+    // "in a game" in admin/live-state for 60s and no event overlay lingers
+    // behind the result overlay. (smoothness fix — exitDuelEarly used to
+    // rely entirely on the result overlay covering a still-running board.)
+    try { if (window.endHeartbeat) window.endHeartbeat(); } catch (e) {}
+    try { if (typeof stopEventSystem === 'function') stopEventSystem(); } catch (e) {}
+    try { var __bs = document.getElementById('booster-strip'); if (__bs) __bs.remove(); } catch (e) {}
+    try { if (typeof busy !== 'undefined') busy = true; } catch (e) {}
     try { if (typeof submitDuelScore === 'function') submitDuelScore(finalScore); } catch (e) {
       console.warn('[duel-hud] exit submit failed', e);
     }
@@ -880,7 +891,7 @@
       hud.classList.add('duel-hud-status-pending');
     } else if (state.oppStatus === 'accepted') {
       statusEl.textContent = 'מקבל אתגר';
-      scoreEl.textContent  = '0';
+      scoreEl.textContent  = '--'; // "--" (not "0") so it doesn't read as "opponent scored 0"
       hud.classList.add('duel-hud-status-accepted');
     } else if (state.oppStatus === 'playing') {
       statusEl.textContent = '🎮 משחק';
@@ -923,10 +934,15 @@
     if (oppScore == null) { el.textContent = ''; el.className = 'duel-hud-delta'; return; }
     var d = (myScore | 0) - (oppScore | 0);
     if (d > 0) {
-      el.textContent = '+' + d.toLocaleString() + ' 💪';
+      // Ahead → celebrate the lead.
+      el.textContent = '👑 מוביל +' + d.toLocaleString();
       el.className = 'duel-hud-delta duel-hud-delta-ahead';
     } else if (d < 0) {
-      el.textContent = d.toLocaleString() + ' 😬';
+      // Behind → frame as a GOAL ("X more to overtake"), not a demoralizing
+      // "-X you're losing". The opponent's score is the target to beat; this
+      // reads as motivation instead of defeat, especially at the start of an
+      // async duel where the opponent already has a full score. (smoothness fix)
+      el.textContent = '🎯 עוד ' + (-d).toLocaleString() + ' לעבור';
       el.className = 'duel-hud-delta duel-hud-delta-behind';
     } else {
       el.textContent = '= תיקו';

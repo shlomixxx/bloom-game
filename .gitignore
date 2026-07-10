@@ -25,3 +25,7 @@ bloom-*.png
 live-race-result-*.png
 .playwright-mcp/
 qa-*.png
+
+# QA/debug screenshots (session artifacts)
+duel-hud-*.png
+duel-wait-*.png
