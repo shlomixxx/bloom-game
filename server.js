@@ -7672,6 +7672,10 @@ async function _runSquadMatchmaker() {
   try {
     const cfg = await _loadSquadConfig();
     if (cfg.squad_tournament_enabled === 'false') return;
+    // QA (scorecard wind-down) — stop creating NEW weekly brackets. _runSquadAdvance
+    // is deliberately left running so any in-flight tournament still reaches
+    // 'finished' and its reward stays claimable (strand-free).
+    if (cfg.squad_tournament_wind_down === 'true') return;
     const ilNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Jerusalem' }));
     if (ilNow.getDay() !== 0 || ilNow.getHours() !== 6) return; // Sunday 06:00 IL only
     const weekStart = _ilWeekStart();
@@ -8098,11 +8102,15 @@ app.get('/api/bank/state', async (req, res) => {
     res.json({
       ok: true,
       enabled: true,
+      // QA (scorecard wind-down) — bank is closing: withdraw stays OPEN so no
+      // deposited gems are stranded, but new deposits + interest are off and the
+      // client shows a reclaim-only view. See bank_wind_down.
+      windDown: cfg.bank_wind_down === 'true',
       deposited: Number(row.deposited) || 0,
       totalInterestPaid: Number(row.total_interest_paid) || 0,
       lastInterestDate: row.last_interest_date,
-      interestPctDaily: parseFloat(cfg.bank_interest_pct_daily) || 1,
-      withdrawalFeePct: parseFloat(cfg.bank_withdrawal_fee_pct) || 5,
+      interestPctDaily: (cfg.bank_wind_down === 'true') ? 0 : (parseFloat(cfg.bank_interest_pct_daily) || 1),
+      withdrawalFeePct: (cfg.bank_wind_down === 'true') ? 0 : (parseFloat(cfg.bank_withdrawal_fee_pct) || 5),
       minDeposit: parseInt(cfg.bank_min_deposit, 10) || 100,
       maxBalance: parseInt(cfg.bank_max_balance, 10) || 1000000,
       msUntilNextInterest: msUntilNext
@@ -8123,6 +8131,8 @@ app.post('/api/bank/deposit', requireDeviceAuth, async (req, res) => {
     if (!Number.isFinite(amount) || amount <= 0) return res.json({ ok: false, reason: 'bad_amount' });
     const cfg = await _loadBankConfig();
     if (cfg.bank_enabled === 'false') return res.json({ ok: false, reason: 'disabled' });
+    // QA (scorecard wind-down) — bank closing: no NEW deposits (withdraw stays open).
+    if (cfg.bank_wind_down === 'true') return res.json({ ok: false, reason: 'disabled' });
     const minDep = parseInt(cfg.bank_min_deposit, 10) || 100;
     const maxBal = parseInt(cfg.bank_max_balance, 10) || 1000000;
     if (amount < minDep) return res.json({ ok: false, reason: 'below_min', minDeposit: minDep });
@@ -8178,7 +8188,9 @@ app.post('/api/bank/withdraw', requireDeviceAuth, async (req, res) => {
     if (!Number.isFinite(amount) || amount <= 0) return res.json({ ok: false, reason: 'bad_amount' });
     const cfg = await _loadBankConfig();
     if (cfg.bank_enabled === 'false') return res.json({ ok: false, reason: 'disabled' });
-    const feePct = parseFloat(cfg.bank_withdrawal_fee_pct) || 5;
+    // QA (scorecard wind-down) — no fee on reclaiming your own gems from a
+    // bank the system is closing (the player didn't choose to close it).
+    const feePct = (cfg.bank_wind_down === 'true') ? 0 : (parseFloat(cfg.bank_withdrawal_fee_pct) || 5);
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
@@ -8230,6 +8242,7 @@ async function _runDailyBankInterest() {
   try {
     const cfg = await _loadBankConfig();
     if (cfg.bank_enabled === 'false') return;
+    if (cfg.bank_wind_down === 'true') return; // QA (scorecard) — faucet off during wind-down
     const pct = parseFloat(cfg.bank_interest_pct_daily) || 1;
     if (pct <= 0) return;
     // Only run between 03:00 and 04:00 IL — gives the cron a 1-hour window

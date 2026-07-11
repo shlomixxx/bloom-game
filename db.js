@@ -676,6 +676,21 @@ export async function initDb() {
          INSERT INTO game_config (key, value) VALUES ('_mig_scorecard_cuts_v1', '1') ON CONFLICT (key) DO NOTHING;
        END IF;
      END $$;`,
+    // QA (feature scorecard) — wind DOWN Gem Bank + Squad Tournaments (instead of a
+    // hard disable that would strand deposits / unclaimed rewards). Sets the
+    // *_wind_down flags: no new deposits/tournaments + no interest faucet, but
+    // withdraw/claim stay OPEN so nothing is stranded, and the client shows a
+    // reclaim-only view. Guarded one-time flip → fully REVERSIBLE: set a
+    // *_wind_down key back to 'false' in the admin config editor and it sticks.
+    `DO $$
+     BEGIN
+       IF NOT EXISTS (SELECT 1 FROM game_config WHERE key = '_mig_scorecard_winddown_v1') THEN
+         INSERT INTO game_config (key, value) VALUES
+           ('bank_wind_down', 'true'), ('squad_tournament_wind_down', 'true')
+           ON CONFLICT (key) DO UPDATE SET value = 'true';
+         INSERT INTO game_config (key, value) VALUES ('_mig_scorecard_winddown_v1', '1') ON CONFLICT (key) DO NOTHING;
+       END IF;
+     END $$;`,
     `INSERT INTO game_config (key, value) VALUES ('duel_wager_match_tolerance_pct', '0')      ON CONFLICT (key) DO NOTHING`,
     `INSERT INTO game_config (key, value) VALUES ('duel_wager_widen_after_polls',   '3')      ON CONFLICT (key) DO NOTHING`,
     `INSERT INTO game_config (key, value) VALUES ('duel_wager_widen_band',          '50')     ON CONFLICT (key) DO NOTHING`,

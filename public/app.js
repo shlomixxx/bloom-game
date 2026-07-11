@@ -33389,6 +33389,14 @@ try {
     if (!home) return;
     fetchState(false).then(function(d) {
       if (!d || !d.ok || !d.enabled) return;
+      // QA (scorecard wind-down) — bank is closing: hide the tile entirely for
+      // players with nothing left to reclaim (declutter); players who still have
+      // gems deposited keep a reclaim-only tile + modal (see renderModalBody).
+      if (d.windDown && (d.deposited | 0) <= 0) {
+        var gone = document.getElementById('gem-bank-tile');
+        if (gone) gone.remove();
+        return;
+      }
       var tile = document.getElementById('gem-bank-tile');
       if (!tile) {
         tile = document.createElement('button');
@@ -33405,6 +33413,17 @@ try {
 
   function renderTileInner(d) {
     var headline;
+    if (d.windDown) {
+      // Bank is closing — only reachable here with a positive deposit.
+      headline = '🏦 הבנק נסגר · משוך את היהלומים שלך (<strong>' + (d.deposited | 0).toLocaleString() + '💎</strong>)';
+      return (
+        '<div class="gem-bank-tile-main">' +
+          '<div class="gem-bank-tile-title">🏦 הבנק נסגר</div>' +
+          '<div class="gem-bank-tile-sub">' + headline + '</div>' +
+        '</div>' +
+        '<div class="gem-bank-tile-arrow">›</div>'
+      );
+    }
     if (d.deposited <= 0) {
       headline = '💰 הפקד וקבל ' + d.interestPctDaily + '% ריבית יומית';
     } else {
@@ -33457,6 +33476,30 @@ try {
     }
     var wallet = (typeof playerBalance !== 'undefined') ? (playerBalance | 0) : 0;
     var bankBal = d.deposited | 0;
+    if (d.windDown) {
+      // QA (scorecard wind-down) — reclaim-only: no deposit / no interest UI.
+      // Reuses the withdraw ids so wireActionButtons() binds the withdraw flow.
+      host.innerHTML =
+        '<div class="gem-bank-empty" style="margin-bottom:10px">🏦 הבנק נסגר — משוך את היהלומים שלך' +
+          (d.withdrawalFeePct > 0 ? '' : ' (ללא עמלה)') + '</div>' +
+        '<div class="gem-bank-balances">' +
+          '<div class="gem-bank-bal-row gem-bank-bal-bank">' +
+            '<span class="gem-bank-bal-label">🏦 בבנק</span>' +
+            '<span class="gem-bank-bal-val">' + bankBal.toLocaleString() + '</span>' +
+          '</div>' +
+        '</div>' +
+        (bankBal > 0
+          ? '<div class="gem-bank-action-card gem-bank-action-withdraw">' +
+              '<div class="gem-bank-action-title">⬆ משיכה</div>' +
+              '<div class="gem-bank-amount-row">' +
+                '<input type="number" id="gem-bank-withdraw-amount" min="1" step="100" placeholder="כמה למשוך" />' +
+                '<button class="gem-bank-amount-btn" data-fill="withdraw-max">הכל</button>' +
+              '</div>' +
+              '<button class="gem-bank-do-btn gem-bank-withdraw-btn" id="gem-bank-withdraw-btn">⬆ משוך</button>' +
+            '</div>'
+          : '<div class="gem-bank-empty">אין יהלומים בבנק</div>');
+      return;
+    }
     // Compute "next-day projection": if I deposit X today, I have X*(1+pct/100) tomorrow.
     host.innerHTML =
       '<div class="gem-bank-balances">' +

@@ -561,6 +561,11 @@ CREATE TABLE IF NOT EXISTS gem_bank (
 );
 
 INSERT INTO game_config (key, value) VALUES ('bank_enabled',          'true') ON CONFLICT (key) DO NOTHING;
+-- Scorecard wind-down: when 'true', the bank stops taking new deposits + pays
+-- no interest, but withdrawals stay OPEN (fee-free) so deposited gems are never
+-- stranded, and the client shows a reclaim-only tile. Admin-toggleable.
+INSERT INTO game_config (key, value) VALUES ('bank_wind_down',        'false') ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('squad_tournament_wind_down', 'false') ON CONFLICT (key) DO NOTHING;
 -- 1% daily interest by default. Stored as PERCENTAGE (1 = 1%). Admin
 -- can tune (e.g. 0.5 = half percent, 2 = double).
 INSERT INTO game_config (key, value) VALUES ('bank_interest_pct_daily', '1')   ON CONFLICT (key) DO NOTHING;
