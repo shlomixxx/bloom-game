@@ -231,7 +231,10 @@ bloom-game/
 ├── admin/
 │   └── index.html      # Single-file RTL Hebrew admin dashboard
 ├── build.sh            # Concatenates src/*.js → app.js, css/*.css → styles.css
-├── server.js           # Express app + routes + admin router
+├── server.js           # Express app + routes + admin router (imports pure helpers from lib/)
+├── lib/                # Pure, unit-tested modules extracted from server.js (SR.1 decomposition, 2026-07-11)
+│   ├── bot-scoring.js  # deterministic bot-duel score math (imported by server.js + test_bot_scores.mjs)
+│   └── validators.js   # pure input sanitizers (isValidDate/cleanName/cleanSlug/challengeDropsImplausible/…)
 ├── bot-engine.js       # Server-side bots (200 Israeli names)
 ├── db.js               # pg.Pool, initDb()
 ├── schema.sql          # All tables (idempotent, runs on boot)

@@ -5,6 +5,8 @@ import { readFileSync } from 'node:fs';
 import { pool, initDb } from './db.js';
 import { startBots, stopBots, getBotStatus } from './bot-engine.js';
 import webpush from 'web-push';
+import { _seededBotRng, _calibrateBotScore, _liveBotTargetScore, BOT_MIN_VISIBLE_SCORE, _floorBotVisibleScore, _liveBotScoreAt, _botAsyncCandidateScore, _snapshotForScore, _snapshotForProgress, _snapshotForTime } from './lib/bot-scoring.js';
+import { isValidDate, cleanName, cleanContestName, cleanDisplayName, cleanSlug, challengeDropsImplausible } from './lib/validators.js';
 
 // ============================================================
 // WEB PUSH (PWA notifications) — closed-app delivery
@@ -479,23 +481,7 @@ async function logAdminAction(action, targetType, targetId, metadata) {
 // HELPERS
 // ============================================================
 
-function isValidDate(s) {
-  return typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s);
-}
-
-function cleanName(n) {
-  const s = String(n || '').trim().slice(0, 24);
-  return s || 'אנונימי';
-}
-
-function cleanContestName(n) {
-  return String(n || '').trim().slice(0, 100);
-}
-
-function cleanDisplayName(n) {
-  const s = String(n || '').trim().slice(0, 50);
-  return s || 'אנונימי';
-}
+// isValidDate / cleanName / cleanContestName / cleanDisplayName → lib/validators.js
 
 function generateContestCode() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -2112,32 +2098,7 @@ app.post('/api/contests/:code/unwatch', softDeviceAuth, async (req, res) => {
 
 const CHALLENGE_TYPES = ['race', 'top_n', 'beat', 'first_to_tier'];
 
-function cleanSlug(s) {
-  return String(s || '').toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40);
-}
-
-// Drops-vs-score sanity table. Calibrated against the BloomDebug bot's
-// recorded games. Returns true if the score appears unreachable in the
-// number of drops reported.
-function challengeDropsImplausible(score, drops) {
-  // Recalibrated for the exponential tier scoring + tier-up bonuses
-  // introduced in the score-economy rebalance. Real games now produce
-  // 2-3× higher scores per drop, so the old thresholds (50K / 25 drops)
-  // would false-positive on legitimate skilled play. New thresholds
-  // assume a strong player can reasonably hit ~100K in 25 drops by
-  // chaining mid-tier merges + the +500/+1500 milestone bonuses.
-  const tiers = [
-    [100_000,   25],
-    [200_000,   50],
-    [500_000,  100],
-    [1_500_000, 200],
-    [3_000_000, 350]
-  ];
-  for (const [s, d] of tiers) {
-    if (score >= s && drops < d) return true;
-  }
-  return false;
-}
+// cleanSlug / challengeDropsImplausible → lib/validators.js
 
 // Computes the z-score (vs. completed entries' scores) for one entry.
 // Returns null if there's not enough data to be meaningful.
@@ -9540,68 +9501,8 @@ setInterval(async function() {
 // ────────────────────────────────────────────────────────────
 // BL.1.3 — seeded RNG (Mulberry32) so calibration is fully deterministic
 // per duelId. Two calls with the same (duelId, playerScore, playerWinPct)
-// always return the SAME score → the live preview and the final settled
-// value agree, no surprise jumps.
-function _seededBotRng(seed) {
-  let s = (seed | 0) >>> 0;
-  return function() {
-    s |= 0; s = (s + 0x6D2B79F5) | 0;
-    let t = Math.imul(s ^ (s >>> 15), 1 | s);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-function _calibrateBotScore(duelId, playerScore, playerWinPct) {
-  const p = Math.max(20, Math.min(80, playerWinPct | 0));
-  const rng = _seededBotRng((duelId | 0) ^ 0x12345678);
-  const playerWins = rng() * 100 < p;
-  const isTie = rng() < 0.02;
-  let deltaPct;
-  const t = rng();
-  if (t < 0.65)      deltaPct = 0.03 + rng() * 0.10;  // 65% → 3-13%
-  else if (t < 0.90) deltaPct = 0.10 + rng() * 0.15;  // 25% → 10-25%
-  else               deltaPct = 0.25 + rng() * 0.15;  // 10% → 25-40%
-  let botScore;
-  if (isTie) botScore = playerScore;
-  else if (playerWins) botScore = Math.max(0, Math.floor(playerScore * (1 - deltaPct)));
-  else botScore = Math.floor(playerScore * (1 + deltaPct));
-  return Math.max(100, botScore); // never show "0" — looks like a failure
-}
-
-// Deterministic per-duel-id target final score for live bot duels.
-function _liveBotTargetScore(duelId) {
-  const r = ((duelId * 9301 + 49297) % 233280) / 233280;
-  return Math.floor(35000 + r * 75000); // 35K-110K final
-}
-
-// DU.2.2 — a real BLOOM score jumps in merge-sized steps (a first tier-1
-// merge is ~20 pts); nothing ever reads as "16". So any computed bot score
-// below this threshold is shown as 0 ("hasn't merged yet") rather than an
-// absurd 1-19. Keeps the slow start (no head-start gap) while killing the
-// weird sub-20 numbers the player noticed.
-const BOT_MIN_VISIBLE_SCORE = 20;
-function _floorBotVisibleScore(raw) {
-  raw = raw | 0;
-  return raw < BOT_MIN_VISIBLE_SCORE ? 0 : raw;
-}
-
-// BL.1.6 — bot's "live score" for live races. QUADRATIC easing (was
-// sqrt) so the bot starts SLOW like a real player who's still placing
-// initial pieces, then accelerates as if merges are cascading. This
-// fixes the "bot starts with a huge gap" complaint: at t=5/60s, sqrt
-// gave target × 0.29 (way ahead of player who barely dropped 2 tiles);
-// quadratic gives target × 0.007 (essentially 0, matching a real
-// player's start). Curve still hits full target at t=duration.
-function _liveBotScoreAt(duelId, startedAtMs, durationSec, nowMs) {
-  const target = _liveBotTargetScore(duelId);
-  const elapsed = Math.max(0, (nowMs - startedAtMs) / 1000);
-  const ratio = Math.min(1, elapsed / Math.max(1, durationSec));
-  // Quadratic: ratio² → slow start, accelerating mid-game, hits target at end.
-  const eased = ratio * ratio;
-  // DU.2.2 — snap sub-20 values to 0 so the bot never shows an absurd "16".
-  return _floorBotVisibleScore(Math.floor(target * eased));
-}
+// bot-scoring math (_seededBotRng, _calibrateBotScore, _liveBotTargetScore,
+// BOT_MIN_VISIBLE_SCORE, _floorBotVisibleScore, _liveBotScoreAt) → lib/bot-scoring.js
 
 // DU.3 — in-memory cache of LIVE bot trajectories (immutable after spawn) so
 // the 1Hz heartbeat + live-state polls don't re-fetch a ~10KB JSONB each tick.
@@ -18410,27 +18311,7 @@ app.get('/api/live-state/:deviceId', async (req, res) => {
 // When player submits, target switches from estimate → calibrated final,
 // which can be a JUMP (up or down). To guard against down-jumps, the
 // caller wraps this with the GREATEST(...) DB guard on opponent_live_score.
-function _botAsyncCandidateScore(duelId, createdMs, challengerScore, settleAtMs, nowMs, playerWinPct) {
-  // Time anchor: end of curve = bot_settle_at if known, else estimated 90s.
-  const endMs = (settleAtMs && settleAtMs > createdMs) ? settleAtMs : (createdMs + 90 * 1000);
-  const totalSec = Math.max(1, (endMs - createdMs) / 1000);
-  const elapsed = Math.max(0, (nowMs - createdMs) / 1000);
-  const ratio = Math.min(1, elapsed / totalSec);
-  // BL.1.6 — quadratic easing (was sqrt). Same reasoning as
-  // _liveBotScoreAt: slow start matches real player behaviour.
-  const eased = ratio * ratio;
-  // BL.1.6 — pre-submit anchor LOWERED 40000 → 8000.
-  // The high anchor caused the live ceiling to grow into the 25-35K
-  // range during the player's game, but when the player submitted with
-  // (e.g.) 5000, the calibrated final was ~4500 — the displayed score
-  // dropped from 25K to 4.5K at settle. User noticed: "bot at 17K mid-
-  // game then 9K final". With anchor=8000, the pre-submit ceiling tops
-  // out at ~6-7K, so when calibrated final comes in (typically much
-  // higher), the live score climbs UP toward it — no regression.
-  const anchor = (challengerScore | 0) > 0 ? (challengerScore | 0) : 8000;
-  const target = _calibrateBotScore(duelId, anchor, playerWinPct);
-  return Math.max(100, Math.floor(target * eased));
-}
+// _botAsyncCandidateScore → lib/bot-scoring.js
 
 // DU.2 — cap for the pre-submit spectator estimate so it can never grow
 // above a typical locked final (which would force a down-jump at settle).
@@ -18949,54 +18830,7 @@ async function _getOrComputeBotTrajectory(duel) {
   return traj;
 }
 
-// Look up the snapshot whose score is closest-but-not-greater-than the
-// target score. Returns the snapshot or null.
-function _snapshotForScore(trajectory, targetScore) {
-  if (!trajectory || !Array.isArray(trajectory.snapshots) || !trajectory.snapshots.length) return null;
-  const target = Math.max(0, targetScore | 0);
-  let chosen = trajectory.snapshots[0];
-  for (const snap of trajectory.snapshots) {
-    if ((snap.s | 0) <= target) chosen = snap;
-    else break;
-  }
-  return chosen;
-}
-
-// BL.1.5 — alternative lookup by PROGRESS (0..1) through the trajectory.
-// Used when the bot's displayed score is calibrated (not natural), so we
-// can't match by score directly. Linear mapping: 0 → snapshot[0],
-// 1 → snapshot[last]. Smooth progression through the bot's real game.
-function _snapshotForProgress(trajectory, progressRatio) {
-  if (!trajectory || !Array.isArray(trajectory.snapshots) || !trajectory.snapshots.length) return null;
-  const n = trajectory.snapshots.length;
-  const p = Math.max(0, Math.min(1, progressRatio));
-  const idx = Math.min(n - 1, Math.floor(p * (n - 1)));
-  return trajectory.snapshots[idx];
-}
-
-// ─── DU.3 — "One Real Game, One Truth" ───────────────────────────────
-// THE single selector for bot duels: the bot's displayed score AND board
-// both come from the SAME real-game snapshot, chosen by elapsed wall-clock
-// TIME. The score is a real merge-step series (monotonic for free), so the
-// settled final == the last frame the player saw → zero end-jump, and the
-// board the player watches is literally that game's board at that moment.
-function _snapshotForTime(traj, elapsedSec) {
-  if (!traj || !Array.isArray(traj.snapshots) || !traj.snapshots.length) return null;
-  const snaps = traj.snapshots;
-  const lastT = snaps[snaps.length - 1].t || 0;
-  const t = Math.max(0, Math.min(elapsedSec, lastT));
-  let chosen = snaps[0];
-  for (let i = 0; i < snaps.length; i++) {
-    if ((snaps[i].t || 0) <= t) chosen = snaps[i];
-    else break;
-  }
-  return {
-    score: _floorBotVisibleScore(chosen.s | 0),
-    tier: chosen.h | 0,
-    grid: chosen.g,
-    isFinal: chosen === snaps[snaps.length - 1]
-  };
-}
+// _snapshotForScore / _snapshotForProgress / _snapshotForTime → lib/bot-scoring.js
 
 // Is this bot trajectory truthful (DU.3) — i.e. does its real final equal
 // what the player will be shown? Guarded by the rollback flag so the old

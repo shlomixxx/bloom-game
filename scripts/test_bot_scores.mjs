@@ -16,61 +16,12 @@
  * Run: node scripts/test_bot_scores.mjs
  */
 
-function _seededBotRng(seed) {
-  let s = (seed | 0) >>> 0;
-  return function() {
-    s |= 0; s = (s + 0x6D2B79F5) | 0;
-    let t = Math.imul(s ^ (s >>> 15), 1 | s);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-function _calibrateBotScore(duelId, playerScore, playerWinPct) {
-  const p = Math.max(20, Math.min(80, playerWinPct | 0));
-  const rng = _seededBotRng((duelId | 0) ^ 0x12345678);
-  const playerWins = rng() * 100 < p;
-  const isTie = rng() < 0.02;
-  let deltaPct;
-  const t = rng();
-  if (t < 0.65)      deltaPct = 0.03 + rng() * 0.10;
-  else if (t < 0.90) deltaPct = 0.10 + rng() * 0.15;
-  else               deltaPct = 0.25 + rng() * 0.15;
-  let botScore;
-  if (isTie) botScore = playerScore;
-  else if (playerWins) botScore = Math.max(0, Math.floor(playerScore * (1 - deltaPct)));
-  else botScore = Math.floor(playerScore * (1 + deltaPct));
-  return Math.max(100, botScore);
-}
-
-function _liveBotTargetScore(duelId) {
-  const r = ((duelId * 9301 + 49297) % 233280) / 233280;
-  return Math.floor(35000 + r * 75000);
-}
-
-function _liveBotScoreAt(duelId, startedAtMs, durationSec, nowMs) {
-  const target = _liveBotTargetScore(duelId);
-  const elapsed = Math.max(0, (nowMs - startedAtMs) / 1000);
-  const ratio = Math.min(1, elapsed / Math.max(1, durationSec));
-  // BL.1.6 — quadratic easing.
-  const eased = ratio * ratio;
-  // DU.2.2 — snap sub-20 to 0 (no weird "16").
-  const raw = Math.floor(target * eased);
-  return raw < 20 ? 0 : raw;
-}
-
-function _botAsyncCandidateScore(duelId, createdMs, challengerScore, settleAtMs, nowMs, playerWinPct) {
-  const endMs = (settleAtMs && settleAtMs > createdMs) ? settleAtMs : (createdMs + 90 * 1000);
-  const totalSec = Math.max(1, (endMs - createdMs) / 1000);
-  const elapsed = Math.max(0, (nowMs - createdMs) / 1000);
-  const ratio = Math.min(1, elapsed / totalSec);
-  // BL.1.6 — quadratic easing.
-  const eased = ratio * ratio;
-  // BL.1.6 — anchor lowered 40000 → 8000.
-  const anchor = (challengerScore | 0) > 0 ? (challengerScore | 0) : 8000;
-  const target = _calibrateBotScore(duelId, anchor, playerWinPct);
-  return Math.max(100, Math.floor(target * eased));
-}
+// Import the REAL production formulas (extracted to lib/bot-scoring.js) so this
+// test validates server.js's actual code, not a hand-kept copy. No more drift.
+import {
+  _seededBotRng, _calibrateBotScore, _liveBotTargetScore,
+  _liveBotScoreAt, _botAsyncCandidateScore
+} from '../lib/bot-scoring.js';
 
 // BL.1.6 — settle helper that mirrors _settleBotDuel logic.
 function _settledBotScore(duelId, playerScore, liveCeiling, playerWinPct) {

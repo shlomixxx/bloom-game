@@ -30,6 +30,8 @@ jobs:
           node --check server.js
           node --check db.js
           node --check bot-engine.js
+          node --check lib/bot-scoring.js
+          node --check lib/validators.js
 
       - name: Build bundle (src → app.js, css → styles.css)
         run: ./build.sh
@@ -48,5 +50,8 @@ jobs:
       - name: Engine self-test (gravity invariant, 200 games)
         run: node scripts/test_engine.mjs
 
-      - name: Bot-score determinism test
-        run: node scripts/test_bot_scores.mjs || echo "bot-score test not fatal in CI"
+      - name: Bot-score tests (against lib/bot-scoring.js)
+        run: node scripts/test_bot_scores.mjs
+
+      - name: Validator tests (lib/validators.js)
+        run: node scripts/test_validators.mjs
