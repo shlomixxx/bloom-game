@@ -660,6 +660,22 @@ export async function initDb() {
     // so every board/skin/tournament/deal/gacha/bundle/calendar/guild/push-broadcast audit
     // row silently failed (all wrapped in .catch). Add the column so the audit trail records them.
     `ALTER TABLE admin_actions ADD COLUMN IF NOT EXISTS details TEXT`,
+    // QA (feature scorecard) — turn OFF three low-value, fully-overlapping loops
+    // (Rivalries, Ghost Mode, Friend Challenges) whose jobs are already covered by
+    // 1v1 Duels. Guarded one-time flip → runs ONCE and never re-overrides a later
+    // admin choice, so it is fully REVERSIBLE: re-enable any of them in the admin
+    // config editor and it stays on. The friend-challenge resolver was un-gated in
+    // server.js so pending challenges still pay out (strand-free). Bank + Squad are
+    // intentionally NOT cut here — disabling them needs a reclaim wind-down first
+    // so player deposits / unclaimed rewards can't be stranded.
+    `DO $$
+     BEGIN
+       IF NOT EXISTS (SELECT 1 FROM game_config WHERE key = '_mig_scorecard_cuts_v1') THEN
+         UPDATE game_config SET value = 'false'
+           WHERE key IN ('rival_enabled', 'ghost_enabled', 'friend_challenge_enabled');
+         INSERT INTO game_config (key, value) VALUES ('_mig_scorecard_cuts_v1', '1') ON CONFLICT (key) DO NOTHING;
+       END IF;
+     END $$;`,
     `INSERT INTO game_config (key, value) VALUES ('duel_wager_match_tolerance_pct', '0')      ON CONFLICT (key) DO NOTHING`,
     `INSERT INTO game_config (key, value) VALUES ('duel_wager_widen_after_polls',   '3')      ON CONFLICT (key) DO NOTHING`,
     `INSERT INTO game_config (key, value) VALUES ('duel_wager_widen_band',          '50')     ON CONFLICT (key) DO NOTHING`,

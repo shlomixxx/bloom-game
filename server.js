@@ -9899,7 +9899,11 @@ app.post('/api/friend-challenges/:id/decline', requireDeviceAuth, async (req, re
 async function _resolveFriendChallengesForGame(deviceId, score, opts) {
   try {
     const cfg = await _loadFriendChallengeConfig();
-    if (cfg.friend_challenge_enabled === 'false') return [];
+    // QA (scorecard wind-down) — do NOT gate the RESOLVER on friend_challenge_enabled.
+    // New challenges are blocked in POST /friend-challenges/send; but a pending
+    // challenge that the winner beats AFTER the feature is turned off must still
+    // pay out the +N💎 both sides earned — otherwise disabling the feature strands
+    // that reward. Strand-free wind-down.
     const reward = parseInt(cfg.friend_challenge_win_reward, 10) || 50;
     // Find pending challenges aimed at this player that the score beats.
     // If the challenge specifies a board_id, only credit it when the game
