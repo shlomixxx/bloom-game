@@ -2933,14 +2933,20 @@
         sim[group[j][0]][group[j][1]] = 0;
       }
       sim[sr][sc] = SENTINEL;
-      // Apply gravity in-place on the clone (same algorithm as applyGravity)
+      // Apply gravity in-place on the clone — EXACTLY mirroring applyGravity()
+      // incl. anchors. QA (bughunt-2): the old plain sim ignored void/frozen/
+      // locked anchors, so on smart-mode special boards it predicted the wrong
+      // landing cell → wrong survivor. On non-special boards these guards are
+      // all false, so the sim is byte-identical to before.
       for (var c = 0; c < cols; c++) {
         var w = rows - 1;
         for (var r = rows - 1; r >= 0; r--) {
-          if (sim[r][c] !== 0) {
-            if (r !== w) { sim[w][c] = sim[r][c]; sim[r][c] = 0; }
-            w--;
-          }
+          if (typeof isShapeInactiveAt === 'function' && isShapeInactiveAt(r, c)) { if (r - 1 < w) w = r - 1; continue; }
+          if (typeof isLockedAt === 'function' && isLockedAt(r, c)) { if (r - 1 < w) w = r - 1; continue; }
+          if (sim[r][c] === 0) continue;
+          if (typeof isFrozenAt === 'function' && isFrozenAt(r, c)) { if (r - 1 < w) w = r - 1; continue; }
+          if (r !== w) { sim[w][c] = sim[r][c]; sim[r][c] = 0; }
+          w--;
         }
       }
       // Find the sentinel post-gravity
@@ -3682,7 +3688,7 @@
           if (typeof updateDynamicBoardsButton === 'function') { try { updateDynamicBoardsButton(); } catch (e) {} }
         }
       } catch (e) {}
-      try { if (typeof submitTournamentScoreFromGame === 'function') submitTournamentScoreFromGame(score, highestTier, window.__bloomDropCount || 0); } catch (e) {}
+      try { if (typeof submitTournamentScoreFromGame === 'function') submitTournamentScoreFromGame(score, highestTier, dropsCount); } catch (e) {}
       // Global per-board leaderboard submit (fire-and-forget).
       try {
         var __payload = {
@@ -3690,7 +3696,7 @@
           token: typeof deviceToken !== 'undefined' ? deviceToken : null,
           name: (typeof getPlayerName === 'function') ? getPlayerName() : 'אנונימי',
           score: score, tier: highestTier,
-          drops: window.__bloomDropCount || 0,
+          drops: dropsCount,
           country: (typeof getCountry === 'function') ? getCountry() : null
         };
         fetch('/api/boards/' + __boardId + '/score', {
@@ -4173,7 +4179,7 @@
           name: getPlayerName ? getPlayerName() : 'אנונימי',
           score: score,
           tier: highestTier,
-          drops: window.__bloomDropCount || 0,
+          drops: dropsCount,
           country: (typeof getCountry === 'function') ? getCountry() : null
         };
         render({
@@ -4223,7 +4229,7 @@
         // 🏆 Live Tournament — if there's a tournament currently in its
         // window, auto-submit this score. Server best-score-wins.
         if (typeof submitTournamentScoreFromGame === 'function') {
-          try { submitTournamentScoreFromGame(score, highestTier, window.__bloomDropCount || 0); } catch (e) {}
+          try { submitTournamentScoreFromGame(score, highestTier, dropsCount); } catch (e) {}
         }
         (function() {
           try {

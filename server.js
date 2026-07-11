@@ -3475,15 +3475,18 @@ app.post('/api/player/comeback-claim', requireDeviceAuth, async (req, res) => {
     const tieredReward = daysAwayN >= 14 ? reward14 : (daysAwayN >= 7 ? reward7 : reward);
     const tier = daysAwayN >= 14 ? 14 : (daysAwayN >= 7 ? 7 : 3);
     // Server-side dedup: one comeback claim per device per rolling 7 days.
+    // QA (bughunt-2) — the INSERT is the atomic dedup gate (RETURNING 1). Only
+    // the request that actually inserts the key credits. Was: a SELECT-then-check
+    // then an UNCHECKED INSERT ON CONFLICT DO NOTHING, so two concurrent claims
+    // both passed the check and both credited (up to 600💎 doubled).
     const dedupKey = `_comeback:${deviceId}:${Math.floor(Date.now() / (7 * 24 * 60 * 60 * 1000))}`;
-    const existing = await pool.query(`SELECT value FROM game_config WHERE key = $1`, [dedupKey]);
-    if (existing.rows.length) {
-      return res.json({ ok: false, reason: 'already_claimed' });
-    }
-    await pool.query(
-      `INSERT INTO game_config (key, value) VALUES ($1, $2) ON CONFLICT (key) DO NOTHING`,
+    const claimIns = await pool.query(
+      `INSERT INTO game_config (key, value) VALUES ($1, $2) ON CONFLICT (key) DO NOTHING RETURNING 1`,
       [dedupKey, '1']
     );
+    if (!claimIns.rows.length) {
+      return res.json({ ok: false, reason: 'already_claimed' });
+    }
     // Atomic credit.
     let newBalance = null;
     try {
@@ -3780,12 +3783,23 @@ app.post('/api/player/season/claim-tier', requireDeviceAuth, async (req, res) =>
       await client.query('BEGIN');
       const newList = targetList.concat([tierN]);
       const updateCol = trackKind === 'premium' ? 'claimed_premium_tiers' : 'claimed_tiers';
-      await client.query(
+      // QA (bughunt-2) — CAS the tier append atomically: only claim if the tier
+      // isn't already in the list, and CHECK a row matched before crediting.
+      // Was: the dedup read happened OUTSIDE the txn (3758) and the SET was
+      // unconditional, so two concurrent claims of the same tier both credited.
+      // (updateCol is a hardcoded column name — no injection.)
+      const upd = await client.query(
         `UPDATE player_season_progress
-            SET ${updateCol} = $1::jsonb, updated_at = NOW()
-          WHERE device_id = $2 AND season_id = $3`,
-        [JSON.stringify(newList), deviceId, seasonId]
+            SET ${updateCol} = COALESCE(${updateCol}, '[]'::jsonb) || $1::jsonb, updated_at = NOW()
+          WHERE device_id = $2 AND season_id = $3
+            AND NOT (COALESCE(${updateCol}, '[]'::jsonb) @> $1::jsonb)
+          RETURNING 1`,
+        [JSON.stringify([tierN]), deviceId, seasonId]
       );
+      if (!upd.rows.length) {
+        await client.query('ROLLBACK');
+        return res.json({ ok: false, reason: 'already_claimed' });
+      }
       const credit = await client.query(
         `UPDATE player_profiles
             SET balance = balance + $1, total_earned = total_earned + $1, updated_at = NOW()
@@ -4046,6 +4060,20 @@ app.post('/api/player/starter-pack/buy', requireDeviceAuth, async (req, res) => 
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
+      // QA (bughunt-2) — CAS the purchase atomically at the top of the txn so
+      // only ONE concurrent buy proceeds. Was: purchased_at was checked (4048)
+      // from an UNLOCKED SELECT outside the txn, so two concurrent buys both
+      // passed, both debited 500 + credited 1500 → +2000💎 net doubled. If a
+      // later step fails the whole txn rolls back and purchased_at reverts.
+      const claim = await client.query(
+        `UPDATE starter_pack_state SET purchased_at = NOW(), updated_at = NOW()
+          WHERE device_id = $1 AND purchased_at IS NULL RETURNING 1`,
+        [deviceId]
+      );
+      if (!claim.rows.length) {
+        await client.query('ROLLBACK');
+        return res.json({ ok: false, reason: 'already_purchased' });
+      }
       // Net effect on balance: reward_gems - price_gems. If price > reward we'd
       // be deducting, so we use two separate UPDATEs to keep the math obvious.
       const debit = await client.query(
@@ -4651,8 +4679,12 @@ async function _doGachaPull(deviceId, multiplier, isFree) {
     // Free-pull dedup.
     if (isFree) {
       const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' });
+      // QA (bughunt-2) — FOR UPDATE locks the state row so two concurrent free
+      // pulls serialize: the second blocks, then re-reads the date the first
+      // committed (=today) and bails. Was: an unlocked read, so both passed and
+      // both got a free daily pull.
       const checkR = await client.query(
-        `SELECT free_pull_claimed_date FROM player_gacha_state WHERE device_id = $1`,
+        `SELECT free_pull_claimed_date FROM player_gacha_state WHERE device_id = $1 FOR UPDATE`,
         [deviceId]
       );
       const lastDate = checkR.rows[0] && checkR.rows[0].free_pull_claimed_date
@@ -6511,14 +6543,24 @@ app.post('/api/lifetime/prestige', requireDeviceAuth, async (req, res) => {
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
-      await client.query(
+      // QA (bughunt-2) — CAS the prestige advance and CHECK it matched a row
+      // before crediting. Was: the UPDATE result was discarded and the 5000💎
+      // credit ran unconditionally, so two concurrent requests (both read the
+      // same prestige_count outside the txn) each credited 5000 while prestige
+      // advanced only once → 10,000💎. Mirrors the league/album claim guard.
+      const claim = await client.query(
         `UPDATE player_lifetime_state
             SET prestige_count = prestige_count + 1,
                 last_prestige_at = NOW(),
                 updated_at = NOW()
-          WHERE device_id = $1 AND prestige_count = $2`,
+          WHERE device_id = $1 AND prestige_count = $2
+          RETURNING prestige_count`,
         [deviceId, currentPrestige]
       );
+      if (!claim.rows.length) {
+        await client.query('ROLLBACK');
+        return res.json({ ok: false, reason: 'race_already_prestiged' });
+      }
       const credit = await client.query(
         `UPDATE player_profiles
             SET balance = balance + $1, total_earned = total_earned + $1, updated_at = NOW()
@@ -11688,68 +11730,85 @@ async function maybeFinalizeTournament(tournamentId) {
   // safe to call multiple times. Top-N players have their prizes
   // credited to balance + recorded in tournament_scores.prize_claimed.
   try {
-    const t = await pool.query(
-      `SELECT id, prize_pool, status, ends_at FROM tournaments WHERE id = $1`,
+    // Unlocked pre-check — avoid taking a pooled client for the common
+    // already-finalized / not-ended-yet case (the public GET polls this).
+    const pre = await pool.query(
+      `SELECT status, ends_at FROM tournaments WHERE id = $1`,
       [tournamentId]
     );
-    if (!t.rows.length) return false;
-    const row = t.rows[0];
-    if (row.status === 'finalized') return true;
-    if (new Date(row.ends_at) > new Date()) return false;
-    const pool_ = Array.isArray(row.prize_pool) ? row.prize_pool : [];
-    if (!pool_.length) {
-      await pool.query(`UPDATE tournaments SET status = 'finalized', finalized_at = NOW() WHERE id = $1`, [tournamentId]);
-      return true;
-    }
-    // Order top players by score desc. Tie-breaker: earliest score wins
-    // (rewards consistency, not late-game catch-up).
-    const lb = await pool.query(
-      `SELECT device_id, score, updated_at
-         FROM tournament_scores
-        WHERE tournament_id = $1
-          AND (prize_claimed IS NULL)
-          AND device_id NOT LIKE 'bot-%'   -- Task #5/#12: seeded bots populate the board but never take real prizes
-        ORDER BY score DESC, updated_at ASC
-        LIMIT $2`,
-      [tournamentId, pool_.length]
-    );
-    // Credit each top-N player.
+    if (!pre.rows.length) return false;
+    if (pre.rows[0].status === 'finalized') return true;
+    if (new Date(pre.rows[0].ends_at) > new Date()) return false;
+    // QA (bughunt-2) — serialize concurrent finalizers with a row lock and
+    // RE-CHECK status under it. Was: status + winners were read WITHOUT a lock
+    // and the prize UPDATE had no `prize_claimed IS NULL` CAS, so N clients
+    // hitting the unauthenticated GET /api/tournaments in the same second all
+    // passed the check, all read the same unclaimed winners, and all credited
+    // the full pool → (N-1)× overpayment. Now: FOR UPDATE serializes, the
+    // leaderboard is read inside the txn, each prize is a CAS, and the
+    // finalize is status-guarded. Mirrors the guild-war/challenge finalize.
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
-      for (let i = 0; i < lb.rows.length; i++) {
-        const player = lb.rows[i];
-        const tier = pool_[i] || {};
-        const reward = parseInt(tier.reward, 10) || 0;
-        if (reward <= 0) continue;
-        await client.query(
-          `UPDATE tournament_scores SET prize_claimed = $1 WHERE tournament_id = $2 AND device_id = $3`,
-          [reward, tournamentId, player.device_id]
+      const t = await client.query(
+        `SELECT id, prize_pool, status, ends_at FROM tournaments WHERE id = $1 FOR UPDATE`,
+        [tournamentId]
+      );
+      if (!t.rows.length) { await client.query('ROLLBACK'); return false; }
+      const row = t.rows[0];
+      if (row.status === 'finalized') { await client.query('ROLLBACK'); return true; }
+      if (new Date(row.ends_at) > new Date()) { await client.query('ROLLBACK'); return false; }
+      const pool_ = Array.isArray(row.prize_pool) ? row.prize_pool : [];
+      if (pool_.length) {
+        // Top players by score desc; tie-breaker earliest score wins.
+        const lb = await client.query(
+          `SELECT device_id, score, updated_at
+             FROM tournament_scores
+            WHERE tournament_id = $1
+              AND (prize_claimed IS NULL)
+              AND device_id NOT LIKE 'bot-%'
+            ORDER BY score DESC, updated_at ASC
+            LIMIT $2`,
+          [tournamentId, pool_.length]
         );
-        await client.query(
-          `UPDATE player_profiles
-              SET balance = balance + $1, total_earned = total_earned + $1, updated_at = NOW()
-            WHERE device_id = $2`,
-          [reward, player.device_id]
-        );
-        // Push notification to the winner.
-        if (typeof sendPushToDevice === 'function') {
-          sendPushToDevice(player.device_id, {
-            title: '🏆 זכית בטורניר!',
-            body: 'מקום ' + (i + 1) + ' · ' + reward + '💎 נכנסו לחשבון',
-            tag: 'tournament-prize-' + tournamentId,
-            data: { url: '/' }
-          }).catch(function() {});
+        for (let i = 0; i < lb.rows.length; i++) {
+          const player = lb.rows[i];
+          const tier = pool_[i] || {};
+          const reward = parseInt(tier.reward, 10) || 0;
+          if (reward <= 0) continue;
+          // CAS: claim the prize only if still unclaimed; credit only if it matched.
+          const claimed = await client.query(
+            `UPDATE tournament_scores SET prize_claimed = $1
+              WHERE tournament_id = $2 AND device_id = $3 AND prize_claimed IS NULL
+              RETURNING 1`,
+            [reward, tournamentId, player.device_id]
+          );
+          if (!claimed.rows.length) continue;
+          await client.query(
+            `UPDATE player_profiles
+                SET balance = balance + $1, total_earned = total_earned + $1, updated_at = NOW()
+              WHERE device_id = $2`,
+            [reward, player.device_id]
+          );
+          if (typeof sendPushToDevice === 'function') {
+            sendPushToDevice(player.device_id, {
+              title: '🏆 זכית בטורניר!',
+              body: 'מקום ' + (i + 1) + ' · ' + reward + '💎 נכנסו לחשבון',
+              tag: 'tournament-prize-' + tournamentId,
+              data: { url: '/' }
+            }).catch(function() {});
+          }
         }
       }
       await client.query(
-        `UPDATE tournaments SET status = 'finalized', finalized_at = NOW(), updated_at = NOW() WHERE id = $1`,
+        `UPDATE tournaments SET status = 'finalized', finalized_at = NOW(), updated_at = NOW()
+          WHERE id = $1 AND status != 'finalized'`,
         [tournamentId]
       );
       await client.query('COMMIT');
       return true;
     } catch (err) {
-      await client.query('ROLLBACK');
+      try { await client.query('ROLLBACK'); } catch (e) {}
       throw err;
     } finally {
       client.release();
@@ -16133,17 +16192,20 @@ app.post('/api/player/earn', requireDeviceAuth, async (req, res) => {
         ? ':' + JSON.stringify(validatedMeta)
         : '';
       const dedupKey = action + ':' + today + metaKey;
-      const dup = await pool.query(
-        `SELECT 1 FROM game_config WHERE key = $1`, ['_earn:' + deviceId + ':' + dedupKey]);
-      if (dup.rows.length) return res.json({ ok: false, reason: 'already_earned' });
-      // Save dedup key. Log (don't swallow) failures — a silent failure here
-      // would let the next call to /earn look like a first call, undoing dedup.
-      await pool.query(
-        `INSERT INTO game_config (key, value) VALUES ($1, $2) ON CONFLICT (key) DO NOTHING`,
+      // QA (bughunt-2) — the INSERT is the atomic dedup gate (RETURNING 1). Only
+      // the request that actually inserts the key proceeds to credit. Was: a
+      // SELECT-then-check then an UNCHECKED INSERT ON CONFLICT DO NOTHING, so two
+      // concurrent /earn calls for the same action both passed the check and both
+      // credited. On a DB error we do NOT credit (retry-safe) rather than risk a
+      // double-grant.
+      const earnIns = await pool.query(
+        `INSERT INTO game_config (key, value) VALUES ($1, $2) ON CONFLICT (key) DO NOTHING RETURNING 1`,
         ['_earn:' + deviceId + ':' + dedupKey, '1']
       ).catch((err) => {
         console.error('[earn] dedup-key insert failed', err.message, 'key=', '_earn:' + deviceId + ':' + dedupKey);
+        return null;
       });
+      if (!earnIns || !earnIns.rows.length) return res.json({ ok: false, reason: 'already_earned' });
     }
 
     // Calculate reward

@@ -1468,6 +1468,15 @@
       for (var cc = 0; cc < getBoardCols(); cc++) {
         var seenFilled = false;
         for (var rr = 0; rr < getBoardRows(); rr++) {
+          // QA (bughunt-2) — void/frozen/locked cells are gravity ANCHORS: tiles
+          // settle independently in each segment between them, so an empty below
+          // an anchor is NOT a violation. Reset the scan at each anchor. Without
+          // this, every shape/frozen/locked board false-positived here → console
+          // spam + a redundant applyGravity() on every render.
+          var isAnchor = (typeof isShapeInactiveAt === 'function' && isShapeInactiveAt(rr, cc)) ||
+                         (typeof isFrozenAt === 'function' && isFrozenAt(rr, cc)) ||
+                         (typeof isLockedAt === 'function' && isLockedAt(rr, cc));
+          if (isAnchor) { seenFilled = false; continue; }
           if (grid[rr][cc] !== 0) seenFilled = true;
           else if (seenFilled) {
             violated = true;

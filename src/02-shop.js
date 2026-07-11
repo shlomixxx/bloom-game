@@ -1162,6 +1162,11 @@
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ deviceId: deviceId, token: deviceToken, difficulty: difficulty, wager: _liveRaceWager })
     }).then(function(r) { return r.json(); }).catch(function() { return null; }).then(function(d) {
+      // QA (bughunt-2) — if the player cancelled while this poll was in flight,
+      // _liveRacePoller is null; ignore the response so a late server match can't
+      // trap the player into a race they already cancelled (+ re-escrow the
+      // wager after a local refund). Mirrors the DU.3 pollRandomMatch guard.
+      if (!_liveRacePoller) return;
       if (!d || !d.ok) {
         if (d && d.reason === 'insufficient_funds') {
           stopLiveRaceMatchmaking('cancelled');

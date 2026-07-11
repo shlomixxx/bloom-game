@@ -77,3 +77,33 @@
 
 ## Summary
 **1 critical, 5 high, 3 medium, 7 low.** No SQLi, no CORS gap, no auth gap, no broken ON CONFLICT, no duplicate routes. The two **admin-monitoring** panels the owner asked about (moderation + economy) are broken by a one-character-class prefix typo (H2/H3, trivial fix); the audit log under-reports (H4). The highest *player-impact* bug is C1 (silent progression loss on the core loop). Everything else in the app responds and functions live.
+
+---
+
+# QA Audit — Pass 2 (2026-07-11) — concurrency bug-hunt
+**Method:** 6-lens adversarial bug-hunt workflow (find → refute-by-default 2-vote verify). 18 candidates → 11 confirmed. All FIXED + verified (build + engine self-test 200/0-floating + node --check). Shipped in `v20260711a`.
+
+> The workflow hit the monthly spend limit mid-verify; remaining fixes done inline.
+
+## The headline class: economy concurrency double-credit (all fixed to the codebase's safe pattern)
+Endpoints that read state OUTSIDE the transaction, ran a CAS whose rowcount was never checked, then credited UNCONDITIONALLY → N concurrent requests paid N×.
+
+- [x] **HIGH** `server.js` `maybeFinalizeTournament` — public `GET /api/tournaments` (polled by every client) lazy-finalized with no lock/CAS → N× prize-pool payout. Fix: `FOR UPDATE` on the tournament row + per-prize CAS `AND prize_claimed IS NULL RETURNING 1` + `status != 'finalized'` guard.
+- [x] **HIGH** `server.js` `/api/lifetime/prestige` — CAS result discarded, 5000💎 credited unconditionally. Fix: `RETURNING` + rowcount check before credit.
+- [x] **HIGH** `server.js` `/api/player/season/claim-tier` — non-atomic dedup (read outside txn + unconditional SET). Fix: atomic JSONB append `|| $1 WHERE NOT (col @> $1) RETURNING 1`.
+- [x] **MED** `server.js` `/api/player/earn` — unchecked dedup `INSERT ON CONFLICT DO NOTHING`. Fix: `RETURNING 1` gate; credit only if inserted.
+- [x] **MED** `server.js` `/api/player/starter-pack/buy` — purchased_at checked outside txn → +2000💎 doubled. Fix: CAS `purchased_at IS NULL` at top of txn.
+- [x] **MED** `server.js` `/api/player/comeback-claim` — unchecked dedup INSERT (up to 600�e2 doubled). Fix: `RETURNING 1` gate.
+- [x] **LOW** `server.js` gacha free daily pull — unlocked date read inside txn. Fix: `FOR UPDATE` on the state row.
+
+## Client + engine
+- [x] **HIGH** `src/11-game.js` — `window.__bloomDropCount` was NEVER assigned → every dynamic-board + tournament game-over sent `drops:0`, and the server's drops-implausibility check silently rejected scores ≥100K. Fix: use the real `dropsCount` at all 4 sites.
+- [x] **HIGH** `src/02-shop.js` — ⚡ live-race matchmaking lacked the DU.3 cancel-vs-match guard → trapped into a 60s wagered race after a local refund. Fix: `if (!_liveRacePoller) return;` in the poll `.then`.
+- [x] **LOW** `src/12-tour-info.js` — render-time gravity invariant false-positived on every shape/frozen/locked board (console spam + redundant applyGravity). Fix: reset the scan at void/frozen/locked anchors.
+- [x] **LOW** `src/11-game.js` `pickSmartSurvivor` — gravity sim ignored anchors → wrong survivor on smart-mode special boards. Fix: mirror `applyGravity`'s anchor handling (byte-identical on non-special boards).
+
+## Also
+- [x] Deleted orphaned dead code `05b-home-v3.js` + `home-v3.css` (−980 lines; styles.css 22842→22400) + fixed the build.sh doc comment.
+
+## Summary (pass 2)
+**3 high (economy) + 3 medium + 3 low (economy) + 2 high (client) + 2 low (engine) = 11 fixed.** No SQLi/auth/crash regressions introduced (each fix mirrors an existing safe pattern in the same file; engine self-test clean).
