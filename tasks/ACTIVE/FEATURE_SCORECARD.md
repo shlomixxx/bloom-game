@@ -2,6 +2,8 @@
 
 # BLOOM Feature Scorecard — Add / Change / Delete
 
+> **EXECUTION STATUS (2026-07-11).** Of the 5 "cut" candidates, **3 were cut** (reversible, deployed `v20260711a`): **Rivalries** (`rival_enabled`), **Ghost Mode** (`ghost_enabled`), **Friend Challenges** (`friend_challenge_enabled`) — via a guarded one-time db.js migration (`_mig_scorecard_cuts_v1`); re-enable any in the admin config editor. Friend-Challenges' resolver was un-gated so pending challenges still pay out. **2 were DEFERRED — cutting them blind would strand player value:** disabling **Gem Bank** (`bank_enabled`) makes `bank/withdraw` return `disabled` → deposited gems locked; disabling **Squad Tournaments** (`squad_tournament_enabled`) locks unclaimed tournament rewards. They need a reclaim wind-down (keep withdraw/claim reachable) + an owner decision now that GA4 is live to measure impact. Also corrected 2 wrong key names below (the real keys are `squad_tournament_enabled` / `friend_challenge_enabled` singular, and `bank_enabled` not `gem_bank_enabled`).
+
 **Net score = retentionValue + monetizationValue − maintenanceCost − uiClutter.** Higher = more value per unit of cost/clutter carried. This is a triage signal, not a verdict on its own — a few negative-Net systems are correctly KEPT because they own a unique axis the linear formula can't see (churn-prevention, the only working async-delivery channel, D1 onboarding). Those exceptions are flagged.
 
 **Headline:** 29 of 46 systems score negative Net — the catalog's maintenance + clutter cost now exceeds its retention + monetization value in aggregate. This is a **consolidation problem, not a feature-gap problem.** The single most valuable move is deletion, not addition.
