@@ -33,6 +33,9 @@ jobs:
           node --check lib/bot-scoring.js
           node --check lib/validators.js
           node --check routes/pet.js
+          node --check routes/spin.js
+          node --check routes/lives.js
+          node --check routes/logincal.js
 
       - name: Build bundle (src → app.js, css → styles.css)
         run: ./build.sh
@@ -57,5 +60,5 @@ jobs:
       - name: Validator tests (lib/validators.js)
         run: node scripts/test_validators.mjs
 
-      - name: Pet route-wiring test (routes/pet.js deps)
-        run: node scripts/test_routes_pet.mjs
+      - name: Route-group wiring tests (routes/*.js dep injection)
+        run: node scripts/test_routes.mjs
