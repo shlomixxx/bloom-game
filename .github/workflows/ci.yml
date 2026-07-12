@@ -32,6 +32,7 @@ jobs:
           node --check bot-engine.js
           node --check lib/bot-scoring.js
           node --check lib/validators.js
+          node --check routes/pet.js
 
       - name: Build bundle (src → app.js, css → styles.css)
         run: ./build.sh
@@ -55,3 +56,6 @@ jobs:
 
       - name: Validator tests (lib/validators.js)
         run: node scripts/test_validators.mjs
+
+      - name: Pet route-wiring test (routes/pet.js deps)
+        run: node scripts/test_routes_pet.mjs
