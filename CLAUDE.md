@@ -235,6 +235,8 @@ bloom-game/
 ├── lib/                # Pure, unit-tested modules extracted from server.js (SR.1 decomposition, 2026-07-11)
 │   ├── bot-scoring.js  # deterministic bot-duel score math (imported by server.js + test_bot_scores.mjs)
 │   └── validators.js   # pure input sanitizers (isValidDate/cleanName/cleanSlug/challengeDropsImplausible/…)
+├── routes/             # Route-group modules extracted from server.js (SR.3 decomposition). registerXRoutes(app, deps).
+│   └── pet.js          # Pet/Mascot: 5 routes + 4 helpers; deps injected. Verified by scripts/test_routes_pet.mjs
 ├── bot-engine.js       # Server-side bots (200 Israeli names)
 ├── db.js               # pg.Pool, initDb()
 ├── schema.sql          # All tables (idempotent, runs on boot)
