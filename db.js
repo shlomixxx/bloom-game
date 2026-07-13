@@ -691,6 +691,21 @@ export async function initDb() {
          INSERT INTO game_config (key, value) VALUES ('_mig_scorecard_winddown_v1', '1') ON CONFLICT (key) DO NOTHING;
        END IF;
      END $$;`,
+    // QA follow-up (2026-07) — RESTORE the 3 features cut by _mig_scorecard_cuts_v1.
+    // The cut left BROKEN client surfaces (ghost tile errored on tap, friend-challenge
+    // 🎯 dead-ended with "disabled") and removed real social/viral addiction levers.
+    // Re-enable them. The self-hide gates shipped alongside mean a *future* admin cut
+    // hides the surface cleanly instead of showing a dead button. Guarded one-time
+    // flip → fully REVERSIBLE: an admin who re-cuts via the config editor sticks
+    // (this migration won't re-run).
+    `DO $$
+     BEGIN
+       IF NOT EXISTS (SELECT 1 FROM game_config WHERE key = '_mig_scorecard_restore_v1') THEN
+         UPDATE game_config SET value = 'true'
+           WHERE key IN ('rival_enabled', 'ghost_enabled', 'friend_challenge_enabled');
+         INSERT INTO game_config (key, value) VALUES ('_mig_scorecard_restore_v1', '1') ON CONFLICT (key) DO NOTHING;
+       END IF;
+     END $$;`,
     `INSERT INTO game_config (key, value) VALUES ('duel_wager_match_tolerance_pct', '0')      ON CONFLICT (key) DO NOTHING`,
     `INSERT INTO game_config (key, value) VALUES ('duel_wager_widen_after_polls',   '3')      ON CONFLICT (key) DO NOTHING`,
     `INSERT INTO game_config (key, value) VALUES ('duel_wager_widen_band',          '50')     ON CONFLICT (key) DO NOTHING`,

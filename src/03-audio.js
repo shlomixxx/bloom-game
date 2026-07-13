@@ -9,6 +9,9 @@
       .then(function(d) {
         if (d && d.config) {
           gameConfig = d.config;
+          // Expose to window so standalone IIFEs (ghost-mode, promo-engine) can
+          // read admin flags like ghost_enabled to self-hide when a feature is cut.
+          try { window.gameConfig = d.config; } catch (e) {}
           // Cache boot-time gating flags to localStorage: the FTUE fires
           // synchronously at boot BEFORE this async fetch resolves, so it can't
           // read gameConfig directly. Persisting these lets the next boot honor

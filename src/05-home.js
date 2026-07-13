@@ -37,6 +37,10 @@
       var __bsHomeV1 = document.getElementById('booster-strip');
       if (__bsHomeV1) __bsHomeV1.remove();
     } catch (e) {}
+    // PWA stuck-at-top fix — tear down the fixed-position game HUDs
+    // (contest/duel/ghost/live-race + danger meter) that would otherwise float
+    // pinned over the home screen with no reload to clear them.
+    if (typeof purgeGameHuds === 'function') purgeGameHuds();
     const app = document.querySelector('.app');
     if (!app || document.getElementById('home-screen')) return;
     // Mark the app so CSS can hide the game UI behind the home overlay.

@@ -178,6 +178,10 @@
     // Level gate L8+ — same as Friend Challenges. Requires player has
     // played a few games + understands the daily flow.
     try { if (typeof getPlayerLevel === 'function' && getPlayerLevel() < 8) return; } catch (e) {}
+    // Self-hide when the admin has cut Ghost Mode — the tile has no enabled-gate
+    // of its own, so with ghost_enabled=false it used to mount and then error
+    // ("אין רוח זמינה") on every tap. Now it simply doesn't appear.
+    try { if (window.gameConfig && window.gameConfig.ghost_enabled === 'false') return; } catch (e) {}
     var home = document.getElementById('home-screen-v2') || document.getElementById('home-screen');
     if (!home) return;
     if (document.getElementById('ghost-mode-tile')) return;

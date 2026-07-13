@@ -2464,8 +2464,12 @@
           // suffix is already constrained to [A-HJ-NP-Z2-9]{4} by the regex
           // above, so no need to escape — the chars are HTML/attr-safe by
           // construction. No XSS surface.
+          // Self-hide the 🎯 (Friend Challenge) button when the admin has cut it —
+          // otherwise it opens the send modal and dead-ends on a "disabled" error.
+          // The ⚔️ duel button is unaffected.
+          var fcEnabled = !(typeof gameConfig !== 'undefined' && gameConfig && gameConfig.friend_challenge_enabled === 'false');
           var actionBtns = suffix
-            ? ('<button class="dyn-friend-row-fc" data-suffix="' + suffix + '" data-name="' + escapeHtml(f.name || '') + '" title="🎯 שלח אתגר ניקוד">🎯</button>' +
+            ? ((fcEnabled ? '<button class="dyn-friend-row-fc" data-suffix="' + suffix + '" data-name="' + escapeHtml(f.name || '') + '" title="🎯 שלח אתגר ניקוד">🎯</button>' : '') +
                '<button class="dyn-friend-row-challenge" data-suffix="' + suffix + '" title="⚔️ אתגר לדו-קרב">⚔️</button>')
             : '';
           html += '<div class="dyn-friend-row">' +

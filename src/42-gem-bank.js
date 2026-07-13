@@ -157,6 +157,10 @@
               '<button class="gem-bank-do-btn gem-bank-withdraw-btn" id="gem-bank-withdraw-btn">⬆ משוך</button>' +
             '</div>'
           : '<div class="gem-bank-empty">אין יהלומים בבנק</div>');
+      // QA FIX — bind the withdraw button. This branch used to `return` BEFORE
+      // wireActionButtons(d) ran, so the "⬆ משוך" + "הכל" buttons had no onclick
+      // → dead → deposited gems stranded (the exact thing wind-down prevents).
+      wireActionButtons(d);
       return;
     }
     // Compute "next-day projection": if I deposit X today, I have X*(1+pct/100) tomorrow.

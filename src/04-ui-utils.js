@@ -400,6 +400,37 @@
     for (var i = 0; i < els.length; i++) els[i].remove();
   }
 
+  // Purge every fixed-position in-game HUD that mounts on <body> with NO
+  // auto-timeout: contest / duel / ghost / live-race (+ its spectate panel) and
+  // the danger meter. showHome/showHomeV2 already tore down event overlays and
+  // celebration banners, but NOT these HUDs — so a mid-game "חזרה לבית"
+  // (especially in a PWA, where there is no reload to clear stale <body> DOM)
+  // left one pinned at top:~8-14px, z-index 9500-9999, floating over the home
+  // screen (the reported "part of the game gets stuck at the top"). The worst
+  // offender is the ghost HUD: it is only removed by disarmGhost(), which fires
+  // ONLY on a daily→non-daily mode transition — and going home doesn't change
+  // the mode, so it never fired. This single teardown is called by both home
+  // entry-points. Prefer the real teardown fns (they also clear polling timers),
+  // then belt-and-suspenders-remove any leftover DOM + stuck body classes.
+  function purgeGameHuds() {
+    try { if (typeof stopContestHud === 'function') stopContestHud(); } catch (e) {}
+    try { if (typeof stopDuelOpponentHud === 'function') stopDuelOpponentHud(); } catch (e) {}
+    try {
+      if (window.__bloomGhostMode && typeof window.__bloomGhostMode.disarm === 'function') {
+        window.__bloomGhostMode.disarm();
+      }
+    } catch (e) {}
+    // endLiveRace() has settle side-effects, so remove its HUD DOM directly
+    // rather than invoking it (a genuine live race can't reach home anyway —
+    // body.live-race-active hides the home button; the server cron settles it).
+    ['ghost-hud', 'contest-hud', 'duel-hud', 'live-race-hud', 'live-race-spectate', 'danger-meter']
+      .forEach(function(id) {
+        var el = document.getElementById(id);
+        if (el) { try { el.remove(); } catch (e) {} }
+      });
+    try { document.body.classList.remove('duel-active', 'live-race-active', 'danger-mode'); } catch (e) {}
+  }
+
   // ============ §3.4 GENERIC TOAST HELPER ============
   // The audit asked for a single `showToast(text, type)` so every async
   // action (join contest, submit name, ad watch, etc) can confirm itself

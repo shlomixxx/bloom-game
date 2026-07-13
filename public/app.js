@@ -4124,6 +4124,9 @@
       .then(function(d) {
         if (d && d.config) {
           gameConfig = d.config;
+          // Expose to window so standalone IIFEs (ghost-mode, promo-engine) can
+          // read admin flags like ghost_enabled to self-hide when a feature is cut.
+          try { window.gameConfig = d.config; } catch (e) {}
           // Cache boot-time gating flags to localStorage: the FTUE fires
           // synchronously at boot BEFORE this async fetch resolves, so it can't
           // read gameConfig directly. Persisting these lets the next boot honor
@@ -5124,6 +5127,37 @@
     for (var i = 0; i < els.length; i++) els[i].remove();
   }
 
+  // Purge every fixed-position in-game HUD that mounts on <body> with NO
+  // auto-timeout: contest / duel / ghost / live-race (+ its spectate panel) and
+  // the danger meter. showHome/showHomeV2 already tore down event overlays and
+  // celebration banners, but NOT these HUDs — so a mid-game "חזרה לבית"
+  // (especially in a PWA, where there is no reload to clear stale <body> DOM)
+  // left one pinned at top:~8-14px, z-index 9500-9999, floating over the home
+  // screen (the reported "part of the game gets stuck at the top"). The worst
+  // offender is the ghost HUD: it is only removed by disarmGhost(), which fires
+  // ONLY on a daily→non-daily mode transition — and going home doesn't change
+  // the mode, so it never fired. This single teardown is called by both home
+  // entry-points. Prefer the real teardown fns (they also clear polling timers),
+  // then belt-and-suspenders-remove any leftover DOM + stuck body classes.
+  function purgeGameHuds() {
+    try { if (typeof stopContestHud === 'function') stopContestHud(); } catch (e) {}
+    try { if (typeof stopDuelOpponentHud === 'function') stopDuelOpponentHud(); } catch (e) {}
+    try {
+      if (window.__bloomGhostMode && typeof window.__bloomGhostMode.disarm === 'function') {
+        window.__bloomGhostMode.disarm();
+      }
+    } catch (e) {}
+    // endLiveRace() has settle side-effects, so remove its HUD DOM directly
+    // rather than invoking it (a genuine live race can't reach home anyway —
+    // body.live-race-active hides the home button; the server cron settles it).
+    ['ghost-hud', 'contest-hud', 'duel-hud', 'live-race-hud', 'live-race-spectate', 'danger-meter']
+      .forEach(function(id) {
+        var el = document.getElementById(id);
+        if (el) { try { el.remove(); } catch (e) {} }
+      });
+    try { document.body.classList.remove('duel-active', 'live-race-active', 'danger-mode'); } catch (e) {}
+  }
+
   // ============ §3.4 GENERIC TOAST HELPER ============
   // The audit asked for a single `showToast(text, type)` so every async
   // action (join contest, submit name, ad watch, etc) can confirm itself
@@ -5839,6 +5873,10 @@
       var __bsHomeV1 = document.getElementById('booster-strip');
       if (__bsHomeV1) __bsHomeV1.remove();
     } catch (e) {}
+    // PWA stuck-at-top fix — tear down the fixed-position game HUDs
+    // (contest/duel/ghost/live-race + danger meter) that would otherwise float
+    // pinned over the home screen with no reload to clear them.
+    if (typeof purgeGameHuds === 'function') purgeGameHuds();
     const app = document.querySelector('.app');
     if (!app || document.getElementById('home-screen')) return;
     // Mark the app so CSS can hide the game UI behind the home overlay.
@@ -6185,6 +6223,10 @@
     } catch (e) {}
     // Going home = leaving any dynamic-board session. Next game starts vanilla.
     if (typeof clearDynamicBoardSession === 'function') clearDynamicBoardSession();
+    // PWA stuck-at-top fix — tear down the fixed-position game HUDs
+    // (contest/duel/ghost/live-race + danger meter) that would otherwise float
+    // pinned over the home screen with no reload to clear them.
+    if (typeof purgeGameHuds === 'function') purgeGameHuds();
     const app = document.querySelector('.app');
     if (!app || document.getElementById('home-screen')) return;
     // Mark the app so CSS can hide the game UI behind the home overlay.
@@ -10396,8 +10438,12 @@
           // suffix is already constrained to [A-HJ-NP-Z2-9]{4} by the regex
           // above, so no need to escape — the chars are HTML/attr-safe by
           // construction. No XSS surface.
+          // Self-hide the 🎯 (Friend Challenge) button when the admin has cut it —
+          // otherwise it opens the send modal and dead-ends on a "disabled" error.
+          // The ⚔️ duel button is unaffected.
+          var fcEnabled = !(typeof gameConfig !== 'undefined' && gameConfig && gameConfig.friend_challenge_enabled === 'false');
           var actionBtns = suffix
-            ? ('<button class="dyn-friend-row-fc" data-suffix="' + suffix + '" data-name="' + escapeHtml(f.name || '') + '" title="🎯 שלח אתגר ניקוד">🎯</button>' +
+            ? ((fcEnabled ? '<button class="dyn-friend-row-fc" data-suffix="' + suffix + '" data-name="' + escapeHtml(f.name || '') + '" title="🎯 שלח אתגר ניקוד">🎯</button>' : '') +
                '<button class="dyn-friend-row-challenge" data-suffix="' + suffix + '" title="⚔️ אתגר לדו-קרב">⚔️</button>')
             : '';
           html += '<div class="dyn-friend-row">' +
@@ -33498,6 +33544,10 @@ try {
               '<button class="gem-bank-do-btn gem-bank-withdraw-btn" id="gem-bank-withdraw-btn">⬆ משוך</button>' +
             '</div>'
           : '<div class="gem-bank-empty">אין יהלומים בבנק</div>');
+      // QA FIX — bind the withdraw button. This branch used to `return` BEFORE
+      // wireActionButtons(d) ran, so the "⬆ משוך" + "הכל" buttons had no onclick
+      // → dead → deposited gems stranded (the exact thing wind-down prevents).
+      wireActionButtons(d);
       return;
     }
     // Compute "next-day projection": if I deposit X today, I have X*(1+pct/100) tomorrow.
@@ -34210,6 +34260,10 @@ try {
     // Level gate L8+ — same as Friend Challenges. Requires player has
     // played a few games + understands the daily flow.
     try { if (typeof getPlayerLevel === 'function' && getPlayerLevel() < 8) return; } catch (e) {}
+    // Self-hide when the admin has cut Ghost Mode — the tile has no enabled-gate
+    // of its own, so with ghost_enabled=false it used to mount and then error
+    // ("אין רוח זמינה") on every tap. Now it simply doesn't appear.
+    try { if (window.gameConfig && window.gameConfig.ghost_enabled === 'false') return; } catch (e) {}
     var home = document.getElementById('home-screen-v2') || document.getElementById('home-screen');
     if (!home) return;
     if (document.getElementById('ghost-mode-tile')) return;
