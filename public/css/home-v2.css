@@ -6006,8 +6006,27 @@ html[data-theme="dark"] .friends-banner-requests .friends-banner-arrow { color: 
    body[data-home-variant="tiles"] so the other 4 variants are byte-safe.
    ════════════════════════════════════════════════════════════════ */
 
-/* faint drifting tiles behind the home (z below content) */
-body[data-home-variant="tiles"] #home-screen { position: relative; }
+/* faint drifting tiles behind the home (z below content).
+
+   HL.1 BUGFIX (2026-08-23) — this rule used to say `position: relative`, which
+   was the single most-visible bug in the game: `.home-screen` is the OVERLAY
+   that hides the in-game UI (`.home-screen { position:absolute; inset:0;
+   z-index:250 }` + an opaque background in home.css). There is NO
+   `.app[data-home="active"] > .top { display:none }` rule anywhere — the game
+   chrome is hidden purely by being PAINTED OVER. Overriding position to
+   `relative` (this selector is id+attr, so it beats the `.home-screen` class
+   rule) took the home out of overlay mode and put it back in normal flow, so
+   the in-game `.top` — which contains `.stats`, i.e. the חנות/רצף/שיא/ניקוד
+   score board — plus `#grid-wrap` rendered ABOVE the home content and pushed
+   the whole home down ~172px. That is the user's reported
+   "לוח התוצאות גולש על הדף הראשי". Since HOME.2.1 made `tiles` the DEFAULT
+   variant, this hit EVERY player.
+   `absolute` establishes a containing block for `.home-tiles-float` exactly as
+   well as `relative` does, so the drifting-tiles background is unaffected —
+   the only reason `relative` was chosen here in the first place. Verified live
+   on prod: home 0,0→390×844 (covers .app), `.home-tiles-float` still 390×844,
+   in-game `.top` correctly hidden behind the overlay. */
+body[data-home-variant="tiles"] #home-screen { position: absolute; }
 .home-tiles-float {
   position: absolute; inset: 0; z-index: 0; overflow: hidden;
   pointer-events: none;

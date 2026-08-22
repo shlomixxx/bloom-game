@@ -3395,6 +3395,17 @@
       if (typeof gameConfig === 'object' && gameConfig && gameConfig.danger_meter_enabled === 'false') enabled = false;
     } catch (e) {}
     var existing = document.getElementById('danger-meter');
+    // HL.1 — updateDangerMode() only bails on __bloomGameOver, which is FALSE
+    // when the player leaves a PAUSED game for home. render() keeps running
+    // through the awaited chain/gravity animation after the home mounts, so
+    // this re-appended #danger-meter into .app (and re-added body.danger-mode)
+    // moments AFTER purgeGameHuds() removed them — the classic "teardown then
+    // a live poller re-mounts it" leak.
+    if (document.getElementById('home-screen')) {
+      if (existing) existing.remove();
+      try { document.body.classList.remove('danger-mode'); } catch (e) {}
+      return;
+    }
     if (!enabled || !empties || empties <= 0) {
       if (existing) existing.remove();
       return;

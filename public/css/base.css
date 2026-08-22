@@ -1861,8 +1861,18 @@
      UX audit 2026-06-02 — branded confirm dialog (__bloomConfirm)
      replacing the off-brand native confirm(). Topmost z so it can be
      triggered from inside another modal. ============================ */
+  /* HL.1 (2026-08-23) — was 10060, which the comment above called "topmost"
+     but was NOT: the boards.css modal family (starter-pack, daily-deal,
+     bundle, album, lifetime, guild, league, rival, calendar, ach-lb) sits at
+     100000-100003 with 78-92% opaque backdrops, and those are exactly the
+     modals that INVOKE __bloomConfirm (gem-bank withdraw, lifetime prestige,
+     leave-guild, leave-contest, device-sync transfer). So the confirm mounted
+     *underneath* the modal that opened it — dimmed to near-invisible AND with
+     its pointer events swallowed, leaving the awaited Promise unresolvable by
+     anything except ESC. Sits just below the toast (100200) so a toast fired
+     from inside a confirm flow still reads on top of it. */
   .bloom-confirm-overlay {
-    position: fixed; inset: 0; z-index: 10060;
+    position: fixed; inset: 0; z-index: 100150;
     background: rgba(0,0,0,0.6);
     display: flex; align-items: center; justify-content: center;
     padding: 20px; direction: rtl;

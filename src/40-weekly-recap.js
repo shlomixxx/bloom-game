@@ -79,6 +79,14 @@
         markSeenThisSunday(key);
         return;
       }
+      // HL.1 — maybeAutoShow() is fired from the home mount, but the recap
+      // modal is a full-screen `position:fixed; inset:0; z-index:10001`
+      // overlay on <body>. The fetch above is async, so a player who taps PLAY
+      // while it is in flight gets the Wrapped recap slammed on top of a
+      // running board. Re-check that home still owns the screen at MOUNT time,
+      // not just at call time. Deliberately NOT marked as seen when we bail,
+      // so the recap still gets its chance the next time they open home.
+      if (!document.getElementById('home-screen')) return;
       markSeenThisSunday(key);
       showRecapModal(d, { auto: true });
     });

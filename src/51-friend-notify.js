@@ -52,6 +52,13 @@
     var did = getDeviceId();
     if (!did || did.length < 8) return;
     if (document.visibilityState === 'hidden') return;
+    // HL.1 — the pop-up is a body-level `position:fixed; top:8px; z-index:9998`
+    // banner, i.e. exactly the band the in-game HUDs occupy. Firing it during a
+    // game drops a friend request on top of the live board (and over the
+    // duel/contest/ghost HUD). Only surface it while home owns the screen —
+    // this poller runs every 45s + on visibility regain, so nothing is lost:
+    // the request is still there on the next tick once the player is back home.
+    if (!document.getElementById('home-screen')) return;
     var data;
     try {
       var r = await fetch('/api/friends/requests?deviceId=' + encodeURIComponent(did), { cache: 'no-store' });

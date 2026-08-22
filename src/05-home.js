@@ -301,6 +301,20 @@
 
   function hideHome() {
     stopHomeLivePulse();
+    // HL.1 — showHome() DELEGATES to showHomeV2() (the default home), which
+    // mounts the bottom-nav plus four `.bn-tab-screen` panels — each
+    // `position:absolute; inset:0; z-index:250` with an OPAQUE background,
+    // inside `.app`. hideHome() had no matching delegation, so the 13 call
+    // sites that enter a game/contest/challenge via hideHome() (duel + live
+    // race in 02-shop, contest menu in 06-contests, challenges in
+    // 09-challenges, ghost mode, …) left those panels pinned over the
+    // destination screen — and since mountBottomNav() early-returns while the
+    // nav still exists, they never got rebuilt either. Contest/challenge views
+    // are z-index 50 inside the same container, so they mounted INVISIBLY
+    // behind a stale tab panel. hideHomeV2() is fully idempotent (every timer
+    // is null-checked, unmountBottomNav() no-ops when nothing is mounted), so
+    // calling it here is safe even when v1 is the active home. */
+    if (typeof hideHomeV2 === 'function') { try { hideHomeV2(); } catch (e) {} }
     const h = document.getElementById('home-screen');
     if (h) h.remove();
     const app = document.querySelector('.app');

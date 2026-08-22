@@ -428,7 +428,76 @@
         var el = document.getElementById(id);
         if (el) { try { el.remove(); } catch (e) {} }
       });
+    // HL.1 — the in-game ⋯ menu popover (src/13-boot.js buildTopMenu) is
+    // position:fixed z-9500 on <body>, so it outranks the home overlay (250).
+    // Its own "🏠 חזרה לבית" item closes it first, but every OTHER route home
+    // (deep-link, bottom-nav, programmatic showHome) leaves it pinned.
+    try {
+      document.querySelectorAll('.top-menu-popover').forEach(function(el) { el.remove(); });
+    } catch (e) {}
+
+    // ── HL.1 — the pollers, not just the DOM ───────────────────────────────
+    // A 20-agent adversarial sweep found that removing a HUD is only half the
+    // job: several in-game POLLERS keep running after the player is home and
+    // then RE-MOUNT a surface on top of it. Removing the node without killing
+    // the timer just delays the leak by one tick. Each of these is a pure
+    // teardown (verified: none of them navigate or start a game).
+    //   • spectator — 1s poll + 5s /watch heartbeat; stopSpectator() was
+    //     reachable ONLY from init(), so leaving the spectator view via the ⋯
+    //     menu kept both timers hammering the server forever. Called with no
+    //     argument it takes the `exit !== 'exit'` early return = teardown only.
+    //   • contest overtake watch — a 12s poller whose only guard is
+    //     `mode === 'contest'`, which going home does NOT change, so it kept
+    //     slamming a full-width z-9999 standings banner over the home screen.
+    //   • per-board leaderboard — #board-lb-overlay + its 30s refresh were
+    //     removed ONLY by the overlay's own buttons, so any programmatic
+    //     navigation left the results board floating over home. This is the
+    //     literal "לוח התוצאות" surface in the user's report.
+    try { if (typeof stopSpectator === 'function') stopSpectator(); } catch (e) {}
+    try { if (typeof stopOvertakeWatch === 'function') stopOvertakeWatch(); } catch (e) {}
+    try { if (typeof closeBoardLeaderboard === 'function') closeBoardLeaderboard(); } catch (e) {}
+    // Live-race timers: endLiveRace() has settle side-effects so we still don't
+    // call it, but its 1s state poll + hard timeout must stop or they keep
+    // firing (and can mount the result overlay) while the player is on home.
+    try { if (typeof stopLiveRaceTimersOnly === 'function') stopLiveRaceTimersOnly(); } catch (e) {}
+
+    // ── HL.1 — body-level banners that outrank the home overlay (z 250) ────
+    // These mount on <body> at position:fixed with z 999-9999 and are removed
+    // only by their own short setTimeout or by a closure-local cleanup, so a
+    // navigation mid-timer strands them on top of the home screen. They carry
+    // no data-bloom-banner attribute, so clearTransientBanners() misses them.
+    try {
+      ['booster-pop-banner', 'duel-opp-finished-toast', 'skin-trial-banner', 'flow-pill', 'idle-warn-banner']
+        .forEach(function(id) {
+          var el = document.getElementById(id);
+          if (el) { try { el.remove(); } catch (e) {} }
+        });
+      document.querySelectorAll('.multi-merge-badge, .chain-badge, .spectator-toast')
+        .forEach(function(el) { try { el.remove(); } catch (e) {} });
+    } catch (e) {}
+    // The POP booster also leaves a capture-phase click listener + a class on
+    // #grid. render() only clears innerHTML, so the class (and the intercepted
+    // first tap of the NEXT game) survive. The listener is closure-local and
+    // can't be removed from here, but dropping the class removes the visual
+    // "tap a cell to destroy" affordance; 35-boosters.js self-heals the
+    // listener on the next applyPopBooster().
+    try {
+      var __g = document.getElementById('grid');
+      if (__g) __g.classList.remove('booster-pop-mode');
+      document.body.style.paddingBottom = '';   // skin-trial banner spacer
+    } catch (e) {}
+
+    // Board THEME classes (holiday palettes) repaint the whole <body>
+    // background + .app glow. clearDynamicBoardSession() clears the column
+    // multipliers but NOT these, so a Valentine/Hanukkah board left the home
+    // screen wearing the holiday skin.
+    try { if (typeof clearBoardThemeClasses === 'function') clearBoardThemeClasses(); } catch (e) {}
+
     try { document.body.classList.remove('duel-active', 'live-race-active', 'danger-mode'); } catch (e) {}
+    // Stale _liveRaceMode makes BOTH game-over branches take the live-race
+    // hand-off path, diverting an ordinary practice game-over into a race
+    // that no longer exists.
+    try { window._liveRaceMode = false; } catch (e) {}
   }
 
   // ============ §3.4 GENERIC TOAST HELPER ============
@@ -463,10 +532,19 @@
       // Sit ABOVE the persistent 5-tab bottom-nav (~76px tall) so success/error
       // confirmations are never hidden behind it on iOS. The extra safe-area
       // inset keeps it clear of the home indicator on notched phones.
+      //
+      // HL.1 (2026-08-23) — z was 10005, BELOW the boards.css modal family
+      // (100000-100003, backdrops 78-92% opaque). T0.4 replaced 40 blocking
+      // alert() calls with showToast(), but every toast fired from INSIDE one
+      // of those modals — insufficient-funds on a bundle/starter-pack/gacha
+      // buy, and worst of all the "🎉 הקלאן נוצר! קוד שיתוף: XXXXXX" success
+      // message, whose share code the player then never sees — was painted
+      // underneath the backdrop and effectively unreadable. Now the topmost
+      // layer in the app, above the confirm dialog (100150).
       style: 'position:fixed;left:50%;bottom:calc(90px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);' +
              'background:' + p.bg + ';color:' + p.fg + ';' +
              'border:1px solid ' + p.border + ';' +
-             'padding:10px 18px;border-radius:10px;z-index:10005;' +
+             'padding:10px 18px;border-radius:10px;z-index:100200;' +
              'box-shadow:0 6px 24px rgba(0,0,0,0.18);direction:rtl;' +
              'font-size:14px;font-weight:600;letter-spacing:0.01em;' +
              'max-width:80vw;text-align:center;',

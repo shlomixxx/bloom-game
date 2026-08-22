@@ -1623,6 +1623,15 @@
     const wrap = document.getElementById('grid-wrap');
     const grid = document.getElementById('grid');
     if (!wrap || !grid) return;
+    // HL.1 — while a home screen owns the viewport the in-game chrome is
+    // display:none (public/css/v2-mechanics.css), so the wrap measures 0×0 and
+    // the retry branch below would burn the whole 30-frame budget on a board
+    // nobody is looking at — leaving it DISARMED for the next real fit, which
+    // is exactly the "tiles disappear / empty board" case the retry exists to
+    // catch. Bail early and hand the next fit a clean budget. Safe because
+    // hideHome()/hideHomeV2() REMOVE #home-screen before init()→render()→
+    // fitGrid() runs, so a genuine in-game fit never takes this branch.
+    if (document.getElementById('home-screen')) { window.__fitGridRetries = 0; return; }
     ensureGridResizeObserver();    // self-heal: re-fit whenever grid-wrap settles
     const padX = 6;                // matches CSS .grid-wrap horizontal padding
     const padY = 12;               // matches CSS .grid-wrap bottom padding

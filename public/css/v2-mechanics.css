@@ -187,6 +187,35 @@ body:has(#home-screen) .col-mult-bar,
 .app[data-home="active"] #v2-spine,
 .app[data-home="active"] .col-mult-bar { display: none !important; }
 
+/* ── HL.1 — DEFENCE IN DEPTH for the WHOLE in-game chrome (2026-08-23) ────
+   The June fix above hid #v2-spine + .col-mult-bar, but every OTHER in-game
+   surface (.top — which holds .stats, i.e. the חנות/רצף/שיא/ניקוד score board
+   — plus .mode-bar / #mode-extras / #tier-bar / #grid-wrap) was never hidden
+   at all. It was only ever PAINTED OVER by .home-screen, which is
+   `position:absolute; inset:0; z-index:250` with an opaque background.
+   That made the whole home a single-point-of-failure: ONE `position` override
+   anywhere (home-v2.css's tiles-variant rule did exactly this) silently drops
+   the home out of overlay mode and the entire game header lands on top of the
+   home screen. Rather than rely on the paint-over alone, state the invariant
+   directly: while a #home-screen is mounted, the in-game chrome is hidden.
+   `body:has(#home-screen)` is the robust signal — the bottom-nav relocates
+   #home-screen, so any `>` direct-child selector is unreliable; the
+   .app[data-home="active"] pair is the no-:has fallback.
+   Safe because hideHome()/hideHomeV2() REMOVE #home-screen from the DOM (they
+   don't just hide it) and both run BEFORE init()/fitGrid() measures anything,
+   so the chrome is back in flow with real geometry by the time the board is
+   sized. */
+body:has(#home-screen) .top,
+body:has(#home-screen) .mode-bar,
+body:has(#home-screen) #mode-extras,
+body:has(#home-screen) #tier-bar,
+body:has(#home-screen) #grid-wrap,
+.app[data-home="active"] .top,
+.app[data-home="active"] .mode-bar,
+.app[data-home="active"] #mode-extras,
+.app[data-home="active"] #tier-bar,
+.app[data-home="active"] #grid-wrap { display: none !important; }
+
 /* ---- Aim overlay: ghost landing preview + column highlight ---- */
 body.bloom-v2 #v2-aim { position: absolute; inset: 0; pointer-events: none; z-index: 6; }
 body.bloom-v2 .v2-col-hi {

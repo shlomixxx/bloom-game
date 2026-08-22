@@ -1861,8 +1861,18 @@
      UX audit 2026-06-02 — branded confirm dialog (__bloomConfirm)
      replacing the off-brand native confirm(). Topmost z so it can be
      triggered from inside another modal. ============================ */
+  /* HL.1 (2026-08-23) — was 10060, which the comment above called "topmost"
+     but was NOT: the boards.css modal family (starter-pack, daily-deal,
+     bundle, album, lifetime, guild, league, rival, calendar, ach-lb) sits at
+     100000-100003 with 78-92% opaque backdrops, and those are exactly the
+     modals that INVOKE __bloomConfirm (gem-bank withdraw, lifetime prestige,
+     leave-guild, leave-contest, device-sync transfer). So the confirm mounted
+     *underneath* the modal that opened it — dimmed to near-invisible AND with
+     its pointer events swallowed, leaving the awaited Promise unresolvable by
+     anything except ESC. Sits just below the toast (100200) so a toast fired
+     from inside a confirm flow still reads on top of it. */
   .bloom-confirm-overlay {
-    position: fixed; inset: 0; z-index: 10060;
+    position: fixed; inset: 0; z-index: 100150;
     background: rgba(0,0,0,0.6);
     display: flex; align-items: center; justify-content: center;
     padding: 20px; direction: rtl;
@@ -8749,8 +8759,27 @@ html[data-theme="dark"] .friends-banner-requests .friends-banner-arrow { color: 
    body[data-home-variant="tiles"] so the other 4 variants are byte-safe.
    ════════════════════════════════════════════════════════════════ */
 
-/* faint drifting tiles behind the home (z below content) */
-body[data-home-variant="tiles"] #home-screen { position: relative; }
+/* faint drifting tiles behind the home (z below content).
+
+   HL.1 BUGFIX (2026-08-23) — this rule used to say `position: relative`, which
+   was the single most-visible bug in the game: `.home-screen` is the OVERLAY
+   that hides the in-game UI (`.home-screen { position:absolute; inset:0;
+   z-index:250 }` + an opaque background in home.css). There is NO
+   `.app[data-home="active"] > .top { display:none }` rule anywhere — the game
+   chrome is hidden purely by being PAINTED OVER. Overriding position to
+   `relative` (this selector is id+attr, so it beats the `.home-screen` class
+   rule) took the home out of overlay mode and put it back in normal flow, so
+   the in-game `.top` — which contains `.stats`, i.e. the חנות/רצף/שיא/ניקוד
+   score board — plus `#grid-wrap` rendered ABOVE the home content and pushed
+   the whole home down ~172px. That is the user's reported
+   "לוח התוצאות גולש על הדף הראשי". Since HOME.2.1 made `tiles` the DEFAULT
+   variant, this hit EVERY player.
+   `absolute` establishes a containing block for `.home-tiles-float` exactly as
+   well as `relative` does, so the drifting-tiles background is unaffected —
+   the only reason `relative` was chosen here in the first place. Verified live
+   on prod: home 0,0→390×844 (covers .app), `.home-tiles-float` still 390×844,
+   in-game `.top` correctly hidden behind the overlay. */
+body[data-home-variant="tiles"] #home-screen { position: absolute; }
 .home-tiles-float {
   position: absolute; inset: 0; z-index: 0; overflow: hidden;
   pointer-events: none;
@@ -22338,6 +22367,35 @@ body:has(#home-screen) #v2-spine,
 body:has(#home-screen) .col-mult-bar,
 .app[data-home="active"] #v2-spine,
 .app[data-home="active"] .col-mult-bar { display: none !important; }
+
+/* ── HL.1 — DEFENCE IN DEPTH for the WHOLE in-game chrome (2026-08-23) ────
+   The June fix above hid #v2-spine + .col-mult-bar, but every OTHER in-game
+   surface (.top — which holds .stats, i.e. the חנות/רצף/שיא/ניקוד score board
+   — plus .mode-bar / #mode-extras / #tier-bar / #grid-wrap) was never hidden
+   at all. It was only ever PAINTED OVER by .home-screen, which is
+   `position:absolute; inset:0; z-index:250` with an opaque background.
+   That made the whole home a single-point-of-failure: ONE `position` override
+   anywhere (home-v2.css's tiles-variant rule did exactly this) silently drops
+   the home out of overlay mode and the entire game header lands on top of the
+   home screen. Rather than rely on the paint-over alone, state the invariant
+   directly: while a #home-screen is mounted, the in-game chrome is hidden.
+   `body:has(#home-screen)` is the robust signal — the bottom-nav relocates
+   #home-screen, so any `>` direct-child selector is unreliable; the
+   .app[data-home="active"] pair is the no-:has fallback.
+   Safe because hideHome()/hideHomeV2() REMOVE #home-screen from the DOM (they
+   don't just hide it) and both run BEFORE init()/fitGrid() measures anything,
+   so the chrome is back in flow with real geometry by the time the board is
+   sized. */
+body:has(#home-screen) .top,
+body:has(#home-screen) .mode-bar,
+body:has(#home-screen) #mode-extras,
+body:has(#home-screen) #tier-bar,
+body:has(#home-screen) #grid-wrap,
+.app[data-home="active"] .top,
+.app[data-home="active"] .mode-bar,
+.app[data-home="active"] #mode-extras,
+.app[data-home="active"] #tier-bar,
+.app[data-home="active"] #grid-wrap { display: none !important; }
 
 /* ---- Aim overlay: ghost landing preview + column highlight ---- */
 body.bloom-v2 #v2-aim { position: absolute; inset: 0; pointer-events: none; z-index: 6; }

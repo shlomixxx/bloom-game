@@ -1117,6 +1117,23 @@
   var _liveRaceSpecPoller = null;
   var _liveRaceSpecTargetId = null;
 
+  // HL.1 — teardown-ONLY variant of endLiveRace's timer cleanup, for
+  // purgeGameHuds(). endLiveRace() settles the duel (server call, result
+  // overlay, gem payout), which must NOT happen just because the player
+  // navigated home — but its 1s poll + the durationMs+3500ms hard timeout MUST
+  // stop, or they keep firing and can mount #live-race-result on top of the
+  // home screen (position:fixed, z-index 10020, well above the home's 250).
+  // Clearing _liveRaceState is what actually disarms them: pollLiveRaceState
+  // and sendLiveHeartbeat both open with `if (!_liveRaceState) return;`.
+  function stopLiveRaceTimersOnly() {
+    if (_liveRaceHbTimer) { clearInterval(_liveRaceHbTimer); _liveRaceHbTimer = null; }
+    if (_liveRacePollTimer) { clearInterval(_liveRacePollTimer); _liveRacePollTimer = null; }
+    if (_liveRaceHardTimeout) { clearTimeout(_liveRaceHardTimeout); _liveRaceHardTimeout = null; }
+    try { stopLiveRaceSpectator(); } catch (e) {}
+    _liveRaceState = null;
+    _liveRaceEnding = false;
+  }
+
   var _liveRaceWager = 0; // DU.2 — escrowed stake for the active live search
 
   function startLiveRaceMatchmaking(difficulty, wager) {
