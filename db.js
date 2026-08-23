@@ -609,6 +609,11 @@ export async function initDb() {
     `INSERT INTO game_config (key, value) VALUES ('bots_games_today_floor', '0') ON CONFLICT (key) DO NOTHING`,
     // AD.4 — live "moves to survive" danger meter (loss-aversion). Default on.
     `INSERT INTO game_config (key, value) VALUES ('danger_meter_enabled', 'true') ON CONFLICT (key) DO NOTHING`,
+    // HL.3 — read by the `comeback` earn action but never seeded, so the admin
+    // could not see or tune them. Values are the existing hardcoded fallbacks.
+    `INSERT INTO game_config (key, value) VALUES ('comeback_reward_short', '50') ON CONFLICT (key) DO NOTHING`,
+    `INSERT INTO game_config (key, value) VALUES ('comeback_reward_mid', '100') ON CONFLICT (key) DO NOTHING`,
+    `INSERT INTO game_config (key, value) VALUES ('comeback_reward_long', '200') ON CONFLICT (key) DO NOTHING`,
     // UR.6/UR.7 — unified "calm card" look on the 4 bottom-nav tab pages. Default on.
     `INSERT INTO game_config (key, value) VALUES ('tab_cards_calm', 'true') ON CONFLICT (key) DO NOTHING`,
     // Task #24 — in-session "hot streak" meter on game-over. Default on.

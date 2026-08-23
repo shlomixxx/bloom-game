@@ -764,7 +764,7 @@
     };
   }
 
-  function endSkinTrial() {
+  function revertSkinTrial() {
     if (skinTrialOriginal) {
       activeSkinId = skinTrialOriginal;
       try { localStorage.setItem(ACTIVE_SKIN_KEY, skinTrialOriginal); } catch(e) {}
@@ -783,6 +783,18 @@
     try { localStorage.removeItem(SKIN_TRIAL_ORIGINAL_KEY); } catch(e) {}
     removeSkinTrialBanner();
     buildTierBar(true);
+  }
+
+  // HL.3 — endSkinTrial() is the "trial is over, here's the shop" FLOW: it
+  // reverts the skin AND starts a fresh practice game AND opens the shop.
+  // Callers that are LEAVING the game (the game-over "🏠 חזרה לבית" button)
+  // need the revert WITHOUT that navigation, so the pure teardown now lives in
+  // revertSkinTrial() above and this wrapper adds the navigation on top.
+  // Statement order is identical to the pre-split version, so the three
+  // existing callers (trial timer, banner's end button, #home-btn) are
+  // byte-for-byte unchanged.
+  function endSkinTrial() {
+    revertSkinTrial();
     init('practice', { fresh: true }); // fresh game so trial score doesn't leak
     updateModeBar();
     showSkinShop();

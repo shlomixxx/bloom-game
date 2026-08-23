@@ -1600,19 +1600,36 @@
   // Wires up scroll-detection on a freshly-rendered .overlay so the
   // fade-out hint at the bottom only shows when there's actually more to
   // scroll to. Call this after every wrap.innerHTML = '<div class="overlay">…'.
+  // HL.3 — the window 'resize' listener is registered ONCE for the page lifetime
+  // and re-queries the current overlay when it fires. equipOverlay runs on EVERY
+  // render({ over:true }) — the game-over paint, then AGAIN when the leaderboard
+  // fetch resolves (loadLeaderboard / loadContestLeaderboard both end in
+  // render({ over:true })) — so the old per-call `window.addEventListener` added
+  // SEVERAL listeners per game-over, and each closure pinned the now-detached
+  // overlay subtree it had captured. window is a GC root, so none were ever
+  // collected. Only ONE .overlay can exist inside #grid-wrap (every creation site
+  // REPLACES #grid-wrap.innerHTML), so the lookup is unambiguous.
+  var overlayResizeWired = false;
+  function syncOverlayBottomState() {
+    const overlay = document.querySelector('#grid-wrap .overlay');
+    if (!overlay) return;
+    // "at-bottom" = nothing more to reveal by scrolling
+    const fits   = overlay.scrollHeight <= overlay.clientHeight + 2;
+    const ended  = overlay.scrollTop + overlay.clientHeight >= overlay.scrollHeight - 2;
+    overlay.classList.toggle('at-bottom', fits || ended);
+  }
   function equipOverlay() {
     const overlay = document.querySelector('#grid-wrap .overlay');
     if (!overlay) return;
-    function syncBottomState() {
-      // "at-bottom" = nothing more to reveal by scrolling
-      const fits   = overlay.scrollHeight <= overlay.clientHeight + 2;
-      const ended  = overlay.scrollTop + overlay.clientHeight >= overlay.scrollHeight - 2;
-      overlay.classList.toggle('at-bottom', fits || ended);
-    }
     // Initial check after layout settles
-    setTimeout(syncBottomState, 0);
-    overlay.addEventListener('scroll', syncBottomState, { passive: true });
-    window.addEventListener('resize', syncBottomState);
+    setTimeout(syncOverlayBottomState, 0);
+    // Per-node, and dies with the node — using the SAME function reference means
+    // a repeat equip on the same overlay dedupes instead of stacking a closure.
+    overlay.addEventListener('scroll', syncOverlayBottomState, { passive: true });
+    if (!overlayResizeWired) {
+      overlayResizeWired = true;
+      window.addEventListener('resize', syncOverlayBottomState);
+    }
   }
 
   // Sizes the .grid element with SQUARE cells. Fits within BOTH the

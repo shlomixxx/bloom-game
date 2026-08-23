@@ -1397,6 +1397,34 @@
       var overHomeBtn = document.getElementById('over-home');
       if (overHomeBtn) overHomeBtn.onclick = function() {
         try { if (typeof ensureAudio === 'function') ensureAudio(); } catch (e) {}
+        // HL.3 — mirror the canonical #home-btn skin-trial teardown. Leaving via
+        // THIS button skipped it entirely, and showHome() -> purgeGameHuds()
+        // removes #skin-trial-banner — which is exactly the condition that makes
+        // tickTrialCountdown() clearInterval itself. So the 60s auto-end never
+        // fired and skinTrialMode stayed TRUE for the rest of the session,
+        // silently suppressing score submission, difficulty scores, trophies,
+        // pet XP, guild contribution, mystery chests, boosters, events and
+        // personal bests on every later game. revertSkinTrial() is the pure
+        // teardown half of endSkinTrial() — no init(), no showSkinShop().
+        // Runs BEFORE showHome() so the interval is cleared while its banner
+        // still exists; it is a no-op when no trial is active.
+        try {
+          if (typeof skinTrialMode !== 'undefined' && skinTrialMode &&
+              typeof revertSkinTrial === 'function') {
+            revertSkinTrial();
+            if (typeof updateModeBar === 'function') updateModeBar();
+          }
+        } catch (e) {}
+        // NOTE: deliberately NOT calling savePracticeGameState() /
+        // saveContestGameState() here. Both game-over branches in 11-game.js
+        // just called clearPracticeGameState()/clearContestGameState(); saving
+        // now would re-persist the DEAD, full board (neither save fn checks
+        // __bloomGameOver, and saveContestGameState falls back to
+        // activeContestCode when activeGameContestCode is nulled). Corollary:
+        // clearing skinTrialMode above RE-ARMS savePracticeGameState's guard
+        // (`mode !== 'practice' || !grid || skinTrialMode`) for the dead board
+        // still in memory, so the beforeunload/visibilitychange listeners can
+        // now persist it. Bounded and accepted: `best` is untouched.
         try { if (typeof showHome === 'function') showHome(); } catch (e) {}
       };
       var waShareBtn = document.getElementById('share-wa-btn');

@@ -11687,7 +11687,16 @@ if (ADMIN_PATH && ADMIN_PASSWORD) {
              WHERE date >= CURRENT_DATE - INTERVAL '29 days')                                      AS mau,
            (SELECT COUNT(*) FROM device_visits WHERE date = CURRENT_DATE
               AND device_id NOT IN (SELECT device_id FROM device_visits WHERE date < CURRENT_DATE)) AS new_today,
-           (SELECT COUNT(*) FROM daily_scores WHERE date = CURRENT_DATE)                            AS games_today,
+           -- HL.3 — daily_scores.date holds the ASIA/JERUSALEM date the client played on
+           -- (that is the whole daily-seed contract), but CURRENT_DATE resolves in the
+           -- server session TZ, which is UTC on Railway. So for the 2-3 hours after
+           -- Israel midnight the admin dashboard reported yesterday's count while the
+           -- public live-pulse (which correctly uses toLocaleDateString('en-CA',
+           -- {timeZone:'Asia/Jerusalem'})) reported today's — two different numbers for
+           -- the same metric. NOTE: DAU/WAU/MAU/new_today in this same query read
+           -- device_visits, which is WRITTEN with CURRENT_DATE, so they are internally
+           -- consistent — do not "fix" those without also changing the ping writer.
+           (SELECT COUNT(*) FROM daily_scores WHERE date = (NOW() AT TIME ZONE 'Asia/Jerusalem')::date) AS games_today,
            (SELECT COUNT(*) FROM contests WHERE ends_at > NOW())                                    AS contests_active`
       );
       const k = dauRes.rows[0];
@@ -12959,7 +12968,12 @@ if (ADMIN_PATH && ADMIN_PASSWORD) {
       res.json({ ok: true, openCount: parseInt(r.rows[0].open_count, 10) || 0,
                  urgentCount: parseInt(r.rows[0].urgent_count, 10) || 0 });
     } catch (e) {
-      res.json({ ok: true, openCount: 0, urgentCount: 0 });
+      // HL.3 — this used to answer `ok:true, openCount:0` on ANY failure, which is
+      // byte-identical to "everything is healthy". A DB outage therefore hid the 🚨
+      // badge exactly when the owner most needed it. Fail loudly instead; the client
+      // renders a red "?" so a broken check can never read as a clean one.
+      console.error('admin GET /issues/stats failed:', e.message);
+      res.status(500).json({ ok: false, error: 'server' });
     }
   });
 
@@ -17251,7 +17265,14 @@ app.post('/api/heartbeat', softDeviceAuth, async (req, res) => {
     const gridJson = Array.isArray(grid) ? JSON.stringify(grid) : null;
     const did = String(deviceId).slice(0, 64);
     const name = String(displayName || '').slice(0, 100) || 'אנונימי';
-    const m = String(mode || 'daily').slice(0, 20);
+    // HL.3 — belt-and-braces for the admin-live-view XSS. This endpoint is
+    // softDeviceAuth (it passes with NO token at all), so `mode` was an
+    // attacker-controlled 20-char string that the admin panel rendered. The
+    // panel now escapes it; pin it to the real mode set here too so nothing
+    // downstream can ever be surprised by this column.
+    const HEARTBEAT_MODES = ['daily', 'practice', 'contest', 'duel', 'challenge', 'dynamic'];
+    const rawMode = String(mode || 'daily');
+    const m = HEARTBEAT_MODES.indexOf(rawMode) >= 0 ? rawMode : 'daily';
     const s = Math.max(0, parseInt(score, 10) || 0);
     const t = Math.max(1, parseInt(highestTier, 10) || 1);
     try {

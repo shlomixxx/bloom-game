@@ -3449,6 +3449,9 @@
     bots_auto_count: 'כמה בוטים אוטומטיים להריץ במקביל.<div class="tip-example">📊 8-15 = תחושת חיים בלי להעמיס. שעות שיא? 20. עלות שרת זניחה עד 50.</div>',
     bots_auto_mode: 'מצב המשחק של הבוטים האוטומטיים.<div class="tip-example">📅 <code>daily</code> = ממלא את לוח המובילים היומי (מומלץ). 🏋️ <code>practice</code> / 🎯 <code>dynamic</code> = heartbeat בלבד (״שחקנים פעילים״ אך לא בלוח).</div>',
     bots_games_today_floor: 'רצפה ל״משחקים היום״ בעמוד הבית.<div class="tip-example">📊 <code>0</code> = ללא רצפה (מציג את המספר האמיתי). 50+ ליצירת רושם של פעילות גבוהה.</div>',
+    comeback_reward_short: 'בונוס "ברוך שובך" לשחקן שחזר אחרי 2-6 ימי היעדרות (💎).<div class="tip-example">📊 ברירת מחדל: 50💎. זו ההיעדרות הכי נפוצה — הפרס נועד להחזיר להרגל, לא לפצות. אל תעלה יותר מדי או שישתלם "להיעלם".</div>',
+    comeback_reward_mid: 'בונוס "ברוך שובך" לשחקן שחזר אחרי 7-29 ימי היעדרות (💎).<div class="tip-example">📊 ברירת מחדל: 100💎. השחקן כבר איבד רצף — צריך תמריץ ממשי כדי להצדיק חזרה.</div>',
+    comeback_reward_long: 'בונוס "ברוך שובך" לשחקן שחזר אחרי 30+ ימי היעדרות (💎).<div class="tip-example">📊 ברירת מחדל: 200💎. שחקן רדום שחוזר שווה הרבה יותר מרכישת שחקן חדש — כאן כדאי להיות נדיב.</div>',
     danger_meter_enabled: 'מד "תאים נותרו" — כשהלוח כמעט מלא (≤3 תאים) מופיע תג אדום מעל הלוח שמראה כמה תאים נשארו. הופך את הסכנה מ"אדום מפחיד" לפאזל טקטי.<div class="tip-example">💡 loss-aversion — המנוף החזק ביותר ל"עוד הטלה אחת". השאר <code>true</code>. אדום + פעימה כשנשאר תא אחד.</div>',
     tab_cards_calm: 'מראה אחיד ורגוע לכרטיסים בלשוניות התחתונות (פרסים/קהילה/דרגות/חנות). ON = כל הכרטיסים חולקים גיאומטריה אחת + טון מעט מרוכך (פחות "מרק קשת" עמוס). OFF = כל כרטיס בגרדיאנט הרועש המקורי שלו.<div class="tip-example">🎨 פתרון ה"דפים נראים עמוסים". תצוגה מקדימה חיה: <code>?cards=calm</code> או <code>?cards=classic</code>. השאר <code>true</code> לדפים נקיים יותר.</div>',
     win_streak_enabled: 'מד "רצף ניצחונות" תוך-סשן — כשהשחקן מסיים כמה משחקים ברצף מעל הסף, מופיע מד מסלים מעל כפתור "שחק שוב" ("🔥 רצף 3 — עוד אחד!") + חגיגה ב-3/5/7/10. כשהרצף נשבר → "💔 הרצף נשבר ב-N".<div class="tip-example">💡 ה-driver הגרעיני של "עוד אחד". מתאפס כשסוגרים את הטאב (sessionStorage). השאר <code>true</code>.</div>',
@@ -4526,6 +4529,17 @@
       var d = await api('/issues/stats');
       var badge = $('issues-tab-badge');
       if (!badge) return;
+      // HL.3 — distinguish "0 open issues" from "the check itself failed".
+      // api() returns null on any non-2xx, and the endpoint now 500s instead of
+      // pretending everything is fine, so a red "?" surfaces a broken check.
+      if (!d || !d.ok) {
+        badge.textContent = '?';
+        badge.style.background = '#DC2626';
+        badge.style.display = '';
+        badge.title = 'בדיקת התקלות נכשלה — ייתכן שיש תקלות שלא מוצגות';
+        return;
+      }
+      badge.title = '';
       var n = (d && d.openCount) | 0;
       if (n > 0) {
         badge.textContent = n > 99 ? '99+' : String(n);
@@ -4598,7 +4612,13 @@
           var gameUrl = location.origin + '/?watch=' + encodeURIComponent(p.device_id);
           html += '<tr>' +
             '<td>' + escHtml(p.name) + '</td>' +
-            '<td>' + p.mode + '</td>' +
+            // HL.3 CRITICAL — UNAUTHENTICATED STORED XSS. POST /api/heartbeat uses
+            // softDeviceAuth, which passes when NO token is sent at all, and stored
+            // `mode` as an arbitrary 20-char string with no allowlist. Rendering it
+            // raw here meant any anonymous visitor could put script into the admin's
+            // own session just by sending one heartbeat. The sibling p.name was
+            // already escaped — this field was simply missed.
+            '<td>' + escHtml(p.mode) + '</td>' +
             '<td><strong>' + fmtNum(p.score) + '</strong></td>' +
             '<td>' + (p.tier | 0) + '</td>' +
             '<td class="muted">' + fmtTime(p.updated) + '</td>' +
@@ -5667,7 +5687,8 @@
           var when = new Date(row.declared_at).toLocaleString('he-IL', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
           return '<div style="display:grid;grid-template-columns:32px 1fr auto auto;gap:8px;padding:6px 10px;background:var(--bg);border-radius:6px;align-items:center">' +
             '<div style="font-size:18px;text-align:center">' + outcomeEmoji + '</div>' +
-            '<div style="font-weight:700;color:var(--fg);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + row.my_name + ' VS ' + row.rival_name + '</div>' +
+            /* HL.3 — player-controlled display names; escape like every other list. */
+            '<div style="font-weight:700;color:var(--fg);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escHtml(row.my_name) + ' VS ' + escHtml(row.rival_name) + '</div>' +
             '<div style="font-size:10px;color:var(--muted)">' + outcomeText + '</div>' +
             '<div style="font-size:10px;color:var(--muted)">' + when + '</div>' +
           '</div>';
@@ -5712,9 +5733,11 @@
           var medal = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : ('#' + (idx + 1));
           return '<div style="display:grid;grid-template-columns:50px auto 1fr auto auto auto;gap:10px;padding:8px 12px;background:var(--bg);border-radius:8px;align-items:center">' +
             '<div style="font-weight:900;text-align:center;color:var(--gold)">' + medal + '</div>' +
-            '<div style="font-size:22px">' + (g.emoji || '🛡') + '</div>' +
+            /* HL.3 — guild emoji is a player-supplied 10-char string, not a fixed glyph. */
+            '<div style="font-size:22px">' + escHtml(g.emoji || '🛡') + '</div>' +
             '<div style="min-width:0">' +
-              '<div style="font-weight:700;color:var(--fg)">' + g.name + ' <span style="font-family:monospace;font-size:10px;color:var(--muted);background:rgba(0,0,0,0.05);padding:1px 6px;border-radius:4px">' + g.code + '</span></div>' +
+              /* HL.3 — g.name is a player-chosen 60-char string; g.code is server-generated. */
+              '<div style="font-weight:700;color:var(--fg)">' + escHtml(g.name) + ' <span style="font-family:monospace;font-size:10px;color:var(--muted);background:rgba(0,0,0,0.05);padding:1px 6px;border-radius:4px">' + g.code + '</span></div>' +
               '<div style="font-size:10px;color:var(--muted);margin-top:2px">' +
                 '👥 ' + g.member_count + '/' + g.max_members + ' · ' +
                 '🏆 ' + (parseInt(g.total_score_alltime, 10) || 0).toLocaleString() + ' · ' +
@@ -5839,7 +5862,8 @@
           var when = new Date(row.last_sent_at).toLocaleString('he-IL', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
           return '<div style="display:grid;grid-template-columns:32px 1fr auto auto;gap:8px;padding:6px 10px;background:var(--bg);border-radius:6px;align-items:center">' +
             '<div style="font-size:18px;text-align:center">' + lbl.emoji + '</div>' +
-            '<div style="font-weight:700;color:var(--fg);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + row.name + '</div>' +
+            /* HL.3 — player-controlled display name; escape it. */
+            '<div style="font-weight:700;color:var(--fg);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escHtml(row.name) + '</div>' +
             '<div style="font-size:10px;color:var(--muted)">' + lbl.label + '</div>' +
             '<div style="font-size:10px;color:var(--muted)">' + when + '</div>' +
           '</div>';
@@ -6609,7 +6633,17 @@
     if (!host) return;
     try {
       var cfgR = await fetch('/' + ADMIN_PATH + '/api/config').then(function(r){return r.json();});
-      var cfg = (cfgR && cfgR.config) || {};
+      // HL.3 CRITICAL FIX — the ADMIN /api/config returns `config: r.rows`, i.e. an
+      // ARRAY of {key,value,updated_at} (server.js), NOT a dict. (Only the PUBLIC
+      // /api/config returns a flat dict — do not "simplify" this back.) Indexing an
+      // array by a string key yields undefined, so every one of the 60 inputs below
+      // rendered BLANK — and because each one saves on blur via
+      // `String(parseInt(input.value,10) || 0)`, merely tabbing through the grid
+      // silently PATCHed that tier to "0". Opening the Battle Pass tab and clicking
+      // around was enough to wipe the whole BP economy.
+      var _cfgRows = (cfgR && Array.isArray(cfgR.config)) ? cfgR.config : [];
+      var cfg = {};
+      _cfgRows.forEach(function(row) { if (row && row.key != null) cfg[row.key] = row.value; });
       // Keep header row (4 cells now), remove old data rows
       while (host.children.length > 4) host.removeChild(host.lastChild);
       for (var tier = 1; tier <= 20; tier++) {
@@ -6656,6 +6690,11 @@
   }
   async function saveSeasonPassTier(input) {
     var key = input.dataset.key;
+    // HL.3 — defence in depth for the bug above: NEVER write on an empty input.
+    // `String(parseInt('',10) || 0)` is "0", so a blur on a field that failed to
+    // load (or that the admin just cleared) used to destroy the tier's value.
+    // A deliberate zero must be typed as an explicit "0".
+    if (String(input.value).trim() === '') return;
     var val = String(parseInt(input.value, 10) || 0);
     var status = document.getElementById('season-pass-status');
     try {
@@ -6696,7 +6735,16 @@
       ]);
       var boards = (boardsR && boardsR.boards) || [];
       var dailySpecial = (dsR && dsR.dailySpecial) || { enabled: false };
-      var currentOverride = ((cfgR && cfgR.config) || {}).daily_special_override_id || '';
+      // HL.3 — same array-vs-dict bug as the Battle Pass grid: the ADMIN
+      // /api/config returns an ARRAY of {key,value}, so this always read
+      // undefined and the dropdown always showed "🔄 בחירה אוטומטית" — directly
+      // under a status line that correctly said "🎯 override ידני". Saving
+      // worked; only the displayed state lied. (The PUBLIC /api/config DOES
+      // return a flat dict — don't unify these.)
+      var _dsRows = (cfgR && Array.isArray(cfgR.config)) ? cfgR.config : [];
+      var _dsMap = {};
+      _dsRows.forEach(function(row) { if (row && row.key != null) _dsMap[row.key] = row.value; });
+      var currentOverride = _dsMap.daily_special_override_id || '';
       // Reset options (keep the auto option)
       while (picker.options.length > 1) picker.remove(1);
       boards.forEach(function(b) {
@@ -8113,6 +8161,12 @@
   window.openBoardEditor    = openBoardEditor;
   window.closeBoardEditor   = closeBoardEditor;
   window.onBoardTypeChange  = onBoardTypeChange;
+  // HL.3 — the "🔄 רענן" button on the 📊 ברז מול בור panel is an inline onclick,
+  // which compiles in GLOBAL scope, but loadEconomy is declared inside this IIFE —
+  // so the button threw ReferenceError and did nothing. It matters because loadTab()
+  // marks a tab loaded once, making this the only in-tab way to re-pull live economy
+  // numbers (and the panel's own placeholder tells the admin to use it).
+  window.loadEconomy        = loadEconomy;
   window.setMultipliers     = setMultipliers;
   window.saveBoard          = saveBoard;
   window.toggleBoardActive  = toggleBoardActive;
@@ -8746,6 +8800,9 @@
   // Privacy: manual PII purge button.
   var purgeBtn = $('btn-privacy-purge');
   if (purgeBtn) purgeBtn.onclick = async function() {
+    // HL.3 — this was the only irreversible admin action in the file with no
+    // confirmation. It permanently wipes challenge-winner contact details.
+    if (!confirm('למחוק לצמיתות את פרטי הקשר (שם/טלפון/אימייל) של זוכי אתגרים שתבעו פרס לפני יותר מ-90 יום?\n\nהפעולה בלתי הפיכה.')) return;
     var out = $('privacy-purge-result');
     purgeBtn.disabled = true;
     if (out) out.textContent = '...';

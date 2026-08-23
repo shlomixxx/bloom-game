@@ -764,7 +764,7 @@
     };
   }
 
-  function endSkinTrial() {
+  function revertSkinTrial() {
     if (skinTrialOriginal) {
       activeSkinId = skinTrialOriginal;
       try { localStorage.setItem(ACTIVE_SKIN_KEY, skinTrialOriginal); } catch(e) {}
@@ -783,6 +783,18 @@
     try { localStorage.removeItem(SKIN_TRIAL_ORIGINAL_KEY); } catch(e) {}
     removeSkinTrialBanner();
     buildTierBar(true);
+  }
+
+  // HL.3 — endSkinTrial() is the "trial is over, here's the shop" FLOW: it
+  // reverts the skin AND starts a fresh practice game AND opens the shop.
+  // Callers that are LEAVING the game (the game-over "🏠 חזרה לבית" button)
+  // need the revert WITHOUT that navigation, so the pure teardown now lives in
+  // revertSkinTrial() above and this wrapper adds the navigation on top.
+  // Statement order is identical to the pre-split version, so the three
+  // existing callers (trial timer, banner's end button, #home-btn) are
+  // byte-for-byte unchanged.
+  function endSkinTrial() {
+    revertSkinTrial();
     init('practice', { fresh: true }); // fresh game so trial score doesn't leak
     updateModeBar();
     showSkinShop();
@@ -5517,9 +5529,18 @@
 
   // UX audit 2026-06-02 — branded confirm dialog replacing native confirm()
   // (which renders an off-brand LTR OS dialog on a polished RTL game). Returns
-  // a Promise<boolean>. Handles its own ESC/backdrop (resolve false). The class
-  // intentionally does NOT contain "modal-overlay" so the global ESC handler
-  // doesn't double-fire on it. Usage: if (!(await window.__bloomConfirm(msg, {danger:true}))) return;
+  // a Promise<boolean>. Backdrop click resolves false.
+  // ESC/back is handled by the GLOBAL handler, not here: '.bloom-confirm-overlay'
+  // is in the __bloomGetCloseableModals allowlist and its cancel button carries
+  // data-close-modal, so the dismiss chain clicks cancel -> finish(false) and the
+  // Promise resolves normally. DO NOT "fix" a perceived double-fire by removing it
+  // from that allowlist — that WAS the 2026-08-23 bug: an unlisted confirm does not
+  // make the global handler stand down, it makes it fall THROUGH to the modal
+  // underneath, so one ESC closed the confirm AND its parent modal (and inside a
+  // contest it navigated the player out of the contest entirely).
+  // The local escH below is a harmless fallback: finish() removes it mid-dispatch
+  // (so it is not invoked when the global path runs) and finish() is idempotent.
+  // Usage: if (!(await window.__bloomConfirm(msg, {danger:true}))) return;
   function __bloomConfirm(message, opts) {
     opts = opts || {};
     return new Promise(function(resolve) {
@@ -5532,7 +5553,7 @@
           (opts.icon ? '<div class="bloom-confirm-icon">' + opts.icon + '</div>' : '') +
           '<div class="bloom-confirm-msg">' + safe + '</div>' +
           '<div class="bloom-confirm-actions">' +
-            '<button class="bloom-confirm-cancel" type="button">' + (opts.cancelText || 'ביטול') + '</button>' +
+            '<button class="bloom-confirm-cancel" type="button" data-close-modal="1">' + (opts.cancelText || 'ביטול') + '</button>' +
             '<button class="bloom-confirm-ok' + (opts.danger ? ' danger' : '') + '" type="button">' + (opts.confirmText || 'אישור') + '</button>' +
           '</div>' +
         '</div>';
@@ -6042,6 +6063,28 @@
       '.board-lb-overlay, .dyn-boards-overlay, .dyn-comeback-overlay, ' +
       '.dyn-friends-modal-overlay, .gem-bank-overlay, .ghost-confirm-overlay, ' +
       '.gacha-history-overlay, ' +
+      // HL.3 (2026-08-23) — the branded confirm dialog (__bloomConfirm) used to
+      // be deliberately kept OUT of this list, on the theory that omitting it
+      // stopped the global handler "double-firing" on it. That reasoning was
+      // backwards: the confirm wires its OWN document keydown, the global
+      // handler is registered EARLIER on the same node, and stopPropagation()
+      // does not suppress another listener on that same node. So ONE ESC ran
+      // BOTH — the global handler fell THROUGH the unlisted confirm to the
+      // modal underneath and closed THAT, then the local handler closed the
+      // confirm. All 5 call sites sit inside a matching overlay, so it
+      // reproduced 100% of the time: gem-bank (z-10000), device-sync (10000),
+      // lifetime + guild (100001), and worst of all #contest-screen — where the
+      // dismiss chain reached .contest-back-btn and navigated the player OUT OF
+      // THE CONTEST. Listing it here makes the z-ranked sort below pick the
+      // confirm (z-100150, the highest closeable) as topmost, so ESC and the
+      // back-gesture act on the confirm ALONE.
+      // Its cancel button carries data-close-modal so the dismiss chain CLICKS
+      // it and the awaited Promise resolves(false). WITHOUT that attribute the
+      // chain falls through to top.remove(), which never calls finish(): on ESC
+      // the confirm's own escH still resolves(false) on the same dispatch so it
+      // survives — but the BACK gesture has no such fallback and the caller
+      // would hang forever mid-function. Both edits ship together.
+      '.bloom-confirm-overlay, ' +
       // HL.2 — `.squad-overlay` is the REAL class (src/43-squad-tournament.js:106).
       // It does NOT contain "modal-overlay", so nothing was matching it and the
       // squad-tournament modal was silently un-closable by ESC/back.
@@ -13228,19 +13271,36 @@
   // Wires up scroll-detection on a freshly-rendered .overlay so the
   // fade-out hint at the bottom only shows when there's actually more to
   // scroll to. Call this after every wrap.innerHTML = '<div class="overlay">…'.
+  // HL.3 — the window 'resize' listener is registered ONCE for the page lifetime
+  // and re-queries the current overlay when it fires. equipOverlay runs on EVERY
+  // render({ over:true }) — the game-over paint, then AGAIN when the leaderboard
+  // fetch resolves (loadLeaderboard / loadContestLeaderboard both end in
+  // render({ over:true })) — so the old per-call `window.addEventListener` added
+  // SEVERAL listeners per game-over, and each closure pinned the now-detached
+  // overlay subtree it had captured. window is a GC root, so none were ever
+  // collected. Only ONE .overlay can exist inside #grid-wrap (every creation site
+  // REPLACES #grid-wrap.innerHTML), so the lookup is unambiguous.
+  var overlayResizeWired = false;
+  function syncOverlayBottomState() {
+    const overlay = document.querySelector('#grid-wrap .overlay');
+    if (!overlay) return;
+    // "at-bottom" = nothing more to reveal by scrolling
+    const fits   = overlay.scrollHeight <= overlay.clientHeight + 2;
+    const ended  = overlay.scrollTop + overlay.clientHeight >= overlay.scrollHeight - 2;
+    overlay.classList.toggle('at-bottom', fits || ended);
+  }
   function equipOverlay() {
     const overlay = document.querySelector('#grid-wrap .overlay');
     if (!overlay) return;
-    function syncBottomState() {
-      // "at-bottom" = nothing more to reveal by scrolling
-      const fits   = overlay.scrollHeight <= overlay.clientHeight + 2;
-      const ended  = overlay.scrollTop + overlay.clientHeight >= overlay.scrollHeight - 2;
-      overlay.classList.toggle('at-bottom', fits || ended);
-    }
     // Initial check after layout settles
-    setTimeout(syncBottomState, 0);
-    overlay.addEventListener('scroll', syncBottomState, { passive: true });
-    window.addEventListener('resize', syncBottomState);
+    setTimeout(syncOverlayBottomState, 0);
+    // Per-node, and dies with the node — using the SAME function reference means
+    // a repeat equip on the same overlay dedupes instead of stacking a closure.
+    overlay.addEventListener('scroll', syncOverlayBottomState, { passive: true });
+    if (!overlayResizeWired) {
+      overlayResizeWired = true;
+      window.addEventListener('resize', syncOverlayBottomState);
+    }
   }
 
   // Sizes the .grid element with SQUARE cells. Fits within BOTH the
@@ -22157,6 +22217,34 @@
       var overHomeBtn = document.getElementById('over-home');
       if (overHomeBtn) overHomeBtn.onclick = function() {
         try { if (typeof ensureAudio === 'function') ensureAudio(); } catch (e) {}
+        // HL.3 — mirror the canonical #home-btn skin-trial teardown. Leaving via
+        // THIS button skipped it entirely, and showHome() -> purgeGameHuds()
+        // removes #skin-trial-banner — which is exactly the condition that makes
+        // tickTrialCountdown() clearInterval itself. So the 60s auto-end never
+        // fired and skinTrialMode stayed TRUE for the rest of the session,
+        // silently suppressing score submission, difficulty scores, trophies,
+        // pet XP, guild contribution, mystery chests, boosters, events and
+        // personal bests on every later game. revertSkinTrial() is the pure
+        // teardown half of endSkinTrial() — no init(), no showSkinShop().
+        // Runs BEFORE showHome() so the interval is cleared while its banner
+        // still exists; it is a no-op when no trial is active.
+        try {
+          if (typeof skinTrialMode !== 'undefined' && skinTrialMode &&
+              typeof revertSkinTrial === 'function') {
+            revertSkinTrial();
+            if (typeof updateModeBar === 'function') updateModeBar();
+          }
+        } catch (e) {}
+        // NOTE: deliberately NOT calling savePracticeGameState() /
+        // saveContestGameState() here. Both game-over branches in 11-game.js
+        // just called clearPracticeGameState()/clearContestGameState(); saving
+        // now would re-persist the DEAD, full board (neither save fn checks
+        // __bloomGameOver, and saveContestGameState falls back to
+        // activeContestCode when activeGameContestCode is nulled). Corollary:
+        // clearing skinTrialMode above RE-ARMS savePracticeGameState's guard
+        // (`mode !== 'practice' || !grid || skinTrialMode`) for the dead board
+        // still in memory, so the beforeunload/visibilitychange listeners can
+        // now persist it. Bounded and accepted: `best` is untouched.
         try { if (typeof showHome === 'function') showHome(); } catch (e) {}
       };
       var waShareBtn = document.getElementById('share-wa-btn');

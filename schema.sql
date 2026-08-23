@@ -1009,6 +1009,17 @@ INSERT INTO game_config (key, value) VALUES ('leaderboard_default_difficulty', '
 
 INSERT INTO game_config (key, value) VALUES ('score_milestone_reward', '5')
   ON CONFLICT (key) DO NOTHING;
+-- HL.3 — the `comeback` earn action in server.js reads these three keys with a
+-- comment claiming they exist "so admins can tune them without code changes",
+-- but no row was ever seeded — so they never rendered in the admin config table
+-- and the knob was undiscoverable. Seeded with the exact hardcoded fallbacks, so
+-- behaviour is unchanged; they are simply editable now.
+INSERT INTO game_config (key, value) VALUES ('comeback_reward_short', '50')
+  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('comeback_reward_mid', '100')
+  ON CONFLICT (key) DO NOTHING;
+INSERT INTO game_config (key, value) VALUES ('comeback_reward_long', '200')
+  ON CONFLICT (key) DO NOTHING;
 -- Tiered milestone rewards — must mirror SCORE_MILESTONES in src/11-game.js so
 -- the banner number is what actually lands in the wallet. Server picks via
 -- meta.milestone (validated against ALLOWED_MILESTONES in /api/player/earn).

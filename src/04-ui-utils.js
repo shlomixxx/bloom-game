@@ -617,9 +617,18 @@
 
   // UX audit 2026-06-02 — branded confirm dialog replacing native confirm()
   // (which renders an off-brand LTR OS dialog on a polished RTL game). Returns
-  // a Promise<boolean>. Handles its own ESC/backdrop (resolve false). The class
-  // intentionally does NOT contain "modal-overlay" so the global ESC handler
-  // doesn't double-fire on it. Usage: if (!(await window.__bloomConfirm(msg, {danger:true}))) return;
+  // a Promise<boolean>. Backdrop click resolves false.
+  // ESC/back is handled by the GLOBAL handler, not here: '.bloom-confirm-overlay'
+  // is in the __bloomGetCloseableModals allowlist and its cancel button carries
+  // data-close-modal, so the dismiss chain clicks cancel -> finish(false) and the
+  // Promise resolves normally. DO NOT "fix" a perceived double-fire by removing it
+  // from that allowlist — that WAS the 2026-08-23 bug: an unlisted confirm does not
+  // make the global handler stand down, it makes it fall THROUGH to the modal
+  // underneath, so one ESC closed the confirm AND its parent modal (and inside a
+  // contest it navigated the player out of the contest entirely).
+  // The local escH below is a harmless fallback: finish() removes it mid-dispatch
+  // (so it is not invoked when the global path runs) and finish() is idempotent.
+  // Usage: if (!(await window.__bloomConfirm(msg, {danger:true}))) return;
   function __bloomConfirm(message, opts) {
     opts = opts || {};
     return new Promise(function(resolve) {
@@ -632,7 +641,7 @@
           (opts.icon ? '<div class="bloom-confirm-icon">' + opts.icon + '</div>' : '') +
           '<div class="bloom-confirm-msg">' + safe + '</div>' +
           '<div class="bloom-confirm-actions">' +
-            '<button class="bloom-confirm-cancel" type="button">' + (opts.cancelText || 'ביטול') + '</button>' +
+            '<button class="bloom-confirm-cancel" type="button" data-close-modal="1">' + (opts.cancelText || 'ביטול') + '</button>' +
             '<button class="bloom-confirm-ok' + (opts.danger ? ' danger' : '') + '" type="button">' + (opts.confirmText || 'אישור') + '</button>' +
           '</div>' +
         '</div>';
@@ -1142,6 +1151,28 @@
       '.board-lb-overlay, .dyn-boards-overlay, .dyn-comeback-overlay, ' +
       '.dyn-friends-modal-overlay, .gem-bank-overlay, .ghost-confirm-overlay, ' +
       '.gacha-history-overlay, ' +
+      // HL.3 (2026-08-23) — the branded confirm dialog (__bloomConfirm) used to
+      // be deliberately kept OUT of this list, on the theory that omitting it
+      // stopped the global handler "double-firing" on it. That reasoning was
+      // backwards: the confirm wires its OWN document keydown, the global
+      // handler is registered EARLIER on the same node, and stopPropagation()
+      // does not suppress another listener on that same node. So ONE ESC ran
+      // BOTH — the global handler fell THROUGH the unlisted confirm to the
+      // modal underneath and closed THAT, then the local handler closed the
+      // confirm. All 5 call sites sit inside a matching overlay, so it
+      // reproduced 100% of the time: gem-bank (z-10000), device-sync (10000),
+      // lifetime + guild (100001), and worst of all #contest-screen — where the
+      // dismiss chain reached .contest-back-btn and navigated the player OUT OF
+      // THE CONTEST. Listing it here makes the z-ranked sort below pick the
+      // confirm (z-100150, the highest closeable) as topmost, so ESC and the
+      // back-gesture act on the confirm ALONE.
+      // Its cancel button carries data-close-modal so the dismiss chain CLICKS
+      // it and the awaited Promise resolves(false). WITHOUT that attribute the
+      // chain falls through to top.remove(), which never calls finish(): on ESC
+      // the confirm's own escH still resolves(false) on the same dispatch so it
+      // survives — but the BACK gesture has no such fallback and the caller
+      // would hang forever mid-function. Both edits ship together.
+      '.bloom-confirm-overlay, ' +
       // HL.2 — `.squad-overlay` is the REAL class (src/43-squad-tournament.js:106).
       // It does NOT contain "modal-overlay", so nothing was matching it and the
       // squad-tournament modal was silently un-closable by ESC/back.
