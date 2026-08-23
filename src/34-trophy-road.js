@@ -373,6 +373,13 @@
   }
 
   function showTrophyChangeToast(result) {
+    // HL.2 — this grant resolves from the server AFTER game-over, so it can
+    // land seconds later on a board the player has already restarted. The
+    // toast is fixed at top:80px — straight into the in-game HUD band, over
+    // the tier ladder. Suppress only over a LIVE game; on home (where a reward
+    // recap belongs) and on the over-screen it shows as before. The trophies
+    // are already persisted server-side, so nothing is lost.
+    if (window.__bloomCelebrationBlocked && window.__bloomCelebrationBlocked()) return;
     var t = document.createElement('div');
     t.className = 'trophy-toast ' + (result.delta > 0 ? 'trophy-toast-up' : 'trophy-toast-down');
     var sign = result.delta > 0 ? '+' : '';
@@ -394,6 +401,12 @@
   }
 
   function showArenaPromotionOverlay(arena) {
+    // HL.2 — full-screen, z-10001, click-blocking, and in the ESC EXCLUDE list
+    // (so a reward can't be ESC-skipped) — which means if it lands mid-game the
+    // player cannot dismiss it at all. Suppress over a live board only; the
+    // arena change is already committed server-side and the home trophy tile
+    // shows the new arena on its next paint.
+    if (window.__bloomCelebrationBlocked && window.__bloomCelebrationBlocked()) return;
     var ov = document.createElement('div');
     ov.className = 'trophy-promo-overlay';
     ov.innerHTML =

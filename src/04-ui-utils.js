@@ -423,7 +423,13 @@
     // endLiveRace() has settle side-effects, so remove its HUD DOM directly
     // rather than invoking it (a genuine live race can't reach home anyway —
     // body.live-race-active hides the home button; the server cron settles it).
-    ['ghost-hud', 'contest-hud', 'duel-hud', 'live-race-hud', 'live-race-spectate', 'danger-meter']
+    // HL.2 adds 'live-race-settling' + 'live-race-result' — both position:fixed
+    // inset:0 at z 10010/10020, far above the home screen's 250. This REQUIRES
+    // the home guard at the top of showLiveRaceResult: the 2200/2500ms present()
+    // timers are closure-local and cannot be cancelled from here, so purging
+    // alone would just let them re-mount over home a moment later.
+    ['ghost-hud', 'contest-hud', 'duel-hud', 'live-race-hud', 'live-race-spectate',
+     'live-race-settling', 'live-race-result', 'danger-meter']
       .forEach(function(id) {
         var el = document.getElementById(id);
         if (el) { try { el.remove(); } catch (e) {} }
@@ -454,6 +460,13 @@
     //     navigation left the results board floating over home. This is the
     //     literal "לוח התוצאות" surface in the user's report.
     try { if (typeof stopSpectator === 'function') stopSpectator(); } catch (e) {}
+    // HL.2 — the duel settle poller (2s, up to 5 min). Its handle used to be
+    // function-local so nothing could cancel it; going home now does.
+    try { if (typeof stopDuelSettlePoll === 'function') stopDuelSettlePoll(); } catch (e) {}
+    try {
+      document.querySelectorAll('[data-duel-result-overlay]')
+        .forEach(function(el) { el.remove(); });
+    } catch (e) {}
     try { if (typeof stopOvertakeWatch === 'function') stopOvertakeWatch(); } catch (e) {}
     try { if (typeof closeBoardLeaderboard === 'function') closeBoardLeaderboard(); } catch (e) {}
     // Live-race timers: endLiveRace() has settle side-effects so we still don't
@@ -499,6 +512,50 @@
     // that no longer exists.
     try { window._liveRaceMode = false; } catch (e) {}
   }
+
+  // HL.2 — "would this celebration land on top of a game the player is
+  // actively playing?"
+  // Trophy Road and the trophy chests grant from the server AFTER game-over,
+  // so their callbacks resolve at an unpredictable moment — often several
+  // seconds later, by which time the player may have tapped "שחק שוב" into a
+  // fresh board. All three surfaces then mount on <body> with no guard:
+  //   .trophy-toast          fixed, top:80px  (straight into the HUD band)
+  //   .trophy-promo-overlay  fixed, inset:0, z-10001, click-blocking
+  //   .chest-celebration-overlay fixed, inset:0, z-10010, click-blocking
+  // The last two are also in the ESC EXCLUDE list (so a reward can't be
+  // ESC-skipped), which means landing mid-game they cannot be dismissed at
+  // all until their timer runs out.
+  //
+  // On HOME they are welcome — that is where a reward recap belongs — so this
+  // returns false there. It returns true ONLY for a live, playable board:
+  // no home mounted AND not on the over-screen.
+  //
+  // Suppressing is safe and loses nothing the player earned: every one of
+  // these is purely presentational. The trophies, the arena change and the
+  // chest gems are all committed server-side BEFORE the animation runs, and
+  // the home tiles read that state on their next paint.
+  function celebrationWouldCoverLiveGame() {
+    try {
+      // Blocking surfaces are checked FIRST — a celebration must not paint over
+      // a contest/challenge board even when __bloomGameOver happens to be true.
+      if (document.getElementById('contest-screen')) return true;
+      if (document.getElementById('challenge-screen')) return true;
+      // Spectating: the view mounts INSIDE #grid-wrap rather than as a screen
+      // of its own, and it is entered from the over-screen where
+      // __bloomGameOver is still true — so the fallback below would wrongly
+      // report "safe". (There is no #spectator-screen element; that id is a
+      // phantom, including in the stale check in src/14-events.js.)
+      if (document.querySelector('#grid-wrap .spectator-view')) return true;
+      // A live race whose board filled early sets __bloomGameOver = true while
+      // the race is STILL RUNNING for up to ~60s (the HUD and its 1s poll keep
+      // going, and the player is watching the opponent). body.live-race-active
+      // is the honest "still running" marker.
+      if (document.body.classList.contains('live-race-active')) return true;
+      if (document.getElementById('home-screen')) return false;
+      return !window.__bloomGameOver;
+    } catch (e) { return false; }
+  }
+  window.__bloomCelebrationBlocked = celebrationWouldCoverLiveGame;
 
   // ============ §3.4 GENERIC TOAST HELPER ============
   // The audit asked for a single `showToast(text, type)` so every async
@@ -1068,15 +1125,34 @@
   // shouldn't disappear on ESC).
   // ============================================================
   function __bloomGetCloseableModals() {
-    // Generic match: any class ending in -modal-overlay.
-    var generic = document.querySelectorAll('[class*="modal-overlay"]');
-    // Curated additions for overlays that don't use the "modal" suffix
-    // but still act as modals (player can dismiss them).
-    var extras = document.querySelectorAll(
+    // HL.2 — ONE union query, not two.
+    // The old code ran `generic.forEach(consider)` and THEN
+    // `extras.forEach(consider)`, so every curated "extra" sorted after every
+    // generic match regardless of when it was opened or what it paints above.
+    // Since the caller takes the LAST element as topmost, opening a generic
+    // modal on top of an extra (e.g. the trophy modal, z-10000, from inside
+    // #contest-screen, z-50) made ESC dismiss the CONTEST — navigating the
+    // player out of the screen — while the modal they were looking at stayed.
+    // A single selector returns nodes in true document order and fixes that.
+    var nodes = document.querySelectorAll(
+      // Generic match: any class containing -modal-overlay.
+      '[class*="modal-overlay"], ' +
+      // Curated additions for overlays that don't use the "modal" suffix
+      // but still act as modals (player can dismiss them).
       '.board-lb-overlay, .dyn-boards-overlay, .dyn-comeback-overlay, ' +
       '.dyn-friends-modal-overlay, .gem-bank-overlay, .ghost-confirm-overlay, ' +
-      '.gacha-history-overlay, .squad-modal-overlay, .squad-tournament-modal-overlay, ' +
-      '.rivalry-modal-overlay, .leagues-modal-overlay, ' +
+      '.gacha-history-overlay, ' +
+      // HL.2 — `.squad-overlay` is the REAL class (src/43-squad-tournament.js:106).
+      // It does NOT contain "modal-overlay", so nothing was matching it and the
+      // squad-tournament modal was silently un-closable by ESC/back.
+      // Removed here as verified PHANTOMS — nothing in src/ ever creates them,
+      // so they were pure noise: .squad-modal-overlay,
+      // .squad-tournament-modal-overlay, .rivalry-modal-overlay,
+      // .leagues-modal-overlay, #spectator-screen, #my-contests-list.
+      // (The real rival/league classes are `rival-modal-overlay` and
+      // `league-modal-overlay`, which the generic matcher above already
+      // catches — that is why nobody noticed the phantoms.)
+      '.squad-overlay, ' +
       // UX audit 2026-06-02 (theme #3): these overlays used non-"modal"
       // class names and were silently un-closable by ESC / back-gesture,
       // so players felt "stuck". Each has an aria-label="סגור" close
@@ -1097,11 +1173,26 @@
       // country picker, score info, share dialog, shop, etc.). Adding here
       // so ESC + back-gesture close all of them through the unified path.
       '.info-modal, ' +
+      // HL.2 — the in-game tile shop (src/02-shop.js showTileShop) is mounted
+      // with only an id and NO class, so it matched nothing here and had no
+      // ESC/back path at all. Its ✕ gets data-close-modal below so the dismiss
+      // chain clicks it rather than raw-removing the node.
+      '#tile-shop-modal, ' +
+      // HL.2 — the self-promo ad-replacement overlay covers the whole viewport
+      // at z-99999 and its only exit is a skip control that appears after 3s.
+      // It is deliberately gated on :not([data-esc-locked]) — during those
+      // first 3 seconds ESC must do NOTHING, because the overlay resolves a
+      // Promise that pays the player's +30💎 ad reward, and a raw remove()
+      // would leave that Promise forever pending (reward silently lost).
+      // src/45-promo-engine.js drops the attribute the moment the skip
+      // control becomes live, and tags it data-close-modal so ESC routes
+      // through close() and the reward fires normally.
+      '.promo-overlay:not([data-esc-locked]), ' +
       // Full-screen views (not modals, but ESC/back-gesture should exit them
       // back to home — they intentionally have a small absolute-positioned
       // back arrow that's easy to miss). Adding here so the global handler
       // catches them and routes through the existing back button.
-      '#contest-screen, #challenge-screen, #spectator-screen, #my-contests-list'
+      '#contest-screen, #challenge-screen'
     );
     // Exclusions — overlays that LOOK like modals but are actually
     // in-game animations, celebrations, or the FTUE. ESC should NOT
@@ -1112,11 +1203,16 @@
       'dyn-chest-overlay': 1, 'ftue-overlay': 1, 'over-restored-banner': 1,
       'spin-reveal-overlay': 1, 'trophy-arena-overlay': 1, 'gw-claim-overlay': 1,
       'sp-claim-overlay': 1, 'sq-claim-overlay': 1, 'login-cal-claim-overlay': 1,
-      'wrapped-share-overlay': 1
+      'wrapped-share-overlay': 1,
+      // HL.2 — a promo already fading out (close() defers removal by 200ms and
+      // the out-animation only touches opacity) still has display:flex and real
+      // client rects, so it stayed ranked topmost at z-99999 and silently ate
+      // the player's NEXT ESC. close() is already running; ignore it.
+      'promo-overlay-out': 1
     };
     var out = [];
     var seen = new Set();
-    var consider = function(el) {
+    var consider = function(el, domIndex) {
       if (!el || seen.has(el)) return;
       seen.add(el);
       // Check if any of the element's classes are excluded.
@@ -1128,18 +1224,36 @@
       if (!el.isConnected) return;
       var st = window.getComputedStyle ? window.getComputedStyle(el) : null;
       if (st && (st.display === 'none' || st.visibility === 'hidden')) return;
-      out.push(el);
+      // HL.1 hides the whole in-game chrome via `display:none` on an ANCESTOR
+      // while home is mounted; getComputedStyle on the child still reports its
+      // own display, so check for real layout boxes too. Otherwise ESC could
+      // "close" e.g. #tile-shop-modal that the player cannot even see.
+      if (el.getClientRects && el.getClientRects().length === 0) return;
+      var z = st ? parseInt(st.zIndex, 10) : NaN;
+      out.push({ el: el, z: Number.isFinite(z) ? z : 0, i: domIndex });
     };
-    generic.forEach(consider);
-    extras.forEach(consider);
-    return out;
+    nodes.forEach(consider);
+    // HL.2 — rank by what the player actually SEES on top.
+    // The old code took the last node in DOM order and justified it with
+    // "z-index variance is mostly harmonized via :root --z-modal". That is
+    // simply not true: live values run from 50 (#tile-shop-modal,
+    // .contest-screen) through 300 (.info-modal) and 10038
+    // (.dyn-friends-modal-overlay) up to 99999 (.promo-overlay) and 100150
+    // (.bloom-confirm-overlay). So a LOW-z
+    // overlay opened LATER was picked as "topmost" even though it painted
+    // underneath. Sort by computed z-index, with document order as an explicit
+    // tiebreak (not relying on sort stability) — the caller still reads the
+    // LAST entry, so the contract is unchanged.
+    out.sort(function(a, b) { return (a.z - b.z) || (a.i - b.i); });
+    return out.map(function(o) { return o.el; });
   }
   function __bloomDismissTopmostModal() {
     var modals = __bloomGetCloseableModals();
     if (!modals.length) return false;
-    // Topmost = last in document order. (DOM is built in mount order;
-    // newer modals come later. Z-index variance is mostly harmonized
-    // via :root --z-modal so we don't need to sort by computed z.)
+    // Topmost = last after the ranking done in __bloomGetCloseableModals
+    // (highest computed z-index, document order breaking ties). It used to be
+    // "last in document order" on the claim that z-index was harmonized via
+    // :root --z-modal — it is not; see the sort comment there.
     var top = modals[modals.length - 1];
     // Try the modal's own close button first — preserves any
     // cleanup logic the modal already wires (refunds, telemetry,

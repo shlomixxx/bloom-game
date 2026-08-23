@@ -115,6 +115,12 @@
     var overlay = document.createElement('div');
     overlay.className = 'promo-overlay';
     overlay.setAttribute('dir', 'rtl');
+    // HL.2 — ESC must NOT dismiss this during the 3s skip countdown. The
+    // overlay resolves a Promise that pays the player's ad reward, so a raw
+    // remove() would leave it pending forever and silently eat the gems.
+    // The global ESC handler matches `.promo-overlay:not([data-esc-locked])`,
+    // and the countdown drops this attribute the moment skip goes live.
+    overlay.setAttribute('data-esc-locked', '1');
     overlay.innerHTML =
       '<div class="promo-card" style="background:' + bg + '">' +
         '<div class="promo-skip">דלג בעוד <span class="promo-skip-sec">3</span>s</div>' +
@@ -156,6 +162,12 @@
             skipDiv.classList.add('promo-skip-ready');
             skipDiv.style.cursor = 'pointer';
             skipDiv.onclick = function() { close(false); };
+            // HL.2 — skip is live, so ESC/back may now dismiss. data-close-modal
+            // makes the global dismiss chain CLICK this control (running close(),
+            // which resolves the Promise and pays the reward) instead of falling
+            // back to a raw remove() that would strand it.
+            skipDiv.setAttribute('data-close-modal', '1');
+            try { overlay.removeAttribute('data-esc-locked'); } catch (e) {}
           }
         }
       }, 1000);

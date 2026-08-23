@@ -1920,11 +1920,44 @@
   // home screen (position:fixed, z-index 10020, well above the home's 250).
   // Clearing _liveRaceState is what actually disarms them: pollLiveRaceState
   // and sendLiveHeartbeat both open with `if (!_liveRaceState) return;`.
+  // HL.2 — transient cover for the ~2.2-2.5s between restoring the game chrome
+  // and mounting the live-race result. Sits above `.top` (100) and the
+  // bottom-nav (2000) so neither route home is tappable, but below the result
+  // overlay (10020) so the reveal paints over it normally. A hard self-timeout
+  // guarantees it can never strand the player even if `present()` never runs.
+  var _lrSettleCoverTimer = null;
+  function showLiveRaceSettlingCover() {
+    try {
+      if (document.getElementById('live-race-settling')) return;
+      var el = document.createElement('div');
+      el.id = 'live-race-settling';
+      el.setAttribute('aria-live', 'polite');
+      el.style.cssText =
+        'position:fixed;inset:0;z-index:10010;background:rgba(20,18,16,0.55);' +
+        'backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px);' +
+        'display:flex;align-items:center;justify-content:center;direction:rtl;' +
+        'font-size:15px;font-weight:800;color:#F2EFE9;letter-spacing:0.01em;';
+      el.textContent = '⚡ מסכם את המרוץ…';
+      document.body.appendChild(el);
+      if (_lrSettleCoverTimer) clearTimeout(_lrSettleCoverTimer);
+      // Failsafe: strictly longer than the 2.2s/2.5s fetch races above.
+      _lrSettleCoverTimer = setTimeout(hideLiveRaceSettlingCover, 6000);
+    } catch (e) {}
+  }
+  function hideLiveRaceSettlingCover() {
+    if (_lrSettleCoverTimer) { clearTimeout(_lrSettleCoverTimer); _lrSettleCoverTimer = null; }
+    try {
+      var el = document.getElementById('live-race-settling');
+      if (el) el.remove();
+    } catch (e) {}
+  }
+
   function stopLiveRaceTimersOnly() {
     if (_liveRaceHbTimer) { clearInterval(_liveRaceHbTimer); _liveRaceHbTimer = null; }
     if (_liveRacePollTimer) { clearInterval(_liveRacePollTimer); _liveRacePollTimer = null; }
     if (_liveRaceHardTimeout) { clearTimeout(_liveRaceHardTimeout); _liveRaceHardTimeout = null; }
     try { stopLiveRaceSpectator(); } catch (e) {}
+    try { hideLiveRaceSettlingCover(); } catch (e) {}
     _liveRaceState = null;
     _liveRaceEnding = false;
   }
@@ -2230,9 +2263,14 @@
     var hud0 = document.getElementById('live-race-hud');
     if (hud0) hud0.remove();
     try { document.body.classList.remove('live-race-active'); } catch (e) {}
+    // HL.2 — same 2.5s gap as endLiveRace: chrome is back but the result is
+    // still 2.5s away, so the ⋯→home route and the bottom-nav are tappable and
+    // #live-race-result would land on top of the home screen. Cover the gap.
+    showLiveRaceSettlingCover();
     var ffShown = false;
     function ffPresent(myScore, oppScore, d) {
       if (ffShown) return; ffShown = true;
+      hideLiveRaceSettlingCover();
       showLiveRaceResult(myScore, oppScore, oppName, d, ffOppDeviceId);
     }
     var ffTo = setTimeout(function() { ffPresent(sc, _liveRaceLastOppScore | 0, null); }, 2500);
@@ -2350,9 +2388,21 @@
     var provisional = (stateData && stateData.ok)
       ? pick(stateData)
       : { my: myLocal, op: _liveRaceLastOppScore | 0, d: stateData || null };
+    // HL.2 — cover the gap between "chrome is back" and "result is up".
+    // LR.1 deliberately restores the chrome SYNCHRONOUSLY (never gated on the
+    // network) because a hung fetch used to freeze the screen with no way out.
+    // But body.live-race-active is the ONLY thing hiding `.top` and the
+    // bottom-nav, so for the 2.2s while we wait for the settled finals the
+    // ⋯→home route and the nav are live — tap either and #live-race-result
+    // (position:fixed, z-10020) lands on top of the home screen.
+    // Fix the gap, not the teardown: a lightweight non-interactive cover.
+    // Deliberately NOT a "-modal-overlay" class and not in the ESC allowlist —
+    // it is transient, and ESC-closing it would just re-open the same hole.
+    showLiveRaceSettlingCover();
     var shown = false;
     function present(res) {
       if (shown) return; shown = true;
+      hideLiveRaceSettlingCover();
       showLiveRaceResult(res.my, res.op, oppName, res.d, oppDeviceId);
     }
     // Prefer the authoritative SETTLED finals, but race the fetch against a
@@ -2505,6 +2555,32 @@
   function showLiveRaceResult(myScore, oppScore, oppName, settleData, oppDeviceId) {
     var existing = document.getElementById('live-race-result');
     if (existing) existing.remove();
+    // HL.2 — never mount a position:fixed z-10020 overlay on top of home. The
+    // #live-race-settling cover blocks the normal 2.2-2.5s gap, but present()'s
+    // timers live in closures nothing can cancel, so an exotic route home
+    // (deep-link, push tap, programmatic showHome) can still land here. Degrade
+    // to a toast — which HL.1 raised to z-100200, so it reads above home — and
+    // keep the outcome plus the payout, rather than swallowing the result.
+    // Placed AFTER the `existing.remove()` above so the degraded path can never
+    // leave the old overlay orphaned on screen.
+    try {
+      if (document.getElementById('home-screen')) {
+        var _w = (myScore | 0) > (oppScore | 0), _t = (myScore | 0) === (oppScore | 0);
+        var _reward = 0, _wager = 0;
+        try {
+          _reward = (settleData && settleData.winnerReward != null) ? (settleData.winnerReward | 0) : 0;
+          _wager = (settleData && settleData.wager != null) ? (settleData.wager | 0) : 0;
+        } catch (e2) {}
+        var _pay = _w && _reward > 0 ? ' · +' + _reward + '💎'
+                 : (_t && _wager > 0 ? ' · הוחזרו ' + _wager + '💎' : '');
+        if (typeof showToast === 'function') {
+          showToast((_w ? '🏆 ניצחת במרוץ! ' : (_t ? '🤝 תיקו במרוץ · ' : '😔 הפסדת במרוץ · ')) +
+            (myScore | 0).toLocaleString() + ' מול ' + (oppScore | 0).toLocaleString() + _pay,
+            _w ? 'success' : 'info');
+        }
+        return;
+      }
+    } catch (e) {}
     var won = myScore > oppScore;
     var tied = myScore === oppScore;
     var ov = document.createElement('div');
@@ -2781,6 +2857,31 @@
   // Poll a duel after we submitted but the opponent hasn't yet. Stops as soon
   // as the duel becomes 'settled' or 'tie', or after 5 minutes (whichever
   // comes first). Updates the in-flight result overlay in place.
+  // ── HL.2 — the duel settle poller is cancellable + surface-aware ────────
+  // It used to live entirely in a function-local `poller` handle with no
+  // liveness check, so NOTHING outside the closure could stop it. Dismissing
+  // the "ממתין ליריב" overlay (✕ / backdrop / ESC / "שחק שוב") or navigating
+  // home left it running for up to 5 minutes, and the moment the duel settled
+  // it mounted a position:fixed inset:0 z-9999 result overlay on top of
+  // whatever the player had moved on to — home, a fresh game, a contest.
+  var _duelSettlePoller = null;
+
+  function stopDuelSettlePoll() {
+    if (_duelSettlePoller) { clearInterval(_duelSettlePoller); _duelSettlePoller = null; }
+  }
+
+  // True once the player is no longer looking at the duel waiting overlay:
+  // either they dismissed it, or they navigated home (which mounts
+  // #home-screen — both home variants use that id, and hideHome/hideHomeV2
+  // REMOVE it, so it is reliably absent for the whole duel game including
+  // game-over). Same idiom HL.1 established elsewhere.
+  function duelResultSurfaceLost() {
+    try {
+      if (document.getElementById('home-screen')) return true;
+      return !document.querySelector('[data-duel-result-overlay]');
+    } catch (e) { return false; }
+  }
+
   function pollDuelUntilSettled(duelId, myScore, oppName) {
     var attempts = 0;
     var maxAttempts = 150; // live race: 150 × 2s = 5 minutes of active polling
@@ -2805,7 +2906,19 @@
     var botMax = Math.max(asyncMax, Math.ceil((botSettleMax + 15) / 2));
     var isLive = null; // resolved from the duel row on the first successful poll
     var isBot = false;
-    var poller = setInterval(function() {
+    stopDuelSettlePoll();   // never leave two settle polls running at once
+    _duelSettlePoller = setInterval(function() {
+      // HL.2 liveness gate. STOP the timer — don't merely skip the tick. A
+      // guard that only returned would leave a zombie poll running forever
+      // with no way to ever act (the same shape as the fitGrid retry bug).
+      // Nothing is lost: checkIncomingDuels polls every 60s from home and
+      // surfaces the eventual settle/decline/expire via the non-blocking
+      // duel banner, which is the right surface for someone who moved on.
+      if (duelResultSurfaceLost()) {
+        stopDuelSettlePoll();
+        stopDuelLiveSpectator();
+        return;
+      }
       attempts++;
       var cap = (isLive === false) ? (isBot ? botMax : asyncMax) : maxAttempts;
       if (attempts > cap) {
@@ -2815,7 +2928,7 @@
         // background spectator. The home-side checkIncomingDuels poll
         // (every 60s) will pick up the eventual settle/decline/expire
         // and surface it via the banner.
-        clearInterval(poller);
+        stopDuelSettlePoll();
         stopDuelLiveSpectator();
         replaceDuelResultOverlay({
           result: 'unresolved',
@@ -2853,7 +2966,7 @@
           var isChallenger = u.challenger_device === deviceId;
           // Settled / tie — the normal happy path.
           if (u.status === 'settled' || u.status === 'tie') {
-            clearInterval(poller);
+            stopDuelSettlePoll();
             stopDuelLiveSpectator();
             var oppScore = isChallenger ? u.opponent_score : u.challenger_score;
             var winner = null;
@@ -2908,7 +3021,7 @@
           // Surface a clear "you got your gems back, no win/loss" overlay
           // so the challenger isn't stuck on "ממתין ליריב..." forever.
           if (u.status === 'declined' || u.status === 'expired') {
-            clearInterval(poller);
+            stopDuelSettlePoll();
             stopDuelLiveSpectator();
             replaceDuelResultOverlay({
               result: u.status,            // 'declined' or 'expired'
@@ -3143,11 +3256,49 @@
   // Swap the existing "waiting" overlay for a fresh result overlay. Called
   // by the poller above when the opponent's score lands.
   function replaceDuelResultOverlay(d, myScore, oppName) {
+    // HL.2 — sample the surface state BEFORE the removal loop below.
+    // This ordering is load-bearing: `duelResultSurfaceLost()` asks "is the
+    // waiting overlay gone?", so calling it AFTER the removal would make it
+    // return true on every single call and the duel result would never render
+    // for anyone. (Two independent reviewers caught exactly that mistake in
+    // the first draft of this patch — the comment there had the reasoning
+    // backwards.) All three callers are the poller's terminal branches, which
+    // only ever REPLACE an existing waiting overlay, so "no overlay present"
+    // reliably means the player dismissed it and moved on.
+    var hadOverlay = !!document.querySelector('[data-duel-result-overlay]');
+    var surfaceLost = false;
+    try { surfaceLost = !hadOverlay || !!document.getElementById('home-screen'); } catch (e) {}
     // Remove any open duel-result overlay (created by showDuelResultOverlay
     // — identified by the dark backdrop with the inline border style).
     document.querySelectorAll('[data-duel-result-overlay]').forEach(function(el) {
       el.remove();
     });
+    // Delivery-time gate. The tick's liveness check can pass and then its fetch
+    // resolves ~2s later, by which point the player may have tapped "שחק שוב"
+    // into a fresh game or gone home; mounting a full-screen result then
+    // hijacks the screen. Every side effect in the caller's terminal branches
+    // (balance credit, fetchPlayerCode, updateBalanceDisplay) has ALREADY run
+    // by the time we get here, so nothing the player earned is lost — only the
+    // presentation changes.
+    if (surfaceLost) {
+      var _terminal = d && (d.result === 'settled' || d.result === 'tie');
+      if (_terminal) {
+        // Real outcome → deliver it through the non-blocking banner instead.
+        try {
+          showDuelNotificationBanner({
+            id: 'settle-' + ((d && d.duelId) || oppName || 'x'),
+            kind: (d.result === 'tie') ? 'tie' : (d.winner === 'you' ? 'won' : 'lost'),
+            name: oppName,
+            myScore: (typeof myScore === 'number') ? myScore : undefined,
+            oppScore: (typeof d.opponentScore === 'number') ? d.opponentScore : undefined
+          });
+        } catch (e) {}
+      }
+      // 'waiting' / 'unresolved' are deliberately dropped: a spinner and a
+      // "we'll tell you later" note are meaningless to someone who already
+      // moved on, and the score is committed server-side either way.
+      return;
+    }
     showDuelResultOverlay(d, myScore, oppName);
   }
 
@@ -3696,7 +3847,12 @@
 
     var modal = document.createElement('div');
     modal.id = 'tile-shop-modal';
-    var html = '<button class="ts-close" id="ts-close-btn">✕</button>';
+    // HL.2 — data-close-modal + aria-label so the global ESC/back dismiss chain
+    // CLICKS this button (picking up whatever cleanup the handler grows later)
+    // instead of falling through to its raw remove() fallback. #tile-shop-modal
+    // is also now in the ESC allowlist — it had no ESC/back path at all before,
+    // because it is mounted with an id and no class.
+    var html = '<button class="ts-close" id="ts-close-btn" data-close-modal="1" aria-label="סגור">✕</button>';
     html += '<div class="ts-header"><span>🛒 חנות משחק</span><span style="color:#BA7517;font-weight:700">💎 ' + playerBalance + '</span></div>';
 
     // Section 1: Buy tiles
@@ -5167,7 +5323,13 @@
     // endLiveRace() has settle side-effects, so remove its HUD DOM directly
     // rather than invoking it (a genuine live race can't reach home anyway —
     // body.live-race-active hides the home button; the server cron settles it).
-    ['ghost-hud', 'contest-hud', 'duel-hud', 'live-race-hud', 'live-race-spectate', 'danger-meter']
+    // HL.2 adds 'live-race-settling' + 'live-race-result' — both position:fixed
+    // inset:0 at z 10010/10020, far above the home screen's 250. This REQUIRES
+    // the home guard at the top of showLiveRaceResult: the 2200/2500ms present()
+    // timers are closure-local and cannot be cancelled from here, so purging
+    // alone would just let them re-mount over home a moment later.
+    ['ghost-hud', 'contest-hud', 'duel-hud', 'live-race-hud', 'live-race-spectate',
+     'live-race-settling', 'live-race-result', 'danger-meter']
       .forEach(function(id) {
         var el = document.getElementById(id);
         if (el) { try { el.remove(); } catch (e) {} }
@@ -5198,6 +5360,13 @@
     //     navigation left the results board floating over home. This is the
     //     literal "לוח התוצאות" surface in the user's report.
     try { if (typeof stopSpectator === 'function') stopSpectator(); } catch (e) {}
+    // HL.2 — the duel settle poller (2s, up to 5 min). Its handle used to be
+    // function-local so nothing could cancel it; going home now does.
+    try { if (typeof stopDuelSettlePoll === 'function') stopDuelSettlePoll(); } catch (e) {}
+    try {
+      document.querySelectorAll('[data-duel-result-overlay]')
+        .forEach(function(el) { el.remove(); });
+    } catch (e) {}
     try { if (typeof stopOvertakeWatch === 'function') stopOvertakeWatch(); } catch (e) {}
     try { if (typeof closeBoardLeaderboard === 'function') closeBoardLeaderboard(); } catch (e) {}
     // Live-race timers: endLiveRace() has settle side-effects so we still don't
@@ -5243,6 +5412,50 @@
     // that no longer exists.
     try { window._liveRaceMode = false; } catch (e) {}
   }
+
+  // HL.2 — "would this celebration land on top of a game the player is
+  // actively playing?"
+  // Trophy Road and the trophy chests grant from the server AFTER game-over,
+  // so their callbacks resolve at an unpredictable moment — often several
+  // seconds later, by which time the player may have tapped "שחק שוב" into a
+  // fresh board. All three surfaces then mount on <body> with no guard:
+  //   .trophy-toast          fixed, top:80px  (straight into the HUD band)
+  //   .trophy-promo-overlay  fixed, inset:0, z-10001, click-blocking
+  //   .chest-celebration-overlay fixed, inset:0, z-10010, click-blocking
+  // The last two are also in the ESC EXCLUDE list (so a reward can't be
+  // ESC-skipped), which means landing mid-game they cannot be dismissed at
+  // all until their timer runs out.
+  //
+  // On HOME they are welcome — that is where a reward recap belongs — so this
+  // returns false there. It returns true ONLY for a live, playable board:
+  // no home mounted AND not on the over-screen.
+  //
+  // Suppressing is safe and loses nothing the player earned: every one of
+  // these is purely presentational. The trophies, the arena change and the
+  // chest gems are all committed server-side BEFORE the animation runs, and
+  // the home tiles read that state on their next paint.
+  function celebrationWouldCoverLiveGame() {
+    try {
+      // Blocking surfaces are checked FIRST — a celebration must not paint over
+      // a contest/challenge board even when __bloomGameOver happens to be true.
+      if (document.getElementById('contest-screen')) return true;
+      if (document.getElementById('challenge-screen')) return true;
+      // Spectating: the view mounts INSIDE #grid-wrap rather than as a screen
+      // of its own, and it is entered from the over-screen where
+      // __bloomGameOver is still true — so the fallback below would wrongly
+      // report "safe". (There is no #spectator-screen element; that id is a
+      // phantom, including in the stale check in src/14-events.js.)
+      if (document.querySelector('#grid-wrap .spectator-view')) return true;
+      // A live race whose board filled early sets __bloomGameOver = true while
+      // the race is STILL RUNNING for up to ~60s (the HUD and its 1s poll keep
+      // going, and the player is watching the opponent). body.live-race-active
+      // is the honest "still running" marker.
+      if (document.body.classList.contains('live-race-active')) return true;
+      if (document.getElementById('home-screen')) return false;
+      return !window.__bloomGameOver;
+    } catch (e) { return false; }
+  }
+  window.__bloomCelebrationBlocked = celebrationWouldCoverLiveGame;
 
   // ============ §3.4 GENERIC TOAST HELPER ============
   // The audit asked for a single `showToast(text, type)` so every async
@@ -5812,15 +6025,34 @@
   // shouldn't disappear on ESC).
   // ============================================================
   function __bloomGetCloseableModals() {
-    // Generic match: any class ending in -modal-overlay.
-    var generic = document.querySelectorAll('[class*="modal-overlay"]');
-    // Curated additions for overlays that don't use the "modal" suffix
-    // but still act as modals (player can dismiss them).
-    var extras = document.querySelectorAll(
+    // HL.2 — ONE union query, not two.
+    // The old code ran `generic.forEach(consider)` and THEN
+    // `extras.forEach(consider)`, so every curated "extra" sorted after every
+    // generic match regardless of when it was opened or what it paints above.
+    // Since the caller takes the LAST element as topmost, opening a generic
+    // modal on top of an extra (e.g. the trophy modal, z-10000, from inside
+    // #contest-screen, z-50) made ESC dismiss the CONTEST — navigating the
+    // player out of the screen — while the modal they were looking at stayed.
+    // A single selector returns nodes in true document order and fixes that.
+    var nodes = document.querySelectorAll(
+      // Generic match: any class containing -modal-overlay.
+      '[class*="modal-overlay"], ' +
+      // Curated additions for overlays that don't use the "modal" suffix
+      // but still act as modals (player can dismiss them).
       '.board-lb-overlay, .dyn-boards-overlay, .dyn-comeback-overlay, ' +
       '.dyn-friends-modal-overlay, .gem-bank-overlay, .ghost-confirm-overlay, ' +
-      '.gacha-history-overlay, .squad-modal-overlay, .squad-tournament-modal-overlay, ' +
-      '.rivalry-modal-overlay, .leagues-modal-overlay, ' +
+      '.gacha-history-overlay, ' +
+      // HL.2 — `.squad-overlay` is the REAL class (src/43-squad-tournament.js:106).
+      // It does NOT contain "modal-overlay", so nothing was matching it and the
+      // squad-tournament modal was silently un-closable by ESC/back.
+      // Removed here as verified PHANTOMS — nothing in src/ ever creates them,
+      // so they were pure noise: .squad-modal-overlay,
+      // .squad-tournament-modal-overlay, .rivalry-modal-overlay,
+      // .leagues-modal-overlay, #spectator-screen, #my-contests-list.
+      // (The real rival/league classes are `rival-modal-overlay` and
+      // `league-modal-overlay`, which the generic matcher above already
+      // catches — that is why nobody noticed the phantoms.)
+      '.squad-overlay, ' +
       // UX audit 2026-06-02 (theme #3): these overlays used non-"modal"
       // class names and were silently un-closable by ESC / back-gesture,
       // so players felt "stuck". Each has an aria-label="סגור" close
@@ -5841,11 +6073,26 @@
       // country picker, score info, share dialog, shop, etc.). Adding here
       // so ESC + back-gesture close all of them through the unified path.
       '.info-modal, ' +
+      // HL.2 — the in-game tile shop (src/02-shop.js showTileShop) is mounted
+      // with only an id and NO class, so it matched nothing here and had no
+      // ESC/back path at all. Its ✕ gets data-close-modal below so the dismiss
+      // chain clicks it rather than raw-removing the node.
+      '#tile-shop-modal, ' +
+      // HL.2 — the self-promo ad-replacement overlay covers the whole viewport
+      // at z-99999 and its only exit is a skip control that appears after 3s.
+      // It is deliberately gated on :not([data-esc-locked]) — during those
+      // first 3 seconds ESC must do NOTHING, because the overlay resolves a
+      // Promise that pays the player's +30💎 ad reward, and a raw remove()
+      // would leave that Promise forever pending (reward silently lost).
+      // src/45-promo-engine.js drops the attribute the moment the skip
+      // control becomes live, and tags it data-close-modal so ESC routes
+      // through close() and the reward fires normally.
+      '.promo-overlay:not([data-esc-locked]), ' +
       // Full-screen views (not modals, but ESC/back-gesture should exit them
       // back to home — they intentionally have a small absolute-positioned
       // back arrow that's easy to miss). Adding here so the global handler
       // catches them and routes through the existing back button.
-      '#contest-screen, #challenge-screen, #spectator-screen, #my-contests-list'
+      '#contest-screen, #challenge-screen'
     );
     // Exclusions — overlays that LOOK like modals but are actually
     // in-game animations, celebrations, or the FTUE. ESC should NOT
@@ -5856,11 +6103,16 @@
       'dyn-chest-overlay': 1, 'ftue-overlay': 1, 'over-restored-banner': 1,
       'spin-reveal-overlay': 1, 'trophy-arena-overlay': 1, 'gw-claim-overlay': 1,
       'sp-claim-overlay': 1, 'sq-claim-overlay': 1, 'login-cal-claim-overlay': 1,
-      'wrapped-share-overlay': 1
+      'wrapped-share-overlay': 1,
+      // HL.2 — a promo already fading out (close() defers removal by 200ms and
+      // the out-animation only touches opacity) still has display:flex and real
+      // client rects, so it stayed ranked topmost at z-99999 and silently ate
+      // the player's NEXT ESC. close() is already running; ignore it.
+      'promo-overlay-out': 1
     };
     var out = [];
     var seen = new Set();
-    var consider = function(el) {
+    var consider = function(el, domIndex) {
       if (!el || seen.has(el)) return;
       seen.add(el);
       // Check if any of the element's classes are excluded.
@@ -5872,18 +6124,36 @@
       if (!el.isConnected) return;
       var st = window.getComputedStyle ? window.getComputedStyle(el) : null;
       if (st && (st.display === 'none' || st.visibility === 'hidden')) return;
-      out.push(el);
+      // HL.1 hides the whole in-game chrome via `display:none` on an ANCESTOR
+      // while home is mounted; getComputedStyle on the child still reports its
+      // own display, so check for real layout boxes too. Otherwise ESC could
+      // "close" e.g. #tile-shop-modal that the player cannot even see.
+      if (el.getClientRects && el.getClientRects().length === 0) return;
+      var z = st ? parseInt(st.zIndex, 10) : NaN;
+      out.push({ el: el, z: Number.isFinite(z) ? z : 0, i: domIndex });
     };
-    generic.forEach(consider);
-    extras.forEach(consider);
-    return out;
+    nodes.forEach(consider);
+    // HL.2 — rank by what the player actually SEES on top.
+    // The old code took the last node in DOM order and justified it with
+    // "z-index variance is mostly harmonized via :root --z-modal". That is
+    // simply not true: live values run from 50 (#tile-shop-modal,
+    // .contest-screen) through 300 (.info-modal) and 10038
+    // (.dyn-friends-modal-overlay) up to 99999 (.promo-overlay) and 100150
+    // (.bloom-confirm-overlay). So a LOW-z
+    // overlay opened LATER was picked as "topmost" even though it painted
+    // underneath. Sort by computed z-index, with document order as an explicit
+    // tiebreak (not relying on sort stability) — the caller still reads the
+    // LAST entry, so the contract is unchanged.
+    out.sort(function(a, b) { return (a.z - b.z) || (a.i - b.i); });
+    return out.map(function(o) { return o.el; });
   }
   function __bloomDismissTopmostModal() {
     var modals = __bloomGetCloseableModals();
     if (!modals.length) return false;
-    // Topmost = last in document order. (DOM is built in mount order;
-    // newer modals come later. Z-index variance is mostly harmonized
-    // via :root --z-modal so we don't need to sort by computed z.)
+    // Topmost = last after the ranking done in __bloomGetCloseableModals
+    // (highest computed z-index, document order breaking ties). It used to be
+    // "last in document order" on the claim that z-index was harmonized via
+    // :root --z-modal — it is not; see the sort comment there.
     var top = modals[modals.length - 1];
     // Try the modal's own close button first — preserves any
     // cleanup logic the modal already wires (refunds, telemetry,
@@ -31470,6 +31740,13 @@
   }
 
   function showTrophyChangeToast(result) {
+    // HL.2 — this grant resolves from the server AFTER game-over, so it can
+    // land seconds later on a board the player has already restarted. The
+    // toast is fixed at top:80px — straight into the in-game HUD band, over
+    // the tier ladder. Suppress only over a LIVE game; on home (where a reward
+    // recap belongs) and on the over-screen it shows as before. The trophies
+    // are already persisted server-side, so nothing is lost.
+    if (window.__bloomCelebrationBlocked && window.__bloomCelebrationBlocked()) return;
     var t = document.createElement('div');
     t.className = 'trophy-toast ' + (result.delta > 0 ? 'trophy-toast-up' : 'trophy-toast-down');
     var sign = result.delta > 0 ? '+' : '';
@@ -31491,6 +31768,12 @@
   }
 
   function showArenaPromotionOverlay(arena) {
+    // HL.2 — full-screen, z-10001, click-blocking, and in the ESC EXCLUDE list
+    // (so a reward can't be ESC-skipped) — which means if it lands mid-game the
+    // player cannot dismiss it at all. Suppress over a live board only; the
+    // arena change is already committed server-side and the home trophy tile
+    // shows the new arena on its next paint.
+    if (window.__bloomCelebrationBlocked && window.__bloomCelebrationBlocked()) return;
     var ov = document.createElement('div');
     ov.className = 'trophy-promo-overlay';
     ov.innerHTML =
@@ -32482,6 +32765,12 @@ try {
   // Full-screen celebration when a chest opens. Rarity-themed: legendary
   // gets confetti + bigger animation, common is more subtle.
   function showChestOpenCelebration(type, gems) {
+    // HL.2 — full-screen, z-10010, click-blocking, up to 6s, and in the ESC
+    // EXCLUDE list, so landing on a live board it covers the game with no way
+    // out. Suppress over a live game only. The gems are credited server-side
+    // by /api/chests/open BEFORE this runs, so the player loses the animation,
+    // never the reward — and the balance widget already reflects it.
+    if (window.__bloomCelebrationBlocked && window.__bloomCelebrationBlocked()) return;
     var color = chestColor(type);
     var emoji = chestEmoji(type);
     var label = chestLabel(type);
@@ -34624,6 +34913,12 @@ try {
     var overlay = document.createElement('div');
     overlay.className = 'promo-overlay';
     overlay.setAttribute('dir', 'rtl');
+    // HL.2 — ESC must NOT dismiss this during the 3s skip countdown. The
+    // overlay resolves a Promise that pays the player's ad reward, so a raw
+    // remove() would leave it pending forever and silently eat the gems.
+    // The global ESC handler matches `.promo-overlay:not([data-esc-locked])`,
+    // and the countdown drops this attribute the moment skip goes live.
+    overlay.setAttribute('data-esc-locked', '1');
     overlay.innerHTML =
       '<div class="promo-card" style="background:' + bg + '">' +
         '<div class="promo-skip">דלג בעוד <span class="promo-skip-sec">3</span>s</div>' +
@@ -34665,6 +34960,12 @@ try {
             skipDiv.classList.add('promo-skip-ready');
             skipDiv.style.cursor = 'pointer';
             skipDiv.onclick = function() { close(false); };
+            // HL.2 — skip is live, so ESC/back may now dismiss. data-close-modal
+            // makes the global dismiss chain CLICK this control (running close(),
+            // which resolves the Promise and pays the reward) instead of falling
+            // back to a raw remove() that would strand it.
+            skipDiv.setAttribute('data-close-modal', '1');
+            try { overlay.removeAttribute('data-esc-locked'); } catch (e) {}
           }
         }
       }, 1000);
@@ -34958,7 +35259,22 @@ try {
       var body = screen.querySelector('.bn-tab-screen-body');
       if (!body) return;
       el.classList.add('bn-migrated');
-      if (el.style.display === 'none') el.style.display = '';
+      // HL.2 — this used to clear display:none UNCONDITIONALLY, which took
+      // ownership of a visibility decision the nav has no business making:
+      //   • the T1.1 progressive-unlock gate (applyLevelGates stashes the old
+      //     value in data-pre-gate-display and sets display:none) — a relocated
+      //     tile popped visible regardless of level, so a brand-new player was
+      //     shown gacha/guilds/leagues they cannot use;
+      //   • the "hidden until my fetch resolves" pattern (#home-v2-season-pass)
+      //     — the empty placeholder tile flashed before its data landed.
+      // Only un-hide tiles the nav itself would otherwise strand: leave a
+      // gate-hidden tile hidden and let applyLevelGates reveal it when the
+      // player levels up. countRealTiles/ensurePlaceholderIfEmpty are now
+      // visibility-aware so a hidden tile does not suppress the tab's
+      // empty-state card or inflate its unread badge.
+      if (el.style.display === 'none' && !el.hasAttribute('data-pre-gate-display')) {
+        el.style.display = '';
+      }
       body.appendChild(el);
       // Remove placeholder when real content arrives.
       var placeholder = body.querySelector('.bn-tab-placeholder-card');
@@ -34994,11 +35310,23 @@ try {
         setBadge(tabId, 0);
       }
     }
+    // HL.2 — a tile that is present but HIDDEN must not count as content.
+    // Tiles hide themselves for two legitimate reasons: the T1.1 progressive
+    // -unlock gate (data-min-level, applyLevelGates) and the "stay hidden
+    // until my fetch resolves" pattern (#home-v2-season-pass). Counting them
+    // made the nav paint a "1" badge on a tab the player would find EMPTY.
+    function isVisibleTile(el) {
+      if (!el || !el.style) return true;
+      if (el.style.display === 'none') return false;
+      if (el.hasAttribute && el.hasAttribute('data-pre-gate-display')) return false;
+      return true;
+    }
     function countRealTiles(body) {
       var n = 0;
       for (var i = 0; i < body.children.length; i++) {
         var c = body.children[i];
         if (c.classList && c.classList.contains('bn-tab-placeholder-card')) continue;
+        if (!isVisibleTile(c)) continue;
         n++;
       }
       return n;
@@ -35243,7 +35571,15 @@ try {
       if (!screen) return;
       var body = screen.querySelector('.bn-tab-screen-body');
       if (!body) return;
-      if (body.children.length > 0) return; // tiles already there
+      // HL.2 — was `body.children.length > 0`, which counted HIDDEN children.
+      // #home-v2-season-pass is unconditional home innerHTML, so it always
+      // migrates into the 🏆 progress tab; once the level gate correctly keeps
+      // it hidden (see moveTileToTab), a level-1..7 player had one invisible
+      // child, the placeholder was suppressed, and the tab rendered COMPLETELY
+      // BLANK — worse than the bug being fixed, on exactly the new-player
+      // cohort T1.1 exists to protect. Count only visible tiles so the
+      // "התקדמותך תופיע כאן" empty state appears as designed.
+      if (countRealTiles(body) > 0) return; // visible tiles already there
       if (body.querySelector('.bn-tab-placeholder-card')) return; // already placeheld
       body.appendChild(buildPlaceholderCard(id));
     }

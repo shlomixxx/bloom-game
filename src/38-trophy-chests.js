@@ -293,6 +293,12 @@
   // Full-screen celebration when a chest opens. Rarity-themed: legendary
   // gets confetti + bigger animation, common is more subtle.
   function showChestOpenCelebration(type, gems) {
+    // HL.2 — full-screen, z-10010, click-blocking, up to 6s, and in the ESC
+    // EXCLUDE list, so landing on a live board it covers the game with no way
+    // out. Suppress over a live game only. The gems are credited server-side
+    // by /api/chests/open BEFORE this runs, so the player loses the animation,
+    // never the reward — and the balance widget already reflects it.
+    if (window.__bloomCelebrationBlocked && window.__bloomCelebrationBlocked()) return;
     var color = chestColor(type);
     var emoji = chestEmoji(type);
     var label = chestLabel(type);

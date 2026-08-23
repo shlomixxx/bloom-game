@@ -230,7 +230,22 @@
       var body = screen.querySelector('.bn-tab-screen-body');
       if (!body) return;
       el.classList.add('bn-migrated');
-      if (el.style.display === 'none') el.style.display = '';
+      // HL.2 — this used to clear display:none UNCONDITIONALLY, which took
+      // ownership of a visibility decision the nav has no business making:
+      //   • the T1.1 progressive-unlock gate (applyLevelGates stashes the old
+      //     value in data-pre-gate-display and sets display:none) — a relocated
+      //     tile popped visible regardless of level, so a brand-new player was
+      //     shown gacha/guilds/leagues they cannot use;
+      //   • the "hidden until my fetch resolves" pattern (#home-v2-season-pass)
+      //     — the empty placeholder tile flashed before its data landed.
+      // Only un-hide tiles the nav itself would otherwise strand: leave a
+      // gate-hidden tile hidden and let applyLevelGates reveal it when the
+      // player levels up. countRealTiles/ensurePlaceholderIfEmpty are now
+      // visibility-aware so a hidden tile does not suppress the tab's
+      // empty-state card or inflate its unread badge.
+      if (el.style.display === 'none' && !el.hasAttribute('data-pre-gate-display')) {
+        el.style.display = '';
+      }
       body.appendChild(el);
       // Remove placeholder when real content arrives.
       var placeholder = body.querySelector('.bn-tab-placeholder-card');
@@ -266,11 +281,23 @@
         setBadge(tabId, 0);
       }
     }
+    // HL.2 — a tile that is present but HIDDEN must not count as content.
+    // Tiles hide themselves for two legitimate reasons: the T1.1 progressive
+    // -unlock gate (data-min-level, applyLevelGates) and the "stay hidden
+    // until my fetch resolves" pattern (#home-v2-season-pass). Counting them
+    // made the nav paint a "1" badge on a tab the player would find EMPTY.
+    function isVisibleTile(el) {
+      if (!el || !el.style) return true;
+      if (el.style.display === 'none') return false;
+      if (el.hasAttribute && el.hasAttribute('data-pre-gate-display')) return false;
+      return true;
+    }
     function countRealTiles(body) {
       var n = 0;
       for (var i = 0; i < body.children.length; i++) {
         var c = body.children[i];
         if (c.classList && c.classList.contains('bn-tab-placeholder-card')) continue;
+        if (!isVisibleTile(c)) continue;
         n++;
       }
       return n;
@@ -515,7 +542,15 @@
       if (!screen) return;
       var body = screen.querySelector('.bn-tab-screen-body');
       if (!body) return;
-      if (body.children.length > 0) return; // tiles already there
+      // HL.2 — was `body.children.length > 0`, which counted HIDDEN children.
+      // #home-v2-season-pass is unconditional home innerHTML, so it always
+      // migrates into the 🏆 progress tab; once the level gate correctly keeps
+      // it hidden (see moveTileToTab), a level-1..7 player had one invisible
+      // child, the placeholder was suppressed, and the tab rendered COMPLETELY
+      // BLANK — worse than the bug being fixed, on exactly the new-player
+      // cohort T1.1 exists to protect. Count only visible tiles so the
+      // "התקדמותך תופיע כאן" empty state appears as designed.
+      if (countRealTiles(body) > 0) return; // visible tiles already there
       if (body.querySelector('.bn-tab-placeholder-card')) return; // already placeheld
       body.appendChild(buildPlaceholderCard(id));
     }

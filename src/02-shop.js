@@ -1125,11 +1125,44 @@
   // home screen (position:fixed, z-index 10020, well above the home's 250).
   // Clearing _liveRaceState is what actually disarms them: pollLiveRaceState
   // and sendLiveHeartbeat both open with `if (!_liveRaceState) return;`.
+  // HL.2 — transient cover for the ~2.2-2.5s between restoring the game chrome
+  // and mounting the live-race result. Sits above `.top` (100) and the
+  // bottom-nav (2000) so neither route home is tappable, but below the result
+  // overlay (10020) so the reveal paints over it normally. A hard self-timeout
+  // guarantees it can never strand the player even if `present()` never runs.
+  var _lrSettleCoverTimer = null;
+  function showLiveRaceSettlingCover() {
+    try {
+      if (document.getElementById('live-race-settling')) return;
+      var el = document.createElement('div');
+      el.id = 'live-race-settling';
+      el.setAttribute('aria-live', 'polite');
+      el.style.cssText =
+        'position:fixed;inset:0;z-index:10010;background:rgba(20,18,16,0.55);' +
+        'backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px);' +
+        'display:flex;align-items:center;justify-content:center;direction:rtl;' +
+        'font-size:15px;font-weight:800;color:#F2EFE9;letter-spacing:0.01em;';
+      el.textContent = '⚡ מסכם את המרוץ…';
+      document.body.appendChild(el);
+      if (_lrSettleCoverTimer) clearTimeout(_lrSettleCoverTimer);
+      // Failsafe: strictly longer than the 2.2s/2.5s fetch races above.
+      _lrSettleCoverTimer = setTimeout(hideLiveRaceSettlingCover, 6000);
+    } catch (e) {}
+  }
+  function hideLiveRaceSettlingCover() {
+    if (_lrSettleCoverTimer) { clearTimeout(_lrSettleCoverTimer); _lrSettleCoverTimer = null; }
+    try {
+      var el = document.getElementById('live-race-settling');
+      if (el) el.remove();
+    } catch (e) {}
+  }
+
   function stopLiveRaceTimersOnly() {
     if (_liveRaceHbTimer) { clearInterval(_liveRaceHbTimer); _liveRaceHbTimer = null; }
     if (_liveRacePollTimer) { clearInterval(_liveRacePollTimer); _liveRacePollTimer = null; }
     if (_liveRaceHardTimeout) { clearTimeout(_liveRaceHardTimeout); _liveRaceHardTimeout = null; }
     try { stopLiveRaceSpectator(); } catch (e) {}
+    try { hideLiveRaceSettlingCover(); } catch (e) {}
     _liveRaceState = null;
     _liveRaceEnding = false;
   }
@@ -1435,9 +1468,14 @@
     var hud0 = document.getElementById('live-race-hud');
     if (hud0) hud0.remove();
     try { document.body.classList.remove('live-race-active'); } catch (e) {}
+    // HL.2 — same 2.5s gap as endLiveRace: chrome is back but the result is
+    // still 2.5s away, so the ⋯→home route and the bottom-nav are tappable and
+    // #live-race-result would land on top of the home screen. Cover the gap.
+    showLiveRaceSettlingCover();
     var ffShown = false;
     function ffPresent(myScore, oppScore, d) {
       if (ffShown) return; ffShown = true;
+      hideLiveRaceSettlingCover();
       showLiveRaceResult(myScore, oppScore, oppName, d, ffOppDeviceId);
     }
     var ffTo = setTimeout(function() { ffPresent(sc, _liveRaceLastOppScore | 0, null); }, 2500);
@@ -1555,9 +1593,21 @@
     var provisional = (stateData && stateData.ok)
       ? pick(stateData)
       : { my: myLocal, op: _liveRaceLastOppScore | 0, d: stateData || null };
+    // HL.2 — cover the gap between "chrome is back" and "result is up".
+    // LR.1 deliberately restores the chrome SYNCHRONOUSLY (never gated on the
+    // network) because a hung fetch used to freeze the screen with no way out.
+    // But body.live-race-active is the ONLY thing hiding `.top` and the
+    // bottom-nav, so for the 2.2s while we wait for the settled finals the
+    // ⋯→home route and the nav are live — tap either and #live-race-result
+    // (position:fixed, z-10020) lands on top of the home screen.
+    // Fix the gap, not the teardown: a lightweight non-interactive cover.
+    // Deliberately NOT a "-modal-overlay" class and not in the ESC allowlist —
+    // it is transient, and ESC-closing it would just re-open the same hole.
+    showLiveRaceSettlingCover();
     var shown = false;
     function present(res) {
       if (shown) return; shown = true;
+      hideLiveRaceSettlingCover();
       showLiveRaceResult(res.my, res.op, oppName, res.d, oppDeviceId);
     }
     // Prefer the authoritative SETTLED finals, but race the fetch against a
@@ -1710,6 +1760,32 @@
   function showLiveRaceResult(myScore, oppScore, oppName, settleData, oppDeviceId) {
     var existing = document.getElementById('live-race-result');
     if (existing) existing.remove();
+    // HL.2 — never mount a position:fixed z-10020 overlay on top of home. The
+    // #live-race-settling cover blocks the normal 2.2-2.5s gap, but present()'s
+    // timers live in closures nothing can cancel, so an exotic route home
+    // (deep-link, push tap, programmatic showHome) can still land here. Degrade
+    // to a toast — which HL.1 raised to z-100200, so it reads above home — and
+    // keep the outcome plus the payout, rather than swallowing the result.
+    // Placed AFTER the `existing.remove()` above so the degraded path can never
+    // leave the old overlay orphaned on screen.
+    try {
+      if (document.getElementById('home-screen')) {
+        var _w = (myScore | 0) > (oppScore | 0), _t = (myScore | 0) === (oppScore | 0);
+        var _reward = 0, _wager = 0;
+        try {
+          _reward = (settleData && settleData.winnerReward != null) ? (settleData.winnerReward | 0) : 0;
+          _wager = (settleData && settleData.wager != null) ? (settleData.wager | 0) : 0;
+        } catch (e2) {}
+        var _pay = _w && _reward > 0 ? ' · +' + _reward + '💎'
+                 : (_t && _wager > 0 ? ' · הוחזרו ' + _wager + '💎' : '');
+        if (typeof showToast === 'function') {
+          showToast((_w ? '🏆 ניצחת במרוץ! ' : (_t ? '🤝 תיקו במרוץ · ' : '😔 הפסדת במרוץ · ')) +
+            (myScore | 0).toLocaleString() + ' מול ' + (oppScore | 0).toLocaleString() + _pay,
+            _w ? 'success' : 'info');
+        }
+        return;
+      }
+    } catch (e) {}
     var won = myScore > oppScore;
     var tied = myScore === oppScore;
     var ov = document.createElement('div');
@@ -1986,6 +2062,31 @@
   // Poll a duel after we submitted but the opponent hasn't yet. Stops as soon
   // as the duel becomes 'settled' or 'tie', or after 5 minutes (whichever
   // comes first). Updates the in-flight result overlay in place.
+  // ── HL.2 — the duel settle poller is cancellable + surface-aware ────────
+  // It used to live entirely in a function-local `poller` handle with no
+  // liveness check, so NOTHING outside the closure could stop it. Dismissing
+  // the "ממתין ליריב" overlay (✕ / backdrop / ESC / "שחק שוב") or navigating
+  // home left it running for up to 5 minutes, and the moment the duel settled
+  // it mounted a position:fixed inset:0 z-9999 result overlay on top of
+  // whatever the player had moved on to — home, a fresh game, a contest.
+  var _duelSettlePoller = null;
+
+  function stopDuelSettlePoll() {
+    if (_duelSettlePoller) { clearInterval(_duelSettlePoller); _duelSettlePoller = null; }
+  }
+
+  // True once the player is no longer looking at the duel waiting overlay:
+  // either they dismissed it, or they navigated home (which mounts
+  // #home-screen — both home variants use that id, and hideHome/hideHomeV2
+  // REMOVE it, so it is reliably absent for the whole duel game including
+  // game-over). Same idiom HL.1 established elsewhere.
+  function duelResultSurfaceLost() {
+    try {
+      if (document.getElementById('home-screen')) return true;
+      return !document.querySelector('[data-duel-result-overlay]');
+    } catch (e) { return false; }
+  }
+
   function pollDuelUntilSettled(duelId, myScore, oppName) {
     var attempts = 0;
     var maxAttempts = 150; // live race: 150 × 2s = 5 minutes of active polling
@@ -2010,7 +2111,19 @@
     var botMax = Math.max(asyncMax, Math.ceil((botSettleMax + 15) / 2));
     var isLive = null; // resolved from the duel row on the first successful poll
     var isBot = false;
-    var poller = setInterval(function() {
+    stopDuelSettlePoll();   // never leave two settle polls running at once
+    _duelSettlePoller = setInterval(function() {
+      // HL.2 liveness gate. STOP the timer — don't merely skip the tick. A
+      // guard that only returned would leave a zombie poll running forever
+      // with no way to ever act (the same shape as the fitGrid retry bug).
+      // Nothing is lost: checkIncomingDuels polls every 60s from home and
+      // surfaces the eventual settle/decline/expire via the non-blocking
+      // duel banner, which is the right surface for someone who moved on.
+      if (duelResultSurfaceLost()) {
+        stopDuelSettlePoll();
+        stopDuelLiveSpectator();
+        return;
+      }
       attempts++;
       var cap = (isLive === false) ? (isBot ? botMax : asyncMax) : maxAttempts;
       if (attempts > cap) {
@@ -2020,7 +2133,7 @@
         // background spectator. The home-side checkIncomingDuels poll
         // (every 60s) will pick up the eventual settle/decline/expire
         // and surface it via the banner.
-        clearInterval(poller);
+        stopDuelSettlePoll();
         stopDuelLiveSpectator();
         replaceDuelResultOverlay({
           result: 'unresolved',
@@ -2058,7 +2171,7 @@
           var isChallenger = u.challenger_device === deviceId;
           // Settled / tie — the normal happy path.
           if (u.status === 'settled' || u.status === 'tie') {
-            clearInterval(poller);
+            stopDuelSettlePoll();
             stopDuelLiveSpectator();
             var oppScore = isChallenger ? u.opponent_score : u.challenger_score;
             var winner = null;
@@ -2113,7 +2226,7 @@
           // Surface a clear "you got your gems back, no win/loss" overlay
           // so the challenger isn't stuck on "ממתין ליריב..." forever.
           if (u.status === 'declined' || u.status === 'expired') {
-            clearInterval(poller);
+            stopDuelSettlePoll();
             stopDuelLiveSpectator();
             replaceDuelResultOverlay({
               result: u.status,            // 'declined' or 'expired'
@@ -2348,11 +2461,49 @@
   // Swap the existing "waiting" overlay for a fresh result overlay. Called
   // by the poller above when the opponent's score lands.
   function replaceDuelResultOverlay(d, myScore, oppName) {
+    // HL.2 — sample the surface state BEFORE the removal loop below.
+    // This ordering is load-bearing: `duelResultSurfaceLost()` asks "is the
+    // waiting overlay gone?", so calling it AFTER the removal would make it
+    // return true on every single call and the duel result would never render
+    // for anyone. (Two independent reviewers caught exactly that mistake in
+    // the first draft of this patch — the comment there had the reasoning
+    // backwards.) All three callers are the poller's terminal branches, which
+    // only ever REPLACE an existing waiting overlay, so "no overlay present"
+    // reliably means the player dismissed it and moved on.
+    var hadOverlay = !!document.querySelector('[data-duel-result-overlay]');
+    var surfaceLost = false;
+    try { surfaceLost = !hadOverlay || !!document.getElementById('home-screen'); } catch (e) {}
     // Remove any open duel-result overlay (created by showDuelResultOverlay
     // — identified by the dark backdrop with the inline border style).
     document.querySelectorAll('[data-duel-result-overlay]').forEach(function(el) {
       el.remove();
     });
+    // Delivery-time gate. The tick's liveness check can pass and then its fetch
+    // resolves ~2s later, by which point the player may have tapped "שחק שוב"
+    // into a fresh game or gone home; mounting a full-screen result then
+    // hijacks the screen. Every side effect in the caller's terminal branches
+    // (balance credit, fetchPlayerCode, updateBalanceDisplay) has ALREADY run
+    // by the time we get here, so nothing the player earned is lost — only the
+    // presentation changes.
+    if (surfaceLost) {
+      var _terminal = d && (d.result === 'settled' || d.result === 'tie');
+      if (_terminal) {
+        // Real outcome → deliver it through the non-blocking banner instead.
+        try {
+          showDuelNotificationBanner({
+            id: 'settle-' + ((d && d.duelId) || oppName || 'x'),
+            kind: (d.result === 'tie') ? 'tie' : (d.winner === 'you' ? 'won' : 'lost'),
+            name: oppName,
+            myScore: (typeof myScore === 'number') ? myScore : undefined,
+            oppScore: (typeof d.opponentScore === 'number') ? d.opponentScore : undefined
+          });
+        } catch (e) {}
+      }
+      // 'waiting' / 'unresolved' are deliberately dropped: a spinner and a
+      // "we'll tell you later" note are meaningless to someone who already
+      // moved on, and the score is committed server-side either way.
+      return;
+    }
     showDuelResultOverlay(d, myScore, oppName);
   }
 
@@ -2901,7 +3052,12 @@
 
     var modal = document.createElement('div');
     modal.id = 'tile-shop-modal';
-    var html = '<button class="ts-close" id="ts-close-btn">✕</button>';
+    // HL.2 — data-close-modal + aria-label so the global ESC/back dismiss chain
+    // CLICKS this button (picking up whatever cleanup the handler grows later)
+    // instead of falling through to its raw remove() fallback. #tile-shop-modal
+    // is also now in the ESC allowlist — it had no ESC/back path at all before,
+    // because it is mounted with an id and no class.
+    var html = '<button class="ts-close" id="ts-close-btn" data-close-modal="1" aria-label="סגור">✕</button>';
     html += '<div class="ts-header"><span>🛒 חנות משחק</span><span style="color:#BA7517;font-weight:700">💎 ' + playerBalance + '</span></div>';
 
     // Section 1: Buy tiles
