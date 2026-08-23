@@ -730,6 +730,27 @@ export async function initDb() {
          INSERT INTO game_config (key, value) VALUES ('_mig_scorecard_restore_v1', '1') ON CONFLICT (key) DO NOTHING;
        END IF;
      END $$;`,
+    // BANK.1 (2026-08-24) — REOPEN the Gem Bank. Owner report: "I withdrew my
+    // balance and now I can't see the bank in the game at all, I want to deposit
+    // gems." That is the wind-down working as designed and colliding with a real
+    // player intent: the client hides the tile ENTIRELY once
+    // `windDown && deposited <= 0` (src/42-gem-bank.js), so emptying the account
+    // makes the whole feature vanish with no way back in from the UI.
+    // Flipping the flag restores deposits, the daily-interest cron and the
+    // withdrawal fee (bank_interest_pct_daily / bank_withdrawal_fee_pct resume
+    // their configured values). Verified before flipping: _runDailyBankInterest
+    // pays ONE day (deposited * pct/100) and stamps last_interest_date = today —
+    // it does NOT loop over missed days — so re-enabling causes NO retroactive
+    // catch-up payout for accounts that sat through the wind-down.
+    // Guarded one-time flip → fully REVERSIBLE: an admin who re-closes the bank
+    // via the config editor sticks, because this migration will not re-run.
+    `DO $$
+     BEGIN
+       IF NOT EXISTS (SELECT 1 FROM game_config WHERE key = '_mig_bank_reopen_v1') THEN
+         UPDATE game_config SET value = 'false' WHERE key = 'bank_wind_down';
+         INSERT INTO game_config (key, value) VALUES ('_mig_bank_reopen_v1', '1') ON CONFLICT (key) DO NOTHING;
+       END IF;
+     END $$;`,
     `INSERT INTO game_config (key, value) VALUES ('duel_wager_match_tolerance_pct', '0')      ON CONFLICT (key) DO NOTHING`,
     `INSERT INTO game_config (key, value) VALUES ('duel_wager_widen_after_polls',   '3')      ON CONFLICT (key) DO NOTHING`,
     `INSERT INTO game_config (key, value) VALUES ('duel_wager_widen_band',          '50')     ON CONFLICT (key) DO NOTHING`,
