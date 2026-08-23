@@ -74,7 +74,7 @@ function trackEvent(n,p){try{gtag('event',n,p||{});}catch(e){}}
 })();
 </script>
 
-<link rel="stylesheet" href="/styles.css?v=20260823c">
+<link rel="stylesheet" href="/styles.css?v=20260823d">
 </head>
 <body>
 
@@ -163,8 +163,13 @@ function trackEvent(n,p){try{gtag('event',n,p||{});}catch(e){}}
 <script>
 (function(){
   "use strict";
-  var CB = 'v=20260823c';
+  var CB = 'v=20260823d';
   var _booted = false;
+  // E1 — expose the build id to the app. _reportJsError (src/13-boot.js) stamps
+  // it into every reported JS error's context, so the admin 🚨 tab can tell a
+  // stack line from the LIVE build apart from one produced by an OLD cached
+  // build (the exact confusion that made AD.A1/IS.7 triage a stale line).
+  try { window.__bloomBuildId = CB.replace(/^v=/, ''); } catch (e) {}
   function loadScript(src){ return new Promise(function(res,rej){ var s=document.createElement('script'); s.src=src; s.onload=res; s.onerror=rej; document.body.appendChild(s); }); }
   function boot(variant){
     if(_booted) return; _booted = true;

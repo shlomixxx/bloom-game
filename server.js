@@ -11316,6 +11316,19 @@ app.get('/api/friends/requests', async (req, res) => {
   try {
     const deviceId = (req.query.deviceId || '').toString().slice(0, 64);
     if (!deviceId || deviceId.length < 8) return res.status(400).json({ error: 'bad_device' });
+    // B11 — the flag must actually disable the feature. Degrade QUIETLY:
+    // ok:false here makes the requests tab render '⚠️ שגיאת רשת' and leaves a
+    // stale unread badge (src/49-friend-search.js:119, :352). ok:true + empty
+    // lists renders the normal 'no requests yet' empty state and the 45s
+    // FN.1 poller simply finds nothing.
+    const cfgFr = await pool.query(
+      `SELECT key, value FROM game_config WHERE key IN ('friend_requests_enabled')`
+    );
+    const cfgFrMap = {};
+    cfgFr.rows.forEach(r => { cfgFrMap[r.key] = r.value; });
+    if (cfgFrMap.friend_requests_enabled === 'false') {
+      return res.json({ ok: true, incoming: [], outgoing: [], unreadIncoming: 0, disabled: true });
+    }
     const incoming = await pool.query(
       `SELECT fr.id, fr.from_device AS other_device, pp.display_name, pp.player_code, pp.country,
               pp.level, fr.message, fr.created_at, fr.status
@@ -11376,6 +11389,14 @@ app.post('/api/friends/request-respond', requireDeviceAuth, async (req, res) => 
     if (!checkRateLimit('fr_respond', deviceId, 60, 60 * 60 * 1000)) {
       return res.status(429).json({ error: 'rate_limited' });
     }
+    // B11 — mirror the gate on /api/users/search + /api/friends/request-send:
+    // without it, friend_requests_enabled=false still accepted requests.
+    const cfgFr = await pool.query(
+      `SELECT key, value FROM game_config WHERE key IN ('friend_requests_enabled')`
+    );
+    const cfgFrMap = {};
+    cfgFr.rows.forEach(r => { cfgFrMap[r.key] = r.value; });
+    if (cfgFrMap.friend_requests_enabled === 'false') return res.json({ ok: false, reason: 'disabled' });
     const row = await pool.query(
       `SELECT id, from_device, to_device, status FROM friend_requests WHERE id = $1`,
       [rid]
@@ -11419,6 +11440,14 @@ async function _friendRequestAccept(requestId, accepterDevice, senderDevice, res
   const cfgMap = {};
   cfg.rows.forEach(r => { cfgMap[r.key] = r.value; });
   const signupBonus = parseInt(cfgMap.friends_signup_bonus, 10) || 200;
+  // B11 — friends_enabled was FETCHED above but never read, so turning the
+  // friends system off still created the friendship and paid BOTH players the
+  // bonus. Bail before pool.connect(): nothing is consumed, the request row
+  // stays 'pending', and flipping the flag back resumes it untouched. Covers
+  // both call sites (request-respond accept + request-send reverse auto-accept).
+  if (cfgMap.friends_enabled === 'false') {
+    return res.json({ ok: false, reason: 'disabled' });
+  }
   const [a, b] = orderDevicePair(accepterDevice, senderDevice);
   const client = await pool.connect();
   try {
@@ -12784,6 +12813,15 @@ if (ADMIN_PATH && ADMIN_PASSWORD) {
       if (after && isIso(after))   { params.push(after);  where.push(`reported_at >= $${params.length}`); }
       if (before && isIso(before)) { params.push(before); where.push(`reported_at <= $${params.length}`); }
       const whereSql = where.length ? 'WHERE ' + where.join(' AND ') : '';
+      // B8 — the client is PAGED (limit/offset). Without a filtered total the
+      // admin cannot tell "50 rows" from "50 of 206", and the bulk bar reads as
+      // "resolve everything". NOTE the `stats` aggregate below is deliberately
+      // GLOBAL/unfiltered (it drives the 5 stat cards) so it cannot serve here.
+      // Counted BEFORE limit/offset are pushed; .slice() so the shared params
+      // array can never be mutated out from under pg.
+      const totalR = await pool.query(
+        `SELECT COUNT(*)::int AS n FROM player_issues ${whereSql}`, params.slice());
+      const total = (totalR.rows[0] && totalR.rows[0].n) || 0;
       params.push(limit, offset);
       const r = await pool.query(
         `SELECT id, device_id, player_code, display_name, kind, severity, title,
@@ -12793,7 +12831,17 @@ if (ADMIN_PATH && ADMIN_PASSWORD) {
            ${whereSql}
           ORDER BY
             CASE severity WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END,
-            reported_at DESC
+            reported_at DESC,
+            -- B8 — the client now pages with LIMIT/OFFSET. (severity, reported_at)
+            -- is NOT unique: reported_at defaults to NOW() (transaction time, so
+            -- a flood shares timestamps) and severity has only 4 buckets. Postgres
+            -- gives no stable order for ties across two separate LIMIT/OFFSET
+            -- executions, so without a TOTAL sort page 2 could repeat a row shown
+            -- on page 1 and omit one never shown — silently re-introducing exactly
+            -- the truncation B8 exists to fix. id is the PK, so this makes the
+            -- ordering deterministic. The leading columns are unchanged, so
+            -- idx_player_issues_status(status, reported_at DESC) still applies.
+            id DESC
           LIMIT $${params.length - 1} OFFSET $${params.length}`,
         params
       );
@@ -12806,7 +12854,7 @@ if (ADMIN_PATH && ADMIN_PASSWORD) {
           COALESCE(SUM(compensation_amount) FILTER (WHERE compensation_paid = TRUE), 0) AS total_compensated
         FROM player_issues
       `);
-      res.json({ ok: true, issues: r.rows, stats: stats.rows[0] });
+      res.json({ ok: true, issues: r.rows, stats: stats.rows[0], total, limit, offset });
     } catch (e) {
       console.error('admin GET /issues', e);
       res.status(500).json({ error: 'server' });
@@ -13876,6 +13924,10 @@ if (ADMIN_PATH && ADMIN_PASSWORD) {
     try {
       const id = parseInt(req.params.id, 10);
       const ok = await maybeFinalizeTournament(id);
+      // B9 — this is the most consequential admin action in the file: it
+      // CREDITS PRIZE GEMS to the top-N finishers. It wrote no audit row.
+      // `finalized` distinguishes a real payout from a no-op re-finalize.
+      await logAdminAction('tournament.finalize', 'tournament', String(id), { finalized: !!ok });
       res.json({ ok });
     } catch (e) {
       console.error('admin tournament finalize', e.message);
@@ -14258,6 +14310,9 @@ if (ADMIN_PATH && ADMIN_PASSWORD) {
         vals
       );
       if (!r.rows[0]) return res.status(404).json({ error: 'not_found' });
+      // B9 — log only the field NAMES, mirroring challenge.patch (server.js:12323),
+      // so the audit row stays small and carries no free-text payload.
+      await logAdminAction('calendar.patch', 'calendar_event', String(id), { fields: updates.slice(0, -1) });
       res.json({ ok: true, event: r.rows[0] });
     } catch (e) {
       console.error('PATCH admin/calendar/events/:id', e);
@@ -14270,6 +14325,8 @@ if (ADMIN_PATH && ADMIN_PASSWORD) {
       const id = parseInt(req.params.id, 10);
       const r = await pool.query(`DELETE FROM calendar_events WHERE id = $1 RETURNING title`, [id]);
       if (!r.rows[0]) return res.status(404).json({ error: 'not_found' });
+      // B9 — after the 404 guard so a no-op delete never fabricates an audit row.
+      await logAdminAction('calendar.delete', 'calendar_event', String(id), { title: r.rows[0].title });
       res.json({ ok: true });
     } catch (e) {
       console.error('DELETE admin/calendar/events/:id', e);
@@ -14378,6 +14435,8 @@ if (ADMIN_PATH && ADMIN_PASSWORD) {
       const id = parseInt(req.params.id, 10);
       const r = await pool.query(`DELETE FROM limited_bundles WHERE id = $1 RETURNING slug`, [id]);
       if (!r.rows[0]) return res.status(404).json({ error: 'not_found' });
+      // B9 — after the 404 guard so a no-op delete never fabricates an audit row.
+      await logAdminAction('bundle.delete', 'bundle', String(id), { slug: r.rows[0].slug });
       res.json({ ok: true });
     } catch (e) {
       console.error('DELETE admin/bundles/:id', e);
@@ -14701,7 +14760,13 @@ if (ADMIN_PATH && ADMIN_PASSWORD) {
       await logAdminAction('promo.create', 'promo', String(r.rows[0].id), { slug });
       res.json({ ok: true, promo: r.rows[0] });
     } catch (e) {
-      if (e && e.code === '23505') return res.status(409).json({ error: 'slug_taken' });
+      // B13 — 200 + {ok:false, reason} is this codebase's convention for an
+      // expected rejection (see the already_resolved path, server.js:12841).
+      // A 409 was short-circuited by the admin api() helper's `if (!res.ok)`
+      // (admin/index.html:2835), which returns null before parsing the body —
+      // so the slug_taken branch in the admin UI could never be reached.
+      // Paired with the r.reason switch in admin/index.html.
+      if (e && e.code === '23505') return res.json({ ok: false, reason: 'slug_taken' });
       console.error('admin POST /promos', e);
       res.status(500).json({ error: 'internal' });
     }

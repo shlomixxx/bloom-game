@@ -633,6 +633,25 @@ export async function initDb() {
     `INSERT INTO game_config (key, value) VALUES ('trophy_arena_6_at', '3000') ON CONFLICT (key) DO NOTHING`,
     `INSERT INTO game_config (key, value) VALUES ('trophy_arena_7_at', '6000') ON CONFLICT (key) DO NOTHING`,
     `INSERT INTO game_config (key, value) VALUES ('trophy_arena_8_at', '12000') ON CONFLICT (key) DO NOTHING`,
+    // E5 — the matching NAME/EMOJI overrides _trophyArenas() already reads. Seeded
+    // with the CURRENT hardcoded values so behaviour is byte-identical; seeding is
+    // what makes them appear (and be editable) in the admin config table.
+    `INSERT INTO game_config (key, value) VALUES ('trophy_arena_1_name', 'נבט') ON CONFLICT (key) DO NOTHING`,
+    `INSERT INTO game_config (key, value) VALUES ('trophy_arena_1_emoji', '🌱') ON CONFLICT (key) DO NOTHING`,
+    `INSERT INTO game_config (key, value) VALUES ('trophy_arena_2_name', 'יער הקסם') ON CONFLICT (key) DO NOTHING`,
+    `INSERT INTO game_config (key, value) VALUES ('trophy_arena_2_emoji', '🌳') ON CONFLICT (key) DO NOTHING`,
+    `INSERT INTO game_config (key, value) VALUES ('trophy_arena_3_name', 'הכפר') ON CONFLICT (key) DO NOTHING`,
+    `INSERT INTO game_config (key, value) VALUES ('trophy_arena_3_emoji', '🏘') ON CONFLICT (key) DO NOTHING`,
+    `INSERT INTO game_config (key, value) VALUES ('trophy_arena_4_name', 'הטירה') ON CONFLICT (key) DO NOTHING`,
+    `INSERT INTO game_config (key, value) VALUES ('trophy_arena_4_emoji', '🏰') ON CONFLICT (key) DO NOTHING`,
+    `INSERT INTO game_config (key, value) VALUES ('trophy_arena_5_name', 'הר הגעש') ON CONFLICT (key) DO NOTHING`,
+    `INSERT INTO game_config (key, value) VALUES ('trophy_arena_5_emoji', '🌋') ON CONFLICT (key) DO NOTHING`,
+    `INSERT INTO game_config (key, value) VALUES ('trophy_arena_6_name', 'היכל הקרח') ON CONFLICT (key) DO NOTHING`,
+    `INSERT INTO game_config (key, value) VALUES ('trophy_arena_6_emoji', '❄️') ON CONFLICT (key) DO NOTHING`,
+    `INSERT INTO game_config (key, value) VALUES ('trophy_arena_7_name', 'הגלקסיה') ON CONFLICT (key) DO NOTHING`,
+    `INSERT INTO game_config (key, value) VALUES ('trophy_arena_7_emoji', '🌌') ON CONFLICT (key) DO NOTHING`,
+    `INSERT INTO game_config (key, value) VALUES ('trophy_arena_8_name', 'היכל האגדה') ON CONFLICT (key) DO NOTHING`,
+    `INSERT INTO game_config (key, value) VALUES ('trophy_arena_8_emoji', '⚡') ON CONFLICT (key) DO NOTHING`,
     // Task #22 — global multiplier on the shared ui-* micro-interaction durations.
     `INSERT INTO game_config (key, value) VALUES ('animation_duration_multiplier', '1') ON CONFLICT (key) DO NOTHING`,
     // Task #23 — Mystery Chest at every game-over (not just dynamic). Default on.

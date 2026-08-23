@@ -736,7 +736,15 @@
         title: String(msg || 'JS error').slice(0, 200),
         detail: 'src=' + (source || '?') + ':' + (line || 0) + ':' + (col || 0) +
                 (stack ? '\n' + String(stack).slice(0, 600) : ''),
-        context: { url: location.href, ua: (navigator.userAgent || '').slice(0, 200) }
+        context: {
+          // E1 — WHICH BUILD produced this stack. Without it an old cached
+          // index.html/app.js reports line numbers that no longer exist at
+          // HEAD, and triage "fixes" a bug that was already fixed.
+          // 'unknown' = served by an index.html older than this change.
+          build: (window.__bloomBuildId || 'unknown'),
+          url: location.href,
+          ua: (navigator.userAgent || '').slice(0, 200)
+        }
       });
     } catch (e) {}
   }

@@ -5340,11 +5340,25 @@
     // the home guard at the top of showLiveRaceResult: the 2200/2500ms present()
     // timers are closure-local and cannot be cancelled from here, so purging
     // alone would just let them re-mount over home a moment later.
+    // E3 — leak DETECTOR. A node still standing here is PROOF a teardown was
+    // missed, but ONLY for the ids whose real teardown ran a few lines above
+    // (contest / duel / ghost — each of those fns unconditionally removes its
+    // own node) or that endLiveRace() removes synchronously (live-race-hud,
+    // and body.live-race-active hides every route home during a race). The
+    // REST of this list is NORMAL on a mid-game "חזרה לבית": #danger-meter is
+    // only cleared by init()/game-over, and #live-race-settling exists exactly
+    // to cover a window in which HL.2 documents the home route as live. Those
+    // would be pure noise, so only the four below are watched.
+    var _leakedHuds = [];
+    var _HUD_LEAK_WATCH = { 'ghost-hud': 1, 'contest-hud': 1, 'duel-hud': 1, 'live-race-hud': 1 };
     ['ghost-hud', 'contest-hud', 'duel-hud', 'live-race-hud', 'live-race-spectate',
      'live-race-settling', 'live-race-result', 'danger-meter']
       .forEach(function(id) {
         var el = document.getElementById(id);
-        if (el) { try { el.remove(); } catch (e) {} }
+        if (el) {
+          if (_HUD_LEAK_WATCH[id]) _leakedHuds.push(id);
+          try { el.remove(); } catch (e) {}
+        }
       });
     // HL.1 — the in-game ⋯ menu popover (src/13-boot.js buildTopMenu) is
     // position:fixed z-9500 on <body>, so it outranks the home overlay (250).
@@ -5423,6 +5437,35 @@
     // hand-off path, diverting an ordinary practice game-over into a race
     // that no longer exists.
     try { window._liveRaceMode = false; } catch (e) {}
+
+    // ── E3 — report the leak, LAST and non-fatally ────────────────────────
+    // Deliberately the FINAL statement of purgeGameHuds: everything above is
+    // load-bearing teardown and this is pure telemetry, so a throw here can
+    // only cost the report, never the purge. (That inversion — a "fix" placed
+    // before the thing it depends on — is the HL.1/HL.2 shape.)
+    // Spam control: __bloomReportIssue already dedups per session on
+    // kind + context.id, and context.id IS the sorted id-set — so the same
+    // leak on every later home entry is dropped client-side while a genuinely
+    // different combination still gets through. The server's per-device hourly
+    // cap on /api/issues/report is the backstop.
+    try {
+      if (_leakedHuds.length && typeof window.__bloomReportIssue === 'function') {
+        var _hudSig = _leakedHuds.slice().sort().join('+');
+        window.__bloomReportIssue({
+          kind: 'hud_leak',
+          severity: 'medium',
+          title: 'HUD נתקע על מסך הבית: ' + _hudSig,
+          detail: 'purgeGameHuds removed ' + _hudSig + ' AFTER that HUD\'s own ' +
+                  'teardown fn already ran — the upstream teardown was missed.',
+          context: {
+            id: _hudSig,
+            huds: _leakedHuds,
+            build: (window.__bloomBuildId || 'unknown'),
+            url: location.href
+          }
+        });
+      }
+    } catch (e) {}
   }
 
   // HL.2 — "would this celebration land on top of a game the player is
@@ -13348,7 +13391,49 @@
       // to 0 height → an invisible board, and nothing ever re-fit it. Now we
       // retry on the next frame (capped) until the layout settles.
       window.__fitGridRetries = (window.__fitGridRetries || 0) + 1;
-      if (window.__fitGridRetries <= 30) requestAnimationFrame(fitGrid);
+      if (window.__fitGridRetries <= 30) { requestAnimationFrame(fitGrid); return; }
+      // E2 TELEMETRY (2026-08-23) — the 30-frame budget is spent and the wrap
+      // STILL measures 0x0, so we give up with the grid UNSIZED: its 1fr cells
+      // CSS-collapse to 0 height and the player stares at an invisible board.
+      // Nothing throws, so this never reached the admin's tab before.
+      // Report ONCE, at the exact frame the budget runs out (===31); later
+      // failing calls push the counter past 31 and stay silent, and
+      // __bloomReportIssue dedups per session on top of that.
+      // Benign cases deliberately NOT reported: a mounted #home-screen returns
+      // at the top of this function (and resets the counter), but the no-`:has`
+      // fallback hides #grid-wrap via .app[data-home="active"], a backgrounded
+      // tab can legitimately measure 0, and anything display:none'd has
+      // offsetParent === null (grid-wrap is position:relative, never fixed, so
+      // that test is meaningful here) — those are "hidden on purpose", not
+      // "collapsed". This is TELEMETRY, not a fix: ensureGridResizeObserver()
+      // may still self-heal the board a moment later.
+      if (window.__fitGridRetries === 31) {
+        var _fgMode = null; try { _fgMode = mode; } catch (e) {}
+        try {
+          if (typeof window.__bloomReportIssue === 'function' &&
+              !document.hidden &&
+              !document.querySelector('.app[data-home="active"]') &&
+              wrap.offsetParent !== null) {
+            window.__bloomReportIssue({
+              kind: 'fitgrid_collapsed',
+              severity: 'high',
+              title: 'הלוח לא נמדד — התאים קרסו לגובה 0',
+              detail: 'fitGrid ויתר אחרי 30 פריימים. grid-wrap=' +
+                      wrap.clientWidth + 'x' + wrap.clientHeight +
+                      ', W=' + W + ', H=' + H +
+                      ', viewport=' + window.innerWidth + 'x' + window.innerHeight +
+                      ', mode=' + _fgMode,
+              context: {
+                wrapW: wrap.clientWidth, wrapH: wrap.clientHeight,
+                W: W, H: H,
+                vw: window.innerWidth, vh: window.innerHeight,
+                v2: document.body.classList.contains('bloom-v2'),
+                mode: _fgMode
+              }
+            });
+          }
+        } catch (e) {}
+      }
       return;
     }
     window.__fitGridRetries = 0;
@@ -23296,7 +23381,15 @@
         title: String(msg || 'JS error').slice(0, 200),
         detail: 'src=' + (source || '?') + ':' + (line || 0) + ':' + (col || 0) +
                 (stack ? '\n' + String(stack).slice(0, 600) : ''),
-        context: { url: location.href, ua: (navigator.userAgent || '').slice(0, 200) }
+        context: {
+          // E1 — WHICH BUILD produced this stack. Without it an old cached
+          // index.html/app.js reports line numbers that no longer exist at
+          // HEAD, and triage "fixes" a bug that was already fixed.
+          // 'unknown' = served by an index.html older than this change.
+          build: (window.__bloomBuildId || 'unknown'),
+          url: location.href,
+          ua: (navigator.userAgent || '').slice(0, 200)
+        }
       });
     } catch (e) {}
   }

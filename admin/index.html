@@ -2676,16 +2676,24 @@
           <button class="btn sm" id="issues-clear-old" title="מסמן כבוטלו את כל התקלות האוטומטיות (api_*) הישנות מ-24 שעות. מנקה הצפות משרת שבור — לא נוגע בתקלות שדווחו או שפוצו." style="background:#FEF3C7;border-color:#F59E0B">🧹 נקה הצפות ישנות</button>
         </span>
       </h2>
-      <!-- Bulk-action bar: act on ALL currently-shown OPEN issues at once
-           (the status/severity/kind/date filters above ARE the selection). -->
+      <!-- Bulk-action bar: acts ONLY on the OPEN issues currently LOADED into
+           the list (the filters above + how many pages you pulled ARE the
+           selection). B8 — the label is painted from JS with the exact count it
+           will act on and the exact number of matching rows that were NOT
+           loaded, so it can never be read as "resolve every issue in the DB". -->
       <div id="issues-bulk-bar" style="display:none;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 10px;margin-bottom:10px;background:#F0F9FF;border:1px solid #7DD3FC;border-radius:8px;font-size:12px">
-        <span>פעולה על <b id="issues-bulk-count">0</b> התקלות הפתוחות המוצגות:</span>
+        <span id="issues-bulk-label" style="font-weight:600">—</span>
         <input type="number" id="issues-bulk-comp" value="0" min="0" max="100000" title="פיצוי 💎 לכל אחת (0 = ללא)" style="width:70px;padding:4px 6px;border:1px solid var(--border);border-radius:6px;font-size:11px;text-align:center"/>
-        <button class="btn sm" id="issues-bulk-resolve" style="background:#9FE1CB;color:#04342C;font-weight:700">✓ פתור הכל המוצג</button>
-        <button class="btn sm" id="issues-bulk-dismiss" style="background:rgba(0,0,0,0.08)">⊘ בטל הכל המוצג</button>
+        <button class="btn sm" id="issues-bulk-resolve" style="background:#9FE1CB;color:#04342C;font-weight:700">✓ פתור את הטעונות</button>
+        <button class="btn sm" id="issues-bulk-dismiss" style="background:rgba(0,0,0,0.08)">⊘ בטל את הטעונות</button>
       </div>
       <div id="issues-list" style="display:flex;flex-direction:column;gap:8px;min-height:80px">
         <div style="color:var(--muted);text-align:center;padding:14px">⏳ טוען...</div>
+      </div>
+      <!-- B8 — paging affordance. Hidden until the server reports more rows
+           matching the current filter than are currently loaded. -->
+      <div id="issues-more-host" style="display:none;text-align:center;margin-top:10px">
+        <button class="btn sm" id="issues-load-more" style="background:#F0F9FF;border-color:#7DD3FC;font-weight:700">טען עוד</button>
       </div>
     </section>
 
@@ -3467,6 +3475,22 @@
     trophy_arena_6_at: 'סף הגביעים לארנה 6 (❄️ היכל הקרח). ברירת מחדל <code>3000</code>.',
     trophy_arena_7_at: 'סף הגביעים לארנה 7 (🌌 הגלקסיה). ברירת מחדל <code>6000</code>.',
     trophy_arena_8_at: 'סף הגביעים לארנה 8 (⚡ היכל האגדה — הגבוהה ביותר). ברירת מחדל <code>12000</code>.<div class="tip-example">💡 זו הפסגה — שחקני-על מתגאים בה. גבוה מדי = לעולם לא מושגת; נמוך = מאבדת יוקרה.</div>',
+    trophy_arena_1_name: 'שם ארנה 1 (ברירת מחדל <code>נבט</code>). ריק = חוזר לשם המובנה בקוד.<div class="tip-example">🎨 השם + האמוג׳י מוצגים באריח הבית, בסולם הארנות ובחגיגת הקידום. שינוי כאן = ריתמוט של כל הסולם ל־עונה/אירוע בלי deploy.<br>⚠️ ה-<code>id</code> הפנימי לא משתנה — היסטוריית שחקנים לא נשברת.</div>',
+    trophy_arena_1_emoji: 'אמוג׳י ארנה 1 (ברירת מחדל <code>🌱</code>). ריק = חוזר לאמוג׳י המובנה.<div class="tip-example">💡 אמוג׳י בודד עובד הכי טוב — הוא מוצג בגודל גדול בכותרת הארנה ובקטן בסולם.</div>',
+    trophy_arena_2_name: 'שם ארנה 2 (ברירת מחדל <code>יער הקסם</code>). ריק = ברירת המחדל.',
+    trophy_arena_2_emoji: 'אמוג׳י ארנה 2 (ברירת מחדל <code>🌳</code>). ריק = ברירת המחדל.',
+    trophy_arena_3_name: 'שם ארנה 3 (ברירת מחדל <code>הכפר</code>). ריק = ברירת המחדל.',
+    trophy_arena_3_emoji: 'אמוג׳י ארנה 3 (ברירת מחדל <code>🏘</code>). ריק = ברירת המחדל.',
+    trophy_arena_4_name: 'שם ארנה 4 (ברירת מחדל <code>הטירה</code>). ריק = ברירת המחדל.',
+    trophy_arena_4_emoji: 'אמוג׳י ארנה 4 (ברירת מחדל <code>🏰</code>). ריק = ברירת המחדל.',
+    trophy_arena_5_name: 'שם ארנה 5 (ברירת מחדל <code>הר הגעש</code>). ריק = ברירת המחדל.',
+    trophy_arena_5_emoji: 'אמוג׳י ארנה 5 (ברירת מחדל <code>🌋</code>). ריק = ברירת המחדל.',
+    trophy_arena_6_name: 'שם ארנה 6 (ברירת מחדל <code>היכל הקרח</code>). ריק = ברירת המחדל.',
+    trophy_arena_6_emoji: 'אמוג׳י ארנה 6 (ברירת מחדל <code>❄️</code>). ריק = ברירת המחדל.',
+    trophy_arena_7_name: 'שם ארנה 7 (ברירת מחדל <code>הגלקסיה</code>). ריק = ברירת המחדל.',
+    trophy_arena_7_emoji: 'אמוג׳י ארנה 7 (ברירת מחדל <code>🌌</code>). ריק = ברירת המחדל.',
+    trophy_arena_8_name: 'שם ארנה 8 — הפסגה (ברירת מחדל <code>היכל האגדה</code>). ריק = ברירת המחדל.<div class="tip-example">👑 זו הארנה שמופיעה בצילומי מסך של שחקני-על — שם קליט כאן שווה שיתופים.</div>',
+    trophy_arena_8_emoji: 'אמוג׳י ארנה 8 (ברירת מחדל <code>⚡</code>). ריק = ברירת המחדל.',
     animation_duration_multiplier: 'מכפיל-מהירות גלובלי לאנימציות ה-micro-interaction המשותפות (ui-pop-in/out/bounce/glow/slide). 1 = רגיל, פחות = מהיר יותר, יותר = איטי/דרמטי.<div class="tip-example">💡 0.75 = ממשק "זריז"; 1.25 = "יוקרתי/דרמטי". מכבד prefers-reduced-motion (OS). טווח 0.5-1.5.</div>',
     chest_all_modes_enabled: 'תיבת-מסתורין (Skinner-box) בכל סוף-משחק — לא רק בלוחות דינמיים אלא גם daily/practice/contest. מכבד את ה-master toggle <code>dyn_chest_enabled</code>; ה-pity floor + cap-יומי (<code>dyn_chest_daily_cap</code>) עדיין נאכפים בשרת.<div class="tip-example">💡 פרס-הפתעה בכל game-over = ליבת ההתמכרות. ⚠️ מגדיל את ה-faucet (עד ה-cap) — עקוב בדשבורד "ברז מול בור". כבה אם הכלכלה מתנפחת.</div>',
     bot_traj_percentile_variance: '"אישיות" לבוטים בדו-קרב — שונות-לכל-קרב באיזה משחק-בוט אמיתי נבחר מהבנק. גבוה = יותר דרמה (הפסדים צמודים + ניצחונות-comeback מאוחרים), 0 = תמיד אותו אחוזון (חלק). **עדיין משחק-בוט אמיתי עם ניקוד אמיתי — בלי זיוף.**<div class="tip-example">💡 DEFAULT OFF (0). הפעל <code>0.10-0.20</code> לדרמה עדינה. דטרמיניסטי לכל duel id (הניקוד יציב, ה-monotonicity נשמרת). 0.30+ = הבוט לפעמים חזק מאוד/חלש מאוד.</div>',
@@ -3884,12 +3908,14 @@
     friend_challenge_win_reward: 'תגמול בשני הצדדים כשהחבר עובר את האתגר.<div class="tip-example">💎 <code>50</code> (ברירת מחדל)=מאוזן. שני הצדדים מקבלים — גם מי שאתגר וגם מי שעבר. מעודד spam ידידותי של אתגרים.</div>',
     // ─── A10 Gem Bank ───
     bank_enabled: 'מתג לבנק יהלומים (behavioral-economics retention).<div class="tip-example">✅ שחקן מפקיד 💎 → מקבל ריבית 1%/יום compound. משיכה עולה 5%.<br>💡 loss-aversion stickiness — שחקן עם 💎 בבנק יחזור יותר.</div>',
+    bank_wind_down: 'סגירה מבוקרת של הבנק: עוצר הפקדות חדשות + את קרון הריבית, אבל <strong>המשיכה נשארת פתוחה וללא עמלה</strong> כדי שלא ייתקעו 💎 מופקדים.<div class="tip-example">✅ <code>true</code> (המצב בפרודקשן כרגע, הוגדר פעם אחת ע״י מיגרציית <code>_mig_scorecard_winddown_v1</code>): הפקדה מחזירה <code>disabled</code>, ריבית יומית לא נצברת, עמלת משיכה נכפית ל-0, ואריח הבנק בבית מוסתר לגמרי למי שיתרת הבנק שלו 0 — למי שנשארו 💎 מוצג מסך משיכה בלבד.<br>🔄 <code>false</code> = פתיחה מחדש מלאה (<code>bank_interest_pct_daily</code> ו-<code>bank_withdrawal_fee_pct</code> חוזרים לפעול). המיגרציה לא תרוץ שוב, אז השינוי נשאר.<br>⚠️ זה <strong>לא</strong> <code>bank_enabled</code> — כיבוי מלא היה נועל בפנים את היהלומים שכבר הופקדו.</div>',
     bank_interest_pct_daily: 'אחוז ריבית יומי (compound). <strong>אחוז, לא שבר</strong> (1 = 1%/יום).<div class="tip-example">📊 <code>1</code> (ברירת מחדל)=1,000💎→1,348💎 ב-30 ימים, <code>0.5</code>=שמרני, <code>2-3</code>=נדיב.<br>⚠️ ריבית >5%/יום יוצרת inflation לא מאוזנת.</div>',
     bank_max_balance: 'מקסימום בנק לאדם (cap על whales).<div class="tip-example">💎 <code>100000</code> (ברירת מחדל)=מספיק לכמעט כולם, <code>1000000</code>=ללא תקרה.<br>⚠️ ללא cap whales יצברו אסטרונומיים — מערער את ה-economy.</div>',
     bank_min_deposit: 'מינימום הפקדה לכל פעולה.<div class="tip-example">📊 <code>100</code> (ברירת מחדל)=נמוך, <code>1000</code>=ריצופי-מצב הופך פחות שכיח.</div>',
     bank_withdrawal_fee_pct: 'אחוז משיכה — מנכים מהסכום בעת המשיכה.<div class="tip-example">📊 <code>5</code> (ברירת מחדל)=מתון, <code>0</code>=ללא קנס, <code>15</code>=מגביל מאוד.<br>💡 הקנס יוצר את loss-aversion — שחקן מהסס לפני משיכה.</div>',
     // ─── A8 Squad Tournaments ───
     squad_tournament_enabled: 'מתג ל-Squad Tournaments (4-guild bracket שבועי).<div class="tip-example">✅ matchmaker רץ יום ראשון 06:00 IL ומזווג 4 קלאנים. דורש Stage 27 Guilds פעיל.<br>💡 שונה מ-Guild Wars (1v1) — bracket יוצר יותר drama.</div>',
+    squad_tournament_wind_down: 'סגירה מבוקרת של Squad Tournaments: לא נוצרים <strong>בראקטים חדשים</strong>, אבל בראקט שכבר רץ ממשיך עד הסוף והפרסים נשארים ניתנים לאיסוף.<div class="tip-example">✅ <code>true</code> (המצב בפרודקשן כרגע, הוגדר פעם אחת ע״י מיגרציית <code>_mig_scorecard_winddown_v1</code>): ה-matchmaker של יום ראשון 06:00 IL מדלג ולא מזווג 4 קלאנים. השלבים (חצי גמר רביעי 20:00, גמר שבת 20:00) ואיסוף הפרס נשארים פעילים בכוונה — אחרת קלאן שכבר באמצע טורניר היה מאבד את התגמול.<br>🔄 <code>false</code> = ה-matchmaker חוזר ביום ראשון הקרוב (דורש גם <code>squad_tournament_enabled</code> פעיל).<br>💡 האריח בבית נעלם מעצמו אחרי שהבראקט האחרון מסתיים — אין צורך בכיבוי נוסף.</div>',
     squad_tournament_min_members: 'מינימום חברים פעילים בקלאן כדי להיכלל ב-matchmaker.<div class="tip-example">📊 <code>3</code> (ברירת מחדל)=מינימום הוגן, <code>5+</code>=רק קלאנים גדולים.<br>⚠️ ערך גבוה מדי = אין מספיק קלאנים → matchmaker לא נטען.</div>',
     squad_tournament_winner_reward: 'תגמול לכל חבר בקלאן מנצח.<div class="tip-example">💎 <code>1000</code> (ברירת מחדל)=ראוי לשבוע של מאמץ, <code>500</code>=מתון, <code>5000+</code>=פרס יוקרתי.</div>',
     squad_tournament_finalist_reward: 'תגמול לכל חבר בקלאן שהגיע לגמר (לא ניצח).<div class="tip-example">💎 <code>300</code> (ברירת מחדל)=נחמה משמעותית, <code>100</code>=סמלי.</div>',
@@ -4380,7 +4406,36 @@
       return 'לפני ' + d + ' י׳';
     } catch (e) { return ''; }
   }
-  async function loadIssues() {
+  // B8 — the list is PAGED. Before this the client sent no limit, so the server
+  // default of 50 silently truncated it while the (global, unfiltered) stat card
+  // above showed the true total — during the IS.1 flood that read "206" next to
+  // 50 rows with no paging affordance at all.
+  var ISSUES_PAGE_SIZE = 200;   // server hard-caps limit at 200
+  var _issuesOffset = 0;        // rows already rendered for the CURRENT filter
+  var _issuesTotal = 0;         // server COUNT for the CURRENT filter
+  // B8 — ids already rendered for the CURRENT filter. A total sort (added on the
+  // server) fixes tie instability, but NOT the other cause of duplicates: OFFSET
+  // paging shifts whenever a row is INSERTed above the window, and _reportIssue
+  // fires one INSERT per HTTP 500 — precisely during the flood that makes an
+  // admin page 200+ rows in the first place. One insert between page 1 and page 2
+  // re-serves the row that was at index 199. Deduping by id neutralises BOTH
+  // causes, and keeps the bulk bar's promised count honest (a duplicated id would
+  // inflate _issuesShownOpenIds and make it over-promise against the server, which
+  // dedups with `id = ANY($1) AND status='open'`).
+  var _issuesSeenIds = Object.create(null);
+  // `opts` is an options OBJECT, deliberately NOT a boolean: several call sites
+  // assign this function straight to onchange/onclick, so it can be invoked as
+  // loadIssues(Event). Only an explicit { append: true } continues a page — an
+  // Event has no `.append`, so every handler falls through to a fresh, offset-0
+  // load. That property-absence is what makes the filter reset structural.
+  async function loadIssues(opts) {
+    var append = !!(opts && opts.append === true);
+    if (!append) { _issuesOffset = 0; _issuesTotal = 0; _issuesSeenIds = Object.create(null); }
+    // B8 — a filter change while an append is in flight would otherwise resolve
+    // LATER and append page 2 of the OLD filter underneath page 1 of the NEW one,
+    // leaving the bulk bar acting on rows that don't match what's on screen.
+    // Stamp a token and drop any response whose token is stale.
+    var _myToken = (window.__issuesToken = (window.__issuesToken || 0) + 1);
     var statusF = $('issues-filter-status') ? $('issues-filter-status').value : 'open';
     var sevF = $('issues-filter-severity') ? $('issues-filter-severity').value : '';
     var kindF = $('issues-filter-kind') ? $('issues-filter-kind').value.trim() : '';
@@ -4392,10 +4447,27 @@
     if (kindF) qs.push('kind=' + encodeURIComponent(kindF));
     if (afterF) qs.push('reported_after=' + encodeURIComponent(afterF));
     if (beforeF) qs.push('reported_before=' + encodeURIComponent(beforeF));
+    qs.push('limit=' + ISSUES_PAGE_SIZE);
+    qs.push('offset=' + _issuesOffset);
+    var moreHost = $('issues-more-host');
+    var moreBtn = $('issues-load-more');
+    if (moreBtn) { moreBtn.disabled = true; moreBtn.textContent = '⏳ טוען…'; }
     var d = await api('/issues' + (qs.length ? '?' + qs.join('&') : ''));
+    // B8 — a newer load (a filter change, or the tab reload) started while this
+    // request was in flight: drop this response entirely rather than rendering a
+    // page that belongs to a filter the admin has already moved off.
+    if (_myToken !== window.__issuesToken) return;
+    if (moreBtn) moreBtn.disabled = false;
     var listEl = $('issues-list');
     if (!d || !d.ok) {
+      // On an APPEND failure keep the rows already on screen — wiping them would
+      // lose the admin's place AND leave window._issuesShownOpenIds pointing at
+      // ids whose rows are no longer rendered.
+      if (append) { if (moreBtn) moreBtn.textContent = '↻ נסה שוב לטעון עוד'; return; }
       if (listEl) listEl.innerHTML = '<div style="color:var(--muted);text-align:center;padding:14px">שגיאת רשת</div>';
+      if (moreHost) moreHost.style.display = 'none';
+      var bbErr = $('issues-bulk-bar'); if (bbErr) bbErr.style.display = 'none';
+      window._issuesShownOpenIds = [];
       return;
     }
     // Stats card
@@ -4409,15 +4481,39 @@
     refreshIssuesBadge();
     // List
     if (!d.issues.length) {
+      // An APPEND that comes back empty means "no more pages" — never wipe the
+      // rows already rendered, just retire the affordance (also stops any chance
+      // of a load-more loop if the server ever reports a stale total).
+      if (append) {
+        _issuesTotal = _issuesOffset;
+        if (moreHost) moreHost.style.display = 'none';
+        return;
+      }
       listEl.innerHTML =
         '<div style="text-align:center;padding:30px;color:var(--muted);background:#F0FDF4;border-radius:10px">' +
           '<div style="font-size:42px;margin-bottom:8px">✅</div>' +
           '<div style="font-weight:800;font-size:14px;color:#166534">אין תקלות פתוחות</div>' +
           '<div style="font-size:11.5px;margin-top:4px">כל השחקנים שלך מקבלים את מה שהם זוכים בו</div>' +
         '</div>';
+      if (moreHost) moreHost.style.display = 'none';
+      // Pre-existing leak: this branch returned BEFORE the bulk-bar block, so
+      // resolving the last open issue left the bar visible with the previous
+      // page's count and ids that are all already resolved.
+      var bbEmpty = $('issues-bulk-bar'); if (bbEmpty) bbEmpty.style.display = 'none';
+      window._issuesShownOpenIds = [];
       return;
     }
-    listEl.innerHTML = d.issues.map(function(i) {
+    // B8 — drop ids already on screen before rendering. See the _issuesSeenIds
+    // comment above: OFFSET paging shifts under concurrent INSERTs, so a page can
+    // legitimately re-serve a row from the previous page. Filtering here (rather
+    // than trusting the offset) is what makes both the rendered list and the bulk
+    // bar's promised count truthful.
+    d.issues = d.issues.filter(function(i) {
+      if (_issuesSeenIds[i.id]) return false;
+      _issuesSeenIds[i.id] = 1;
+      return true;
+    });
+    var _rowsHtml = d.issues.map(function(i) {
       var sev = SEVERITY_META[i.severity] || SEVERITY_META.medium;
       var statusBadge = i.status === 'open'
         ? '<span style="padding:2px 8px;background:#DC2626;color:#FFF;border-radius:6px;font-size:10px;font-weight:700">⚠️ פתוחה</span>'
@@ -4456,6 +4552,18 @@
         actions +
       '</div>';
     }).join('');
+    if (append) listEl.insertAdjacentHTML('beforeend', _rowsHtml);
+    else listEl.innerHTML = _rowsHtml;
+    _issuesOffset += d.issues.length;
+    _issuesTotal = (typeof d.total === 'number') ? d.total : _issuesOffset;
+    // "טען עוד" — shown only while the server says the filter matches more rows
+    // than we have rendered. If an older server omits `total` we fall back to
+    // _issuesOffset, which hides the button rather than offering a dead page.
+    if (moreHost && moreBtn) {
+      var remaining = Math.max(0, _issuesTotal - _issuesOffset);
+      moreHost.style.display = remaining > 0 ? '' : 'none';
+      moreBtn.textContent = 'טען עוד (נותרו ' + remaining.toLocaleString() + ')';
+    }
     // Wire action buttons.
     listEl.querySelectorAll('[data-issue-comp]').forEach(function(b) {
       b.onclick = function() {
@@ -4486,26 +4594,54 @@
         resolveIssue(id, 0, '', true);
       };
     });
-    // Bulk bar — the status/kind/date filters above ARE the selection. Collect
-    // the currently-shown OPEN issue ids; show the bar when 2+ are visible.
-    window._issuesShownOpenIds = (d.issues || []).filter(function(i) { return i.status === 'open'; }).map(function(i) { return i.id; });
+    // Bulk bar — acts on the OPEN issues LOADED so far (filters + pages pulled).
+    // B8: with paging this MUST accumulate across appended pages, otherwise the
+    // bar would show 150 rows on screen but send only the last page's ids —
+    // exactly the silent truncation this whole change exists to remove.
+    var _pageOpenIds = (d.issues || []).filter(function(i) { return i.status === 'open'; }).map(function(i) { return i.id; });
+    window._issuesShownOpenIds = append
+      ? (window._issuesShownOpenIds || []).concat(_pageOpenIds)
+      : _pageOpenIds;
     var bulkBar = $('issues-bulk-bar');
     if (bulkBar) {
       var nOpen = window._issuesShownOpenIds.length;
+      var nHidden = Math.max(0, (_issuesTotal | 0) - (_issuesOffset | 0));
       bulkBar.style.display = nOpen > 1 ? 'flex' : 'none';
-      var bcEl = $('issues-bulk-count'); if (bcEl) bcEl.textContent = nOpen;
+      var lblEl = $('issues-bulk-label');
+      if (lblEl) {
+        lblEl.textContent = nHidden > 0
+          ? 'פעולה על ' + nOpen + ' תקלות פתוחות שנטענו — עוד ' + nHidden.toLocaleString() +
+            ' תואמות את הסינון, לא נטענו, ולא ייגעו:'
+          : 'פעולה על כל ' + nOpen + ' התקלות הפתוחות שתואמות את הסינון:';
+      }
+      var brEl = $('issues-bulk-resolve'); if (brEl) brEl.textContent = '✓ פתור את ' + nOpen;
+      var bdEl = $('issues-bulk-dismiss'); if (bdEl) bdEl.textContent = '⊘ בטל את ' + nOpen;
     }
   }
   async function bulkResolveShown(dismiss) {
     var ids = window._issuesShownOpenIds || [];
-    if (!ids.length) { toast('אין תקלות פתוחות מוצגות'); return; }
+    if (!ids.length) { toast('אין תקלות פתוחות טעונות'); return; }
     var compEl = $('issues-bulk-comp');
     var comp = (!dismiss && compEl) ? (parseInt(compEl.value, 10) || 0) : 0;
     var verb = dismiss ? 'לבטל' : (comp > 0 ? 'לפתור ולפצות ב-' + comp + '💎' : 'לפתור');
-    if (!confirm(verb + ' את ' + ids.length + ' התקלות המוצגות?')) return;
-    var r = await api('/issues/bulk-resolve', { method: 'POST', body: JSON.stringify({ ids: ids, dismiss: !!dismiss, compensation: comp }) });
-    if (r && r.ok) { toast('בוצע: ' + (r.affected | 0) + ' תקלות' + (r.compensated ? ' · פוצו ' + r.compensated : '')); loadIssues(); }
-    else toast('שגיאה בפעולה מרובה');
+    var nHidden = Math.max(0, (_issuesTotal | 0) - (_issuesOffset | 0));
+    var warn = nHidden > 0
+      ? '\n\n⚠️ עוד ' + nHidden.toLocaleString() + ' תקלות תואמות את הסינון אך לא נטענו — הן לא ייגעו.\nלטיפול בהן לחץ "טען עוד" קודם.'
+      : '';
+    if (!confirm(verb + ' את ' + ids.length + ' התקלות הפתוחות שנטענו?' + warn)) return;
+    // The server hard-caps `ids` at 500 per request (slice(0,500)) and reports no
+    // truncation, so a single POST would silently drop everything past 500 —
+    // making the count we just promised a lie. Send in chunks instead.
+    var CHUNK = 500, affected = 0, compensated = 0, failed = false;
+    for (var ci = 0; ci < ids.length; ci += CHUNK) {
+      var r = await api('/issues/bulk-resolve', { method: 'POST', body: JSON.stringify({ ids: ids.slice(ci, ci + CHUNK), dismiss: !!dismiss, compensation: comp }) });
+      if (!r || !r.ok) { failed = true; break; }
+      affected += (r.affected | 0);
+      compensated += (r.compensated | 0);
+    }
+    if (failed) toast('שגיאה בפעולה מרובה — טופלו ' + affected + ' לפני הכשל');
+    else toast('בוצע: ' + affected + ' תקלות' + (compensated ? ' · פוצו ' + compensated : ''));
+    loadIssues();
   }
   async function resolveIssue(issueId, compensation, notes, dismiss) {
     var r = await api('/issues/' + issueId + '/resolve', {
@@ -4557,12 +4693,20 @@
   setInterval(refreshIssuesBadge, 60 * 1000);
   // Also wire filter changes.
   setTimeout(function() {
-    var sf = $('issues-filter-status'); if (sf) sf.onchange = loadIssues;
-    var svf = $('issues-filter-severity'); if (svf) svf.onchange = loadIssues;
-    var kf = $('issues-filter-kind'); if (kf) kf.onchange = loadIssues;
-    var af = $('issues-filter-after'); if (af) af.onchange = loadIssues;
-    var bf = $('issues-filter-before'); if (bf) bf.onchange = loadIssues;
-    var rf = $('issues-refresh'); if (rf) rf.onclick = loadIssues;
+    // B8 — these were assigned as BARE function references, so the browser
+    // invoked loadIssues(Event). Now that loadIssues takes an options object,
+    // call it with NO arguments: that is what forces the non-append path, which
+    // resets _issuesOffset/_issuesTotal to 0 so any filter change (and the ↻
+    // button) always restarts at page 1 instead of continuing a stale offset.
+    // Note `kf` intentionally stays on onchange (fires on blur) — oninput would
+    // issue a 200-row request per keystroke.
+    var _reload = function() { loadIssues(); };
+    var sf = $('issues-filter-status'); if (sf) sf.onchange = _reload;
+    var svf = $('issues-filter-severity'); if (svf) svf.onchange = _reload;
+    var kf = $('issues-filter-kind'); if (kf) kf.onchange = _reload;
+    var af = $('issues-filter-after'); if (af) af.onchange = _reload;
+    var bf = $('issues-filter-before'); if (bf) bf.onchange = _reload;
+    var rf = $('issues-refresh'); if (rf) rf.onclick = _reload;
     var co = $('issues-clear-old');
     if (co) co.onclick = async function() {
       if (!confirm('לסמן כבוטלו את כל התקלות האוטומטיות (api_*) הפתוחות הישנות מ-24 שעות?\nזה מנקה הצפות משרת שבור. תקלות שדווחו מהלקוח או שכבר פוצו לא ייגעו.')) return;
@@ -4574,6 +4718,8 @@
     };
     var br = $('issues-bulk-resolve'); if (br) br.onclick = function() { bulkResolveShown(false); };
     var bd = $('issues-bulk-dismiss'); if (bd) bd.onclick = function() { bulkResolveShown(true); };
+    var lm = $('issues-load-more');
+    if (lm) lm.onclick = function() { loadIssues({ append: true }); };
   }, 100);
 
   // ---------- LIVE ----------
@@ -5444,7 +5590,7 @@
       if (r && r.ok) {
         $('promo-editor').style.display = 'none';
         loadPromos();
-      } else if (r && r.error === 'slug_taken') {
+      } else if (r && r.reason === 'slug_taken') {
         alert('slug תפוס — בחר אחר');
       } else {
         alert('שגיאה: ' + (r && r.error || 'unknown'));
@@ -6728,13 +6874,19 @@
     var clearBtn = document.getElementById('daily-special-override-clear');
     if (!picker) return;
     try {
-      var [boardsR, dsR, cfgR] = await Promise.all([
-        fetch('/api/boards/available').then(function(r){return r.json();}),
+      // B5 — /api/boards/available returns BOTH `boards` and `dailySpecial` in a
+      // single payload (server.js: res.json({ ok, boards, dailySpecial })), so the
+      // second identical fetch this function used to fire was pure duplication.
+      // Reading both off one response also removes a real (if rare) inconsistency:
+      // that endpoint has a 60s server cache, so two calls straddling an expiry
+      // could return different snapshots and make the boards.find() below — which
+      // matches on dailySpecial.id — miss and mislabel today's board.
+      var [boardsR, cfgR] = await Promise.all([
         fetch('/api/boards/available').then(function(r){return r.json();}),
         fetch('/' + ADMIN_PATH + '/api/config').then(function(r){return r.json();})
       ]);
       var boards = (boardsR && boardsR.boards) || [];
-      var dailySpecial = (dsR && dsR.dailySpecial) || { enabled: false };
+      var dailySpecial = (boardsR && boardsR.dailySpecial) || { enabled: false };
       // HL.3 — same array-vs-dict bug as the Battle Pass grid: the ADMIN
       // /api/config returns an ARRAY of {key,value}, so this always read
       // undefined and the dropdown always showed "🔄 בחירה אוטומטית" — directly
@@ -9840,13 +9992,15 @@
   // is also dumped to the browser DevTools console with [BLOOM DEBUG]
   // prefix so the user can copy-paste output back when they want help.
   //
-  // Six checks:
+  // Eight checks:
   //   1. Duplicate DOM ids       (real HTML bug)
   //   2. Duplicate H2 titles     (visual repeats)
   //   3. Endpoint health         (GET each admin/api/* + status)
   //   4. Hidden config keys      (in game_config, not in TIPS_PER_KEY)
   //   5. Dead buttons            (id= without onclick handler)
   //   6. Orphaned tip data       (data-tip=KEY where KEY not in TIPS)
+  //   7. Doubled api() prefix    (api('/api/...') resolves to /api/api → 404)
+  //   8. Client error rate       (player_issues bucketed by kind, last 24h)
   // ============================================================
   var debugLastResults = null;
   function dbgLog(category, severity, message, details) {
@@ -10083,6 +10237,72 @@
     return bugs;
   }
 
+  // E4 — CLIENT health (2026-08-23). Every check above inspects the admin's
+  // OWN DOM or the admin API, so a green "0 issues" is fully compatible with a
+  // completely broken GAME. player_issues is the only place client-side
+  // failures land (window.onerror + unhandledrejection from 13-boot.js, plus
+  // every explicit __bloomReportIssue call), so bucket the last 24h by `kind`
+  // and flag any bucket over the threshold.
+  // The admin list endpoint DOES support ?status / ?reported_after / ?limit
+  // (verified in server.js adminRouter.get('/api/issues')), BUT it silently
+  // IGNORES a reported_after that fails its ISO regex — a silently-ignored
+  // filter would widen the window to all-time and turn every long-lived kind
+  // into a false alarm. So we re-filter by reported_at client-side too.
+  var DBG_CLIENT_ERR_THRESHOLD = 10;   // rows of one kind in 24h = a real pattern
+  var DBG_SEV_RANK = { low: 0, medium: 1, high: 2, critical: 3 };
+  async function checkClientErrorRate() {
+    var findings = [];
+    try {
+      var sinceMs = Date.now() - 24 * 60 * 60 * 1000;
+      var sinceIso = new Date(sinceMs).toISOString();
+      // Same absolute-origin + credentials:'include' form as the sibling
+      // checks (a credentialed location.href makes a relative fetch throw).
+      var r = await fetch(location.origin + API + '/issues?status=open&limit=200' +
+                          '&reported_after=' + encodeURIComponent(sinceIso),
+                          { credentials: 'include' });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      var d = await r.json();
+      if (!d || !d.ok || !Array.isArray(d.issues)) throw new Error('bad payload');
+      var rows = d.issues.filter(function(i) {
+        var t = (i && i.reported_at) ? new Date(i.reported_at).getTime() : 0;
+        return t >= sinceMs;
+      });
+      var buckets = {};
+      rows.forEach(function(i) {
+        var k = (i && i.kind) || '(unknown)';
+        var b = buckets[k] || (buckets[k] = { kind: k, count: 0, deviceCount: 0,
+                                              severity: 'low', sample: '', _dev: {} });
+        b.count++;
+        if (i.device_id) b._dev[i.device_id] = 1;
+        if ((DBG_SEV_RANK[i.severity] || 0) > (DBG_SEV_RANK[b.severity] || 0)) b.severity = i.severity;
+        if (!b.sample) b.sample = String(i.title || '').slice(0, 70);
+      });
+      Object.keys(buckets).forEach(function(k) {
+        var b = buckets[k];
+        b.deviceCount = Object.keys(b._dev).length;
+        delete b._dev;
+        if (b.count < DBG_CLIENT_ERR_THRESHOLD) return;
+        findings.push(b);
+        dbgLog('CLIENT-ERR', 'error', 'kind "' + b.kind + '" — ' + b.count +
+               ' open issues from ' + b.deviceCount + ' devices in 24h', b);
+      });
+      findings.sort(function(a, b2) { return b2.count - a.count; });
+      // 200 is the server's hard LIMIT — a full page means these counts are a
+      // FLOOR, not a total. Say so rather than silently under-reporting.
+      if (d.issues.length >= 200) {
+        dbgLog('CLIENT-ERR', 'warn', 'issues list hit the 200-row cap — counts are a floor', {});
+      }
+    } catch (e) {
+      // A check that could not RUN must never render as "0 findings / all
+      // clear" — that is exactly the /issues/stats bug HL.3 fixed. Surface the
+      // failure itself as a finding so the scanner can't go green on a blind spot.
+      findings.push({ kind: '(הבדיקה נכשלה)', count: 0, deviceCount: 0,
+                      severity: 'unknown', sample: 'שגיאה: ' + (e && e.message) });
+      dbgLog('CLIENT-ERR', 'error', 'client-health check failed: ' + (e && e.message), e);
+    }
+    return findings;
+  }
+
   async function runDebugScan() {
     var statusEl = document.getElementById('debug-status');
     var resultsEl = document.getElementById('debug-results');
@@ -10101,6 +10321,7 @@
       results.deadButtons = await checkDeadButtons();
       results.orphanTips = await checkOrphanedTipReferences();
       results.apiPathBugs = await checkApiPathBugs();
+      results.clientErrors = await checkClientErrorRate();
     } catch (e) {
       console.error('[BLOOM DEBUG] scan crashed:', e);
     }
@@ -10115,7 +10336,8 @@
       { name: '❓ הגדרות בלי tooltip', count: results.hiddenKeys.length, items: results.hiddenKeys, fmt: function(x) { return '<code>' + x + '</code>'; } },
       { name: '🔘 לחצנים ללא handler ידני', count: results.deadButtons.length, items: results.deadButtons, fmt: function(x) { return 'id="<code>' + x.id + '</code>" — "' + x.text + '"'; } },
       { name: '💬 data-tip יתום', count: results.orphanTips.length, items: results.orphanTips, fmt: function(x) { return '<code>' + x.key + '</code>'; } },
-      { name: '🔗 api() prefix כפול (/api/api)', count: (results.apiPathBugs || []).length, items: results.apiPathBugs || [], fmt: function(x) { return '<code>' + (x.snippet || '') + '</code>'; } }
+      { name: '🔗 api() prefix כפול (/api/api)', count: (results.apiPathBugs || []).length, items: results.apiPathBugs || [], fmt: function(x) { return '<code>' + (x.snippet || '') + '</code>'; } },
+      { name: '🎮 שגיאות לקוח ב-24ש (לפי kind)', count: (results.clientErrors || []).length, items: results.clientErrors || [], fmt: function(x) { return '<code>' + escHtml(x.kind) + '</code> — ' + (x.count | 0) + ' פניות · ' + (x.deviceCount | 0) + ' מכשירים · ' + escHtml(x.severity) + (x.sample ? ' · "' + escHtml(x.sample) + '"' : ''); } }
     ];
 
     var totalIssues = summary.reduce(function(sum, s) { return sum + s.count; }, 0);

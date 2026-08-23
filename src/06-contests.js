@@ -1677,7 +1677,49 @@
       // to 0 height → an invisible board, and nothing ever re-fit it. Now we
       // retry on the next frame (capped) until the layout settles.
       window.__fitGridRetries = (window.__fitGridRetries || 0) + 1;
-      if (window.__fitGridRetries <= 30) requestAnimationFrame(fitGrid);
+      if (window.__fitGridRetries <= 30) { requestAnimationFrame(fitGrid); return; }
+      // E2 TELEMETRY (2026-08-23) — the 30-frame budget is spent and the wrap
+      // STILL measures 0x0, so we give up with the grid UNSIZED: its 1fr cells
+      // CSS-collapse to 0 height and the player stares at an invisible board.
+      // Nothing throws, so this never reached the admin's tab before.
+      // Report ONCE, at the exact frame the budget runs out (===31); later
+      // failing calls push the counter past 31 and stay silent, and
+      // __bloomReportIssue dedups per session on top of that.
+      // Benign cases deliberately NOT reported: a mounted #home-screen returns
+      // at the top of this function (and resets the counter), but the no-`:has`
+      // fallback hides #grid-wrap via .app[data-home="active"], a backgrounded
+      // tab can legitimately measure 0, and anything display:none'd has
+      // offsetParent === null (grid-wrap is position:relative, never fixed, so
+      // that test is meaningful here) — those are "hidden on purpose", not
+      // "collapsed". This is TELEMETRY, not a fix: ensureGridResizeObserver()
+      // may still self-heal the board a moment later.
+      if (window.__fitGridRetries === 31) {
+        var _fgMode = null; try { _fgMode = mode; } catch (e) {}
+        try {
+          if (typeof window.__bloomReportIssue === 'function' &&
+              !document.hidden &&
+              !document.querySelector('.app[data-home="active"]') &&
+              wrap.offsetParent !== null) {
+            window.__bloomReportIssue({
+              kind: 'fitgrid_collapsed',
+              severity: 'high',
+              title: 'הלוח לא נמדד — התאים קרסו לגובה 0',
+              detail: 'fitGrid ויתר אחרי 30 פריימים. grid-wrap=' +
+                      wrap.clientWidth + 'x' + wrap.clientHeight +
+                      ', W=' + W + ', H=' + H +
+                      ', viewport=' + window.innerWidth + 'x' + window.innerHeight +
+                      ', mode=' + _fgMode,
+              context: {
+                wrapW: wrap.clientWidth, wrapH: wrap.clientHeight,
+                W: W, H: H,
+                vw: window.innerWidth, vh: window.innerHeight,
+                v2: document.body.classList.contains('bloom-v2'),
+                mode: _fgMode
+              }
+            });
+          }
+        } catch (e) {}
+      }
       return;
     }
     window.__fitGridRetries = 0;

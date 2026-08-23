@@ -428,11 +428,25 @@
     // the home guard at the top of showLiveRaceResult: the 2200/2500ms present()
     // timers are closure-local and cannot be cancelled from here, so purging
     // alone would just let them re-mount over home a moment later.
+    // E3 — leak DETECTOR. A node still standing here is PROOF a teardown was
+    // missed, but ONLY for the ids whose real teardown ran a few lines above
+    // (contest / duel / ghost — each of those fns unconditionally removes its
+    // own node) or that endLiveRace() removes synchronously (live-race-hud,
+    // and body.live-race-active hides every route home during a race). The
+    // REST of this list is NORMAL on a mid-game "חזרה לבית": #danger-meter is
+    // only cleared by init()/game-over, and #live-race-settling exists exactly
+    // to cover a window in which HL.2 documents the home route as live. Those
+    // would be pure noise, so only the four below are watched.
+    var _leakedHuds = [];
+    var _HUD_LEAK_WATCH = { 'ghost-hud': 1, 'contest-hud': 1, 'duel-hud': 1, 'live-race-hud': 1 };
     ['ghost-hud', 'contest-hud', 'duel-hud', 'live-race-hud', 'live-race-spectate',
      'live-race-settling', 'live-race-result', 'danger-meter']
       .forEach(function(id) {
         var el = document.getElementById(id);
-        if (el) { try { el.remove(); } catch (e) {} }
+        if (el) {
+          if (_HUD_LEAK_WATCH[id]) _leakedHuds.push(id);
+          try { el.remove(); } catch (e) {}
+        }
       });
     // HL.1 — the in-game ⋯ menu popover (src/13-boot.js buildTopMenu) is
     // position:fixed z-9500 on <body>, so it outranks the home overlay (250).
@@ -511,6 +525,35 @@
     // hand-off path, diverting an ordinary practice game-over into a race
     // that no longer exists.
     try { window._liveRaceMode = false; } catch (e) {}
+
+    // ── E3 — report the leak, LAST and non-fatally ────────────────────────
+    // Deliberately the FINAL statement of purgeGameHuds: everything above is
+    // load-bearing teardown and this is pure telemetry, so a throw here can
+    // only cost the report, never the purge. (That inversion — a "fix" placed
+    // before the thing it depends on — is the HL.1/HL.2 shape.)
+    // Spam control: __bloomReportIssue already dedups per session on
+    // kind + context.id, and context.id IS the sorted id-set — so the same
+    // leak on every later home entry is dropped client-side while a genuinely
+    // different combination still gets through. The server's per-device hourly
+    // cap on /api/issues/report is the backstop.
+    try {
+      if (_leakedHuds.length && typeof window.__bloomReportIssue === 'function') {
+        var _hudSig = _leakedHuds.slice().sort().join('+');
+        window.__bloomReportIssue({
+          kind: 'hud_leak',
+          severity: 'medium',
+          title: 'HUD נתקע על מסך הבית: ' + _hudSig,
+          detail: 'purgeGameHuds removed ' + _hudSig + ' AFTER that HUD\'s own ' +
+                  'teardown fn already ran — the upstream teardown was missed.',
+          context: {
+            id: _hudSig,
+            huds: _leakedHuds,
+            build: (window.__bloomBuildId || 'unknown'),
+            url: location.href
+          }
+        });
+      }
+    } catch (e) {}
   }
 
   // HL.2 — "would this celebration land on top of a game the player is
