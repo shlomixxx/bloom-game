@@ -89,7 +89,12 @@
           if (typeof window.showSeasonPassModal === 'function') { window.showSeasonPassModal(); return; }
           break;
         case 'gem_bank':
-          if (typeof window.__bloomGemBank === 'object' && window.__bloomGemBank.showModal) { window.__bloomGemBank.showModal(); return; }
+          // BANK.1 — was `__bloomGemBank.showModal`; both the object and the
+          // method name were wrong (the module exposes window.__bloomBank.open),
+          // so this guard never matched, the switch just `break`ed, and
+          // navigateToTarget returned SILENTLY. The seeded `gem_bank_promo`
+          // CTA was therefore a dead click.
+          if (window.__bloomBank && typeof window.__bloomBank.open === 'function') { window.__bloomBank.open(); return; }
           break;
         case 'bundles':
           if (typeof window.__bloomBundles === 'object' && window.__bloomBundles.showModal) { window.__bloomBundles.showModal(); return; }

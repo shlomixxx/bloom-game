@@ -35068,7 +35068,12 @@ try {
           if (typeof window.showSeasonPassModal === 'function') { window.showSeasonPassModal(); return; }
           break;
         case 'gem_bank':
-          if (typeof window.__bloomGemBank === 'object' && window.__bloomGemBank.showModal) { window.__bloomGemBank.showModal(); return; }
+          // BANK.1 — was `__bloomGemBank.showModal`; both the object and the
+          // method name were wrong (the module exposes window.__bloomBank.open),
+          // so this guard never matched, the switch just `break`ed, and
+          // navigateToTarget returned SILENTLY. The seeded `gem_bank_promo`
+          // CTA was therefore a dead click.
+          if (window.__bloomBank && typeof window.__bloomBank.open === 'function') { window.__bloomBank.open(); return; }
           break;
         case 'bundles':
           if (typeof window.__bloomBundles === 'object' && window.__bloomBundles.showModal) { window.__bloomBundles.showModal(); return; }
@@ -35907,7 +35912,13 @@ try {
       teaser: ['השקעה לטווח ארוך — היהלומים גדלים בלי לעשות כלום',
                'ריבית דריבית — כל יום הסכום מצטבר על עצמו',
                '5% עמלת משיכה — לכן כדאי להשאיר בפנים'],
-      tileSelector: '#gem-bank-tile', openGlobal: '__bloomGemBank.openModal' },
+      // BANK.1 — was '__bloomGemBank.openModal'; BOTH halves were wrong. The
+      // module exposes window.__bloomBank with .open (src/42-gem-bank.js), so
+      // resolveGlobal() returned null and this row fell back to clicking the
+      // tile. That fallback only works while the tile is MOUNTED — and during
+      // the bank wind-down the tile is removed for anyone with a 0 balance,
+      // which is precisely when a player needs the discovery map to find it.
+      tileSelector: '#gem-bank-tile', openGlobal: '__bloomBank.open' },
     { id: 'daily_deals', emoji: '🔥', name: 'דיל יומי', category: 'economy', minLevel: 8,
       description: 'מבצע אחד מתחלף כל יום — חיסכון של 60%+',
       teaser: ['7 דילים שונים — סקין / חבילה / חיים / chest',

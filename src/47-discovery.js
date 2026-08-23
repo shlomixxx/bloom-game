@@ -44,7 +44,13 @@
       teaser: ['השקעה לטווח ארוך — היהלומים גדלים בלי לעשות כלום',
                'ריבית דריבית — כל יום הסכום מצטבר על עצמו',
                '5% עמלת משיכה — לכן כדאי להשאיר בפנים'],
-      tileSelector: '#gem-bank-tile', openGlobal: '__bloomGemBank.openModal' },
+      // BANK.1 — was '__bloomGemBank.openModal'; BOTH halves were wrong. The
+      // module exposes window.__bloomBank with .open (src/42-gem-bank.js), so
+      // resolveGlobal() returned null and this row fell back to clicking the
+      // tile. That fallback only works while the tile is MOUNTED — and during
+      // the bank wind-down the tile is removed for anyone with a 0 balance,
+      // which is precisely when a player needs the discovery map to find it.
+      tileSelector: '#gem-bank-tile', openGlobal: '__bloomBank.open' },
     { id: 'daily_deals', emoji: '🔥', name: 'דיל יומי', category: 'economy', minLevel: 8,
       description: 'מבצע אחד מתחלף כל יום — חיסכון של 60%+',
       teaser: ['7 דילים שונים — סקין / חבילה / חיים / chest',
