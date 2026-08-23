@@ -7555,7 +7555,16 @@ app.post('/api/bank/deposit', requireDeviceAuth, async (req, res) => {
       }
       // Atomic deduct from wallet; if insufficient, fail.
       const ded = await client.query(
-        `UPDATE player_profiles SET balance = balance - $1, total_spent = total_spent + $1
+        // BANK-X1: a deposit is a move between the player's OWN pockets
+        // (wallet -> bank), not a gem SINK. It used to add to total_spent, which
+        // double-counted gems the dashboard already reports honestly as
+        // bankFloat. Pairs with the withdraw fix below — fixing only one side
+        // would turn a symmetric distortion into a directional lie about
+        // sinkRatioPct, the exact metric the owner tunes the economy on.
+        // NOTE: already-farmed Lifetime XP cannot be unwound (total_earned /
+        // total_spent are running sums with no per-source breakdown), so this
+        // stops the ONGOING inflation only.
+        `UPDATE player_profiles SET balance = balance - $1
           WHERE device_id = $2 AND balance >= $1
           RETURNING balance`,
         [amount, deviceId]
@@ -7615,9 +7624,22 @@ app.post('/api/bank/withdraw', requireDeviceAuth, async (req, res) => {
       );
       // Credit wallet (net of fee).
       const ded = await client.query(
-        `UPDATE player_profiles SET balance = balance + $1, total_earned = total_earned + $1
+        // BANK-X1: a withdrawal is NOT a faucet — the player is reclaiming their
+        // own gems. Crediting total_earned here was the XP-farming loop:
+        // _computeLifetimeXp adds total_earned/2, so cycling 1000 gems minted
+        // ~475 Lifetime XP for only the 5% fee, and Lifetime XP drives the
+        // Lifetime level, the Prestige gate (5000 gems/star) and Rivalry pairing.
+        // (The Weekly League is delta-based, so it self-corrects from the first
+        // full week.) This also removes a latent hard-failure: total_earned is
+        // INT, and sustained round-tripping would eventually throw "integer out
+        // of range" INSIDE this transaction, permanently bricking that player's
+        // withdrawals.
+        // The FEE is the one real sink — the only gems actually destroyed — so it
+        // is booked to total_spent, keeping faucet - sink == float exact. $3 is a
+        // NEW placeholder: the param array below MUST stay in $1,$2,$3 order.
+        `UPDATE player_profiles SET balance = balance + $1, total_spent = total_spent + $3
           WHERE device_id = $2 RETURNING balance`,
-        [netPayout, deviceId]
+        [netPayout, deviceId, fee]
       );
       await client.query('COMMIT');
       res.json({
@@ -7663,10 +7685,24 @@ async function _runDailyBankInterest() {
     const r = await pool.query(
       `UPDATE gem_bank
           SET deposited = LEAST($2, deposited + GREATEST(1, FLOOR(deposited * $1 / 100))),
-              total_interest_paid = total_interest_paid + LEAST($2 - deposited, GREATEST(1, FLOOR(deposited * $1 / 100))),
+              total_interest_paid = total_interest_paid + GREATEST(0, LEAST($2 - deposited, GREATEST(1, FLOOR(deposited * $1 / 100)))),
               last_interest_date = $3,
               updated_at = NOW()
-        WHERE deposited > 0 AND (last_interest_date IS NULL OR last_interest_date < $3::date)
+        -- BANK-X2: the deposited < $2 conjunct SKIPS accounts at or over
+        -- bank_max_balance instead of truncating them. Every SET right-hand side
+        -- reads the OLD row, so lowering bank_max_balance (one click in the admin
+        -- config editor: there is a 10000 preset chip against a live seed of
+        -- 1000000) used to CONFISCATE the excess down to the new cap and drive
+        -- total_interest_paid NEGATIVE. Validated on a real Postgres: that one
+        -- click destroyed 6.46M gems across 4 accounts while the log still said
+        -- "paid to 5 accounts". Over-cap accounts now keep every gem, stay fully
+        -- withdrawable, and simply stop earning until they draw below the cap or
+        -- the cap is raised. The GREATEST(0, ...) is belt-and-suspenders so a
+        -- future WHERE edit cannot reintroduce a negative. gem_bank has no index
+        -- beyond its PK, so this adds no query-plan risk.
+        -- Do NOT put backticks in this comment: the statement is a JS template
+        -- literal, and a backtick here terminates it and breaks server boot.
+        WHERE deposited > 0 AND deposited < $2 AND (last_interest_date IS NULL OR last_interest_date < $3::date)
         RETURNING device_id`,
       [pct, maxBal, today]
     );
@@ -13315,9 +13351,24 @@ if (ADMIN_PATH && ADMIN_PASSWORD) {
            COUNT(*) FILTER (WHERE balance > 0)::int AS holders
          FROM player_profiles`);
       let bankFloat = 0;
+      let bankInterestFaucet = 0;
       try {
-        const b = await pool.query(`SELECT COALESCE(SUM(deposited),0)::bigint AS bank FROM gem_bank`);
+        // BANK-X1 follow-up: daily interest mints NEW gems straight into
+        // gem_bank.deposited and never passes through player_profiles, so it has
+        // never entered the "faucet" figure directly. Before BANK-X1 it leaked in
+        // on withdrawal (as part of netPayout credited to total_earned); now that
+        // withdrawals correctly stop touching total_earned, it would be a fully
+        // INVISIBLE faucet — the owner could crank bank_interest_pct_daily and
+        // see no movement in the metric he tunes the economy on. Surfacing the
+        // exact per-account total here is read-only and touches no money path
+        // (crediting total_earned from the cron would re-open the XP loop
+        // BANK-X1 just closed).
+        const b = await pool.query(
+          `SELECT COALESCE(SUM(deposited),0)::bigint AS bank,
+                  COALESCE(SUM(total_interest_paid),0)::bigint AS interest
+             FROM gem_bank`);
         bankFloat = Number(b.rows[0].bank) || 0;
+        bankInterestFaucet = Number(b.rows[0].interest) || 0;
       } catch (e) { /* gem_bank may not exist on a fresh DB */ }
       // Active-player economy (visited in last 7d) — what the live base looks like.
       const active = await pool.query(
@@ -13344,6 +13395,9 @@ if (ADMIN_PATH && ADMIN_PASSWORD) {
         ok: true,
         totals: {
           faucet, sink, walletFloat: Number(a.wallet_float), bankFloat,
+          // Gems minted by bank interest. Reported separately because they never
+          // pass through player_profiles, so they are NOT part of "faucet".
+          bankInterestFaucet,
           float: Number(a.wallet_float) + bankFloat,
           players: a.players, holders: a.holders,
           sinkRatioPct: faucet > 0 ? Math.round((sink / faucet) * 1000) / 10 : 0

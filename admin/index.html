@@ -5183,6 +5183,11 @@
     h += '<div style="flex:1;min-width:120px;padding:12px;border-radius:10px;background:rgba(160,160,160,.10)"><div style="font-size:12px;opacity:.8">📈 יחס-בור</div><div style="font-size:20px;font-weight:800;color:' + rc(t.sinkRatioPct) + '">' + t.sinkRatioPct + '%</div></div>';
     h += '</div>';
     h += '<p style="color:var(--muted);font-size:12px;margin:0 0 12px">' + fmtNum(t.players) + ' שחקנים · ' + fmtNum(t.holders) + ' מחזיקים יהלומים · בנק: ' + fmtNum(t.bankFloat) + '💎</p>';
+    // BANK-X1 — bank interest mints gems straight into gem_bank and never passes
+    // through player_profiles, so it is NOT counted in the ברז figure above.
+    // Surface it explicitly, otherwise raising bank_interest_pct_daily moves no
+    // number on this panel and the faucet looks smaller than it really is.
+    h += '<p style="color:var(--muted);font-size:12px;margin:-6px 0 12px">🏦 ריבית בנק שנוצרה: <strong style="color:var(--gold)">' + fmtNum(t.bankInterestFaucet || 0) + '💎</strong> <span style="opacity:.75">(לא נכלל בברז — נוצר ישירות בבנק)</span></p>';
     h += '<div style="padding:10px;border-radius:8px;background:rgba(120,140,255,.06);margin-bottom:14px;font-size:13px"><strong>פעילים (7 ימים):</strong> ' + fmtNum(a.players) + ' · ברז ' + fmtNum(a.faucet) + ' · בור ' + fmtNum(a.sink) + ' · יחס <strong style="color:' + rc(a.sinkRatioPct) + '">' + a.sinkRatioPct + '%</strong></div>';
     function tbl(title, rows, vk, vl) {
       var s = '<h4 style="margin:14px 0 6px">' + title + '</h4><table><thead><tr><th>קוד</th><th>שם</th><th>' + vl + '</th><th>נוצרו</th><th>הוצאו</th><th>יתרה</th></tr></thead><tbody>';
